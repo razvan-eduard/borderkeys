@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.entity.LanguagePackEntry
+import com.borderkeys.predict.LanguagePackInspector
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
@@ -69,28 +70,8 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
         importing = true
         message = null
         scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    val name = uri.lastPathSegment?.substringAfterLast('/')?.take(64)
-                        ?: "imported.bkd"
-                    context.contentResolver.openInputStream(uri)?.use { stream ->
-                        // Copied into private storage and hashed on the way through. The file
-                        // behind a content:// URI can be rewritten by the app that owns it
-                        // between being checked and being mapped, so it is never mapped.
-                        repository.stage(stream, name)
-                    }
-                }.getOrNull()
-            }
+            message = withContext(Dispatchers.IO) { importPack(context, repository, uri) }
             importing = false
-            message = when {
-                result == null -> "The file could not be read."
-                result.isFailure -> "Import failed: ${result.exceptionOrNull()?.message}"
-                else -> {
-                    val staged = result.getOrThrow()
-                    "Copied ${staged.sizeBytes} bytes. SHA-256 ${staged.sha256.take(16)}… " +
-                        "Validation happens when the keyboard next starts."
-                }
-            }
         }
     }
 
@@ -143,6 +124,82 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
             scope.launch { themes.updatePreferences { it.copy(perAppLanguageMemory = value) } }
         }
     }
+}
+
+
+/**
+ * Copies a chosen file into private storage, validates it, and records it -- or removes it.
+ *
+ * The three steps are one operation on purpose. Staging a pack and leaving it unregistered would
+ * put a file on disk that nothing lists, nothing loads and nothing can delete through the UI,
+ * which is what this screen used to do.
+ *
+ * The file is copied before it is validated rather than validated in place. A `content://` URI
+ * is served by another application, which is free to rewrite what is behind it between the
+ * moment it is checked and the moment it is mapped; the copy in private storage cannot be
+ * rewritten by anyone, so the bytes that were validated are the bytes that get mapped.
+ *
+ * Returns the sentence to show under the button, whatever happened.
+ */
+private suspend fun importPack(
+    context: android.content.Context,
+    repository: com.borderkeys.data.LanguagePackRepository,
+    uri: android.net.Uri,
+): String {
+    val name = uri.lastPathSegment?.substringAfterLast('/')?.take(64) ?: "imported.bkd"
+    val staged = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            repository.stage(stream, name)
+        }
+    }.getOrNull()
+
+    if (staged == null) {
+        return "The file could not be read."
+    }
+    if (staged.isFailure) {
+        return "Import failed: ${staged.exceptionOrNull()?.message}"
+    }
+    val pack = staged.getOrThrow()
+
+    return when (val verdict = LanguagePackInspector.inspect(pack.file)) {
+        is LanguagePackInspector.Result.Refused -> {
+            // Refused means refused: the file goes, so a pack that cannot be read cannot sit in
+            // private storage taking up space and waiting to be tried again.
+            pack.file.delete()
+            "Refused — ${verdict.reason}."
+        }
+
+        is LanguagePackInspector.Result.Valid -> {
+            val info = verdict.info
+            repository.register(
+                LanguagePackEntry(
+                    tag = info.tag,
+                    displayName = displayNameFor(info.tag),
+                    fileName = pack.file.name,
+                    formatVersion = info.formatVersion,
+                    wordCount = info.wordCount,
+                    sizeBytes = pack.sizeBytes,
+                    sha256 = pack.sha256,
+                    importedAt = System.currentTimeMillis(),
+                    enabled = true,
+                    weight = 1f,
+                    // Nothing here can know the licence of a word list someone compiled
+                    // themselves, and inventing one would be worse than admitting it. The
+                    // packs the project publishes carry theirs in docs/licensing.md.
+                    licenseNote = "not recorded — set by whoever built the pack",
+                ),
+            )
+            "Added ${info.wordCount} words for ${info.tag}. " +
+                "SHA-256 ${pack.sha256.take(16)}…"
+        }
+    }
+}
+
+/** The language tag as a person would read it, falling back to the tag itself. */
+private fun displayNameFor(tag: String): String {
+    val locale = java.util.Locale.forLanguageTag(tag)
+    val name = locale.getDisplayName(java.util.Locale.getDefault())
+    return if (name.isBlank() || name == tag) tag else name
 }
 
 @Composable

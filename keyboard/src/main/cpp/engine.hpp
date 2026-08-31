@@ -20,6 +20,33 @@
 
 namespace borderkeys {
 
+/**
+ * What a pack says about itself, once its header has been validated.
+ *
+ * Filled by [bkdInspectPack] so that the settings UI can name a pack it has just been handed --
+ * its language, its size, how many words it holds -- without a second parser for the format in
+ * Kotlin. There is one implementation of this header layout, it is in C++, and everything else
+ * asks it.
+ */
+struct PackInfo {
+    char tag[16];
+    uint32_t formatVersion;
+    uint32_t wordCount;
+    uint64_t fileBytes;
+};
+
+/**
+ * Validates the `.bkd` in `[offset, offset + length)` of `fd` and describes it.
+ *
+ * The same validation the engine performs before it will read a pack: magic, version, header
+ * size and checksum, every section offset against the real file size, and the content checksum.
+ * Maps and unmaps; nothing is retained and the descriptor is not taken over.
+ *
+ * Returns a `BkdStatus`. On anything but `kBkdOk`, `out` is left untouched -- a caller that
+ * ignored the status would otherwise show a language tag read out of a file that failed.
+ */
+int32_t bkdInspectPack(int fd, int64_t offset, int64_t length, PackInfo* out);
+
 // One mapped .bkd file, plus the per-language state the engine adapts at runtime.
 class LanguagePack {
 public:

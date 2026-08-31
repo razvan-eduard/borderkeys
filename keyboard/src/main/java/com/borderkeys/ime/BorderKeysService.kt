@@ -151,6 +151,7 @@ class BorderKeysService :
                 .onFailure { error -> degradeWithoutDictionaries(error) }
         }
         observeSettings()
+        observeLanguagePacks()
     }
 
     /**
@@ -208,6 +209,48 @@ class BorderKeysService :
         android.util.Log.e("BorderKeys", "starting without dictionaries", error)
         learning.enabled = false
         scope.launch { host?.suggestionStrip?.clear() }
+    }
+
+    /**
+     * Reloads the language packs whenever the set of them changes.
+     *
+     * Settings runs in this process, so importing a pack, switching one off or moving a weight
+     * happens a few metres from an engine that has already mapped what it was told to map at
+     * start. Without this the change takes effect the next time the input method is created,
+     * which from the user's side looks like the setting having been ignored.
+     *
+     * Reloading a tag replaces it in the engine rather than taking a second slot, which is what
+     * makes this safe to run on every emission: the signature below means it runs only when
+     * something that actually affects loading has changed, not on every unrelated write.
+     */
+    private fun observeLanguagePacks() {
+        scope.launch {
+            var previous: String? = null
+            DataGraph.languagePacks.packs
+                .catch { error ->
+                    android.util.Log.e("BorderKeys", "the pack list is unreadable", error)
+                }
+                .collect { packs ->
+                    val signature = packs
+                        .filter { it.enabled }
+                        .sortedBy { it.id }
+                        .joinToString("|") { "${it.id}:${it.tag}:${it.sha256}:${it.weight}" }
+                    if (signature == previous) {
+                        return@collect
+                    }
+                    // The first emission arrives after loadDictionaries has already run, and
+                    // repeating that work would map every pack a second time for nothing.
+                    val first = previous == null
+                    previous = signature
+                    if (first) {
+                        return@collect
+                    }
+                    runCatching { loadDictionaries() }
+                        .onFailure { error ->
+                            android.util.Log.e("BorderKeys", "reloading packs failed", error)
+                        }
+                }
+        }
     }
 
     private fun observeSettings() {

@@ -102,6 +102,58 @@ float maxEditCostFor(int length) {
 // LanguagePack
 // --------------------------------------------------------------------------------------
 
+int32_t bkdInspectPack(int fd, int64_t offset, int64_t length, PackInfo* out) {
+    if (out == nullptr || fd < 0 || offset < 0 || length <= 0) {
+        return kBkdErrArgument;
+    }
+    if (static_cast<uint64_t>(length) > kMaxPackBytes) {
+        return kBkdErrTooLarge;
+    }
+    if (static_cast<uint64_t>(length) < sizeof(BkdHeader)) {
+        return kBkdErrTooSmall;
+    }
+
+    const long pageSize = sysconf(_SC_PAGESIZE);
+    if (pageSize <= 0) {
+        return kBkdErrMmap;
+    }
+    const int64_t delta = offset % pageSize;
+    const size_t mapBytes = static_cast<size_t>(length + delta);
+    void* const mapping = mmap(nullptr, mapBytes, PROT_READ, MAP_PRIVATE, fd,
+                               static_cast<off_t>(offset - delta));
+    if (mapping == MAP_FAILED) {
+        return kBkdErrMmap;
+    }
+    const uint8_t* const base = static_cast<const uint8_t*>(mapping) + delta;
+    const uint64_t baseBytes = static_cast<uint64_t>(length);
+
+    BkdHeader header;
+    std::memcpy(&header, base, sizeof(header));
+
+    int32_t status = bkdValidateHeader(header, baseBytes);
+    if (status == kBkdOk && (header.flags & kBkdFlagContentCrc) != 0u) {
+        const uint64_t contentBytes = baseBytes - header.headerBytes;
+        if (crc32(base + header.headerBytes, static_cast<size_t>(contentBytes)) !=
+            header.contentCrc32) {
+            status = kBkdErrContentCrc;
+        }
+    }
+
+    if (status == kBkdOk) {
+        // languageTag is NUL padded and NUL terminated by the format, and bkdValidateHeader has
+        // already established that. Copied whole rather than with strncpy so a header that
+        // somehow lost its terminator cannot walk off the end here.
+        std::memcpy(out->tag, header.languageTag, sizeof(out->tag));
+        out->tag[sizeof(out->tag) - 1] = '\0';
+        out->formatVersion = header.formatVersion;
+        out->wordCount = header.wordCount;
+        out->fileBytes = header.fileBytes;
+    }
+
+    munmap(mapping, mapBytes);
+    return status;
+}
+
 int32_t LanguagePack::open(const char* tag, int fd, int64_t offset, int64_t length) {
     close();
     if (tag == nullptr || fd < 0 || offset < 0 || length <= 0) {

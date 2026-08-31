@@ -60,6 +60,20 @@ internal object NativePredictor {
     ): Int
 
     /**
+     * Describes a `.bkd` without loading it into an engine.
+     *
+     * Fills [out] with `{ status, formatVersion, wordCount }` and returns the pack's BCP-47
+     * language tag, or null when the pack was refused -- in which case `out[0]` carries the
+     * negative `BkdStatus` saying why. The same validation the engine applies before it will
+     * read a pack: magic, version, header checksum, every section offset against the real file
+     * size, and the content checksum.
+     *
+     * Unlike everything else here this touches no engine, so it has no handle and no thread
+     * restriction beyond not being called on the UI thread -- it checksums the whole file.
+     */
+    external fun nativeInspectPack(fd: Int, offset: Long, length: Long, out: IntArray): String?
+
+    /**
      * Sets which of the loaded packs take part in scoring, and with what weight.
      *
      * All of them at once, not one "current language". Someone writing Romanian and English in

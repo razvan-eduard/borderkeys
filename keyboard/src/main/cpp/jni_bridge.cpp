@@ -123,6 +123,37 @@ jint nativeLoadLanguage(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring tag
                                 static_cast<int64_t>(length), static_cast<float>(weight));
 }
 
+/**
+ * Describes a `.bkd` without loading it into an engine.
+ *
+ * Fills `out` with { status, formatVersion, wordCount } and returns the language tag, or null
+ * when the pack was refused -- in which case `out[0]` carries the BkdStatus that says why.
+ *
+ * This exists so that Settings can name and record a pack the user has just chosen without a
+ * second implementation of the header layout in Kotlin. It allocates one String per import,
+ * which is not a hot path: the alternative is two parsers that agree until they do not.
+ */
+jstring nativeInspectPack(JNIEnv* env, jobject /*thiz*/, jint fd, jlong offset, jlong length,
+                          jintArray out) {
+    if (out == nullptr || env->GetArrayLength(out) < 3) {
+        return nullptr;
+    }
+    borderkeys::PackInfo info = {};
+    const int32_t status = borderkeys::bkdInspectPack(
+        static_cast<int>(fd), static_cast<int64_t>(offset), static_cast<int64_t>(length), &info);
+
+    jint values[3] = {static_cast<jint>(status), 0, 0};
+    if (status == borderkeys::kBkdOk) {
+        values[1] = static_cast<jint>(info.formatVersion);
+        values[2] = static_cast<jint>(info.wordCount);
+    }
+    env->SetIntArrayRegion(out, 0, 3, values);
+    if (status != borderkeys::kBkdOk) {
+        return nullptr;
+    }
+    return env->NewStringUTF(info.tag);
+}
+
 void nativeSetActiveLanguages(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray tags,
                               jfloatArray weights) {
     Engine* const engine = engineFrom(handle);
@@ -522,6 +553,8 @@ const JNINativeMethod kMethods[] = {
     {"nativeDestroy", "(J)V", reinterpret_cast<void*>(nativeDestroy)},
     {"nativeLoadLanguage", "(JLjava/lang/String;IJJF)I",
      reinterpret_cast<void*>(nativeLoadLanguage)},
+    {"nativeInspectPack", "(IJJ[I)Ljava/lang/String;",
+     reinterpret_cast<void*>(nativeInspectPack)},
     {"nativeSetActiveLanguages", "(J[Ljava/lang/String;[F)V",
      reinterpret_cast<void*>(nativeSetActiveLanguages)},
     {"nativeSetKeyGeometry", "(J[I[F[FFF)V", reinterpret_cast<void*>(nativeSetKeyGeometry)},
