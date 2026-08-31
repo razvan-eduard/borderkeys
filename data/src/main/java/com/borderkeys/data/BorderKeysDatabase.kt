@@ -7,6 +7,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.borderkeys.data.dao.AssistModelDao
 import com.borderkeys.data.dao.BlockedWordDao
 import com.borderkeys.data.dao.ClipboardDao
@@ -34,7 +36,7 @@ import java.util.Arrays
         LanguagePackEntry::class,
         AssistModelEntry::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class BorderKeysDatabase : RoomDatabase() {
@@ -47,6 +49,46 @@ abstract class BorderKeysDatabase : RoomDatabase() {
 
     companion object {
         private const val DATABASE_NAME = "borderkeys.db"
+
+        /**
+         * Version 1 to 2: the text assistant's model table.
+         *
+         * Written rather than destroyed-and-recreated, and the reason is not that anything has
+         * shipped yet. This database holds the personal dictionary and the clipboard history --
+         * things the user cannot get back -- so "recreate on a schema change" is a policy that
+         * would eventually delete them, on some future version, on somebody's phone. The habit
+         * of writing the migration is the point.
+         *
+         * The failure this fixes was found by installing: adding an entity without moving the
+         * version made Room refuse to open the database at all, and the input method died on
+         * start with it. A keyboard that cannot start is one the user cannot replace without
+         * already having another keyboard installed.
+         */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `assist_models` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `displayName` TEXT NOT NULL,
+                        `fileName` TEXT NOT NULL,
+                        `sha256` TEXT NOT NULL,
+                        `sizeBytes` INTEGER NOT NULL,
+                        `license` TEXT NOT NULL,
+                        `source` TEXT NOT NULL,
+                        `contextTokens` INTEGER NOT NULL,
+                        `importedAt` INTEGER NOT NULL,
+                        `active` INTEGER NOT NULL,
+                        `integrityFailedAt` INTEGER
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_assist_models_fileName` " +
+                        "ON `assist_models` (`fileName`)",
+                )
+            }
+        }
 
         fun open(context: Context): BorderKeysDatabase {
             // sqlcipher-android 4.x has no static initialiser that does this: nothing in the
@@ -66,6 +108,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
                 DATABASE_NAME,
             )
                 .openHelperFactory(factory)
+                .addMigrations(MIGRATION_1_2)
                 // The settings screen and the IME run in the same process, but the text
                 // assistant runs in ":assist" and opens this database too. Without this, a write
                 // in one process leaves the other's Flows showing stale rows indefinitely.

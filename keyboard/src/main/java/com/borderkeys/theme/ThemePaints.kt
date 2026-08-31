@@ -111,11 +111,24 @@ class ThemePaints {
      * Cheap to call on every theme emission: an unchanged theme at an unchanged density does
      * nothing at all.
      */
-    fun update(theme: KeyboardTheme, metrics: DisplayMetrics): Boolean {
+    /**
+     * Multiplier on the row height, from the size settings.
+     *
+     * Kept here rather than applied by the view because everything that depends on row height --
+     * the keyboard's measured height, the suggestion strip, the assistant sheet -- reads it from
+     * this one place, and scaling it in three of them would let them disagree.
+     */
+    var heightScale: Float = 1f
+        private set
+
+    fun update(theme: KeyboardTheme, metrics: DisplayMetrics, heightScale: Float = 1f): Boolean {
         val newScaledDensity = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 1f, metrics)
-        if (this.theme == theme && density == metrics.density && scaledDensity == newScaledDensity) {
+        if (this.theme == theme && density == metrics.density &&
+            scaledDensity == newScaledDensity && this.heightScale == heightScale
+        ) {
             return false
         }
+        this.heightScale = heightScale
         this.theme = theme
         density = metrics.density
         scaledDensity = newScaledDensity
@@ -141,7 +154,7 @@ class ThemePaints {
 
         keyCornerRadiusPx = theme.keyCornerRadiusDp * density
         keyGapPx = theme.keyGapDp * density
-        rowHeightPx = theme.rowHeightDp * density
+        rowHeightPx = theme.rowHeightDp * density * heightScale
         swipeTrailWidthPx = theme.swipeTrailWidthDp * density
         pressedElevationPx = theme.pressedElevation * density
         showKeyBorders = theme.showKeyBorders

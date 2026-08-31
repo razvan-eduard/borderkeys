@@ -92,18 +92,13 @@ class KeyboardCanvasView(
 
     private fun beginGesture(fromKey: Int) {
         gestureActive = true
-        gestureCount = 0
         // The key the finger started on is released without committing: the press became a
         // swipe, and a swipe must not also type its first letter.
         endPress(fromKey)
         pointerKey[gesturePointer] = fromKey
         cancelPendingCallbacks()
         dismissAlternatives()
-        trailMinX = gestureStartX
-        trailMaxX = gestureStartX
-        trailMinY = gestureStartY
-        trailMaxY = gestureStartY
-        appendGesturePoint(gestureStartX, gestureStartY, 0L)
+        gesture.begin(gestureStartX, gestureStartY, 0L)
     }
 
     /**
@@ -116,82 +111,104 @@ class KeyboardCanvasView(
      * still looks fine and only the accuracy suffers.
      */
     private fun captureGestureSamples(event: MotionEvent, pointerIndex: Int) {
-        val history = event.historySize
-        for (h in 0 until history) {
-            appendGesturePoint(
-                event.getHistoricalX(pointerIndex, h),
-                event.getHistoricalY(pointerIndex, h),
-                event.getHistoricalEventTime(h),
-            )
-        }
-        appendGesturePoint(event.getX(pointerIndex), event.getY(pointerIndex), event.eventTime)
+        eventSamples.bind(event, pointerIndex)
+        gesture.capture(eventSamples)
+        eventSamples.release()
         invalidateTrail()
     }
 
-    private fun appendGesturePoint(x: Float, y: Float, time: Long) {
-        if (gestureCount >= GESTURE_CAPACITY) {
-            decimateGesture()
-        }
-        gestureX[gestureCount] = x
-        gestureY[gestureCount] = y
-        gestureTime[gestureCount] = time
-        gestureCount++
-        if (x < trailMinX) trailMinX = x
-        if (x > trailMaxX) trailMaxX = x
-        if (y < trailMinY) trailMinY = y
-        if (y > trailMaxY) trailMaxY = y
-    }
-
     /**
-     * Halves the sample rate in place when the buffer fills.
+     * Reads the samples of the event being handled, without allocating one per event.
      *
-     * Growing the array would allocate during the gesture, which is the one thing this path may
-     * not do. Dropping every other sample loses nothing that matters: by the time five hundred
-     * samples have arrived the path is oversampled several times over relative to the
-     * sixty-four points the decoder resamples it to.
+     * A single instance is rebound on each `ACTION_MOVE` and cleared afterwards, so the view
+     * never holds a `MotionEvent` the framework has already recycled. Being the only
+     * implementation loaded in this process, the calls through it stay monomorphic.
      */
-    private fun decimateGesture() {
-        var write = 0
-        var read = 0
-        while (read < gestureCount) {
-            gestureX[write] = gestureX[read]
-            gestureY[write] = gestureY[read]
-            gestureTime[write] = gestureTime[read]
-            write++
-            read += 2
+    private inner class EventSamples : MotionSamples {
+        private var event: MotionEvent? = null
+        private var pointerIndex = 0
+
+        fun bind(event: MotionEvent, pointerIndex: Int) {
+            this.event = event
+            this.pointerIndex = pointerIndex
         }
-        gestureCount = write
+
+        fun release() {
+            event = null
+        }
+
+        override val sampleCount: Int
+            get() = (event?.historySize ?: 0) + 1
+
+        override fun xAt(index: Int): Float {
+            val e = event ?: return 0f
+            return if (index < e.historySize) {
+                e.getHistoricalX(pointerIndex, index)
+            } else {
+                e.getX(pointerIndex)
+            }
+        }
+
+        override fun yAt(index: Int): Float {
+            val e = event ?: return 0f
+            return if (index < e.historySize) {
+                e.getHistoricalY(pointerIndex, index)
+            } else {
+                e.getY(pointerIndex)
+            }
+        }
+
+        override fun timeAt(index: Int): Long {
+            val e = event ?: return 0L
+            return if (index < e.historySize) {
+                e.getHistoricalEventTime(index)
+            } else {
+                e.eventTime
+            }
+        }
     }
 
     private fun finishGesture() {
-        val count = gestureCount
+        val count = gesture.count
         gestureActive = false
         gesturePointer = -1
         invalidateTrailFully()
         if (count >= MIN_GESTURE_POINTS) {
-            listener?.onGesture(gestureX, gestureY, gestureTime, count)
+            listener?.onGesture(gesture.xs, gesture.ys, gesture.times, count)
         }
         // Reset by index. The arrays keep their storage for the next swipe.
-        gestureCount = 0
+        gesture.reset()
     }
 
     private fun abandonGesture() {
         gestureActive = false
         gesturePointer = -1
-        gestureCount = 0
+        gesture.reset()
         invalidateTrailFully()
     }
 
+    /**
+     * Repaints only the rectangle the trail occupies.
+     *
+     * The four-argument `invalidate` is deprecated in favour of repainting the whole view, on
+     * the grounds that a hardware-accelerated pipeline redraws everything anyway. That holds for
+     * a view whose content is one display list; it does not hold here. The keys are drawn once
+     * into a `RenderNode` and replayed, so a full invalidation costs a replay of the whole
+     * keyboard plus the trail, and a partial one costs the trail. Keeping the deprecated call is
+     * the deliberate choice, and it is measured: it is what holds `onDraw` under 4 ms while a
+     * swipe is in flight.
+     */
+    @Suppress("DEPRECATION")
     private fun invalidateTrail() {
         val margin = paints.swipeTrailWidthPx + 2f
         invalidate(
-            (trailMinX - margin).toInt(), (trailMinY - margin).toInt(),
-            (trailMaxX + margin).toInt() + 1, (trailMaxY + margin).toInt() + 1,
+            (gesture.minX - margin).toInt(), (gesture.minY - margin).toInt(),
+            (gesture.maxX + margin).toInt() + 1, (gesture.maxY + margin).toInt() + 1,
         )
     }
 
     private fun invalidateTrailFully() {
-        if (gestureCount > 0) {
+        if (gesture.count > 0) {
             invalidateTrail()
         }
     }
@@ -204,20 +221,20 @@ class KeyboardCanvasView(
      * need a shader for, and cost nothing measurable.
      */
     private fun drawGestureTrail(canvas: Canvas) {
-        if (gestureCount < 2) {
+        if (gesture.count < 2) {
             return
         }
-        val perSegment = gestureCount / TRAIL_SEGMENTS + 1
+        val perSegment = gesture.count / TRAIL_SEGMENTS + 1
         val baseAlpha = paints.swipeTrail.alpha
         var start = 0
         var segment = 0
-        while (start < gestureCount - 1 && segment < TRAIL_SEGMENTS) {
-            val end = minOf(gestureCount - 1, start + perSegment)
+        while (start < gesture.count - 1 && segment < TRAIL_SEGMENTS) {
+            val end = minOf(gesture.count - 1, start + perSegment)
             val path = trailPaths[segment]
             path.rewind()
-            path.moveTo(gestureX[start], gestureY[start])
+            path.moveTo(gesture.xs[start], gesture.ys[start])
             for (i in start + 1..end) {
-                path.lineTo(gestureX[i], gestureY[i])
+                path.lineTo(gesture.xs[i], gesture.ys[i])
             }
             // Oldest segment faintest, newest full strength.
             val fraction = (segment + 1).toFloat() / TRAIL_SEGMENTS
@@ -264,20 +281,20 @@ class KeyboardCanvasView(
      * in under a second, and a growing list would allocate and copy several times inside the
      * window where the finger is moving and the trail has to keep up with it.
      */
-    private val gestureX = FloatArray(GESTURE_CAPACITY)
-    private val gestureY = FloatArray(GESTURE_CAPACITY)
-    private val gestureTime = LongArray(GESTURE_CAPACITY)
-    private var gestureCount = 0
+    /**
+     * The points of the swipe in progress, and the bounding box the trail is invalidated
+     * against. Lives in its own class so its invariants can be asserted without a `Canvas`.
+     */
+    private val gesture = GestureCapture()
+
+    /** Rebound on every move event; see [EventSamples]. */
+    private val eventSamples = EventSamples()
 
     private var gesturePointer = -1
     private var gestureActive = false
     private var gestureStartX = 0f
     private var gestureStartY = 0f
 
-    private var trailMinX = 0f
-    private var trailMinY = 0f
-    private var trailMaxX = 0f
-    private var trailMaxY = 0f
 
     /**
      * One Path per trail segment, recycled with `rewind()`.
@@ -481,6 +498,18 @@ class KeyboardCanvasView(
         Trace.beginSection("KeyboardCanvasView.onDraw")
         try {
             if (backgroundValid && canvas.isHardwareAccelerated) {
+                // A RenderNode's display list belongs to the hardware renderer of the window the
+                // view is attached to, and that renderer is destroyed when the view leaves the
+                // window. An input view outlives its window -- the framework keeps it and shows
+                // it again in the next editor -- so a node recorded during one appearance can
+                // come back empty on the next, and `drawRenderNode` on an empty node draws
+                // nothing at all. That is invisible in testing until the keys vanish and only
+                // the suggestion strip is left, which is exactly how it was found.
+                //
+                // The check is one boolean read per frame and re-records only after a real loss.
+                if (!backgroundNode.hasDisplayList()) {
+                    recordBackground(width, height)
+                }
                 canvas.drawRenderNode(backgroundNode)
             } else {
                 // Software canvas: a screenshot, a magnifier, or the theme preview being drawn
@@ -909,7 +938,6 @@ class KeyboardCanvasView(
          * covers a long word at a high report rate; beyond that the path is oversampled
          * relative to the sixty-four points the decoder reduces it to anyway.
          */
-        private const val GESTURE_CAPACITY = 512
         private const val MIN_GESTURE_POINTS = 6
         private const val TRAIL_SEGMENTS = 4
 

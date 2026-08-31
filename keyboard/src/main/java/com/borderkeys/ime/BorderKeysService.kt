@@ -34,6 +34,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -140,7 +141,14 @@ class BorderKeysService :
             symbolsLayout = LayoutLoader.load(assets, SYMBOLS_LAYOUT)
             symbolsShiftLayout = LayoutLoader.load(assets, SYMBOLS_SHIFT_LAYOUT)
             numpadLayout = LayoutLoader.load(assets, NUMPAD_LAYOUT)
-            loadDictionaries()
+            // A keyboard that cannot start is one the user cannot replace without already
+            // having another keyboard installed, so nothing on this path is allowed to be
+            // fatal. Failing to open the database costs suggestions; it must not cost typing.
+            //
+            // This is not hypothetical: a schema change without a version bump made Room refuse
+            // to open the database, and the whole input method died on start with it.
+            runCatching { loadDictionaries() }
+                .onFailure { error -> degradeWithoutDictionaries(error) }
         }
         observeSettings()
     }
@@ -189,15 +197,35 @@ class BorderKeysService :
         learning.setBlockedWords(blockedWords)
     }
 
+    /**
+     * Carries on with no dictionary rather than dying.
+     *
+     * Typing, deleting, shift, layouts and the clipboard all still work; what is lost is
+     * prediction and correction. That is the right trade for the one application on the device
+     * that the user cannot uninstall their way out of.
+     */
+    private fun degradeWithoutDictionaries(error: Throwable) {
+        android.util.Log.e("BorderKeys", "starting without dictionaries", error)
+        learning.enabled = false
+        scope.launch { host?.suggestionStrip?.clear() }
+    }
+
     private fun observeSettings() {
         scope.launch {
             combine(DataGraph.themes.theme, DataGraph.themes.preferences) { theme, preferences ->
                 theme to preferences
+            }.catch { error ->
+                // The theme store failing is not a reason to have no keyboard either; the
+                // defaults are perfectly usable colours.
+                android.util.Log.e("BorderKeys", "settings unavailable, using defaults", error)
             }.collect { (newTheme, newPreferences) ->
                 theme = newTheme
                 preferences = newPreferences
-                val changed = paints.update(newTheme, resources.displayMetrics)
+                val changed = paints.update(
+                    newTheme, resources.displayMetrics, newPreferences.heightScale,
+                )
                 host?.let { view ->
+                    applyPlacement(view, newPreferences)
                     view.keyboard.hapticEnabled = newPreferences.hapticFeedback
                     view.keyboard.swipeEnabled = newPreferences.swipeEnabled
                     // The number row is a layout change, not a colour change, so it has to be
@@ -371,8 +399,9 @@ class BorderKeysService :
     override fun onCreateInputView(): View {
         // Built in code. LayoutInflater would parse XML and reflect to construct three views,
         // every time the keyboard is shown in a new editor.
-        paints.update(theme, resources.displayMetrics)
+        paints.update(theme, resources.displayMetrics, preferences.heightScale)
         val view = KeyboardHostView(this, paints)
+        applyPlacement(view, preferences)
         view.keyboard.listener = this
         view.keyboard.hapticEnabled = preferences.hapticFeedback
         view.keyboard.swipeEnabled = preferences.swipeEnabled
@@ -451,6 +480,22 @@ class BorderKeysService :
     }
 
     // ---- geometry ------------------------------------------------------------------------------
+
+    /**
+     * Applies size and position.
+     *
+     * Called from the preferences flow, so dragging a slider in Settings moves the keyboard that
+     * is on screen at that moment rather than the next one.
+     */
+    private fun applyPlacement(view: KeyboardHostView, settings: KeyboardPreferences) {
+        val density = resources.displayMetrics.density
+        view.setPlacement(
+            settings.positionMode,
+            settings.widthScale,
+            (settings.bottomOffsetDp * density).toInt(),
+            (settings.horizontalOffsetDp * density).toInt(),
+        )
+    }
 
     private fun pushKeyGeometry() {
         val view = host?.keyboard ?: return

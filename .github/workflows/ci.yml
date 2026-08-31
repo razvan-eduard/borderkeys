@@ -206,9 +206,6 @@ jobs:
             ./native-tests/build-asan/pack_corpus_test
 
       # Accuracy is the only thing that says whether a decoder change helped. Compared against
-      # the number recorded in docs/, so a regression fails here instead of being noticed on a
-      # device weeks later.
-      # Accuracy is the only thing that says whether a decoder change helped. Compared against
       # the number recorded in docs/gesture-accuracy.json, so a regression fails here rather
       # than being noticed on a device weeks later.
       - name: Swipe decoder accuracy

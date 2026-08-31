@@ -38,6 +38,26 @@ data class KeyboardPreferences(
      */
     val perAppLanguageMemory: Boolean = false,
     val hapticFeedback: Boolean = true,
+
+    // ---- size and position -------------------------------------------------------------
+    //
+    // A keyboard is the one part of the screen a person's thumb has to reach a hundred times a
+    // minute, and whose right size depends on the hand holding the phone rather than on the
+    // phone. These are the settings that let it be moved rather than endured.
+
+    /** Multiplier on the row height. Larger keys, fewer of them on screen. */
+    val heightScale: Float = 1f,
+    /**
+     * Fraction of the screen width the keyboard occupies. Only meaningful away from
+     * [MODE_DOCKED], where a keyboard narrower than the screen would just leave a gap.
+     */
+    val widthScale: Float = 1f,
+    /** One of the MODE_ constants below. */
+    val positionMode: Int = MODE_DOCKED,
+    /** How far the keyboard sits above the bottom edge, in dp. */
+    val bottomOffsetDp: Float = 0f,
+    /** Horizontal offset from centre, in dp. Floating mode only. */
+    val horizontalOffsetDp: Float = 0f,
     /**
      * A permanent row of digits above the letters.
      *
@@ -53,7 +73,66 @@ data class KeyboardPreferences(
     fun sanitised(): KeyboardPreferences = copy(
         clipboardRetentionMinutes = clipboardRetentionMinutes.coerceIn(1, 60 * 24 * 30),
         clipboardMaxEntries = clipboardMaxEntries.coerceIn(1, 1000),
+        // Clamped for the same reason the theme's dimensions are: a file that parses is not a
+        // file that makes sense, and a keyboard scaled to zero is one the user cannot reach the
+        // settings through.
+        heightScale = heightScale.coerceIn(MIN_HEIGHT_SCALE, MAX_HEIGHT_SCALE),
+        widthScale = widthScale.coerceIn(MIN_WIDTH_SCALE, 1f),
+        positionMode = if (positionMode in MODE_DOCKED..MODE_FLOATING) positionMode else MODE_DOCKED,
+        bottomOffsetDp = bottomOffsetDp.coerceIn(0f, MAX_BOTTOM_OFFSET_DP),
+        horizontalOffsetDp = horizontalOffsetDp.coerceIn(-160f, 160f),
     )
+
+    val isOneHanded: Boolean
+        get() = positionMode == MODE_ONE_HANDED_LEFT || positionMode == MODE_ONE_HANDED_RIGHT
+
+    /**
+     * Moves to [mode], narrowing the keyboard the first time it leaves the dock.
+     *
+     * Without the narrowing, choosing "one-handed" while the width is still 100% changes nothing
+     * at all: the mode is set, the keyboard is pushed to a side it already fills, and the
+     * feature reads as broken. So the first departure from the dock also picks a width that a
+     * thumb can cross, and every later change is left alone -- a user who has already set 70% or
+     * deliberately gone back to 100% keeps what they chose.
+     */
+    fun withPositionMode(mode: Int): KeyboardPreferences {
+        val narrowing = positionMode == MODE_DOCKED && mode != MODE_DOCKED && widthScale == 1f
+        return copy(
+            positionMode = mode,
+            widthScale = if (narrowing) ONE_HANDED_WIDTH_SCALE else widthScale,
+        )
+    }
+
+    companion object {
+        /** Full width, flush with the bottom edge. What a keyboard normally is. */
+        const val MODE_DOCKED = 0
+
+        /**
+         * Narrowed and pushed to one side, so every key is inside a thumb's arc.
+         *
+         * Left and right are separate modes rather than a handedness flag because people switch
+         * hands: the setting is "where the keyboard is now", not "which hand you have".
+         */
+        const val MODE_ONE_HANDED_LEFT = 1
+        const val MODE_ONE_HANDED_RIGHT = 2
+
+        /** Lifted off the bottom edge and movable, for a large screen or a split view. */
+        const val MODE_FLOATING = 3
+
+        const val MIN_HEIGHT_SCALE = 0.65f
+        const val MAX_HEIGHT_SCALE = 1.6f
+        const val MIN_WIDTH_SCALE = 0.55f
+
+        /**
+         * The width the keyboard takes the first time it leaves the dock.
+         *
+         * Roughly a thumb's reach across a 6-inch phone held in one hand: narrow enough that the
+         * far column is reachable, wide enough that the keys do not shrink below the touch
+         * target the hit-testing assumes.
+         */
+        const val ONE_HANDED_WIDTH_SCALE = 0.82f
+        const val MAX_BOTTOM_OFFSET_DP = 220f
+    }
 }
 
 object KeyboardPreferencesSerializer : Serializer<KeyboardPreferences> {
