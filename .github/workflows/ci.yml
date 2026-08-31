@@ -146,6 +146,13 @@ jobs:
           fi
           echo "core APK: no assistant classes, no model files"
 
+      # The .bkd writer and the engine that reads it are two implementations of one format,
+      # and the only thing keeping them in agreement is that both were written against
+      # bkd_format.hpp. This builds a pack and reads it back with an independent reader, so a
+      # drift in the layout fails here rather than as a pack the keyboard silently cannot use.
+      - name: Dictionary compiler round trip
+        run: python3 tools/build_dict.py --selftest
+
       # Runs from step 8 onward, when native-tests/ exists. Guarded rather than omitted so the
       # step is already wired and cannot be forgotten later; it prints what it skipped, because
       # a silently absent check reads exactly like a passing one.
