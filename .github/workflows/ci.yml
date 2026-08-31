@@ -182,28 +182,42 @@ jobs:
       # Runs from step 8 onward, when native-tests/ exists. Guarded rather than omitted so the
       # step is already wired and cannot be forgotten later; it prints what it skipped, because
       # a silently absent check reads exactly like a passing one.
+      # The engine compiled for the host and run against the same sources the device gets.
+      # The test pack is produced by tools/build_dict.py rather than by a fixture, so a drift
+      # between the writer and the reader fails here instead of shipping.
       - name: Native tests
         run: |
           set -euo pipefail
-          if [ ! -f native-tests/CMakeLists.txt ]; then
-            echo "::notice::native-tests/CMakeLists.txt does not exist yet (step 8) — skipped"
-            exit 0
-          fi
           cmake -S native-tests -B native-tests/build -DCMAKE_BUILD_TYPE=Debug
           cmake --build native-tests/build --parallel
           ctest --test-dir native-tests/build --output-on-failure
 
+      # The same loader, under the sanitisers, with the checksums repaired after each mutation
+      # so the mutation reaches the section-bounds and traversal checks rather than being
+      # absorbed by the CRC. A crash here is a build failure, not a report.
+      - name: Language-pack loader under ASan and UBSan
+        run: |
+          set -euo pipefail
+          cmake -S native-tests -B native-tests/build-asan -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
+          cmake --build native-tests/build-asan --target pack_corpus_test --parallel
+          ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 \
+            ./native-tests/build-asan/pack_corpus_test
+
       # Accuracy is the only thing that says whether a decoder change helped. Compared against
       # the number recorded in docs/, so a regression fails here instead of being noticed on a
       # device weeks later.
+      # Accuracy is the only thing that says whether a decoder change helped. Compared against
+      # the number recorded in docs/gesture-accuracy.json, so a regression fails here rather
+      # than being noticed on a device weeks later.
       - name: Swipe decoder accuracy
         run: |
           set -euo pipefail
-          if [ ! -f tools/gesture_replay.py ]; then
-            echo "::notice::tools/gesture_replay.py does not exist yet (step 6.6) — skipped"
-            exit 0
-          fi
-          python3 tools/gesture_replay.py --check-regression
+          python3 tools/gesture_replay.py \
+            --binary native-tests/build/gesture_replay \
+            --pack native-tests/build/test_pack.bkd \
+            --check-regression
 
       - name: Publish reports
         if: always()

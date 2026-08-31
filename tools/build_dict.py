@@ -628,6 +628,12 @@ SAMPLE_WORDS = [
     ("time", 26000), ("timer", 400), ("test", 5000), ("testing", 900), ("water", 4000),
     ("keyboard", 700), ("key", 3000), ("keys", 1500), ("border", 800), ("borders", 300),
     ("privacy", 600), ("private", 1400), ("prediction", 250), ("predict", 300), ("press", 2000),
+    # The words the committed gesture corpus is recorded against. Kept here so the replay
+    # harness has a dictionary to decode into without shipping a real lexicon, whose licence is
+    # still an open question.
+    ("these", 18000), ("people", 22000), ("should", 19000), ("because", 21000),
+    ("through", 14000), ("another", 12000), ("between", 11000), ("important", 6000),
+    ("different", 7000), ("question", 5000), ("together", 6500), ("water", 4000),
 ]
 
 SAMPLE_NGRAMS = {

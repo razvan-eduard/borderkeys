@@ -24,3 +24,6 @@ build/
 *.keystore
 keystore.properties
 keystore_password.txt
+
+# Host test output. native-tests/ is a CMake project, built out of tree.
+/native-tests/build*/

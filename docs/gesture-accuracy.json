@@ -1,0 +1,6 @@
+{
+  "corpus": "native-tests/data/gestures.csv",
+  "gestures": 30,
+  "top1": 96.67,
+  "top3": 100.0
+}
