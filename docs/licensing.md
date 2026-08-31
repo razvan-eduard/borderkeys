@@ -88,7 +88,21 @@ say so.
 | `com.google.guava:listenablefuture:1.0` | Apache-2.0 | Compatible. | `androidx.concurrent:concurrent-futures` |
 | `org.jspecify:jspecify:1.0.0` | Apache-2.0 | Compatible. | `androidx.room`, `androidx.security` |
 
-### 1.5 Build-time only (not in the APK)
+### 1.5 Vendored source (compiled into the `plus` APK)
+
+| Component | Licence | Verdict |
+|---|---|---|
+| `ggml-org/llama.cpp` v0.3.0, submodule at `assist/src/main/cpp/third_party/llama.cpp` | MIT | Compatible. MIT is one-way compatible with GPLv3; the combined work is distributed under GPLv3. Built from source as a CMake target, never as a prebuilt artefact, so the binary is reproducible from this tree plus the recorded submodule commit. |
+
+Only the `llama` and `ggml` targets are built. Tests, tools, examples and the server are off,
+and that last one matters beyond build time: **the server target links `cpp-httplib`**. Verified
+before vendoring that with those options the httplib sources compile no objects at all — an HTTP
+client inside the process holding the user's selected text would contradict this project's
+central claim even if nothing ever called it.
+
+Result: `libborderkeysassist.so` is 3.2 MB stripped for arm64-v8a and 2.4 MB for armeabi-v7a.
+
+### 1.6 Build-time only (not in the APK)
 
 | Component | Licence | Verdict |
 |---|---|---|
@@ -106,7 +120,7 @@ say so.
 > EPL-1.0 cannot be combined with GPLv3 in a distributed binary. It never reaches one here, and
 > it must not start to.
 
-### 1.6 Deliberately absent
+### 1.7 Deliberately absent
 
 Enforced by `verifyNoForbiddenDependencies`, which walks the transitive graph and throws:
 Firebase, Google Play Services, MediaPipe, OkHttp, Retrofit, Ktor, Volley, Dagger/Hilt, Koin,
@@ -153,7 +167,7 @@ this reason.
 | FUTO `swipe-library` C++ inference code | 6.3 | **GPL-3.0-or-later — verified via the GitLab API, `license.key = gpl-3.0+`.** That is not merely compatible with this project, it is the same licence. Not to be confused with the FUTO Keyboard *application*, which is under the FUTO Source First License 1.0 — not free, and it must never enter this repository. |
 | ExecuTorch v1.2.0 | 6.3 (option B1) | **BSD-3-Clause.** Compatible. Not previously accounted for: `swipe-library` vendors ExecuTorch as a git submodule and its models are `.pte` files, so option B1 means building PyTorch's runtime into `libborderkeys.so`, not the self-contained C++ library the plan assumed. It also requires CMake 3.29+, against the 3.22.1 this project pins. See section 2.4. |
 | FUTO gesture corpus, `futo-org/swipe.futo.org` | 6.3 (option B2) | **MIT — verified from the dataset's own licence tag.** Free. There is also `futo-org/swipe-negatives` under Apache-2.0. Together these are what make option B2 legally possible without asking anyone's permission. |
-| GGUF language model for the text assistant | 7 | Per-model. Never bundled unless small and freely licensed; the normal path is user import from a local file with a known-hash check. Any bundled weights are recorded here and reflected in `AntiFeatures`. |
+| GGUF language model for the text assistant | 7 | **Never bundled, in either flavor.** A model arrives only because the user chose a file, and only if its SHA-256 matches an entry in `KnownAssistModels`. All three entries are **Apache-2.0**, verified from the publishing repositories' own file metadata: Qwen3-0.6B-Q8_0 (610 MB, `9465e63a…`), Qwen3-1.7B-Q8_0 (1.75 GB, `061b54da…`) and SmolLM3-Q4_K_M (1.83 GB, `8334b850…`). So `plus` carries no non-free asset on this account and declares no anti-feature for it. |
 
 ### 2.3 What the licence check actually found
 
@@ -185,7 +199,28 @@ That matters for three reasons:
 None of this makes B1 impossible. It makes it a different decision than the one written down,
 and it is the maintainer's to make rather than one to take quietly while implementing.
 
-### 2.4 Option B2 — what a free-weights swipe decoder would cost
+### 2.4 The text assistant's runtime and models, checked before writing code
+
+Same discipline as the swipe decoder, and this time every assumption held.
+
+**llama.cpp is MIT** and builds for both Android ABIs with CMake 3.22.1 — the version this
+project pins, unlike `swipe-library`, which needs 3.29+. It configures and links without
+`cpp-httplib` once the server target is off, which was the one thing worth checking before
+putting an inference runtime inside a keyboard that holds no network permission.
+
+**Three of the candidate models are free software.** Qwen3 0.6B and 1.7B are Apache-2.0, as is
+SmolLM3. Phi-4-mini is MIT. That matters more than it might look: it means the `plus` flavor can
+offer a text assistant **without a single non-free asset**, which is not true of the swipe
+weights in section 2.2. The two remaining candidates are not free and are not in the registry:
+LFM2 is under a bespoke "LFM Open License", and Gemma 3 is under Google's Gemma Terms of Use.
+Gemma is the best of them on a weak phone — it fits in 4 GB — and that is the trade being
+declined, on the grounds that a keyboard whose free build has no anti-features should not need
+one in its paid-for-in-storage build either.
+
+Nothing is bundled either way. A 610 MB model in an APK is not a distribution mechanism, and
+F-Droid would be right to refuse it.
+
+### 2.5 Option B2 — what a free-weights swipe decoder would cost
 
 Recorded here so the option stays real rather than aspirational.
 

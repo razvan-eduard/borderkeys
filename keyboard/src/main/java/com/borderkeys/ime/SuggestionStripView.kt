@@ -30,7 +30,20 @@ class SuggestionStripView(
 
     interface Listener {
         fun onSuggestionPicked(index: Int, word: String)
+
+        /**
+         * One of the assistant's actions was tapped.
+         *
+         * The strip carries these because a text selection and a word in progress cannot both
+         * exist: while text is selected there is nothing to suggest, so the row is free, and
+         * putting the actions where the user is already looking beats a button they must find.
+         */
+        fun onActionPicked(index: Int)
     }
+
+    /** True while the strip is showing assistant actions rather than word suggestions. */
+    var actionMode: Boolean = false
+        private set
 
     var listener: Listener? = null
 
@@ -73,6 +86,9 @@ class SuggestionStripView(
      * next request, and holding it would mean the strip and the engine race over the same slots.
      */
     fun setSuggestions(source: Array<String?>, sourceCount: Int) {
+        if (!actionMode && source === words) {
+            return
+        }
         val newCount = sourceCount.coerceIn(0, MAX_SUGGESTIONS)
         var changed = newCount != count
         for (index in 0 until newCount) {
@@ -100,7 +116,14 @@ class SuggestionStripView(
         }
     }
 
+    /** Switches the strip to the assistant's actions for the current selection. */
+    fun setActions(labels: Array<String?>, count: Int) {
+        actionMode = true
+        setSuggestions(labels, count)
+    }
+
     fun clear() {
+        actionMode = false
         if (count != 0) {
             count = 0
             for (index in 0 until MAX_SUGGESTIONS) {
@@ -193,7 +216,9 @@ class SuggestionStripView(
                 val word = if (slot >= 0) words[slot] else null
                 pressedIndex = -1
                 invalidate()
-                if (word != null) {
+                if (slot >= 0 && actionMode) {
+                    listener?.onActionPicked(slot)
+                } else if (word != null) {
                     listener?.onSuggestionPicked(slot, word)
                 }
             }

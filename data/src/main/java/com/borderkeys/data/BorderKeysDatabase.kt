@@ -7,10 +7,12 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.borderkeys.data.dao.AssistModelDao
 import com.borderkeys.data.dao.BlockedWordDao
 import com.borderkeys.data.dao.ClipboardDao
 import com.borderkeys.data.dao.LanguagePackDao
 import com.borderkeys.data.dao.UserWordDao
+import com.borderkeys.data.entity.AssistModelEntry
 import com.borderkeys.data.entity.BlockedWord
 import com.borderkeys.data.entity.ClipEntry
 import com.borderkeys.data.entity.LanguagePackEntry
@@ -30,6 +32,7 @@ import java.util.Arrays
         UserWord::class,
         BlockedWord::class,
         LanguagePackEntry::class,
+        AssistModelEntry::class,
     ],
     version = 1,
     exportSchema = true,
@@ -40,6 +43,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
     abstract fun userWordDao(): UserWordDao
     abstract fun blockedWordDao(): BlockedWordDao
     abstract fun languagePackDao(): LanguagePackDao
+    abstract fun assistModelDao(): AssistModelDao
 
     companion object {
         private const val DATABASE_NAME = "borderkeys.db"

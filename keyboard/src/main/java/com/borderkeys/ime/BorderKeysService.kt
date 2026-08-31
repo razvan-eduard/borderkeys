@@ -20,7 +20,10 @@ import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.common.TextViewStyle
 import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
+import com.borderkeys.assist.AssistClient
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.assist.AssistProtocol
+import com.borderkeys.data.assist.AssistTask
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.keyboard.BuildConfig
@@ -49,6 +52,8 @@ class BorderKeysService :
     InputMethodService(),
     KeyboardCanvasView.Listener,
     SuggestionStripView.Listener,
+    AssistSheetView.Listener,
+    AssistClient.Listener,
     PredictionEngine.ResultListener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -88,6 +93,28 @@ class BorderKeysService :
      * having been ignored.
      */
     private val gestureDecodingRunnable = Runnable { host?.suggestionStrip?.decoding = true }
+
+    // ---- text assistant ----------------------------------------------------------------------
+    //
+    // Everything below is inert in the free build: AssistClient resolves the service by name,
+    // :assist is attached only to the `plus` flavor, and resolution simply fails. There is no
+    // flag to check and nothing to disable.
+
+    private val assist by lazy { AssistClient(this).also { it.listener = this } }
+    private var assistAvailable = false
+    private var assistRequestId = -1
+    private var assistSelection = ""
+    private var assistTask: AssistTask? = null
+
+    /**
+     * The actions offered for a selection.
+     *
+     * Three, because the strip has three slots and because a longer menu would need somewhere
+     * else to live. Translation is offered in one direction at a time, chosen by the layout's
+     * language: a Romanian keyboard offers English, and the other way round.
+     */
+    private val assistActions = arrayOfNulls<String>(SuggestionStripView.MAX_SUGGESTIONS)
+    private var assistTasks: Array<AssistTask> = emptyArray()
 
     private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
         onClipboardChanged()
@@ -185,6 +212,162 @@ class BorderKeysService :
         }
     }
 
+    /**
+     * Called whenever the cursor or the selection moves.
+     *
+     * A non-empty selection is the assistant's only entry point. It is not offered while typing,
+     * it never appears on its own, and it is refused outright in a private field -- checked here
+     * rather than only in the service, because a feature that reads the user's selected text
+     * must be impossible to reach from a password box by any path.
+     */
+    override fun onUpdateSelection(
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int,
+    ) {
+        super.onUpdateSelection(
+            oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd,
+        )
+        val view = host ?: return
+        if (view.assistSheetVisible) {
+            return
+        }
+        val hasSelection = newSelEnd > newSelStart
+        if (!hasSelection || privateMode || !assistAvailable) {
+            if (view.suggestionStrip.actionMode) {
+                view.suggestionStrip.clear()
+                requestSuggestions()
+            }
+            return
+        }
+        offerAssistActions()
+    }
+
+    private fun offerAssistActions() {
+        val view = host ?: return
+        val selection = currentInputConnection
+            ?.getSelectedText(0)?.toString().orEmpty()
+        if (selection.isEmpty() || selection.length > AssistProtocol.MAX_SELECTION_CHARS) {
+            return
+        }
+        assistSelection = selection
+
+        // The translation direction follows the layout: a Romanian keyboard offers English.
+        val translate = if (alphabeticLayout.languageTag.startsWith("ro")) {
+            AssistTask.TRANSLATE_TO_ENGLISH
+        } else {
+            AssistTask.TRANSLATE_TO_ROMANIAN
+        }
+        assistTasks = arrayOf(AssistTask.SUMMARISE, AssistTask.CORRECT, translate)
+        assistActions[0] = "Summarise"
+        assistActions[1] = "Correct"
+        assistActions[2] = if (translate == AssistTask.TRANSLATE_TO_ENGLISH) "→ English" else "→ Română"
+        view.suggestionStrip.setActions(assistActions, assistTasks.size)
+    }
+
+    override fun onActionPicked(index: Int) {
+        val task = assistTasks.getOrNull(index) ?: return
+        if (privateMode || assistSelection.isEmpty()) {
+            return
+        }
+        val view = host ?: return
+        assistTask = task
+        view.assistSheet.listener = this
+        view.assistSheet.showRunning(assistActionTitle(task), assistSelection)
+        view.showAssistSheet(true)
+        assistRequestId = assist.run(task, assistSelection)
+        if (assistRequestId < 0) {
+            view.assistSheet.showError("The assistant is not installed.")
+        }
+    }
+
+    private fun assistActionTitle(task: AssistTask): String = when (task) {
+        AssistTask.SUMMARISE -> "Summary"
+        AssistTask.CORRECT -> "Correction"
+        AssistTask.REWRITE_FORMAL -> "Formal rewrite"
+        AssistTask.TRANSLATE_TO_ENGLISH -> "Translation into English"
+        AssistTask.TRANSLATE_TO_ROMANIAN -> "Traducere în română"
+    }
+
+    override fun onAssistResult(requestId: Int, text: String, modelName: String?) {
+        // A late answer to a request the user has already dismissed is discarded rather than
+        // shown over whatever they are doing now.
+        if (requestId != assistRequestId) {
+            return
+        }
+        host?.assistSheet?.showResult(text, modelName)
+    }
+
+    override fun onAssistError(requestId: Int, error: Int) {
+        if (requestId != assistRequestId) {
+            return
+        }
+        host?.assistSheet?.showError(
+            when (error) {
+                AssistProtocol.ERROR_NO_MODEL ->
+                    "No model imported yet. Settings › Text assistant."
+                AssistProtocol.ERROR_MODEL_CHANGED ->
+                    "The model file changed since it was imported and was not loaded."
+                AssistProtocol.ERROR_LOAD_FAILED ->
+                    "The model could not be loaded. It may not fit in memory on this device."
+                AssistProtocol.ERROR_TOO_LONG ->
+                    "The selection is longer than this model's context window."
+                AssistProtocol.ERROR_BUSY -> "Still working on the previous request."
+                else -> "The assistant could not finish."
+            },
+        )
+    }
+
+    override fun onAssistAvailability(available: Boolean, modelName: String?) {
+        assistAvailable = available
+    }
+
+    /**
+     * The sheet's buttons.
+     *
+     * Replace is the only one that writes anything, and it writes in a single batch edit so the
+     * editor sees one change rather than a delete followed by an insert.
+     */
+    override fun onAssistButton(button: AssistSheetView.Button) {
+        val view = host ?: return
+        when (button) {
+            AssistSheetView.Button.REPLACE -> {
+                val text = view.assistSheet.currentProposal()
+                val connection = currentInputConnection
+                if (text.isNotEmpty() && connection != null) {
+                    connection.beginBatchEdit()
+                    connection.commitText(text, 1)
+                    connection.endBatchEdit()
+                }
+            }
+            AssistSheetView.Button.COPY -> {
+                val text = view.assistSheet.currentProposal()
+                if (text.isNotEmpty()) {
+                    clipboardManager?.setPrimaryClip(
+                        android.content.ClipData.newPlainText("BorderKeys", text),
+                    )
+                }
+            }
+            AssistSheetView.Button.DISCARD -> assist.cancel()
+        }
+        closeAssistSheet()
+    }
+
+    private fun closeAssistSheet() {
+        assistRequestId = -1
+        assistTask = null
+        assistSelection = ""
+        host?.showAssistSheet(false)
+        host?.suggestionStrip?.clear()
+        // The model unloads itself on its own timer; dropping the binding is what lets the
+        // process stop rather than lingering for the rest of the session.
+        assist.disconnect()
+        requestSuggestions()
+    }
+
     override fun onCreateInputView(): View {
         // Built in code. LayoutInflater would parse XML and reflect to construct three views,
         // every time the keyboard is shown in a new editor.
@@ -220,6 +403,13 @@ class BorderKeysService :
             view.keyboard.swipeEnabled = preferences.swipeEnabled
         }
         showPage(pageFor(info))
+        // Asked once per field rather than once per selection: the answer is about whether the
+        // flavor has an assistant and a verified model, neither of which changes mid-session.
+        if (!privateMode) {
+            assist.queryAvailability()
+        } else {
+            assistAvailable = false
+        }
         shiftState = if (info != null && shouldAutoCapitalise(info)) SHIFT_ON else SHIFT_OFF
 
         resetComposing()
@@ -234,6 +424,11 @@ class BorderKeysService :
 
     override fun onFinishInput() {
         super.onFinishInput()
+        if (host?.assistSheetVisible == true) {
+            closeAssistSheet()
+        } else {
+            assist.disconnect()
+        }
         // The session is over, so everything held in memory is written now rather than waiting
         // for a debounce that may never fire: the process can be killed the moment the keyboard
         // is hidden.
@@ -244,6 +439,7 @@ class BorderKeysService :
     }
 
     override fun onDestroy() {
+        assist.disconnect()
         unregisterClipboardListener()
         flushLearning()
         // Zeroes the handle under a lock before freeing, so a request already in flight

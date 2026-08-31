@@ -24,9 +24,19 @@ android {
         }
         externalNativeBuild {
             cmake {
+                // c++_shared here, unlike :keyboard's c++_static. llama.cpp is several static
+                // libraries linking into one shared object, and a static STL in that
+                // configuration duplicates its symbols across them.
                 arguments += listOf("-DANDROID_STL=c++_shared")
                 cppFlags += "-std=c++17"
             }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = libs.versions.cmake.get()
         }
     }
 

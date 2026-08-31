@@ -53,8 +53,14 @@ jobs:
       GRADLE_HEAP: -Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
 
     steps:
+      # The `plus` flavor compiles llama.cpp from the vendored submodule, so the build cannot
+      # run without it. Shallow: the pinned commit is all that is needed, and a full clone of
+      # llama.cpp is several hundred megabytes for history nobody here reads.
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 1
 
       # 21 because gradle/gradle-daemon-jvm.properties pins the daemon to 21. A different JDK
       # here means the runner downloads its own, silently, on every run.
@@ -128,7 +134,7 @@ jobs:
       # `plusImplementation` is what keeps the assistant out of the free build, and it is a
       # single line in one build file. Asserted against the dex rather than trusted: DEX stores
       # type descriptors as plain strings, so grep is enough and needs no extra tooling.
-      - name: The core APK contains no assistant code and no model files
+      - name: The core APK contains no assistant code, runtime or model files
         run: |
           set -euo pipefail
           APK="$(find app/build/outputs/apk/core/release -name '*.apk' | head -1)"
@@ -138,13 +144,33 @@ jobs:
             echo "::error::core APK contains com.borderkeys.assist classes"
             exit 1
           fi
+          # The inference runtime is a native library, so it would not show up in the dex check
+          # above even if the whole of llama.cpp were packaged.
+          if unzip -l "$APK" | grep -q 'borderkeysassist'; then
+            echo "::error::core APK contains the inference runtime"
+            exit 1
+          fi
           MODELS="$(unzip -l "$APK" | grep -iE '\.(gguf|tflite|onnx|pt|pte|safetensors)$' || true)"
           if [ -n "$MODELS" ]; then
             echo "::error::core APK contains model files:"
             echo "$MODELS"
             exit 1
           fi
-          echo "core APK: no assistant classes, no model files"
+          echo "core APK: no assistant classes, no inference runtime, no model files"
+
+      # Neither flavor bundles a model. `plus` ships the runtime and nothing to run: a model
+      # arrives because the user chose a file, and that keeps `plus` free of non-free assets.
+      - name: Neither flavor bundles a model
+        run: |
+          set -euo pipefail
+          for FLAVOR in core plus; do
+            APK="$(find "app/build/outputs/apk/$FLAVOR/release" -name '*.apk' | head -1)"
+            if unzip -l "$APK" | grep -iqE '\.(gguf|pte|onnx|safetensors)$'; then
+              echo "::error::$FLAVOR APK bundles a model"
+              exit 1
+            fi
+          done
+          echo "no model files in either flavor"
 
       # The .bkd writer and the engine that reads it are two implementations of one format,
       # and the only thing keeping them in agreement is that both were written against

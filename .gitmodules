@@ -1,0 +1,4 @@
+[submodule "assist/src/main/cpp/third_party/llama.cpp"]
+	path = assist/src/main/cpp/third_party/llama.cpp
+	url = https://github.com/ggml-org/llama.cpp
+	shallow = true

@@ -285,3 +285,48 @@ class KeyboardLayoutTest {
         }
     }
 }
+
+class NumberRowSymbolsTest {
+
+    @Test
+    fun `each digit carries the symbol a physical keyboard puts above it`() {
+        val digits = KeyboardLayout.fallbackQwerty().withNumberRow().rows[0].keys
+        val expected = "1234567890".zip("!@#$%^&*()")
+        assertEquals(expected.size, digits.size)
+        for ((index, pair) in expected.withIndex()) {
+            val (digit, shifted) = pair
+            assertEquals(digit.toString(), digits[index].label)
+            assertEquals(shifted.toString(), digits[index].alternatives)
+            assertTrue(KeyFlags.has(digits[index].flags, KeyFlags.HAS_ALTERNATIVES))
+        }
+    }
+
+    @Test
+    fun `no shipped letter layout puts a digit under a letter`() {
+        // The whole point of moving the digits into their own row: a long press on "t" belongs
+        // to the Romanian comma, not to a five. Asserted against the asset files themselves,
+        // read as text -- org.json is stubbed in a JVM unit test, and this invariant is about
+        // what ships rather than about the parser.
+        for (name in listOf("qwerty_ro", "qwerty_en")) {
+            val file = java.io.File("src/main/assets/layouts/$name.json")
+            assertTrue("$name.json is missing", file.isFile)
+            val text = file.readText()
+            val alternates = Regex("\"alt\"\\s*:\\s*\"([^\"]*)\"").findAll(text)
+                .map { it.groupValues[1] }.toList()
+            assertTrue("$name has no long-press alternates at all", alternates.isNotEmpty())
+            for (value in alternates) {
+                assertTrue(
+                    "$name puts a digit in a long press: \"$value\"",
+                    value.none { it.isDigit() },
+                )
+            }
+        }
+        // And the Romanian diacritics are still where they belong.
+        val romanian = java.io.File("src/main/assets/layouts/qwerty_ro.json").readText()
+        for (pair in listOf("\"t\", \"alt\": \"ț", "\"s\", \"alt\": \"ș")) {
+            assertTrue("qwerty_ro lost $pair", romanian.contains(pair))
+        }
+        assertTrue(romanian.contains("\"a\", \"alt\": \"ă"))
+        assertTrue(romanian.contains("\"i\", \"alt\": \"î"))
+    }
+}

@@ -53,6 +53,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          # The `plus` flavor compiles llama.cpp from the vendored submodule.
+          submodules: recursive
           fetch-depth: 1
 
       - name: Set up JDK

@@ -36,6 +36,14 @@ class KeyboardHostView(
     val keyboard = KeyboardCanvasView(context, paints)
 
     /**
+     * Covers the keys while the assistant's answer is on screen.
+     *
+     * Present in both flavors because the view is in `:keyboard`; it is only ever shown when
+     * `:assist` exists to fill it, which in the free build is never.
+     */
+    val assistSheet = AssistSheetView(context, paints)
+
+    /**
      * Space the system's own IME navigation bar occupies along the bottom edge.
      *
      * Android 15 enforces edge-to-edge for the input method window, so the framework draws its
@@ -52,7 +60,9 @@ class KeyboardHostView(
         addView(suggestionStrip)
         addView(inlineSuggestions)
         addView(keyboard)
+        addView(assistSheet)
         inlineSuggestions.visibility = GONE
+        assistSheet.visibility = GONE
 
         setOnApplyWindowInsetsListener { _, insets ->
             val bottom = insets.getInsets(
@@ -87,6 +97,18 @@ class KeyboardHostView(
         }
     }
 
+    /** Puts the assistant's sheet over the keys, or takes it away. */
+    fun showAssistSheet(show: Boolean) {
+        val visibility = if (show) VISIBLE else GONE
+        if (assistSheet.visibility != visibility) {
+            assistSheet.visibility = visibility
+            keyboard.visibility = if (show) GONE else VISIBLE
+            requestLayout()
+        }
+    }
+
+    val assistSheetVisible: Boolean get() = assistSheet.visibility == VISIBLE
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val exactWidth = MeasureSpec.makeMeasureSpec(
@@ -105,8 +127,14 @@ class KeyboardHostView(
             inlineSuggestions.measure(exactWidth, unbounded)
             height += inlineSuggestions.measuredHeight
         }
-        keyboard.measure(exactWidth, unbounded)
-        height += keyboard.measuredHeight
+        if (keyboard.visibility != GONE) {
+            keyboard.measure(exactWidth, unbounded)
+            height += keyboard.measuredHeight
+        }
+        if (assistSheet.visibility != GONE) {
+            assistSheet.measure(exactWidth, unbounded)
+            height += assistSheet.measuredHeight
+        }
 
         setMeasuredDimension(width, height + navigationBarInset)
     }
@@ -122,6 +150,12 @@ class KeyboardHostView(
             inlineSuggestions.layout(0, y, width, y + inlineSuggestions.measuredHeight)
             y += inlineSuggestions.measuredHeight
         }
-        keyboard.layout(0, y, width, y + keyboard.measuredHeight)
+        if (keyboard.visibility != GONE) {
+            keyboard.layout(0, y, width, y + keyboard.measuredHeight)
+            y += keyboard.measuredHeight
+        }
+        if (assistSheet.visibility != GONE) {
+            assistSheet.layout(0, y, width, y + assistSheet.measuredHeight)
+        }
     }
 }

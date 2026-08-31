@@ -61,15 +61,19 @@ class KeyboardLayout(
         if (rows.isEmpty() || id.endsWith(NUMBER_ROW_SUFFIX)) {
             return this
         }
-        val digits = "1234567890".map { character ->
+        // Digit on the key, the symbol a physical keyboard puts above it on the long press.
+        // That pairing is the one people already know, and it keeps the digits off the letter
+        // row -- where the long press belongs to the diacritics, and where a digit competing
+        // with "t" for "t" would be a collision rather than a convenience.
+        val digits = DIGIT_ROW.map { (digit, shifted) ->
             Key(
-                code = character.code,
-                label = character.toString(),
-                alternatives = "",
+                code = digit.code,
+                label = digit.toString(),
+                alternatives = shifted.toString(),
                 widthUnits = 1f,
-                // Not a LETTER: a swipe must not be able to pass through a digit, and a digit
-                // is not a substitution target when correcting a typo.
-                flags = KeyFlags.PREVIEW,
+                // Not a LETTER: a swipe must not pass through a digit, and a digit is never a
+                // substitution target when correcting a typo.
+                flags = KeyFlags.PREVIEW or KeyFlags.HAS_ALTERNATIVES,
             )
         }
         return KeyboardLayout(
@@ -82,6 +86,9 @@ class KeyboardLayout(
 
     companion object {
         private const val NUMBER_ROW_SUFFIX = "+num"
+
+        /** The top row of a physical keyboard, unshifted and shifted. */
+        private val DIGIT_ROW = "1234567890".zip("!@#$%^&*()")
         private const val NUMBER_ROW_HEIGHT = 0.8f
 
         /**

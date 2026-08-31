@@ -19,6 +19,14 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2007 Free Software Foundation, Inc. <https://fsf.org/>"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# Submodule pointers. The vendored source itself is a separate repository with its own
+# licensing, recorded in docs/licensing.md; REUSE correctly declines to descend into it.
+[[annotations]]
+path = ".gitmodules"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 BorderKeys contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # Empty directory markers. They exist so that the module source roots survive a clone; every
 # one of them disappears as its step lands.
 [[annotations]]

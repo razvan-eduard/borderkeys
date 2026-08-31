@@ -104,6 +104,13 @@ object DataGraph {
         )
     }
 
+    val assistModels: AssistModelRepository by lazy {
+        AssistModelRepository(
+            database.assistModelDao(),
+            File(requireContext.filesDir, "models"),
+        )
+    }
+
     /** The directory imported packs live in. Private storage, never a content:// URI. */
     val packsDirectory: File
         get() = File(requireContext.filesDir, "packs")
