@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-#include <dirent.h>
-#include <fcntl.h>
-#include <unistd.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <dirent.h>
+#include <fcntl.h>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 #include "bkd_format.hpp"
@@ -99,7 +101,10 @@ bool loadAndQuery(const std::string& bytes, const char* scratchPath, bool* loade
             // rather than a wrong suggestion on someone's phone.
             volatile char sink = 0;
             for (uint32_t k = 0; text != nullptr && k < length; ++k) {
-                sink = static_cast<volatile char>(text[k]);
+                // Assigned to a volatile, which is what stops the compiler dropping the read.
+                // Casting to `volatile char` instead would be a cast to a qualified prvalue,
+                // where the qualifier is discarded -- gcc warns about it and is right to.
+                sink = text[k];
             }
             (void)sink;
         }

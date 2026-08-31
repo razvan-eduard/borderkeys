@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <fcntl.h>
+#include <string>
 #include <sys/stat.h>
 #include <unistd.h>
-
-#include <cstring>
-#include <string>
 
 #include "engine.hpp"
 #include "proximity.hpp"

@@ -3,6 +3,8 @@
 
 #include "template_cache.hpp"
 
+#include <cstdint>
+
 namespace borderkeys {
 
 void TemplateCache::setGeometry(const KeyGeometry* geometry) {

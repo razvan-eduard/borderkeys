@@ -3,6 +3,7 @@
 
 #include "packed_trie.hpp"
 
+#include <cstdint>
 #include <cstring>
 
 namespace borderkeys {

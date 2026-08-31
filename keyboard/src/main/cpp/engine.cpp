@@ -5,11 +5,13 @@
 
 #include "gesture/shark2_decoder.hpp"
 
-#include <sys/mman.h>
-#include <unistd.h>
 
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <sys/mman.h>
+#include <unistd.h>
 
 namespace borderkeys {
 namespace {

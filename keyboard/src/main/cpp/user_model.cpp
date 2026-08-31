@@ -4,6 +4,8 @@
 #include "user_model.hpp"
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 

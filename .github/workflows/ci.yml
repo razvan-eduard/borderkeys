@@ -185,6 +185,23 @@ jobs:
       # The engine compiled for the host and run against the same sources the device gets.
       # The test pack is produced by tools/build_dict.py rather than by a fixture, so a drift
       # between the writer and the reader fails here instead of shipping.
+      # Every header has to compile on its own. The alternative is a header that works only
+      # because whatever included it first happened to pull in <cstdint>, which is true on
+      # libc++ and false on libstdc++ -- so it builds on the machine it was written on and
+      # fails here, which is exactly what happened.
+      - name: Headers are self-contained
+        run: |
+          set -euo pipefail
+          status=0
+          for header in $(find keyboard/src/main/cpp native-tests -name '*.hpp' | sort); do
+            printf '#include "%s"\n' "$PWD/$header" > /tmp/header-check.cpp
+            if ! g++ -std=c++17 -fsyntax-only -I keyboard/src/main/cpp /tmp/header-check.cpp; then
+              echo "not self-contained: $header"
+              status=1
+            fi
+          done
+          exit $status
+
       - name: Native tests
         run: |
           set -euo pipefail

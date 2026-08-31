@@ -9,6 +9,8 @@
 #include "resample.hpp"
 #include "template_cache.hpp"
 
+#include <cstdint>
+
 namespace borderkeys {
 
 /**

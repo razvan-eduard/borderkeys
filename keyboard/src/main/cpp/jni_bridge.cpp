@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-#include <jni.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <jni.h>
 #include <new>
 
 #include "engine.hpp"

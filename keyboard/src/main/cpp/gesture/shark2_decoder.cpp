@@ -4,6 +4,7 @@
 #include "shark2_decoder.hpp"
 
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 
 namespace borderkeys {

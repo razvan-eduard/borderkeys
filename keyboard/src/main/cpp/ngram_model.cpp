@@ -3,6 +3,9 @@
 
 #include "ngram_model.hpp"
 
+#include <cstddef>
+#include <cstdint>
+
 namespace borderkeys {
 
 bool NgramModel::bind(const uint8_t* base, uint64_t mappedBytes, const BkdHeader& header) {

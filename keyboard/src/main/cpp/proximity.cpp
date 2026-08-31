@@ -4,6 +4,8 @@
 #include "proximity.hpp"
 
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 
 namespace borderkeys {

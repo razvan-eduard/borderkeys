@@ -4,6 +4,7 @@
 #include "resample.hpp"
 
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 
 namespace borderkeys {

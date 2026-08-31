@@ -3,11 +3,13 @@
 
 #include "text_assist.hpp"
 
-#include <android/log.h>
-#include <llama.h>
 
 #include <algorithm>
+#include <android/log.h>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <llama.h>
 #include <vector>
 
 namespace borderkeys {

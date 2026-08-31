@@ -5,6 +5,8 @@
 #define BORDERKEYS_TEST_SUPPORT_HPP
 
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <string>
