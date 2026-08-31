@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Present only in the `plus` flavor: :app attaches this module through plusImplementation, so
+    the core APK does not contain this manifest, this service, or any of the code behind it.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <!--
+            android:process=":assist" is the whole point of this module existing separately.
+
+            A quantised 1-3B parameter model is hundreds of megabytes resident. Loading one into
+            the IME process would make the process that every other app types through into the
+            largest thing on the device, and the memory killer sorts by exactly that: the
+            keyboard would be reclaimed while backgrounded and pay a cold start on the next tap
+            in any text field. In its own process the model is loaded on an explicit user
+            action, released after ninety seconds of inactivity, and the process it lived in can
+            be killed at any moment without the keyboard noticing.
+
+            exported="false": bound only from within this application, over an explicit
+            component name. Nothing outside the app can reach the assistant, and the assistant
+            reaches nothing outside - there is no network in this process either.
+        -->
+        <service
+            android:name="com.borderkeys.assist.TextAssistService"
+            android:process=":assist"
+            android:exported="false" />
+
+    </application>
+
+</manifest>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    The keyboard module declares its own component. Nothing about this service lives in the
+    application manifest, so the module can be built, tested and reasoned about on its own, and
+    deleting the module deletes the component with it.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <!--
+            The class name is fully qualified because this is a library: its manifest is merged
+            into an application whose applicationId it does not share, so a leading-dot name
+            would resolve against com.borderkeys rather than against this module.
+
+            android:permission is what makes the service safe to export. Only the system holds
+            BIND_INPUT_METHOD, so "exported" here means "bindable by the input method manager",
+            not "bindable by any app that asks". Both attributes are required by the platform;
+            an IME without them is never listed.
+
+            directBootAware is false, and deliberately: everything this keyboard knows lives in
+            a SQLCipher database whose key is in the Keystore, none of which is readable before
+            the user has unlocked the device. A direct-boot-aware IME would have to run with no
+            dictionary, no personal words and no clipboard, which is worse than the system
+            falling back to its own keyboard on the lock screen.
+        -->
+        <service
+            android:name="com.borderkeys.ime.BorderKeysService"
+            android:label="@string/ime_name"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true"
+            android:directBootAware="false">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+
+    </application>
+
+</manifest>

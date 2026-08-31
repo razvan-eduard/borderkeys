@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+-->
+<resources>
+
+    <!-- Shown in the system's input method list and on the keyboard switcher. -->
+    <string name="ime_name" translatable="false">BorderKeys</string>
+
+    <!--
+        Substituted by the framework with the subtype's locale display name, in the phone's
+        language. Not translatable: there is nothing here to translate.
+    -->
+    <string name="subtype_language_label" translatable="false">%s</string>
+
+</resources>

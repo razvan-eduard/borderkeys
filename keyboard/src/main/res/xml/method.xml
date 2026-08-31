@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    What the platform reads to describe this input method before ever binding to it.
+
+    settingsActivity is a string, not a class reference, and it names a class in :settings.
+    That is the one and only link pointing from :keyboard towards :settings, and it exists only
+    because the platform demands a name here. It creates no compile-time dependency and no
+    Compose on the keyboard's classpath - which is exactly why it is allowed to point that way
+    when nothing else may.
+-->
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.borderkeys.settings.SettingsActivity"
+    android:isDefault="false"
+    android:supportsSwitchingToNextInputMethod="true"
+    android:supportsInlineSuggestions="true">
+
+    <!--
+        Subtypes select the LAYOUT: which keys exist, where they are, which diacritics sit on
+        which long-press. They do not decide which dictionaries are active. The engine keeps up
+        to four language packs loaded at once and scores candidates from all of them (section
+        3.6), so a Romanian layout with ro, en and fr enabled is a normal configuration and
+        switching subtype does not switch what the keyboard knows.
+
+        subtypeId is stated rather than derived. The platform otherwise hashes the subtype's
+        fields into an id, which means changing a label or an extra value silently produces a
+        *different* subtype - and the user's enabled-subtype selection, stored by id, is lost
+        on update.
+
+        isAsciiCapable tells the system this subtype can type a password or a URL, so it is not
+        skipped over when an app asks for a keyboard in an ASCII-only field. Both layouts are
+        QWERTY with the diacritics on long-press, so both are.
+
+        The label is "%s": the framework substitutes the locale's display name, already
+        translated into whatever language the phone is set to. Hardcoding "Romanian" here would
+        print English on a Romanian phone.
+    -->
+    <subtype
+        android:subtypeId="0x0B0DE001"
+        android:label="@string/subtype_language_label"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="ro-RO"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=ro_qwerty" />
+
+    <subtype
+        android:subtypeId="0x0B0DE002"
+        android:label="@string/subtype_language_label"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="en-US"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=en_qwerty" />
+
+</input-method>

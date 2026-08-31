@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    The settings UI is the only launchable thing this app has. It runs in the main application
+    process, which is not the IME process: Compose can take as long as it likes to compose
+    here, because nothing on this side of the process boundary is between a finger and a
+    character appearing in a text field.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <!--
+            exported="true" solely because of the LAUNCHER filter below - this activity has no
+            other entry point and accepts no extras, so there is no surface for another app to
+            reach beyond "open the settings screen", which is what the launcher icon does.
+
+            No android:configChanges. A dark-mode toggle or a rotation recreates the activity,
+            which is the correct behaviour for a settings screen and means the theme editor
+            re-reads the DataStore rather than trusting a value it captured before the change.
+        -->
+        <activity
+            android:name="com.borderkeys.settings.SettingsActivity"
+            android:exported="true"
+            android:label="@string/settings_activity_label"
+            android:theme="@style/Theme.BorderKeys.Settings"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

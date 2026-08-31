@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Defined here rather than in :app because a library manifest cannot reference an application
+    module's resources - merging runs one way, from libraries into the app.
+
+    This theme exists only to give the window a correct background and no action bar before the
+    first frame Compose draws. Material3 colours, typography and shape all come from Compose
+    itself; nothing below is read at runtime by any of our code, and the keyboard reads none of
+    it at all - its appearance comes from the typed DataStore, precompiled into Paint objects.
+
+    DeviceDefault rather than AppCompat: the activity is a ComponentActivity, so there is no
+    AppCompat dependency to satisfy, and DayNight follows the system setting on its own.
+-->
+<resources>
+
+    <style name="Theme.BorderKeys.Settings" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <!--
+            Edge-to-edge is enabled from the activity; these keep the system bars from painting
+            an opaque scrim over content that Compose has already drawn behind them.
+        -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+</resources>
