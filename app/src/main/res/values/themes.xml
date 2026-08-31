@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Application-level theme only. It exists so the window has a sane background and follows
+    the system light/dark setting before Compose has drawn anything; the settings UI paints
+    everything else itself, and the keyboard uses none of this - its colours come from the
+    typed DataStore, precompiled into Paint objects (section 4.2), never from ?attr lookups
+    at draw time.
+
+    No AppCompat: the settings screen is a ComponentActivity, so the framework theme is
+    enough and DayNight comes from the platform.
+-->
+<resources>
+
+    <style name="Theme.BorderKeys" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+</resources>

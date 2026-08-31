@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+#
+# F-Droid metadata. Only the `core` flavor is published here: it is the one that contains no
+# model files and no non-free assets, which is why the flavor split exists at all. If `plus`
+# is ever published it needs its own entry with AntiFeatures: [NonFreeAssets] — see
+# docs/licensing.md section 5.
+
+Categories:
+  - System
+  - Writing
+
+License: GPL-3.0-or-later
+AuthorName: BorderKeys contributors
+SourceCode: https://github.com/razvan-eduard/borderkeys
+IssueTracker: https://github.com/razvan-eduard/borderkeys/issues
+Changelog: https://github.com/razvan-eduard/borderkeys/releases
+
+AutoName: BorderKeys
+
+Summary: Keyboard with no permissions and no network access
+
+Description: |-
+    An Android keyboard that requests zero permissions and contains no code capable of opening
+    a network connection. Word prediction is a deterministic engine — a compact trie plus
+    n-grams — written in C++ and running through JNI, not a language model.
+
+    Nothing downloads at runtime. Dictionaries and language packs are either inside the APK or
+    imported by you from a local file. There is no telemetry, no crash reporting, no account
+    and no sync. Clipboard history and the personal dictionary live in a SQLCipher-encrypted
+    database and are excluded from system backup and from device-to-device transfer.
+
+    * No permissions at all. Haptic feedback uses the API that needs none.
+    * The typing surface is a custom View drawing on a Canvas — no Compose and no XML layout
+      inflation in the keyboard process.
+    * Several languages active at once, with no manual switching. Mixing two languages in one
+      sentence is the normal case, not an exception.
+    * Swipe typing decoded geometrically on-device.
+    * Private mode is automatic in password fields and whenever an app sets
+      IME_FLAG_NO_PERSONALIZED_LEARNING: no learning, no clipboard history, no personal
+      dictionary.
+    * Works with any installed password manager through the platform's inline autofill
+      suggestions. The keyboard cannot read their contents — the platform guarantees that —
+      and never sees your password.
+
+    This is the "core" build: it contains no machine-learning model of any kind.
+
+RepoType: git
+Repo: https://github.com/razvan-eduard/borderkeys.git
+
+# Pins publishing to our release certificate, so a build signed by anything else is rejected
+# rather than silently accepted. SHA-256 of the signing certificate, lowercase hex.
+AllowedAPKSigningKeys: f49409d101891a6d5c7254168b083cc4d0772cda2448cc853e8e2f331b4e5321
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 1
+    commit: v0.1.0
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^v[0-9.]+$
+CurrentVersion: 0.1.0
+CurrentVersionCode: 1

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Referenced by android:fullBackupContent, for devices below API 31. allowBackup is already
+    false, so this file is belt and braces: if someone ever flips allowBackup, the exclusions
+    below are what stops the clipboard history and the personal dictionary from being copied
+    off the device by the platform backup agent.
+-->
+<full-backup-content>
+    <exclude domain="root" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="external" path="." />
+</full-backup-content>

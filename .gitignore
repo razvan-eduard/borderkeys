@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+*.iml
+.gradle
+.kotlin
+/local.properties
+
+# The whole IDE directory. Android Studio regenerates it, none of it is portable between
+# machines, and every file in it would need a licence header to pass `reuse lint`.
+/.idea/
+.DS_Store
+build/
+/captures
+.externalNativeBuild
+.cxx
+
+# Native host-test build output (native-tests/ is a CMake project, not a Gradle module).
+/native-tests/build/
+
+# Signing material never enters the repository. The keystore lives in ~/.borderkeys/ on a
+# developer machine and in a repository secret for CI; see app/build.gradle.kts.
+*.jks
+*.keystore
+keystore.properties
+keystore_password.txt

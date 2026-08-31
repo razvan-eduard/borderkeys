@@ -1,0 +1,184 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+name: CI
+
+# Every push to main and every pull request against it. The release workflow only wakes on a
+# version bump or a tag, so without this a commit that touches :keyboard or :data and no
+# version would never be compiled by anything until the next release — which then blames
+# whoever released.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+# A second push makes the first irrelevant: only the tip needs to be green. Releases
+# deliberately do not do this — abandoning a publish half way is a different kind of mess —
+# but a verification run is safe to cancel.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Seconds, not minutes, and it fails on things a reviewer cannot see in a diff: a new file
+  # without an SPDX header, an asset with no REUSE annotation. Its own job and first, because a
+  # missing licence header should not be reported after a ten-minute Android build.
+  licensing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # The charset-normalizer extra rather than plain `reuse`: without an encoding-detection
+      # module the tool cannot even import, and which one is available depends on whether
+      # libmagic happens to be on the runner. Pinning the pure-Python one removes the variable.
+      - name: Install REUSE
+        run: pipx install 'reuse[charset-normalizer]'
+
+      # Blocking, not advisory. The project claims to be open source from the first commit;
+      # a file nobody can tell the licence of makes that claim false.
+      - name: reuse lint
+        run: reuse lint
+
+  verify:
+    runs-on: ubuntu-latest
+
+    env:
+      # gradle.properties asks for 4 GB, sized for one developer machine building one flavor.
+      # This job compiles both flavors and runs R8 twice in a single invocation. Raised here
+      # rather than in gradle.properties so a laptop is not asked to reserve 6 GB for every
+      # build.
+      GRADLE_HEAP: -Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # 21 because gradle/gradle-daemon-jvm.properties pins the daemon to 21. A different JDK
+      # here means the runner downloads its own, silently, on every run.
+      - name: Set up JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # Read out of the catalog rather than restated here, so a CI run and a release cannot
+      # compile the same native code with different compilers.
+      - name: Resolve the pinned NDK and CMake
+        run: |
+          echo "NDK_VERSION=$(grep -m1 '^ndk = ' gradle/libs.versions.toml | sed 's/.*"\(.*\)".*/\1/')" >> "$GITHUB_ENV"
+          echo "CMAKE_VERSION=$(grep -m1 '^cmake = ' gradle/libs.versions.toml | sed 's/.*"\(.*\)".*/\1/')" >> "$GITHUB_ENV"
+
+      - name: Install NDK and CMake
+        run: sdkmanager --install "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}"
+
+      - name: Unit tests, every module
+        run: ./gradlew test --no-daemon "$GRADLE_HEAP"
+
+      # Both flavors, because the interesting failures are asymmetric: `plus` compiles native
+      # code `core` does not, and `core` is the one whose emptiness is the product claim.
+      # The three verification tasks are wired into assemble, so this runs them.
+      - name: Assemble both flavors
+        run: ./gradlew :app:assembleCoreRelease :app:assemblePlusRelease --no-daemon "$GRADLE_HEAP"
+
+      # Named explicitly as well. If someone unwires a gate from `assemble` while leaving the
+      # task in place, the step above goes green and this one does not.
+      - name: Verification gates
+        run: |
+          ./gradlew --no-daemon "$GRADLE_HEAP" \
+            :app:verifyNoInternetPermission \
+            :app:verifyNoForbiddenDependencies \
+            :keyboard:verifyKeyboardHasNoCompose
+
+      # The Gradle tasks check the sources of the APK. This checks the APK. They are not the
+      # same claim: a merged manifest with no INTERNET and a packaged binary with no INTERNET
+      # are separated by resource shrinking, R8 and the packager.
+      - name: The shipped APKs request no permissions at all
+        run: |
+          set -euo pipefail
+          AAPT2="$(find -L "$ANDROID_HOME/build-tools" -maxdepth 1 -type d | sort -V | tail -1)/aapt2"
+          FAILED=0
+          for FLAVOR in core plus; do
+            APK="$(find "app/build/outputs/apk/$FLAVOR/release" -name '*.apk' | head -1)"
+            if [ -z "$APK" ]; then
+              echo "::error::no APK found for flavor $FLAVOR"
+              exit 1
+            fi
+            PERMS="$("$AAPT2" dump permissions "$APK" | grep -E '^(uses-permission|permission):' || true)"
+            if [ -n "$PERMS" ]; then
+              echo "::error::$FLAVOR APK declares permissions:"
+              echo "$PERMS"
+              FAILED=1
+            else
+              echo "$FLAVOR: zero permissions"
+            fi
+          done
+          exit "$FAILED"
+
+      # `plusImplementation` is what keeps the assistant out of the free build, and it is a
+      # single line in one build file. Asserted against the dex rather than trusted: DEX stores
+      # type descriptors as plain strings, so grep is enough and needs no extra tooling.
+      - name: The core APK contains no assistant code and no model files
+        run: |
+          set -euo pipefail
+          APK="$(find app/build/outputs/apk/core/release -name '*.apk' | head -1)"
+          WORK="$(mktemp -d)"
+          unzip -o -q "$APK" -d "$WORK" 'classes*.dex'
+          if grep -qa 'Lcom/borderkeys/assist/' "$WORK"/classes*.dex; then
+            echo "::error::core APK contains com.borderkeys.assist classes"
+            exit 1
+          fi
+          MODELS="$(unzip -l "$APK" | grep -iE '\.(gguf|tflite|onnx|pt|pte|safetensors)$' || true)"
+          if [ -n "$MODELS" ]; then
+            echo "::error::core APK contains model files:"
+            echo "$MODELS"
+            exit 1
+          fi
+          echo "core APK: no assistant classes, no model files"
+
+      # Runs from step 8 onward, when native-tests/ exists. Guarded rather than omitted so the
+      # step is already wired and cannot be forgotten later; it prints what it skipped, because
+      # a silently absent check reads exactly like a passing one.
+      - name: Native tests
+        run: |
+          set -euo pipefail
+          if [ ! -f native-tests/CMakeLists.txt ]; then
+            echo "::notice::native-tests/CMakeLists.txt does not exist yet (step 8) — skipped"
+            exit 0
+          fi
+          cmake -S native-tests -B native-tests/build -DCMAKE_BUILD_TYPE=Debug
+          cmake --build native-tests/build --parallel
+          ctest --test-dir native-tests/build --output-on-failure
+
+      # Accuracy is the only thing that says whether a decoder change helped. Compared against
+      # the number recorded in docs/, so a regression fails here instead of being noticed on a
+      # device weeks later.
+      - name: Swipe decoder accuracy
+        run: |
+          set -euo pipefail
+          if [ ! -f tools/gesture_replay.py ]; then
+            echo "::notice::tools/gesture_replay.py does not exist yet (step 6.6) — skipped"
+            exit 0
+          fi
+          python3 tools/gesture_replay.py --check-regression
+
+      - name: Publish reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports
+          path: |
+            **/build/reports/tests/**
+            **/build/reports/borderkeys/**
+          retention-days: 7
+          if-no-files-found: ignore

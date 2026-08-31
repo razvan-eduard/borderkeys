@@ -1,0 +1,286 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+    # A version bump is the only edit to this file that should cut a release, and it is the
+    # only edit that changes versionName. Anything else that touches :app leaves the version
+    # alone, and the "already released?" check below turns that into a no-op.
+    paths:
+      - 'app/build.gradle.kts'
+  # A dispatched run builds and verifies but does not publish, unless this is ticked. A
+  # blanket block would also remove the only way to re-publish a release whose build succeeded
+  # and whose publish step failed; an explicit opt-in keeps the accident impossible and the
+  # deliberate case available.
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish a GitHub Release (move the tag, upload the APKs). Off = build only.'
+        type: boolean
+        default: false
+
+# One release at a time. Two pushes landing close together would both force-move the same tag
+# and both delete the same release before recreating it, and which one won would depend on
+# runner scheduling. Queued rather than cancelled: a publish interrupted half way leaves a tag
+# pointing at a release that no longer exists.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # Provenance is signed with a short-lived OIDC identity and recorded in a transparency
+      # log; neither is possible without these two.
+      id-token: write
+      attestations: write
+
+    env:
+      GRADLE_HEAP: -Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Set up JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Resolve the pinned NDK and CMake
+        run: |
+          echo "NDK_VERSION=$(grep -m1 '^ndk = ' gradle/libs.versions.toml | sed 's/.*"\(.*\)".*/\1/')" >> "$GITHUB_ENV"
+          echo "CMAKE_VERSION=$(grep -m1 '^cmake = ' gradle/libs.versions.toml | sed 's/.*"\(.*\)".*/\1/')" >> "$GITHUB_ENV"
+
+      - name: Install NDK and CMake
+        run: sdkmanager --install "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}"
+
+      # A tag push carries its own version. A push to main reads it from the build file, which
+      # is the thing that changed to get here.
+      - name: Determine version
+        id: version
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            VERSION_NAME=$(grep -m1 'versionName = ' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
+            TAG="v${VERSION_NAME}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if echo "$TAG" | grep -qiE '\-(alpha|beta|rc)'; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Release tag: $TAG"
+
+      # Asks whether this exact version was already released, rather than diffing versionCode
+      # against HEAD~1. The diff approach breaks whenever a push lands more than one commit:
+      # HEAD~1 is then inside the same push and already shows the bumped value, so the build
+      # is skipped for a version that was never released.
+      - name: Skip if this version is already published
+        id: check
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "$TAG already released — nothing to do"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Unit tests
+        if: steps.check.outputs.changed != 'false'
+        run: ./gradlew test --no-daemon "$GRADLE_HEAP"
+
+      - name: Decode signing keystore
+        if: steps.check.outputs.changed != 'false'
+        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      # The verification gates run as part of assemble; a release that skipped them would be
+      # the one build where it matters most.
+      - name: Build both flavors, signed
+        if: steps.check.outputs.changed != 'false'
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.jks
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          ./gradlew :app:assembleCoreRelease :app:assemblePlusRelease --no-daemon "$GRADLE_HEAP"
+
+      - name: Name the artifacts after the tag
+        if: steps.check.outputs.changed != 'false'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          for FLAVOR in core plus; do
+            APK="$(find "app/build/outputs/apk/$FLAVOR/release" -name '*.apk' | head -1)"
+            cp "$APK" "BorderKeys-${TAG}-${FLAVOR}.apk"
+          done
+          ls -l BorderKeys-*.apk
+
+      # Gradle only signs when it sees the keystore environment variables, and an unsigned APK
+      # installs over nothing. Assert rather than assume: a release that is quietly unsigned
+      # looks identical to one that is not until somebody tries to update.
+      - name: The APKs are signed with the release certificate
+        if: steps.check.outputs.changed != 'false'
+        run: |
+          set -euo pipefail
+          # -L: the SDK path on a runner is a tree of symlinks, and an unfollowed find matches
+          # nothing.
+          BUILD_TOOLS="$(find -L "$ANDROID_HOME/build-tools" -maxdepth 1 -type d | sort -V | tail -1)"
+          EXPECTED="${{ vars.RELEASE_CERT_SHA256 }}"
+          for APK in BorderKeys-*.apk; do
+            OUT="$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK")"
+            echo "$OUT"
+            DIGEST="$(echo "$OUT" | grep -m1 -oE 'certificate SHA-256 digest: [0-9a-f]+' | awk '{print $NF}')"
+            if [ -z "$DIGEST" ]; then
+              echo "::error::$APK is not signed"
+              exit 1
+            fi
+            # Only compared when the repository variable is set, so a fork can still build.
+            if [ -n "$EXPECTED" ] && [ "$DIGEST" != "$EXPECTED" ]; then
+              echo "::error::$APK signed by $DIGEST, expected $EXPECTED"
+              exit 1
+            fi
+          done
+
+      # Same two assertions CI makes, repeated on the artifacts that are about to be published
+      # rather than on a build that resembles them.
+      - name: The published core APK is free of permissions, models and assistant code
+        if: steps.check.outputs.changed != 'false'
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$(find -L "$ANDROID_HOME/build-tools" -maxdepth 1 -type d | sort -V | tail -1)"
+          APK="BorderKeys-${{ steps.version.outputs.tag }}-core.apk"
+          PERMS="$("$BUILD_TOOLS/aapt2" dump permissions "$APK" | grep -E '^(uses-permission|permission):' || true)"
+          if [ -n "$PERMS" ]; then
+            echo "::error::core APK declares permissions:"; echo "$PERMS"; exit 1
+          fi
+          WORK="$(mktemp -d)"
+          unzip -o -q "$APK" -d "$WORK" 'classes*.dex'
+          if grep -qa 'Lcom/borderkeys/assist/' "$WORK"/classes*.dex; then
+            echo "::error::core APK contains com.borderkeys.assist classes"; exit 1
+          fi
+          if unzip -l "$APK" | grep -iqE '\.(gguf|tflite|onnx|pt|pte|safetensors)$'; then
+            echo "::error::core APK contains model files"; exit 1
+          fi
+
+      - name: Deepen checkout for the changelog
+        if: steps.check.outputs.changed != 'false'
+        run: git fetch --prune --unshallow --tags origin
+
+      - name: Generate CHANGELOG.md
+        if: steps.check.outputs.changed != 'false'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^$TAG$" | head -n 1 || echo "")
+          if [ -n "$PREV_TAG" ]; then RANGE="${PREV_TAG}..HEAD"; else RANGE="HEAD"; fi
+          {
+            echo "# BorderKeys ${TAG}"
+            echo ""
+            echo "## Changes"
+            echo ""
+            git log ${RANGE} --pretty=format:"- %s (%h)" --no-merges \
+              | grep -iE '^- (feat|fix|perf)(\(|!?:)' || echo "- Maintenance update"
+            echo ""
+            echo ""
+            echo "## Verifying this build"
+            echo ""
+            echo '```'
+            echo "gh attestation verify BorderKeys-${TAG}-core.apk --repo ${{ github.repository }}"
+            echo '```'
+            echo ""
+            echo "## Full changelog"
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              echo "https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG}"
+            else
+              echo "https://github.com/${{ github.repository }}/commits/${TAG}"
+            fi
+          } > CHANGELOG.md
+          cat CHANGELOG.md
+
+      # A published tag is an address. Republishing the same commit is fine; moving a tag to a
+      # different commit replaces the bytes behind an address people have already downloaded.
+      - name: Refuse to move a published tag
+        if: steps.check.outputs.changed != 'false' && (github.event_name != 'workflow_dispatch' || inputs.publish)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          # The peeled ref (^{}) sorts after the plain one, so tail -1 resolves an annotated
+          # tag to its commit and leaves a lightweight tag as-is.
+          REMOTE_SHA=$(git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}" | tail -1 | cut -f1)
+          if [ -n "$REMOTE_SHA" ] && [ "$REMOTE_SHA" != "$(git rev-parse HEAD)" ]; then
+            if gh release view "$TAG" --repo "${{ github.repository }}" --json isDraft \
+                 --jq 'select(.isDraft == false)' 2>/dev/null | grep -q .; then
+              echo "::error::$TAG is already published from $REMOTE_SHA — bump the version"
+              exit 1
+            fi
+          fi
+
+      # Same gate as publishing. On a tag push this is a no-op force-push of a tag that
+      # already points here; on a version bump it is what creates the tag at all.
+      # GITHUB_TOKEN can never carry the `workflows` scope, and what that forbids is making a
+      # ref point at a tree whose .github/workflows content differs from the repository's. Tag
+      # the tip and nothing differs.
+      - name: Point the tag at this commit
+        if: steps.check.outputs.changed != 'false' && (github.event_name != 'workflow_dispatch' || inputs.publish)
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          git tag -f "$TAG"
+          git push origin "$TAG" --force
+
+      - name: Delete the existing release so the publish date is this one
+        if: steps.check.outputs.changed != 'false' && (github.event_name != 'workflow_dispatch' || inputs.publish)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete "${{ steps.version.outputs.tag }}" --yes || true
+
+      # Ties these exact bytes to this commit, this workflow and this runner, signed. Someone
+      # who downloads the APK runs `gh attestation verify` and learns where it came from,
+      # rather than trusting it because of where it was hosted.
+      - name: Attest build provenance
+        if: steps.check.outputs.changed != 'false' && (github.event_name != 'workflow_dispatch' || inputs.publish)
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: BorderKeys-*.apk
+
+      - name: Create the GitHub Release
+        if: steps.check.outputs.changed != 'false' && (github.event_name != 'workflow_dispatch' || inputs.publish)
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          files: |
+            BorderKeys-*.apk
+            CHANGELOG.md
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: ${{ steps.version.outputs.is_prerelease }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
