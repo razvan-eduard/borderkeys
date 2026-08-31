@@ -58,6 +58,15 @@ target_compile_options(borderkeys PRIVATE
 target_link_options(borderkeys PRIVATE
     $<$<CONFIG:Release>:-Wl,--gc-sections>
     -Wl,--exclude-libs,ALL
+    # 16 KB page alignment.
+    #
+    # Android 15 ships devices whose page size is 16384 bytes, and a shared library whose LOAD
+    # segments are aligned to the old 4096 simply does not load there: dlopen fails and the
+    # keyboard comes up with no prediction engine at all. This was found by installing on such a
+    # device and reading the segment alignment out of the ELF -- every third-party .so in the
+    # APK already had 0x4000 and ours had 0x1000, which is invisible in any build log.
+    -Wl,-z,max-page-size=16384
+    -Wl,-z,common-page-size=16384
 )
 
 if(BORDERKEYS_NEURAL_SWIPE)

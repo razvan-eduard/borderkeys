@@ -22,6 +22,19 @@
 -keep class net.zetetic.database.** { *; }
 -dontwarn net.zetetic.database.**
 
+# --- Tink, via androidx.security:security-crypto -----------------------------------------
+# Tink is compiled against Error Prone's annotations and JSR-305, both of which are
+# compile-time only and are not on the runtime classpath by design. R8 refuses to build once
+# Tink becomes reachable -- which happened the moment the IME service started opening the
+# database -- unless it is told that their absence is expected.
+#
+# Discarding them is correct: they carry no behaviour, only static-analysis contracts. It is
+# also the third thing this one dependency has cost, after gson and Tink itself; see
+# docs/licensing.md section 1.6 for the alternative.
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn javax.annotation.**
+-dontwarn javax.annotation.concurrent.**
+
 # --- kotlinx.serialization -------------------------------------------------------------
 # The compiler plugin generates a `Companion.serializer()` and a `$$serializer` object per
 # @Serializable class; both are reached reflectively by the runtime the first time a theme is

@@ -1,0 +1,222 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+package com.borderkeys.ime
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import kotlin.math.abs
+
+class KeyboardGeometryTest {
+
+    private val width = 1080f
+    private val height = 640f
+
+    private fun compiled(gap: Float = 8f): KeyboardGeometry =
+        KeyboardGeometry().apply {
+            compile(KeyboardLayout.fallbackQwerty(), width, height, gap)
+        }
+
+    @Test
+    fun `every key gets a rectangle with positive area`() {
+        val geometry = compiled()
+        assertEquals(KeyboardLayout.fallbackQwerty().keyCount, geometry.keyCount)
+        for (index in 0 until geometry.keyCount) {
+            assertTrue(
+                "key $index has no width",
+                geometry.keyRight[index] > geometry.keyLeft[index],
+            )
+            assertTrue(
+                "key $index has no height",
+                geometry.keyBottom[index] > geometry.keyTop[index],
+            )
+        }
+    }
+
+    @Test
+    fun `no two keys overlap`() {
+        val geometry = compiled()
+        for (a in 0 until geometry.keyCount) {
+            for (b in a + 1 until geometry.keyCount) {
+                val separated = geometry.keyRight[a] <= geometry.keyLeft[b] ||
+                    geometry.keyRight[b] <= geometry.keyLeft[a] ||
+                    geometry.keyBottom[a] <= geometry.keyTop[b] ||
+                    geometry.keyBottom[b] <= geometry.keyTop[a]
+                assertTrue("keys $a and $b overlap", separated)
+            }
+        }
+    }
+
+    @Test
+    fun `rows fill the width exactly`() {
+        val geometry = compiled(gap = 0f)
+        val layout = KeyboardLayout.fallbackQwerty()
+        var index = 0
+        for (row in layout.rows) {
+            val first = index
+            val last = index + row.keys.size - 1
+            // The indent is real empty space, so only the right edge has to reach the boundary.
+            assertEquals(
+                "row starting at $first does not reach the right edge",
+                width, geometry.keyRight[last], 0.01f,
+            )
+            assertEquals(
+                "row starting at $first does not start at its indent",
+                row.indent * (width / row.units), geometry.keyLeft[first], 0.01f,
+            )
+            index += row.keys.size
+        }
+    }
+
+    @Test
+    fun `rows stack without gaps and fill the height`() {
+        val geometry = compiled(gap = 0f)
+        val layout = KeyboardLayout.fallbackQwerty()
+        var index = 0
+        var expectedTop = 0f
+        for (row in layout.rows) {
+            assertEquals(expectedTop, geometry.keyTop[index], 0.01f)
+            expectedTop = geometry.keyBottom[index]
+            index += row.keys.size
+        }
+        assertEquals(height, expectedTop, 0.01f)
+    }
+
+    @Test
+    fun `the centre of every key hits that key`() {
+        val geometry = compiled()
+        for (index in 0 until geometry.keyCount) {
+            assertEquals(
+                "the centre of key $index resolves elsewhere",
+                index,
+                geometry.findKeyAt(geometry.centerX[index], geometry.centerY[index]),
+            )
+        }
+    }
+
+    @Test
+    fun `there is no dead pixel anywhere on the keyboard`() {
+        // A touch in the gap between two keys must still type. Sampling the whole surface is
+        // the only way to be sure the grid has no cell resolving to nothing -- and a gap that
+        // does nothing is invisible in a screenshot and infuriating in use.
+        val geometry = compiled()
+        var x = 0.5f
+        while (x < width) {
+            var y = 0.5f
+            while (y < height) {
+                assertNotEquals(
+                    "no key at ($x, $y)",
+                    KeyboardGeometry.NO_KEY,
+                    geometry.findKeyAt(x, y),
+                )
+                y += 3f
+            }
+            x += 3f
+        }
+    }
+
+    @Test
+    fun `a point in the gap resolves to one of the keys touching it`() {
+        val geometry = compiled(gap = 12f)
+        // Midway between the first two keys of the top row, vertically centred on them.
+        val gapX = (geometry.keyRight[0] + geometry.keyLeft[1]) / 2f
+        val gapY = geometry.centerY[0]
+        val hit = geometry.findKeyAt(gapX, gapY)
+        assertTrue("the gap resolved to $hit", hit == 0 || hit == 1)
+    }
+
+    @Test
+    fun `touches outside the surface are clamped rather than lost`() {
+        val geometry = compiled()
+        // A finger that slides off the edge keeps typing the edge key instead of nothing.
+        assertNotEquals(KeyboardGeometry.NO_KEY, geometry.findKeyAt(-50f, 10f))
+        assertNotEquals(KeyboardGeometry.NO_KEY, geometry.findKeyAt(width + 50f, height - 10f))
+    }
+
+    @Test
+    fun `the grid agrees with an exhaustive nearest-key search`() {
+        // The grid is a precomputed cache of nearestKey. If they ever disagree, the cache is
+        // wrong -- which would show up as a key that is hard to hit near its edge.
+        val geometry = compiled()
+        var mismatches = 0
+        var samples = 0
+        var x = 2f
+        while (x < width) {
+            var y = 2f
+            while (y < height) {
+                samples++
+                val exact = geometry.nearestKey(x, y)
+                val grid = geometry.findKeyAt(x, y)
+                if (exact != grid) {
+                    // Disagreement is only acceptable in a gap, where both answers are a
+                    // nearest key rather than a containing one.
+                    val insideExact = x >= geometry.keyLeft[exact] && x < geometry.keyRight[exact] &&
+                        y >= geometry.keyTop[exact] && y < geometry.keyBottom[exact]
+                    if (insideExact) {
+                        mismatches++
+                    }
+                }
+                y += 7f
+            }
+            x += 7f
+        }
+        assertTrue("$mismatches of $samples samples hit the wrong key", mismatches == 0)
+    }
+
+    @Test
+    fun `only letters are exported to the engine`() {
+        val geometry = compiled()
+        val codes = IntArray(64)
+        val xs = FloatArray(64)
+        val ys = FloatArray(64)
+        val written = geometry.exportGeometry(codes, xs, ys)
+
+        assertEquals(26, written)
+        for (index in 0 until written) {
+            assertTrue(
+                "exported a non-letter: ${codes[index]}",
+                Character.isLetter(codes[index]),
+            )
+            assertTrue(xs[index] in 0f..width)
+            assertTrue(ys[index] in 0f..height)
+        }
+        // Shift, delete, space and enter must not be there: a swipe through shift means nothing,
+        // and offering it as a substitution target would corrupt every correction near it.
+        assertTrue(codes.take(written).none { it == KeyCodes.SPACE })
+    }
+
+    @Test
+    fun `recompiling at a new size reuses the arrays`() {
+        val geometry = compiled()
+        val before = geometry.keyLeft
+        geometry.compile(KeyboardLayout.fallbackQwerty(), 720f, 480f, 0f)
+        assertTrue("a rotation reallocated the geometry", before === geometry.keyLeft)
+        assertEquals(720f, geometry.keyRight[9], 0.01f)
+    }
+
+    @Test
+    fun `labels are packed into one shared buffer`() {
+        val geometry = compiled()
+        // No String per key: the draw path reads characters out of one array.
+        var total = 0
+        for (index in 0 until geometry.keyCount) {
+            total += geometry.labelLength[index]
+        }
+        assertEquals(total, geometry.labelChars.size)
+        val first = String(geometry.labelChars, geometry.labelOffset[0], geometry.labelLength[0])
+        assertEquals("q", first)
+    }
+
+    @Test
+    fun `key centres are the midpoints of their rectangles`() {
+        val geometry = compiled()
+        for (index in 0 until geometry.keyCount) {
+            assertTrue(
+                abs(geometry.centerX[index] -
+                    (geometry.keyLeft[index] + geometry.keyRight[index]) / 2f) < 0.001f,
+            )
+        }
+    }
+}
