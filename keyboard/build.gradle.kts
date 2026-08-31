@@ -37,6 +37,13 @@ android {
         consumerProguardFiles("consumer-rules.pro")
     }
 
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = libs.versions.cmake.get()
+        }
+    }
+
     // Same dimension name as :app so AGP matches variants without a manual strategy.
     flavorDimensions += "engine"
     productFlavors {

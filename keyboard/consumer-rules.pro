@@ -11,9 +11,7 @@
 -keep,includedescriptorclasses class com.borderkeys.predict.NativePredictor {
     native <methods>;
     <init>(...);
-}
--keep,includedescriptorclasses class com.borderkeys.predict.NativePredictor$Companion {
-    native <methods>;
+    public static final com.borderkeys.predict.NativePredictor INSTANCE;
 }
 
 # The InputMethodService is instantiated by the system from the name written in the manifest.

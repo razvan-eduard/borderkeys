@@ -60,6 +60,11 @@ android {
     compileSdk {
         version = release(libs.versions.compileSdk.get().toInt())
     }
+    // This module compiles no native code of its own, but it is the one that packages the .so
+    // files coming out of :keyboard, and stripping them needs llvm-strip from the NDK. Without
+    // an ndkVersion here AGP cannot find the toolchain, warns once, and packages the libraries
+    // unstripped -- 868 KB of DWARF per ABI for 154 KB of actual code.
+    ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
         applicationId = "com.borderkeys"
