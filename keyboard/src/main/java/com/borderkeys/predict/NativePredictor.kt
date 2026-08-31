@@ -108,6 +108,29 @@ internal object NativePredictor {
      */
     external fun nativeLearn(handle: Long, word: String, prev1: String?, prev2: String?)
 
+    /**
+     * Decodes a swipe into candidates, best first, and returns how many were written.
+     *
+     * The arrays carry the raw touch samples in view pixels, exactly as the driver reported
+     * them -- including the historical samples inside each motion event, which are the ones
+     * carrying the curvature. Smoothing and resampling happen on the native side so the
+     * geometric and neural tiers cannot disagree about how the features were produced.
+     *
+     * [outWords] and [outScores] are the same reused buffers the tap path uses; this runs on
+     * the prediction thread, never on the UI thread.
+     */
+    external fun nativeDecodeGesture(
+        handle: Long,
+        xs: FloatArray,
+        ys: FloatArray,
+        timestamps: LongArray,
+        count: Int,
+        prev1: String?,
+        prev2: String?,
+        outWords: Array<String?>,
+        outScores: FloatArray,
+    ): Int
+
     /** Replaces the in-memory personal dictionary. Called once at start, from Room. */
     external fun nativeLoadUserWords(handle: Long, words: Array<String>, counts: IntArray)
 

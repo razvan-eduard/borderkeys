@@ -149,12 +149,43 @@ this reason.
 |---|---|---|
 | `ro_RO.bkd`, `en_US.bkd` word lists and n-grams | 3 | **Unresolved.** Many lexical corpora are not free. The source corpus must be chosen for its licence first and its size second, and recorded here before the blob is committed. |
 | Keyboard layout descriptions (`assets/layouts/*.json`) | 5 | Authored here, GPL-3.0-or-later. |
-| FUTO Swipe neural weights | 6.3 (option B1) | **FUTO Model Weights License 1.0 — not OSI, not free.** Permits commercial use, redistribution and modification, but requires a visible "powered by FUTO Swipe" notice, forbids sublicensing, and terminates on a patent challenge. Weights are an aggregated asset, not linked code, so they coexist with GPL legally — but the `plus` flavor would then carry a non-free artifact and must declare `NonFreeAssets` in the F-Droid metadata. |
-| FUTO `swipe-library` C++ inference code | 6.3 | **GPL.** Compatible with this project; vendored as a submodule and compiled from source, with our patches kept in `patches/`. Not to be confused with the FUTO Keyboard *application*, which is under the FUTO Source First License 1.0 — that is **not free** and must never enter this repository in any form. |
-| FUTO gesture corpus (>1M gestures) | 6.3 (option B2) | **MIT.** Free. This is what makes option B2 — training our own encoder and publishing the weights under a free licence — legally possible. |
+| FUTO Swipe neural weights | 6.3 (option B1) | **FUTO Model Weights License 1.0 — not OSI, not free.** Verified by reading the licence at `huggingface.co/futo-org/futo-swipe`: commercial use, redistribution and derivative models are all permitted, but a **visible "powered by FUTO Swipe" notice to end users is mandatory** and its absence is "a material breach"; sublicensing is forbidden; the licence terminates immediately on a patent claim against the weights. Weights are an aggregated asset rather than linked code, so they coexist with GPL legally — but `plus` would then carry a non-free artifact and must declare `NonFreeAssets`. |
+| FUTO `swipe-library` C++ inference code | 6.3 | **GPL-3.0-or-later — verified via the GitLab API, `license.key = gpl-3.0+`.** That is not merely compatible with this project, it is the same licence. Not to be confused with the FUTO Keyboard *application*, which is under the FUTO Source First License 1.0 — not free, and it must never enter this repository. |
+| ExecuTorch v1.2.0 | 6.3 (option B1) | **BSD-3-Clause.** Compatible. Not previously accounted for: `swipe-library` vendors ExecuTorch as a git submodule and its models are `.pte` files, so option B1 means building PyTorch's runtime into `libborderkeys.so`, not the self-contained C++ library the plan assumed. It also requires CMake 3.29+, against the 3.22.1 this project pins. See section 2.4. |
+| FUTO gesture corpus, `futo-org/swipe.futo.org` | 6.3 (option B2) | **MIT — verified from the dataset's own licence tag.** Free. There is also `futo-org/swipe-negatives` under Apache-2.0. Together these are what make option B2 legally possible without asking anyone's permission. |
 | GGUF language model for the text assistant | 7 | Per-model. Never bundled unless small and freely licensed; the normal path is user import from a local file with a known-hash check. Any bundled weights are recorded here and reflected in `AntiFeatures`. |
 
-### 2.3 Option B2 — what a free-weights swipe decoder would cost
+### 2.3 What the licence check actually found
+
+Checked before writing any tier-B code, because the plan depended on facts about other people's
+repositories rather than on anything in this one. Three of the four assumptions held. The fourth
+did not.
+
+**Held.** The corpus is MIT. `swipe-library` is GPL-3.0-or-later, identical to ours rather than
+merely compatible. The weights are under a non-OSI licence whose real obligation is a visible
+attribution notice, exactly as expected.
+
+**Did not hold.** `swipe-library` is not a self-contained C++ library. Its `.gitmodules` vendors
+`github.com/pytorch/executorch`, its README states "It depends on ExecuTorch for model
+inference", and the published models are `.pte` files — the ExecuTorch format. So integrating
+tier B through it means compiling PyTorch's runtime into this keyboard's native library.
+
+That matters for three reasons:
+
+1. `docs/state-of-the-art.md` argues *against* ExecuTorch for the text assistant, on the grounds
+   that its static graph fixes the context length at compile time. That argument does not apply
+   to a swipe encoder, whose input is always 64 points — but it does mean the project would be
+   depending on a runtime it had reasoned itself out of using elsewhere.
+2. `swipe-library` requires **CMake 3.29+**, and `gradle/libs.versions.toml` pins 3.22.1. That
+   pin would have to move, for every native target, to add one optional feature to one flavor.
+3. It is a large third-party build inside the module with the tightest latency budget in the
+   application. Not an AAR, which the rules forbid — but not the small vendored library the plan
+   described either.
+
+None of this makes B1 impossible. It makes it a different decision than the one written down,
+and it is the maintainer's to make rather than one to take quietly while implementing.
+
+### 2.4 Option B2 — what a free-weights swipe decoder would cost
 
 Recorded here so the option stays real rather than aspirational.
 

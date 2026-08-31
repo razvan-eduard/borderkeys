@@ -38,6 +38,16 @@ data class KeyboardPreferences(
      */
     val perAppLanguageMemory: Boolean = false,
     val hapticFeedback: Boolean = true,
+    /**
+     * A permanent row of digits above the letters.
+     *
+     * Off by default. It costs about a fifth of the keyboard's height, and on a touch surface
+     * key size is accuracy -- so it is a choice, and the digits are reachable by long press
+     * either way.
+     */
+    val numberRow: Boolean = false,
+    /** Switch to a numeric keypad automatically in numeric and phone fields. */
+    val numericKeypad: Boolean = true,
     val showSuggestionStrip: Boolean = true,
 ) {
     fun sanitised(): KeyboardPreferences = copy(

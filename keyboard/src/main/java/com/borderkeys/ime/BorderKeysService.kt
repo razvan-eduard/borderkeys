@@ -68,12 +68,26 @@ class BorderKeysService :
 
     private var alphabeticLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var symbolsLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
-    private var showingSymbols = false
+    private var symbolsShiftLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
+    private var numpadLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
+
+    /** Which page is on screen. The numeric one is chosen by the field, not by the user. */
+    private var page = PAGE_ALPHABETIC
 
     private var shiftState = SHIFT_OFF
     private var lastShiftPressAt = 0L
 
     private val flushLearningRunnable = Runnable { flushLearning() }
+
+    /**
+     * Shows "decoding" only if the answer is late.
+     *
+     * A swipe is decoded in well under a millisecond on the measurements taken so far, so in
+     * practice this never fires. It exists for the case where it does -- a very long word, a
+     * device under load -- because a strip that goes blank for a moment reads as the gesture
+     * having been ignored.
+     */
+    private val gestureDecodingRunnable = Runnable { host?.suggestionStrip?.decoding = true }
 
     private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
         onClipboardChanged()
@@ -97,6 +111,8 @@ class BorderKeysService :
         scope.launch(Dispatchers.IO) {
             alphabeticLayout = LayoutLoader.load(assets, DEFAULT_ALPHABETIC_LAYOUT)
             symbolsLayout = LayoutLoader.load(assets, SYMBOLS_LAYOUT)
+            symbolsShiftLayout = LayoutLoader.load(assets, SYMBOLS_SHIFT_LAYOUT)
+            numpadLayout = LayoutLoader.load(assets, NUMPAD_LAYOUT)
             loadDictionaries()
         }
         observeSettings()
@@ -156,6 +172,10 @@ class BorderKeysService :
                 val changed = paints.update(newTheme, resources.displayMetrics)
                 host?.let { view ->
                     view.keyboard.hapticEnabled = newPreferences.hapticFeedback
+                    view.keyboard.swipeEnabled = newPreferences.swipeEnabled
+                    // The number row is a layout change, not a colour change, so it has to be
+                    // applied even when the paints are unchanged.
+                    showPage(page)
                     if (changed) {
                         view.keyboard.onThemeChanged()
                         view.requestLayout()
@@ -172,7 +192,10 @@ class BorderKeysService :
         val view = KeyboardHostView(this, paints)
         view.keyboard.listener = this
         view.keyboard.hapticEnabled = preferences.hapticFeedback
-        view.keyboard.setLayout(alphabeticLayout)
+        view.keyboard.swipeEnabled = preferences.swipeEnabled
+        view.keyboard.setLayout(
+            if (preferences.numberRow) alphabeticLayout.withNumberRow() else alphabeticLayout,
+        )
         view.suggestionStrip.listener = this
         view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> pushKeyGeometry() }
         host = view
@@ -193,10 +216,10 @@ class BorderKeysService :
         host?.let { view ->
             view.suggestionStrip.privateMode = privateMode
             view.suggestionStrip.clear()
-            view.keyboard.setLayout(alphabeticLayout)
             view.keyboard.hapticEnabled = preferences.hapticFeedback
+            view.keyboard.swipeEnabled = preferences.swipeEnabled
         }
-        showingSymbols = false
+        showPage(pageFor(info))
         shiftState = if (info != null && shouldAutoCapitalise(info)) SHIFT_ON else SHIFT_OFF
 
         resetComposing()
@@ -249,6 +272,58 @@ class BorderKeysService :
 
     override fun onKeyDown(code: Int) = Unit
 
+    /**
+     * A completed swipe.
+     *
+     * The word in progress is committed first: a swipe starts a new word, and leaving the
+     * previous one composing would make the decoded word replace it.
+     */
+    override fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
+        if (!preferences.swipeEnabled) {
+            return
+        }
+        val connection = currentInputConnection
+        if (connection != null && composing.isNotEmpty()) {
+            connection.beginBatchEdit()
+            val finished = finishComposing(connection)
+            connection.endBatchEdit()
+            if (finished != null) {
+                recordLearned(finished)
+            }
+        }
+        host?.postDelayed(gestureDecodingRunnable, GESTURE_DECODING_NOTICE_MILLIS)
+        engine.decodeGesture(xs, ys, timestamps, count, previousWord1, previousWord2)
+    }
+
+    /**
+     * The decoded candidates.
+     *
+     * The first one is committed immediately, as composing text, and the rest go to the strip.
+     * The user does not wait for a confirmation: the common case is that the top candidate is
+     * right, and leaving it uncommitted would make every swipe a two-step action. Because it is
+     * composing rather than committed, tapping another candidate replaces it in one edit rather
+     * than deleting and retyping.
+     */
+    override fun onGestureCandidates(words: Array<String?>, count: Int) {
+        host?.removeCallbacks(gestureDecodingRunnable)
+        val view = host
+        view?.suggestionStrip?.decoding = false
+        if (count == 0) {
+            view?.suggestionStrip?.clear()
+            return
+        }
+        val connection = currentInputConnection ?: return
+        val best = words[0] ?: return
+
+        connection.beginBatchEdit()
+        composing.setLength(0)
+        composing.append(best)
+        connection.setComposingText(composing, 1)
+        connection.endBatchEdit()
+
+        view?.suggestionStrip?.setSuggestions(words, count)
+    }
+
     override fun onKeyRepeat(code: Int) {
         if (code == KeyCodes.DELETE) {
             handleDelete()
@@ -268,7 +343,12 @@ class BorderKeysService :
             KeyCodes.SHIFT -> handleShift()
             KeyCodes.DELETE -> handleDelete()
             KeyCodes.ENTER -> handleEnter()
-            KeyCodes.SYMBOLS -> toggleSymbols()
+            KeyCodes.SYMBOLS -> showPage(
+                if (page == PAGE_ALPHABETIC) PAGE_SYMBOLS else PAGE_ALPHABETIC,
+            )
+            KeyCodes.SYMBOLS_SHIFT -> showPage(
+                if (page == PAGE_SYMBOLS) PAGE_SYMBOLS_SHIFT else PAGE_SYMBOLS,
+            )
             KeyCodes.LANGUAGE -> switchLanguage()
             KeyCodes.SETTINGS -> openSettings()
             KeyCodes.EMOJI -> Unit
@@ -367,10 +447,42 @@ class BorderKeysService :
         lastShiftPressAt = now
     }
 
-    private fun toggleSymbols() {
-        showingSymbols = !showingSymbols
-        host?.keyboard?.setLayout(if (showingSymbols) symbolsLayout else alphabeticLayout)
+    /**
+     * Puts a page on screen, applying the number-row setting to the alphabetic one.
+     *
+     * The number row is composed rather than authored into a second copy of every layout: two
+     * assets per language that differ by one row is two assets to keep in step, and they would
+     * drift the first time a key moved.
+     */
+    private fun showPage(next: Int) {
+        page = next
+        val layout = when (next) {
+            PAGE_SYMBOLS -> symbolsLayout
+            PAGE_SYMBOLS_SHIFT -> symbolsShiftLayout
+            PAGE_NUMPAD -> numpadLayout
+            else -> if (preferences.numberRow) alphabeticLayout.withNumberRow() else alphabeticLayout
+        }
+        host?.keyboard?.setLayout(layout)
         pushKeyGeometry()
+    }
+
+    /**
+     * The page a field asks for.
+     *
+     * A phone number field gets a keypad, not a QWERTY with digits hidden behind a symbols
+     * key. The framework already told us what kind of field it is; ignoring that and making the
+     * user find the digits is a choice, and the wrong one.
+     */
+    private fun pageFor(info: EditorInfo?): Int {
+        if (info == null || !preferences.numericKeypad) {
+            return PAGE_ALPHABETIC
+        }
+        return when (info.inputType and android.text.InputType.TYPE_MASK_CLASS) {
+            android.text.InputType.TYPE_CLASS_NUMBER,
+            android.text.InputType.TYPE_CLASS_PHONE,
+            -> PAGE_NUMPAD
+            else -> PAGE_ALPHABETIC
+        }
     }
 
     private fun switchLanguage() {
@@ -640,6 +752,13 @@ class BorderKeysService :
     private companion object {
         const val DEFAULT_ALPHABETIC_LAYOUT = "qwerty_ro"
         const val SYMBOLS_LAYOUT = "symbols"
+        const val SYMBOLS_SHIFT_LAYOUT = "symbols_shift"
+        const val NUMPAD_LAYOUT = "numpad"
+
+        const val PAGE_ALPHABETIC = 0
+        const val PAGE_SYMBOLS = 1
+        const val PAGE_SYMBOLS_SHIFT = 2
+        const val PAGE_NUMPAD = 3
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
         const val USER_MODEL_SNAPSHOT = "user_model.bku"
 
@@ -650,6 +769,7 @@ class BorderKeysService :
 
         const val CONTEXT_WINDOW_CHARS = 64
         const val MIN_LEARNED_LENGTH = 2
+        const val GESTURE_DECODING_NOTICE_MILLIS = 50L
         const val MAX_CLIP_LENGTH = 20_000
         const val MAX_INLINE_SUGGESTIONS = 5
         const val MIN_CHIP_WIDTH_DP = 120

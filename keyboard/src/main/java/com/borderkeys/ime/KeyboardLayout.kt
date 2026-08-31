@@ -45,7 +45,45 @@ class KeyboardLayout(
 
     val totalHeightScale: Float = rows.sumOf { it.heightScale.toDouble() }.toFloat()
 
+    /**
+     * The same layout with a row of digits above it.
+     *
+     * A number row is a real trade, not a preference to be defaulted: it removes a keystroke
+     * from every digit and takes about a fifth of the keyboard's height away from the letters,
+     * on a surface where key size is accuracy. So it is offered as a setting, and the
+     * alternative -- long-pressing the top letter row, where the digits also live -- costs
+     * nothing to anyone who leaves it off.
+     *
+     * The row is shorter than a letter row: digits are hit less often and need less area, and
+     * taking a full row would cost the letters more than the digits gain.
+     */
+    fun withNumberRow(): KeyboardLayout {
+        if (rows.isEmpty() || id.endsWith(NUMBER_ROW_SUFFIX)) {
+            return this
+        }
+        val digits = "1234567890".map { character ->
+            Key(
+                code = character.code,
+                label = character.toString(),
+                alternatives = "",
+                widthUnits = 1f,
+                // Not a LETTER: a swipe must not be able to pass through a digit, and a digit
+                // is not a substitution target when correcting a typo.
+                flags = KeyFlags.PREVIEW,
+            )
+        }
+        return KeyboardLayout(
+            id = id + NUMBER_ROW_SUFFIX,
+            label = label,
+            languageTag = languageTag,
+            rows = listOf(Row(0f, NUMBER_ROW_HEIGHT, digits)) + rows,
+        )
+    }
+
     companion object {
+        private const val NUMBER_ROW_SUFFIX = "+num"
+        private const val NUMBER_ROW_HEIGHT = 0.8f
+
         /**
          * A layout that needs no asset and no parsing.
          *

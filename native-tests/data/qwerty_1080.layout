@@ -1,0 +1,31 @@
+# BorderKeys replay layout: 1080 px phone QWERTY.
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+# keyWidth keyHeight
+108 160
+q 54.0 80.0
+w 162.0 80.0
+e 270.0 80.0
+r 378.0 80.0
+t 486.0 80.0
+y 594.0 80.0
+u 702.0 80.0
+i 810.0 80.0
+o 918.0 80.0
+p 1026.0 80.0
+a 108.0 240.0
+s 216.0 240.0
+d 324.0 240.0
+f 432.0 240.0
+g 540.0 240.0
+h 648.0 240.0
+j 756.0 240.0
+k 864.0 240.0
+l 972.0 240.0
+z 216.0 400.0
+x 324.0 400.0
+c 432.0 400.0
+v 540.0 400.0
+b 648.0 400.0
+n 756.0 400.0
+m 864.0 400.0

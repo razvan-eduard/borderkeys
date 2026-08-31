@@ -6,6 +6,7 @@ package com.borderkeys.ime
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Path
 import android.graphics.RenderNode
 import android.os.Trace
 import android.view.Choreographer
@@ -50,10 +51,19 @@ class KeyboardCanvasView(
         fun onText(text: CharSequence)
         /** Fired on every press so the service can start a prediction early. */
         fun onKeyDown(code: Int)
+
+        /**
+         * A completed swipe, as raw touch samples in view pixels.
+         *
+         * The arrays are the view's own capture buffers and are reused on the next gesture, so
+         * the listener must consume or copy them before returning.
+         */
+        fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int)
     }
 
     var listener: Listener? = null
     var hapticEnabled: Boolean = true
+    var swipeEnabled: Boolean = true
 
     private var layout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
 
@@ -77,6 +87,148 @@ class KeyboardCanvasView(
     private val pointerKey = IntArray(MAX_POINTERS) { NO_KEY }
     private val pointerDownAt = LongArray(MAX_POINTERS)
     private var touchSlop = 0
+
+    // ---- gesture capture -----------------------------------------------------------------------
+
+    private fun beginGesture(fromKey: Int) {
+        gestureActive = true
+        gestureCount = 0
+        // The key the finger started on is released without committing: the press became a
+        // swipe, and a swipe must not also type its first letter.
+        endPress(fromKey)
+        pointerKey[gesturePointer] = fromKey
+        cancelPendingCallbacks()
+        dismissAlternatives()
+        trailMinX = gestureStartX
+        trailMaxX = gestureStartX
+        trailMinY = gestureStartY
+        trailMaxY = gestureStartY
+        appendGesturePoint(gestureStartX, gestureStartY, 0L)
+    }
+
+    /**
+     * Reads every sample the motion event carries, not just the current one.
+     *
+     * A touch driver batches: one `ACTION_MOVE` typically holds several samples taken between
+     * frames, reachable only through the historical accessors. Ignoring them throws away most
+     * of a fast swipe and, with it, exactly the curvature that tells "than" from "thin" -- and
+     * it is the single most common mistake in an amateur implementation, because the trail
+     * still looks fine and only the accuracy suffers.
+     */
+    private fun captureGestureSamples(event: MotionEvent, pointerIndex: Int) {
+        val history = event.historySize
+        for (h in 0 until history) {
+            appendGesturePoint(
+                event.getHistoricalX(pointerIndex, h),
+                event.getHistoricalY(pointerIndex, h),
+                event.getHistoricalEventTime(h),
+            )
+        }
+        appendGesturePoint(event.getX(pointerIndex), event.getY(pointerIndex), event.eventTime)
+        invalidateTrail()
+    }
+
+    private fun appendGesturePoint(x: Float, y: Float, time: Long) {
+        if (gestureCount >= GESTURE_CAPACITY) {
+            decimateGesture()
+        }
+        gestureX[gestureCount] = x
+        gestureY[gestureCount] = y
+        gestureTime[gestureCount] = time
+        gestureCount++
+        if (x < trailMinX) trailMinX = x
+        if (x > trailMaxX) trailMaxX = x
+        if (y < trailMinY) trailMinY = y
+        if (y > trailMaxY) trailMaxY = y
+    }
+
+    /**
+     * Halves the sample rate in place when the buffer fills.
+     *
+     * Growing the array would allocate during the gesture, which is the one thing this path may
+     * not do. Dropping every other sample loses nothing that matters: by the time five hundred
+     * samples have arrived the path is oversampled several times over relative to the
+     * sixty-four points the decoder resamples it to.
+     */
+    private fun decimateGesture() {
+        var write = 0
+        var read = 0
+        while (read < gestureCount) {
+            gestureX[write] = gestureX[read]
+            gestureY[write] = gestureY[read]
+            gestureTime[write] = gestureTime[read]
+            write++
+            read += 2
+        }
+        gestureCount = write
+    }
+
+    private fun finishGesture() {
+        val count = gestureCount
+        gestureActive = false
+        gesturePointer = -1
+        invalidateTrailFully()
+        if (count >= MIN_GESTURE_POINTS) {
+            listener?.onGesture(gestureX, gestureY, gestureTime, count)
+        }
+        // Reset by index. The arrays keep their storage for the next swipe.
+        gestureCount = 0
+    }
+
+    private fun abandonGesture() {
+        gestureActive = false
+        gesturePointer = -1
+        gestureCount = 0
+        invalidateTrailFully()
+    }
+
+    private fun invalidateTrail() {
+        val margin = paints.swipeTrailWidthPx + 2f
+        invalidate(
+            (trailMinX - margin).toInt(), (trailMinY - margin).toInt(),
+            (trailMaxX + margin).toInt() + 1, (trailMaxY + margin).toInt() + 1,
+        )
+    }
+
+    private fun invalidateTrailFully() {
+        if (gestureCount > 0) {
+            invalidateTrail()
+        }
+    }
+
+    /**
+     * Draws the trail as a few polylines of increasing opacity.
+     *
+     * The fade is per segment rather than per point because alpha lives on the paint, not on a
+     * vertex: three or four `drawPath` calls give the effect that a per-point gradient would
+     * need a shader for, and cost nothing measurable.
+     */
+    private fun drawGestureTrail(canvas: Canvas) {
+        if (gestureCount < 2) {
+            return
+        }
+        val perSegment = gestureCount / TRAIL_SEGMENTS + 1
+        val baseAlpha = paints.swipeTrail.alpha
+        var start = 0
+        var segment = 0
+        while (start < gestureCount - 1 && segment < TRAIL_SEGMENTS) {
+            val end = minOf(gestureCount - 1, start + perSegment)
+            val path = trailPaths[segment]
+            path.rewind()
+            path.moveTo(gestureX[start], gestureY[start])
+            for (i in start + 1..end) {
+                path.lineTo(gestureX[i], gestureY[i])
+            }
+            // Oldest segment faintest, newest full strength.
+            val fraction = (segment + 1).toFloat() / TRAIL_SEGMENTS
+            paints.swipeTrail.alpha = (baseAlpha * (0.25f + 0.75f * fraction)).toInt()
+                .coerceIn(0, 255)
+            canvas.drawPath(path, paints.swipeTrail)
+            start = end
+            segment++
+        }
+        paints.swipeTrail.alpha = baseAlpha
+    }
 
     // ---- press animation -----------------------------------------------------------------
 
@@ -102,6 +254,40 @@ class KeyboardCanvasView(
     private var longPressPointer = -1
 
     private var repeatKey = NO_KEY
+
+    // ---- gesture capture ---------------------------------------------------------------------
+
+    /**
+     * The captured swipe, in three preallocated arrays.
+     *
+     * Nothing is allocated for the duration of a gesture. A swipe produces hundreds of samples
+     * in under a second, and a growing list would allocate and copy several times inside the
+     * window where the finger is moving and the trail has to keep up with it.
+     */
+    private val gestureX = FloatArray(GESTURE_CAPACITY)
+    private val gestureY = FloatArray(GESTURE_CAPACITY)
+    private val gestureTime = LongArray(GESTURE_CAPACITY)
+    private var gestureCount = 0
+
+    private var gesturePointer = -1
+    private var gestureActive = false
+    private var gestureStartX = 0f
+    private var gestureStartY = 0f
+
+    private var trailMinX = 0f
+    private var trailMinY = 0f
+    private var trailMaxX = 0f
+    private var trailMaxY = 0f
+
+    /**
+     * One Path per trail segment, recycled with `rewind()`.
+     *
+     * `rewind()` rather than `reset()`: reset frees the internal buffer and the next gesture
+     * allocates it again, which is precisely the allocation this is avoiding. Several paths
+     * rather than one because the trail fades with age, and alpha is a property of the paint
+     * rather than of a point.
+     */
+    private val trailPaths = Array(TRAIL_SEGMENTS) { Path() }
 
     // ---- reused scratch ----------------------------------------------------------------------
 
@@ -323,6 +509,10 @@ class KeyboardCanvasView(
             }
             paints.keyPressedFill.alpha = 255
 
+            if (gestureActive) {
+                drawGestureTrail(canvas)
+            }
+
             if (alternativesKey != NO_KEY) {
                 drawAlternatives(canvas)
             }
@@ -375,8 +565,13 @@ class KeyboardCanvasView(
             }
             MotionEvent.ACTION_MOVE -> {
                 for (pointerIndex in 0 until event.pointerCount) {
-                    onPointerMove(event.getPointerId(pointerIndex),
-                        event.getX(pointerIndex), event.getY(pointerIndex))
+                    val pointerId = event.getPointerId(pointerIndex)
+                    if (gestureActive && pointerId == gesturePointer) {
+                        captureGestureSamples(event, pointerIndex)
+                    } else {
+                        onPointerMove(pointerId, event.getX(pointerIndex),
+                            event.getY(pointerIndex), event, pointerIndex)
+                    }
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
@@ -401,6 +596,14 @@ class KeyboardCanvasView(
         pointerDownAt[pointerId] = eventTime
         startPress(index)
 
+        // Every press on a letter is a gesture that has not started yet. Recording the origin
+        // here costs two floats and means the slop test below needs no extra state.
+        if (swipeEnabled && !gestureActive && KeyFlags.has(geometry.keyFlags[index], KeyFlags.LETTER)) {
+            gesturePointer = pointerId
+            gestureStartX = x
+            gestureStartY = y
+        }
+
         if (hapticEnabled) {
             // Needs no VIBRATE permission, which is why the manifest has none.
             performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -417,7 +620,13 @@ class KeyboardCanvasView(
         }
     }
 
-    private fun onPointerMove(pointerId: Int, x: Float, y: Float) {
+    private fun onPointerMove(
+        pointerId: Int,
+        x: Float,
+        y: Float,
+        event: MotionEvent,
+        pointerIndex: Int,
+    ) {
         if (pointerId >= MAX_POINTERS) {
             return
         }
@@ -428,6 +637,21 @@ class KeyboardCanvasView(
         val previous = pointerKey[pointerId]
         if (previous == NO_KEY) {
             return
+        }
+
+        // A swipe begins when the finger has travelled past the touch slop without lifting.
+        // Distance is the only arbiter: a timer would either start a gesture out of a slow tap
+        // or refuse one from a fast flick, and the user's intent is in the movement.
+        if (swipeEnabled && !gestureActive && pointerId == gesturePointer &&
+            KeyFlags.has(geometry.keyFlags[previous], KeyFlags.LETTER)
+        ) {
+            val dx = x - gestureStartX
+            val dy = y - gestureStartY
+            if (dx * dx + dy * dy > touchSlop * touchSlop) {
+                beginGesture(previous)
+                captureGestureSamples(event, pointerIndex)
+                return
+            }
         }
         val index = findKeyAt(x, y)
         if (index == previous || index == NO_KEY) {
@@ -449,6 +673,11 @@ class KeyboardCanvasView(
         if (pointerId >= MAX_POINTERS) {
             return
         }
+        if (gestureActive && pointerId == gesturePointer) {
+            finishGesture()
+            pointerKey[pointerId] = NO_KEY
+            return
+        }
         val index = pointerKey[pointerId]
         pointerKey[pointerId] = NO_KEY
         if (index == NO_KEY) {
@@ -465,6 +694,9 @@ class KeyboardCanvasView(
     }
 
     private fun cancelAllPointers() {
+        if (gestureActive) {
+            abandonGesture()
+        }
         for (pointerId in 0 until MAX_POINTERS) {
             val index = pointerKey[pointerId]
             if (index != NO_KEY) {
@@ -671,6 +903,15 @@ class KeyboardCanvasView(
         private const val LABEL_WIDTH_FRACTION = 0.82f
         private const val DEFAULT_ROW_HEIGHT_PX = 150f
         private const val MIN_ALTERNATIVE_WIDTH_PX = 96f
+
+        /**
+         * Samples one swipe may hold before the buffer is decimated. Five hundred and twelve
+         * covers a long word at a high report rate; beyond that the path is oversampled
+         * relative to the sixty-four points the decoder reduces it to anyway.
+         */
+        private const val GESTURE_CAPACITY = 512
+        private const val MIN_GESTURE_POINTS = 6
+        private const val TRAIL_SEGMENTS = 4
 
         private const val LONG_PRESS_MILLIS = 380L
         private const val REPEAT_DELAY_MILLIS = 400L

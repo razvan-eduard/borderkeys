@@ -23,6 +23,8 @@ object KeyCodes {
     const val LANGUAGE = -5
     const val EMOJI = -6
     const val SETTINGS = -7
+    /** The second symbols page: the one behind "=\\<". */
+    const val SYMBOLS_SHIFT = -8
     const val NONE = -100
 
     fun isCharacter(code: Int): Boolean = code > 0
@@ -37,6 +39,7 @@ object KeyCodes {
         "language" -> LANGUAGE
         "emoji" -> EMOJI
         "settings" -> SETTINGS
+        "symbols_shift" -> SYMBOLS_SHIFT
         else -> NONE
     }
 }

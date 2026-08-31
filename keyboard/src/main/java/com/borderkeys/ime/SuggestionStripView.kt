@@ -47,6 +47,18 @@ class SuggestionStripView(
             }
         }
 
+    /**
+     * Shown while a swipe is still being decoded, and only if that takes long enough to notice.
+     * A strip that simply goes blank reads as the gesture having been ignored.
+     */
+    var decoding: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
     private val words = arrayOfNulls<String>(MAX_SUGGESTIONS)
     private val chars = Array(MAX_SUGGESTIONS) { CharArray(MAX_WORD_CHARS) }
     private val charCount = IntArray(MAX_SUGGESTIONS)
@@ -114,7 +126,11 @@ class SuggestionStripView(
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paints.background)
 
             if (privateMode) {
-                drawPrivateNotice(canvas)
+                drawNotice(canvas, privateNoticeChars, PRIVATE_NOTICE.length)
+                return
+            }
+            if (decoding && count == 0) {
+                drawNotice(canvas, decodingNoticeChars, DECODING_NOTICE.length)
                 return
             }
             if (count == 0) {
@@ -147,10 +163,9 @@ class SuggestionStripView(
         }
     }
 
-    private fun drawPrivateNotice(canvas: Canvas) {
-        PRIVATE_NOTICE.toCharArray(privateNoticeChars, 0, 0, PRIVATE_NOTICE.length)
+    private fun drawNotice(canvas: Canvas, chars: CharArray, length: Int) {
         canvas.drawText(
-            privateNoticeChars, 0, PRIVATE_NOTICE.length,
+            chars, 0, length,
             width / 2f, height / 2f + paints.secondaryBaselineOffsetPx,
             paints.labelSecondary,
         )
@@ -198,7 +213,10 @@ class SuggestionStripView(
         return if (slot in 0 until count) slot else -1
     }
 
-    private val privateNoticeChars = CharArray(PRIVATE_NOTICE.length)
+    private val privateNoticeChars =
+        CharArray(PRIVATE_NOTICE.length).also { PRIVATE_NOTICE.toCharArray(it, 0, 0, it.size) }
+    private val decodingNoticeChars =
+        CharArray(DECODING_NOTICE.length).also { DECODING_NOTICE.toCharArray(it, 0, 0, it.size) }
 
     companion object {
         const val MAX_SUGGESTIONS = 3
@@ -212,5 +230,6 @@ class SuggestionStripView(
          * chrome arrives with the settings screen.
          */
         private const val PRIVATE_NOTICE = "Private field — nothing is learned or saved"
+        private const val DECODING_NOTICE = "…"
     }
 }

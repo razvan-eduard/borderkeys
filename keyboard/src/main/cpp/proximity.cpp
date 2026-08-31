@@ -322,6 +322,31 @@ float KeyGeometry::substitutionCost(uint32_t typedFolded, uint32_t intendedFolde
     return std::sqrt(dx * dx + dy * dy);
 }
 
+bool KeyGeometry::centreOf(uint32_t folded, float* x, float* y) const {
+    const int index = indexOf(folded);
+    if (index < 0) {
+        return false;
+    }
+    *x = centersX_[index];
+    *y = centersY_[index];
+    return true;
+}
+
+int KeyGeometry::nearestSlot(float x, float y) const {
+    int best = -1;
+    float bestDistance = 3.0e38f;
+    for (int i = 0; i < count_; ++i) {
+        const float dx = x - centersX_[i];
+        const float dy = y - centersY_[i];
+        const float distance = dx * dx + dy * dy;  // squared: the ordering is the same
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = i;
+        }
+    }
+    return best;
+}
+
 int KeyGeometry::neighbours(uint32_t typedFolded, const uint32_t** codesOut,
                             const float** costsOut) const {
     const int index = indexOf(typedFolded);

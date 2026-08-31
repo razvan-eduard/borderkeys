@@ -220,3 +220,68 @@ class KeyboardGeometryTest {
         }
     }
 }
+
+class KeyboardLayoutTest {
+
+    @Test
+    fun `the number row is prepended and the letters keep their order`() {
+        val base = KeyboardLayout.fallbackQwerty()
+        val withDigits = base.withNumberRow()
+
+        assertEquals(base.rows.size + 1, withDigits.rows.size)
+        assertEquals(base.keyCount + 10, withDigits.keyCount)
+        assertEquals("1", withDigits.rows[0].keys[0].label)
+        assertEquals("0", withDigits.rows[0].keys[9].label)
+        // Everything below the digits is untouched.
+        assertEquals(base.rows[0].keys.map { it.code }, withDigits.rows[1].keys.map { it.code })
+    }
+
+    @Test
+    fun `a digit is not a swipe letter`() {
+        // A gesture must not be able to pass through the number row, and a digit must never be
+        // offered as a substitution when correcting a typo.
+        val digits = KeyboardLayout.fallbackQwerty().withNumberRow().rows[0].keys
+        for (key in digits) {
+            assertTrue(
+                "digit ${key.label} is marked as a swipe letter",
+                !KeyFlags.has(key.flags, KeyFlags.LETTER),
+            )
+        }
+    }
+
+    @Test
+    fun `the number row is shorter than a letter row`() {
+        val withDigits = KeyboardLayout.fallbackQwerty().withNumberRow()
+        assertTrue(withDigits.rows[0].heightScale < withDigits.rows[1].heightScale)
+    }
+
+    @Test
+    fun `applying the number row twice changes nothing`() {
+        // The service reapplies the layout whenever a setting changes, so this has to be
+        // idempotent or the keyboard grows a row on every emission.
+        val once = KeyboardLayout.fallbackQwerty().withNumberRow()
+        val twice = once.withNumberRow()
+        assertEquals(once.keyCount, twice.keyCount)
+        assertEquals(once.rows.size, twice.rows.size)
+    }
+
+    @Test
+    fun `the number row lays out without overlaps`() {
+        val geometry = KeyboardGeometry()
+        geometry.compile(KeyboardLayout.fallbackQwerty().withNumberRow(), 1080f, 720f, 8f)
+        for (index in 0 until geometry.keyCount) {
+            assertTrue(geometry.keyRight[index] > geometry.keyLeft[index])
+            assertTrue(geometry.keyBottom[index] > geometry.keyTop[index])
+        }
+        // Every point still resolves to a key, including inside the new row.
+        var x = 2f
+        while (x < 1080f) {
+            var y = 2f
+            while (y < 720f) {
+                assertNotEquals(KeyboardGeometry.NO_KEY, geometry.findKeyAt(x, y))
+                y += 11f
+            }
+            x += 11f
+        }
+    }
+}

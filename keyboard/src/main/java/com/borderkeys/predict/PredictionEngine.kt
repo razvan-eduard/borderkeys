@@ -37,6 +37,12 @@ class PredictionEngine(
     /** Delivered on the UI thread, already filtered for staleness. */
     interface ResultListener {
         fun onSuggestions(words: Array<String?>, count: Int)
+
+        /**
+         * A decoded swipe. Separate from [onSuggestions] because the service treats it
+         * differently: the first candidate is committed immediately rather than offered.
+         */
+        fun onGestureCandidates(words: Array<String?>, count: Int)
     }
 
     var listener: ResultListener? = null
@@ -68,8 +74,19 @@ class PredictionEngine(
     private val geometryX = FloatArray(MAX_KEYS)
     private val geometryY = FloatArray(MAX_KEYS)
 
+    // The gesture is copied out of the view's capture buffers before it crosses threads: the
+    // view reuses those arrays for the next swipe, and the finger can start one while the
+    // decoder is still working on the last.
+    private val gestureX = FloatArray(MAX_GESTURE_POINTS)
+    private val gestureY = FloatArray(MAX_GESTURE_POINTS)
+    private val gestureTime = LongArray(MAX_GESTURE_POINTS)
+    private var gestureCount = 0
+    private val gestureLock = Any()
+
     private val workerLoop = Runnable { serveRequests() }
     private val publishResults = Runnable { publish() }
+    private val publishGesture = Runnable { publishGestureResult() }
+    private var gestureResultCount = 0
 
     fun start(): Boolean {
         thread.start()
@@ -112,6 +129,7 @@ class PredictionEngine(
             NativePredictor.nativeDestroy(toDestroy)
         }
         mainHandler.removeCallbacks(publishResults)
+        mainHandler.removeCallbacks(publishGesture)
     }
 
     private inline fun <T> withHandle(fallback: T, block: (Long) -> T): T {
@@ -243,6 +261,57 @@ class PredictionEngine(
     /** Requests superseded before being served. Exposed for tracing and tests. */
     val droppedRequests: Int get() = queue.droppedRequests
 
+    /**
+     * Decodes a swipe. Returns immediately; the answer arrives on the UI thread.
+     *
+     * The samples are copied under a lock rather than handed over, because they belong to the
+     * view and the view will overwrite them on the next gesture.
+     */
+    fun decodeGesture(
+        xs: FloatArray,
+        ys: FloatArray,
+        timestamps: LongArray,
+        count: Int,
+        previous1: String?,
+        previous2: String?,
+    ) {
+        val points = count.coerceAtMost(MAX_GESTURE_POINTS)
+        if (points < 2) {
+            return
+        }
+        synchronized(gestureLock) {
+            System.arraycopy(xs, 0, gestureX, 0, points)
+            System.arraycopy(ys, 0, gestureY, 0, points)
+            System.arraycopy(timestamps, 0, gestureTime, 0, points)
+            gestureCount = points
+        }
+        worker.post {
+            Trace.beginSection("PredictionEngine.decodeGesture")
+            val found = try {
+                withHandle(0) { current ->
+                    synchronized(resultLock) {
+                        val samples = synchronized(gestureLock) { gestureCount }
+                        NativePredictor.nativeDecodeGesture(
+                            current, gestureX, gestureY, gestureTime, samples,
+                            previous1, previous2, nativeWords, nativeScores,
+                        )
+                    }
+                }
+            } finally {
+                Trace.endSection()
+            }
+            synchronized(resultLock) { nativeCount = found }
+            mainHandler.removeCallbacks(publishGesture)
+            mainHandler.post(publishGesture)
+        }
+    }
+
+    private fun publishGestureResult() {
+        val written = copyAndFilterResults()
+        gestureResultCount = written
+        listener?.onGestureCandidates(displayWords, written)
+    }
+
     private fun serveRequests() {
         while (queue.take()) {
             val generation = queue.currentGeneration
@@ -281,6 +350,18 @@ class PredictionEngine(
      * moment this returns.
      */
     private fun publish() {
+        listener?.onSuggestions(displayWords, copyAndFilterResults())
+    }
+
+    /**
+     * Moves the shared buffer into the display buffer and drops refused words.
+     *
+     * The copy happens under the lock -- sixteen references, uncontended -- so the prediction
+     * thread can start overwriting the moment this returns. Blocked words are filtered here
+     * rather than in the engine: the native side has no notion of a word the user refused, and
+     * this is a set lookup on at most sixteen strings, once per answer.
+     */
+    private fun copyAndFilterResults(): Int {
         var count: Int
         synchronized(resultLock) {
             count = nativeCount
@@ -288,9 +369,6 @@ class PredictionEngine(
                 displayWords[index] = nativeWords[index]
             }
         }
-        // Blocked words are filtered here rather than in the engine: the native side has no
-        // notion of a word the user refused, and this is a set membership test on at most
-        // sixteen strings, once per answer.
         var written = 0
         synchronized(blocked) {
             for (index in 0 until count) {
@@ -305,12 +383,14 @@ class PredictionEngine(
             displayWords[index] = null
         }
         displayCount = written
-        listener?.onSuggestions(displayWords, displayCount)
+        return written
     }
 
     companion object {
         /** Matches Engine::kMaxCandidates in engine.hpp. */
         const val MAX_RESULTS = 16
         private const val MAX_KEYS = 64
+        /** Matches GESTURE_CAPACITY in KeyboardCanvasView and kMaxGesturePoints in the bridge. */
+        private const val MAX_GESTURE_POINTS = 512
     }
 }

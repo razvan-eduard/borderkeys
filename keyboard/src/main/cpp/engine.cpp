@@ -3,6 +3,8 @@
 
 #include "engine.hpp"
 
+#include "gesture/shark2_decoder.hpp"
+
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -223,11 +225,26 @@ bool Engine::create() {
     }
     geometry_.clear();
     userModel_.clear();
+
+    // The decoder tier, decided here and never again. In the free build the neural tier does
+    // not exist as code, so this is not a runtime choice between two implementations -- it is
+    // the only implementation that was compiled.
+#if defined(BORDERKEYS_NEURAL_SWIPE)
+    gestureDecoder_.reset(new (std::nothrow) Shark2Decoder(*this));
+#else
+    gestureDecoder_.reset(new (std::nothrow) Shark2Decoder(*this));
+#endif
+    if (!gestureDecoder_) {
+        arena_.release();
+        return false;
+    }
+
     created_ = true;
     return true;
 }
 
 void Engine::destroy() {
+    gestureDecoder_.reset();
     for (LanguagePack& pack : packs_) {
         pack.close();
     }
@@ -302,7 +319,96 @@ void Engine::setActiveLanguages(const char* const* tags, const float* weights, i
 
 bool Engine::setKeyGeometry(const int32_t* codes, const float* centersX, const float* centersY,
                             int count, float keyWidth, float keyHeight) {
-    return geometry_.set(codes, centersX, centersY, count, keyWidth, keyHeight);
+    if (!geometry_.set(codes, centersX, centersY, count, keyWidth, keyHeight)) {
+        return false;
+    }
+    // Every cached gesture template is a path through key centres that have just moved.
+    if (gestureDecoder_) {
+        gestureDecoder_->setLayout(geometry_);
+    }
+    return true;
+}
+
+const PackedTrie* Engine::activeTrie(int packIndex) const {
+    if (packIndex < 0 || packIndex >= kMaxPacks) {
+        return nullptr;
+    }
+    const LanguagePack& pack = packs_[packIndex];
+    return (pack.isOpen() && pack.active) ? &pack.trie() : nullptr;
+}
+
+float Engine::packWeightLog(int packIndex) const {
+    if (packIndex < 0 || packIndex >= kMaxPacks || !(normalisedWeight_[packIndex] > 0.f)) {
+        return -30.f;
+    }
+    return std::log(normalisedWeight_[packIndex]);
+}
+
+float Engine::userBoost(const char* text, uint32_t length) const {
+    return userBoostFor(text, length);
+}
+
+void Engine::refreshWeights() {
+    // Scores from packs with different vocabulary sizes carry different normalisations, so they
+    // are brought onto one scale before competing for the same sixteen slots.
+    float weightSum = 0.0f;
+    for (int i = 0; i < kMaxPacks; ++i) {
+        normalisedWeight_[i] = 0.0f;
+        if (packs_[i].isOpen() && packs_[i].active) {
+            const float weight = (packs_[i].adaptiveWeight < kMinLanguageWeight)
+                                     ? kMinLanguageWeight
+                                     : packs_[i].adaptiveWeight;
+            normalisedWeight_[i] = weight;
+            weightSum += weight;
+        }
+    }
+    if (weightSum <= 0.0f) {
+        weightSum = 1.0f;
+    }
+    for (int i = 0; i < kMaxPacks; ++i) {
+        if (normalisedWeight_[i] > 0.0f) {
+            normalisedWeight_[i] /= weightSum;
+        }
+    }
+}
+
+int Engine::decodeGesture(const float* xs, const float* ys, const int64_t* ts, int count,
+                          const char* previous1, size_t previous1Length, const char* previous2,
+                          size_t previous2Length, Candidate* out, int maxOut) {
+    if (!created_ || !gestureDecoder_ || out == nullptr || maxOut <= 0) {
+        return 0;
+    }
+    refreshWeights();
+    resolveContext(previous1, previous1Length, previous2, previous2Length);
+
+    Candidate raw[kMaxCandidates];
+    const int produced = gestureDecoder_->decode(xs, ys, ts, count, raw, kMaxCandidates);
+    if (produced <= 0) {
+        return 0;
+    }
+
+    // Re-offered through the engine's own heap so that the same word reached from two active
+    // languages collapses into one entry -- the decoder deduplicates by word index, which
+    // cannot see that "the" in two packs is one suggestion to a reader.
+    TopK<Candidate> heap;
+    heap.reset(heapStorage_, kMaxCandidates);
+    for (int i = 0; i < produced; ++i) {
+        uint32_t textLength = 0;
+        const char* const text = candidateText(raw[i], &textLength);
+        if (text != nullptr && textLength != 0) {
+            offerCandidate(heap, raw[i], text, textLength);
+        }
+    }
+    const int drained = heap.drainSorted(drainBuffer_, kMaxCandidates);
+    const int written = (drained < maxOut) ? drained : maxOut;
+    for (int i = 0; i < written; ++i) {
+        out[i] = drainBuffer_[i];
+    }
+    return written;
+}
+
+const char* Engine::gestureDecoderName() const {
+    return gestureDecoder_ ? gestureDecoder_->name() : "none";
 }
 
 void Engine::resolveContext(const char* previous1, size_t previous1Length, const char* previous2,
@@ -781,30 +887,7 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
         }
     }
 
-    // Weights are normalised across the active packs so that scores coming out of models with
-    // different vocabulary sizes, and therefore different normalisations, land on one scale
-    // before they compete for the same sixteen slots.
-    float weightSum = 0.0f;
-    for (int i = 0; i < kMaxPacks; ++i) {
-        normalisedWeight_[i] = 0.0f;
-        if (packs_[i].isOpen() && packs_[i].active) {
-            const float weight = (packs_[i].adaptiveWeight < kMinLanguageWeight)
-                                     ? kMinLanguageWeight
-                                     : packs_[i].adaptiveWeight;
-            normalisedWeight_[i] = weight;
-            weightSum += weight;
-        }
-    }
-    if (weightSum <= 0.0f) {
-        // No language active: the personal dictionary is still the user's own data and is
-        // still worth offering.
-        weightSum = 1.0f;
-    }
-    for (int i = 0; i < kMaxPacks; ++i) {
-        if (normalisedWeight_[i] > 0.0f) {
-            normalisedWeight_[i] /= weightSum;
-        }
-    }
+    refreshWeights();
 
     resolveContext(previous1, previous1Length, previous2, previous2Length);
     visitBudget_ = nodeVisitBudgetFor(foldedLength);

@@ -64,6 +64,31 @@ public:
     // better exists.
     float substitutionCost(uint32_t typedFolded, uint32_t intendedFolded) const;
 
+    /**
+     * The centre of a key, in the same pixel space the view uses.
+     *
+     * Exposed for the gesture decoder, which draws a word's ideal path through the centres of
+     * its letters. Returns false when the character is not on the current layout -- which is
+     * how "could this word have been swiped at all" is answered, before any geometry is done.
+     */
+    bool centreOf(uint32_t folded, float* x, float* y) const;
+
+    int keyCount() const { return count_; }
+    float keyWidth() const { return keyWidth_; }
+    float keyHeight() const { return keyHeight_; }
+    uint32_t codeAt(int slot) const {
+        return (slot >= 0 && slot < count_) ? codes_[slot] : 0u;
+    }
+
+    /**
+     * The key nearest to a point, as a slot index. Returns -1 when no geometry is set.
+     *
+     * Used by the gesture decoder to turn a trajectory into the sequence of keys the finger
+     * passed over. Nearest by centre rather than by containment, because a swipe crosses the
+     * gaps between keys constantly and "no key here" is never the useful answer.
+     */
+    int nearestSlot(float x, float y) const;
+
     // The ring around a typed key, cheapest first and including the key itself at cost 0.
     // Returns the count. The search expands only these instead of the whole alphabet, which is
     // what keeps a fuzzy walk from costing forty array probes per node per input position.

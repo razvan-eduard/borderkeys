@@ -42,6 +42,11 @@ constexpr jsize kStringBufferBytes = kMaxStringUnits * 3 + 1;
 
 constexpr int kMaxUserWordsPerCall = 20000;
 
+// Matches the capture buffer in KeyboardCanvasView. A gesture longer than this has already been
+// decimated on the Kotlin side, so the cap here is a bound on a hostile caller rather than on a
+// real swipe.
+constexpr jsize kMaxGesturePoints = 512;
+
 // No jclass, jmethodID or jfieldID is cached here, because none is needed: the bridge fills
 // arrays the caller allocated and calls nothing back into Kotlin. If that ever changes, the id
 // is resolved in JNI_OnLoad and held in a global reference -- never looked up per call, which
@@ -381,6 +386,108 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
     delete[] countValues;
 }
 
+jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArray xs,
+                         jfloatArray ys, jlongArray ts, jint count, jstring prev1, jstring prev2,
+                         jobjectArray outWords, jfloatArray outScores) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || xs == nullptr || ys == nullptr || outWords == nullptr ||
+        outScores == nullptr || count < 2) {
+        return 0;
+    }
+    jsize points = count;
+    if (points > kMaxGesturePoints) {
+        points = kMaxGesturePoints;
+    }
+    if (env->GetArrayLength(xs) < points || env->GetArrayLength(ys) < points) {
+        return 0;
+    }
+
+    // Copied into stack buffers rather than pinned with GetPrimitiveArrayCritical. Critical
+    // sections forbid every other JNI call while they are held, and the decoder below is not a
+    // few instructions -- it is a trie walk with a thirty-millisecond budget. Eight kilobytes of
+    // stack is the cheaper trade.
+    jfloat pointsX[kMaxGesturePoints];
+    jfloat pointsY[kMaxGesturePoints];
+    jlong timestamps[kMaxGesturePoints];
+    env->GetFloatArrayRegion(xs, 0, points, pointsX);
+    env->GetFloatArrayRegion(ys, 0, points, pointsY);
+    if (ts != nullptr && env->GetArrayLength(ts) >= points) {
+        env->GetLongArrayRegion(ts, 0, points, timestamps);
+    } else {
+        std::memset(timestamps, 0, sizeof(jlong) * static_cast<size_t>(points));
+    }
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        env->ExceptionClear();
+        return 0;
+    }
+
+    char prev1Buffer[kStringBufferBytes];
+    char prev2Buffer[kStringBufferBytes];
+    jsize prev1Length = copyString(env, prev1, prev1Buffer, sizeof(prev1Buffer));
+    if (prev1Length < 0) {
+        prev1Buffer[0] = '\0';
+        prev1Length = 0;
+    }
+    jsize prev2Length = copyString(env, prev2, prev2Buffer, sizeof(prev2Buffer));
+    if (prev2Length < 0) {
+        prev2Buffer[0] = '\0';
+        prev2Length = 0;
+    }
+
+    const jsize wordSlots = env->GetArrayLength(outWords);
+    const jsize scoreSlots = env->GetArrayLength(outScores);
+    jsize slots = (wordSlots < scoreSlots) ? wordSlots : scoreSlots;
+    if (slots <= 0) {
+        return 0;
+    }
+    if (slots > Engine::kMaxCandidates) {
+        slots = Engine::kMaxCandidates;
+    }
+
+    Candidate candidates[Engine::kMaxCandidates];
+    const int found = engine->decodeGesture(
+        pointsX, pointsY, reinterpret_cast<const int64_t*>(timestamps), static_cast<int>(points),
+        prev1Buffer, static_cast<size_t>(prev1Length), prev2Buffer,
+        static_cast<size_t>(prev2Length), candidates, static_cast<int>(slots));
+    if (found <= 0) {
+        return 0;
+    }
+
+    float scores[Engine::kMaxCandidates];
+    int written = 0;
+    char text[kStringBufferBytes];
+    for (int i = 0; i < found; ++i) {
+        uint32_t length = 0;
+        const char* const source = engine->candidateText(candidates[i], &length);
+        if (source == nullptr || length == 0 || length >= sizeof(text)) {
+            continue;
+        }
+        std::memcpy(text, source, length);
+        text[length] = '\0';
+        jstring value = env->NewStringUTF(text);
+        if (value == nullptr) {
+            env->ExceptionClear();
+            break;
+        }
+        env->SetObjectArrayElement(outWords, written, value);
+        env->DeleteLocalRef(value);
+        if (env->ExceptionCheck() == JNI_TRUE) {
+            env->ExceptionClear();
+            break;
+        }
+        scores[written] = candidates[i].score;
+        ++written;
+    }
+    if (written > 0) {
+        env->SetFloatArrayRegion(outScores, 0, written, scores);
+        if (env->ExceptionCheck() == JNI_TRUE) {
+            env->ExceptionClear();
+            return 0;
+        }
+    }
+    return written;
+}
+
 jint nativeSnapshotUserModel(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring path) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr) {
@@ -423,6 +530,9 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeLearn)},
     {"nativeLoadUserWords", "(J[Ljava/lang/String;[I)V",
      reinterpret_cast<void*>(nativeLoadUserWords)},
+    {"nativeDecodeGesture",
+     "(J[F[F[JILjava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F)I",
+     reinterpret_cast<void*>(nativeDecodeGesture)},
     {"nativeSnapshotUserModel", "(JLjava/lang/String;)I",
      reinterpret_cast<void*>(nativeSnapshotUserModel)},
 };

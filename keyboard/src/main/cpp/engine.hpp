@@ -6,8 +6,12 @@
 
 #include <cstdint>
 
+#include <memory>
+
 #include "arena.hpp"
 #include "bkd_format.hpp"
+#include "candidate.hpp"
+#include "gesture/gesture_decoder.hpp"
 #include "ngram_model.hpp"
 #include "packed_trie.hpp"
 #include "proximity.hpp"
@@ -15,18 +19,6 @@
 #include "user_model.hpp"
 
 namespace borderkeys {
-
-// A scored suggestion. Plain data on purpose: this crosses into the gesture decoder in step 6
-// and into the JNI bridge, and neither place may allocate or destruct anything.
-struct Candidate {
-    // Index into the engine's pack table, or kUserPack for a word from the personal dictionary.
-    int32_t packIndex;
-    // Word index inside that pack, or entry index inside the user model.
-    int32_t wordIndex;
-    float score;
-
-    static constexpr int32_t kUserPack = -1;
-};
 
 // One mapped .bkd file, plus the per-language state the engine adapts at runtime.
 class LanguagePack {
@@ -79,7 +71,14 @@ private:
     int frequentCount_ = 0;
 };
 
-class Engine {
+/**
+ * The engine, and the scoring surface the gesture decoder sees.
+ *
+ * Implementing [GestureScorer] rather than handing the decoder a pointer to itself is what
+ * keeps the two headers from including each other, and what lets a decoder be exercised against
+ * a stub in the replay harness without an engine existing at all.
+ */
+class Engine final : public GestureScorer {
 public:
     static constexpr int kMaxPacks = 4;
     // Sixteen is the ceiling the design fixes for the top-K heap. The suggestion strip shows
@@ -101,6 +100,27 @@ public:
     int suggest(const char* composing, size_t composingLength, const char* previous1,
                 size_t previous1Length, const char* previous2, size_t previous2Length,
                 Candidate* out, int maxOut);
+
+    /**
+     * Decodes a swipe into candidates, best first.
+     *
+     * The samples are raw touch points in view pixels, exactly as the driver reported them,
+     * including the historical ones inside each motion event. Smoothing and resampling belong
+     * to the decoder, not to the caller: tier A and tier B want the same features and must not
+     * disagree about how they were produced.
+     */
+    int decodeGesture(const float* xs, const float* ys, const int64_t* ts, int count,
+                      const char* previous1, size_t previous1Length, const char* previous2,
+                      size_t previous2Length, Candidate* out, int maxOut);
+
+    const char* gestureDecoderName() const;
+
+    // --- GestureScorer -------------------------------------------------------------------
+    int packCount() const override { return kMaxPacks; }
+    const PackedTrie* activeTrie(int packIndex) const override;
+    float packWeightLog(int packIndex) const override;
+    float contextLogProb(int packIndex, uint32_t wordIndex) const override;
+    float userBoost(const char* text, uint32_t length) const override;
 
     void learn(const char* word, size_t wordLength, const char* previous1,
                size_t previous1Length, const char* previous2, size_t previous2Length);
@@ -140,9 +160,9 @@ private:
     void collectWords(int packIndex, const LanguagePack& pack, const Endpoint& endpoint,
                       TopK<Candidate>& heap);
 
-    // Stupid backoff over trigram, bigram and unigram, in natural log units.
-    float contextLogProb(int packIndex, uint32_t wordIndex) const;
     float userBoostFor(const char* text, uint32_t length) const;
+    /** Normalises the active packs' weights onto one scale. Shared by tapping and swiping. */
+    void refreshWeights();
     static float userBoostForCount(uint32_t count);
     // Offers a candidate, replacing an entry for the same word instead of adding a second one.
     void offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, const char* text,
@@ -152,6 +172,12 @@ private:
 
     LanguagePack packs_[kMaxPacks];
     KeyGeometry geometry_;
+    /**
+     * Chosen once, at create(), from a compile-time flag. There is no `if (neural)` anywhere
+     * near a finger, and in the free build the neural tier is not compiled at all -- so the
+     * shipped library contains no trace of it rather than dead code the linker removed.
+     */
+    std::unique_ptr<GestureDecoder> gestureDecoder_;
     UserModel userModel_;
     Arena arena_;
 
