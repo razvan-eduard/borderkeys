@@ -48,6 +48,30 @@ constexpr float kWeightAdaptRate = 0.06f;
 
 constexpr float kMaxUserBoost = 3.0f;
 
+// A flat surcharge for having needed a correction at all, on top of the per-edit cost.
+//
+// The per-edit cost alone prices an edit against a probability ratio, and loses when the ratio
+// is large. In Romanian the case is not hypothetical: "si" is roughly eighty times more
+// frequent than "stiu", so deleting two characters to reach it costs 2 * 0.85 * 2.3 = 3.9
+// against a gap of about 4.4, and the keyboard offered "si" first to someone who had typed
+// "stiu" correctly. The leading entry of the strip was not the user's word.
+//
+// This is charged once, to any candidate reached with cost above zero, so it changes how
+// corrections rank against words that needed none -- and nothing else. Completions are
+// untouched: "carte" after "car" costs no edits, so it still competes with "car" on frequency
+// alone, which is what a suggestion strip is for. Corrections still appear; they just stop
+// displacing a word that was spelled correctly.
+//
+// Three units of log-probability is about twenty to one. It is safe to be firm precisely
+// because nothing is ever applied automatically: ranking the typed word first costs the user
+// nothing, since the correction is still one tap away.
+//
+// Note that "no correction needed" is measured after folding, so typing "totusi" reaches
+// "totuși" at zero cost. That is the point. On a Romanian keyboard a diacritic-free spelling
+// that counted as a correction would put every accented word behind whatever short word happens
+// to be more frequent.
+constexpr float kCorrectionSurcharge = 3.0f;
+
 // The log-probability a word gets when the personal dictionary is the only place it exists.
 // Scores from the user model cannot be derived from its own totals: a word confirmed forty
 // times out of fifty is three quarters of *that* distribution, which on a language pack's scale
@@ -725,7 +749,9 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
     const int alphabetSize = trie.alphabetSize();
     const float weight = normalisedWeight_[packIndex];
     const float weightLog = std::log(weight);
-    const float editComponent = -kEditPenalty * endpoint.cost;
+    const float editComponent = endpoint.cost > 0.0f
+        ? -(kEditPenalty * endpoint.cost + kCorrectionSurcharge)
+        : 0.0f;
 
     while (stackSize > 0) {
         if (visitBudget_ <= 0) {

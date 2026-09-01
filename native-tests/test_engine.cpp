@@ -168,6 +168,28 @@ void runEngineTests() {
         check(loaded.rankOf("tara", "țară") >= 0, "and does so for t-comma as well");
         check(loaded.rankOf("keyboarf", "keyboard") >= 0,
               "a neighbouring-key slip is corrected using the pushed-down geometry");
+
+        // A correction must not displace a word that needed none, however much more frequent
+        // the correction is. "the" is a hundred times more frequent than "theme" in the test
+        // pack, and deleting two characters to reach it used to cost less than that ratio was
+        // worth -- so someone who typed "theme" correctly read "the" at the head of the strip.
+        // The same shape in Romanian is "si" beating a correctly typed "stiu".
+        check(loaded.rankOf("theme", "theme") == 0,
+              "a correctly spelled rare word outranks a frequent correction of it");
+        check(loaded.rankOf("theme", "the") > 0,
+              "and the frequent correction is still offered, just not first");
+        check(loaded.rankOf("timer", "timer") == 0,
+              "which holds when the ratio is sixty to one");
+        check(loaded.rankOf("masiv", "masiv") == 0,
+              "and when the correction would also add a diacritic");
+
+        // The surcharge is charged for correcting, not for completing. A completion costs no
+        // edits, so it still competes on frequency alone: this is what a suggestion strip is
+        // for, and a rule that put "car" ahead of everything starting with it would break it.
+        check(loaded.rankOf("them", "theme") > 0,
+              "a completion is still offered above nothing");
+        check(loaded.rankOf("mas", "mașina") >= 0,
+              "and a prefix still reaches the frequent completion");
         check(loaded.rankOf("zzzqqq", "the") < 0, "nonsense does not produce a top word");
 
         Candidate out[Engine::kMaxCandidates];
