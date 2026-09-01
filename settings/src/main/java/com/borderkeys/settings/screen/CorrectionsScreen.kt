@@ -82,6 +82,22 @@ fun CorrectionsScreen(modifier: Modifier = Modifier) {
         )
 
         Divider()
+        SectionHeader("Two words at once")
+        SwitchRow(
+            title = "Suggest whole phrases",
+            subtitle = "Offers \"vreau să\" where it would otherwise offer \"vreau\", for " +
+                "phrases you write over and over.",
+            checked = preferences.phraseSuggestions,
+        ) { value -> update { it.copy(phraseSuggestions = value) } }
+        Explanation(
+            "Only from what you have written, never from the dictionary: frequency can chain " +
+                "any two common pairs into something grammatical and meaningless. The second " +
+                "word needs twice the evidence of the first, so a phrase appears after about " +
+                "four repetitions where a single word appears after two — twice the evidence " +
+                "for twice the guess. The first word is always offered on its own as well.",
+        )
+
+        Divider()
         SectionHeader("Correcting as you type")
         SwitchRow(
             title = "Apply the first suggestion when you press space",

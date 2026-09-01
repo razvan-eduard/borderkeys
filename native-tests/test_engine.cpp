@@ -359,6 +359,45 @@ void runEngineTests() {
               "nor is the most frequent Romanian word after itself");
     }
 
+    section("two words offered as one suggestion");
+    {
+        const auto write = [](LoadedEngine& loaded, const char* a, const char* b,
+                              const char* c) {
+            loaded.engine.learn(a, std::strlen(a), nullptr, 0, nullptr, 0);
+            loaded.engine.learn(b, std::strlen(b), a, std::strlen(a), nullptr, 0);
+            loaded.engine.learn(c, std::strlen(c), b, std::strlen(b), a, std::strlen(a));
+        };
+
+        // Off by default: a keyboard that guesses two words at a time without being asked is
+        // the behaviour this project refuses everywhere else.
+        LoadedEngine off;
+        off.open();
+        for (int i = 0; i < 6; ++i) {
+            write(off, "the", "test", "keys");
+        }
+        check(off.rankOf("", "test keys", "the") < 0,
+              "no two-word suggestion unless it is switched on");
+
+        LoadedEngine on;
+        on.open();
+        on.engine.setPhraseSuggestions(true);
+        for (int i = 0; i < 6; ++i) {
+            write(on, "the", "test", "keys");
+        }
+        check(on.rankOf("", "test keys", "the") > 0,
+              "a phrase written six times is offered");
+        check(on.rankOf("", "test", "the") == 0,
+              "and never ahead of its own first word, which is still there alone");
+
+        // The second link is held to twice the evidence, so one repetition is not a phrase.
+        LoadedEngine once;
+        once.open();
+        once.engine.setPhraseSuggestions(true);
+        write(once, "the", "test", "keys");
+        check(once.rankOf("", "test keys", "the") < 0,
+              "a phrase written once is not offered");
+    }
+
     section("a phrase is not learned from a single word");
     {
         LoadedEngine loaded;

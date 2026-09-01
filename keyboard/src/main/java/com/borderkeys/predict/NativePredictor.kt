@@ -157,6 +157,18 @@ internal object NativePredictor {
      */
     external fun nativeSetLearningSpeed(handle: Long, speed: Float)
 
+    /** Whether a suggestion may be two words. See KeyboardPreferences.phraseSuggestions. */
+    external fun nativeSetPhraseSuggestions(handle: Long, enabled: Boolean)
+
+    /** Replaces the remembered three-word sequences. Called after the pairs, same reason. */
+    external fun nativeLoadUserTrigrams(
+        handle: Long,
+        previous2: Array<String>,
+        previous1: Array<String>,
+        next: Array<String>,
+        counts: IntArray,
+    )
+
     external fun nativeLoadUserBigrams(
         handle: Long,
         previous: Array<String>,

@@ -183,6 +183,9 @@ class KeyboardPreferencesTest {
         assertEquals(0f, defaults.horizontalOffsetDp, 0f)
         assertEquals(KeyboardPreferences.LEARNING_BALANCED, defaults.learningSpeed)
         assertEquals(KeyboardPreferences.DEFAULT_SUGGESTIONS, defaults.suggestionCount)
+        // Two-word suggestions are the one prediction feature that can be confidently wrong
+        // about something the user did not write, so they are opt-in like autocorrect.
+        assertFalse(defaults.phraseSuggestions)
         assertEquals(defaults, defaults.sanitised())
     }
 }

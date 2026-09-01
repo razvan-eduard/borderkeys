@@ -5,11 +5,14 @@ package com.borderkeys.data
 
 import com.borderkeys.data.dao.BlockedWordDao
 import com.borderkeys.data.dao.LearnedBigram
+import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.data.dao.UserBigramDao
+import com.borderkeys.data.dao.UserTrigramDao
 import com.borderkeys.data.dao.UserWordDao
 import com.borderkeys.data.entity.BlockedWord
 import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserWord
 import kotlinx.coroutines.flow.Flow
 
@@ -20,6 +23,7 @@ class DictionaryRepository internal constructor(
     private val userWords: UserWordDao,
     private val blockedWords: BlockedWordDao,
     private val userBigrams: UserBigramDao,
+    private val userTrigrams: UserTrigramDao,
 ) {
     val words: Flow<List<UserWord>> = userWords.observeAll()
     val blocked: Flow<List<BlockedWord>> = blockedWords.observeAll()
@@ -38,6 +42,10 @@ class DictionaryRepository internal constructor(
 
     /** How many pairs are remembered. Shown in Settings, because it should be visible. */
     suspend fun bigramCount(): Int = userBigrams.count()
+
+    /** The three-word sequences pushed into the native engine at service start. */
+    suspend fun topTrigrams(limit: Int = MAX_TRIGRAMS_IN_MEMORY): List<UserTrigram> =
+        userTrigrams.topTriples(limit)
 
     /**
      * Applies a batch of learning updates in one transaction.
@@ -61,6 +69,13 @@ class DictionaryRepository internal constructor(
         userBigrams.incrementAll(updates)
     }
 
+    suspend fun applyLearnedTrigrams(updates: List<LearnedTrigram>) {
+        if (updates.isEmpty()) {
+            return
+        }
+        userTrigrams.incrementAll(updates)
+    }
+
     /**
      * Forgets a word, and every phrase it was part of.
      *
@@ -71,11 +86,13 @@ class DictionaryRepository internal constructor(
     suspend fun forget(word: String) {
         userWords.delete(word)
         userBigrams.deleteInvolving(word)
+        userTrigrams.deleteInvolving(word)
     }
 
     suspend fun forgetEverything() {
         userWords.deleteAll()
         userBigrams.deleteAll()
+        userTrigrams.deleteAll()
     }
 
     /**
@@ -89,6 +106,7 @@ class DictionaryRepository internal constructor(
         blockedWords.insert(BlockedWord(word))
         userWords.delete(word)
         userBigrams.deleteInvolving(word)
+        userTrigrams.deleteInvolving(word)
     }
 
     suspend fun unblock(word: String) = blockedWords.delete(word)
@@ -120,5 +138,8 @@ class DictionaryRepository internal constructor(
          * Reading more rows than that would be reading them to discard them.
          */
         const val MAX_BIGRAMS_IN_MEMORY = 4_096
+
+        /** Matches UserModel::kMaxTrigrams. */
+        const val MAX_TRIGRAMS_IN_MEMORY = 2_048
     }
 }

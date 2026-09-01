@@ -161,8 +161,17 @@ public:
                          const char* const* next, const size_t* nextLengths,
                          const int32_t* counts, int count);
 
+    /** Replaces the remembered three-word sequences. Called after the pairs. */
+    void loadUserTrigrams(const char* const* previous2, const size_t* previous2Lengths,
+                          const char* const* previous1, const size_t* previous1Lengths,
+                          const char* const* next, const size_t* nextLengths,
+                          const int32_t* counts, int count);
+
     /** How readily what the user writes outranks the dictionary. See KeyboardPreferences. */
     void setLearningSpeed(float speed);
+
+    /** Whether two-word suggestions are offered at all. Off unless the user asks for them. */
+    void setPhraseSuggestions(bool enabled) { phraseSuggestions_ = enabled; }
     bool snapshotUserModel(const char* path);
 
     // Resolves a candidate to its display text. The pointer is owned by the mapping or by the
@@ -196,6 +205,22 @@ private:
      * what was just written.
      */
     void searchUserSuccessors(TopK<Candidate>& heap);
+
+    /**
+     * Offers a two-word continuation as a single suggestion.
+     *
+     * Only from the personal model, and only when both links are habits. A corpus can chain any
+     * two frequent bigrams into something grammatical and meaningless -- "de la a" -- because
+     * frequency says nothing about whether the pair was ever written together by this person.
+     * A phrase both of whose links this person has repeatedly written is a different claim.
+     *
+     * The second link is held to a stricter bar than the first, because it is a longer guess:
+     * getting a word wrong costs a glance, getting two wrong costs the same glance plus the
+     * suspicion that the keyboard is inventing things.
+     */
+    void searchUserPhrases(TopK<Candidate>& heap);
+
+
 
     /** How much a personal pair argues for this word, given the context. Zero without one. */
     float userBigramBonusFor(uint32_t entryIndex) const;
@@ -243,6 +268,24 @@ private:
     float learningSpeed_ = 1.0f;
 
     int32_t userContext1_ = -1;
+    /** The word before that one, in the personal model. -1 when there is none. */
+    int32_t userContext2_ = -1;
+
+    bool phraseSuggestions_ = false;
+
+    /**
+     * Text for the phrase candidates of the request being answered.
+     *
+     * Fixed and owned by the engine: composing a phrase needs somewhere to put it, the arena is
+     * rewound between searches, and returning a pointer into a temporary would hand the caller
+     * a dangling one. Four slots because a strip shows between three and eight suggestions and
+     * phrases should never be most of them.
+     */
+    static constexpr int kMaxPhrases = 4;
+    static constexpr int kMaxPhraseBytes = 96;
+    char phraseText_[kMaxPhrases][kMaxPhraseBytes] = {};
+    int phraseLength_[kMaxPhrases] = {};
+    int phraseCount_ = 0;
 
     int32_t contextWord1_[kMaxPacks] = {};
     int32_t contextWord2_[kMaxPacks] = {};

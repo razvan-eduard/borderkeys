@@ -98,6 +98,7 @@ object DataGraph {
             database.userWordDao(),
             database.blockedWordDao(),
             database.userBigramDao(),
+            database.userTrigramDao(),
         )
     }
 

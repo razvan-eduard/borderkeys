@@ -96,6 +96,20 @@ data class KeyboardPreferences(
     val suggestionCount: Int = DEFAULT_SUGGESTIONS,
 
     /**
+     * Whether a suggestion may be two words rather than one.
+     *
+     * Off by default. It offers "vreau să" where it would otherwise offer "vreau", but only from
+     * phrases this person has written repeatedly -- never from the dictionary, because frequency
+     * can chain any two common pairs into something grammatical and meaningless.
+     *
+     * The second word is held to twice the evidence of the first, so a two-word suggestion needs
+     * about four repetitions where a one-word one needs two. Twice the evidence for twice the
+     * guess: a wrong single word costs a glance, a wrong pair costs the glance and the suspicion
+     * that the keyboard is inventing things.
+     */
+    val phraseSuggestions: Boolean = false,
+
+    /**
      * Whether a delimiter applies the leading suggestion instead of committing what was typed.
      *
      * Off, and the default is the argument. A keyboard that rewrites what you wrote because it

@@ -14,12 +14,14 @@ import com.borderkeys.data.dao.BlockedWordDao
 import com.borderkeys.data.dao.ClipboardDao
 import com.borderkeys.data.dao.LanguagePackDao
 import com.borderkeys.data.dao.UserBigramDao
+import com.borderkeys.data.dao.UserTrigramDao
 import com.borderkeys.data.dao.UserWordDao
 import com.borderkeys.data.entity.AssistModelEntry
 import com.borderkeys.data.entity.BlockedWord
 import com.borderkeys.data.entity.ClipEntry
 import com.borderkeys.data.entity.LanguagePackEntry
 import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserWord
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.util.Arrays
@@ -38,8 +40,9 @@ import java.util.Arrays
         LanguagePackEntry::class,
         AssistModelEntry::class,
         UserBigram::class,
+        UserTrigram::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class BorderKeysDatabase : RoomDatabase() {
@@ -50,6 +53,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
     abstract fun languagePackDao(): LanguagePackDao
     abstract fun assistModelDao(): AssistModelDao
     abstract fun userBigramDao(): UserBigramDao
+    abstract fun userTrigramDao(): UserTrigramDao
 
     companion object {
         private const val DATABASE_NAME = "borderkeys.db"
@@ -125,6 +129,39 @@ abstract class BorderKeysDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the table of three-word sequences, for predicting from two words of context
+         * rather than one. Additive like the two before it.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `user_trigrams` (
+                        `previousWord2` TEXT NOT NULL,
+                        `previousWord1` TEXT NOT NULL,
+                        `word` TEXT NOT NULL,
+                        `count` INTEGER NOT NULL,
+                        `lastUsedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`previousWord2`, `previousWord1`, `word`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_user_trigrams_count` " +
+                        "ON `user_trigrams` (`count` DESC)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_user_trigrams_word` " +
+                        "ON `user_trigrams` (`word`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_user_trigrams_previousWord1` " +
+                        "ON `user_trigrams` (`previousWord1`)",
+                )
+            }
+        }
+
         fun open(context: Context): BorderKeysDatabase {
             // sqlcipher-android 4.x has no static initialiser that does this: nothing in the
             // library loads its own .so, so the first call into it would fail with an
@@ -143,7 +180,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
                 DATABASE_NAME,
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 // The settings screen and the IME run in the same process, but the text
                 // assistant runs in ":assist" and opens this database too. Without this, a write
                 // in one process leaves the other's Flows showing stale rows indefinitely.

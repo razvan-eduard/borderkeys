@@ -121,6 +121,28 @@ constexpr float kUserChainPreference = 1.5f;
 /** Observations at which the preference above reaches half its ceiling. */
 constexpr float kUserChainHalfLife = 3.0f;
 
+/**
+ * How much more evidence the second word of a two-word suggestion needs than the first.
+ *
+ * A single-word suggestion that is wrong costs a glance. A two-word one that is wrong costs the
+ * same glance and the suspicion that the keyboard is making things up, and it takes twice as
+ * long to undo. So the second link is smoothed against a larger prior than the first.
+ *
+ * Measured on a chain written over and over: a single-word suggestion leads after two
+ * repetitions, a two-word one appears after four. Twice the evidence for twice the guess, which
+ * is the relationship worth having and the reason this is a factor rather than a second
+ * hand-tuned threshold.
+ */
+constexpr float kPhraseSecondLinkFactor = 1.5f;
+
+/**
+ * The share of its context a link must hold before it can be part of a phrase.
+ *
+ * Not a count: a word followed by one thing nine times in ten is a habit, and the same word
+ * followed by nine different things is not, however many times each was written.
+ */
+constexpr float kPhraseMinShare = 0.34f;
+
 constexpr int kMaxEndpoints = 96;
 
 // How many trie nodes a request may visit, by prefix length.
@@ -544,9 +566,13 @@ void Engine::resolveContext(const char* previous1, size_t previous1Length, const
 
     int length1 = -1;
     userContext1_ = -1;
+    userContext2_ = -1;
     if (previous1 != nullptr && previous1Length > 0) {
         length1 = foldUtf8(previous1, previous1Length, folded, kMaxComposing);
         userContext1_ = userModel_.entryIndexFor(previous1, previous1Length);
+    }
+    if (previous2 != nullptr && previous2Length > 0) {
+        userContext2_ = userModel_.entryIndexFor(previous2, previous2Length);
     }
     for (int i = 0; i < kMaxPacks; ++i) {
         contextWord1_[i] = -1;
@@ -618,6 +644,17 @@ float Engine::userBoostForCount(uint32_t count) const {
     const float effective = static_cast<float>(count) * learningSpeed_;
     const float boost = 0.9f * std::log(1.0f + effective);
     return (boost > kMaxUserBoost) ? kMaxUserBoost : boost;
+}
+
+void Engine::loadUserTrigrams(const char* const* previous2, const size_t* previous2Lengths,
+                              const char* const* previous1, const size_t* previous1Lengths,
+                              const char* const* next, const size_t* nextLengths,
+                              const int32_t* counts, int count) {
+    if (!created_) {
+        return;
+    }
+    userModel_.bulkLoadTrigrams(previous2, previous2Lengths, previous1, previous1Lengths, next,
+                                nextLengths, counts, count);
 }
 
 void Engine::setLearningSpeed(float speed) {
@@ -1008,18 +1045,107 @@ float Engine::userBigramBonusFor(uint32_t entryIndex) const {
     return bonus;
 }
 
+void Engine::searchUserPhrases(TopK<Candidate>& heap) {
+    if (!phraseSuggestions_ || userContext1_ < 0 || userModel_.size() == 0) {
+        return;
+    }
+    const uint32_t firstTotal = userModel_.successorTotal(userContext1_);
+    if (firstTotal == 0u) {
+        return;
+    }
+
+    constexpr int kMaxFirst = 3;
+    UserModel::Successor first[kMaxFirst];
+    const int firstCount = userModel_.successors(userContext1_, first, kMaxFirst);
+
+    for (int i = 0; i < firstCount && phraseCount_ < kMaxPhrases; ++i) {
+        const float firstShare = static_cast<float>(first[i].count) /
+                                 (static_cast<float>(firstTotal) + kUserBigramPrior);
+        if (firstShare < kPhraseMinShare) {
+            continue;
+        }
+
+        const int32_t middle = static_cast<int32_t>(first[i].entryIndex);
+        const uint32_t secondTotal = userModel_.successorTotal(middle);
+        if (secondTotal == 0u) {
+            continue;
+        }
+        UserModel::Successor second[1];
+        if (userModel_.successors(middle, second, 1) != 1) {
+            continue;
+        }
+        // The stricter bar. Written as a larger prior rather than a larger share so that the
+        // requirement is "more evidence" rather than "more dominance": a second word written
+        // three times out of four is admitted, one written once out of one is not.
+        const float secondShare =
+            static_cast<float>(second[0].count) /
+            (static_cast<float>(secondTotal) + kUserBigramPrior * kPhraseSecondLinkFactor);
+        if (secondShare < kPhraseMinShare) {
+            continue;
+        }
+
+        uint32_t firstLength = 0;
+        uint32_t secondLength = 0;
+        const char* const firstText = userModel_.entryText(first[i].entryIndex, &firstLength);
+        const char* const secondText = userModel_.entryText(second[0].entryIndex, &secondLength);
+        if (firstText == nullptr || secondText == nullptr || firstLength == 0 ||
+            secondLength == 0) {
+            continue;
+        }
+        const size_t needed = firstLength + 1 + secondLength;
+        if (needed + 1 > static_cast<size_t>(kMaxPhraseBytes)) {
+            continue;
+        }
+
+        const int slot = phraseCount_;
+        char* const target = phraseText_[slot];
+        std::memcpy(target, firstText, firstLength);
+        target[firstLength] = ' ';
+        std::memcpy(target + firstLength + 1, secondText, secondLength);
+        target[needed] = '\0';
+        phraseLength_[slot] = static_cast<int>(needed);
+        ++phraseCount_;
+
+        // Scored as the two links together, which is what it is: the probability of writing
+        // both. Multiplying the shares means a phrase can only outrank its own first word when
+        // the second link is close to certain, and never outranks a better single suggestion.
+        const float score = std::log(firstShare) + std::log(secondShare) +
+                            kUserChainPreference *
+                                (static_cast<float>(first[i].count) /
+                                 (static_cast<float>(first[i].count) + kUserChainHalfLife));
+        offerCandidate(heap, Candidate{Candidate::kPhrasePack, slot, score}, target,
+                       static_cast<uint32_t>(needed));
+    }
+}
+
 void Engine::searchUserSuccessors(TopK<Candidate>& heap) {
     if (userContext1_ < 0 || userModel_.size() == 0) {
         return;
     }
-    const uint32_t total = userModel_.successorTotal(userContext1_);
-    if (total == 0u) {
-        return;
-    }
 
+    // The triple first, exactly as the pack's own n-grams back off: evidence about these two
+    // words beats evidence about the last one alone, when there is any. A triple seen twice
+    // still says more than a pair seen twenty times, because it is a statement about a longer
+    // and rarer context -- which is why the confidence below is computed from its own count
+    // rather than borrowed from the pair.
     constexpr int kMaxSuccessors = 8;
     UserModel::Successor successors[kMaxSuccessors];
-    const int found = userModel_.successors(userContext1_, successors, kMaxSuccessors);
+    int found = 0;
+    uint32_t total = 0u;
+    if (userContext2_ >= 0) {
+        total = userModel_.trigramTotal(userContext2_, userContext1_);
+        if (total > 0u) {
+            found = userModel_.trigramSuccessors(userContext2_, userContext1_, successors,
+                                                 kMaxSuccessors);
+        }
+    }
+    if (found == 0) {
+        total = userModel_.successorTotal(userContext1_);
+        if (total == 0u) {
+            return;
+        }
+        found = userModel_.successors(userContext1_, successors, kMaxSuccessors);
+    }
     for (int i = 0; i < found; ++i) {
         // A proper conditional probability on the same scale as the packs', so a phrase someone
         // repeats competes with the language model instead of being bolted on top of it, plus
@@ -1086,6 +1212,10 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
         return 0;
     }
     arena_.reset();
+    // The phrase slots belong to the request being answered. The previous request's text is not
+    // referenced any more: its candidates were read out before this call could be made, on the
+    // one thread both of them run on.
+    phraseCount_ = 0;
 
     uint32_t folded[kMaxComposing];
     int foldedLength = 0;
@@ -1125,6 +1255,7 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
         // Nothing typed: this is the next-word case, and the phrases this person repeats are
         // the best evidence there is about what follows the word they just wrote.
         searchUserSuccessors(heap);
+        searchUserPhrases(heap);
     }
 
     const int drained = heap.drainSorted(drainBuffer_, kMaxCandidates);
@@ -1144,16 +1275,19 @@ void Engine::learn(const char* word, size_t wordLength, const char* previous1,
     // phrase someone repeats -- "vreau să", "să mă", "mă duc" -- come back as a prediction
     // rather than having to be typed out every time.
     //
-    // Only the immediately preceding word is recorded. A trigram would need the pair table to
-    // be keyed on two indices and would fire far more rarely, and the bigram already covers the
-    // case people notice: the next word after the one just written.
-    (void)previous2;
-    (void)previous2Length;
+    // Both the pair and the triple. The triple fires only when the last two words match, so it
+    // is rarer and narrower; the pair is what covers the common case. Keeping both is what lets
+    // the scorer prefer the more specific evidence when there is any and fall back when there
+    // is not, which is the same shape the language pack's own n-grams use.
 
     const int32_t wordIndex = userModel_.learn(word, wordLength);
     if (previous1 != nullptr && previous1Length > 0) {
-        const int32_t previousIndex = userModel_.entryIndexFor(previous1, previous1Length);
-        userModel_.learnBigram(previousIndex, wordIndex);
+        const int32_t index1 = userModel_.entryIndexFor(previous1, previous1Length);
+        userModel_.learnBigram(index1, wordIndex);
+        if (previous2 != nullptr && previous2Length > 0) {
+            const int32_t index2 = userModel_.entryIndexFor(previous2, previous2Length);
+            userModel_.learnTrigram(index2, index1, wordIndex);
+        }
     }
 
     // Language weight adaptation. Which packs contain the confirmed word is the only signal
@@ -1218,6 +1352,16 @@ bool Engine::snapshotUserModel(const char* path) {
 }
 
 const char* Engine::candidateText(const Candidate& candidate, uint32_t* lengthOut) const {
+    if (candidate.packIndex == Candidate::kPhrasePack) {
+        const int slot = candidate.wordIndex;
+        if (slot < 0 || slot >= phraseCount_) {
+            return nullptr;
+        }
+        if (lengthOut != nullptr) {
+            *lengthOut = static_cast<uint32_t>(phraseLength_[slot]);
+        }
+        return phraseText_[slot];
+    }
     if (candidate.packIndex == Candidate::kUserPack) {
         return userModel_.entryText(static_cast<uint32_t>(candidate.wordIndex), lengthOut);
     }

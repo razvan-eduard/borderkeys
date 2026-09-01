@@ -47,6 +47,14 @@ public:
      */
     static constexpr int kMaxBigrams = 4096;
 
+    /**
+     * How many three-word sequences are remembered.
+     *
+     * Half the pairs, because a triple is both rarer and narrower: it fires only when the last
+     * two words match, so a table the same size would hold mostly entries that never come up.
+     */
+    static constexpr int kMaxTrigrams = 2048;
+
     UserModel();
 
     void clear();
@@ -79,6 +87,34 @@ public:
 
     /** The words seen after `previous`, most frequent first, up to `maxOut`. */
     int successors(int32_t previousIndex, Successor* out, int maxOut) const;
+
+    /**
+     * Records that `next` followed `previous1`, which followed `previous2`.
+     *
+     * Learned alongside the pair rather than instead of it: a triple that has been seen once
+     * says less than a pair seen ten times, and the scorer needs both to choose between them.
+     */
+    void learnTrigram(int32_t previous2Index, int32_t previous1Index, int32_t nextIndex);
+
+    /** How often this exact three-word sequence has been written. */
+    uint32_t trigramCount(int32_t previous2Index, int32_t previous1Index,
+                          int32_t nextIndex) const;
+
+    /** How often those two words have been followed by anything at all. */
+    uint32_t trigramTotal(int32_t previous2Index, int32_t previous1Index) const;
+
+    /** The words seen after that pair, up to `maxOut`. */
+    int trigramSuccessors(int32_t previous2Index, int32_t previous1Index, Successor* out,
+                          int maxOut) const;
+
+    int trigramCount() const { return static_cast<int>(trigrams_.size()); }
+    void trigramAt(int index, int32_t* previous2Index, int32_t* previous1Index,
+                   int32_t* nextIndex, uint32_t* count) const;
+
+    void bulkLoadTrigrams(const char* const* previous2, const size_t* previous2Lengths,
+                          const char* const* previous1, const size_t* previous1Lengths,
+                          const char* const* next, const size_t* nextLengths,
+                          const int32_t* counts, int count);
 
     /** Every remembered pair, for persisting them. */
     int bigramCount() const { return static_cast<int>(bigrams_.size()); }
@@ -131,7 +167,15 @@ private:
         uint32_t count;
     };
 
+    struct Trigram {
+        int32_t previous2Index;
+        int32_t previous1Index;
+        int32_t nextIndex;
+        uint32_t count;
+    };
+
     void dropLeastUsedBigram();
+    void dropLeastUsedTrigram();
 
     std::vector<Node> nodes_;
     std::vector<Entry> entries_;
@@ -141,6 +185,7 @@ private:
     // serialisation, and a second structure to enumerate one word's successors, which is the
     // access this exists for.
     std::vector<Bigram> bigrams_;
+    std::vector<Trigram> trigrams_;
     uint32_t totalCount_ = 0;
 };
 

@@ -11,6 +11,7 @@ import android.os.Process
 import android.os.Trace
 import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserWord
 
 /**
@@ -237,6 +238,30 @@ class PredictionEngine(
         worker.post {
             withHandle(Unit) { current ->
                 NativePredictor.nativeSetLearningSpeed(current, speed)
+            }
+        }
+    }
+
+    /** Posted after [loadUserBigrams], so the words a triple names are already held. */
+    fun loadUserTrigrams(triples: List<UserTrigram>) {
+        if (triples.isEmpty()) {
+            return
+        }
+        val previous2 = Array(triples.size) { triples[it].previousWord2 }
+        val previous1 = Array(triples.size) { triples[it].previousWord1 }
+        val next = Array(triples.size) { triples[it].word }
+        val counts = IntArray(triples.size) { triples[it].count }
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeLoadUserTrigrams(current, previous2, previous1, next, counts)
+            }
+        }
+    }
+
+    fun setPhraseSuggestions(enabled: Boolean) {
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeSetPhraseSuggestions(current, enabled)
             }
         }
     }

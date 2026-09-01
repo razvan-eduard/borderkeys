@@ -215,6 +215,7 @@ class BorderKeysService :
         // After the words, never before: a pair names two words, and the model resolves those
         // names against what it already holds.
         engine.loadUserBigrams(dictionary.topBigrams())
+        engine.loadUserTrigrams(dictionary.topTrigrams())
         val blockedWords = dictionary.blockedWordSet()
         engine.setBlockedWords(blockedWords)
         learning.setBlockedWords(blockedWords)
@@ -510,6 +511,7 @@ class BorderKeysService :
         engine.setLearningSpeed(
             KeyboardPreferences.learningSpeedFactor(preferences.learningSpeed),
         )
+        engine.setPhraseSuggestions(preferences.phraseSuggestions)
         if (privateMode) {
             learning.discard()
         }
@@ -1047,13 +1049,21 @@ class BorderKeysService :
 
         // Choosing a candidate that was not already the top one is the learning signal. This is
         // where personalisation happens: a count goes up, and nothing is retrained.
-        recordLearned(word, contextWord)
+        // A two-word suggestion is two words confirmed, not one long one. Learning it whole
+        // would put "vreau sa" in the personal dictionary as a single entry, which would then be
+        // offered as a completion of "vr" and never match anything the user typed.
+        val words = word.split(' ').filter { it.isNotEmpty() }
+        var previous = contextWord
+        for (part in words) {
+            recordLearned(part, previous)
+            previous = part
+        }
         // The picked word is now the context for whatever comes next. Nothing else sets this on
         // this path -- onUpdateSelection only refreshes it when the cursor moves on its own --
         // so without it the next-word prediction after picking a suggestion would be made
         // against the word before the one the user just chose.
-        previousWord2 = previousWord1
-        previousWord1 = word
+        previousWord2 = if (words.size >= 2) words[words.size - 2] else previousWord1
+        previousWord1 = words.lastOrNull() ?: word
         composing.setLength(0)
         host?.suggestionStrip?.clear()
         requestSuggestions()
@@ -1092,6 +1102,7 @@ class BorderKeysService :
             dictionary.forget(word)
             engine.loadUserWords(dictionary.topWords())
             engine.loadUserBigrams(dictionary.topBigrams())
+        engine.loadUserTrigrams(dictionary.topTrigrams())
             requestSuggestions()
         }
     }
@@ -1196,6 +1207,11 @@ class BorderKeysService :
         val locale = alphabeticLayout.languageTag
         val now = System.currentTimeMillis()
         contextWord?.let { learning.recordPair(it, word, now) }
+        // The triple uses the word before the context word, which the service still holds:
+        // recordLearned is called before previousWord2 is advanced.
+        if (contextWord != null && previousWord2 != null) {
+            learning.recordTriple(previousWord2!!, contextWord, word, now)
+        }
         if (learning.record(word, locale, now)) {
             engine.learn(
                 listOf(
@@ -1222,13 +1238,15 @@ class BorderKeysService :
     private fun flushLearning() {
         val updates = learning.drain()
         val pairs = learning.drainPairs()
-        if (updates.isEmpty() && pairs.isEmpty()) {
+        val triples = learning.drainTriples()
+        if (updates.isEmpty() && pairs.isEmpty() && triples.isEmpty()) {
             return
         }
         val snapshotPath = File(filesDir, USER_MODEL_SNAPSHOT).absolutePath
         scope.launch(Dispatchers.IO) {
             DataGraph.dictionary.applyLearned(updates)
             DataGraph.dictionary.applyLearnedBigrams(pairs)
+            DataGraph.dictionary.applyLearnedTrigrams(triples)
             engine.snapshotUserModel(snapshotPath)
         }
     }

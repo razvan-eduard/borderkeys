@@ -22,6 +22,16 @@ struct Candidate {
     float score;
 
     static constexpr int32_t kUserPack = -1;
+
+    /**
+     * Two words offered as one suggestion, composed by the engine.
+     *
+     * Neither pack nor personal dictionary holds "vreau să" as an entry, so a phrase cannot be
+     * named by a word index. `wordIndex` is instead a slot in the engine's phrase buffer, which
+     * lives as long as one request -- long enough for the caller to read the text out, which is
+     * all a candidate's text is ever used for.
+     */
+    static constexpr int32_t kPhrasePack = -2;
 };
 
 }  // namespace borderkeys

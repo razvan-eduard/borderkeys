@@ -4,6 +4,7 @@
 package com.borderkeys.predict
 
 import com.borderkeys.data.dao.LearnedBigram
+import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.LearnedWord
 
 /**
@@ -26,6 +27,7 @@ class LearningBuffer(
 ) {
     private val pending = LinkedHashMap<Key, Entry>()
     private val pendingPairs = LinkedHashMap<PairKey, Entry>()
+    private val pendingTriples = LinkedHashMap<TripleKey, Entry>()
     private var oldestRecordedAt = 0L
     private var blocked: Set<String> = emptySet()
 
@@ -83,6 +85,41 @@ class LearningBuffer(
             pendingPairs.remove(pendingPairs.keys.first())
         }
         pendingPairs[key] = Entry(delta = 1, lastUsedAt = nowMillis)
+        return true
+    }
+
+    /** The same as [recordPair], one word further back. */
+    fun recordTriple(
+        previousWord2: String,
+        previousWord1: String,
+        word: String,
+        nowMillis: Long,
+    ): Boolean {
+        if (!enabled || previousWord2.isEmpty() || previousWord1.isEmpty() || word.isEmpty()) {
+            return false
+        }
+        if (previousWord2.length > MAX_WORD_LENGTH || previousWord1.length > MAX_WORD_LENGTH ||
+            word.length > MAX_WORD_LENGTH
+        ) {
+            return false
+        }
+        if (previousWord2 in blocked || previousWord1 in blocked || word in blocked) {
+            return false
+        }
+        if (previousWord1 == word) {
+            return false
+        }
+        val key = TripleKey(previousWord2, previousWord1, word)
+        val existing = pendingTriples[key]
+        if (existing != null) {
+            existing.delta++
+            existing.lastUsedAt = nowMillis
+            return true
+        }
+        if (pendingTriples.size >= maxEntries) {
+            pendingTriples.remove(pendingTriples.keys.first())
+        }
+        pendingTriples[key] = Entry(delta = 1, lastUsedAt = nowMillis)
         return true
     }
 
@@ -165,16 +202,42 @@ class LearningBuffer(
         return drained
     }
 
+    /** Empties the triple buffer. Drained in the same flush as the words and the pairs. */
+    fun drainTriples(): List<LearnedTrigram> {
+        if (pendingTriples.isEmpty()) {
+            return emptyList()
+        }
+        val drained = ArrayList<LearnedTrigram>(pendingTriples.size)
+        for ((key, entry) in pendingTriples) {
+            drained += LearnedTrigram(
+                previousWord2 = key.previousWord2,
+                previousWord1 = key.previousWord1,
+                word = key.word,
+                delta = entry.delta,
+                lastUsedAt = entry.lastUsedAt,
+            )
+        }
+        pendingTriples.clear()
+        return drained
+    }
+
     /** Discards everything without writing it. Used when entering private mode mid-session. */
     fun discard() {
         pending.clear()
         pendingPairs.clear()
+        pendingTriples.clear()
         oldestRecordedAt = 0L
     }
 
     private data class Key(val word: String, val locale: String)
 
     private data class PairKey(val previousWord: String, val word: String)
+
+    private data class TripleKey(
+        val previousWord2: String,
+        val previousWord1: String,
+        val word: String,
+    )
 
     private class Entry(var delta: Int, var lastUsedAt: Long)
 

@@ -31,6 +31,7 @@ void UserModel::clear() {
     nodes_.clear();
     entries_.clear();
     bigrams_.clear();
+    trigrams_.clear();
     nodes_.emplace_back();  // the root
     totalCount_ = 0;
 }
@@ -159,6 +160,143 @@ void UserModel::dropLeastUsedBigram() {
     }
     bigrams_[worst] = bigrams_.back();
     bigrams_.pop_back();
+}
+
+void UserModel::learnTrigram(int32_t previous2Index, int32_t previous1Index,
+                             int32_t nextIndex) {
+    const int32_t entryCount = static_cast<int32_t>(entries_.size());
+    if (previous2Index < 0 || previous1Index < 0 || nextIndex < 0) {
+        return;
+    }
+    if (previous2Index >= entryCount || previous1Index >= entryCount ||
+        nextIndex >= entryCount) {
+        return;
+    }
+    // The same refusal the pair store makes: a word following itself is a stutter, and a triple
+    // whose last two words are equal would predict one.
+    if (previous1Index == nextIndex) {
+        return;
+    }
+    for (Trigram& trigram : trigrams_) {
+        if (trigram.previous2Index == previous2Index &&
+            trigram.previous1Index == previous1Index && trigram.nextIndex == nextIndex) {
+            if (trigram.count < UINT32_MAX) {
+                ++trigram.count;
+            }
+            return;
+        }
+    }
+    if (static_cast<int>(trigrams_.size()) >= kMaxTrigrams) {
+        dropLeastUsedTrigram();
+    }
+    if (static_cast<int>(trigrams_.size()) < kMaxTrigrams) {
+        trigrams_.push_back(Trigram{previous2Index, previous1Index, nextIndex, 1u});
+    }
+}
+
+void UserModel::dropLeastUsedTrigram() {
+    if (trigrams_.empty()) {
+        return;
+    }
+    size_t worst = 0;
+    for (size_t i = 1; i < trigrams_.size(); ++i) {
+        if (trigrams_[i].count < trigrams_[worst].count) {
+            worst = i;
+        }
+    }
+    trigrams_[worst] = trigrams_.back();
+    trigrams_.pop_back();
+}
+
+uint32_t UserModel::trigramCount(int32_t previous2Index, int32_t previous1Index,
+                                 int32_t nextIndex) const {
+    if (previous2Index < 0 || previous1Index < 0 || nextIndex < 0) {
+        return 0u;
+    }
+    for (const Trigram& trigram : trigrams_) {
+        if (trigram.previous2Index == previous2Index &&
+            trigram.previous1Index == previous1Index && trigram.nextIndex == nextIndex) {
+            return trigram.count;
+        }
+    }
+    return 0u;
+}
+
+uint32_t UserModel::trigramTotal(int32_t previous2Index, int32_t previous1Index) const {
+    if (previous2Index < 0 || previous1Index < 0) {
+        return 0u;
+    }
+    uint32_t total = 0u;
+    for (const Trigram& trigram : trigrams_) {
+        if (trigram.previous2Index == previous2Index &&
+            trigram.previous1Index == previous1Index) {
+            total += trigram.count;
+        }
+    }
+    return total;
+}
+
+int UserModel::trigramSuccessors(int32_t previous2Index, int32_t previous1Index, Successor* out,
+                                 int maxOut) const {
+    if (out == nullptr || maxOut <= 0 || previous2Index < 0 || previous1Index < 0) {
+        return 0;
+    }
+    int written = 0;
+    for (const Trigram& trigram : trigrams_) {
+        if (trigram.previous2Index != previous2Index ||
+            trigram.previous1Index != previous1Index) {
+            continue;
+        }
+        if (written < maxOut) {
+            out[written++] = Successor{static_cast<uint32_t>(trigram.nextIndex), trigram.count};
+            continue;
+        }
+        int weakest = 0;
+        for (int i = 1; i < written; ++i) {
+            if (out[i].count < out[weakest].count) {
+                weakest = i;
+            }
+        }
+        if (trigram.count > out[weakest].count) {
+            out[weakest] = Successor{static_cast<uint32_t>(trigram.nextIndex), trigram.count};
+        }
+    }
+    return written;
+}
+
+void UserModel::trigramAt(int index, int32_t* previous2Index, int32_t* previous1Index,
+                          int32_t* nextIndex, uint32_t* count) const {
+    if (index < 0 || index >= static_cast<int>(trigrams_.size())) {
+        return;
+    }
+    const Trigram& trigram = trigrams_[static_cast<size_t>(index)];
+    if (previous2Index != nullptr) *previous2Index = trigram.previous2Index;
+    if (previous1Index != nullptr) *previous1Index = trigram.previous1Index;
+    if (nextIndex != nullptr) *nextIndex = trigram.nextIndex;
+    if (count != nullptr) *count = trigram.count;
+}
+
+void UserModel::bulkLoadTrigrams(const char* const* previous2, const size_t* previous2Lengths,
+                                 const char* const* previous1, const size_t* previous1Lengths,
+                                 const char* const* next, const size_t* nextLengths,
+                                 const int32_t* counts, int count) {
+    trigrams_.clear();
+    if (previous2 == nullptr || previous1 == nullptr || next == nullptr || counts == nullptr) {
+        return;
+    }
+    for (int i = 0; i < count && static_cast<int>(trigrams_.size()) < kMaxTrigrams; ++i) {
+        if (counts[i] <= 0) {
+            continue;
+        }
+        const int32_t index2 = entryIndexFor(previous2[i], previous2Lengths[i]);
+        const int32_t index1 = entryIndexFor(previous1[i], previous1Lengths[i]);
+        const int32_t indexNext = entryIndexFor(next[i], nextLengths[i]);
+        if (index2 < 0 || index1 < 0 || indexNext < 0 || index1 == indexNext) {
+            continue;
+        }
+        trigrams_.push_back(
+            Trigram{index2, index1, indexNext, static_cast<uint32_t>(counts[i])});
+    }
 }
 
 uint32_t UserModel::bigramCount(int32_t previousIndex, int32_t nextIndex) const {

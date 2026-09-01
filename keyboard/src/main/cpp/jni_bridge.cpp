@@ -397,6 +397,68 @@ void freeStringArray(char** storage, jsize count) {
  * because a separator would have to be a character no word can contain and there is no such
  * character once the dictionary can hold anything the user typed.
  */
+void nativeLoadUserTrigrams(JNIEnv* env, jobject /*thiz*/, jlong handle,
+                            jobjectArray previous2, jobjectArray previous1, jobjectArray next,
+                            jintArray counts) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || previous2 == nullptr || previous1 == nullptr || next == nullptr ||
+        counts == nullptr) {
+        return;
+    }
+    const jsize tripleCount = env->GetArrayLength(previous2);
+    if (tripleCount <= 0 || env->GetArrayLength(previous1) < tripleCount ||
+        env->GetArrayLength(next) < tripleCount ||
+        env->GetArrayLength(counts) < tripleCount || tripleCount > kMaxUserWordsPerCall) {
+        return;
+    }
+
+    char** const store2 = new (std::nothrow) char*[tripleCount];
+    size_t* const lengths2 = new (std::nothrow) size_t[tripleCount];
+    char** const store1 = new (std::nothrow) char*[tripleCount];
+    size_t* const lengths1 = new (std::nothrow) size_t[tripleCount];
+    char** const storeNext = new (std::nothrow) char*[tripleCount];
+    size_t* const lengthsNext = new (std::nothrow) size_t[tripleCount];
+    int32_t* const countValues = new (std::nothrow) int32_t[tripleCount];
+    if (store2 == nullptr || lengths2 == nullptr || store1 == nullptr || lengths1 == nullptr ||
+        storeNext == nullptr || lengthsNext == nullptr || countValues == nullptr) {
+        delete[] store2; delete[] lengths2; delete[] store1; delete[] lengths1;
+        delete[] storeNext; delete[] lengthsNext; delete[] countValues;
+        return;
+    }
+
+    env->GetIntArrayRegion(counts, 0, tripleCount, reinterpret_cast<jint*>(countValues));
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        env->ExceptionClear();
+        delete[] store2; delete[] lengths2; delete[] store1; delete[] lengths1;
+        delete[] storeNext; delete[] lengthsNext; delete[] countValues;
+        return;
+    }
+
+    copyStringArray(env, previous2, tripleCount, store2, lengths2);
+    copyStringArray(env, previous1, tripleCount, store1, lengths1);
+    copyStringArray(env, next, tripleCount, storeNext, lengthsNext);
+
+    engine->loadUserTrigrams(store2, lengths2, store1, lengths1, storeNext, lengthsNext,
+                             countValues, static_cast<int>(tripleCount));
+
+    freeStringArray(store2, tripleCount);
+    delete[] lengths2;
+    freeStringArray(store1, tripleCount);
+    delete[] lengths1;
+    freeStringArray(storeNext, tripleCount);
+    delete[] lengthsNext;
+    delete[] countValues;
+}
+
+void nativeSetPhraseSuggestions(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
+                                jboolean enabled) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return;
+    }
+    engine->setPhraseSuggestions(enabled == JNI_TRUE);
+}
+
 void nativeSetLearningSpeed(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jfloat speed) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr) {
@@ -678,6 +740,11 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeLoadUserBigrams)},
     {"nativeSetLearningSpeed", "(JF)V",
      reinterpret_cast<void*>(nativeSetLearningSpeed)},
+    {"nativeSetPhraseSuggestions", "(JZ)V",
+     reinterpret_cast<void*>(nativeSetPhraseSuggestions)},
+    {"nativeLoadUserTrigrams",
+     "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I)V",
+     reinterpret_cast<void*>(nativeLoadUserTrigrams)},
     {"nativeDecodeGesture",
      "(J[F[F[JILjava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F)I",
      reinterpret_cast<void*>(nativeDecodeGesture)},
