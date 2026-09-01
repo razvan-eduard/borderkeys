@@ -89,3 +89,42 @@ contains them. Those are the rare words, and the blind positions are exactly whe
 word is rare, so grammar may be unavailable where it is most wanted. The measurement above
 already includes this dilution: a position whose previous word has no tag falls back to
 frequency and is counted as such.
+
+## How it is built
+
+`tools/build_pos.py` reads one or more `.conllu` files and writes a JSON of tags and a matrix,
+which `tools/build_dict.py --grammar` folds into the pack. The Gradle task passes it whenever a
+`dictionaries/{lang}.pos` exists, so a language can be added long before anyone finds a treebank
+for it — a pack without grammar declares zero tags, carries two empty sections, and is scored
+exactly as packs were before the sections existed.
+
+Which tagset is used is decided per treebank. Where a treebank fills its XPOS column that is a
+tagset a linguist designed for that language and it measured better — 11.0% against 10.1% on
+Romanian. Where it does not, and French GSD and Spanish GSD do not, the tag is composed from
+UPOS plus the features agreement is expressed through: gender, number, case, person, verb form,
+mood, definiteness, pronoun type. Picking one scheme for all six would have meant either
+French getting a single tag or Romanian giving up its own.
+
+| language | tags | source |
+|---|---|---|
+| Romanian | 255 | RRT's MULTEXT-East |
+| English | 49 | EWT's Penn tags |
+| German | 52 | GSD's STTS |
+| Italian | 38 | ISDT |
+| Spanish | 255 | composed |
+| French | 212 | composed |
+
+## Where it applies
+
+Only in the branch of `Engine::contextLogProb` that has already fallen through both the trigram
+and the bigram. Everywhere above it a stored n-gram exists, and that is better evidence about
+this pair than a tag class is; adding the term there would be a worse signal arguing with a
+better one. The weight is 0.75, from the sweep above.
+
+## The format change
+
+Version 2 of `.bkd`. Two sections were added and the header grew from 256 to 320 bytes to hold
+their descriptors, so a version 1 pack is refused rather than read with the new fields zeroed —
+every section offset in an old file means something different now. Bundled dictionaries are
+compiled at build time and are unaffected; a pack someone imported by hand has to be imported
+again, and the refusal says so.

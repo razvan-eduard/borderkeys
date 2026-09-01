@@ -73,6 +73,31 @@ public:
     // the ones a user would actually have meant.
     static constexpr int kFrequentCount = 512;
     const int32_t* frequentWords() const { return frequent_; }
+
+    /** The tag for a word, or kNoPosTag when this pack carries no grammar or does not know it. */
+    uint32_t posTag(int32_t wordIndex) const {
+        if (wordTags_ == nullptr || wordIndex < 0) {
+            return kNoPosTag;
+        }
+        const uint32_t tag = wordTags_[wordIndex];
+        return (tag < posTagCount_) ? tag : kNoPosTag;
+    }
+
+    /**
+     * Quantised -log P(tag | previousTag), on the same scale as the n-gram values so the two
+     * can be added without converting either. Two array reads and a multiply.
+     */
+    uint8_t posTransition(uint32_t previousTag, uint32_t tag) const {
+        if (posTransitions_ == nullptr || previousTag >= posTagCount_ || tag >= posTagCount_) {
+            return 0;
+        }
+        return posTransitions_[previousTag * posTagCount_ + tag];
+    }
+
+    bool hasGrammar() const { return posTransitions_ != nullptr; }
+
+    /** No tag: the pack has no grammar, or the treebank never contained this word. */
+    static constexpr uint32_t kNoPosTag = 0xFFFFFFFFu;
     int frequentWordCount() const { return frequentCount_; }
 
     bool active = false;
@@ -89,6 +114,10 @@ private:
     size_t mappingBytes_ = 0;
     const uint8_t* base_ = nullptr;
     uint64_t baseBytes_ = 0;
+
+    const uint8_t* wordTags_ = nullptr;
+    const uint8_t* posTransitions_ = nullptr;
+    uint32_t posTagCount_ = 0;
 
     char tag_[16] = {};
     PackedTrie trie_;
@@ -257,6 +286,9 @@ private:
     // The edit-cost ceiling for the request being answered. A member rather than a parameter
     // because the fallback pass changes it between two runs over the same packs.
     float editCostCeiling_ = 0.0f;
+
+    /** The previous word's tag in each pack, resolved with contextWord1_. */
+    uint32_t contextTag1_[kMaxPacks] = {};
 
     float languageLockMinimum_ = 1.8f;
     float languageEvidence_[kMaxPacks] = {};

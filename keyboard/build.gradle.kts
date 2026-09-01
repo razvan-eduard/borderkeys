@@ -138,6 +138,7 @@ abstract class BuildDictionaries : DefaultTask() {
         for (list in lists) {
             val name = list.name.removeSuffix(".tsv")
             val ngrams = list.parentFile.resolve("$name.ngrams")
+            val grammar = list.parentFile.resolve("$name.pos")
             val arguments = mutableListOf(
                 "python3", compiler.get().asFile.absolutePath,
                 "--words", list.absolutePath,
@@ -147,6 +148,12 @@ abstract class BuildDictionaries : DefaultTask() {
             )
             if (ngrams.isFile) {
                 arguments += listOf("--ngrams", ngrams.absolutePath)
+            }
+            // Optional per language. A pack built without one carries no grammar sections and
+            // is scored exactly as packs were before they existed, so a language can be added
+            // long before anyone finds a treebank for it.
+            if (grammar.isFile) {
+                arguments += listOf("--grammar", grammar.absolutePath)
             }
             execOperations.exec { commandLine(arguments) }
         }

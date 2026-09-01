@@ -32,7 +32,10 @@ inline constexpr uint32_t kBkdMagic = 0x31444B42u;
 
 // Bumped whenever the meaning of any field changes. A pack whose version is not exactly this
 // is refused; there is no best-effort interpretation of an unknown layout.
-inline constexpr uint32_t kBkdVersion = 1u;
+// 2 added the part-of-speech sections and grew the header from 256 to 320 bytes to hold their
+// descriptors. A version 1 pack is refused rather than read with the new fields zeroed: the
+// header grew, so every section offset in an old file means something different now.
+inline constexpr uint32_t kBkdVersion = 2u;
 
 // Caps, checked before a single byte is mapped.
 //
@@ -46,6 +49,10 @@ inline constexpr uint32_t kMaxNodes = 32000000u;
 inline constexpr uint32_t kMaxAlphabet = 1024u;
 inline constexpr uint32_t kMaxNgramCapacity = 1u << 26;
 
+// One byte per tag, so the matrix a pack may declare is bounded by what that byte can index.
+// 255 tags cover 99.4% of Romanian tokens; the tail shares the last slot.
+inline constexpr uint32_t kMaxPosTags = 256u;
+
 // Section table. Order is fixed; a section may be empty (length 0) but may not be missing.
 enum BkdSectionIndex : uint32_t {
     kSectionAlphabet = 0,     // uint32_t[alphabetCount], sorted folded code points
@@ -58,6 +65,8 @@ enum BkdSectionIndex : uint32_t {
     kSectionBigramValues,     // uint8_t[bigramCapacity]
     kSectionTrigramKeys,      // uint32_t[3 * trigramCapacity]
     kSectionTrigramValues,    // uint8_t[trigramCapacity]
+    kSectionWordTags,         // uint8_t[wordCount], part-of-speech tag index per word
+    kSectionPosTransitions,   // uint8_t[posTagCount * posTagCount], quantised -log P(t|prev)
     kSectionCount
 };
 
@@ -90,12 +99,18 @@ struct BkdHeader {
     uint32_t trigramCapacity;  // power of two, or zero
     uint32_t logProbScaleQ;    // fixed point: logProb = -quantised / logProbScaleQ
 
-    uint32_t reserved[6];
+    // Rows and columns of the transition matrix, and the exclusive upper bound on a word's tag
+    // index. Zero when the pack carries no grammar, which is a pack built without a treebank
+    // rather than a broken one -- the two sections are then empty and the engine scores without
+    // the term, exactly as it did before.
+    uint32_t posTagCount;
+
+    uint32_t reserved[13];
 
     BkdSection sections[kSectionCount];
 };
 
-static_assert(sizeof(BkdHeader) == 256, "the .bkd header is a fixed 256 bytes");
+static_assert(sizeof(BkdHeader) == 320, "the .bkd header is a fixed 320 bytes");
 static_assert(sizeof(BkdSection) == 16, "section descriptors are two 64-bit fields");
 static_assert(alignof(BkdHeader) == 8, "header alignment is part of the layout");
 
@@ -247,6 +262,11 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
     if (trigramCap != 0 && (trigramCap & (trigramCap - 1)) != 0) {
         return kBkdErrCapacity;
     }
+    // A tag index is a byte, so a matrix wider than 256 could not be addressed by one. Zero is
+    // a pack built without a treebank, which is valid and simply carries no grammar.
+    if (header.posTagCount > kMaxPosTags) {
+        return kBkdErrCounts;
+    }
 
     const uint64_t headerBytes = header.headerBytes;
     const uint64_t fileBytes = header.fileBytes;
@@ -268,6 +288,10 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
         {kSectionBigramValues, sizeof(uint8_t), alignof(uint8_t), bigramCap},
         {kSectionTrigramKeys, sizeof(uint32_t), alignof(uint32_t),
          static_cast<uint64_t>(trigramCap) * 3u},
+        {kSectionWordTags, sizeof(uint8_t), alignof(uint8_t),
+         header.posTagCount == 0 ? 0u : header.wordCount},
+        {kSectionPosTransitions, sizeof(uint8_t), alignof(uint8_t),
+         static_cast<uint64_t>(header.posTagCount) * header.posTagCount},
         {kSectionTrigramValues, sizeof(uint8_t), alignof(uint8_t), trigramCap},
     };
     for (const Expectation& e : expectations) {

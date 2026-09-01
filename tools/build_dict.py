@@ -30,6 +30,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import random
 import struct
@@ -43,18 +44,24 @@ from pathlib import Path
 # --------------------------------------------------------------------------------------
 
 MAGIC = 0x31444B42  # 'B' 'K' 'D' '1' little endian
-VERSION = 1
-HEADER_BYTES = 256
+VERSION = 2
+# 320 rather than 256: version 2 added the two part-of-speech sections, and their descriptors
+# did not fit in the reserved words that were left.
+HEADER_BYTES = 320
+# Where the section descriptors begin: the fixed fields are 76 bytes and 52 are reserved.
+SECTION_TABLE_OFFSET = 128
 MAX_PACK_BYTES = 64 * 1024 * 1024
 MAX_WORDS = 4_000_000
 MAX_NODES = 32_000_000
 MAX_ALPHABET = 1024
 MAX_NGRAM_CAPACITY = 1 << 26
+# A tag index is one byte, so the matrix a pack may declare is bounded by what a byte can reach.
+MAX_POS_TAGS = 256
 
 FLAG_CASE_FOLDED = 1 << 0
 FLAG_CONTENT_CRC = 1 << 1
 
-SECTION_COUNT = 10
+SECTION_COUNT = 12
 (
     S_ALPHABET,
     S_TRIE_BASE,
@@ -66,6 +73,8 @@ SECTION_COUNT = 10
     S_BIGRAM_VALUES,
     S_TRIGRAM_KEYS,
     S_TRIGRAM_VALUES,
+    S_WORD_TAGS,
+    S_POS_TRANSITIONS,
 ) = range(SECTION_COUNT)
 
 # Quantisation scale for log-probabilities: q = round(-logProb * SCALE), saturating at 255,
@@ -333,7 +342,33 @@ def align_up(value: int, alignment: int) -> int:
     return (value + alignment - 1) & ~(alignment - 1)
 
 
-def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict) -> bytes:
+class Grammar:
+    """A tag per word and a square transition matrix, as tools/build_pos.py emitted them.
+
+    Held as a mapping rather than a list because the pack's word order is decided here, after
+    the tags were derived -- looking each word up is what keeps the two files independent.
+    """
+
+    def __init__(self, tags: dict[str, int], transitions: bytes, tag_count: int) -> None:
+        self.tags = tags
+        self.transitions = transitions
+        self.tag_count = tag_count
+        # The tail slot, shared by every tag too rare to earn its own and by every word the
+        # treebank never contained. The engine reads it as "no opinion".
+        self.unknown = tag_count - 1 if tag_count else 0
+
+    def tag_for(self, word: str) -> int:
+        return self.tags.get(word, self.unknown)
+
+    @staticmethod
+    def load(path: Path) -> "Grammar":
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        matrix = bytes.fromhex(payload["transitions"])
+        return Grammar(payload["tags"], matrix, payload["tag_count"])
+
+
+def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
+               grammar: "Grammar | None" = None) -> bytes:
     if not words:
         raise SystemExit("the word list is empty")
     if len(words) > MAX_WORDS:
@@ -402,6 +437,25 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict) -> bytes:
     bigram_capacity, bigram_keys, bigram_values = build_hash_table(bigram_entries, 2)
     trigram_capacity, trigram_keys, trigram_values = build_hash_table(trigram_entries, 3)
 
+    # Grammar is optional. A pack built without a treebank declares zero tags and carries two
+    # empty sections, which the engine reads as "score without the term" -- the same ranking
+    # packs produced before the sections existed.
+    if grammar is None:
+        pos_tag_count = 0
+        word_tags = b""
+        pos_transitions = b""
+    else:
+        pos_tag_count = grammar.tag_count
+        if pos_tag_count > MAX_POS_TAGS:
+            raise SystemExit(f"{pos_tag_count} tags exceeds the format cap of {MAX_POS_TAGS}")
+        # Keyed on the words the pack actually stores, not on the list that came in: folding
+        # collapses forms that differ only by case, so the two are not the same length and a
+        # tag array built from the input would be rejected as the wrong size for wordCount.
+        word_tags = bytes(grammar.tag_for(word) for word in display)
+        pos_transitions = grammar.transitions
+        if len(pos_transitions) != pos_tag_count * pos_tag_count:
+            raise SystemExit("the transition matrix is not square in the declared tag count")
+
     payloads = {
         S_ALPHABET: (struct.pack(f"<{len(alphabet)}I", *alphabet), 4),
         S_TRIE_BASE: (struct.pack(f"<{len(base)}i", *base), 4),
@@ -413,6 +467,8 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict) -> bytes:
         S_BIGRAM_VALUES: (bigram_values, 1),
         S_TRIGRAM_KEYS: (trigram_keys, 4),
         S_TRIGRAM_VALUES: (trigram_values, 1),
+        S_WORD_TAGS: (word_tags, 1),
+        S_POS_TRANSITIONS: (pos_transitions, 1),
     }
 
     body = bytearray()
@@ -435,7 +491,7 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict) -> bytes:
 
     def pack_header(header_crc: int) -> bytes:
         blob = struct.pack(
-            "<IIII Q II 16s IIIIII 6I",
+            "<IIII Q II 16s IIIIII I 13I",
             MAGIC,
             VERSION,
             HEADER_BYTES,
@@ -450,7 +506,8 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict) -> bytes:
             bigram_capacity,
             trigram_capacity,
             LOG_PROB_SCALE,
-            0, 0, 0, 0, 0, 0,
+            pos_tag_count,
+            *([0] * 13),
         )
         for index in range(SECTION_COUNT):
             data, _ = payloads[index]
@@ -473,17 +530,20 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict) -> bytes:
 class PackReader:
     def __init__(self, blob: bytes) -> None:
         self.blob = blob
-        fields = struct.unpack_from("<IIII Q II 16s IIIIII 6I", blob, 0)
+        fields = struct.unpack_from("<IIII Q II 16s IIIIII I 13I", blob, 0)
         (
             self.magic, self.version, self.header_bytes, self.flags,
             self.file_bytes, self.content_crc, self.header_crc, tag_raw,
             self.word_count, self.node_count, self.alphabet_count,
             self.bigram_capacity, self.trigram_capacity, self.log_prob_scale,
+            self.pos_tag_count,
             *_reserved,
         ) = fields
         self.tag = tag_raw.split(b"\x00")[0].decode("utf-8")
+        # The descriptors start where the fixed fields end: 76 bytes of them, then 52 reserved.
         self.sections = [
-            struct.unpack_from("<QQ", blob, 96 + 16 * index) for index in range(SECTION_COUNT)
+            struct.unpack_from("<QQ", blob, SECTION_TABLE_OFFSET + 16 * index)
+            for index in range(SECTION_COUNT)
         ]
 
         if self.magic != MAGIC:
@@ -692,6 +752,9 @@ def main(argv: list[str]) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--words", type=Path)
     parser.add_argument("--ngrams", type=Path)
+    parser.add_argument("--grammar", type=Path,
+                        help="tags and transition matrix from tools/build_pos.py; without it "
+                             "the pack carries no grammar and scores exactly as before")
     parser.add_argument("--tag", default="und")
     parser.add_argument("--out", type=Path)
     parser.add_argument("--selftest", action="store_true",
@@ -721,7 +784,8 @@ def main(argv: list[str]) -> int:
 
     words = load_words(arguments.words)
     ngrams = load_ngrams(arguments.ngrams) if arguments.ngrams else {}
-    blob = build_pack(arguments.tag, words, ngrams)
+    grammar = Grammar.load(arguments.grammar) if arguments.grammar else None
+    blob = build_pack(arguments.tag, words, ngrams, grammar)
 
     # Written to a temporary file in the destination directory and renamed, so that an
     # interrupted build never leaves a half-written pack where the app would map it.

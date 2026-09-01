@@ -30,8 +30,40 @@ MAX_TAGS = 255
 OTHER_TAG = 255
 
 
-def tokens(path):
-    """(form, upos, xpos) for every real token, skipping ranges and empty nodes."""
+# The features that change what may follow a word, in the order they are composed into a tag.
+#
+# Not every feature UD defines: Foreign, Typo and the rest describe the token rather than
+# constrain the next one, and each one kept multiplies the tagset. These are the ones agreement
+# is expressed through -- which is what grammar constrains, and the reason coarse tags measured
+# no better than no grammar at all.
+FEATURES = ("Gender", "Number", "Case", "Person", "VerbForm", "Mood", "Definite", "PronType")
+
+
+def compose(upos, feats):
+    """A tag from the universal columns, so it does not matter whether a treebank fills XPOS.
+
+    French GSD and Spanish GSD leave XPOS empty, which produced one tag for a whole language and
+    a transition matrix that said nothing. UPOS plus the agreement features is available in
+    every treebank and gives Romanian a tagset within a few of its own MULTEXT-East one.
+    """
+    if feats == "_":
+        return upos
+    values = dict(p.split("=", 1) for p in feats.split("|") if "=" in p)
+    parts = [upos]
+    for feature in FEATURES:
+        value = values.get(feature)
+        if value is not None:
+            parts.append(value.split(",")[0])
+    return ".".join(parts)
+
+
+# Below this many distinct XPOS values a treebank is not really filling the column, and the
+# composed tag is used instead. Romanian RRT has 476 and French GSD has one.
+MIN_USEFUL_XPOS = 20
+
+
+def rows(path):
+    """(form, upos, xpos, feats) for every real token, with None between sentences."""
     for line in open(path, encoding="utf-8"):
         line = line.rstrip("\n")
         if not line:
@@ -42,28 +74,56 @@ def tokens(path):
         c = line.split("\t")
         if "-" in c[0] or "." in c[0]:
             continue
-        yield c[1].lower(), c[3], c[4]
+        yield c[1].lower(), c[3], c[4], c[5]
+
+
+def uses_xpos(paths):
+    """Whether the treebank's own fine tagset is worth preferring to a composed one.
+
+    Where a treebank fills XPOS it is a tagset a linguist designed for that language, and it
+    measured better than composition -- 11.0% against 10.1% on Romanian. Where it does not,
+    composition is the only option. Deciding per treebank rather than picking one for all of
+    them costs a pass over the file and gets both.
+    """
+    seen = set()
+    for path in paths:
+        for row in rows(path):
+            if row is not None:
+                seen.add(row[2])
+            if len(seen) > MIN_USEFUL_XPOS:
+                return True
+    return False
+
+
+def tokens(path, xpos):
+    """(form, upos, tag) for every real token, skipping ranges and empty nodes."""
+    for row in rows(path):
+        if row is None:
+            yield None
+            continue
+        form, upos, fine, feats = row
+        yield form, upos, (fine if xpos else compose(upos, feats))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--treebank", type=pathlib.Path, nargs="+", required=True,
                         help="one or more .conllu files")
-    parser.add_argument("--words", type=pathlib.Path, required=True,
-                        help="the word list the pack is built from, one word per line with count")
-    parser.add_argument("--out", type=pathlib.Path, required=True)
+    parser.add_argument("--out", type=pathlib.Path, required=True,
+                        help="JSON, read by tools/build_dict.py --grammar")
     parser.add_argument("--coarse", action="store_true",
-                        help="use UPOS (16 tags) rather than the fine tagset")
+                        help="use bare UPOS rather than UPOS plus agreement features")
     arguments = parser.parse_args()
 
     column = 1 if arguments.coarse else 2
+    xpos = not arguments.coarse and uses_xpos(arguments.treebank)
     word_tags = collections.defaultdict(collections.Counter)
     tag_counts = collections.Counter()
     transitions = collections.defaultdict(collections.Counter)
 
     for path in arguments.treebank:
         previous = None
-        for item in tokens(path):
+        for item in tokens(path, xpos):
             if item is None:
                 previous = None
                 continue
@@ -94,40 +154,29 @@ def main():
             q = max(LOG_PROB_FLOOR, math.log(p))
             matrix[row * size + i] = min(255, int(round(-q * LOG_PROB_SCALE)))
 
-    # One tag per word: the one it carries most often. The ambiguity this discards is measured
-    # and reported, because it is the honest cost of a single byte.
-    words = []
-    for line in open(arguments.words, encoding="utf-8"):
-        p = line.rstrip("\n").split("\t")
-        if p and p[0]:
-            words.append(p[0])
-
-    tags = bytearray(len(words))
-    tagged = ambiguous = 0
-    for i, word in enumerate(words):
-        counter = word_tags.get(word)
-        if not counter:
-            tags[i] = OTHER_TAG
-            continue
-        tagged += 1
+    # One tag per word: the one it carries most often. Keyed by word rather than by position,
+    # because the pack's word order is decided by the pack compiler, after this runs. The
+    # ambiguity a single tag discards is reported, because it is the honest cost of one byte.
+    tags = {}
+    ambiguous = 0
+    for word, counter in word_tags.items():
         if len(counter) > 1:
             ambiguous += 1
-        tags[i] = index.get(counter.most_common(1)[0][0], OTHER_TAG)
+        tag = index.get(counter.most_common(1)[0][0])
+        if tag is not None:
+            tags[word] = tag
 
-    arguments.out.write_bytes(bytes(tags) + bytes(matrix))
-    meta = {
-        "tags": size,
+    arguments.out.write_text(json.dumps({
+        "tag_count": size,
         "tagset": ordered,
-        "words": len(words),
-        "tagged": tagged,
-        "ambiguous_types": ambiguous,
-        "token_coverage_of_tagset": round(100 * kept / total, 2),
-        "bytes_tags": len(tags),
-        "bytes_matrix": len(matrix),
-    }
-    print(json.dumps(meta, ensure_ascii=False, indent=2)[:400])
-    print(f"tags {len(tags)} B + matrix {len(matrix)} B = {(len(tags)+len(matrix))/1024:.1f} KB")
-    print(f"{tagged}/{len(words)} words tagged, {ambiguous} of them ambiguous in the treebank")
+        "tags": tags,
+        "transitions": bytes(matrix).hex(),
+    }, ensure_ascii=False), encoding="utf-8")
+
+    source = "the treebank's own tagset" if xpos else "UPOS plus agreement features"
+    print(f"{size} tags from {source}, covering {100 * kept / total:.2f}% of tokens")
+    print(f"{len(tags)} words tagged, {ambiguous} of them ambiguous in the treebank")
+    print(f"matrix {len(matrix) / 1024:.1f} KB, one byte per word on top of that")
 
 
 if __name__ == "__main__":

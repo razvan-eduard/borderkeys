@@ -207,6 +207,17 @@ constexpr float kLanguageEvidenceDecay = 0.85f;
 // languageLockMinimum_.
 constexpr float kLanguageDominanceShare = 0.7f;
 
+// How much the part-of-speech transition counts where the n-gram model has nothing.
+//
+// 0.75 came out of a sweep on held-out text: below it the term barely moves the ranking, above
+// it grammatically plausible but rare words start displacing frequent ones and the fifth slot
+// suffers for no further gain in the first. The trade is deliberate -- the first chip is what
+// people tap, and nobody reads the fifth.
+constexpr float kGrammarWeight = 0.75f;
+
+// The scale the pack quantises log probabilities on, mirrored from tools/build_pos.py.
+constexpr float kLogProbScale = 10.0f;
+
 // Once a language is detected, the other dictionaries are not consulted at all.
 //
 // A penalty was tried first and does not work, for a reason that is obvious afterwards: the
@@ -340,6 +351,18 @@ int32_t LanguagePack::open(const char* tag, int fd, int64_t offset, int64_t leng
         return kBkdErrSectionBounds;
     }
 
+    // Grammar, if this pack was built with a treebank. Both sections are empty when it was not,
+    // and posTagCount is then zero, which is what every read below tests against -- a pack with
+    // no grammar scores exactly as packs did before the sections existed.
+    posTagCount_ = header.posTagCount;
+    if (posTagCount_ != 0) {
+        wordTags_ = base_ + header.sections[kSectionWordTags].offset;
+        posTransitions_ = base_ + header.sections[kSectionPosTransitions].offset;
+    } else {
+        wordTags_ = nullptr;
+        posTransitions_ = nullptr;
+    }
+
     std::memset(tag_, 0, sizeof(tag_));
     std::strncpy(tag_, tag, sizeof(tag_) - 1);
 
@@ -355,6 +378,9 @@ void LanguagePack::close() {
     mappingBytes_ = 0;
     base_ = nullptr;
     baseBytes_ = 0;
+    wordTags_ = nullptr;
+    posTransitions_ = nullptr;
+    posTagCount_ = 0;
     frequentCount_ = 0;
     active = false;
     tag_[0] = '\0';
@@ -678,11 +704,15 @@ void Engine::resolveContext(const char* previous1, size_t previous1Length, const
     }
     for (int i = 0; i < kMaxPacks; ++i) {
         contextWord1_[i] = -1;
+        contextTag1_[i] = LanguagePack::kNoPosTag;
         if (length1 > 0 && packs_[i].isOpen()) {
             contextWord1_[i] = packs_[i].trie().lookupFolded(folded, length1);
         }
         if (contextWord1_[i] >= 0) {
             hasContext1_ = true;
+            // Resolved once per request rather than once per candidate: the previous word does
+            // not change while sixteen candidates are being scored against it.
+            contextTag1_[i] = packs_[i].posTag(contextWord1_[i]);
         }
     }
 
@@ -734,7 +764,30 @@ float Engine::contextLogProb(int packIndex, uint32_t wordIndex) const {
     if (w1 >= 0 && w2 >= 0) {
         ++dropped;
     }
-    return unigram + kBackoffLogFactor * static_cast<float>(dropped);
+    float score = unigram + kBackoffLogFactor * static_cast<float>(dropped);
+
+    // Grammar, and only here.
+    //
+    // This branch is the one where the model has no evidence about this pair and is ranking by
+    // raw frequency -- the same five words whatever came before. Everywhere above, a bigram
+    // exists, and a bigram encodes the same grammar more precisely than a tag class can: it
+    // knows what follows *this word*, not merely what follows its part of speech. Adding the
+    // term there would be a worse signal arguing with a better one.
+    //
+    // Measured on held-out text, restricted to exactly these positions: the first suggestion
+    // goes from 8.6% to 11.0% correct. See docs/pos-tagging.md.
+    if (dropped > 0 && pack.hasGrammar()) {
+        const uint32_t previousTag = contextTag1_[packIndex];
+        if (previousTag != LanguagePack::kNoPosTag) {
+            const uint32_t tag = pack.posTag(static_cast<int32_t>(wordIndex));
+            if (tag != LanguagePack::kNoPosTag) {
+                const float transition =
+                    -static_cast<float>(pack.posTransition(previousTag, tag)) / kLogProbScale;
+                score += kGrammarWeight * transition;
+            }
+        }
+    }
+    return score;
 }
 
 float Engine::userBoostForCount(uint32_t count) const {

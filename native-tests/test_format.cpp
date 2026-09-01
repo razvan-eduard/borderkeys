@@ -74,6 +74,48 @@ void runFormatTests() {
         check(pack.trie().wordCount() > 0, "and a non-empty dictionary");
     }
 
+    section("grammar sections");
+
+    {
+        // The test pack is built without a treebank, which is the case every language starts
+        // in and the one that must keep working: no tags, no matrix, and a score with no
+        // grammar term rather than a refusal.
+        LanguagePack pack;
+        check(openFromBytes(good, &pack) == kBkdOk, "a pack with no grammar opens");
+        check(!pack.hasGrammar(), "and reports that it carries none");
+        check(pack.posTag(0) == LanguagePack::kNoPosTag, "every word is untagged");
+        check(pack.posTransition(0, 0) == 0, "and the matrix reads as free everywhere");
+    }
+
+    {
+        // posTagCount is the field every grammar read is bounded by, so a value a byte could
+        // not index has to be refused on the field rather than trusted into an array index.
+        std::string mutated = good;
+        BkdHeader header;
+        std::memcpy(&header, mutated.data(), sizeof(header));
+        header.posTagCount = kMaxPosTags + 1u;
+        std::memcpy(mutated.data(), &header, sizeof(header));
+        repairChecksums(mutated);
+        LanguagePack pack;
+        const int32_t status = openFromBytes(mutated, &pack);
+        check(status == kBkdErrCounts, "a tag count wider than a byte is refused");
+    }
+
+    {
+        // A pack claiming tags without a tag section is claiming wordCount bytes that are not
+        // there, which the section bounds check is what catches.
+        std::string mutated = good;
+        BkdHeader header;
+        std::memcpy(&header, mutated.data(), sizeof(header));
+        header.posTagCount = 8u;
+        std::memcpy(mutated.data(), &header, sizeof(header));
+        repairChecksums(mutated);
+        LanguagePack pack;
+        const int32_t status = openFromBytes(mutated, &pack);
+        check(status == kBkdErrSectionBounds,
+              "declaring tags without the sections to hold them is refused");
+    }
+
     section("the header is validated field by field");
 
     struct Case {
