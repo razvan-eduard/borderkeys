@@ -12,6 +12,7 @@ import android.os.Trace
 import android.view.Choreographer
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.accessibility.AccessibilityNodeProvider
 import android.view.View
 import android.view.ViewConfiguration
 import com.borderkeys.theme.ThemePaints
@@ -294,6 +295,21 @@ class KeyboardCanvasView(
      * The points of the swipe in progress, and the bounding box the trail is invalidated
      * against. Lives in its own class so its invariants can be asserted without a `Canvas`.
      */
+    /**
+     * The virtual view hierarchy a screen reader explores.
+     *
+     * Built from the same compiled geometry the drawing and the hit-testing use, so a key that
+     * is drawn is a key that can be explored and there is no second layout to drift.
+     */
+    private val accessibility = KeyboardAccessibility(this, geometry).apply {
+        listener = KeyboardAccessibility.Listener { code, keyIndex ->
+            // Activated by the reader rather than by a finger: there was no press to release,
+            // so this goes straight to the same place a completed tap goes. Qualified because
+            // `listener` inside `apply` is the accessibility helper's own.
+            this@KeyboardCanvasView.listener?.onKey(code, keyIndex)
+        }
+    }
+
     private val gesture = GestureCapture()
 
     /** Rebound on every move event; see [EventSamples]. */
@@ -399,6 +415,16 @@ class KeyboardCanvasView(
         }
     }
 
+    override fun getAccessibilityNodeProvider(): AccessibilityNodeProvider = accessibility.provider
+
+    /**
+     * With a screen reader on, a finger dragged over the keyboard produces hover events instead
+     * of touches. They are routed to the virtual view under them; anything not consumed falls
+     * through to the framework's own handling.
+     */
+    override fun dispatchHoverEvent(event: MotionEvent): Boolean =
+        accessibility.dispatchHoverEvent(event) || super.dispatchHoverEvent(event)
+
     /**
      * Turns the layout description into the arrays everything else reads.
      *
@@ -413,6 +439,9 @@ class KeyboardCanvasView(
         }
         measureLabels()
         recordBackground(viewWidth, viewHeight)
+        // Every virtual view just moved, and a reader holding a stale node would speak the
+        // wrong key or none at all.
+        accessibility.onGeometryChanged()
     }
 
     /**
