@@ -34,7 +34,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "BorderKeys"
 
-// Exactly five modules. The split is the enforcement mechanism for "Compose never enters
+// Exactly six modules. The split is the enforcement mechanism for "Compose never enters
 // the keyboard process": :keyboard cannot see Compose because no path in the dependency
 // graph puts it there, so an accidental import is a compile error rather than a review note.
 include(":app")
@@ -42,3 +42,4 @@ include(":keyboard")
 include(":data")
 include(":settings")
 include(":assist")
+include(":i18n")

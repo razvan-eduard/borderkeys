@@ -13,6 +13,8 @@ import android.view.MotionEvent
 import android.view.View
 import com.borderkeys.theme.ThemePaints
 import kotlin.math.min
+import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.i18n.Keys
 
 /**
  * The assistant's sheet, drawn over the keyboard.
@@ -31,7 +33,11 @@ import kotlin.math.min
 class AssistSheetView(
     context: Context,
     private val paints: ThemePaints,
+    private val strings: LanguageManager,
 ) : View(context) {
+
+    /** Resolved once, so nothing on the draw path does a map lookup. */
+    private val buttonLabels = Array(BUTTON_LABEL_KEYS.size) { strings[BUTTON_LABEL_KEYS[it]] }
 
     enum class Button { REPLACE, COPY, DISCARD }
 
@@ -61,7 +67,7 @@ class AssistSheetView(
         title = taskTitle
         original = selection
         proposal = ""
-        status = "Working…"
+        status = strings[Keys.ASSIST_WORKING]
         hasResult = false
         rebuildLayouts()
         invalidate()
@@ -69,7 +75,7 @@ class AssistSheetView(
 
     fun showResult(text: String, modelName: String?) {
         proposal = text
-        status = modelName?.let { "Produced on this device by $it" } ?: "Produced on this device"
+        status = modelName?.let { strings.getString(Keys.ASSIST_PRODUCED_ON_THIS_DEVICE_BY, it) } ?: strings[Keys.ASSIST_PRODUCED_ON_THIS_DEVICE]
         hasResult = true
         rebuildLayouts()
         invalidate()
@@ -186,7 +192,7 @@ class AssistSheetView(
             canvas.drawRoundRect(left, top, left + buttonWidth, top + buttonHeight, radius,
                 radius, fill)
 
-            val label = BUTTON_LABELS[index]
+            val label = buttonLabels[index]
             val paint = if (enabled) paints.label else paints.labelSecondary
             canvas.drawText(
                 label, left + buttonWidth / 2f,
@@ -243,6 +249,7 @@ class AssistSheetView(
         const val GAP_PX = 12f
         const val MAX_ORIGINAL_LINES = 3
         const val MAX_PROPOSAL_LINES = 6
-        val BUTTON_LABELS = arrayOf("Replace", "Copy", "Discard")
+        /** Catalogue keys: the companion exists before any instance has a catalogue. */
+        val BUTTON_LABEL_KEYS = arrayOf(Keys.ASSIST_REPLACE, Keys.ASSIST_COPY, Keys.ASSIST_DISCARD)
     }
 }

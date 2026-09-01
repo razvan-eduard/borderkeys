@@ -3,6 +3,9 @@
 
 package com.borderkeys.settings.screen
 
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.LocalStrings
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,6 +41,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun CorrectionsScreen(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
     val repository = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
     val theme by repository.theme.collectAsStateWithLifecycle(initialValue = KeyboardTheme())
@@ -49,18 +53,17 @@ fun CorrectionsScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader("Suggestions")
+        SectionHeader(strings[Keys.CORRECTIONS_SUGGESTIONS])
         SwitchRow(
-            title = "Show the suggestion strip",
-            subtitle = "The row above the keys. It carries corrections of the word you are " +
-                "typing and, once you finish one, the words that usually follow it.",
+            title = strings[Keys.CORRECTIONS_SHOW_THE_SUGGESTION_STRIP],
+            subtitle = strings[Keys.CORRECTIONS_THE_ROW_ABOVE_THE_KEYS_IT],
             checked = preferences.showSuggestionStrip,
         ) { value -> update { it.copy(showSuggestionStrip = value) } }
 
-        SectionHeader("How many suggestions")
+        SectionHeader(strings[Keys.CORRECTIONS_HOW_MANY_SUGGESTIONS])
         SuggestionStripPreview(theme, preferences, Modifier.padding(vertical = 8.dp))
         Text(
-            "${preferences.suggestionCount} at a time",
+            strings.getString(Keys.CORRECTIONS_AT_A_TIME, preferences.suggestionCount),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 20.dp),
@@ -76,51 +79,38 @@ fun CorrectionsScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
         )
         Explanation(
-            "The strip is a fixed width, so every extra slot makes each one narrower and each " +
-                "target smaller. The preview above uses words of realistic length rather than " +
-                "short filler, because that is where the difference shows.",
+            strings[Keys.CORRECTIONS_THE_STRIP_IS_A_FIXED_WIDTH],
         )
 
         Divider()
-        SectionHeader("Two words at once")
+        SectionHeader(strings[Keys.CORRECTIONS_TWO_WORDS_AT_ONCE])
         SwitchRow(
-            title = "Suggest whole phrases",
-            subtitle = "Offers \"vreau să\" where it would otherwise offer \"vreau\", for " +
-                "phrases you write over and over.",
+            title = strings[Keys.CORRECTIONS_SUGGEST_WHOLE_PHRASES],
+            subtitle = strings[Keys.CORRECTIONS_OFFERS_VREAU_S_WHERE_IT_WOULD],
             checked = preferences.phraseSuggestions,
         ) { value -> update { it.copy(phraseSuggestions = value) } }
         Explanation(
-            "Only from what you have written, never from the dictionary: frequency can chain " +
-                "any two common pairs into something grammatical and meaningless. The second " +
-                "word needs twice the evidence of the first, so a phrase appears after about " +
-                "four repetitions where a single word appears after two — twice the evidence " +
-                "for twice the guess. The first word is always offered on its own as well.",
+            strings[Keys.CORRECTIONS_ONLY_FROM_WHAT_YOU_HAVE_WRITTEN],
         )
 
         Divider()
-        SectionHeader("Correcting as you type")
+        SectionHeader(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE])
         SwitchRow(
-            title = "Apply the first suggestion when you press space",
-            subtitle = "Off by default. With it off, space commits exactly the letters you " +
-                "typed and a correction is applied only when you tap it.",
+            title = strings[Keys.CORRECTIONS_APPLY_THE_FIRST_SUGGESTION_WHEN_YOU],
+            subtitle = strings[Keys.CORRECTIONS_OFF_BY_DEFAULT_WITH_IT_OFF],
             checked = preferences.autoCorrectOnSpace,
         ) { value -> update { it.copy(autoCorrectOnSpace = value) } }
         Explanation(
-            "The usual objection to autocorrect is not that it is wrong sometimes — it is that " +
-                "undoing it costs more than typing the word did. So this only exists together " +
-                "with the switch below, and words shorter than three letters are left alone: " +
-                "half the alphabet is one edit away from them.",
+            strings[Keys.CORRECTIONS_THE_USUAL_OBJECTION_TO_AUTOCORRECT_IS],
         )
 
         SwitchRow(
-            title = "Backspace puts back what you typed",
-            subtitle = "The backspace straight after a correction restores your original word " +
-                "instead of deleting a letter. One key, and it is exactly as you wrote it.",
+            title = strings[Keys.CORRECTIONS_BACKSPACE_PUTS_BACK_WHAT_YOU_TYPED],
+            subtitle = strings[Keys.CORRECTIONS_THE_BACKSPACE_STRAIGHT_AFTER_A_CORRECTION],
             checked = preferences.revertCorrectionOnBackspace,
         ) { value -> update { it.copy(revertCorrectionOnBackspace = value) } }
         Explanation(
-            "A correction is only learned once it survives that first backspace. Reject it and " +
-                "nothing is remembered except your own word, which is what rejecting it says.",
+            strings[Keys.CORRECTIONS_A_CORRECTION_IS_ONLY_LEARNED_ONCE],
         )
     }
 }

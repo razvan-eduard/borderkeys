@@ -6,6 +6,7 @@ package com.borderkeys.ime
 import android.content.res.AssetManager
 import org.json.JSONException
 import org.json.JSONObject
+import com.borderkeys.i18n.Keys
 
 /**
  * Reads a layout asset into a [KeyboardLayout].
@@ -59,7 +60,9 @@ object LayoutLoader {
         }
         return KeyboardLayout(
             id = root.optString("id", "unnamed"),
-            label = root.optString("label", "Keyboard"),
+            // A catalogue key, not text: the loader runs off the UI thread with no catalogue
+            // in hand, and the label is only ever shown by something that has one.
+            label = root.optString("label", Keys.LAYOUT_KEYBOARD_2),
             languageTag = root.optString("languageTag", "und"),
             rows = rows,
         )

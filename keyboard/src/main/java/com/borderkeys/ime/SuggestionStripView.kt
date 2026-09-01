@@ -10,6 +10,8 @@ import android.os.Trace
 import android.view.MotionEvent
 import android.view.View
 import com.borderkeys.theme.ThemePaints
+import com.borderkeys.i18n.Keys
+import com.borderkeys.i18n.LanguageManager
 
 /**
  * The band above the keys: three candidates, or a note that nothing is being learned here.
@@ -26,6 +28,7 @@ import com.borderkeys.theme.ThemePaints
 class SuggestionStripView(
     context: Context,
     private val paints: ThemePaints,
+    private val strings: LanguageManager,
 ) : View(context) {
 
     interface Listener {
@@ -241,7 +244,7 @@ class SuggestionStripView(
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paints.background)
 
             if (privateMode) {
-                drawNotice(canvas, privateNoticeChars, PRIVATE_NOTICE.length)
+                drawNotice(canvas, privateNoticeChars, privateNotice.length)
                 return
             }
             if (decoding && count == 0) {
@@ -249,6 +252,12 @@ class SuggestionStripView(
                 return
             }
             if (count == 0) {
+                // An empty strip with nothing drawn in it reads as a dead row rather than an
+                // idle one, so say what the row is waiting for. Suppressed in action mode,
+                // where an empty strip means the assistant simply offered nothing.
+                if (!actionMode) {
+                    drawNotice(canvas, idleNoticeChars, idleNotice.length)
+                }
                 return
             }
 
@@ -366,8 +375,15 @@ class SuggestionStripView(
         return if (slot in 0 until shown) slot else -1
     }
 
+    // Resolved once, here, rather than on every frame: a lookup returns an existing String but
+    // copying it into the CharArray onDraw reads does allocate, and onDraw must not. The view is
+    // rebuilt when the language changes, so there is nothing to invalidate.
+    private val privateNotice = strings[Keys.STRIP_PRIVATE]
     private val privateNoticeChars =
-        CharArray(PRIVATE_NOTICE.length).also { PRIVATE_NOTICE.toCharArray(it, 0, 0, it.size) }
+        CharArray(privateNotice.length).also { privateNotice.toCharArray(it, 0, 0, it.size) }
+    private val idleNotice = strings[Keys.STRIP_IDLE]
+    private val idleNoticeChars =
+        CharArray(idleNotice.length).also { idleNotice.toCharArray(it, 0, 0, it.size) }
     private val decodingNoticeChars =
         CharArray(DECODING_NOTICE.length).also { DECODING_NOTICE.toCharArray(it, 0, 0, it.size) }
 
@@ -396,7 +412,6 @@ class SuggestionStripView(
          * `CharArray` on a path that must not allocate, and localisation of the keyboard's own
          * chrome arrives with the settings screen.
          */
-        private const val PRIVATE_NOTICE = "Private field — nothing is learned or saved"
         private const val DECODING_NOTICE = "…"
     }
 }

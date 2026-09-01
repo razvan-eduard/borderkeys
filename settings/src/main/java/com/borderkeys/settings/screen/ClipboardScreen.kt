@@ -3,6 +3,10 @@
 
 package com.borderkeys.settings.screen
 
+import com.borderkeys.i18n.Keys
+import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.settings.LocalStrings
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,6 +44,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun ClipboardScreen(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
     val repository = remember { DataGraph.clipboard }
     val themes = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
@@ -49,19 +54,17 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SwitchRow(
-            title = "Remember what you copy",
-            subtitle = "Only while BorderKeys is the keyboard in use. The platform delivers " +
-                "clipboard changes to the focused input method, which is why this needs no " +
-                "permission.",
+            title = strings[Keys.CLIPBOARD_REMEMBER_WHAT_YOU_COPY],
+            subtitle = strings[Keys.CLIPBOARD_ONLY_WHILE_BORDERKEYS_IS_THE_KEYBOARD],
             checked = preferences.clipboardEnabled,
         ) { value ->
             scope.launch { themes.updatePreferences { it.copy(clipboardEnabled = value) } }
         }
 
         Divider()
-        SectionHeader("Keep unpinned items for")
+        SectionHeader(strings[Keys.CLIPBOARD_KEEP_UNPINNED_ITEMS_FOR])
         Text(
-            formatRetention(preferences.clipboardRetentionMinutes),
+            formatRetention(strings, preferences.clipboardRetentionMinutes),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 20.dp),
@@ -77,28 +80,27 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
         )
         Explanation(
-            "Expired items are deleted, not merely hidden. Filtering them out of the list would " +
-                "leave the text sitting in the database for anything that got hold of the file.",
+            strings[Keys.CLIPBOARD_EXPIRED_ITEMS_ARE_DELETED_NOT_MERELY],
         )
 
         Divider()
-        SectionHeader("History (${entries.size})")
+        SectionHeader(strings.getString(Keys.CLIPBOARD_HISTORY, entries.size))
         if (entries.isEmpty()) {
-            SettingRow(title = "Empty")
+            SettingRow(title = strings[Keys.CLIPBOARD_EMPTY])
         }
         for (entry in entries) {
             SettingRow(
                 title = entry.content.take(80).replace('\n', ' '),
-                subtitle = if (entry.isPinned) "Pinned — never expires" else "Expires on the timer",
+                subtitle = if (entry.isPinned) strings[Keys.CLIPBOARD_PINNED_NEVER_EXPIRES] else strings[Keys.CLIPBOARD_EXPIRES_ON_THE_TIMER],
                 trailing = {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(
                             onClick = {
                                 scope.launch { repository.setPinned(entry.id, !entry.isPinned) }
                             },
-                        ) { Text(if (entry.isPinned) "Unpin" else "Pin") }
+                        ) { Text(if (entry.isPinned) strings[Keys.CLIPBOARD_UNPIN] else strings[Keys.CLIPBOARD_PIN]) }
                         TextButton(onClick = { scope.launch { repository.delete(entry.id) } }) {
-                            Text("Delete")
+                            Text(strings[Keys.CLIPBOARD_DELETE])
                         }
                     }
                 },
@@ -109,13 +111,13 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
         TextButton(
             onClick = { scope.launch { repository.deleteAll() } },
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-        ) { Text("Delete everything, including pinned") }
+        ) { Text(strings[Keys.CLIPBOARD_DELETE_EVERYTHING_INCLUDING_PINNED]) }
     }
 }
 
-private fun formatRetention(minutes: Int): String = when {
-    minutes < 60 -> "$minutes minutes"
-    minutes == 60 -> "1 hour"
-    minutes % 60 == 0 -> "${minutes / 60} hours"
-    else -> "${minutes / 60} h ${minutes % 60} min"
+private fun formatRetention(strings: LanguageManager, minutes: Int): String = when {
+    minutes < 60 -> strings.getString(Keys.CLIPBOARD_MINUTES, minutes)
+    minutes == 60 -> strings[Keys.CLIPBOARD_1_HOUR]
+    minutes % 60 == 0 -> strings.getString(Keys.CLIPBOARD_HOURS, minutes / 60)
+    else -> strings.getString(Keys.CLIPBOARD_H_MIN, minutes / 60, minutes % 60)
 }

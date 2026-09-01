@@ -37,6 +37,7 @@ fun KeyboardPreview(
     layoutId: String = "qwerty_ro",
 ) {
     val context = LocalContext.current
+    val strings = LocalStrings.current
     val paints = remember { ThemePaints() }
     val layout = remember(layoutId) { LayoutLoader.load(context.assets, layoutId) }
 
@@ -47,7 +48,7 @@ fun KeyboardPreview(
                 // to know how one-handed mode positions it.
                 FrameLayout(viewContext).apply {
                     addView(
-                        KeyboardCanvasView(viewContext, paints).apply {
+                        KeyboardCanvasView(viewContext, paints, strings).apply {
                             isEnabled = false
                             swipeEnabled = false
                         },

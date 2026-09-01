@@ -37,6 +37,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
+import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.i18n.Keys
 
 /**
  * The input method itself.
@@ -69,6 +71,15 @@ class BorderKeysService :
 
     private var privateMode = false
     private var preferences = KeyboardPreferences()
+
+    /**
+     * The interface language, resolved once when the service starts.
+     *
+     * Built here rather than per view so the JSON is parsed once for the process. It is not
+     * reloaded when preferences change: the language picker recreates the input view, which is
+     * the only moment a different catalogue could take effect anyway.
+     */
+    private lateinit var strings: LanguageManager
     private var theme = KeyboardTheme()
 
     private var alphabeticLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
@@ -150,6 +161,12 @@ class BorderKeysService :
     override fun onCreate() {
         super.onCreate()
         DataGraph.install(applicationContext)
+        // Before anything that draws. The stored language is read on this thread because the
+        // service has nothing to show until it is known, and it is one small file read at
+        // process start rather than something on the typing path.
+        strings = LanguageManager(this).apply {
+            loadResolved(DataGraph.themes.currentPreferences().uiLanguage)
+        }
         engine.listener = this
         engine.start()
 
@@ -363,9 +380,9 @@ class BorderKeysService :
             AssistTask.TRANSLATE_TO_ROMANIAN
         }
         assistTasks = arrayOf(AssistTask.SUMMARISE, AssistTask.CORRECT, translate)
-        assistActions[0] = "Summarise"
-        assistActions[1] = "Correct"
-        assistActions[2] = if (translate == AssistTask.TRANSLATE_TO_ENGLISH) "→ English" else "→ Română"
+        assistActions[0] = strings[Keys.ASSISTANT_SUMMARISE]
+        assistActions[1] = strings[Keys.ASSISTANT_CORRECT]
+        assistActions[2] = if (translate == AssistTask.TRANSLATE_TO_ENGLISH) strings[Keys.ASSISTANT_ENGLISH] else strings[Keys.ASSISTANT_ROM_N]
         view.suggestionStrip.setActions(assistActions, assistTasks.size)
     }
 
@@ -390,21 +407,20 @@ class BorderKeysService :
         val view = host ?: return
         assistTask = task
         view.assistSheet.listener = this
-        view.quickSettings.listener = this
         view.assistSheet.showRunning(assistActionTitle(task), assistSelection)
         view.showAssistSheet(true)
         assistRequestId = assist.run(task, assistSelection)
         if (assistRequestId < 0) {
-            view.assistSheet.showError("The assistant is not installed.")
+            view.assistSheet.showError(strings[Keys.ASSISTANT_THE_ASSISTANT_IS_NOT_INSTALLED])
         }
     }
 
     private fun assistActionTitle(task: AssistTask): String = when (task) {
-        AssistTask.SUMMARISE -> "Summary"
-        AssistTask.CORRECT -> "Correction"
-        AssistTask.REWRITE_FORMAL -> "Formal rewrite"
-        AssistTask.TRANSLATE_TO_ENGLISH -> "Translation into English"
-        AssistTask.TRANSLATE_TO_ROMANIAN -> "Traducere în română"
+        AssistTask.SUMMARISE -> strings[Keys.ASSISTANT_SUMMARY]
+        AssistTask.CORRECT -> strings[Keys.ASSISTANT_CORRECTION]
+        AssistTask.REWRITE_FORMAL -> strings[Keys.ASSISTANT_FORMAL_REWRITE]
+        AssistTask.TRANSLATE_TO_ENGLISH -> strings[Keys.ASSISTANT_TRANSLATION_INTO_ENGLISH]
+        AssistTask.TRANSLATE_TO_ROMANIAN -> strings[Keys.ASSISTANT_TRADUCERE_N_ROM_N]
     }
 
     override fun onAssistResult(requestId: Int, text: String, modelName: String?) {
@@ -423,15 +439,15 @@ class BorderKeysService :
         host?.assistSheet?.showError(
             when (error) {
                 AssistProtocol.ERROR_NO_MODEL ->
-                    "No model imported yet. Settings › Text assistant."
+                    strings[Keys.ASSISTANT_NO_MODEL_IMPORTED_YET_SETTINGS_TEXT]
                 AssistProtocol.ERROR_MODEL_CHANGED ->
-                    "The model file changed since it was imported and was not loaded."
+                    strings[Keys.ASSISTANT_THE_MODEL_FILE_CHANGED_SINCE_IT]
                 AssistProtocol.ERROR_LOAD_FAILED ->
-                    "The model could not be loaded. It may not fit in memory on this device."
+                    strings[Keys.ASSISTANT_THE_MODEL_COULD_NOT_BE_LOADED]
                 AssistProtocol.ERROR_TOO_LONG ->
-                    "The selection is longer than this model's context window."
-                AssistProtocol.ERROR_BUSY -> "Still working on the previous request."
-                else -> "The assistant could not finish."
+                    strings[Keys.ASSISTANT_THE_SELECTION_IS_LONGER_THAN_THIS]
+                AssistProtocol.ERROR_BUSY -> strings[Keys.ASSISTANT_STILL_WORKING_ON_THE_PREVIOUS_REQUEST]
+                else -> strings[Keys.ASSISTANT_THE_ASSISTANT_COULD_NOT_FINISH]
             },
         )
     }
@@ -487,7 +503,7 @@ class BorderKeysService :
         // Built in code. LayoutInflater would parse XML and reflect to construct three views,
         // every time the keyboard is shown in a new editor.
         paints.update(theme, resources.displayMetrics, preferences.heightScale)
-        val view = KeyboardHostView(this, paints)
+        val view = KeyboardHostView(this, paints, strings)
         applyPlacement(view, preferences)
         view.keyboard.listener = this
         view.keyboard.hapticEnabled = preferences.hapticFeedback
@@ -496,6 +512,13 @@ class BorderKeysService :
             if (preferences.numberRow) alphabeticLayout.withNumberRow() else alphabeticLayout,
         )
         view.suggestionStrip.listener = this
+        view.suggestionStrip.visibleLimit = preferences.suggestionCount
+        // Bound here rather than beside the assistant's listeners, which are set on the path
+        // that runs when an assistant action is picked. Putting it there meant the arrow in the
+        // gutter was drawn, received its touch, and called nothing at all.
+        view.quickSettings.listener = this
+        view.assistSheet.listener = this
+        view.onMoveToOtherSide = { moveKeyboardToOtherSide() }
         view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> pushKeyGeometry() }
         host = view
         return view
@@ -578,8 +601,55 @@ class BorderKeysService :
      * Called from the preferences flow, so dragging a slider in Settings moves the keyboard that
      * is on screen at that moment rather than the next one.
      */
+    /**
+     * Moves a narrowed keyboard to the opposite side, or across the middle when it is floating.
+     *
+     * The gesture behind the arrow in the gutter. One tap, reachable by the thumb that is
+     * already on that side, for the case the settings screen answers badly: needing the
+     * keyboard on the other side right now, with the hand that cannot reach the settings key.
+     */
+    private fun moveKeyboardToOtherSide() {
+        updatePreferences { current ->
+            when (current.positionMode) {
+                KeyboardPreferences.MODE_ONE_HANDED_LEFT ->
+                    current.copy(positionMode = KeyboardPreferences.MODE_ONE_HANDED_RIGHT)
+                KeyboardPreferences.MODE_ONE_HANDED_RIGHT ->
+                    current.copy(positionMode = KeyboardPreferences.MODE_ONE_HANDED_LEFT)
+                KeyboardPreferences.MODE_FLOATING ->
+                    // Floating has no side, so the arrow mirrors the offset instead.
+                    current.copy(horizontalOffsetDp = -current.horizontalOffsetDp)
+                else -> current
+            }
+        }
+    }
+
+    /**
+     * Asks the system to blur what shows through beside a narrowed keyboard.
+     *
+     * Only when there is something to see through: a docked keyboard covers its whole window
+     * and blurring behind it costs a compositor pass for a result nobody can see. The system
+     * refuses outright on devices where cross-window blur is disabled, and asking is how you
+     * find out -- there is no fallback worth having, so a refusal is simply no blur.
+     */
+    private fun applyBlur(settings: KeyboardPreferences) {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
+            return
+        }
+        val target = window?.window ?: return
+        val wanted = settings.blurBehindKeyboard &&
+            settings.positionMode != KeyboardPreferences.MODE_DOCKED
+        val radius = if (wanted) {
+            (resources.displayMetrics.density * BLUR_RADIUS_DP).toInt()
+        } else {
+            0
+        }
+        runCatching { target.setBackgroundBlurRadius(radius) }
+    }
+
     private fun applyPlacement(view: KeyboardHostView, settings: KeyboardPreferences) {
         val density = resources.displayMetrics.density
+        view.edgeArrows = settings.edgeArrows
+        applyBlur(settings)
         view.setPlacement(
             settings.positionMode,
             settings.widthScale,
@@ -1081,7 +1151,7 @@ class BorderKeysService :
             return
         }
         pendingForget = word
-        host?.suggestionStrip?.setActions(arrayOf("Forget \u201C$word\u201D", "Cancel"), 2)
+        host?.suggestionStrip?.setActions(arrayOf(strings.getString(Keys.ASSISTANT_FORGET, word), strings[Keys.ASSISTANT_CANCEL]), 2)
     }
 
     /**
@@ -1401,6 +1471,7 @@ class BorderKeysService :
         const val MAX_CLIP_LENGTH = 20_000
         const val MAX_INLINE_SUGGESTIONS = 5
         const val MIN_CHIP_WIDTH_DP = 120
+        const val BLUR_RADIUS_DP = 24f
         const val CHIP_PADDING_PX = 12
 
         val WORD_SEPARATORS = charArrayOf(

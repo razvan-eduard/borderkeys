@@ -10,6 +10,8 @@ import android.graphics.Paint
 import android.view.MotionEvent
 import android.view.View
 import com.borderkeys.theme.ThemePaints
+import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.i18n.Keys
 
 /**
  * The settings you want while typing, drawn over the keys.
@@ -33,7 +35,11 @@ import com.borderkeys.theme.ThemePaints
 class QuickSettingsView(
     context: Context,
     private val paints: ThemePaints,
+    private val strings: LanguageManager,
 ) : View(context) {
+
+    /** Resolved once, so nothing on the draw path does a map lookup. */
+    private val chipLabels = Array(CHIP_LABEL_KEYS.size) { strings[CHIP_LABEL_KEYS[it]] }
 
     /** Which mode chip a row of chips is offering. Mirrors KeyboardPreferences. */
     enum class Placement { DOCKED, LEFT, RIGHT, FLOATING }
@@ -173,13 +179,13 @@ class QuickSettingsView(
         canvas.drawRect(0f, 0f, w, h, paints.background)
 
         val radius = paints.keyCornerRadiusPx
-        canvas.drawText("Keyboard", padding, rowHeight * 0.5f + labelBaseline, titlePaint)
-        canvas.drawText(CLOSE, w - padding - accentPaint.measureText(CLOSE),
+        canvas.drawText(strings[Keys.PANEL_KEYBOARD], padding, rowHeight * 0.5f + labelBaseline, titlePaint)
+        canvas.drawText(strings[Keys.PANEL_CLOSE], w - padding - accentPaint.measureText(strings[Keys.PANEL_CLOSE]),
             rowHeight * 0.5f + labelBaseline, accentPaint)
 
-        drawSlider(canvas, "Height", heightRowCentre, fraction(heightScale, MIN_HEIGHT, MAX_HEIGHT),
+        drawSlider(canvas, strings[Keys.PANEL_HEIGHT], heightRowCentre, fraction(heightScale, MIN_HEIGHT, MAX_HEIGHT),
             enabled = true)
-        drawSlider(canvas, "Width", widthRowCentre, fraction(widthScale, MIN_WIDTH, 1f),
+        drawSlider(canvas, strings[Keys.PANEL_WIDTH], widthRowCentre, fraction(widthScale, MIN_WIDTH, 1f),
             enabled = placement != Placement.DOCKED)
 
         for (i in Placement.entries.indices) {
@@ -196,14 +202,14 @@ class QuickSettingsView(
                 canvas.drawRoundRect(left, chipTop, left + chipWidth, chipBottom, radius, radius,
                     outlinePaint)
             }
-            val label = CHIP_LABELS[i]
+            val label = chipLabels[i]
             canvas.drawText(label, left + (chipWidth - labelPaint.measureText(label)) / 2f,
                 (chipTop + chipBottom) / 2f + labelBaseline, labelPaint)
         }
 
         // One toggle, drawn as a chip that is filled when on: a switch track and thumb would be
         // three more shapes for a control that has two states and one word.
-        val toggleLabel = "Number row"
+        val toggleLabel = strings[Keys.PANEL_NUMBER_ROW]
         canvas.drawRoundRect(padding, toggleTop, padding + chipWidth * 2f, toggleBottom,
             radius, radius, if (numberRow) paints.keyPressedFill else paints.keyFill)
         if (numberRow) {
@@ -217,7 +223,7 @@ class QuickSettingsView(
             labelPaint,
         )
 
-        canvas.drawText(MORE, padding, footerTop + rowHeight * 0.5f + labelBaseline, accentPaint)
+        canvas.drawText(strings[Keys.PANEL_ALL_SETTINGS], padding, footerTop + rowHeight * 0.5f + labelBaseline, accentPaint)
     }
 
     private fun drawSlider(canvas: Canvas, label: String, centreY: Float, position: Float,
@@ -250,7 +256,7 @@ class QuickSettingsView(
                 draggingHeight = false
                 draggingWidth = false
                 if (y < rowHeight) {
-                    if (x > width - padding * 2f - accentPaint.measureText(CLOSE)) {
+                    if (x > width - padding * 2f - accentPaint.measureText(strings[Keys.PANEL_CLOSE])) {
                         listener?.onCloseQuickSettings()
                     }
                     return true
@@ -324,8 +330,12 @@ class QuickSettingsView(
         const val MAX_HEIGHT = 1.6f
         const val MIN_WIDTH = 0.55f
 
-        val CHIP_LABELS = arrayOf("Dock", "Left", "Right", "Float")
-        const val CLOSE = "Close"
-        const val MORE = "All settings…"
+        /**
+         * Catalogue keys, not text: a companion object is built when the class is first
+         * touched, which is before any instance has a catalogue to read from.
+         */
+        val CHIP_LABEL_KEYS = arrayOf(
+            Keys.PANEL_DOCK, Keys.PANEL_LEFT, Keys.PANEL_RIGHT, Keys.PANEL_FLOAT,
+        )
     }
 }

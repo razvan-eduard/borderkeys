@@ -3,6 +3,9 @@
 
 package com.borderkeys.settings.screen
 
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.LocalStrings
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +50,7 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun DictionaryScreen(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
     val context = LocalContext.current
     val repository = remember { DataGraph.dictionary }
     val scope = rememberCoroutineScope()
@@ -70,7 +74,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                     }
                 }.isSuccess
             }
-            message = if (written) "Exported ${words.size} words." else "Export failed."
+            message = if (written) strings.getString(Keys.DICTIONARY_EXPORTED_WORDS, words.size) else strings[Keys.DICTIONARY_EXPORT_FAILED]
         }
     }
 
@@ -87,9 +91,9 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 }.getOrNull()
             }
             message = if (csv == null) {
-                "The file could not be read."
+                strings[Keys.DICTIONARY_THE_FILE_COULD_NOT_BE_READ]
             } else {
-                "Imported ${repository.importCsv(csv)} words."
+                strings.getString(Keys.DICTIONARY_IMPORTED_WORDS, repository.importCsv(csv))
             }
         }
     }
@@ -103,38 +107,31 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader("How quickly it learns")
+        SectionHeader(strings[Keys.DICTIONARY_HOW_QUICKLY_IT_LEARNS])
         Explanation(
-            "This does not change what is recorded — every word and pair you confirm is stored " +
-                "either way. It changes how soon what you write starts leading the suggestion " +
-                "strip instead of what the dictionary says.",
+            strings[Keys.DICTIONARY_THIS_DOES_NOT_CHANGE_WHAT_IS],
         )
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            SpeedChip("Cautious", KeyboardPreferences.LEARNING_CAUTIOUS, preferences, ::update)
-            SpeedChip("Balanced", KeyboardPreferences.LEARNING_BALANCED, preferences, ::update)
-            SpeedChip("Immediate", KeyboardPreferences.LEARNING_IMMEDIATE, preferences, ::update)
+            SpeedChip(strings[Keys.DICTIONARY_CAUTIOUS], KeyboardPreferences.LEARNING_CAUTIOUS, preferences, ::update)
+            SpeedChip(strings[Keys.DICTIONARY_BALANCED], KeyboardPreferences.LEARNING_BALANCED, preferences, ::update)
+            SpeedChip(strings[Keys.DICTIONARY_IMMEDIATE], KeyboardPreferences.LEARNING_IMMEDIATE, preferences, ::update)
         }
         Explanation(
             when (preferences.learningSpeed) {
                 KeyboardPreferences.LEARNING_CAUTIOUS ->
-                    "About six repetitions before a phrase you write outranks what the " +
-                        "dictionary predicts. The keyboard will not rearrange itself around one " +
-                        "sentence you wrote once."
+                    strings[Keys.DICTIONARY_ABOUT_SIX_REPETITIONS_BEFORE_A_PHRASE]
                 KeyboardPreferences.LEARNING_IMMEDIATE ->
-                    "The first time counts. Best if you write the same things every day; it " +
-                        "does mean a one-off phrase leads until you write something else."
+                    strings[Keys.DICTIONARY_THE_FIRST_TIME_COUNTS_BEST_IF]
                 else ->
-                    "A phrase written twice starts to lead. What the dictionary predicts stays " +
-                        "in the strip behind it."
+                    strings[Keys.DICTIONARY_A_PHRASE_WRITTEN_TWICE_STARTS_TO]
             },
         )
         SwitchRow(
-            title = "Learn at all",
-            subtitle = "Off means nothing new is recorded. What has already been learned stays " +
-                "until you delete it below.",
+            title = strings[Keys.DICTIONARY_LEARN_AT_ALL],
+            subtitle = strings[Keys.DICTIONARY_OFF_MEANS_NOTHING_NEW_IS_RECORDED],
             checked = preferences.learningEnabled,
         ) { value -> update { it.copy(learningEnabled = value) } }
 
@@ -142,18 +139,16 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text("Search") },
+            label = { Text(strings[Keys.DICTIONARY_SEARCH]) },
             modifier = Modifier.fillMaxWidth().padding(20.dp),
         )
 
-        SectionHeader("Learned words (${words.size})")
+        SectionHeader(strings.getString(Keys.DICTIONARY_LEARNED_WORDS, words.size))
         if (words.isEmpty()) {
             SettingRow(
-                title = if (query.isBlank()) "Nothing learned yet" else "No match",
+                title = if (query.isBlank()) strings[Keys.DICTIONARY_NOTHING_LEARNED_YET] else strings[Keys.DICTIONARY_NO_MATCH],
                 subtitle = if (query.isBlank()) {
-                    "A word is learned when you choose it from the suggestion strip. Nothing is " +
-                        "learned from what you merely typed, and nothing at all in a password " +
-                        "field."
+                    strings[Keys.DICTIONARY_A_WORD_IS_LEARNED_WHEN_YOU]
                 } else {
                     null
                 },
@@ -162,54 +157,53 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
         for (word in words.take(200)) {
             SettingRow(
                 title = word.word,
-                subtitle = "chosen ${word.count} times · typed on ${word.locale}",
+                subtitle = strings.getString(Keys.DICTIONARY_CHOSEN_TIMES_TYPED_ON, word.count, word.locale),
                 trailing = {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = { scope.launch { repository.forget(word.word) } }) {
-                            Text("Forget")
+                            Text(strings[Keys.DICTIONARY_FORGET])
                         }
                         TextButton(onClick = { scope.launch { repository.block(word.word) } }) {
-                            Text("Block")
+                            Text(strings[Keys.DICTIONARY_BLOCK])
                         }
                     }
                 },
             )
         }
         if (words.size > 200) {
-            Explanation("Showing the first 200. Use search to narrow it down.")
+            Explanation(strings[Keys.DICTIONARY_SHOWING_THE_FIRST_200_USE_SEARCH])
         }
 
         Divider()
-        SectionHeader("Blocked (${blocked.size})")
+        SectionHeader(strings.getString(Keys.DICTIONARY_BLOCKED, blocked.size))
         Explanation(
-            "A blocked word is never suggested again. Blocking also forgets it: deleting alone " +
-                "would let the word come straight back from the language pack.",
+            strings[Keys.DICTIONARY_A_BLOCKED_WORD_IS_NEVER_SUGGESTED],
         )
         for (entry in blocked) {
             SettingRow(
                 title = entry.word,
                 trailing = {
                     TextButton(onClick = { scope.launch { repository.unblock(entry.word) } }) {
-                        Text("Unblock")
+                        Text(strings[Keys.DICTIONARY_UNBLOCK])
                     }
                 },
             )
         }
 
         Divider()
-        SectionHeader("Move it to another phone")
+        SectionHeader(strings[Keys.DICTIONARY_MOVE_IT_TO_ANOTHER_PHONE])
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             TextButton(onClick = { exporter.launch("borderkeys-dictionary.csv") }) {
-                Text("Export CSV")
+                Text(strings[Keys.DICTIONARY_EXPORT_CSV])
             }
             TextButton(onClick = { importer.launch(arrayOf("text/*", "*/*")) }) {
-                Text("Import CSV")
+                Text(strings[Keys.DICTIONARY_IMPORT_CSV])
             }
             TextButton(onClick = { scope.launch { repository.forgetEverything() } }) {
-                Text("Forget everything")
+                Text(strings[Keys.DICTIONARY_FORGET_EVERYTHING])
             }
         }
         message?.let {
@@ -221,8 +215,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
             )
         }
         Explanation(
-            "This is the only form of sync there is. The app cannot reach a network, so a file " +
-                "you carry is the only way anything moves.",
+            strings[Keys.DICTIONARY_THIS_IS_THE_ONLY_FORM_OF],
         )
     }
 }

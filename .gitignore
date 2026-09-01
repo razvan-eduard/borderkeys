@@ -27,3 +27,7 @@ keystore_password.txt
 
 # Host test output. native-tests/ is a CMake project, built out of tree.
 /native-tests/build*/
+
+# Python bytecode from the tools in tools/.
+__pycache__/
+*.pyc

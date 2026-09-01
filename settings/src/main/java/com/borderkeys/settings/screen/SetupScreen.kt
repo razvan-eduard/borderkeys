@@ -3,6 +3,9 @@
 
 package com.borderkeys.settings.screen
 
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.LocalStrings
+
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -38,21 +41,19 @@ import com.borderkeys.settings.SectionHeader
  */
 @Composable
 fun SetupScreen(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
     val context = LocalContext.current
     var probe by remember { mutableStateOf("") }
     val enabled = isEnabled(context)
     val isDefault = isDefault(context)
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader("Step 1 — enable it")
+        SectionHeader(strings[Keys.SETUP_STEP_1_ENABLE_IT])
         Explanation(
             if (enabled) {
-                "Done. BorderKeys appears in the system's list of input methods."
+                strings[Keys.SETUP_DONE_BORDERKEYS_APPEARS_IN_THE_SYSTEM]
             } else {
-                "Android will warn that a keyboard can read everything you type. That warning " +
-                    "is shown for every keyboard and it is correct. What makes it a smaller " +
-                    "risk here is that this one holds no permissions and has no way to send " +
-                    "anything anywhere — which the Privacy screen explains and you can verify."
+                strings[Keys.SETUP_ANDROID_WILL_WARN_THAT_A_KEYBOARD]
             },
         )
         Button(
@@ -63,15 +64,14 @@ fun SetupScreen(modifier: Modifier = Modifier) {
                 )
             },
             modifier = Modifier.padding(horizontal = 20.dp),
-        ) { Text(if (enabled) "Open input method settings" else "Enable BorderKeys") }
+        ) { Text(if (enabled) strings[Keys.SETUP_OPEN_INPUT_METHOD_SETTINGS] else strings[Keys.SETUP_ENABLE_BORDERKEYS]) }
 
-        SectionHeader("Step 2 — switch to it")
+        SectionHeader(strings[Keys.SETUP_STEP_2_SWITCH_TO_IT])
         Explanation(
             if (isDefault) {
-                "Done. BorderKeys is the current keyboard."
+                strings[Keys.SETUP_DONE_BORDERKEYS_IS_THE_CURRENT_KEYBOARD]
             } else {
-                "Enabled but not selected. The picker below switches between the keyboards you " +
-                    "have enabled."
+                strings[Keys.SETUP_ENABLED_BUT_NOT_SELECTED_THE_PICKER]
             },
         )
         Button(
@@ -80,18 +80,18 @@ fun SetupScreen(modifier: Modifier = Modifier) {
                     ?.showInputMethodPicker()
             },
             modifier = Modifier.padding(horizontal = 20.dp),
-        ) { Text("Choose keyboard") }
+        ) { Text(strings[Keys.SETUP_CHOOSE_KEYBOARD]) }
 
-        SectionHeader("Try it")
-        Explanation("A real text field. Whatever you type here stays on this screen.")
+        SectionHeader(strings[Keys.SETUP_TRY_IT])
+        Explanation(strings[Keys.SETUP_A_REAL_TEXT_FIELD_WHATEVER_YOU])
         OutlinedTextField(
             value = probe,
             onValueChange = { probe = it },
-            label = { Text("Type here") },
+            label = { Text(strings[Keys.SETUP_TYPE_HERE]) },
             modifier = Modifier.fillMaxWidth().padding(20.dp),
         )
         Text(
-            "This field is not saved anywhere.",
+            strings[Keys.SETUP_THIS_FIELD_IS_NOT_SAVED_ANYWHERE],
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),

@@ -3,6 +3,9 @@
 
 package com.borderkeys.settings.screen
 
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.LocalStrings
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +29,7 @@ import com.borderkeys.settings.SettingRow
  */
 @Composable
 fun PrivacyScreen(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
     val context = LocalContext.current
     val permissions = remember {
         runCatching {
@@ -38,12 +42,11 @@ fun PrivacyScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader("Permissions")
+        SectionHeader(strings[Keys.PRIVACY_PERMISSIONS])
         if (permissions.isEmpty()) {
             SettingRow(
-                title = "None",
-                subtitle = "Read from the installed package just now, not from a string in this " +
-                    "screen. If a permission were ever added, this list would say so.",
+                title = strings[Keys.PRIVACY_NONE],
+                subtitle = strings[Keys.PRIVACY_READ_FROM_THE_INSTALLED_PACKAGE_JUST],
             )
         } else {
             for (permission in permissions) {
@@ -51,63 +54,47 @@ fun PrivacyScreen(modifier: Modifier = Modifier) {
             }
         }
         Explanation(
-            "Haptic feedback uses the API that needs no VIBRATE permission. Clipboard history " +
-                "works because the platform delivers clipboard changes to the input method that " +
-                "currently has focus, which needs no permission either.",
+            strings[Keys.PRIVACY_HAPTIC_FEEDBACK_USES_THE_API_THAT],
         )
 
         Divider()
-        SectionHeader("Network")
+        SectionHeader(strings[Keys.PRIVACY_NETWORK])
         SettingRow(
-            title = "There is none",
-            subtitle = "No INTERNET permission, and no HTTP client anywhere in the dependency " +
-                "graph. The build fails if either appears — including through a library that " +
-                "brings one in without asking.",
+            title = strings[Keys.PRIVACY_THERE_IS_NONE],
+            subtitle = strings[Keys.PRIVACY_NO_INTERNET_PERMISSION_AND_NO_HTTP],
         )
         Explanation(
-            "That is why nothing downloads. Dictionaries and models are either inside the app or " +
-                "chosen by you from a file on this device.",
+            strings[Keys.PRIVACY_THAT_IS_WHY_NOTHING_DOWNLOADS_DICTIONARIES],
         )
 
         Divider()
-        SectionHeader("What is stored")
+        SectionHeader(strings[Keys.PRIVACY_WHAT_IS_STORED])
         SettingRow(
-            title = "Encrypted database",
-            subtitle = "Clipboard history, the personal dictionary and the list of imported " +
-                "packs live in a SQLCipher database. Its key is generated on this device and " +
-                "held by the Android Keystore, so the file is useless if it is copied elsewhere.",
+            title = strings[Keys.PRIVACY_ENCRYPTED_DATABASE],
+            subtitle = strings[Keys.PRIVACY_CLIPBOARD_HISTORY_THE_PERSONAL_DICTIONARY_AN],
         )
         SettingRow(
-            title = "Pairs of words you write together",
-            subtitle = "So that after \"vreau\" it can offer \"să\". This is the most revealing " +
-                "thing here: a list of words says which words you know, a list of pairs says " +
-                "how you put them together. It is in the same encrypted database, it is never " +
-                "recorded in a password field, and \"forget everything\" in the personal " +
-                "dictionary deletes it along with the words.",
+            title = strings[Keys.PRIVACY_PAIRS_OF_WORDS_YOU_WRITE_TOGETHER],
+            subtitle = strings[Keys.PRIVACY_SO_THAT_AFTER_VREAU_IT_CAN],
         )
         SettingRow(
-            title = "Excluded from backup",
-            subtitle = "Cloud backup and device-to-device transfer are both switched off for " +
-                "this app. Moving your dictionary to a new phone is an explicit CSV export.",
+            title = strings[Keys.PRIVACY_EXCLUDED_FROM_BACKUP],
+            subtitle = strings[Keys.PRIVACY_CLOUD_BACKUP_AND_DEVICE_TO_DEVICE],
         )
         SettingRow(
-            title = "Nothing is learned in a password field",
-            subtitle = "In a password field, or when an app asks for no personalised learning, " +
-                "there is no learning, no clipboard history and no assistant. The suggestion " +
-                "strip says so while it is happening.",
+            title = strings[Keys.PRIVACY_NOTHING_IS_LEARNED_IN_A_PASSWORD],
+            subtitle = strings[Keys.PRIVACY_IN_A_PASSWORD_FIELD_OR_WHEN],
         )
 
         Divider()
-        SectionHeader("What is not stored")
+        SectionHeader(strings[Keys.PRIVACY_WHAT_IS_NOT_STORED])
         SettingRow(
-            title = "No telemetry, no crash reporting, no identifiers",
-            subtitle = "None of it exists to be switched off.",
+            title = strings[Keys.PRIVACY_NO_TELEMETRY_NO_CRASH_REPORTING_NO],
+            subtitle = strings[Keys.PRIVACY_NONE_OF_IT_EXISTS_TO_BE],
         )
         SettingRow(
-            title = "Per-app language memory is off unless you turn it on",
-            subtitle = "It would store a hash of the app's name against learned language " +
-                "weights. That is a behavioural profile, however small and however local, so it " +
-                "is opt-in and can be deleted.",
+            title = strings[Keys.PRIVACY_PER_APP_LANGUAGE_MEMORY_IS_OFF],
+            subtitle = strings[Keys.PRIVACY_IT_WOULD_STORE_A_HASH_OF],
         )
     }
 }

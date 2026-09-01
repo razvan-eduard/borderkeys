@@ -3,6 +3,9 @@
 
 package com.borderkeys.settings.screen
 
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.LocalStrings
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -41,6 +44,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun SizeScreen(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
     val repository = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
     val theme by repository.theme.collectAsStateWithLifecycle(initialValue = KeyboardTheme())
@@ -55,76 +59,85 @@ fun SizeScreen(modifier: Modifier = Modifier) {
         KeyboardPreview(theme, preferences, Modifier.padding(vertical = 12.dp))
         Divider()
 
-        SectionHeader("Height")
+        SectionHeader(strings[Keys.SIZE_HEIGHT])
         Explanation(
-            "Bigger keys are easier to hit and leave less of the app visible. There is no right " +
-                "answer; there is only the one that fits your thumb.",
+            strings[Keys.SIZE_BIGGER_KEYS_ARE_EASIER_TO_HIT],
         )
         LabelledSlider(
             value = preferences.heightScale,
             range = KeyboardPreferences.MIN_HEIGHT_SCALE..KeyboardPreferences.MAX_HEIGHT_SCALE,
-            label = "${(preferences.heightScale * 100).toInt()}%",
+            label = strings.getString(Keys.SIZE_TEXT_2, (preferences.heightScale * 100).toInt()),
         ) { value -> update { it.copy(heightScale = value) } }
 
-        SectionHeader("Position")
+        SectionHeader(strings[Keys.SIZE_POSITION])
         Explanation(
-            "One-handed mode narrows the keyboard and pushes it to one side, so every key is " +
-                "inside a thumb's arc. Left and right are separate settings rather than a " +
-                "handedness switch, because people change hands.",
+            strings[Keys.SIZE_ONE_HANDED_MODE_NARROWS_THE_KEYBOARD],
         )
         androidx.compose.foundation.layout.Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
         ) {
-            ModeChip("Docked", KeyboardPreferences.MODE_DOCKED, preferences.positionMode, ::update)
-            ModeChip("Left", KeyboardPreferences.MODE_ONE_HANDED_LEFT, preferences.positionMode,
+            ModeChip(strings[Keys.SIZE_DOCKED], KeyboardPreferences.MODE_DOCKED, preferences.positionMode, ::update)
+            ModeChip(strings[Keys.SIZE_LEFT], KeyboardPreferences.MODE_ONE_HANDED_LEFT, preferences.positionMode,
                 ::update)
-            ModeChip("Right", KeyboardPreferences.MODE_ONE_HANDED_RIGHT, preferences.positionMode,
+            ModeChip(strings[Keys.SIZE_RIGHT], KeyboardPreferences.MODE_ONE_HANDED_RIGHT, preferences.positionMode,
                 ::update)
-            ModeChip("Floating", KeyboardPreferences.MODE_FLOATING, preferences.positionMode,
+            ModeChip(strings[Keys.SIZE_FLOATING], KeyboardPreferences.MODE_FLOATING, preferences.positionMode,
                 ::update)
         }
 
         if (preferences.positionMode != KeyboardPreferences.MODE_DOCKED) {
-            SectionHeader("Width")
+            SectionHeader(strings[Keys.SIZE_WIDTH])
             LabelledSlider(
                 value = preferences.widthScale,
                 range = KeyboardPreferences.MIN_WIDTH_SCALE..1f,
-                label = "${(preferences.widthScale * 100).toInt()}%",
+                label = strings.getString(Keys.SIZE_TEXT, (preferences.widthScale * 100).toInt()),
             ) { value -> update { it.copy(widthScale = value) } }
 
-            SectionHeader("Distance from the bottom edge")
+            SectionHeader(strings[Keys.SIZE_DISTANCE_FROM_THE_BOTTOM_EDGE])
             Explanation(
-                "Lifts the keyboard off the bottom of the screen — useful next to a gesture bar, " +
-                    "or when the app puts something under it.",
+                strings[Keys.SIZE_LIFTS_THE_KEYBOARD_OFF_THE_BOTTOM],
             )
             LabelledSlider(
                 value = preferences.bottomOffsetDp,
                 range = 0f..KeyboardPreferences.MAX_BOTTOM_OFFSET_DP,
-                label = "${preferences.bottomOffsetDp.toInt()} dp",
+                label = strings.getString(Keys.SIZE_DP_2, preferences.bottomOffsetDp.toInt()),
             ) { value -> update { it.copy(bottomOffsetDp = value) } }
         }
 
         if (preferences.positionMode == KeyboardPreferences.MODE_FLOATING) {
-            SectionHeader("Horizontal position")
+            SectionHeader(strings[Keys.SIZE_HORIZONTAL_POSITION])
             LabelledSlider(
                 value = preferences.horizontalOffsetDp,
                 range = -160f..160f,
-                label = "${preferences.horizontalOffsetDp.toInt()} dp",
+                label = strings.getString(Keys.SIZE_DP, preferences.horizontalOffsetDp.toInt()),
             ) { value -> update { it.copy(horizontalOffsetDp = value) } }
         }
 
-        SectionHeader("Number row")
+        if (preferences.positionMode != KeyboardPreferences.MODE_DOCKED) {
+            SectionHeader(strings[Keys.SIZE_THE_SPACE_BESIDE_THE_KEYS])
+            SwitchRow(
+                title = strings[Keys.SIZE_ARROW_TO_MOVE_IT_ACROSS],
+                subtitle = strings[Keys.SIZE_AN_ARROW_IN_THE_EMPTY_STRIP],
+                checked = preferences.edgeArrows,
+            ) { value -> update { it.copy(edgeArrows = value) } }
+            SwitchRow(
+                title = strings[Keys.SIZE_BLUR_WHAT_SHOWS_THROUGH],
+                subtitle = strings[Keys.SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY],
+                checked = preferences.blurBehindKeyboard,
+            ) { value -> update { it.copy(blurBehindKeyboard = value) } }
+            Divider()
+        }
+
+        SectionHeader(strings[Keys.SIZE_NUMBER_ROW])
         SwitchRow(
-            title = "Show a row of digits",
-            subtitle = "Costs about a fifth of the keyboard's height. Without it the digits are " +
-                "on the ?123 page; the letters keep their long presses for diacritics either way.",
+            title = strings[Keys.SIZE_SHOW_A_ROW_OF_DIGITS],
+            subtitle = strings[Keys.SIZE_COSTS_ABOUT_A_FIFTH_OF_THE],
             checked = preferences.numberRow,
         ) { value -> update { it.copy(numberRow = value) } }
         SwitchRow(
-            title = "Number pad in numeric fields",
-            subtitle = "A phone number field gets a keypad rather than a QWERTY with the digits " +
-                "hidden behind a key.",
+            title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
+            subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
             checked = preferences.numericKeypad,
         ) { value -> update { it.copy(numericKeypad = value) } }
 
@@ -140,7 +153,7 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                 }
             },
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-        ) { Text("Reset size and position") }
+        ) { Text(strings[Keys.SIZE_RESET_SIZE_AND_POSITION]) }
     }
 }
 

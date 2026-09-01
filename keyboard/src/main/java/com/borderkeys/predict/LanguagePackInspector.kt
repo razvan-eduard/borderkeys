@@ -3,6 +3,8 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.i18n.Keys
+
 import android.os.ParcelFileDescriptor
 import java.io.File
 
@@ -31,11 +33,18 @@ object LanguagePackInspector {
         data class Valid(val info: PackInfo) : Result
 
         /**
-         * The pack was refused. [status] is the negative `BkdStatus` from `bkd_format.hpp`, and
-         * [reason] is that code in words -- which is what a person reads when an import fails,
-         * and the difference between "it did not work" and "the file is truncated".
+         * The pack was refused. [status] is the negative `BkdStatus` from `bkd_format.hpp`.
+         *
+         * [reasonKey] is a catalogue key rather than the sentence itself: this runs in the
+         * keyboard, which has no reason to hold a language manager, while what reads the result
+         * is the settings screen, which already has one. [reasonArgument] fills the one `%s` in
+         * the two reasons that carry a detail.
          */
-        data class Refused(val status: Int, val reason: String) : Result
+        data class Refused(
+            val status: Int,
+            val reasonKey: String,
+            val reasonArgument: String = "",
+        ) : Result
     }
 
     fun inspect(file: File): Result {
@@ -50,18 +59,22 @@ object LanguagePackInspector {
                 )
             }
         } catch (error: java.io.IOException) {
-            return Result.Refused(STATUS_UNREADABLE, "the file could not be opened: ${error.message}")
+            return Result.Refused(
+                STATUS_UNREADABLE,
+                Keys.PACK_THE_FILE_COULD_NOT_BE_OPENED_2,
+                error.message.orEmpty(),
+            )
         }
 
         return if (tag != null) {
             Result.Valid(PackInfo(tag = tag, formatVersion = out[1], wordCount = out[2]))
         } else {
-            Result.Refused(out[0], reasonFor(out[0]))
+            Result.Refused(out[0], reasonFor(out[0]), out[0].toString())
         }
     }
 
     /**
-     * The `BkdStatus` codes, in words.
+     * The `BkdStatus` codes, as catalogue keys.
      *
      * Mirrors the enum in `bkd_format.hpp`. Kept as a `when` over literals rather than as
      * constants shared with the native side, because the numbers are part of a published format
@@ -69,21 +82,21 @@ object LanguagePackInspector {
      * branch says the number, which is always true.
      */
     private fun reasonFor(status: Int): String = when (status) {
-        -1 -> "the file is larger than a language pack may be"
-        -2 -> "the file is too small to contain a pack header"
-        -3 -> "this is not a BorderKeys language pack"
-        -4 -> "the pack was built for a different format version"
-        -5 -> "the header is the wrong size"
-        -6 -> "the file size does not match what the header declares, so it is truncated or padded"
-        -7 -> "the header checksum does not match"
-        -8 -> "the content checksum does not match, so the file is damaged"
-        -9 -> "a section points outside the file"
-        -10 -> "a section is misaligned"
-        -11 -> "a section is the wrong size for what it holds"
-        -12 -> "the counts in the header contradict each other"
-        -13 -> "a hash capacity is not a power of two"
-        STATUS_UNREADABLE -> "the file could not be opened"
-        else -> "the pack was refused (status $status)"
+        -1 -> Keys.PACK_THE_FILE_IS_LARGER_THAN_A
+        -2 -> Keys.PACK_THE_FILE_IS_TOO_SMALL_TO
+        -3 -> Keys.PACK_THIS_IS_NOT_A_BORDERKEYS_LANGUAGE
+        -4 -> Keys.PACK_THE_PACK_WAS_BUILT_FOR_A
+        -5 -> Keys.PACK_THE_HEADER_IS_THE_WRONG_SIZE
+        -6 -> Keys.PACK_THE_FILE_SIZE_DOES_NOT_MATCH
+        -7 -> Keys.PACK_THE_HEADER_CHECKSUM_DOES_NOT_MATCH
+        -8 -> Keys.PACK_THE_CONTENT_CHECKSUM_DOES_NOT_MATCH
+        -9 -> Keys.PACK_A_SECTION_POINTS_OUTSIDE_THE_FILE
+        -10 -> Keys.PACK_A_SECTION_IS_MISALIGNED
+        -11 -> Keys.PACK_A_SECTION_IS_THE_WRONG_SIZE
+        -12 -> Keys.PACK_THE_COUNTS_IN_THE_HEADER_CONTRADICT
+        -13 -> Keys.PACK_A_HASH_CAPACITY_IS_NOT_A
+        STATUS_UNREADABLE -> Keys.PACK_THE_FILE_COULD_NOT_BE_OPENED
+        else -> Keys.PACK_THE_PACK_WAS_REFUSED_STATUS
     }
 
     private const val STATUS_UNREADABLE = -1000

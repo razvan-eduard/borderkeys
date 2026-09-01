@@ -3,6 +3,9 @@
 
 package com.borderkeys.settings.screen
 
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.LocalStrings
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +36,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun SwipeScreen(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
     val themes = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
     val theme by themes.theme.collectAsStateWithLifecycle(initialValue = KeyboardTheme())
@@ -42,15 +46,15 @@ fun SwipeScreen(modifier: Modifier = Modifier) {
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SwitchRow(
-            title = "Swipe typing",
-            subtitle = "Drag across the letters instead of tapping them.",
+            title = strings[Keys.SWIPE_SWIPE_TYPING],
+            subtitle = strings[Keys.SWIPE_DRAG_ACROSS_THE_LETTERS_INSTEAD_OF],
             checked = preferences.swipeEnabled,
         ) { value -> scope.launch { themes.updatePreferences { it.copy(swipeEnabled = value) } } }
 
         Divider()
-        SectionHeader("The trail")
+        SectionHeader(strings[Keys.SWIPE_THE_TRAIL])
         Text(
-            "Width — ${theme.swipeTrailWidthDp.toInt()} dp",
+            strings.getString(Keys.SWIPE_WIDTH_DP, theme.swipeTrailWidthDp.toInt()),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 20.dp),
@@ -63,33 +67,28 @@ fun SwipeScreen(modifier: Modifier = Modifier) {
             },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
         )
-        Explanation("The colour is on the Theme screen, next to the rest of the palette.")
+        Explanation(strings[Keys.SWIPE_THE_COLOUR_IS_ON_THE_THEME])
 
         Divider()
-        SectionHeader("Try it here")
+        SectionHeader(strings[Keys.SWIPE_TRY_IT_HERE])
         OutlinedTextField(
             value = probe,
             onValueChange = { probe = it },
-            label = { Text("Swipe a word") },
+            label = { Text(strings[Keys.SWIPE_SWIPE_A_WORD]) },
             modifier = Modifier.fillMaxWidth().padding(20.dp),
         )
-        Explanation("A real field. Nothing typed into it is saved.")
+        Explanation(strings[Keys.SWIPE_A_REAL_FIELD_NOTHING_TYPED_INTO])
 
         Divider()
-        SectionHeader("How it decodes")
+        SectionHeader(strings[Keys.SWIPE_HOW_IT_DECODES])
         Explanation(
-            "Your gesture is smoothed, reduced to sixty-four evenly spaced points, and compared " +
-                "against the ideal path through each candidate word's keys — once for its shape " +
-                "with position and size normalised away, and once for where it actually happened " +
-                "on the keyboard. Shape alone cannot tell \"were\" from \"tie\"; they trace " +
-                "almost the same figure in different places.",
+            strings[Keys.SWIPE_YOUR_GESTURE_IS_SMOOTHED_REDUCED_TO],
         )
         Explanation(
-            "All of it runs on this device, in about a tenth of a millisecond, and the free " +
-                "build contains no machine-learning model of any kind.",
+            strings[Keys.SWIPE_ALL_OF_IT_RUNS_ON_THIS],
         )
         if (!preferences.swipeEnabled) {
-            Explanation("Swipe typing is currently off, so none of the above is running.")
+            Explanation(strings[Keys.SWIPE_SWIPE_TYPING_IS_CURRENTLY_OFF_SO])
         }
     }
 }

@@ -73,6 +73,45 @@ data class KeyboardPreferences(
     val bottomOffsetDp: Float = 0f,
     /** Horizontal offset from centre, in dp. Floating mode only. */
     val horizontalOffsetDp: Float = 0f,
+
+    /**
+     * Whether the empty strip beside a narrowed keyboard offers an arrow to move it across.
+     *
+     * On, because the alternative for a left-handed moment on a right-handed setting is opening
+     * settings with the hand that cannot reach. The arrow appears only where there is empty
+     * space to put it, which is only when the keyboard has been narrowed.
+     */
+    val edgeArrows: Boolean = true,
+
+    /**
+     * Whether what shows through beside a narrowed keyboard is blurred.
+     *
+     * Off, and not because it looks worse. A background blur is composited by the system on
+     * every frame the window is visible, which on a keyboard means most of the time the screen
+     * is on, and it is the kind of cost that does not appear in any number this project
+     * measures. Someone who wants it can have it; nobody gets it without asking.
+     *
+     * The system can also refuse: cross-window blur is disabled on low-end devices and in
+     * battery saver, and asking for it there does nothing at all rather than falling back to
+     * something slower.
+     */
+    val blurBehindKeyboard: Boolean = false,
+
+    /**
+     * The language the interface is written in, as a catalogue code, or empty to follow the
+     * phone.
+     *
+     * Empty by default, and empty is not the same as "en": following the phone means a phone
+     * later switched to a language BorderKeys ships picks it up, where a stored "en" would
+     * stay English forever. What the phone asks for and what is shipped are reconciled by
+     * LanguageResolution, which falls back to English only when nothing else matches.
+     *
+     * This is the interface language and nothing else. Which dictionaries predict words is a
+     * separate setting on the Languages screen, because the two are genuinely independent:
+     * plenty of people read an English interface while writing Romanian.
+     */
+    val uiLanguage: String = "",
+
     /**
      * A permanent row of digits above the letters.
      *
@@ -150,6 +189,9 @@ data class KeyboardPreferences(
         },
         bottomOffsetDp = bottomOffsetDp.coerceIn(0f, MAX_BOTTOM_OFFSET_DP),
         horizontalOffsetDp = horizontalOffsetDp.coerceIn(-160f, 160f),
+        // A language code, not free text. Bounded so a corrupt file cannot carry an arbitrarily
+        // long string into every lookup; an unknown code resolves to English anyway.
+        uiLanguage = uiLanguage.take(MAX_LANGUAGE_TAG),
     )
 
     val isOneHanded: Boolean
@@ -217,6 +259,9 @@ data class KeyboardPreferences(
          * Below three the strip stops being a choice and becomes an announcement; above eight
          * the slots are narrower than a fingertip on any phone this runs on.
          */
+        /** Longest language code accepted from the stored file: `pt-BR` and friends fit easily. */
+        const val MAX_LANGUAGE_TAG = 16
+
         const val MIN_SUGGESTIONS = 3
         const val MAX_SUGGESTIONS = 8
         const val DEFAULT_SUGGESTIONS = 3

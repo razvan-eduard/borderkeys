@@ -5,6 +5,8 @@ package com.borderkeys.data.theme
 
 import androidx.datastore.core.DataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 /**
  * The keyboard's appearance and behaviour, as the rest of the application sees them.
@@ -33,4 +35,15 @@ class ThemeRepository internal constructor(
     suspend fun resetTheme() {
         themeStore.updateData { KeyboardTheme() }
     }
+
+    /**
+     * The stored preferences, read on the calling thread.
+     *
+     * The one sanctioned blocking read, and only for what has to be known before anything is
+     * drawn: which language the interface is in. Collecting it as a flow instead would draw the
+     * first frame in the wrong language and then correct it, which is a visible flash on every
+     * launch. DataStore is a small file and this is a single read at startup, not a pattern to
+     * copy -- everything else goes through [preferences] and re-renders when it re-emits.
+     */
+    fun currentPreferences(): KeyboardPreferences = runBlocking { preferences.first() }
 }

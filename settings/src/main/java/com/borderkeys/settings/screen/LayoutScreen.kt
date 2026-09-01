@@ -3,6 +3,9 @@
 
 package com.borderkeys.settings.screen
 
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.LocalStrings
+
 import android.content.Context
 import android.content.Intent
 import android.view.inputmethod.InputMethodManager
@@ -37,6 +40,7 @@ import com.borderkeys.settings.SettingRow
  */
 @Composable
 fun LayoutScreen(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
     val context = LocalContext.current
     val subtypes = remember {
         val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
@@ -47,17 +51,17 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader("Layouts on this keyboard")
+        SectionHeader(strings[Keys.LAYOUT_LAYOUTS_ON_THIS_KEYBOARD])
         if (subtypes.isEmpty()) {
             SettingRow(
-                title = "None enabled yet",
-                subtitle = "Enable BorderKeys first, then its layouts appear here.",
+                title = strings[Keys.LAYOUT_NONE_ENABLED_YET],
+                subtitle = strings[Keys.LAYOUT_ENABLE_BORDERKEYS_FIRST_THEN_ITS_LAYOUTS],
             )
         }
         for (subtype in subtypes) {
             SettingRow(
-                title = subtype.languageTag.ifEmpty { "Layout" },
-                subtitle = subtype.extraValue.ifEmpty { "keyboard" },
+                title = subtype.languageTag.ifEmpty { strings[Keys.LAYOUT_LAYOUT] },
+                subtitle = subtype.extraValue.ifEmpty { strings[Keys.LAYOUT_KEYBOARD] },
             )
         }
         Button(
@@ -65,24 +69,19 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 context.startActivity(
                     Intent("android.settings.INPUT_METHOD_SUBTYPE_SETTINGS")
                         .putExtra(android.provider.Settings.EXTRA_INPUT_METHOD_ID,
-                            "${context.packageName}/com.borderkeys.ime.BorderKeysService")
+                            strings.getString(Keys.LAYOUT_COM_BORDERKEYS_IME_BORDERKEYSSERVICE, context.packageName))
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
             },
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-        ) { Text("Choose which layouts are enabled") }
+        ) { Text(strings[Keys.LAYOUT_CHOOSE_WHICH_LAYOUTS_ARE_ENABLED]) }
 
         Divider()
         Explanation(
-            "A layout and a language are different things here. The layout decides which keys " +
-                "exist and which diacritics sit on which long press. The dictionaries decide " +
-                "what the keyboard knows, and up to four of them are consulted at once — so a " +
-                "Romanian layout with Romanian and English both active is normal, and switching " +
-                "layout does not switch what it knows.",
+            strings[Keys.LAYOUT_A_LAYOUT_AND_A_LANGUAGE_ARE],
         )
         Explanation(
-            "The globe key cycles between the layouts you enabled above, without leaving " +
-                "BorderKeys.",
+            strings[Keys.LAYOUT_THE_GLOBE_KEY_CYCLES_BETWEEN_THE],
         )
     }
 }

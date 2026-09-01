@@ -3,6 +3,9 @@
 
 package com.borderkeys.settings.screen
 
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.LocalStrings
+
 import android.content.Context
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.Column
@@ -23,6 +26,7 @@ import com.borderkeys.settings.SettingRow
 
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
+    val strings = LocalStrings.current
     val context = LocalContext.current
     val enabled = isKeyboardEnabled(context)
     val isDefault = isKeyboardDefault(context)
@@ -36,58 +40,57 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         if (!enabled || !isDefault) {
-            SectionHeader("Not finished yet")
+            SectionHeader(strings[Keys.HOME_NOT_FINISHED_YET])
             SettingRow(
-                title = "Set up BorderKeys",
+                title = strings[Keys.HOME_SET_UP_BORDERKEYS],
                 subtitle = when {
-                    !enabled -> "The keyboard is not enabled in system settings yet."
-                    else -> "Enabled, but another keyboard is still the default."
+                    !enabled -> strings[Keys.HOME_THE_KEYBOARD_IS_NOT_ENABLED_IN]
+                    else -> strings[Keys.HOME_ENABLED_BUT_ANOTHER_KEYBOARD_IS_STILL]
                 },
                 onClick = { open(Screen.Setup) },
             )
             Divider()
         }
 
-        SectionHeader("Typing")
-        SettingRow("Languages", "Which dictionaries are active, and their weights") {
+        SectionHeader(strings[Keys.HOME_TYPING])
+        SettingRow(strings[Keys.HOME_LANGUAGES], strings[Keys.HOME_WHICH_DICTIONARIES_ARE_ACTIVE_AND_THEIR]) {
             open(Screen.Languages)
         }
-        SettingRow("Layout", "Which keys, and where. Separate from the languages.") {
+        SettingRow(strings[Keys.HOME_LAYOUT], strings[Keys.HOME_WHICH_KEYS_AND_WHERE_SEPARATE_FROM]) {
             open(Screen.Layout)
         }
-        SettingRow("Swipe typing", "Gesture input and the trail it draws") { open(Screen.Swipe) }
+        SettingRow(strings[Keys.HOME_SWIPE_TYPING], strings[Keys.HOME_GESTURE_INPUT_AND_THE_TRAIL_IT]) { open(Screen.Swipe) }
         SettingRow(
-            "Suggestions and corrections",
-            "The strip above the keys, and whether space applies what it offers",
+            strings[Keys.HOME_SUGGESTIONS_AND_CORRECTIONS],
+            strings[Keys.HOME_THE_STRIP_ABOVE_THE_KEYS_AND],
         ) { open(Screen.Corrections) }
-        SettingRow("Personal dictionary", "What this device has learned") {
+        SettingRow(strings[Keys.HOME_PERSONAL_DICTIONARY], strings[Keys.HOME_WHAT_THIS_DEVICE_HAS_LEARNED]) {
             open(Screen.Dictionary)
         }
-        SettingRow("Clipboard", "History, pinning and how long it is kept") {
+        SettingRow(strings[Keys.HOME_CLIPBOARD], strings[Keys.HOME_HISTORY_PINNING_AND_HOW_LONG_IT]) {
             open(Screen.Clipboard)
         }
         if (hasAssistant) {
-            SettingRow("Text assistant", "Summarise, correct and translate, on this device") {
+            SettingRow(strings[Keys.HOME_TEXT_ASSISTANT], strings[Keys.HOME_SUMMARISE_CORRECT_AND_TRANSLATE_ON_THIS]) {
                 open(Screen.Assistant)
             }
         }
 
-        SectionHeader("Appearance")
-        SettingRow("Theme", "Colours, corners and spacing, with a live preview") {
+        SectionHeader(strings[Keys.HOME_APPEARANCE])
+        SettingRow(strings[Keys.HOME_THEME], strings[Keys.HOME_COLOURS_CORNERS_AND_SPACING_WITH_A]) {
             open(Screen.Theme)
         }
         SettingRow(
-            "Size and position",
-            "Height, one-handed mode, floating, and how far off the bottom edge",
+            strings[Keys.HOME_SIZE_AND_POSITION],
+            strings[Keys.HOME_HEIGHT_ONE_HANDED_MODE_FLOATING_AND],
         ) { open(Screen.Size) }
 
-        SectionHeader("About")
-        SettingRow("Privacy", "What is stored, where, and what is not") { open(Screen.Privacy) }
-        SettingRow("About BorderKeys", "Version, source code and licence") { open(Screen.About) }
+        SectionHeader(strings[Keys.HOME_ABOUT])
+        SettingRow(strings[Keys.HOME_PRIVACY], strings[Keys.HOME_WHAT_IS_STORED_WHERE_AND_WHAT]) { open(Screen.Privacy) }
+        SettingRow(strings[Keys.HOME_ABOUT_BORDERKEYS], strings[Keys.HOME_VERSION_SOURCE_CODE_AND_LICENCE]) { open(Screen.About) }
 
         Explanation(
-            "BorderKeys requests no permissions and contains no code that can open a network " +
-                "connection. Nothing it learns leaves this device.",
+            strings[Keys.HOME_BORDERKEYS_REQUESTS_NO_PERMISSIONS_AND_CONTA],
         )
     }
 }

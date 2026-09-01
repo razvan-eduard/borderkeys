@@ -84,6 +84,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
 
     implementation(project(":data"))
+    implementation(project(":i18n"))
     // One direction only. The theme editor embeds the real KeyboardCanvasView in an
     // AndroidView so that the preview and the keyboard cannot diverge; the keyboard never
     // learns that this module exists.

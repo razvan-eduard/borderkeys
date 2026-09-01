@@ -3,6 +3,8 @@
 
 package com.borderkeys.settings
 
+import com.borderkeys.i18n.Keys
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
@@ -33,17 +35,22 @@ fun SuggestionStripPreview(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val strings = LocalStrings.current
     val paints = remember { ThemePaints() }
+    // Resolved into the array the view reads, once per language rather than once per frame.
+    val sample = remember(strings) {
+        Array<String?>(SAMPLE_KEYS.size) { strings[SAMPLE_KEYS[it]] }
+    }
 
     Box(modifier = modifier.fillMaxWidth()) {
         AndroidView(
             factory = { viewContext ->
-                SuggestionStripView(viewContext, paints).apply { isEnabled = false }
+                SuggestionStripView(viewContext, paints, strings).apply { isEnabled = false }
             },
             update = { view ->
                 paints.update(theme, context.resources.displayMetrics, preferences.heightScale)
                 view.visibleLimit = preferences.suggestionCount
-                view.setSuggestions(SAMPLE, SAMPLE.size)
+                view.setSuggestions(sample, sample.size)
                 view.requestLayout()
                 view.invalidate()
             },
@@ -55,10 +62,13 @@ fun SuggestionStripPreview(
 /**
  * Eight words of realistic length, so the preview narrows the way the real strip will.
  *
+ * Keys rather than words: the point is realistic *length*, and a language whose words are longer
+ * than English's would make the preview a lie if it kept showing English ones.
+ *
  * Short filler words would make eight slots look comfortable and then surprise the user on the
  * first long word, which is the opposite of what a preview is for.
  */
-private val SAMPLE: Array<String?> = arrayOf(
-    "keyboard", "because", "through", "another",
-    "question", "together", "important", "different",
+private val SAMPLE_KEYS = arrayOf(
+    Keys.SUGGESTION_STRIP_PREVIEW_KEYBOARD, Keys.SUGGESTION_STRIP_PREVIEW_BECAUSE, Keys.SUGGESTION_STRIP_PREVIEW_THROUGH, Keys.SUGGESTION_STRIP_PREVIEW_ANOTHER,
+    Keys.SUGGESTION_STRIP_PREVIEW_QUESTION, Keys.SUGGESTION_STRIP_PREVIEW_TOGETHER, Keys.SUGGESTION_STRIP_PREVIEW_IMPORTANT, Keys.SUGGESTION_STRIP_PREVIEW_DIFFERENT,
 )

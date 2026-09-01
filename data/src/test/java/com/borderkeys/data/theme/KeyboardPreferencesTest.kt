@@ -186,6 +186,10 @@ class KeyboardPreferencesTest {
         // Two-word suggestions are the one prediction feature that can be confidently wrong
         // about something the user did not write, so they are opt-in like autocorrect.
         assertFalse(defaults.phraseSuggestions)
+        // The arrow costs nothing and answers a problem the settings screen answers badly, so
+        // it is on. The blur costs a compositor pass per frame, so it is not.
+        assertTrue(defaults.edgeArrows)
+        assertFalse(defaults.blurBehindKeyboard)
         assertEquals(defaults, defaults.sanitised())
     }
 }

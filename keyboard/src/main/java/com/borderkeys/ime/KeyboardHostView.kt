@@ -9,6 +9,8 @@ import android.view.View.MeasureSpec
 import android.view.ViewGroup
 import android.view.WindowInsets
 import com.borderkeys.theme.ThemePaints
+import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.i18n.Keys
 
 /**
  * The root of the input view: three children stacked vertically, laid out by arithmetic.
@@ -28,12 +30,13 @@ import com.borderkeys.theme.ThemePaints
 @SuppressLint("ViewConstructor")
 class KeyboardHostView(
     context: Context,
-    paints: ThemePaints,
+    private val paints: ThemePaints,
+    private val strings: LanguageManager,
 ) : ViewGroup(context) {
 
-    val suggestionStrip = SuggestionStripView(context, paints)
+    val suggestionStrip = SuggestionStripView(context, paints, strings)
     val inlineSuggestions = InlineSuggestionsHostView(context, paints)
-    val keyboard = KeyboardCanvasView(context, paints)
+    val keyboard = KeyboardCanvasView(context, paints, strings)
 
     /**
      * Covers the keys while the assistant's answer is on screen.
@@ -41,14 +44,14 @@ class KeyboardHostView(
      * Present in both flavors because the view is in `:keyboard`; it is only ever shown when
      * `:assist` exists to fill it, which in the free build is never.
      */
-    val assistSheet = AssistSheetView(context, paints)
+    val assistSheet = AssistSheetView(context, paints, strings)
 
     /**
      * Size and position, reachable without leaving the keyboard. Covers the keys the same way
      * the assistant's sheet does, because it is the same trade: the panel needs the space, and
      * the keys are not useful while it is open.
      */
-    val quickSettings = QuickSettingsView(context, paints)
+    val quickSettings = QuickSettingsView(context, paints, strings)
 
     /**
      * Space the system's own IME navigation bar occupies along the bottom edge.
@@ -73,6 +76,28 @@ class KeyboardHostView(
     private var positionMode = 0
     private var bottomOffsetPx = 0
     private var horizontalOffsetPx = 0
+
+    /** Whether the empty space beside the keys offers a way to move it across. */
+    var edgeArrows: Boolean = true
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
+    /** Called when the arrow in the gutter is tapped. */
+    var onMoveToOtherSide: (() -> Unit)? = null
+
+    /**
+     * Where the arrow is, in this view's coordinates, or empty when there is none.
+     *
+     * Computed in layout rather than per touch: the gutter only moves when the placement does,
+     * and a touch that has to recompute geometry is a touch that has to think.
+     */
+    private val arrowBounds = android.graphics.Rect()
+    private val arrowPath = android.graphics.Path()
+    private var arrowPressed = false
 
     fun setPlacement(mode: Int, widthScale: Float, bottomOffsetPx: Int, horizontalOffsetPx: Int) {
         val docked = mode == MODE_DOCKED
@@ -100,8 +125,9 @@ class KeyboardHostView(
     }
 
     init {
-        // Painted by the children; the group itself has nothing to draw.
-        setWillNotDraw(true)
+        // The children paint themselves; the group paints only the arrow in the gutter, and only
+        // when the keys have been narrowed enough to leave one.
+        setWillNotDraw(false)
         isClickable = false
         addView(suggestionStrip)
         addView(inlineSuggestions)
@@ -235,6 +261,86 @@ class KeyboardHostView(
         if (quickSettings.visibility != GONE) {
             quickSettings.layout(left, y, right, y + quickSettings.measuredHeight)
         }
+        layoutArrow(width, left, right, keyboard.top, keyboard.bottom)
+    }
+
+    /**
+     * Puts an arrow in the wider of the two gutters, pointing at the emptier side.
+     *
+     * Only where there is room for a target a thumb can hit: below that the arrow is either
+     * invisible or a mis-tap waiting to happen next to the outermost key, and the panel behind
+     * the globe still moves the keyboard.
+     */
+    private fun layoutArrow(width: Int, contentLeft: Int, contentRight: Int, top: Int,
+                            bottom: Int) {
+        arrowBounds.setEmpty()
+        if (!edgeArrows || positionMode == MODE_DOCKED || quickSettings.visibility != GONE) {
+            return
+        }
+        val leftGutter = contentLeft
+        val rightGutter = width - contentRight
+        val gutter = maxOf(leftGutter, rightGutter)
+        val minimum = (resources.displayMetrics.density * MIN_ARROW_GUTTER_DP).toInt()
+        if (gutter < minimum || bottom <= top) {
+            return
+        }
+        val centreY = (top + bottom) / 2
+        val half = minOf(gutter, (resources.displayMetrics.density * MAX_ARROW_SIZE_DP).toInt()) / 2
+        val centreX = if (rightGutter >= leftGutter) width - rightGutter / 2 else leftGutter / 2
+        arrowBounds.set(centreX - half, centreY - half, centreX + half, centreY + half)
+    }
+
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        if (arrowBounds.isEmpty) {
+            return
+        }
+        // Pointing at the gutter it sits in, which is the direction the keyboard would travel.
+        val pointsRight = arrowBounds.centerX() > width / 2
+        // The label paints are fills, so the arrow is a filled triangle rather than a stroke.
+        val paint = if (arrowPressed) paints.label else paints.labelSecondary
+        val inset = arrowBounds.width() * 0.22f
+        val tipX = if (pointsRight) arrowBounds.right - inset else arrowBounds.left + inset
+        val baseX = if (pointsRight) arrowBounds.left + inset else arrowBounds.right - inset
+        arrowPath.reset()
+        arrowPath.moveTo(baseX, arrowBounds.top + inset)
+        arrowPath.lineTo(tipX, arrowBounds.exactCenterY())
+        arrowPath.lineTo(baseX, arrowBounds.bottom - inset)
+        canvas.drawPath(arrowPath, paint)
+    }
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (arrowBounds.isEmpty) {
+            return false
+        }
+        val inside = arrowBounds.contains(event.x.toInt(), event.y.toInt())
+        when (event.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                if (!inside) {
+                    return false
+                }
+                arrowPressed = true
+                invalidate()
+                return true
+            }
+
+            android.view.MotionEvent.ACTION_UP -> {
+                val wasPressed = arrowPressed
+                arrowPressed = false
+                invalidate()
+                if (wasPressed && inside) {
+                    onMoveToOtherSide?.invoke()
+                }
+                return wasPressed
+            }
+
+            android.view.MotionEvent.ACTION_CANCEL -> {
+                arrowPressed = false
+                invalidate()
+                return true
+            }
+        }
+        return arrowPressed
     }
 
     /**
@@ -256,5 +362,9 @@ class KeyboardHostView(
         const val MODE_ONE_HANDED_LEFT = 1
         const val MODE_ONE_HANDED_RIGHT = 2
         const val MODE_FLOATING = 3
+
+        /** Below this there is not enough empty space for a target a thumb can hit. */
+        const val MIN_ARROW_GUTTER_DP = 28f
+        const val MAX_ARROW_SIZE_DP = 56f
     }
 }

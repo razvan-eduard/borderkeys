@@ -5,7 +5,9 @@ package com.borderkeys.settings.screen
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -24,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -31,10 +35,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.entity.LanguagePackEntry
-import com.borderkeys.predict.LanguagePackInspector
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.i18n.Keys
+import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.predict.LanguagePackInspector
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
@@ -51,6 +58,7 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun LanguagesScreen(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
     val context = LocalContext.current
     val repository = remember { DataGraph.languagePacks }
     val themes = remember { DataGraph.themes }
@@ -71,19 +79,21 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
         importing = true
         message = null
         scope.launch {
-            message = withContext(Dispatchers.IO) { importPack(context, repository, uri) }
+            message = withContext(Dispatchers.IO) { importPack(strings, context, repository, uri) }
             importing = false
         }
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader("Installed packs")
+        InterfaceLanguage(preferences) { code ->
+            scope.launch { DataGraph.themes.updatePreferences { it.copy(uiLanguage = code) } }
+        }
+        Divider()
+        SectionHeader(strings[Keys.LANGUAGES_INSTALLED_PACKS])
         if (packs.isEmpty()) {
             SettingRow(
-                title = "None yet",
-                subtitle = "Nothing is downloaded, ever. Add one of the dictionaries below, " +
-                    "which are inside the application, or import a file you built yourself " +
-                    "with tools/build_dict.py from a word list whose licence you know.",
+                title = strings[Keys.LANGUAGES_NONE_YET],
+                subtitle = strings[Keys.LANGUAGES_NOTHING_IS_DOWNLOADED_EVER_ADD_ONE],
             )
         }
         for (pack in packs) {
@@ -95,18 +105,14 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
             packs.none { it.tag.equals(candidate.tag, ignoreCase = true) }
         }
         if (installable.isNotEmpty()) {
-            SectionHeader("Included with the app")
+            SectionHeader(strings[Keys.LANGUAGES_INCLUDED_WITH_THE_APP])
             Explanation(
-                "These are in the application itself, not on a server — there is no network " +
-                    "here to fetch anything from. Adding one copies it out of the app and " +
-                    "validates it exactly like a file you chose.",
+                strings[Keys.LANGUAGES_THESE_ARE_IN_THE_APPLICATION_ITSELF],
             )
             for (candidate in installable) {
                 SettingRow(
                     title = candidate.displayName,
-                    subtitle = "${candidate.wordCount} words, written in this repository. A " +
-                        "starter: enough for everyday words, and meant to be replaced by a " +
-                        "dictionary compiled from a real corpus.",
+                    subtitle = strings.getString(Keys.LANGUAGES_WORDS_WRITTEN_IN_THIS_REPOSITORY_A, candidate.wordCount),
                     trailing = {
                         TextButton(
                             enabled = !importing,
@@ -115,24 +121,24 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
                                 message = null
                                 scope.launch {
                                     message = withContext(Dispatchers.IO) {
-                                        installBundled(context, repository, candidate)
+                                        installBundled(strings, context, repository, candidate)
                                     }
                                     importing = false
                                 }
                             },
-                        ) { Text("Add") }
+                        ) { Text(strings[Keys.LANGUAGES_ADD]) }
                     },
                 )
             }
             Divider()
         }
 
-        SectionHeader("Import your own")
+        SectionHeader(strings[Keys.LANGUAGES_IMPORT_YOUR_OWN])
         Button(
             onClick = { picker.launch(arrayOf("*/*")) },
             enabled = !importing,
             modifier = Modifier.padding(horizontal = 20.dp),
-        ) { Text("Choose a .bkd file") }
+        ) { Text(strings[Keys.LANGUAGES_CHOOSE_A_BKD_FILE]) }
         if (importing) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(20.dp))
         }
@@ -145,18 +151,14 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
             )
         }
         Explanation(
-            "A pack's header is validated completely before any of it is mapped — magic, " +
-                "version, checksum, and every section offset against the real file size. A pack " +
-                "that does not pass is refused rather than interpreted.",
+            strings[Keys.LANGUAGES_A_PACK_S_HEADER_IS_VALIDATED],
         )
 
         Divider()
-        SectionHeader("Per-app language memory")
+        SectionHeader(strings[Keys.LANGUAGES_PER_APP_LANGUAGE_MEMORY])
         SwitchRow(
-            title = "Remember which languages you use in which app",
-            subtitle = "Off by default. It stores a hash of the app's name against learned " +
-                "weights — a behavioural profile, however small and however local. Turning it " +
-                "off deletes what was learned.",
+            title = strings[Keys.LANGUAGES_REMEMBER_WHICH_LANGUAGES_YOU_USE_IN],
+            subtitle = strings[Keys.LANGUAGES_OFF_BY_DEFAULT_IT_STORES_A],
             checked = preferences.perAppLanguageMemory,
         ) { value ->
             scope.launch { themes.updatePreferences { it.copy(perAppLanguageMemory = value) } }
@@ -180,6 +182,7 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
  * Returns the sentence to show under the button, whatever happened.
  */
 private suspend fun importPack(
+    strings: LanguageManager,
     context: android.content.Context,
     repository: com.borderkeys.data.LanguagePackRepository,
     uri: android.net.Uri,
@@ -192,10 +195,10 @@ private suspend fun importPack(
     }.getOrNull()
 
     if (staged == null) {
-        return "The file could not be read."
+        return strings[Keys.LANGUAGES_THE_FILE_COULD_NOT_BE_READ]
     }
     if (staged.isFailure) {
-        return "Import failed: ${staged.exceptionOrNull()?.message}"
+        return strings.getString(Keys.LANGUAGES_IMPORT_FAILED, staged.exceptionOrNull()?.message)
     }
     val pack = staged.getOrThrow()
 
@@ -204,7 +207,7 @@ private suspend fun importPack(
             // Refused means refused: the file goes, so a pack that cannot be read cannot sit in
             // private storage taking up space and waiting to be tried again.
             pack.file.delete()
-            "Refused — ${verdict.reason}."
+            strings.getString(Keys.LANGUAGES_REFUSED, strings.getString(verdict.reasonKey, verdict.reasonArgument))
         }
 
         is LanguagePackInspector.Result.Valid -> {
@@ -224,11 +227,15 @@ private suspend fun importPack(
                     // Nothing here can know the licence of a word list someone compiled
                     // themselves, and inventing one would be worse than admitting it. The
                     // packs the project publishes carry theirs in docs/licensing.md.
-                    licenseNote = "not recorded — set by whoever built the pack",
+                    licenseNote = strings[Keys.LANGUAGES_NOT_RECORDED_SET_BY_WHOEVER_BUILT],
                 ),
             )
-            "Added ${info.wordCount} words for ${info.tag}. " +
-                "SHA-256 ${pack.sha256.take(16)}…"
+            strings.getString(
+                Keys.LANGUAGES_ADDED_WORDS_FOR_2,
+                info.wordCount,
+                info.tag,
+                pack.sha256.take(16),
+            )
         }
     }
 }
@@ -250,6 +257,7 @@ private fun displayNameFor(tag: String): String {
  * compiled corpus is an import away.
  */
 private suspend fun installBundled(
+    strings: LanguageManager,
     context: android.content.Context,
     repository: com.borderkeys.data.LanguagePackRepository,
     entry: BundledDictionaries.Entry,
@@ -261,7 +269,7 @@ private suspend fun installBundled(
     }.getOrNull()
 
     if (staged == null || staged.isFailure) {
-        return "The bundled dictionary could not be read."
+        return strings[Keys.LANGUAGES_THE_BUNDLED_DICTIONARY_COULD_NOT_BE]
     }
     val pack = staged.getOrThrow()
 
@@ -270,7 +278,10 @@ private suspend fun installBundled(
             pack.file.delete()
             // A pack this application compiled itself failing its own validator is a build
             // problem, not a user problem, and saying so is more use than "import failed".
-            "The bundled dictionary is not valid: ${verdict.reason}. This is a bug."
+            strings.getString(
+                Keys.LANGUAGES_THE_BUNDLED_DICTIONARY_IS_NOT_VALID,
+                strings.getString(verdict.reasonKey, verdict.reasonArgument),
+            )
         }
 
         is LanguagePackInspector.Result.Valid -> {
@@ -287,10 +298,10 @@ private suspend fun installBundled(
                     importedAt = System.currentTimeMillis(),
                     enabled = true,
                     weight = 1f,
-                    licenseNote = "GPL-3.0-or-later — the word list is written in this repository",
+                    licenseNote = strings[Keys.LANGUAGES_GPL_3_0_OR_LATER_THE],
                 ),
             )
-            "Added ${info.wordCount} words for ${info.tag}."
+            strings.getString(Keys.LANGUAGES_ADDED_WORDS_FOR, info.wordCount, info.tag)
         }
     }
 }
@@ -301,15 +312,15 @@ private fun PackRow(
     repository: com.borderkeys.data.LanguagePackRepository,
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
+    val strings = LocalStrings.current
     Column(modifier = Modifier.padding(vertical = 4.dp)) {
         SettingRow(
-            title = "${pack.displayName} (${pack.tag})",
+            title = strings.getString(Keys.LANGUAGES_TEXT, pack.displayName, pack.tag),
             subtitle = buildString {
-                append("${pack.wordCount} words, ${pack.sizeBytes / 1024} KB")
-                append(" · ").append(pack.licenseNote.ifEmpty { "licence not recorded" })
+                append(strings.getString(Keys.LANGUAGES_WORDS_KB, pack.wordCount, pack.sizeBytes / 1024))
+                append(" · ").append(pack.licenseNote.ifEmpty { strings[Keys.LANGUAGES_LICENCE_NOT_RECORDED] })
                 if (pack.integrityFailedAt != null) {
-                    append("\nSwitched itself off: the file no longer matches the hash it was ")
-                    append("imported with.")
+                    append(strings[Keys.LANGUAGES_SWITCHED_ITSELF_OFF_THE_FILE_NO])
                 }
             },
             trailing = {
@@ -320,7 +331,7 @@ private fun PackRow(
             },
         )
         Text(
-            "Weight ${"%.2f".format(pack.weight)}",
+            strings.getString(Keys.LANGUAGES_WEIGHT, "%.2f".format(pack.weight)),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 20.dp),
@@ -334,6 +345,58 @@ private fun PackRow(
         TextButton(
             onClick = { scope.launch { repository.remove(pack) } },
             modifier = Modifier.padding(horizontal = 12.dp),
-        ) { Text("Remove") }
+        ) { Text(strings[Keys.LANGUAGES_REMOVE]) }
     }
 }
+
+/**
+ * Which language the interface is written in.
+ *
+ * Offered as a list of what is actually shipped rather than of every language that exists, and
+ * each is named in itself -- someone looking for Romanian is looking for "Română", not for
+ * whatever English calls it. "Follow the phone" is first and is the default, because a phone
+ * later switched to a language BorderKeys ships should pick it up without anyone coming back
+ * here.
+ */
+@Composable
+private fun InterfaceLanguage(preferences: KeyboardPreferences, update: (String) -> Unit) {
+    val strings = LocalStrings.current
+    val available = remember(strings) { strings.availableLanguages() }
+
+    SectionHeader(strings[Keys.LANGUAGES_INTERFACE_LANGUAGE])
+    LanguageRow(
+        label = strings[Keys.LANGUAGES_FOLLOW_THE_PHONE],
+        selected = preferences.uiLanguage.isEmpty(),
+    ) { update("") }
+    for (code in available) {
+        LanguageRow(
+            // Named in itself where the catalogue says so, and by its code where it does not --
+            // a language whose own name is missing is still better offered than hidden.
+            label = strings.getString(LANGUAGE_NAME_PREFIX + code).ifEmpty { code },
+            selected = preferences.uiLanguage == code,
+        ) { update(code) }
+    }
+    Explanation(strings[Keys.LANGUAGES_INTERFACE_EXPLANATION])
+    Explanation(strings[Keys.LANGUAGES_RESTART_NOTE])
+}
+
+@Composable
+private fun LanguageRow(label: String, selected: Boolean, onPick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onPick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onPick)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(start = 12.dp),
+        )
+    }
+}
+
+/** `language_name_ro` holds "Română". Built from the code so adding a language adds no code. */
+private const val LANGUAGE_NAME_PREFIX = "language_name_"

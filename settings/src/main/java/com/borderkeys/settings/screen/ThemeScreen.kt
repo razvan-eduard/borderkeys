@@ -3,6 +3,9 @@
 
 package com.borderkeys.settings.screen
 
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.LocalStrings
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,6 +51,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun ThemeScreen(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
     val repository = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
     val theme by repository.theme.collectAsStateWithLifecycle(initialValue = KeyboardTheme())
@@ -62,63 +66,62 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
         KeyboardPreview(theme, preferences, Modifier.padding(vertical = 12.dp))
         Divider()
 
-        SectionHeader("Presets")
+        SectionHeader(strings[Keys.THEME_PRESETS])
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            TextButton(onClick = { update { KeyboardTheme() } }) { Text("Dark") }
-            TextButton(onClick = { update { LIGHT_THEME } }) { Text("Light") }
-            TextButton(onClick = { update { HIGH_CONTRAST } }) { Text("High contrast") }
+            TextButton(onClick = { update { KeyboardTheme() } }) { Text(strings[Keys.THEME_DARK]) }
+            TextButton(onClick = { update { LIGHT_THEME } }) { Text(strings[Keys.THEME_LIGHT]) }
+            TextButton(onClick = { update { HIGH_CONTRAST } }) { Text(strings[Keys.THEME_HIGH_CONTRAST]) }
         }
 
-        SectionHeader("Colours")
-        ColourRow("Background", theme.backgroundColor) { update { t -> t.copy(backgroundColor = it) } }
-        ColourRow("Keys", theme.keyColor) { update { t -> t.copy(keyColor = it) } }
-        ColourRow("Pressed key", theme.keyPressedColor) {
+        SectionHeader(strings[Keys.THEME_COLOURS])
+        ColourRow(strings[Keys.THEME_BACKGROUND], theme.backgroundColor) { update { t -> t.copy(backgroundColor = it) } }
+        ColourRow(strings[Keys.THEME_KEYS], theme.keyColor) { update { t -> t.copy(keyColor = it) } }
+        ColourRow(strings[Keys.THEME_PRESSED_KEY], theme.keyPressedColor) {
             update { t -> t.copy(keyPressedColor = it) }
         }
-        ColourRow("Modifier keys", theme.modifierKeyColor) {
+        ColourRow(strings[Keys.THEME_MODIFIER_KEYS], theme.modifierKeyColor) {
             update { t -> t.copy(modifierKeyColor = it) }
         }
-        ColourRow("Labels", theme.textColor) { update { t -> t.copy(textColor = it) } }
-        ColourRow("Secondary labels", theme.secondaryTextColor) {
+        ColourRow(strings[Keys.THEME_LABELS], theme.textColor) { update { t -> t.copy(textColor = it) } }
+        ColourRow(strings[Keys.THEME_SECONDARY_LABELS], theme.secondaryTextColor) {
             update { t -> t.copy(secondaryTextColor = it) }
         }
-        ColourRow("Accent", theme.accentColor) { update { t -> t.copy(accentColor = it) } }
-        ColourRow("Swipe trail", theme.swipeTrailColor, preserveAlpha = true) {
+        ColourRow(strings[Keys.THEME_ACCENT], theme.accentColor) { update { t -> t.copy(accentColor = it) } }
+        ColourRow(strings[Keys.THEME_SWIPE_TRAIL], theme.swipeTrailColor, preserveAlpha = true) {
             update { t -> t.copy(swipeTrailColor = it) }
         }
 
-        SectionHeader("Shape")
-        ThemeSlider("Corner radius", theme.keyCornerRadiusDp, 0f..32f, "dp") {
+        SectionHeader(strings[Keys.THEME_SHAPE])
+        ThemeSlider(strings[Keys.THEME_CORNER_RADIUS], theme.keyCornerRadiusDp, 0f..32f, strings[Keys.THEME_DP]) {
             update { t -> t.copy(keyCornerRadiusDp = it) }
         }
-        ThemeSlider("Gap between keys", theme.keyGapDp, 0f..16f, "dp") {
+        ThemeSlider(strings[Keys.THEME_GAP_BETWEEN_KEYS], theme.keyGapDp, 0f..16f, "dp") {
             update { t -> t.copy(keyGapDp = it) }
         }
-        ThemeSlider("Row height", theme.rowHeightDp, 28f..96f, "dp") {
+        ThemeSlider(strings[Keys.THEME_ROW_HEIGHT], theme.rowHeightDp, 28f..96f, "dp") {
             update { t -> t.copy(rowHeightDp = it) }
         }
-        ThemeSlider("Label size", theme.labelTextSizeSp, 8f..40f, "sp") {
+        ThemeSlider(strings[Keys.THEME_LABEL_SIZE], theme.labelTextSizeSp, 8f..40f, "sp") {
             update { t -> t.copy(labelTextSizeSp = it) }
         }
-        ThemeSlider("Press depth", theme.pressedElevation, 0f..16f, "dp") {
+        ThemeSlider(strings[Keys.THEME_PRESS_DEPTH], theme.pressedElevation, 0f..16f, "dp") {
             update { t -> t.copy(pressedElevation = it) }
         }
-        ThemeSlider("Trail width", theme.swipeTrailWidthDp, 1f..24f, "dp") {
+        ThemeSlider(strings[Keys.THEME_TRAIL_WIDTH], theme.swipeTrailWidthDp, 1f..24f, "dp") {
             update { t -> t.copy(swipeTrailWidthDp = it) }
         }
 
         SwitchRow(
-            title = "Outline the keys",
-            subtitle = "A hairline border. Helps when the key and background colours are close.",
+            title = strings[Keys.THEME_OUTLINE_THE_KEYS],
+            subtitle = strings[Keys.THEME_A_HAIRLINE_BORDER_HELPS_WHEN_THE],
             checked = theme.showKeyBorders,
         ) { value -> update { it.copy(showKeyBorders = value) } }
 
         Explanation(
-            "Values are clamped when they are read, so a theme file edited by hand cannot " +
-                "produce a keyboard taller than the screen with the settings hidden behind it.",
+            strings[Keys.THEME_VALUES_ARE_CLAMPED_WHEN_THEY_ARE],
         )
     }
 }
@@ -202,9 +205,10 @@ private fun ThemeSlider(
     unit: String,
     onChange: (Float) -> Unit,
 ) {
+    val strings = LocalStrings.current
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
         Text(
-            "$label — ${value.toInt()} $unit",
+            strings.getString(Keys.THEME_TEXT, label, value.toInt(), unit),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -3,6 +3,9 @@
 
 package com.borderkeys.settings.screen
 
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.LocalStrings
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -45,6 +48,7 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun AssistantScreen(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
     val context = LocalContext.current
     val repository = remember { DataGraph.assistModels }
     val scope = rememberCoroutineScope()
@@ -70,55 +74,56 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
             }
             importing = false
             message = when (result) {
-                null -> "The file could not be read."
+                null -> strings[Keys.ASSISTANT_THE_FILE_COULD_NOT_BE_READ]
                 is AssistModelRepository.ImportResult.Accepted ->
-                    "Imported ${result.entry.displayName}."
+                    strings.getString(Keys.ASSISTANT_IMPORTED, result.entry.displayName)
                 is AssistModelRepository.ImportResult.UnknownModel ->
-                    "Refused. This file hashes to ${result.sha256.take(16)}…, which is not a " +
-                        "model this build knows. The copy has been deleted."
+                    strings.getString(
+                        Keys.ASSISTANT_REFUSED_THIS_FILE_HASHES_TO_WHICH,
+                        result.sha256.take(16),
+                    )
                 is AssistModelRepository.ImportResult.Failed ->
-                    "Import failed: ${result.cause.message}"
+                    strings.getString(Keys.ASSISTANT_IMPORT_FAILED, result.cause.message)
             }
         }
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader("Installed")
+        SectionHeader(strings[Keys.ASSISTANT_INSTALLED])
         if (models.isEmpty()) {
             SettingRow(
-                title = "No model",
-                subtitle = "The assistant does nothing until one is imported. Nothing is " +
-                    "downloaded; you choose a file.",
+                title = strings[Keys.ASSISTANT_NO_MODEL],
+                subtitle = strings[Keys.ASSISTANT_THE_ASSISTANT_DOES_NOTHING_UNTIL_ONE],
             )
         }
         for (model in models) {
             SettingRow(
-                title = model.displayName + if (model.active) " · active" else "",
+                title = model.displayName + if (model.active) strings[Keys.ASSISTANT_ACTIVE] else "",
                 subtitle = buildString {
                     append("${model.sizeBytes / 1024 / 1024} MB · ${model.license}\n")
                     append(model.source)
                     if (model.integrityFailedAt != null) {
-                        append("\nSwitched off: the file no longer matches its recorded hash.")
+                        append(strings[Keys.ASSISTANT_SWITCHED_OFF_THE_FILE_NO_LONGER])
                     }
                 },
                 trailing = {
                     TextButton(onClick = { scope.launch { repository.remove(model) } }) {
-                        Text("Remove")
+                        Text(strings[Keys.ASSISTANT_REMOVE])
                     }
                 },
             )
         }
 
         Divider()
-        SectionHeader("Import")
+        SectionHeader(strings[Keys.ASSISTANT_IMPORT])
         Button(
             onClick = { picker.launch(arrayOf("*/*")) },
             enabled = !importing,
             modifier = Modifier.padding(horizontal = 20.dp),
-        ) { Text("Choose a GGUF file") }
+        ) { Text(strings[Keys.ASSISTANT_CHOOSE_A_GGUF_FILE]) }
         if (importing) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(20.dp))
-            Explanation("Copying and hashing. A model is hundreds of megabytes; this takes a while.")
+            Explanation(strings[Keys.ASSISTANT_COPYING_AND_HASHING_A_MODEL_IS])
         }
         message?.let {
             Text(
@@ -130,34 +135,24 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
         }
 
         Divider()
-        SectionHeader("Models this build will load")
+        SectionHeader(strings[Keys.ASSISTANT_MODELS_THIS_BUILD_WILL_LOAD])
         Explanation(
-            "A GGUF file is not a document — it is weights that a runtime maps and executes in " +
-                "a process holding your selected text. So a file is accepted only if its " +
-                "SHA-256 matches one of these, taken from the publishing repository's own " +
-                "metadata. Anything else is refused and deleted.",
+            strings[Keys.ASSISTANT_A_GGUF_FILE_IS_NOT_A],
         )
         for (entry in KnownAssistModels.entries) {
             SettingRow(
                 title = entry.displayName,
-                subtitle = "${entry.sizeBytes / 1024 / 1024} MB · ${entry.license} · needs about " +
-                    "${entry.approximateRamMb} MB of RAM\n${entry.source}\n" +
-                    "sha256 ${entry.sha256.take(24)}…",
+                subtitle = strings.getString(Keys.ASSISTANT_MB_NEEDS_ABOUT_MB_OF_RAM, entry.sizeBytes / 1024 / 1024, entry.license, entry.approximateRamMb, entry.source, entry.sha256.take(24)),
             )
         }
 
         Divider()
-        SectionHeader("How it runs")
+        SectionHeader(strings[Keys.ASSISTANT_HOW_IT_RUNS])
         Explanation(
-            "In a separate process, started when you ask for something and stopped ninety " +
-                "seconds after you stop. The keyboard never loads a model: a process holding " +
-                "several hundred megabytes is the first thing Android reclaims, and the keyboard " +
-                "has to still be there when you tap the next text field.",
+            strings[Keys.ASSISTANT_IN_A_SEPARATE_PROCESS_STARTED_WHEN],
         )
         Explanation(
-            "It is reached only from a text selection, never from what you are typing, and it " +
-                "is refused outright in a password field. Nothing it produces is inserted until " +
-                "you press Replace.",
+            strings[Keys.ASSISTANT_IT_IS_REACHED_ONLY_FROM_A],
         )
     }
 }

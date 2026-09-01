@@ -78,6 +78,14 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# Every user-facing word in the product, one file per language. JSON has no comment syntax, so
+# the header that would otherwise sit at the top of the file lives here.
+[[annotations]]
+path = "i18n/src/main/assets/translations/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 BorderKeys contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # Keyboard layout descriptions. Plain data, authored here.
 [[annotations]]
 path = "keyboard/src/main/assets/layouts/**"

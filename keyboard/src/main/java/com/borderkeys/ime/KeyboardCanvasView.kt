@@ -18,6 +18,8 @@ import android.view.ViewConfiguration
 import com.borderkeys.theme.ThemePaints
 import kotlin.math.max
 import kotlin.math.min
+import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.i18n.Keys
 
 /**
  * The typing surface: one [View] that draws itself and resolves touches arithmetically.
@@ -43,6 +45,7 @@ import kotlin.math.min
 class KeyboardCanvasView(
     context: Context,
     private val paints: ThemePaints,
+    private val strings: LanguageManager,
 ) : View(context) {
 
     /** What the service is told about. Called on the UI thread, inside a touch event. */
@@ -301,7 +304,7 @@ class KeyboardCanvasView(
      * Built from the same compiled geometry the drawing and the hit-testing use, so a key that
      * is drawn is a key that can be explored and there is no second layout to drift.
      */
-    private val accessibility = KeyboardAccessibility(this, geometry).apply {
+    private val accessibility = KeyboardAccessibility(this, geometry, strings).apply {
         listener = KeyboardAccessibility.Listener { code, keyIndex ->
             // Activated by the reader rather than by a finger: there was no press to release,
             // so this goes straight to the same place a completed tap goes. Qualified because

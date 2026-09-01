@@ -3,6 +3,8 @@
 
 package com.borderkeys.settings
 
+import com.borderkeys.i18n.Keys
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -44,7 +46,7 @@ fun SectionHeader(text: String) {
  *
  * `onClick` is deliberately the **last** parameter, after the composable `trailing` slot, which
  * is the opposite of the usual Compose convention. The convention caused a real bug: with
- * `trailing` last, `SettingRow("About", "…") { open(Screen.About) }` bound the trailing lambda
+ * `trailing` last, `SettingRow(strings[Keys.COMMON_ABOUT], "…") { open(Screen.About) }` bound the trailing lambda
  * to the *composable* slot, which runs during composition rather than on a click — so every row
  * navigated the moment it was drawn and the application opened on whichever row came last.
  * Putting the click last means the natural call site is the correct one.

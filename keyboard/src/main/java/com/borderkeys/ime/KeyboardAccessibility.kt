@@ -11,6 +11,8 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityNodeProvider
+import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.i18n.Keys
 
 /**
  * Makes a keyboard drawn on a Canvas usable with a screen reader.
@@ -36,6 +38,7 @@ import android.view.accessibility.AccessibilityNodeProvider
 class KeyboardAccessibility(
     private val host: View,
     private val geometry: KeyboardGeometry,
+    private val strings: LanguageManager,
 ) {
 
     /** Called when a virtual key is activated by the reader. */
@@ -218,15 +221,15 @@ class KeyboardAccessibility(
     private fun describe(index: Int): CharSequence {
         val code = geometry.keyCode[index]
         val named = when (code) {
-            KeyCodes.SHIFT -> "Shift"
-            KeyCodes.DELETE -> "Delete"
-            KeyCodes.ENTER -> "Enter"
-            KeyCodes.SPACE -> "Space"
-            KeyCodes.SYMBOLS -> "Symbols"
-            KeyCodes.SYMBOLS_SHIFT -> "More symbols"
-            KeyCodes.LANGUAGE -> "Language. Hold for keyboard settings"
-            KeyCodes.SETTINGS -> "Settings"
-            KeyCodes.EMOJI -> "Emoji"
+            KeyCodes.SHIFT -> strings[Keys.KEY_SHIFT]
+            KeyCodes.DELETE -> strings[Keys.KEY_DELETE]
+            KeyCodes.ENTER -> strings[Keys.KEY_ENTER]
+            KeyCodes.SPACE -> strings[Keys.KEY_SPACE]
+            KeyCodes.SYMBOLS -> strings[Keys.KEY_SYMBOLS]
+            KeyCodes.SYMBOLS_SHIFT -> strings[Keys.KEY_MORE_SYMBOLS]
+            KeyCodes.LANGUAGE -> strings[Keys.KEY_LANGUAGE_HOLD_FOR_KEYBOARD_SETTINGS]
+            KeyCodes.SETTINGS -> strings[Keys.KEY_SETTINGS]
+            KeyCodes.EMOJI -> strings[Keys.KEY_EMOJI]
             else -> null
         }
         if (named != null) {
@@ -240,7 +243,7 @@ class KeyboardAccessibility(
         }
         val alternates = geometry.altLength[index]
         return if (alternates > 0) {
-            "$label. Hold for $alternates more"
+            strings.getString(Keys.KEY_HOLD_FOR_MORE, label, alternates)
         } else {
             label
         }

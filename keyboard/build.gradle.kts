@@ -95,6 +95,7 @@ dependencies {
     // and what colour they should be.
     implementation(libs.androidx.autofill)
     implementation(project(":data"))
+    implementation(project(":i18n"))
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

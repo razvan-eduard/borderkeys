@@ -16,11 +16,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import com.borderkeys.data.DataGraph
+import com.borderkeys.i18n.Keys
+import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.settings.screen.AboutScreen
 import com.borderkeys.settings.screen.AssistantScreen
 import com.borderkeys.settings.screen.ClipboardScreen
@@ -53,13 +56,24 @@ class SettingsActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         DataGraph.install(applicationContext)
-        setContent { BorderKeysSettingsTheme { SettingsApp() } }
+        // Loaded before the first composition rather than collected as a flow: a screen drawn
+        // in English for one frame and then redrawn translated is a flash the user would see on
+        // every launch. The language changes only from the picker, which recreates the activity.
+        val strings = LanguageManager(this).apply {
+            loadResolved(DataGraph.themes.currentPreferences().uiLanguage)
+        }
+        setContent {
+            CompositionLocalProvider(LocalStrings provides strings) {
+                BorderKeysSettingsTheme { SettingsApp() }
+            }
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsApp() {
+    val strings = LocalStrings.current
     // A list, used as a back stack. Ten screens with no arguments between them do not need a
     // navigation graph, a route parser or argument encoding.
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
@@ -70,7 +84,7 @@ private fun SettingsApp() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(current.title) },
+                title = { Text(strings[current.titleKey]) },
                 navigationIcon = {
                     if (stack.size > 1) {
                         IconButton(onClick = { stack.removeAt(stack.size - 1) }) {
@@ -78,7 +92,7 @@ private fun SettingsApp() {
                                 painter = painterResource(
                                     android.R.drawable.ic_menu_close_clear_cancel,
                                 ),
-                                contentDescription = "Back",
+                                contentDescription = strings[Keys.SETTINGS_ACTIVITY_BACK],
                             )
                         }
                     }
