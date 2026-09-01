@@ -66,6 +66,19 @@ class BorderKeysService :
     private var host: KeyboardHostView? = null
 
     private val composing = StringBuilder(48)
+
+    /**
+     * The editor's selection, as of the last onUpdateSelection.
+     *
+     * Held rather than fetched because both callers are on the touch path: backspace has to know
+     * whether there is a selection to delete before it does anything else, and asking the editor
+     * costs an IPC per keystroke to answer a question the platform already told us.
+     */
+    private var selectionStart = 0
+    private var selectionEnd = 0
+
+    /** Whether the field holds any text at all, which is not the same as "we are composing". */
+    private var editorEmpty = true
     private var previousWord1: String? = null
     private var previousWord2: String? = null
 
@@ -349,6 +362,11 @@ class BorderKeysService :
         super.onUpdateSelection(
             oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd,
         )
+        selectionStart = newSelStart
+        selectionEnd = newSelEnd
+        // newSelEnd > 0 means there is text before the caret; the extracted-text path below
+        // covers a caret at zero with text after it.
+        updateEditorEmpty(newSelEnd > 0)
         val view = host ?: return
         if (view.assistSheetVisible) {
             return
@@ -357,7 +375,16 @@ class BorderKeysService :
         if (!hasSelection || privateMode || !assistAvailable) {
             if (view.suggestionStrip.actionMode) {
                 view.suggestionStrip.clear()
+            }
+            // The caret moved. If our own edit moved it the composing region already agrees with
+            // where it is, and re-deriving would be work for the same answer; if something else
+            // moved it -- a tap into the middle of a sentence, an arrow key, a backspace out of
+            // one word and into another -- then the word under the caret has changed and the
+            // strip is describing a word the user has left. Re-deriving is what keeps it live.
+            if (!hasSelection && composingMatchesCaret(newSelEnd)) {
                 requestSuggestions()
+            } else if (!hasSelection) {
+                adoptWordAtCaret()
             }
             return
         }
@@ -918,6 +945,17 @@ class BorderKeysService :
 
     private fun handleDelete() {
         val connection = currentInputConnection ?: return
+        // A selection is what backspace deletes, all of it, before anything else is considered.
+        // deleteSurroundingText would not do it: it deletes *around* the selection and leaves
+        // the selected text exactly where it was, which reads as the key having done nothing.
+        if (selectionEnd > selectionStart) {
+            composing.setLength(0)
+            pendingCorrection = null
+            connection.commitText("", 1)
+            refreshContextFromEditor()
+            requestSuggestions()
+            return
+        }
         if (revertCorrection(connection)) {
             return
         }
@@ -1178,6 +1216,12 @@ class BorderKeysService :
     }
 
     override fun onSuggestions(words: Array<String?>, count: Int) {
+        // Settled here as well as in onUpdateSelection: an editor that does not report selection
+        // changes -- and some do not, for their own reasons -- would otherwise leave the idle
+        // line standing over a field the user has already written in.
+        if (composing.isNotEmpty()) {
+            host?.suggestionStrip?.editorEmpty = false
+        }
         // Kept because the delimiter path needs it and the strip is a view, not a model. One
         // reference assignment per suggestion round, off the hot path.
         topSuggestion = if (count > 0) words[0] else null
@@ -1189,6 +1233,22 @@ class BorderKeysService :
             return
         }
         engine.requestSuggestions(composing.toString(), previousWord1, previousWord2)
+    }
+
+    /**
+     * Tells the strip whether the field has anything in it.
+     *
+     * [hasTextBeforeCaret] is what the selection callback knows for free. A caret sitting at
+     * zero says nothing about text after it, so that one case is settled with a read -- rare,
+     * and only when the cheap answer is "empty".
+     */
+    private fun updateEditorEmpty(hasTextBeforeCaret: Boolean) {
+        val strip = host?.suggestionStrip ?: return
+        strip.editorEmpty = if (hasTextBeforeCaret) {
+            false
+        } else {
+            currentInputConnection?.getTextAfterCursor(1, 0).isNullOrEmpty()
+        }
     }
 
     // ---- composing state ---------------------------------------------------------------------------
@@ -1223,6 +1283,49 @@ class BorderKeysService :
      * what is on screen. Bounded to a short window: this is an IPC, and the n-gram model only
      * looks two words back anyway.
      */
+    /** True when the composing region is the run of letters immediately before [caret]. */
+    private fun composingMatchesCaret(caret: Int): Boolean {
+        if (composing.isEmpty()) {
+            return false
+        }
+        val connection = currentInputConnection ?: return false
+        val before = connection.getTextBeforeCursor(composing.length, 0) ?: return false
+        return before.length == composing.length && before.contentEquals(composing)
+    }
+
+    /**
+     * Makes the word the caret is sitting in the one the strip is about.
+     *
+     * Deliberately does *not* set a composing region on it. Marking text the user merely moved
+     * into would underline it and put it one keystroke away from being replaced wholesale, which
+     * is a surprise for someone who only wanted to look. The strip offers; nothing is committed
+     * until a chip is tapped.
+     */
+    private fun adoptWordAtCaret() {
+        composing.setLength(0)
+        pendingCorrection = null
+        currentInputConnection?.finishComposingText()
+
+        val before = currentInputConnection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
+        if (before.isNullOrEmpty()) {
+            previousWord1 = null
+            previousWord2 = null
+            engine.requestSuggestions("", null, null)
+            return
+        }
+        // One read, split once. The run touching the caret is the word being asked about; the
+        // words before it are its context. Splitting the whole window and then deciding which
+        // part is which is cheaper than two getTextBeforeCursor calls, and it cannot disagree
+        // with itself the way two reads at two moments can.
+        val words = before.split(*WORD_SEPARATORS).filter { it.isNotEmpty() }
+        val caretInsideWord = isWordCharacter(before[before.length - 1].code)
+        val partial = if (caretInsideWord) words.lastOrNull().orEmpty() else ""
+        val contextEnd = if (caretInsideWord) words.size - 1 else words.size
+        previousWord1 = words.getOrNull(contextEnd - 1)
+        previousWord2 = words.getOrNull(contextEnd - 2)
+        engine.requestSuggestions(partial, previousWord1, previousWord2)
+    }
+
     private fun refreshContextFromEditor() {
         val connection = currentInputConnection
         val before = connection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)

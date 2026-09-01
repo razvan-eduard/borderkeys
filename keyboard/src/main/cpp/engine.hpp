@@ -240,6 +240,22 @@ private:
     // Offers a candidate, replacing an entry for the same word instead of adding a second one.
     void offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, const char* text,
                         uint32_t textLength) const;
+    // Which language is being written, decided from the words already committed. dominantPack_
+    // is -1 until the evidence is one-sided enough to be worth acting on.
+    void observeContextLanguage(const uint32_t* folded, int length);
+
+    /** Runs the prefix search over every active pack, or over [onlyPack] when it is not -1. */
+    void searchPacks(const uint32_t* folded, int foldedLength, int onlyPack,
+                     TopK<Candidate>& heap);
+
+    // The edit-cost ceiling for the request being answered. A member rather than a parameter
+    // because the fallback pass changes it between two runs over the same packs.
+    float editCostCeiling_ = 0.0f;
+
+    float languageEvidence_[kMaxPacks] = {};
+    int dominantPack_ = -1;
+    uint32_t lastObservedWord_ = 0;
+
     void resolveContext(const char* previous1, size_t previous1Length, const char* previous2,
                         size_t previous2Length);
 

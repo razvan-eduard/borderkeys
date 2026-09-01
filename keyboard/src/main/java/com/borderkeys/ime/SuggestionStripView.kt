@@ -73,6 +73,24 @@ class SuggestionStripView(
         }
 
     /**
+     * Whether the field behind the keyboard is empty.
+     *
+     * The idle line is an answer to "what is this row for", which is only a question before the
+     * first keystroke. Once there is text, an empty strip means the engine had nothing to offer
+     * for this particular word, and telling someone mid-sentence to start typing is worse than
+     * saying nothing at all.
+     */
+    var editorEmpty: Boolean = true
+        set(value) {
+            if (field != value) {
+                field = value
+                if (count == 0) {
+                    invalidate()
+                }
+            }
+        }
+
+    /**
      * Shown while a swipe is still being decoded, and only if that takes long enough to notice.
      * A strip that simply goes blank reads as the gesture having been ignored.
      */
@@ -253,9 +271,10 @@ class SuggestionStripView(
             }
             if (count == 0) {
                 // An empty strip with nothing drawn in it reads as a dead row rather than an
-                // idle one, so say what the row is waiting for. Suppressed in action mode,
-                // where an empty strip means the assistant simply offered nothing.
-                if (!actionMode) {
+                // idle one, so say what the row is waiting for -- but only while there is
+                // nothing to be about. Suppressed in action mode, where an empty strip means
+                // the assistant simply offered nothing.
+                if (!actionMode && editorEmpty) {
                     drawNotice(canvas, idleNoticeChars, idleNotice.length)
                 }
                 return

@@ -183,6 +183,46 @@ float maxEditCostFor(int length) {
     return 2.5f;
 }
 
+// The ceiling for the second pass, run only when the first found nothing at all.
+//
+// A word far enough from every entry to fail the normal ceiling is exactly the word whose
+// author most needs a suggestion -- and an empty strip tells them nothing about why. Wide
+// enough to reach a word four slips away, which is well past what a finger does by accident,
+// and paid for only on the requests that would otherwise have shown nothing.
+constexpr float kFallbackEditCost = 4.2f;
+
+// How the evidence for "which language is being written" ages.
+//
+// Each completed word multiplies every language's evidence by this and adds one to the
+// languages that contain it, so the count is a weighted sum over roughly the last seven words.
+// Long enough not to swing on one borrowed noun, short enough that switching language mid
+// conversation is followed within a sentence.
+constexpr float kLanguageEvidenceDecay = 0.85f;
+
+// Evidence needed before the keyboard is willing to say a language has been detected, and the
+// share of it one language must hold.
+//
+// 1.8 is about three exclusive words inside the decay window, which measured out as the point
+// where detection is quick enough to be useful and still slow enough to survive a borrowed
+// noun. Higher was tried first and was wrong for a reason worth recording: most words in a
+// sentence belong to several dictionaries at once, so evidence arrives far more slowly than
+// words do -- five English words in a row produced 2.34, and a threshold of 2.5 meant the
+// keyboard never made up its mind at all.
+constexpr float kLanguageEvidenceMinimum = 1.8f;
+constexpr float kLanguageDominanceShare = 0.7f;
+
+// Once a language is detected, the other dictionaries are not consulted at all.
+//
+// A penalty was tried first and does not work, for a reason that is obvious afterwards: the
+// most frequent words of any language outscore mid-frequency words of another by far more than
+// any penalty one would dare apply. Writing five English words and then "car" still produced
+// "a", "ar", "cu" -- Romanian function words winning on raw frequency from three and a half
+// nats down. Frequency is the wrong axis to fight on, so the search does not enter that pack.
+//
+// The user model is deliberately outside this rule. A phrase someone actually writes is
+// evidence about *them*, and someone who drops one English word into every Romanian sentence
+// has said what they want more clearly than any detector can contradict.
+
 }  // namespace
 
 // --------------------------------------------------------------------------------------
@@ -484,6 +524,59 @@ const PackedTrie* Engine::activeTrie(int packIndex) const {
     return (pack.isOpen() && pack.active) ? &pack.trie() : nullptr;
 }
 
+void Engine::observeContextLanguage(const uint32_t* folded, int length) {
+    if (length <= 0) {
+        return;
+    }
+    // The same word arrives on every keystroke of the word after it. Counting it once is the
+    // difference between a window over words and a window over keystrokes, and only the first
+    // is a measure of what language is being written.
+    uint32_t hash = 2166136261u;
+    for (int i = 0; i < length; ++i) {
+        hash = (hash ^ folded[i]) * 16777619u;
+    }
+    if (hash == lastObservedWord_) {
+        return;
+    }
+    lastObservedWord_ = hash;
+
+    // Only a word that exactly one active pack knows is evidence. This is the whole design:
+    // "la", "sa", "no", "mare", "information" sit in several dictionaries at once, and counting
+    // them raises every language equally, which is a slower way of learning nothing. What
+    // separates Romanian from English is "duc", "trebuie", "scoala" -- and one of those in a
+    // sentence is worth more than ten words the two languages share.
+    //
+    // A word no pack knows -- a name, a typo -- is not evidence either. Both cases still age
+    // the window, so a language that has stopped being written stops being detected.
+    int exclusive = -1;
+    int knowers = 0;
+    for (int i = 0; i < kMaxPacks; ++i) {
+        if (packs_[i].isOpen() && packs_[i].active && contextWord1_[i] >= 0) {
+            ++knowers;
+            exclusive = i;
+        }
+    }
+    float total = 0.0f;
+    float best = 0.0f;
+    int bestIndex = -1;
+    for (int i = 0; i < kMaxPacks; ++i) {
+        languageEvidence_[i] *= kLanguageEvidenceDecay;
+        if (knowers == 1 && i == exclusive) {
+            languageEvidence_[i] += 1.0f;
+        }
+        if (packs_[i].isOpen() && packs_[i].active) {
+            total += languageEvidence_[i];
+            if (languageEvidence_[i] > best) {
+                best = languageEvidence_[i];
+                bestIndex = i;
+            }
+        }
+    }
+    dominantPack_ = (total >= kLanguageEvidenceMinimum && best >= total * kLanguageDominanceShare)
+                        ? bestIndex
+                        : -1;
+}
+
 float Engine::packWeightLog(int packIndex) const {
     if (packIndex < 0 || packIndex >= kMaxPacks || !(normalisedWeight_[packIndex] > 0.f)) {
         return -30.f;
@@ -583,6 +676,11 @@ void Engine::resolveContext(const char* previous1, size_t previous1Length, const
             hasContext1_ = true;
         }
     }
+
+    // Which languages contain the word just written is the language signal, and it has already
+    // been computed above for the n-grams. Reading it here costs nothing and needs no new call
+    // from the Java side: every suggestion request carries the last word the user completed.
+    observeContextLanguage(folded, length1);
 
     int length2 = -1;
     if (previous2 != nullptr && previous2Length > 0) {
@@ -907,7 +1005,7 @@ void Engine::searchPack(int packIndex, const uint32_t* folded, int foldedLength,
     // mean the one situation the corrector was written for is the one where it never runs.
     // A word in a genuinely different script fails many characters, not one, and is still
     // rejected here without a single trie access.
-    const float maxCost = maxEditCostFor(foldedLength);
+    const float maxCost = editCostCeiling_;
     const int allowedStrangers = (maxCost > 0.0f && geometry_.isSet()) ? 1 : 0;
     int strangers = 0;
     for (int i = 0; i < foldedLength; ++i) {
@@ -1205,6 +1303,27 @@ void Engine::searchUserModel(const uint32_t* folded, int foldedLength, TopK<Cand
     arena_.rewind(mark);
 }
 
+void Engine::searchPacks(const uint32_t* folded, int foldedLength, int onlyPack,
+                         TopK<Candidate>& heap) {
+    for (int i = 0; i < kMaxPacks; ++i) {
+        if (!packs_[i].isOpen() || !packs_[i].active) {
+            continue;
+        }
+        if (onlyPack >= 0 && i != onlyPack) {
+            continue;
+        }
+        if (foldedLength == 0) {
+            searchNextWord(i, heap);
+        } else {
+            // Shortlist first. It is cheap, it is bounded, and running it before the descent
+            // raises the heap's floor -- which then lets the descent reject most of what it
+            // finds on one comparison instead of scoring it.
+            searchFrequentWithPrefix(i, folded, foldedLength, heap);
+            searchPack(i, folded, foldedLength, heap);
+        }
+    }
+}
+
 int Engine::suggest(const char* composing, size_t composingLength, const char* previous1,
                     size_t previous1Length, const char* previous2, size_t previous2Length,
                     Candidate* out, int maxOut) {
@@ -1235,22 +1354,26 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     TopK<Candidate> heap;
     heap.reset(heapStorage_, kMaxCandidates);
 
-    for (int i = 0; i < kMaxPacks; ++i) {
-        if (!packs_[i].isOpen() || !packs_[i].active) {
-            continue;
-        }
-        if (foldedLength == 0) {
-            searchNextWord(i, heap);
-        } else {
-            // Shortlist first. It is cheap, it is bounded, and running it before the descent
-            // raises the heap's floor -- which then lets the descent reject most of what it
-            // finds on one comparison instead of scoring it.
-            searchFrequentWithPrefix(i, folded, foldedLength, heap);
-            searchPack(i, folded, foldedLength, heap);
-        }
+    editCostCeiling_ = maxEditCostFor(foldedLength);
+    searchPacks(folded, foldedLength, dominantPack_, heap);
+    // A detected language that turns out to have nothing for this word must not leave the strip
+    // empty; the detector is a guess about the sentence, not a verdict on the next word.
+    if (heap.size() == 0 && dominantPack_ >= 0) {
+        searchPacks(folded, foldedLength, -1, heap);
     }
     if (foldedLength > 0) {
         searchUserModel(folded, foldedLength, heap);
+        // Nothing at all, for a word someone is in the middle of writing. That happens when the
+        // word is further from every entry than the ordinary ceiling allows -- which is the
+        // case where an empty strip is least useful, because the writer cannot tell whether the
+        // keyboard has no idea or has stopped working. One wider pass, on the requests that
+        // would otherwise show nothing, and the budget is refreshed because the first pass has
+        // usually spent it.
+        if (heap.size() == 0) {
+            editCostCeiling_ = kFallbackEditCost;
+            visitBudget_ = nodeVisitBudgetFor(foldedLength);
+            searchPacks(folded, foldedLength, -1, heap);
+        }
     } else {
         // Nothing typed: this is the next-word case, and the phrases this person repeats are
         // the best evidence there is about what follows the word they just wrote.
