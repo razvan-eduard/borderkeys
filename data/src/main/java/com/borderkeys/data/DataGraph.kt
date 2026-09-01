@@ -94,7 +94,11 @@ object DataGraph {
     }
 
     val dictionary: DictionaryRepository by lazy {
-        DictionaryRepository(database.userWordDao(), database.blockedWordDao())
+        DictionaryRepository(
+            database.userWordDao(),
+            database.blockedWordDao(),
+            database.userBigramDao(),
+        )
     }
 
     val languagePacks: LanguagePackRepository by lazy {

@@ -30,6 +30,7 @@ UserModel::UserModel() { clear(); }
 void UserModel::clear() {
     nodes_.clear();
     entries_.clear();
+    bigrams_.clear();
     nodes_.emplace_back();  // the root
     totalCount_ = 0;
 }
@@ -78,14 +79,14 @@ int32_t UserModel::findNode(const uint32_t* folded, int count) const {
     return node;
 }
 
-void UserModel::learn(const char* word, size_t length) {
+int32_t UserModel::learn(const char* word, size_t length) {
     if (word == nullptr || length == 0 || length > kMaxWordBytes) {
-        return;
+        return -1;
     }
     uint32_t folded[kMaxWordCodePoints];
     const int count = foldUtf8(word, length, folded, kMaxWordCodePoints);
     if (count <= 0) {
-        return;
+        return -1;
     }
 
     int32_t node = 0;
@@ -105,6 +106,144 @@ void UserModel::learn(const char* word, size_t length) {
     }
     if (totalCount_ < UINT32_MAX) {
         ++totalCount_;
+    }
+    return nodes_[node].entryIndex;
+}
+
+int32_t UserModel::entryIndexFor(const char* word, size_t length) const {
+    if (word == nullptr || length == 0 || length > kMaxWordBytes) {
+        return -1;
+    }
+    uint32_t folded[kMaxWordCodePoints];
+    const int count = foldUtf8(word, length, folded, kMaxWordCodePoints);
+    if (count <= 0) {
+        return -1;
+    }
+    const int32_t node = findNode(folded, count);
+    return node < 0 ? -1 : nodes_[static_cast<size_t>(node)].entryIndex;
+}
+
+void UserModel::learnBigram(int32_t previousIndex, int32_t nextIndex) {
+    const int32_t entryCount = static_cast<int32_t>(entries_.size());
+    if (previousIndex < 0 || nextIndex < 0 || previousIndex >= entryCount ||
+        nextIndex >= entryCount || previousIndex == nextIndex) {
+        // A word following itself is almost always a stutter or a repeated tap, and learning it
+        // would suggest the same word twice in a row for ever after.
+        return;
+    }
+    for (Bigram& bigram : bigrams_) {
+        if (bigram.previousIndex == previousIndex && bigram.nextIndex == nextIndex) {
+            if (bigram.count < UINT32_MAX) {
+                ++bigram.count;
+            }
+            return;
+        }
+    }
+    if (static_cast<int>(bigrams_.size()) >= kMaxBigrams) {
+        dropLeastUsedBigram();
+    }
+    if (static_cast<int>(bigrams_.size()) < kMaxBigrams) {
+        bigrams_.push_back(Bigram{previousIndex, nextIndex, 1u});
+    }
+}
+
+void UserModel::dropLeastUsedBigram() {
+    if (bigrams_.empty()) {
+        return;
+    }
+    size_t worst = 0;
+    for (size_t i = 1; i < bigrams_.size(); ++i) {
+        if (bigrams_[i].count < bigrams_[worst].count) {
+            worst = i;
+        }
+    }
+    bigrams_[worst] = bigrams_.back();
+    bigrams_.pop_back();
+}
+
+uint32_t UserModel::bigramCount(int32_t previousIndex, int32_t nextIndex) const {
+    if (previousIndex < 0 || nextIndex < 0) {
+        return 0u;
+    }
+    for (const Bigram& bigram : bigrams_) {
+        if (bigram.previousIndex == previousIndex && bigram.nextIndex == nextIndex) {
+            return bigram.count;
+        }
+    }
+    return 0u;
+}
+
+uint32_t UserModel::successorTotal(int32_t previousIndex) const {
+    if (previousIndex < 0) {
+        return 0u;
+    }
+    uint32_t total = 0u;
+    for (const Bigram& bigram : bigrams_) {
+        if (bigram.previousIndex == previousIndex) {
+            total += bigram.count;
+        }
+    }
+    return total;
+}
+
+int UserModel::successors(int32_t previousIndex, Successor* out, int maxOut) const {
+    if (out == nullptr || maxOut <= 0 || previousIndex < 0) {
+        return 0;
+    }
+    int written = 0;
+    for (const Bigram& bigram : bigrams_) {
+        if (bigram.previousIndex != previousIndex) {
+            continue;
+        }
+        if (written < maxOut) {
+            out[written++] = Successor{static_cast<uint32_t>(bigram.nextIndex), bigram.count};
+            continue;
+        }
+        // Full: keep this one only if it beats the weakest already held.
+        int weakest = 0;
+        for (int i = 1; i < written; ++i) {
+            if (out[i].count < out[weakest].count) {
+                weakest = i;
+            }
+        }
+        if (bigram.count > out[weakest].count) {
+            out[weakest] = Successor{static_cast<uint32_t>(bigram.nextIndex), bigram.count};
+        }
+    }
+    return written;
+}
+
+void UserModel::bigramAt(int index, int32_t* previousIndex, int32_t* nextIndex,
+                         uint32_t* count) const {
+    if (index < 0 || index >= static_cast<int>(bigrams_.size())) {
+        return;
+    }
+    const Bigram& bigram = bigrams_[static_cast<size_t>(index)];
+    if (previousIndex != nullptr) *previousIndex = bigram.previousIndex;
+    if (nextIndex != nullptr) *nextIndex = bigram.nextIndex;
+    if (count != nullptr) *count = bigram.count;
+}
+
+void UserModel::bulkLoadBigrams(const char* const* previous, const size_t* previousLengths,
+                                const char* const* next, const size_t* nextLengths,
+                                const int32_t* counts, int count) {
+    bigrams_.clear();
+    if (previous == nullptr || next == nullptr || counts == nullptr) {
+        return;
+    }
+    for (int i = 0; i < count && static_cast<int>(bigrams_.size()) < kMaxBigrams; ++i) {
+        if (counts[i] <= 0) {
+            continue;
+        }
+        // Both halves have to be words this model already knows. They will be: every word the
+        // keyboard commits is learned, so a pair can only have been recorded after both of its
+        // words were. A pair whose words have since been forgotten is simply dropped.
+        const int32_t previousIndex = entryIndexFor(previous[i], previousLengths[i]);
+        const int32_t nextIndex = entryIndexFor(next[i], nextLengths[i]);
+        if (previousIndex < 0 || nextIndex < 0 || previousIndex == nextIndex) {
+            continue;
+        }
+        bigrams_.push_back(Bigram{previousIndex, nextIndex, static_cast<uint32_t>(counts[i])});
     }
 }
 

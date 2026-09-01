@@ -3,6 +3,7 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedWord
 
 /**
@@ -24,6 +25,7 @@ class LearningBuffer(
     private val maxEntries: Int = DEFAULT_MAX_ENTRIES,
 ) {
     private val pending = LinkedHashMap<Key, Entry>()
+    private val pendingPairs = LinkedHashMap<PairKey, Entry>()
     private var oldestRecordedAt = 0L
     private var blocked: Set<String> = emptySet()
 
@@ -52,6 +54,38 @@ class LearningBuffer(
      * A word is confirmed when the user picks it from the suggestion strip, or commits it by
      * typing a delimiter after it. Nothing is learned from what is merely on screen.
      */
+    /**
+     * Records that [word] followed [previousWord], if both are things worth remembering.
+     *
+     * Kept apart from [record] because the two fail independently: the word is always worth
+     * learning, the pair only when the word before it is one this dictionary would also hold.
+     * A pair whose halves are not both learnable would name a word the native model cannot
+     * resolve, and would be dropped at the next start anyway.
+     */
+    fun recordPair(previousWord: String, word: String, nowMillis: Long): Boolean {
+        if (!enabled || previousWord.isEmpty() || word.isEmpty()) {
+            return false
+        }
+        if (previousWord.length > MAX_WORD_LENGTH || word.length > MAX_WORD_LENGTH) {
+            return false
+        }
+        if (previousWord in blocked || word in blocked || previousWord == word) {
+            return false
+        }
+        val key = PairKey(previousWord, word)
+        val existing = pendingPairs[key]
+        if (existing != null) {
+            existing.delta++
+            existing.lastUsedAt = nowMillis
+            return true
+        }
+        if (pendingPairs.size >= maxEntries) {
+            pendingPairs.remove(pendingPairs.keys.first())
+        }
+        pendingPairs[key] = Entry(delta = 1, lastUsedAt = nowMillis)
+        return true
+    }
+
     fun record(word: String, locale: String, nowMillis: Long): Boolean {
         if (!enabled || word.isEmpty() || word.length > MAX_WORD_LENGTH) {
             return false
@@ -83,6 +117,8 @@ class LearningBuffer(
     /** True when the buffer should be written out. */
     fun isDue(nowMillis: Long): Boolean {
         if (pending.isEmpty()) {
+            // The pairs ride along with the words. A pair is only ever recorded next to a word,
+            // so an empty word buffer means there is nothing to write either.
             return false
         }
         return pending.size >= maxEntries || nowMillis - oldestRecordedAt >= debounceMillis
@@ -111,13 +147,34 @@ class LearningBuffer(
         return drained
     }
 
+    /** Empties the pair buffer and returns what it held. Drained in the same flush as the words. */
+    fun drainPairs(): List<LearnedBigram> {
+        if (pendingPairs.isEmpty()) {
+            return emptyList()
+        }
+        val drained = ArrayList<LearnedBigram>(pendingPairs.size)
+        for ((key, entry) in pendingPairs) {
+            drained += LearnedBigram(
+                previousWord = key.previousWord,
+                word = key.word,
+                delta = entry.delta,
+                lastUsedAt = entry.lastUsedAt,
+            )
+        }
+        pendingPairs.clear()
+        return drained
+    }
+
     /** Discards everything without writing it. Used when entering private mode mid-session. */
     fun discard() {
         pending.clear()
+        pendingPairs.clear()
         oldestRecordedAt = 0L
     }
 
     private data class Key(val word: String, val locale: String)
+
+    private data class PairKey(val previousWord: String, val word: String)
 
     private class Entry(var delta: Int, var lastUsedAt: Long)
 

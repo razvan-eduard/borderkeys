@@ -10,6 +10,7 @@ import android.os.Looper
 import android.os.Process
 import android.os.Trace
 import com.borderkeys.data.dao.LearnedWord
+import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserWord
 
 /**
@@ -209,6 +210,24 @@ class PredictionEngine(
         worker.post {
             withHandle(Unit) { current ->
                 NativePredictor.nativeLoadUserWords(current, texts, counts)
+            }
+        }
+    }
+
+    /**
+     * Pushes the remembered word pairs. Posted after [loadUserWords] on the same single-threaded
+     * worker, which is what guarantees the words are in place before the pairs that name them.
+     */
+    fun loadUserBigrams(pairs: List<UserBigram>) {
+        if (pairs.isEmpty()) {
+            return
+        }
+        val previous = Array(pairs.size) { pairs[it].previousWord }
+        val next = Array(pairs.size) { pairs[it].word }
+        val counts = IntArray(pairs.size) { pairs[it].count }
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeLoadUserBigrams(current, previous, next, counts)
             }
         }
     }

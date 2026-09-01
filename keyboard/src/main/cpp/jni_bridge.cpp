@@ -347,6 +347,107 @@ void nativeLearn(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word, jstr
                   static_cast<size_t>(prev2Length));
 }
 
+/**
+ * Copies a Java string array into freshly allocated C strings.
+ *
+ * Shared by the two bulk loaders. Both run once at service start, off the UI thread, over the
+ * whole personal dictionary, so they are the one place in this file allowed to allocate in
+ * proportion to their input. Returns false and frees everything on any failure.
+ */
+bool copyStringArray(JNIEnv* env, jobjectArray array, jsize count, char** storage,
+                     size_t* lengths) {
+    for (jsize i = 0; i < count; ++i) {
+        storage[i] = nullptr;
+        lengths[i] = 0;
+    }
+    for (jsize i = 0; i < count; ++i) {
+        jstring value = static_cast<jstring>(env->GetObjectArrayElement(array, i));
+        char buffer[kStringBufferBytes];
+        const jsize length = copyString(env, value, buffer, sizeof(buffer));
+        if (value != nullptr) {
+            // Without this the loop accumulates one local reference per element and overflows
+            // the local reference table long before a real dictionary is exhausted.
+            env->DeleteLocalRef(value);
+        }
+        if (length <= 0) {
+            continue;
+        }
+        char* const copy = new (std::nothrow) char[length];
+        if (copy == nullptr) {
+            continue;
+        }
+        std::memcpy(copy, buffer, static_cast<size_t>(length));
+        storage[i] = copy;
+        lengths[i] = static_cast<size_t>(length);
+    }
+    return true;
+}
+
+void freeStringArray(char** storage, jsize count) {
+    for (jsize i = 0; i < count; ++i) {
+        delete[] storage[i];
+    }
+    delete[] storage;
+}
+
+/**
+ * Loads the remembered word pairs. Runs once, at service start, right after the words.
+ *
+ * The pairs are given as two parallel string arrays rather than as one array of joined strings,
+ * because a separator would have to be a character no word can contain and there is no such
+ * character once the dictionary can hold anything the user typed.
+ */
+void nativeLoadUserBigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray previous,
+                           jobjectArray next, jintArray counts) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || previous == nullptr || next == nullptr || counts == nullptr) {
+        return;
+    }
+    const jsize pairCount = env->GetArrayLength(previous);
+    if (pairCount <= 0 || env->GetArrayLength(next) < pairCount ||
+        env->GetArrayLength(counts) < pairCount || pairCount > kMaxUserWordsPerCall) {
+        return;
+    }
+
+    char** const previousStorage = new (std::nothrow) char*[pairCount];
+    size_t* const previousLengths = new (std::nothrow) size_t[pairCount];
+    char** const nextStorage = new (std::nothrow) char*[pairCount];
+    size_t* const nextLengths = new (std::nothrow) size_t[pairCount];
+    int32_t* const countValues = new (std::nothrow) int32_t[pairCount];
+    if (previousStorage == nullptr || previousLengths == nullptr || nextStorage == nullptr ||
+        nextLengths == nullptr || countValues == nullptr) {
+        delete[] previousStorage;
+        delete[] previousLengths;
+        delete[] nextStorage;
+        delete[] nextLengths;
+        delete[] countValues;
+        return;
+    }
+
+    env->GetIntArrayRegion(counts, 0, pairCount, reinterpret_cast<jint*>(countValues));
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        env->ExceptionClear();
+        delete[] previousStorage;
+        delete[] previousLengths;
+        delete[] nextStorage;
+        delete[] nextLengths;
+        delete[] countValues;
+        return;
+    }
+
+    copyStringArray(env, previous, pairCount, previousStorage, previousLengths);
+    copyStringArray(env, next, pairCount, nextStorage, nextLengths);
+
+    engine->loadUserBigrams(previousStorage, previousLengths, nextStorage, nextLengths,
+                            countValues, static_cast<int>(pairCount));
+
+    freeStringArray(previousStorage, pairCount);
+    delete[] previousLengths;
+    freeStringArray(nextStorage, pairCount);
+    delete[] nextLengths;
+    delete[] countValues;
+}
+
 void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray words,
                          jintArray counts) {
     Engine* const engine = engineFrom(handle);
@@ -565,6 +666,8 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeLearn)},
     {"nativeLoadUserWords", "(J[Ljava/lang/String;[I)V",
      reinterpret_cast<void*>(nativeLoadUserWords)},
+    {"nativeLoadUserBigrams", "(J[Ljava/lang/String;[Ljava/lang/String;[I)V",
+     reinterpret_cast<void*>(nativeLoadUserBigrams)},
     {"nativeDecodeGesture",
      "(J[F[F[JILjava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F)I",
      reinterpret_cast<void*>(nativeDecodeGesture)},

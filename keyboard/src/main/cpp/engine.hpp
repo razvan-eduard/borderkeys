@@ -154,6 +154,12 @@ public:
 
     void loadUserWords(const char* const* words, const size_t* lengths, const int32_t* counts,
                        int count);
+
+    /** Replaces the remembered word pairs. Called right after [loadUserWords], from the same
+     *  database read, so both halves of a pair are already known words. */
+    void loadUserBigrams(const char* const* previous, const size_t* previousLengths,
+                         const char* const* next, const size_t* nextLengths,
+                         const int32_t* counts, int count);
     bool snapshotUserModel(const char* path);
 
     // Resolves a candidate to its display text. The pointer is owned by the mapping or by the
@@ -178,6 +184,18 @@ private:
     void searchFrequentWithPrefix(int packIndex, const uint32_t* folded, int foldedLength,
                                   TopK<Candidate>& heap);
     void searchUserModel(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap);
+
+    /**
+     * Offers the words this person has been seen to write after the current context word.
+     *
+     * Only for the empty prefix: this is the "what comes next" case, where there is nothing to
+     * walk a trie with and the alternative is the language's most frequent words regardless of
+     * what was just written.
+     */
+    void searchUserSuccessors(TopK<Candidate>& heap);
+
+    /** How much a personal pair argues for this word, given the context. Zero without one. */
+    float userBigramBonusFor(uint32_t entryIndex) const;
 
     // Walks the fuzzy neighbourhood of the typed prefix, returning the trie nodes where the
     // whole input has been consumed, with what it cost to get there.
@@ -212,6 +230,14 @@ private:
     Candidate drainBuffer_[kMaxCandidates];
 
     // Per-request context, resolved once per pack instead of once per candidate.
+    /**
+     * The context word's entry in the personal model, or -1.
+     *
+     * Resolved once per request beside the per-pack context indices, because every candidate
+     * would otherwise fold and look up the same word again.
+     */
+    int32_t userContext1_ = -1;
+
     int32_t contextWord1_[kMaxPacks] = {};
     int32_t contextWord2_[kMaxPacks] = {};
     bool hasContext1_ = false;

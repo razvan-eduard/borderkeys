@@ -80,6 +80,23 @@ constexpr float kCorrectionSurcharge = 3.0f;
 // sources comparable -- and keeps a word typed once from outranking the dictionary.
 constexpr float kUserOnlyLogProb = -8.0f;
 
+/**
+ * Smoothing for a personal pair, in observations.
+ *
+ * A phrase written once is not a certainty, and `count / total` would say it is: one "vreau să"
+ * out of one "vreau" is not evidence that "să" always follows. Dividing by `total + prior`
+ * instead makes the first observation worth about a fifth of the way there and each repetition
+ * worth more, which is the shape the evidence actually has.
+ *
+ * Four rather than one because this competes against a language model built from a corpus. A
+ * pair has to be a habit before it displaces what the language says, and a habit is what this
+ * is for.
+ */
+constexpr float kUserBigramPrior = 4.0f;
+
+/** The most a personal pair may add to a word that was already being suggested. */
+constexpr float kMaxUserBigramBoost = 2.5f;
+
 constexpr int kMaxEndpoints = 96;
 
 // How many trie nodes a request may visit, by prefix length.
@@ -502,8 +519,10 @@ void Engine::resolveContext(const char* previous1, size_t previous1Length, const
     uint32_t folded[kMaxComposing];
 
     int length1 = -1;
+    userContext1_ = -1;
     if (previous1 != nullptr && previous1Length > 0) {
         length1 = foldUtf8(previous1, previous1Length, folded, kMaxComposing);
+        userContext1_ = userModel_.entryIndexFor(previous1, previous1Length);
     }
     for (int i = 0; i < kMaxPacks; ++i) {
         contextWord1_[i] = -1;
@@ -922,6 +941,55 @@ void Engine::searchFrequentWithPrefix(int packIndex, const uint32_t* folded, int
     }
 }
 
+float Engine::userBigramBonusFor(uint32_t entryIndex) const {
+    if (userContext1_ < 0) {
+        return 0.0f;
+    }
+    const uint32_t pair = userModel_.bigramCount(userContext1_, static_cast<int32_t>(entryIndex));
+    if (pair == 0u) {
+        return 0.0f;
+    }
+    const uint32_t total = userModel_.successorTotal(userContext1_);
+    if (total == 0u) {
+        return 0.0f;
+    }
+    // The same smoothed share used below, expressed as a bounded bonus rather than as a score:
+    // here the word is already a candidate on its own merits and this only says the context
+    // agrees.
+    const float share = static_cast<float>(pair) /
+                        (static_cast<float>(total) + kUserBigramPrior);
+    const float bonus = kMaxUserBigramBoost * share;
+    return bonus;
+}
+
+void Engine::searchUserSuccessors(TopK<Candidate>& heap) {
+    if (userContext1_ < 0 || userModel_.size() == 0) {
+        return;
+    }
+    const uint32_t total = userModel_.successorTotal(userContext1_);
+    if (total == 0u) {
+        return;
+    }
+
+    constexpr int kMaxSuccessors = 8;
+    UserModel::Successor successors[kMaxSuccessors];
+    const int found = userModel_.successors(userContext1_, successors, kMaxSuccessors);
+    for (int i = 0; i < found; ++i) {
+        // A proper conditional probability on the same scale as the packs', so a phrase someone
+        // repeats competes with the language model instead of being bolted on top of it.
+        const float share = static_cast<float>(successors[i].count) /
+                            (static_cast<float>(total) + kUserBigramPrior);
+        const float score = std::log(share);
+        uint32_t textLength = 0;
+        const Candidate candidate{Candidate::kUserPack,
+                                  static_cast<int32_t>(successors[i].entryIndex), score};
+        const char* const text = candidateText(candidate, &textLength);
+        if (text != nullptr && textLength != 0) {
+            offerCandidate(heap, candidate, text, textLength);
+        }
+    }
+}
+
 void Engine::searchUserModel(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap) {
     if (userModel_.size() == 0) {
         return;
@@ -943,7 +1011,8 @@ void Engine::searchUserModel(const uint32_t* folded, int foldedLength, TopK<Cand
         // exactly the boost a word already in a dictionary would get. A word confirmed once
         // therefore ranks below the dictionary, and a word confirmed fifty times ranks above
         // most of it -- which is the behaviour, and it is bounded.
-        const float score = kUserOnlyLogProb + userBoostForCount(completions[i].count);
+        const float score = kUserOnlyLogProb + userBoostForCount(completions[i].count) +
+                            userBigramBonusFor(completions[i].entryIndex);
         const Candidate candidate{Candidate::kUserPack,
                                   static_cast<int32_t>(completions[i].entryIndex), score};
         uint32_t textLength = 0;
@@ -997,6 +1066,10 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     }
     if (foldedLength > 0) {
         searchUserModel(folded, foldedLength, heap);
+    } else {
+        // Nothing typed: this is the next-word case, and the phrases this person repeats are
+        // the best evidence there is about what follows the word they just wrote.
+        searchUserSuccessors(heap);
     }
 
     const int drained = heap.drainSorted(drainBuffer_, kMaxCandidates);
@@ -1012,12 +1085,21 @@ void Engine::learn(const char* word, size_t wordLength, const char* previous1,
     if (!created_ || word == nullptr || wordLength == 0) {
         return;
     }
-    (void)previous1;
-    (void)previous1Length;
+    // The word, and the fact that it followed the one before it. The second is what makes a
+    // phrase someone repeats -- "vreau să", "să mă", "mă duc" -- come back as a prediction
+    // rather than having to be typed out every time.
+    //
+    // Only the immediately preceding word is recorded. A trigram would need the pair table to
+    // be keyed on two indices and would fire far more rarely, and the bigram already covers the
+    // case people notice: the next word after the one just written.
     (void)previous2;
     (void)previous2Length;
 
-    userModel_.learn(word, wordLength);
+    const int32_t wordIndex = userModel_.learn(word, wordLength);
+    if (previous1 != nullptr && previous1Length > 0) {
+        const int32_t previousIndex = userModel_.entryIndexFor(previous1, previous1Length);
+        userModel_.learnBigram(previousIndex, wordIndex);
+    }
 
     // Language weight adaptation. Which packs contain the confirmed word is the only signal
     // available without asking the user which language they are writing in, and it is a good
@@ -1065,6 +1147,15 @@ void Engine::loadUserWords(const char* const* words, const size_t* lengths,
         return;
     }
     userModel_.bulkLoad(words, lengths, counts, count);
+}
+
+void Engine::loadUserBigrams(const char* const* previous, const size_t* previousLengths,
+                             const char* const* next, const size_t* nextLengths,
+                             const int32_t* counts, int count) {
+    if (!created_) {
+        return;
+    }
+    userModel_.bulkLoadBigrams(previous, previousLengths, next, nextLengths, counts, count);
 }
 
 bool Engine::snapshotUserModel(const char* path) {

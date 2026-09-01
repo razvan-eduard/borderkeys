@@ -4,9 +4,12 @@
 package com.borderkeys.data
 
 import com.borderkeys.data.dao.BlockedWordDao
+import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedWord
+import com.borderkeys.data.dao.UserBigramDao
 import com.borderkeys.data.dao.UserWordDao
 import com.borderkeys.data.entity.BlockedWord
+import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserWord
 import kotlinx.coroutines.flow.Flow
 
@@ -16,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 class DictionaryRepository internal constructor(
     private val userWords: UserWordDao,
     private val blockedWords: BlockedWordDao,
+    private val userBigrams: UserBigramDao,
 ) {
     val words: Flow<List<UserWord>> = userWords.observeAll()
     val blocked: Flow<List<BlockedWord>> = blockedWords.observeAll()
@@ -27,6 +31,13 @@ class DictionaryRepository internal constructor(
         userWords.topWords(limit)
 
     suspend fun blockedWordSet(): Set<String> = blockedWords.allWords().toSet()
+
+    /** The word pairs pushed into the native engine at service start. */
+    suspend fun topBigrams(limit: Int = MAX_BIGRAMS_IN_MEMORY): List<UserBigram> =
+        userBigrams.topPairs(limit)
+
+    /** How many pairs are remembered. Shown in Settings, because it should be visible. */
+    suspend fun bigramCount(): Int = userBigrams.count()
 
     /**
      * Applies a batch of learning updates in one transaction.
@@ -42,9 +53,30 @@ class DictionaryRepository internal constructor(
         userWords.incrementAll(updates)
     }
 
-    suspend fun forget(word: String) = userWords.delete(word)
+    /** The same, for the pairs. Flushed in the same batch as the words. */
+    suspend fun applyLearnedBigrams(updates: List<LearnedBigram>) {
+        if (updates.isEmpty()) {
+            return
+        }
+        userBigrams.incrementAll(updates)
+    }
 
-    suspend fun forgetEverything() = userWords.deleteAll()
+    /**
+     * Forgets a word, and every phrase it was part of.
+     *
+     * The pairs go with it. Keeping them would leave the word being predicted through a phrase
+     * after the user deleted it from their dictionary, which is the setting appearing not to
+     * work in the most alarming possible way.
+     */
+    suspend fun forget(word: String) {
+        userWords.delete(word)
+        userBigrams.deleteInvolving(word)
+    }
+
+    suspend fun forgetEverything() {
+        userWords.deleteAll()
+        userBigrams.deleteAll()
+    }
 
     /**
      * Refuses a word permanently and removes whatever was learned about it.
@@ -56,6 +88,7 @@ class DictionaryRepository internal constructor(
     suspend fun block(word: String) {
         blockedWords.insert(BlockedWord(word))
         userWords.delete(word)
+        userBigrams.deleteInvolving(word)
     }
 
     suspend fun unblock(word: String) = blockedWords.delete(word)
@@ -81,5 +114,11 @@ class DictionaryRepository internal constructor(
 
     private companion object {
         const val MAX_WORDS_IN_MEMORY = 20_000
+
+        /**
+         * Matches UserModel::kMaxBigrams on the native side, which is where they end up.
+         * Reading more rows than that would be reading them to discard them.
+         */
+        const val MAX_BIGRAMS_IN_MEMORY = 4_096
     }
 }

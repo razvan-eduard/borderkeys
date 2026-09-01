@@ -132,6 +132,8 @@ class BorderKeysService :
         val typed: String,
         val corrected: String,
         val delimiter: String,
+        /** The word before it, kept so the pair is learned against the right one. */
+        val contextWord: String?,
     )
 
     private var pendingCorrection: PendingCorrection? = null
@@ -206,6 +208,9 @@ class BorderKeysService :
 
         val dictionary = DataGraph.dictionary
         engine.loadUserWords(dictionary.topWords())
+        // After the words, never before: a pair names two words, and the model resolves those
+        // names against what it already holds.
+        engine.loadUserBigrams(dictionary.topBigrams())
         val blockedWords = dictionary.blockedWordSet()
         engine.setBlockedWords(blockedWords)
         learning.setBlockedWords(blockedWords)
@@ -581,11 +586,12 @@ class BorderKeysService :
         }
         val connection = currentInputConnection
         if (connection != null && composing.isNotEmpty()) {
+            val contextWord = previousWord1
             connection.beginBatchEdit()
             val finished = finishComposing(connection)
             connection.endBatchEdit()
             if (finished != null) {
-                recordLearned(finished)
+                recordLearned(finished, contextWord)
             }
         }
         host?.postDelayed(gestureDecodingRunnable, GESTURE_DECODING_NOTICE_MILLIS)
@@ -690,6 +696,9 @@ class BorderKeysService :
         // really an objection to a correction that costs more to undo than it saved.
         val typed = composing.toString()
         val correction = correctionFor(typed)
+        // Captured before anything commits: finishComposing and the correction branch both
+        // advance previousWord1 to the word being written now.
+        val contextWord = previousWord1
 
         connection.beginBatchEdit()
         val delimiter = String(Character.toChars(shifted))
@@ -712,10 +721,10 @@ class BorderKeysService :
             // Learning waits until the correction survives the next keystroke. Recording it
             // here would teach the personal dictionary a word the user is about to reject, and
             // the whole point of the revert is that rejecting it is expected.
-            pendingCorrection = PendingCorrection(typed, correction, delimiter)
+            pendingCorrection = PendingCorrection(typed, correction, delimiter, contextWord)
         } else {
             if (typed.isNotEmpty()) {
-                recordLearned(typed)
+                recordLearned(typed, contextWord)
             }
             pendingCorrection = null
         }
@@ -733,7 +742,7 @@ class BorderKeysService :
     private fun confirmPendingCorrection() {
         val pending = pendingCorrection ?: return
         pendingCorrection = null
-        recordLearned(pending.corrected)
+        recordLearned(pending.corrected, pending.contextWord)
     }
 
     /**
@@ -766,7 +775,7 @@ class BorderKeysService :
             // Backspace is an ordinary backspace, so this is the correction being accepted the
             // same way any other key would accept it. Dropping it unlearned instead would make
             // the setting quietly change what the dictionary remembers.
-            recordLearned(pending.corrected)
+            recordLearned(pending.corrected, pending.contextWord)
             return false
         }
         val committed = pending.corrected + pending.delimiter
@@ -774,7 +783,7 @@ class BorderKeysService :
         if (before == null || before.toString() != committed) {
             // The cursor moved, or something else edited the field. Reverting blind would
             // delete text nobody asked us to touch, so the correction stands and is accepted.
-            recordLearned(pending.corrected)
+            recordLearned(pending.corrected, pending.contextWord)
             return false
         }
         connection.beginBatchEdit()
@@ -785,7 +794,7 @@ class BorderKeysService :
         // Reverting is the user asserting that what they typed is a word, which is exactly the
         // signal the personal dictionary exists to record. It is the only thing learned here:
         // the correction they rejected is not.
-        recordLearned(pending.typed)
+        recordLearned(pending.typed, pending.contextWord)
         refreshContextFromEditor()
         requestSuggestions()
         return true
@@ -822,6 +831,7 @@ class BorderKeysService :
 
     private fun handleEnter() {
         val connection = currentInputConnection ?: return
+        val contextWord = previousWord1
         connection.beginBatchEdit()
         val finished = finishComposing(connection)
         val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
@@ -834,7 +844,7 @@ class BorderKeysService :
             connection.endBatchEdit()
         }
         if (finished != null) {
-            recordLearned(finished)
+            recordLearned(finished, contextWord)
         }
         requestSuggestions()
     }
@@ -908,6 +918,9 @@ class BorderKeysService :
 
     override fun onSuggestionPicked(index: Int, word: String) {
         val connection = currentInputConnection ?: return
+        // Read before the commit, for the same reason as everywhere else: what is being learned
+        // is that this word followed the one already in the text, not that it followed itself.
+        val contextWord = previousWord1
         connection.beginBatchEdit()
         composing.setLength(0)
         composing.append(word)
@@ -916,7 +929,13 @@ class BorderKeysService :
 
         // Choosing a candidate that was not already the top one is the learning signal. This is
         // where personalisation happens: a count goes up, and nothing is retrained.
-        recordLearned(word)
+        recordLearned(word, contextWord)
+        // The picked word is now the context for whatever comes next. Nothing else sets this on
+        // this path -- onUpdateSelection only refreshes it when the cursor moves on its own --
+        // so without it the next-word prediction after picking a suggestion would be made
+        // against the word before the one the user just chose.
+        previousWord2 = previousWord1
+        previousWord1 = word
         composing.setLength(0)
         host?.suggestionStrip?.clear()
         requestSuggestions()
@@ -996,7 +1015,16 @@ class BorderKeysService :
 
     // ---- learning -----------------------------------------------------------------------------------
 
-    private fun recordLearned(word: String) {
+    /**
+     * Records a confirmed word, and the pair it makes with the word before it.
+     *
+     * [contextWord] is passed rather than read from [previousWord1] because by the time a caller
+     * gets here that field has usually already been advanced to *this* word: `finishComposing`
+     * sets it as part of ending the composing region. Reading it here produced a pair of a word
+     * with itself, which the pair store rejects, so nothing was ever learned and the feature
+     * looked like it did not work at all. It has to be captured before the commit.
+     */
+    private fun recordLearned(word: String, contextWord: String?) {
         if (!learning.enabled || word.length < MIN_LEARNED_LENGTH) {
             return
         }
@@ -1010,12 +1038,12 @@ class BorderKeysService :
         // can know that for a word that was typed rather than picked from a suggestion, which
         // is why the settings screen says "typed on" rather than naming a language.
         val locale = alphabeticLayout.languageTag
-        if (learning.record(word, locale, System.currentTimeMillis())) {
+        val now = System.currentTimeMillis()
+        contextWord?.let { learning.recordPair(it, word, now) }
+        if (learning.record(word, locale, now)) {
             engine.learn(
                 listOf(
-                    com.borderkeys.data.dao.LearnedWord(
-                        word, locale, 1, System.currentTimeMillis(),
-                    ),
+                    com.borderkeys.data.dao.LearnedWord(word, locale, 1, now),
                 ),
                 previousWord1, previousWord2,
             )
@@ -1037,12 +1065,14 @@ class BorderKeysService :
      */
     private fun flushLearning() {
         val updates = learning.drain()
-        if (updates.isEmpty()) {
+        val pairs = learning.drainPairs()
+        if (updates.isEmpty() && pairs.isEmpty()) {
             return
         }
         val snapshotPath = File(filesDir, USER_MODEL_SNAPSHOT).absolutePath
         scope.launch(Dispatchers.IO) {
             DataGraph.dictionary.applyLearned(updates)
+            DataGraph.dictionary.applyLearnedBigrams(pairs)
             engine.snapshotUserModel(snapshotPath)
         }
     }

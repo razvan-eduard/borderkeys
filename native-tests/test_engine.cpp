@@ -246,6 +246,50 @@ void runEngineTests() {
         check(!refused.restore("/nonexistent/path/user.bku"), "a missing snapshot is refused");
     }
 
+    section("phrases the user repeats");
+    {
+        LoadedEngine loaded;
+        loaded.open();
+
+        // Writing "vreau sa ma duc la" a few times, the way the service does it: each word is
+        // learned with the one before it as context.
+        const char* phrase[] = {"vreau", "sa", "ma", "duc", "la"};
+        for (int round = 0; round < 4; ++round) {
+            const char* previous = nullptr;
+            for (const char* word : phrase) {
+                loaded.engine.learn(word, std::strlen(word), previous,
+                                    previous != nullptr ? std::strlen(previous) : 0, nullptr, 0);
+                previous = word;
+            }
+        }
+
+        // With nothing typed, the word that follows in the phrase is offered. This is the whole
+        // point: the sequence comes back without being typed out again.
+        check(loaded.rankOf("", "sa", "vreau") == 0, "after \"vreau\" the next word is \"sa\"");
+        check(loaded.rankOf("", "ma", "sa") == 0, "after \"sa\" it is \"ma\"");
+        check(loaded.rankOf("", "duc", "ma") == 0, "and after \"ma\" it is \"duc\"");
+
+        // And the pair helps a word that is being typed, without being needed for it.
+        check(loaded.rankOf("s", "sa", "vreau") >= 0,
+              "a started word is still reached with the context");
+        check(loaded.rankOf("s", "sa") >= 0, "and without it");
+
+        // A word never written after this one is not invented as a successor.
+        check(loaded.rankOf("", "keyboard", "vreau") != 0,
+              "an unrelated word does not become a prediction");
+    }
+
+    section("a phrase is not learned from a single word");
+    {
+        LoadedEngine loaded;
+        loaded.open();
+        loaded.engine.learn("vreau", 5, nullptr, 0, nullptr, 0);
+        loaded.engine.learn("sa", 2, nullptr, 0, nullptr, 0);
+        // Both words are known, but never one after the other.
+        check(loaded.rankOf("", "sa", "vreau") != 0,
+              "two words learned apart do not make a pair");
+    }
+
     section("the engine survives being used after release");
     {
         Engine engine;

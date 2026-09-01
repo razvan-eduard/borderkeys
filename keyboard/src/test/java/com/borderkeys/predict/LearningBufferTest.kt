@@ -111,4 +111,54 @@ class LearningBufferTest {
         assertTrue(buffer.isEmpty())
         assertFalse(buffer.isDue(Long.MAX_VALUE))
     }
+
+    @Test
+    fun pairsAreBufferedAndDrainedSeparately() {
+        val buffer = LearningBuffer()
+        assertTrue(buffer.recordPair("vreau", "sa", 0L))
+        assertTrue(buffer.recordPair("sa", "ma", 0L))
+        assertTrue(buffer.recordPair("vreau", "sa", 10L))
+
+        val pairs = buffer.drainPairs()
+        assertEquals(2, pairs.size)
+        val repeated = pairs.first { it.previousWord == "vreau" }
+        assertEquals(2, repeated.delta)
+        assertEquals(10L, repeated.lastUsedAt)
+        assertTrue(buffer.drainPairs().isEmpty())
+    }
+
+    /** A word following itself is a stutter, not a phrase. */
+    @Test
+    fun aWordIsNotPairedWithItself() {
+        val buffer = LearningBuffer()
+        assertFalse(buffer.recordPair("da", "da", 0L))
+        assertTrue(buffer.drainPairs().isEmpty())
+    }
+
+    /** Private mode has to stop the pairs as firmly as it stops the words. */
+    @Test
+    fun disabledLearningRecordsNoPairs() {
+        val buffer = LearningBuffer()
+        buffer.enabled = false
+        assertFalse(buffer.recordPair("vreau", "sa", 0L))
+        assertTrue(buffer.drainPairs().isEmpty())
+    }
+
+    /** A blocked word must not come back through a phrase. */
+    @Test
+    fun aBlockedWordIsNotPairedOnEitherSide() {
+        val buffer = LearningBuffer()
+        buffer.setBlockedWords(setOf("naspa"))
+        assertFalse(buffer.recordPair("vreau", "naspa", 0L))
+        assertFalse(buffer.recordPair("naspa", "sa", 0L))
+        assertTrue(buffer.drainPairs().isEmpty())
+    }
+
+    @Test
+    fun discardingDropsThePairsToo() {
+        val buffer = LearningBuffer()
+        buffer.recordPair("vreau", "sa", 0L)
+        buffer.discard()
+        assertTrue(buffer.drainPairs().isEmpty())
+    }
 }

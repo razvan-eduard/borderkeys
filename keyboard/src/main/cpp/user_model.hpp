@@ -31,6 +31,22 @@ public:
         uint32_t count;
     };
 
+    /** A word this person has been seen to write after another one, and how often. */
+    struct Successor {
+        uint32_t entryIndex;
+        uint32_t count;
+    };
+
+    /**
+     * How many pairs are remembered.
+     *
+     * A cap rather than unbounded growth, because this is the structure that grows fastest with
+     * use and it is held in RAM on the prediction thread. Four thousand pairs is far more than
+     * the handful of phrases a person repeats, and when it is full the least used pair is
+     * dropped -- so a phrase typed once years ago does not hold a slot against one typed daily.
+     */
+    static constexpr int kMaxBigrams = 4096;
+
     UserModel();
 
     void clear();
@@ -40,8 +56,38 @@ public:
     void bulkLoad(const char* const* words, const size_t* lengths, const int32_t* counts,
                   int count);
 
-    // Records that the user chose this word. Adds it if it is new.
-    void learn(const char* word, size_t length);
+    // Records that the user chose this word. Adds it if it is new. Returns its entry index.
+    int32_t learn(const char* word, size_t length);
+
+    /**
+     * Records that `next` followed `previous`.
+     *
+     * Separate from [learn] because the two are learned at different moments and one can fail
+     * without the other: the word is always worth remembering, the pair only when both halves
+     * are already known. Both indices come from [learn] or [entryIndexFor].
+     */
+    void learnBigram(int32_t previousIndex, int32_t nextIndex);
+
+    /** The entry index for an exact (folded) word, or -1. */
+    int32_t entryIndexFor(const char* word, size_t length) const;
+
+    /** How many times `next` has followed `previous`. Zero when the pair is unknown. */
+    uint32_t bigramCount(int32_t previousIndex, int32_t nextIndex) const;
+
+    /** How often `previous` has been followed by anything at all. */
+    uint32_t successorTotal(int32_t previousIndex) const;
+
+    /** The words seen after `previous`, most frequent first, up to `maxOut`. */
+    int successors(int32_t previousIndex, Successor* out, int maxOut) const;
+
+    /** Every remembered pair, for persisting them. */
+    int bigramCount() const { return static_cast<int>(bigrams_.size()); }
+    void bigramAt(int index, int32_t* previousIndex, int32_t* nextIndex, uint32_t* count) const;
+
+    /** Replaces the remembered pairs. Used once at start, from the database. */
+    void bulkLoadBigrams(const char* const* previous, const size_t* previousLengths,
+                         const char* const* next, const size_t* nextLengths,
+                         const int32_t* counts, int count);
 
     uint32_t countFor(const char* word, size_t length) const;
     uint32_t totalCount() const { return totalCount_; }
@@ -79,8 +125,22 @@ private:
     int32_t findNode(const uint32_t* folded, int count) const;
     void collect(int32_t node, Completion* out, int maxOut, int* written) const;
 
+    struct Bigram {
+        int32_t previousIndex;
+        int32_t nextIndex;
+        uint32_t count;
+    };
+
+    void dropLeastUsedBigram();
+
     std::vector<Node> nodes_;
     std::vector<Entry> entries_;
+    // A flat vector rather than a hash. It is capped at kMaxBigrams, every access is off the UI
+    // thread, and a linear scan of four thousand 12-byte records is a few microseconds of
+    // sequential memory -- against a hash table that would need its own rehashing, its own
+    // serialisation, and a second structure to enumerate one word's successors, which is the
+    // access this exists for.
+    std::vector<Bigram> bigrams_;
     uint32_t totalCount_ = 0;
 };
 

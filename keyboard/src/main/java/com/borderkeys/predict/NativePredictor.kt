@@ -149,6 +149,17 @@ internal object NativePredictor {
     external fun nativeLoadUserWords(handle: Long, words: Array<String>, counts: IntArray)
 
     /**
+     * Replaces the remembered word pairs. Called right after [nativeLoadUserWords], from the
+     * same read, so that both halves of every pair are words the model already holds.
+     */
+    external fun nativeLoadUserBigrams(
+        handle: Long,
+        previous: Array<String>,
+        next: Array<String>,
+        counts: IntArray,
+    )
+
+    /**
      * Writes the personal dictionary to [path] in the app's private storage. Returns 0 on
      * success. Called on a debounce and at `onFinishInput`, never on a keystroke: Kotlin decides
      * when, the native side only executes.

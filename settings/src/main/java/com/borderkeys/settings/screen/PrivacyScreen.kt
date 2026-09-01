@@ -78,6 +78,14 @@ fun PrivacyScreen(modifier: Modifier = Modifier) {
                 "held by the Android Keystore, so the file is useless if it is copied elsewhere.",
         )
         SettingRow(
+            title = "Pairs of words you write together",
+            subtitle = "So that after \"vreau\" it can offer \"să\". This is the most revealing " +
+                "thing here: a list of words says which words you know, a list of pairs says " +
+                "how you put them together. It is in the same encrypted database, it is never " +
+                "recorded in a password field, and \"forget everything\" in the personal " +
+                "dictionary deletes it along with the words.",
+        )
+        SettingRow(
             title = "Excluded from backup",
             subtitle = "Cloud backup and device-to-device transfer are both switched off for " +
                 "this app. Moving your dictionary to a new phone is an explicit CSV export.",
