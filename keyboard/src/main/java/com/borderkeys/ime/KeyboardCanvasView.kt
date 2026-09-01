@@ -59,6 +59,15 @@ class KeyboardCanvasView(
          * the listener must consume or copy them before returning.
          */
         fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int)
+
+        /**
+         * A key held down that has no alternatives to show.
+         *
+         * Returning true means the press was consumed: the finger lifting afterwards must not
+         * also type the key. That is what makes holding the globe open the settings panel
+         * without also switching language on the way out.
+         */
+        fun onKeyLongPress(code: Int, keyIndex: Int): Boolean
     }
 
     var listener: Listener? = null
@@ -643,10 +652,12 @@ class KeyboardCanvasView(
             repeatKey = index
             postDelayed(repeatRunnable, REPEAT_DELAY_MILLIS)
         }
-        if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.HAS_ALTERNATIVES)) {
-            longPressPointer = pointerId
-            postDelayed(longPressRunnable, LONG_PRESS_MILLIS)
-        }
+        // Armed for every key, not only for keys with alternatives. A key with none offers the
+        // hold to the service instead, which is how holding the globe opens the settings panel.
+        // The cost is one postDelayed and one removeCallbacks per press, both of which the
+        // repeatable keys above were already paying, and neither allocates.
+        longPressPointer = pointerId
+        postDelayed(longPressRunnable, LONG_PRESS_MILLIS)
     }
 
     private fun onPointerMove(
@@ -692,7 +703,7 @@ class KeyboardCanvasView(
         cancelPendingCallbacks()
         pointerKey[pointerId] = index
         startPress(index)
-        if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.HAS_ALTERNATIVES)) {
+        run {
             longPressPointer = pointerId
             postDelayed(longPressRunnable, LONG_PRESS_MILLIS)
         }
@@ -752,7 +763,18 @@ class KeyboardCanvasView(
             return
         }
         val index = pointerKey[pointerId]
-        if (index == NO_KEY || geometry.altLength[index] == 0) {
+        if (index == NO_KEY) {
+            return
+        }
+        if (geometry.altLength[index] == 0) {
+            // No alternatives to show, so the hold is offered to the service instead. If it
+            // takes it, the press is released here so that lifting the finger does not also
+            // type the key that was held.
+            if (listener?.onKeyLongPress(geometry.keyCode[index], index) == true) {
+                endPress(index)
+                pointerKey[pointerId] = NO_KEY
+                longPressPointer = -1
+            }
             return
         }
         alternativesKey = index

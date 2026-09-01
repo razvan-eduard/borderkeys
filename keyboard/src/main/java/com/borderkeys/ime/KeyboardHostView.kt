@@ -44,6 +44,13 @@ class KeyboardHostView(
     val assistSheet = AssistSheetView(context, paints)
 
     /**
+     * Size and position, reachable without leaving the keyboard. Covers the keys the same way
+     * the assistant's sheet does, because it is the same trade: the panel needs the space, and
+     * the keys are not useful while it is open.
+     */
+    val quickSettings = QuickSettingsView(context, paints)
+
+    /**
      * Space the system's own IME navigation bar occupies along the bottom edge.
      *
      * Android 15 enforces edge-to-edge for the input method window, so the framework draws its
@@ -100,8 +107,10 @@ class KeyboardHostView(
         addView(inlineSuggestions)
         addView(keyboard)
         addView(assistSheet)
+        addView(quickSettings)
         inlineSuggestions.visibility = GONE
         assistSheet.visibility = GONE
+        quickSettings.visibility = GONE
 
         setOnApplyWindowInsetsListener { _, insets ->
             val bottom = insets.getInsets(
@@ -148,6 +157,18 @@ class KeyboardHostView(
 
     val assistSheetVisible: Boolean get() = assistSheet.visibility == VISIBLE
 
+    /** Opens or closes the quick panel, hiding the keys underneath it while it is open. */
+    fun showQuickSettings(show: Boolean) {
+        val visibility = if (show) VISIBLE else GONE
+        if (quickSettings.visibility != visibility) {
+            quickSettings.visibility = visibility
+            keyboard.visibility = if (show) GONE else VISIBLE
+            requestLayout()
+        }
+    }
+
+    val quickSettingsVisible: Boolean get() = quickSettings.visibility == VISIBLE
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val contentWidth = (width * widthScale).toInt().coerceAtLeast(1)
@@ -175,6 +196,14 @@ class KeyboardHostView(
             assistSheet.measure(exactWidth, unbounded)
             height += assistSheet.measuredHeight
         }
+        if (quickSettings.visibility != GONE) {
+            // The panel takes exactly the height the keys would have had, so opening it does not
+            // move the editor's text or resize the window under the user's finger.
+            quickSettings.measure(exactWidth, MeasureSpec.makeMeasureSpec(
+                keyboardHeightForPanel(exactWidth), MeasureSpec.EXACTLY,
+            ))
+            height += quickSettings.measuredHeight
+        }
 
         // The window is always full width; the keys are narrower and offset inside it. That
         // keeps the touchable region and the insets the system computes correct in every mode.
@@ -201,7 +230,23 @@ class KeyboardHostView(
         }
         if (assistSheet.visibility != GONE) {
             assistSheet.layout(left, y, right, y + assistSheet.measuredHeight)
+            y += assistSheet.measuredHeight
         }
+        if (quickSettings.visibility != GONE) {
+            quickSettings.layout(left, y, right, y + quickSettings.measuredHeight)
+        }
+    }
+
+    /**
+     * What the keys would have measured, so the panel can take their place exactly.
+     *
+     * Measured rather than remembered: the keyboard is GONE while the panel is open, and a view
+     * that is GONE reports a measured height of zero.
+     */
+    private fun keyboardHeightForPanel(widthSpec: Int): Int {
+        val unbounded = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        keyboard.measure(widthSpec, unbounded)
+        return keyboard.measuredHeight
     }
 
     private companion object {

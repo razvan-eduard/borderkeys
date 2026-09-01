@@ -52,6 +52,7 @@ class BorderKeysService :
     KeyboardCanvasView.Listener,
     SuggestionStripView.Listener,
     AssistSheetView.Listener,
+    QuickSettingsView.Listener,
     AssistClient.Listener,
     PredictionEngine.ResultListener {
 
@@ -287,6 +288,11 @@ class BorderKeysService :
                 )
                 host?.let { view ->
                     applyPlacement(view, newPreferences)
+                    if (view.quickSettingsVisible) {
+                        // Open while the settings application changed something: the panel shows
+                        // what is stored, so it follows rather than holding a stale copy.
+                        pushQuickSettingsState(view)
+                    }
                     view.keyboard.hapticEnabled = newPreferences.hapticFeedback
                     view.keyboard.swipeEnabled = newPreferences.swipeEnabled
                     // The number row is a layout change, not a colour change, so it has to be
@@ -294,6 +300,7 @@ class BorderKeysService :
                     showPage(page)
                     if (changed) {
                         view.keyboard.onThemeChanged()
+                        view.quickSettings.onThemeChanged()
                         view.requestLayout()
                     }
                 }
@@ -365,6 +372,7 @@ class BorderKeysService :
         val view = host ?: return
         assistTask = task
         view.assistSheet.listener = this
+        view.quickSettings.listener = this
         view.assistSheet.showRunning(assistActionTitle(task), assistSelection)
         view.showAssistSheet(true)
         assistRequestId = assist.run(task, assistSelection)
@@ -663,10 +671,26 @@ class BorderKeysService :
                 if (page == PAGE_SYMBOLS) PAGE_SYMBOLS_SHIFT else PAGE_SYMBOLS,
             )
             KeyCodes.LANGUAGE -> switchLanguage()
-            KeyCodes.SETTINGS -> openSettings()
+            KeyCodes.SETTINGS -> toggleQuickSettings()
             KeyCodes.EMOJI -> Unit
             else -> if (KeyCodes.isCharacter(code)) handleCharacter(code)
         }
+    }
+
+    /**
+     * Holding a key that has nothing else to offer.
+     *
+     * Only the globe, and only to open the quick panel. There is a `settings` key code in the
+     * layout format and no layout uses it: a whole key spent on settings is a key not spent on
+     * typing, and holding the key that is already about "which keyboard is this" is where people
+     * look for it anyway.
+     */
+    override fun onKeyLongPress(code: Int, keyIndex: Int): Boolean {
+        if (code != KeyCodes.LANGUAGE && code != KeyCodes.SETTINGS) {
+            return false
+        }
+        toggleQuickSettings()
+        return true
     }
 
     private fun handleCharacter(code: Int) {
@@ -906,6 +930,80 @@ class BorderKeysService :
         // another keyboard. Which dictionaries are active is a separate setting: the engine
         // scores several languages at once and switching layout does not change what it knows.
         switchToNextInputMethod(true)
+    }
+
+    // ---- the panel on the keyboard ------------------------------------------------------------
+
+    /**
+     * Opens the quick panel, or closes it if it is already open.
+     *
+     * The settings key opens this rather than the application, because the settings people reach
+     * for while typing are the ones about the keyboard being in the way -- and judging that
+     * means looking at the keyboard, in the app where it felt wrong. The panel's last row opens
+     * the full settings for everything else.
+     */
+    private fun toggleQuickSettings() {
+        val view = host ?: return
+        val opening = !view.quickSettingsVisible
+        if (opening) {
+            pushQuickSettingsState(view)
+        }
+        view.showQuickSettings(opening)
+    }
+
+    private fun pushQuickSettingsState(view: KeyboardHostView) {
+        view.quickSettings.setState(
+            heightScale = preferences.heightScale,
+            widthScale = preferences.widthScale,
+            placement = when (preferences.positionMode) {
+                KeyboardPreferences.MODE_ONE_HANDED_LEFT -> QuickSettingsView.Placement.LEFT
+                KeyboardPreferences.MODE_ONE_HANDED_RIGHT -> QuickSettingsView.Placement.RIGHT
+                KeyboardPreferences.MODE_FLOATING -> QuickSettingsView.Placement.FLOATING
+                else -> QuickSettingsView.Placement.DOCKED
+            },
+            numberRow = preferences.numberRow,
+        )
+    }
+
+    /**
+     * The panel writes to the same store the settings application writes to.
+     *
+     * Not to a local copy, and not straight to the view: the value goes to the DataStore, the
+     * preferences flow re-emits, and the keyboard resizes through the path that already existed.
+     * That is why the panel and the settings screen cannot disagree.
+     */
+    private fun updatePreferences(transform: (KeyboardPreferences) -> KeyboardPreferences) {
+        scope.launch { DataGraph.themes.updatePreferences(transform) }
+    }
+
+    override fun onHeightScaleChanged(scale: Float) =
+        updatePreferences { it.copy(heightScale = scale) }
+
+    override fun onWidthScaleChanged(scale: Float) =
+        updatePreferences { it.copy(widthScale = scale) }
+
+    override fun onPlacementChanged(placement: QuickSettingsView.Placement) {
+        val mode = when (placement) {
+            QuickSettingsView.Placement.LEFT -> KeyboardPreferences.MODE_ONE_HANDED_LEFT
+            QuickSettingsView.Placement.RIGHT -> KeyboardPreferences.MODE_ONE_HANDED_RIGHT
+            QuickSettingsView.Placement.FLOATING -> KeyboardPreferences.MODE_FLOATING
+            QuickSettingsView.Placement.DOCKED -> KeyboardPreferences.MODE_DOCKED
+        }
+        // withPositionMode rather than copy: leaving the dock for the first time also narrows the
+        // keyboard, or the mode changes nothing visible and reads as broken.
+        updatePreferences { it.withPositionMode(mode) }
+    }
+
+    override fun onNumberRowChanged(enabled: Boolean) =
+        updatePreferences { it.copy(numberRow = enabled) }
+
+    override fun onOpenFullSettings() {
+        host?.showQuickSettings(false)
+        openSettings()
+    }
+
+    override fun onCloseQuickSettings() {
+        host?.showQuickSettings(false)
     }
 
     private fun openSettings() {
