@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.entity.LanguagePackEntry
 import com.borderkeys.predict.LanguagePackInspector
@@ -80,7 +81,8 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
         if (packs.isEmpty()) {
             SettingRow(
                 title = "None yet",
-                subtitle = "Nothing is downloaded, ever. A pack is a file you choose, built " +
+                subtitle = "Nothing is downloaded, ever. Add one of the dictionaries below, " +
+                    "which are inside the application, or import a file you built yourself " +
                     "with tools/build_dict.py from a word list whose licence you know.",
             )
         }
@@ -89,7 +91,43 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
             Divider()
         }
 
-        SectionHeader("Import")
+        val installable = BundledDictionaries.ALL.filter { candidate ->
+            packs.none { it.tag.equals(candidate.tag, ignoreCase = true) }
+        }
+        if (installable.isNotEmpty()) {
+            SectionHeader("Included with the app")
+            Explanation(
+                "These are in the application itself, not on a server — there is no network " +
+                    "here to fetch anything from. Adding one copies it out of the app and " +
+                    "validates it exactly like a file you chose.",
+            )
+            for (candidate in installable) {
+                SettingRow(
+                    title = candidate.displayName,
+                    subtitle = "${candidate.wordCount} words, written in this repository. A " +
+                        "starter: enough for everyday words, and meant to be replaced by a " +
+                        "dictionary compiled from a real corpus.",
+                    trailing = {
+                        TextButton(
+                            enabled = !importing,
+                            onClick = {
+                                importing = true
+                                message = null
+                                scope.launch {
+                                    message = withContext(Dispatchers.IO) {
+                                        installBundled(context, repository, candidate)
+                                    }
+                                    importing = false
+                                }
+                            },
+                        ) { Text("Add") }
+                    },
+                )
+            }
+            Divider()
+        }
+
+        SectionHeader("Import your own")
         Button(
             onClick = { picker.launch(arrayOf("*/*")) },
             enabled = !importing,
@@ -200,6 +238,61 @@ private fun displayNameFor(tag: String): String {
     val locale = java.util.Locale.forLanguageTag(tag)
     val name = locale.getDisplayName(java.util.Locale.getDefault())
     return if (name.isBlank() || name == tag) tag else name
+}
+
+
+/**
+ * Installs a dictionary that shipped inside the application.
+ *
+ * The same path a chosen file takes: copied into private storage, validated by the native
+ * header checks, recorded in the same table. Nothing about it is special afterwards -- it can be
+ * weighted, switched off and removed exactly like an imported one, and replacing it with a real
+ * compiled corpus is an import away.
+ */
+private suspend fun installBundled(
+    context: android.content.Context,
+    repository: com.borderkeys.data.LanguagePackRepository,
+    entry: BundledDictionaries.Entry,
+): String {
+    val staged = runCatching {
+        BundledDictionaries.open(context.assets, entry).use { stream ->
+            repository.stage(stream, entry.fileName)
+        }
+    }.getOrNull()
+
+    if (staged == null || staged.isFailure) {
+        return "The bundled dictionary could not be read."
+    }
+    val pack = staged.getOrThrow()
+
+    return when (val verdict = LanguagePackInspector.inspect(pack.file)) {
+        is LanguagePackInspector.Result.Refused -> {
+            pack.file.delete()
+            // A pack this application compiled itself failing its own validator is a build
+            // problem, not a user problem, and saying so is more use than "import failed".
+            "The bundled dictionary is not valid: ${verdict.reason}. This is a bug."
+        }
+
+        is LanguagePackInspector.Result.Valid -> {
+            val info = verdict.info
+            repository.register(
+                LanguagePackEntry(
+                    tag = info.tag,
+                    displayName = displayNameFor(info.tag),
+                    fileName = pack.file.name,
+                    formatVersion = info.formatVersion,
+                    wordCount = info.wordCount,
+                    sizeBytes = pack.sizeBytes,
+                    sha256 = pack.sha256,
+                    importedAt = System.currentTimeMillis(),
+                    enabled = true,
+                    weight = 1f,
+                    licenseNote = "GPL-3.0-or-later — the word list is written in this repository",
+                ),
+            )
+            "Added ${info.wordCount} words for ${info.tag}."
+        }
+    }
 }
 
 @Composable

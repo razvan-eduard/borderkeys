@@ -96,6 +96,9 @@ class LanguagePackRepository internal constructor(
 
     suspend fun register(entry: LanguagePackEntry): Long = dao.insert(entry)
 
+    /** True when a pack for this language is already installed, whatever it came from. */
+    suspend fun hasLanguage(tag: String): Boolean = dao.findByTag(tag) != null
+
     suspend fun setEnabled(id: Long, enabled: Boolean) = dao.setEnabled(id, enabled)
 
     suspend fun setWeight(id: Long, weight: Float) = dao.setWeight(id, weight.coerceIn(0.05f, 4f))

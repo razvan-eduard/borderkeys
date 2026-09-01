@@ -1,3 +1,5 @@
+import javax.inject.Inject
+import org.gradle.process.ExecOperations
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
@@ -98,4 +100,69 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.test.core)
+}
+
+/**
+ * Compiles the bundled dictionaries from their word lists at build time.
+ *
+ * The lists live in `dictionaries/` as text: reviewable in a diff, licensable by REUSE, and
+ * written by this project rather than taken from a corpus, which is what makes shipping them a
+ * licence question with an answer. The `.bkd` binaries are build output and are not committed,
+ * so a pack in an APK is always exactly what the committed list compiles to.
+ *
+ * The same `tools/build_dict.py` the maintainer runs by hand and the native tests run in CI, so
+ * a format change cannot silently produce packs the engine refuses.
+ */
+abstract class BuildDictionaries : DefaultTask() {
+    @get:InputDirectory
+    abstract val sources: DirectoryProperty
+
+    @get:InputFile
+    abstract val compiler: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @get:Inject
+    abstract val execOperations: ExecOperations
+
+    @TaskAction
+    fun build() {
+        val target = outputDirectory.get().asFile.resolve("dict")
+        target.deleteRecursively()
+        target.mkdirs()
+        val lists = sources.get().asFile.listFiles { file -> file.name.endsWith(".tsv") }
+            ?.sortedBy { it.name } ?: emptyList()
+        check(lists.isNotEmpty()) { "no word lists in ${sources.get().asFile}" }
+        for (list in lists) {
+            val name = list.name.removeSuffix(".tsv")
+            val ngrams = list.parentFile.resolve("$name.ngrams")
+            val arguments = mutableListOf(
+                "python3", compiler.get().asFile.absolutePath,
+                "--words", list.absolutePath,
+                // The file name is the BCP-47 tag with the separator a file name can carry.
+                "--tag", name.replace('_', '-'),
+                "--out", target.resolve("$name.bkd").absolutePath,
+            )
+            if (ngrams.isFile) {
+                arguments += listOf("--ngrams", ngrams.absolutePath)
+            }
+            execOperations.exec { commandLine(arguments) }
+        }
+    }
+}
+
+val buildDictionaries = tasks.register<BuildDictionaries>("buildDictionaries") {
+    sources.set(layout.projectDirectory.dir("../dictionaries"))
+    compiler.set(layout.projectDirectory.file("../tools/build_dict.py"))
+    outputDirectory.set(layout.buildDirectory.dir("generated/dictionaries"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            buildDictionaries,
+            BuildDictionaries::outputDirectory,
+        )
+    }
 }

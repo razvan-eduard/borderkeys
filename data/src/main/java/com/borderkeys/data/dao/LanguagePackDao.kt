@@ -18,6 +18,9 @@ interface LanguagePackDao {
     @Query("SELECT * FROM language_packs ORDER BY enabled DESC, tag")
     fun observeAll(): Flow<List<LanguagePackEntry>>
 
+    @Query("SELECT * FROM language_packs WHERE tag = :tag LIMIT 1")
+    suspend fun findByTag(tag: String): LanguagePackEntry?
+
     @Query("SELECT * FROM language_packs WHERE enabled = 1 ORDER BY weight DESC")
     suspend fun enabledPacks(): List<LanguagePackEntry>
 

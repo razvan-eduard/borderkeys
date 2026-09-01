@@ -58,6 +58,16 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# The word lists the bundled dictionaries are compiled from. Tab-separated data with no comment
+# syntax, so the licence is recorded here rather than in a header that would have to be skipped
+# by every reader of the file. Written by this project, which is what makes shipping the
+# compiled packs a licence question with an answer -- see docs/licensing.md section 2.1.
+[[annotations]]
+path = "dictionaries/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 BorderKeys contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # Keyboard layout descriptions. Plain data, authored here.
 [[annotations]]
 path = "keyboard/src/main/assets/layouts/**"
