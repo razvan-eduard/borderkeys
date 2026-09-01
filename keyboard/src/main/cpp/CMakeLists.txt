@@ -11,7 +11,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Set by the `plus` product flavor only. The neural swipe decoder is compiled out of the `core`
 # variant, not eliminated from it: the preprocessor never sees the code, so no amount of reading
 # the shipped .so can find a trace of it.
-option(BORDERKEYS_NEURAL_SWIPE "Build the neural swipe decoder (step 6, plus flavor)" OFF)
 option(BORDERKEYS_ASAN "Build with AddressSanitizer" OFF)
 
 # Sources are listed, not globbed. file(GLOB) resolves at configure time, so a new file appears
@@ -71,10 +70,6 @@ target_link_options(borderkeys PRIVATE
     -Wl,-z,max-page-size=16384
     -Wl,-z,common-page-size=16384
 )
-
-if(BORDERKEYS_NEURAL_SWIPE)
-    target_compile_definitions(borderkeys PRIVATE BORDERKEYS_NEURAL_SWIPE=1)
-endif()
 
 if(BORDERKEYS_ASAN)
     # Off by default and never enabled for a shipped build: ASan replaces the allocator, which

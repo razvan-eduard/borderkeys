@@ -70,7 +70,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
                     const char* const text = engine.candidateText(out[i], &length);
                     volatile char sink = 0;
                     for (uint32_t k = 0; text != nullptr && k < length; ++k) {
-                        sink = static_cast<volatile char>(text[k]);
+                        // The volatile sink is what stops the read being optimised away; a
+                        // cast to `volatile char` would only discard the qualifier.
+                        sink = text[k];
                     }
                     (void)sink;
                 }

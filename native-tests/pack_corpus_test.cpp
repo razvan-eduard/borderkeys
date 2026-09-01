@@ -154,9 +154,18 @@ int main() {
                 const bool ran = loadAndQuery(readFile((directory + "/" + name).c_str()),
                                               scratch.c_str(), &loaded);
                 char label[256];
-                std::snprintf(label, sizeof(label), "%s handled without crashing (%s)",
-                              name.c_str(), loaded ? "accepted" : "refused");
+                std::snprintf(label, sizeof(label), "%s does not crash the loader",
+                              name.c_str());
                 check(ran, label);
+
+                // Every blob in this directory is damaged by construction -- the file names say
+                // how -- so every one has to be refused rather than mapped. Asserting only
+                // "did not crash" would let a validator that quietly started accepting a
+                // section offset past the end of the file keep passing, which is the exact
+                // failure this corpus exists to catch.
+                std::snprintf(label, sizeof(label), "%s is refused rather than mapped",
+                              name.c_str());
+                check(!loaded, label);
             }
             closedir(dir);
         }

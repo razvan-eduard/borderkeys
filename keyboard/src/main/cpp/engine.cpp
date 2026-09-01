@@ -280,14 +280,20 @@ bool Engine::create() {
     geometry_.clear();
     userModel_.clear();
 
-    // The decoder tier, decided here and never again. In the free build the neural tier does
-    // not exist as code, so this is not a runtime choice between two implementations -- it is
-    // the only implementation that was compiled.
-#if defined(BORDERKEYS_NEURAL_SWIPE)
+    // The decoder, chosen here and never again -- there is one, and it is geometric.
+    //
+    // The plan allowed a second, neural tier in the paid flavor. It is not built, in either
+    // flavor, and this is where a preprocessor branch used to pretend otherwise while both of
+    // its arms constructed the same object. The reason it was not built is recorded in
+    // docs/licensing.md section 2.3: the published implementation turned out to depend on
+    // ExecuTorch and on CMake 3.29, so adopting it means putting PyTorch's runtime inside the
+    // module with the tightest latency budget in the application, and raising the CMake floor
+    // for every native target. That is a decision to take deliberately, not one to smuggle in
+    // behind a flag.
+    //
+    // What makes the option cheap later is the GestureScorer/GestureDecoder split, not a
+    // compile-time switch: a second decoder is a second implementation of one interface.
     gestureDecoder_.reset(new (std::nothrow) Shark2Decoder(*this));
-#else
-    gestureDecoder_.reset(new (std::nothrow) Shark2Decoder(*this));
-#endif
     if (!gestureDecoder_) {
         arena_.release();
         return false;

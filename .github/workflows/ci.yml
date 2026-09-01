@@ -222,6 +222,41 @@ jobs:
           ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 \
             ./native-tests/build-asan/pack_corpus_test
 
+      # The same loader under libFuzzer, seeded from the committed corpus, with a fixed time
+      # budget so the job stays bounded. pack_corpus_test covers this ground deterministically
+      # on every run; this is what finds the inputs nobody thought to write down. A crash fails
+      # the build, and the reproducer is uploaded so it can become a corpus entry rather than
+      # having to be re-derived.
+      - name: Language-pack loader under libFuzzer
+        run: |
+          set -euo pipefail
+          cmake -S native-tests -B native-tests/build-fuzz -DCMAKE_BUILD_TYPE=Debug \
+            -DBORDERKEYS_FUZZ=ON \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          cmake --build native-tests/build-fuzz --target fuzz_pack --parallel
+          # The committed corpus is copied out first. libFuzzer writes the inputs it keeps back
+          # into the directory it is given, and data/corpus is a fixture with eighteen named
+          # cases in it, not a scratch pad.
+          mkdir -p /tmp/fuzz-corpus /tmp/fuzz-artifacts
+          cp native-tests/data/corpus/*.bkd /tmp/fuzz-corpus/
+          # A valid pack in the seed set matters more than any of the broken ones: it is the
+          # only input from which the fuzzer can reach the code behind the header checks.
+          cp native-tests/build/test_pack.bkd /tmp/fuzz-corpus/valid.bkd
+          ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 \
+            ./native-tests/build-fuzz/fuzz_pack /tmp/fuzz-corpus \
+              -max_total_time=90 -max_len=1048576 -rss_limit_mb=2048 \
+              -error_exitcode=1 -print_final_stats=1 \
+              -artifact_prefix=/tmp/fuzz-artifacts/
+
+      - name: Upload fuzz reproducers
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-reproducers
+          path: /tmp/fuzz-artifacts/
+          retention-days: 30
+          if-no-files-found: ignore
+
       # Accuracy is the only thing that says whether a decoder change helped. Compared against
       # the number recorded in docs/gesture-accuracy.json, so a regression fails here rather
       # than being noticed on a device weeks later.

@@ -51,15 +51,11 @@ android {
             dimension = "engine"
             isDefault = true
         }
+        // `plus` differs from `core` only by the :assist module the application links, not by
+        // anything in this one. The plan allowed a second, neural swipe decoder here; it was
+        // not built, and the reason is in docs/licensing.md section 2.3.
         create("plus") {
             dimension = "engine"
-            externalNativeBuild {
-                cmake {
-                    // Compiled out, not dead-code eliminated: libborderkeys.so in the `core`
-                    // variant contains no neural decoder because the preprocessor never saw it.
-                    arguments += listOf("-DBORDERKEYS_NEURAL_SWIPE=ON")
-                }
-            }
         }
     }
 
@@ -69,9 +65,9 @@ android {
     }
 
     buildFeatures {
-        // The decoder tier is chosen once, at nativeCreate, from this flag. There is no
-        // `if (neural)` anywhere near a touch event.
-        buildConfig = true
+        // No BuildConfig: nothing in this module reads one. The application module keeps its
+        // own, for the commit hash and source URL the About screen shows.
+        buildConfig = false
         viewBinding = false
         dataBinding = false
     }
@@ -80,19 +76,6 @@ android {
         unitTests {
             isReturnDefaultValues = true
         }
-    }
-}
-
-androidComponents {
-    onVariants { variant ->
-        variant.buildConfigFields?.put(
-            "NEURAL_SWIPE",
-            com.android.build.api.variant.BuildConfigField(
-                "boolean",
-                (variant.flavorName == "plus").toString(),
-                "True when libborderkeys.so was built with the neural swipe decoder.",
-            ),
-        )
     }
 }
 

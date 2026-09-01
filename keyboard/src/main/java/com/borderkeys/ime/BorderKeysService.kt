@@ -26,7 +26,6 @@ import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
-import com.borderkeys.keyboard.BuildConfig
 import com.borderkeys.predict.LearningBuffer
 import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.theme.ThemePaints
@@ -1064,6 +1063,3 @@ class BorderKeysService :
         )
     }
 }
-
-/** Kept so the flavor flag is read somewhere: the neural decoder arrives in step 6. */
-internal val neuralSwipeCompiledIn: Boolean = BuildConfig.NEURAL_SWIPE
