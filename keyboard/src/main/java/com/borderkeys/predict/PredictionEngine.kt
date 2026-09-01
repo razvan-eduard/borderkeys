@@ -232,6 +232,15 @@ class PredictionEngine(
         }
     }
 
+    /** Applied whenever the preference changes, not only at start. */
+    fun setLearningSpeed(speed: Float) {
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeSetLearningSpeed(current, speed)
+            }
+        }
+    }
+
     fun setBlockedWords(words: Set<String>) {
         synchronized(blocked) {
             blocked.clear()

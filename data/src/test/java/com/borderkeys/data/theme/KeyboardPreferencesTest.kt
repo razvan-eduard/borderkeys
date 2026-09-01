@@ -114,6 +114,41 @@ class KeyboardPreferencesTest {
         assertTrue(defaults.showSuggestionStrip)
     }
 
+    /**
+     * The learning speed is one number applied to two curves, so the three settings have to be
+     * ordered and the middle one has to be the identity.
+     */
+    @Test
+    fun theLearningSpeedsAreOrderedAroundTheDefault() {
+        val cautious = KeyboardPreferences.learningSpeedFactor(KeyboardPreferences.LEARNING_CAUTIOUS)
+        val balanced = KeyboardPreferences.learningSpeedFactor(KeyboardPreferences.LEARNING_BALANCED)
+        val immediate =
+            KeyboardPreferences.learningSpeedFactor(KeyboardPreferences.LEARNING_IMMEDIATE)
+
+        assertTrue("cautious must be slower than the default", cautious < balanced)
+        assertTrue("immediate must be faster than the default", immediate > balanced)
+        assertEquals("the default must not scale anything", 1f, balanced, 0f)
+        assertTrue("a speed must never be zero or negative", cautious > 0f)
+
+        // An unknown value, from a hand-edited file or a future version, is the default rather
+        // than nothing: a keyboard that silently stopped learning would be hard to diagnose.
+        assertEquals(1f, KeyboardPreferences.learningSpeedFactor(99), 0f)
+        assertEquals(1f, KeyboardPreferences.learningSpeedFactor(-1), 0f)
+    }
+
+    @Test
+    fun anOutOfRangeLearningSpeedIsClampedToTheDefault() {
+        assertEquals(
+            KeyboardPreferences.LEARNING_BALANCED,
+            KeyboardPreferences(learningSpeed = 42).sanitised().learningSpeed,
+        )
+        assertEquals(
+            KeyboardPreferences.LEARNING_CAUTIOUS,
+            KeyboardPreferences(learningSpeed = KeyboardPreferences.LEARNING_CAUTIOUS)
+                .sanitised().learningSpeed,
+        )
+    }
+
     /** The defaults are what a first run gets, and a first run should get an ordinary keyboard. */
     @Test
     fun theDefaultIsAPlainDockedKeyboard() {
@@ -123,6 +158,7 @@ class KeyboardPreferencesTest {
         assertEquals(1f, defaults.widthScale, 0f)
         assertEquals(0f, defaults.bottomOffsetDp, 0f)
         assertEquals(0f, defaults.horizontalOffsetDp, 0f)
+        assertEquals(KeyboardPreferences.LEARNING_BALANCED, defaults.learningSpeed)
         assertEquals(defaults, defaults.sanitised())
     }
 }

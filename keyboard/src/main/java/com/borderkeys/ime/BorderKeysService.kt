@@ -482,6 +482,9 @@ class BorderKeysService :
         // which is the point: it is a security requirement, not a preference.
         privateMode = PrivateMode.isPrivate(info)
         learning.enabled = preferences.learningEnabled && !privateMode
+        engine.setLearningSpeed(
+            KeyboardPreferences.learningSpeedFactor(preferences.learningSpeed),
+        )
         if (privateMode) {
             learning.discard()
         }

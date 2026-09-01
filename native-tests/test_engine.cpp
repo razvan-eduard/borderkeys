@@ -313,6 +313,40 @@ void runEngineTests() {
               "a word the pack predicts is still in the list");
     }
 
+    section("how quickly it learns is a setting");
+    {
+        // "testing" is in the pack and much rarer than "test", so with the prefix "test" the
+        // dictionary leads. Choosing "testing" three times is enough to take the lead only at
+        // the impatient setting: the same evidence, believed sooner.
+        const auto leaderAfterThreePicks = [](float speed) {
+            LoadedEngine loaded;
+            loaded.open();
+            loaded.engine.setLearningSpeed(speed);
+            for (int i = 0; i < 3; ++i) {
+                loaded.engine.learn("testing", 7, nullptr, 0, nullptr, 0);
+            }
+            return loaded.rankOf("test", "testing");
+        };
+
+        check(leaderAfterThreePicks(3.0f) == 0,
+              "at the immediate setting three picks put the personal word first");
+        check(leaderAfterThreePicks(1.0f) > 0,
+              "at the default they do not, and the dictionary still leads");
+        check(leaderAfterThreePicks(0.35f) > 0, "nor at the cautious one");
+
+        // The setting is a multiplier crossing JNI from a stored preference. A zero would turn
+        // personalisation off silently and a negative would invert it, so both become the
+        // default rather than being trusted.
+        LoadedEngine guarded;
+        guarded.open();
+        guarded.engine.setLearningSpeed(0.0f);
+        guarded.engine.learn("testing", 7, nullptr, 0, nullptr, 0);
+        check(guarded.rankOf("test", "testing") >= 0,
+              "a zero speed falls back to the default rather than disabling learning");
+        guarded.engine.setLearningSpeed(-5.0f);
+        check(guarded.rankOf("test", "testing") >= 0, "and so does a negative one");
+    }
+
     section("a word is not its own successor");
     {
         LoadedEngine loaded;

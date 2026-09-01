@@ -160,6 +160,9 @@ public:
     void loadUserBigrams(const char* const* previous, const size_t* previousLengths,
                          const char* const* next, const size_t* nextLengths,
                          const int32_t* counts, int count);
+
+    /** How readily what the user writes outranks the dictionary. See KeyboardPreferences. */
+    void setLearningSpeed(float speed);
     bool snapshotUserModel(const char* path);
 
     // Resolves a candidate to its display text. The pointer is owned by the mapping or by the
@@ -208,7 +211,7 @@ private:
     float userBoostFor(const char* text, uint32_t length) const;
     /** Normalises the active packs' weights onto one scale. Shared by tapping and swiping. */
     void refreshWeights();
-    static float userBoostForCount(uint32_t count);
+    float userBoostForCount(uint32_t count) const;
     // Offers a candidate, replacing an entry for the same word instead of adding a second one.
     void offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, const char* text,
                         uint32_t textLength) const;
@@ -236,6 +239,9 @@ private:
      * Resolved once per request beside the per-pack context indices, because every candidate
      * would otherwise fold and look up the same word again.
      */
+    /** Multiplier on how fast the personal model gains ground. 1.0 is the default. */
+    float learningSpeed_ = 1.0f;
+
     int32_t userContext1_ = -1;
 
     int32_t contextWord1_[kMaxPacks] = {};

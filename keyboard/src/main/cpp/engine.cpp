@@ -604,15 +604,30 @@ float Engine::contextLogProb(int packIndex, uint32_t wordIndex) const {
     return unigram + kBackoffLogFactor * static_cast<float>(dropped);
 }
 
-float Engine::userBoostForCount(uint32_t count) {
+float Engine::userBoostForCount(uint32_t count) const {
     if (count == 0) {
         return 0.0f;
     }
     // Diminishing and capped: the tenth time a word is chosen should matter far less than the
     // second, and no amount of repetition should let one word crowd out the dictionary. A
     // linear boost does both of the things this avoids.
-    const float boost = 0.9f * std::log(1.0f + static_cast<float>(count));
+    //
+    // The learning speed multiplies the count rather than the boost, so it moves the curve
+    // along rather than scaling its ceiling: a cautious setting needs more repetitions to reach
+    // the same place, it does not put a lower place at the end of them.
+    const float effective = static_cast<float>(count) * learningSpeed_;
+    const float boost = 0.9f * std::log(1.0f + effective);
     return (boost > kMaxUserBoost) ? kMaxUserBoost : boost;
+}
+
+void Engine::setLearningSpeed(float speed) {
+    // Clamped rather than trusted: this crosses JNI from a stored preference, and a zero or a
+    // negative here would silently turn personalisation off or invert it.
+    if (!(speed > 0.0f)) {
+        learningSpeed_ = 1.0f;
+        return;
+    }
+    learningSpeed_ = (speed > 8.0f) ? 8.0f : speed;
 }
 
 float Engine::userBoostFor(const char* text, uint32_t length) const {
@@ -988,7 +1003,7 @@ float Engine::userBigramBonusFor(uint32_t entryIndex) const {
     // here the word is already a candidate on its own merits and this only says the context
     // agrees.
     const float share = static_cast<float>(pair) /
-                        (static_cast<float>(total) + kUserBigramPrior);
+                        (static_cast<float>(total) + kUserBigramPrior / learningSpeed_);
     const float bonus = kMaxUserBigramBoost * share;
     return bonus;
 }
@@ -1009,9 +1024,16 @@ void Engine::searchUserSuccessors(TopK<Candidate>& heap) {
         // A proper conditional probability on the same scale as the packs', so a phrase someone
         // repeats competes with the language model instead of being bolted on top of it, plus
         // the preference that lets an established habit actually win.
+        // Both the smoothing prior and the confidence half-life scale with the learning speed,
+        // because they are the same question asked twice: how much evidence is demanded before
+        // this is believed. Moving only one of them was tried first and made the three settings
+        // almost indistinguishable -- three, two and two repetitions -- because whichever term
+        // was left fixed went on dominating.
         const float count = static_cast<float>(successors[i].count);
-        const float share = count / (static_cast<float>(total) + kUserBigramPrior);
-        const float confidence = count / (count + kUserChainHalfLife);
+        const float prior = kUserBigramPrior / learningSpeed_;
+        const float halfLife = kUserChainHalfLife / learningSpeed_;
+        const float share = count / (static_cast<float>(total) + prior);
+        const float confidence = count / (count + halfLife);
         const float score = std::log(share) + kUserChainPreference * confidence;
         uint32_t textLength = 0;
         const Candidate candidate{Candidate::kUserPack,

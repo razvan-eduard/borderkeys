@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -28,10 +29,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -91,7 +94,51 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
         }
     }
 
+    val themes = remember { DataGraph.themes }
+    val preferences by themes.preferences
+        .collectAsStateWithLifecycle(initialValue = KeyboardPreferences())
+
+    fun update(transform: (KeyboardPreferences) -> KeyboardPreferences) {
+        scope.launch { themes.updatePreferences(transform) }
+    }
+
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        SectionHeader("How quickly it learns")
+        Explanation(
+            "This does not change what is recorded — every word and pair you confirm is stored " +
+                "either way. It changes how soon what you write starts leading the suggestion " +
+                "strip instead of what the dictionary says.",
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SpeedChip("Cautious", KeyboardPreferences.LEARNING_CAUTIOUS, preferences, ::update)
+            SpeedChip("Balanced", KeyboardPreferences.LEARNING_BALANCED, preferences, ::update)
+            SpeedChip("Immediate", KeyboardPreferences.LEARNING_IMMEDIATE, preferences, ::update)
+        }
+        Explanation(
+            when (preferences.learningSpeed) {
+                KeyboardPreferences.LEARNING_CAUTIOUS ->
+                    "About six repetitions before a phrase you write outranks what the " +
+                        "dictionary predicts. The keyboard will not rearrange itself around one " +
+                        "sentence you wrote once."
+                KeyboardPreferences.LEARNING_IMMEDIATE ->
+                    "The first time counts. Best if you write the same things every day; it " +
+                        "does mean a one-off phrase leads until you write something else."
+                else ->
+                    "A phrase written twice starts to lead. What the dictionary predicts stays " +
+                        "in the strip behind it."
+            },
+        )
+        SwitchRow(
+            title = "Learn at all",
+            subtitle = "Off means nothing new is recorded. What has already been learned stays " +
+                "until you delete it below.",
+            checked = preferences.learningEnabled,
+        ) { value -> update { it.copy(learningEnabled = value) } }
+
+        Divider()
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -178,4 +225,18 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 "you carry is the only way anything moves.",
         )
     }
+}
+
+@Composable
+private fun SpeedChip(
+    label: String,
+    speed: Int,
+    preferences: KeyboardPreferences,
+    update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit,
+) {
+    FilterChip(
+        selected = preferences.learningSpeed == speed,
+        onClick = { update { it.copy(learningSpeed = speed) } },
+        label = { Text(label) },
+    )
 }

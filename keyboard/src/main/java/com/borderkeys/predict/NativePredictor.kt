@@ -152,6 +152,11 @@ internal object NativePredictor {
      * Replaces the remembered word pairs. Called right after [nativeLoadUserWords], from the
      * same read, so that both halves of every pair are words the model already holds.
      */
+    /**
+     * How readily what the user writes outranks the dictionary. A multiplier; 1 is the default.
+     */
+    external fun nativeSetLearningSpeed(handle: Long, speed: Float)
+
     external fun nativeLoadUserBigrams(
         handle: Long,
         previous: Array<String>,

@@ -397,6 +397,14 @@ void freeStringArray(char** storage, jsize count) {
  * because a separator would have to be a character no word can contain and there is no such
  * character once the dictionary can hold anything the user typed.
  */
+void nativeSetLearningSpeed(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jfloat speed) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return;
+    }
+    engine->setLearningSpeed(static_cast<float>(speed));
+}
+
 void nativeLoadUserBigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray previous,
                            jobjectArray next, jintArray counts) {
     Engine* const engine = engineFrom(handle);
@@ -668,6 +676,8 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeLoadUserWords)},
     {"nativeLoadUserBigrams", "(J[Ljava/lang/String;[Ljava/lang/String;[I)V",
      reinterpret_cast<void*>(nativeLoadUserBigrams)},
+    {"nativeSetLearningSpeed", "(JF)V",
+     reinterpret_cast<void*>(nativeSetLearningSpeed)},
     {"nativeDecodeGesture",
      "(J[F[F[JILjava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F)I",
      reinterpret_cast<void*>(nativeDecodeGesture)},

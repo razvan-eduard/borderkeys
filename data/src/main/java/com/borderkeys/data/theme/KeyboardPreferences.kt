@@ -27,6 +27,21 @@ data class KeyboardPreferences(
     val clipboardMaxEntries: Int = 60,
     /** Whether confirmed words are written to the personal dictionary at all. */
     val learningEnabled: Boolean = true,
+
+    /**
+     * How readily what you write starts to outrank what the dictionary says.
+     *
+     * One of the LEARNING_ constants below. It does not change *what* is recorded -- every
+     * confirmed word and pair is stored either way -- only how quickly the record starts
+     * leading the suggestion strip.
+     *
+     * The reason it is a setting rather than a constant is that the right answer is a matter of
+     * taste and nothing else. Someone who writes the same few phrases all day wants the first
+     * repetition to count. Someone who writes about many things wants a keyboard that does not
+     * rearrange itself around a sentence they wrote once. Neither is wrong, and picking one for
+     * both is how a keyboard ends up feeling either stubborn or twitchy.
+     */
+    val learningSpeed: Int = LEARNING_BALANCED,
     val swipeEnabled: Boolean = true,
     /**
      * Off, and it stays off unless the user says otherwise.
@@ -103,6 +118,11 @@ data class KeyboardPreferences(
         heightScale = heightScale.coerceIn(MIN_HEIGHT_SCALE, MAX_HEIGHT_SCALE),
         widthScale = widthScale.coerceIn(MIN_WIDTH_SCALE, 1f),
         positionMode = if (positionMode in MODE_DOCKED..MODE_FLOATING) positionMode else MODE_DOCKED,
+        learningSpeed = if (learningSpeed in LEARNING_CAUTIOUS..LEARNING_IMMEDIATE) {
+            learningSpeed
+        } else {
+            LEARNING_BALANCED
+        },
         bottomOffsetDp = bottomOffsetDp.coerceIn(0f, MAX_BOTTOM_OFFSET_DP),
         horizontalOffsetDp = horizontalOffsetDp.coerceIn(-160f, 160f),
     )
@@ -142,6 +162,31 @@ data class KeyboardPreferences(
 
         /** Lifted off the bottom edge and movable, for a large screen or a split view. */
         const val MODE_FLOATING = 3
+
+        /**
+         * Several repetitions before a word or phrase leads. For someone who writes about many
+         * things and does not want the keyboard rearranged by one sentence.
+         */
+        const val LEARNING_CAUTIOUS = 0
+
+        /** The default. A phrase written twice starts to lead. */
+        const val LEARNING_BALANCED = 1
+
+        /** The first time counts. For someone who writes the same things every day. */
+        const val LEARNING_IMMEDIATE = 2
+
+        /**
+         * The multiplier each setting applies to how fast the personal model gains ground.
+         *
+         * One number rather than one per curve, so the setting means the same thing everywhere:
+         * it scales both how quickly a word climbs and how many repetitions a phrase needs
+         * before it leads. Two knobs that could disagree would be two knobs to explain.
+         */
+        fun learningSpeedFactor(speed: Int): Float = when (speed) {
+            LEARNING_CAUTIOUS -> 0.35f
+            LEARNING_IMMEDIATE -> 3f
+            else -> 1f
+        }
 
         const val MIN_HEIGHT_SCALE = 0.65f
         const val MAX_HEIGHT_SCALE = 1.6f
