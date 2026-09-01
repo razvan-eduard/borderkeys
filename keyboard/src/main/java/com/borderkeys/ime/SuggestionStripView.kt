@@ -172,8 +172,15 @@ class SuggestionStripView(
                     canvas.drawRect(left, 0f, left + slotWidth, height.toFloat(),
                         paints.keyPressedFill)
                 }
-                // The first candidate is what a space key commits, so it is the accent colour:
-                // the difference between "this is what will happen" and "these are options".
+                // The first candidate is the engine's best guess, so it gets the full label
+                // colour and the rest get the secondary one.
+                //
+                // It is *not* what the space key commits. Space commits what was typed, letter
+                // for letter, and a suggestion is applied only when it is tapped -- see
+                // handleCharacter in BorderKeysService, where that is the whole point of the
+                // delimiter branch. An earlier version of this comment claimed the opposite,
+                // which would have described a keyboard that silently rewrites what you wrote:
+                // exactly the behaviour this project exists to avoid.
                 val paint = if (index == 0) paints.label else paints.labelSecondary
                 canvas.drawText(chars[index], 0, length, left + slotWidth / 2f, baseline, paint)
 
