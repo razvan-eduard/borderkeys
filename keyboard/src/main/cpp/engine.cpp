@@ -97,6 +97,30 @@ constexpr float kUserBigramPrior = 4.0f;
 /** The most a personal pair may add to a word that was already being suggested. */
 constexpr float kMaxUserBigramBoost = 2.5f;
 
+/**
+ * How far a phrase this person actually writes may outrank what the corpus says follows.
+ *
+ * Without it the two estimates compete on the smoothed share alone, and a strong corpus bigram
+ * wins for ever: the pack says "să" follows "trebuie" six times in ten, and a user who has
+ * written "trebuie mult" six times still reads "să" first. That is the wrong answer for a
+ * keyboard that is supposed to be theirs. A corpus says what people write; a pair here says what
+ * *this* person writes, and about this person it is the better evidence.
+ *
+ * Not a flat preference, though, because one observation is not evidence of a habit. The
+ * preference is scaled by a confidence that starts near zero and saturates, so:
+ *
+ *   written once      +0.4   -- stays behind a strong corpus bigram, where it belongs
+ *   written 3 times   +0.8   -- takes the lead
+ *   written 20 times  +1.3   -- and keeps it
+ *
+ * The ceiling matters as much as the growth. A phrase written a thousand times must not be able
+ * to bury every alternative, because people do change what they write.
+ */
+constexpr float kUserChainPreference = 1.5f;
+
+/** Observations at which the preference above reaches half its ceiling. */
+constexpr float kUserChainHalfLife = 3.0f;
+
 constexpr int kMaxEndpoints = 96;
 
 // How many trie nodes a request may visit, by prefix length.
@@ -877,6 +901,13 @@ void Engine::searchNextWord(int packIndex, TopK<Candidate>& heap) {
     // work that can measure whether it is worth the bytes.
     for (int i = 0; i < count; ++i) {
         const uint32_t wordIndex = static_cast<uint32_t>(frequent[i]);
+        if (static_cast<int32_t>(wordIndex) == contextWord1_[packIndex]) {
+            // Not the word that was just written. With no bigram to go on this list is ordered
+            // by raw frequency, so the most common word in the language is offered as its own
+            // successor: "the" after "the", "și" after "și". It is never what was meant, and it
+            // takes the slot a real prediction would have had.
+            continue;
+        }
         float score = weightLog + contextLogProb(packIndex, wordIndex);
         if (score + kMaxUserBoost > heap.worstScore()) {
             uint32_t textLength = 0;
@@ -976,10 +1007,12 @@ void Engine::searchUserSuccessors(TopK<Candidate>& heap) {
     const int found = userModel_.successors(userContext1_, successors, kMaxSuccessors);
     for (int i = 0; i < found; ++i) {
         // A proper conditional probability on the same scale as the packs', so a phrase someone
-        // repeats competes with the language model instead of being bolted on top of it.
-        const float share = static_cast<float>(successors[i].count) /
-                            (static_cast<float>(total) + kUserBigramPrior);
-        const float score = std::log(share);
+        // repeats competes with the language model instead of being bolted on top of it, plus
+        // the preference that lets an established habit actually win.
+        const float count = static_cast<float>(successors[i].count);
+        const float share = count / (static_cast<float>(total) + kUserBigramPrior);
+        const float confidence = count / (count + kUserChainHalfLife);
+        const float score = std::log(share) + kUserChainPreference * confidence;
         uint32_t textLength = 0;
         const Candidate candidate{Candidate::kUserPack,
                                   static_cast<int32_t>(successors[i].entryIndex), score};

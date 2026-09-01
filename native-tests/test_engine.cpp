@@ -279,6 +279,52 @@ void runEngineTests() {
               "an unrelated word does not become a prediction");
     }
 
+    section("a learned chain leads the strip");
+    {
+        LoadedEngine loaded;
+        loaded.open();
+
+        // Two phrases starting from the same word, one written three times and one written
+        // once. The repeated one leads: the preference for a personal chain grows with how
+        // often it has been written, so a habit outranks an accident.
+        //
+        // Both words of each phrase are learned, because that is what the service does -- a
+        // pair names two words and the model resolves those names against words it holds. A
+        // test that learned only the second word would record no pair at all and would then
+        // pass or fail for reasons that have nothing to do with what it claims to check.
+        const auto write = [&loaded](const char* first, const char* second) {
+            loaded.engine.learn(first, std::strlen(first), nullptr, 0, nullptr, 0);
+            loaded.engine.learn(second, std::strlen(second), first, std::strlen(first),
+                                nullptr, 0);
+        };
+        for (int round = 0; round < 3; ++round) {
+            write("the", "them");
+        }
+        write("the", "test");
+
+        check(loaded.rankOf("", "them", "the") == 0,
+              "the phrase written three times leads");
+        check(loaded.rankOf("", "test", "the") > 0,
+              "and the one written once is still offered, behind it");
+
+        // The dictionary's own candidates are not thrown away; they sit behind the personal
+        // ones rather than being replaced by them.
+        check(loaded.rankOf("", "time", "the") > 0,
+              "a word the pack predicts is still in the list");
+    }
+
+    section("a word is not its own successor");
+    {
+        LoadedEngine loaded;
+        loaded.open();
+        // With no bigram to go on, the next-word list is ordered by raw frequency, so the most
+        // frequent word in the pack would otherwise be offered as following itself.
+        check(loaded.rankOf("", "the", "the") != 0,
+              "\"the\" is not the top prediction after \"the\"");
+        check(loaded.rankOf("", "\u0219i", "\u0219i") != 0,
+              "nor is the most frequent Romanian word after itself");
+    }
+
     section("a phrase is not learned from a single word");
     {
         LoadedEngine loaded;
