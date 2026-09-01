@@ -14,7 +14,6 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsRequest
 import android.view.inputmethod.InlineSuggestionsResponse
 import android.view.inputmethod.InputConnection
-import android.view.inputmethod.InputMethodManager
 import android.widget.inline.InlinePresentationSpec
 import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.common.TextViewStyle
@@ -121,9 +120,6 @@ class BorderKeysService :
     }
     private var clipboardManager: ClipboardManager? = null
     private var clipboardListenerRegistered = false
-    private val inputMethods: InputMethodManager? by lazy {
-        getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-    }
 
     // ---- lifecycle ---------------------------------------------------------------------------
 
@@ -876,8 +872,16 @@ class BorderKeysService :
         if (!learning.enabled || word.length < MIN_LEARNED_LENGTH) {
             return
         }
-        val locale = inputMethods?.currentInputMethodSubtype?.languageTag?.takeIf { it.isNotEmpty() }
-            ?: alphabeticLayout.languageTag
+        // The layout being typed on, not the system input-method subtype.
+        //
+        // The subtype is one tag declared in method.xml, and this keyboard's premise is that
+        // several languages are active at once with no switching between them -- so the subtype
+        // said "en-US" for a Romanian word typed on a Romanian layout, and the personal
+        // dictionary displayed that. The layout is at least something the user chose and can
+        // see. It is still not a claim about which language the word belongs to: nothing here
+        // can know that for a word that was typed rather than picked from a suggestion, which
+        // is why the settings screen says "typed on" rather than naming a language.
+        val locale = alphabeticLayout.languageTag
         if (learning.record(word, locale, System.currentTimeMillis())) {
             engine.learn(
                 listOf(

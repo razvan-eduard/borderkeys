@@ -115,7 +115,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
         for (word in words.take(200)) {
             SettingRow(
                 title = word.word,
-                subtitle = "chosen ${word.count} times · ${word.locale}",
+                subtitle = "chosen ${word.count} times · typed on ${word.locale}",
                 trailing = {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = { scope.launch { repository.forget(word.word) } }) {
