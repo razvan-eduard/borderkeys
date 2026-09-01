@@ -6,6 +6,7 @@ package com.borderkeys.settings.screen
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -88,6 +90,11 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
         InterfaceLanguage(preferences) { code ->
             scope.launch { DataGraph.themes.updatePreferences { it.copy(uiLanguage = code) } }
         }
+        Divider()
+        LanguageLock(preferences) { lock ->
+            scope.launch { DataGraph.themes.updatePreferences { it.copy(languageLock = lock) } }
+        }
+
         Divider()
         SectionHeader(strings[Keys.LANGUAGES_INSTALLED_PACKS])
         if (packs.isEmpty()) {
@@ -370,9 +377,12 @@ private fun InterfaceLanguage(preferences: KeyboardPreferences, update: (String)
     ) { update("") }
     for (code in available) {
         LanguageRow(
-            // Named in itself where the catalogue says so, and by its code where it does not --
-            // a language whose own name is missing is still better offered than hidden.
-            label = strings.getString(LANGUAGE_NAME_PREFIX + code).ifEmpty { code },
+            // Named in itself where the catalogue says so, and by its code where it does not.
+            // A missing entry comes back as its own key, which is the loader's way of making a
+            // gap visible -- useful on a settings row, useless on a list someone has to choose
+            // from, so here it becomes the code instead.
+            label = strings.getString(LANGUAGE_NAME_PREFIX + code)
+                .takeIf { it != LANGUAGE_NAME_PREFIX + code } ?: code,
             selected = preferences.uiLanguage == code,
         ) { update(code) }
     }
@@ -400,3 +410,53 @@ private fun LanguageRow(label: String, selected: Boolean, onPick: () -> Unit) {
 
 /** `language_name_ro` holds "Română". Built from the code so adding a language adds no code. */
 private const val LANGUAGE_NAME_PREFIX = "language_name_"
+
+/**
+ * How readily the keyboard stops offering words from the languages you are not writing in.
+ *
+ * A choice rather than a constant because the right answer depends on how someone writes, and
+ * the two ends are both reasonable: one person writes one language at a time and wants the
+ * others out of the way; another writes two in the same sentence and would be actively harmed
+ * by the keyboard picking a side.
+ */
+@Composable
+private fun LanguageLock(preferences: KeyboardPreferences, update: (Int) -> Unit) {
+    val strings = LocalStrings.current
+
+    SectionHeader(strings[Keys.LANGUAGES_STICK_TO_ONE_LANGUAGE])
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        LockChip(strings[Keys.LANGUAGES_LOCK_OFF], KeyboardPreferences.LANGUAGE_LOCK_OFF,
+            preferences, update)
+        LockChip(strings[Keys.LANGUAGES_LOCK_PATIENT], KeyboardPreferences.LANGUAGE_LOCK_PATIENT,
+            preferences, update)
+        LockChip(strings[Keys.LANGUAGES_LOCK_BALANCED], KeyboardPreferences.LANGUAGE_LOCK_BALANCED,
+            preferences, update)
+        LockChip(strings[Keys.LANGUAGES_LOCK_QUICK], KeyboardPreferences.LANGUAGE_LOCK_QUICK,
+            preferences, update)
+    }
+    Explanation(strings[Keys.LANGUAGES_LOCK_EXPLANATION])
+    Explanation(
+        if (preferences.languageLock == KeyboardPreferences.LANGUAGE_LOCK_OFF) {
+            strings[Keys.LANGUAGES_LOCK_OFF_NOTE]
+        } else {
+            strings[Keys.LANGUAGES_LOCK_EVIDENCE_NOTE]
+        },
+    )
+}
+
+@Composable
+private fun LockChip(
+    label: String,
+    lock: Int,
+    preferences: KeyboardPreferences,
+    update: (Int) -> Unit,
+) {
+    FilterChip(
+        selected = preferences.languageLock == lock,
+        onClick = { update(lock) },
+        label = { Text(label) },
+    )
+}

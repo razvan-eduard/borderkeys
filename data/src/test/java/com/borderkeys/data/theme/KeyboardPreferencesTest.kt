@@ -192,4 +192,40 @@ class KeyboardPreferencesTest {
         assertFalse(defaults.blurBehindKeyboard)
         assertEquals(defaults, defaults.sanitised())
     }
+    @Test
+    fun `language lock is on and balanced by default`() {
+        assertEquals(
+            KeyboardPreferences.LANGUAGE_LOCK_BALANCED,
+            KeyboardPreferences().languageLock,
+        )
+    }
+
+    /** Zero is the engine's "never lock", so off has to map to it exactly. */
+    @Test
+    fun `off asks the engine for no lock at all`() {
+        assertEquals(
+            0f,
+            KeyboardPreferences.languageLockEvidence(KeyboardPreferences.LANGUAGE_LOCK_OFF),
+        )
+    }
+
+    @Test
+    fun `quick waits for less evidence than patient`() {
+        val quick = KeyboardPreferences.languageLockEvidence(KeyboardPreferences.LANGUAGE_LOCK_QUICK)
+        val balanced =
+            KeyboardPreferences.languageLockEvidence(KeyboardPreferences.LANGUAGE_LOCK_BALANCED)
+        val patient =
+            KeyboardPreferences.languageLockEvidence(KeyboardPreferences.LANGUAGE_LOCK_PATIENT)
+        assertTrue("quick should be the smallest threshold", quick < balanced)
+        assertTrue("patient should be the largest threshold", balanced < patient)
+    }
+
+    @Test
+    fun `an out-of-range lock is repaired rather than trusted`() {
+        assertEquals(
+            KeyboardPreferences.LANGUAGE_LOCK_BALANCED,
+            KeyboardPreferences(languageLock = 99).sanitised().languageLock,
+        )
+    }
+
 }

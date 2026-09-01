@@ -113,6 +113,18 @@ data class KeyboardPreferences(
     val uiLanguage: String = "",
 
     /**
+     * How readily the keyboard stops offering words from the languages you are not writing in.
+     *
+     * On by default, and balanced rather than quick: a wrong guess is worse than a slow one,
+     * because it removes words rather than adding them. Off is a real choice -- someone who
+     * writes two languages inside one sentence is not served by the keyboard picking a side.
+     *
+     * What you have written yourself is never filtered by this. A phrase you repeat is
+     * evidence about you, which outranks any guess about the sentence.
+     */
+    val languageLock: Int = LANGUAGE_LOCK_BALANCED,
+
+    /**
      * A permanent row of digits above the letters.
      *
      * Off by default. It costs about a fifth of the keyboard's height, and on a touch surface
@@ -192,6 +204,11 @@ data class KeyboardPreferences(
         // A language code, not free text. Bounded so a corrupt file cannot carry an arbitrarily
         // long string into every lookup; an unknown code resolves to English anyway.
         uiLanguage = uiLanguage.take(MAX_LANGUAGE_TAG),
+        languageLock = if (languageLock in LANGUAGE_LOCK_OFF..LANGUAGE_LOCK_QUICK) {
+            languageLock
+        } else {
+            LANGUAGE_LOCK_BALANCED
+        },
     )
 
     val isOneHanded: Boolean
@@ -249,19 +266,47 @@ data class KeyboardPreferences(
          * it scales both how quickly a word climbs and how many repetitions a phrase needs
          * before it leads. Two knobs that could disagree would be two knobs to explain.
          */
+        /** Every dictionary is consulted for every word, whatever language the sentence is in. */
+        const val LANGUAGE_LOCK_OFF = 0
+
+        /** Waits for clear evidence -- roughly five or six telling words. */
+        const val LANGUAGE_LOCK_PATIENT = 1
+
+        /** Decides after about three words that belong to one language and no other. */
+        const val LANGUAGE_LOCK_BALANCED = 2
+
+        /** Decides on the first telling word. For someone who rarely mixes languages. */
+        const val LANGUAGE_LOCK_QUICK = 3
+
+        /**
+         * How much one-sided evidence the engine wants before it stops consulting the other
+         * dictionaries, or a value at or below zero to never stop.
+         *
+         * Evidence is counted in words that exactly one active dictionary knows, aged by 0.85
+         * per word written. The numbers are therefore roughly "how many telling words", not
+         * "how many words" -- most of a sentence belongs to several dictionaries at once and
+         * counts for neither.
+         */
+        fun languageLockEvidence(lock: Int): Float = when (lock) {
+            LANGUAGE_LOCK_OFF -> 0f
+            LANGUAGE_LOCK_PATIENT -> 3.4f
+            LANGUAGE_LOCK_QUICK -> 0.9f
+            else -> 1.8f
+        }
+
         fun learningSpeedFactor(speed: Int): Float = when (speed) {
             LEARNING_CAUTIOUS -> 0.35f
             LEARNING_IMMEDIATE -> 3f
             else -> 1f
         }
 
+        /** Longest language code accepted from the stored file: `pt-BR` and friends fit easily. */
+        const val MAX_LANGUAGE_TAG = 16
+
         /**
          * Below three the strip stops being a choice and becomes an announcement; above eight
          * the slots are narrower than a fingertip on any phone this runs on.
          */
-        /** Longest language code accepted from the stored file: `pt-BR` and friends fit easily. */
-        const val MAX_LANGUAGE_TAG = 16
-
         const val MIN_SUGGESTIONS = 3
         const val MAX_SUGGESTIONS = 8
         const val DEFAULT_SUGGESTIONS = 3

@@ -199,16 +199,12 @@ constexpr float kFallbackEditCost = 4.2f;
 // conversation is followed within a sentence.
 constexpr float kLanguageEvidenceDecay = 0.85f;
 
-// Evidence needed before the keyboard is willing to say a language has been detected, and the
-// share of it one language must hold.
+// The share of the evidence one language must hold before it counts as the one being written.
 //
-// 1.8 is about three exclusive words inside the decay window, which measured out as the point
-// where detection is quick enough to be useful and still slow enough to survive a borrowed
-// noun. Higher was tried first and was wrong for a reason worth recording: most words in a
-// sentence belong to several dictionaries at once, so evidence arrives far more slowly than
-// words do -- five English words in a row produced 2.34, and a threshold of 2.5 meant the
-// keyboard never made up its mind at all.
-constexpr float kLanguageEvidenceMinimum = 1.8f;
+// Not a setting: it is a statement about how one-sided a measurement has to be to act on, which
+// is not something anyone can answer by trying values. How *much* evidence to wait for is the
+// question a person can actually have an opinion about, and that one comes from the settings as
+// languageLockMinimum_.
 constexpr float kLanguageDominanceShare = 0.7f;
 
 // Once a language is detected, the other dictionaries are not consulted at all.
@@ -524,6 +520,16 @@ const PackedTrie* Engine::activeTrie(int packIndex) const {
     return (pack.isOpen() && pack.active) ? &pack.trie() : nullptr;
 }
 
+void Engine::setLanguageLock(float minimumEvidence) {
+    languageLockMinimum_ = minimumEvidence;
+    // Turning it off has to take effect on the next word, not on the next sentence: the
+    // evidence already gathered would otherwise keep a language locked after the user said
+    // they did not want that.
+    if (minimumEvidence <= 0.0f) {
+        dominantPack_ = -1;
+    }
+}
+
 void Engine::observeContextLanguage(const uint32_t* folded, int length) {
     if (length <= 0) {
         return;
@@ -572,7 +578,10 @@ void Engine::observeContextLanguage(const uint32_t* folded, int length) {
             }
         }
     }
-    dominantPack_ = (total >= kLanguageEvidenceMinimum && best >= total * kLanguageDominanceShare)
+    // At or below zero the user has asked for every dictionary to stay in play, so no amount
+    // of evidence locks anything.
+    dominantPack_ = (languageLockMinimum_ > 0.0f && total >= languageLockMinimum_ &&
+                     best >= total * kLanguageDominanceShare)
                         ? bestIndex
                         : -1;
 }

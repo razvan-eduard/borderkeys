@@ -157,6 +157,9 @@ internal object NativePredictor {
      */
     external fun nativeSetLearningSpeed(handle: Long, speed: Float)
 
+    /** Zero, or less, keeps every dictionary in play whatever the sentence looks like. */
+    external fun nativeSetLanguageLock(handle: Long, minimumEvidence: Float)
+
     /** Whether a suggestion may be two words. See KeyboardPreferences.phraseSuggestions. */
     external fun nativeSetPhraseSuggestions(handle: Long, enabled: Boolean)
 

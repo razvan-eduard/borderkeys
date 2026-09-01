@@ -170,6 +170,12 @@ public:
     /** How readily what the user writes outranks the dictionary. See KeyboardPreferences. */
     void setLearningSpeed(float speed);
 
+    /**
+     * How much one-sided evidence is wanted before the dictionaries for other languages stop
+     * being searched. At or below zero they are always searched.
+     */
+    void setLanguageLock(float minimumEvidence);
+
     /** Whether two-word suggestions are offered at all. Off unless the user asks for them. */
     void setPhraseSuggestions(bool enabled) { phraseSuggestions_ = enabled; }
     bool snapshotUserModel(const char* path);
@@ -252,6 +258,7 @@ private:
     // because the fallback pass changes it between two runs over the same packs.
     float editCostCeiling_ = 0.0f;
 
+    float languageLockMinimum_ = 1.8f;
     float languageEvidence_[kMaxPacks] = {};
     int dominantPack_ = -1;
     uint32_t lastObservedWord_ = 0;

@@ -242,6 +242,18 @@ class PredictionEngine(
         }
     }
 
+    /**
+     * How much one-sided evidence is wanted before words from other languages stop being
+     * offered. Zero never stops offering them.
+     */
+    fun setLanguageLock(minimumEvidence: Float) {
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeSetLanguageLock(current, minimumEvidence)
+            }
+        }
+    }
+
     /** Posted after [loadUserBigrams], so the words a triple names are already held. */
     fun loadUserTrigrams(triples: List<UserTrigram>) {
         if (triples.isEmpty()) {

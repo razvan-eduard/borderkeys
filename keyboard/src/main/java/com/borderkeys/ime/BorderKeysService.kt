@@ -561,6 +561,9 @@ class BorderKeysService :
         engine.setLearningSpeed(
             KeyboardPreferences.learningSpeedFactor(preferences.learningSpeed),
         )
+        engine.setLanguageLock(
+            KeyboardPreferences.languageLockEvidence(preferences.languageLock),
+        )
         engine.setPhraseSuggestions(preferences.phraseSuggestions)
         if (privateMode) {
             learning.discard()
