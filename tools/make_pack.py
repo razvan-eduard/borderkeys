@@ -59,9 +59,21 @@ HERE = Path(__file__).resolve().parent
 WORD = re.compile(r"[^\W\d_]+(?:['’-][^\W\d_]+)*", re.UNICODE)
 
 
+# Sequences that only appear when UTF-8 has been decoded as Latin-1 somewhere upstream: "dacă"
+# arriving as "dacÄƒ". Real corpora carry some of this, it survives every frequency cutoff
+# because the mis-encoding is consistent, and it reaches the suggestion strip looking like a
+# word. Cheaper to refuse here than to explain later.
+MOJIBAKE = re.compile(r"[ÂÃÄÅ][\u0080-\u00bf\u0192\u2020-\u203a]")
+
+
 def tokenise(line: str) -> list[str]:
     """Lower-cases and splits a line into words, keeping the accents."""
-    return [m.group(0).lower() for m in WORD.finditer(unicodedata.normalize("NFC", line))]
+    normalised = unicodedata.normalize("NFC", line)
+    return [
+        m.group(0).lower()
+        for m in WORD.finditer(normalised)
+        if not MOJIBAKE.search(m.group(0))
+    ]
 
 
 def count_corpus(paths: list[Path], order: int) -> tuple[Counter, Counter, Counter]:
