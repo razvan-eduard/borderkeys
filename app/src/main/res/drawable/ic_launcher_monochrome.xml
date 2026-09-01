@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    The same four shapes in one colour, for the themed icons Android 13 introduced. The
+    system tints this layer from the wallpaper and ignores the fill declared here, so only
+    the silhouette matters: which is why the accent bar is not distinguished from the caps.
+    At a single tint it cannot be, and pretending otherwise would only muddy the shapes.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M34,36 L40,36 A3,3 0 0 1 43,39 L43,47 A3,3 0 0 1 40,50 L34,50 A3,3 0 0 1 31,47 L31,39 A3,3 0 0 1 34,36 Z" />
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M51,36 L57,36 A3,3 0 0 1 60,39 L60,47 A3,3 0 0 1 57,50 L51,50 A3,3 0 0 1 48,47 L48,39 A3,3 0 0 1 51,36 Z" />
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M68,36 L74,36 A3,3 0 0 1 77,39 L77,47 A3,3 0 0 1 74,50 L68,50 A3,3 0 0 1 65,47 L65,39 A3,3 0 0 1 68,36 Z" />
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M34,58 L74,58 A3,3 0 0 1 77,61 L77,69 A3,3 0 0 1 74,72 L34,72 A3,3 0 0 1 31,69 L31,61 A3,3 0 0 1 34,58 Z" />
+</vector>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    A row of three keys over a space bar, drawn the way the keyboard draws its own: rounded
+    rectangles, the pale label colour on the caps, the accent on the bar.
+
+    Three caps rather than two, and one row rather than two, because both ends of that trade
+    were rendered and looked at. Two wide caps read as a pair of dashes; two rows of three
+    are the most obviously a keyboard at full size and merge into texture by the time a
+    folder or the recents strip shrinks the icon to about 56 pixels. Three caps survive both.
+
+    A vector rather than PNGs at five densities. minSdk is 30, so the adaptive icon is always
+    available and no legacy raster fallback is needed; that leaves the icon as text the
+    repository can diff, review and license, with no binary asset and no .license sidecar.
+
+    Sizing is the part that is easy to get wrong. The 108dp viewport is the adaptive-icon
+    canvas, of which a launcher shows about the middle 72dp and guarantees only the middle
+    66dp. This mark occupies x 31..77 and y 36..72, so its farthest corner sits 29 of the
+    permitted 36 units from the centre. A first attempt drew it at 60x60, inside the safe
+    zone by the letter of the specification, and still wrong: scaled up to fill the mask it
+    ran to the edges and read as an abstract flag rather than as a keyboard.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="@color/ic_launcher_key"
+        android:pathData="M34,36 L40,36 A3,3 0 0 1 43,39 L43,47 A3,3 0 0 1 40,50 L34,50 A3,3 0 0 1 31,47 L31,39 A3,3 0 0 1 34,36 Z" />
+
+    <path
+        android:fillColor="@color/ic_launcher_key"
+        android:pathData="M51,36 L57,36 A3,3 0 0 1 60,39 L60,47 A3,3 0 0 1 57,50 L51,50 A3,3 0 0 1 48,47 L48,39 A3,3 0 0 1 51,36 Z" />
+
+    <path
+        android:fillColor="@color/ic_launcher_key"
+        android:pathData="M68,36 L74,36 A3,3 0 0 1 77,39 L77,47 A3,3 0 0 1 74,50 L68,50 A3,3 0 0 1 65,47 L65,39 A3,3 0 0 1 68,36 Z" />
+
+    <path
+        android:fillColor="@color/ic_launcher_accent"
+        android:pathData="M34,58 L74,58 A3,3 0 0 1 77,61 L77,69 A3,3 0 0 1 74,72 L34,72 A3,3 0 0 1 31,69 L31,61 A3,3 0 0 1 34,58 Z" />
+</vector>

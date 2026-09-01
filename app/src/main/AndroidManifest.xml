@@ -48,11 +48,17 @@
         an accessibility service.
     -->
 
+    <!--
+        No android:roundIcon. It exists for devices below API 26 that wanted a circular
+        raster of their own; minSdk is 30, every device here resolves the adaptive icon, and
+        the launcher's own mask decides the shape.
+    -->
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:hardwareAccelerated="true"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.BorderKeys" />

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    The launcher icon's colours, taken from the keyboard's own default theme rather than
+    chosen separately: the background is KeyboardTheme.backgroundColor, the key faces are
+    textColor, and the space bar is accentColor. An icon that does not match the thing it
+    launches is a small lie, and these three values are the ones a user actually sees.
+-->
+<resources>
+    <color name="ic_launcher_background">#FF14141A</color>
+    <color name="ic_launcher_key">#FFF2F2F7</color>
+    <color name="ic_launcher_accent">#FF6EA8FE</color>
+</resources>
