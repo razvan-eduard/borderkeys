@@ -69,6 +69,30 @@ data class KeyboardPreferences(
     /** Switch to a numeric keypad automatically in numeric and phone fields. */
     val numericKeypad: Boolean = true,
     val showSuggestionStrip: Boolean = true,
+
+    /**
+     * Whether a delimiter applies the leading suggestion instead of committing what was typed.
+     *
+     * Off, and the default is the argument. A keyboard that rewrites what you wrote because it
+     * has a better idea is the failure mode this project was written against, and the ordinary
+     * behaviour -- space commits your letters, a suggestion is applied only when tapped -- is
+     * the one that never surprises anyone.
+     *
+     * It is offered anyway because the objection to autocorrect is really an objection to
+     * *irreversible* autocorrect: the correction lands, the sentence moves on, and undoing it
+     * costs more keystrokes than typing it did. With [revertCorrectionOnBackspace] the next
+     * backspace puts back exactly what was typed, so the cost of a wrong correction is one key.
+     */
+    val autoCorrectOnSpace: Boolean = false,
+
+    /**
+     * Whether the backspace immediately after an applied correction restores what was typed.
+     *
+     * Only meaningful with [autoCorrectOnSpace], and on by default because a correction that
+     * cannot be taken back in one key is the thing worth refusing. Turning this off leaves
+     * backspace deleting one character at a time, which is what it does everywhere else.
+     */
+    val revertCorrectionOnBackspace: Boolean = true,
 ) {
     fun sanitised(): KeyboardPreferences = copy(
         clipboardRetentionMinutes = clipboardRetentionMinutes.coerceIn(1, 60 * 24 * 30),

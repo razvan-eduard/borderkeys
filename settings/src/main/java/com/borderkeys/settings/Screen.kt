@@ -11,7 +11,7 @@ package com.borderkeys.settings
  * `entries` gives the back stack something cheap to hold.
  *
  * Not `navigation-compose`: that would bring a graph builder, a route parser and argument
- * encoding to move between twelve screens that pass nothing to each other.
+ * encoding to move between thirteen screens that pass nothing to each other.
  */
 enum class Screen(val title: String) {
     Home("BorderKeys"),
@@ -21,6 +21,7 @@ enum class Screen(val title: String) {
     Theme("Theme"),
     Size("Size and position"),
     Swipe("Swipe typing"),
+    Corrections("Suggestions and corrections"),
     Dictionary("Personal dictionary"),
     Clipboard("Clipboard"),
     Assistant("Text assistant"),

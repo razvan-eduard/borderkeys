@@ -118,6 +118,24 @@ class BorderKeysService :
     private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
         onClipboardChanged()
     }
+    /** The leading suggestion, kept so the delimiter path can apply it. */
+    private var topSuggestion: String? = null
+
+    /**
+     * A correction that has been applied and can still be taken back.
+     *
+     * Alive for exactly one keystroke: the next key either reverts it, if it is backspace, or
+     * confirms it, whichever it is. Anything that moves the cursor drops it, because reverting
+     * text the user has since navigated away from would edit the wrong place.
+     */
+    private data class PendingCorrection(
+        val typed: String,
+        val corrected: String,
+        val delimiter: String,
+    )
+
+    private var pendingCorrection: PendingCorrection? = null
+
     private var clipboardManager: ClipboardManager? = null
     private var clipboardListenerRegistered = false
 
@@ -618,6 +636,13 @@ class BorderKeysService :
     }
 
     override fun onKey(code: Int, keyIndex: Int) {
+        // Backspace is the one key that gets to look at the pending correction; every other key
+        // settles it. Doing this here rather than in each handler is what keeps a correction
+        // from surviving three words and then being undone by a backspace that meant something
+        // else entirely.
+        if (code != KeyCodes.DELETE) {
+            confirmPendingCorrection()
+        }
         when (code) {
             KeyCodes.SHIFT -> handleShift()
             KeyCodes.DELETE -> handleDelete()
@@ -655,23 +680,122 @@ class BorderKeysService :
             return
         }
 
-        // A delimiter ends the word. What was typed is committed as typed -- no silent
-        // replacement with the top suggestion. A keyboard that rewrites what you wrote because
-        // it has a better idea is the failure mode this project exists to avoid; choosing a
-        // suggestion is an act, not a default.
+        // A delimiter ends the word. By default what was typed is committed as typed -- no
+        // silent replacement with the leading suggestion. A keyboard that rewrites what you
+        // wrote because it has a better idea is the failure mode this project was written
+        // against, so choosing a suggestion is an act rather than a default.
+        //
+        // `autoCorrectOnSpace` turns that default off for people who want the other trade, and
+        // it is only defensible together with the revert below: the objection to autocorrect is
+        // really an objection to a correction that costs more to undo than it saved.
+        val typed = composing.toString()
+        val correction = correctionFor(typed)
+
         connection.beginBatchEdit()
-        val finished = finishComposing(connection)
-        connection.commitText(String(Character.toChars(shifted)), 1)
+        val delimiter = String(Character.toChars(shifted))
+        if (correction != null) {
+            // commitText replaces the composing region, which is the whole point: the letters
+            // that are on screen become the correction in one edit. Calling finishComposingText
+            // first would *commit* them and leave the correction appended to what was typed,
+            // which is what the first version of this did.
+            composing.setLength(0)
+            connection.commitText(correction + delimiter, 1)
+        } else {
+            finishComposing(connection)
+            connection.commitText(delimiter, 1)
+        }
         connection.endBatchEdit()
-        if (finished != null) {
-            recordLearned(finished)
+
+        if (correction != null) {
+            previousWord2 = previousWord1
+            previousWord1 = correction
+            // Learning waits until the correction survives the next keystroke. Recording it
+            // here would teach the personal dictionary a word the user is about to reject, and
+            // the whole point of the revert is that rejecting it is expected.
+            pendingCorrection = PendingCorrection(typed, correction, delimiter)
+        } else {
+            if (typed.isNotEmpty()) {
+                recordLearned(typed)
+            }
+            pendingCorrection = null
         }
         shiftAfterDelimiter(shifted)
         requestSuggestions()
     }
 
+    /**
+     * Accepts the applied correction: it survived, so it is what the user meant.
+     *
+     * This is where the correction is learned, rather than at the moment it was applied. A
+     * correction the user is about to reject should not teach the personal dictionary anything,
+     * and one keystroke of patience is what tells the two cases apart.
+     */
+    private fun confirmPendingCorrection() {
+        val pending = pendingCorrection ?: return
+        pendingCorrection = null
+        recordLearned(pending.corrected)
+    }
+
+    /**
+     * The correction a delimiter should apply, or null to commit what was typed.
+     *
+     * Null in every case where applying one would be a guess rather than a correction: the
+     * feature is off, nothing was typed, the suggestion is what was typed anyway, or the strip
+     * is showing a next-word prediction rather than a correction of the current word.
+     */
+    private fun correctionFor(typed: String): String? {
+        if (!preferences.autoCorrectOnSpace || typed.length < MIN_CORRECTED_LENGTH) {
+            return null
+        }
+        val suggestion = topSuggestion ?: return null
+        return if (suggestion.isNotEmpty() && suggestion != typed) suggestion else null
+    }
+
+    /**
+     * Puts back exactly what was typed, if the last thing that happened was a correction.
+     *
+     * Deletes the correction and its delimiter and writes the original in their place, in one
+     * batch edit so the editor sees a single change rather than a deletion followed by a
+     * reinsertion. Returns false when there is nothing to revert, and the caller then does what
+     * backspace normally does.
+     */
+    private fun revertCorrection(connection: InputConnection): Boolean {
+        val pending = pendingCorrection ?: return false
+        pendingCorrection = null
+        if (!preferences.revertCorrectionOnBackspace) {
+            // Backspace is an ordinary backspace, so this is the correction being accepted the
+            // same way any other key would accept it. Dropping it unlearned instead would make
+            // the setting quietly change what the dictionary remembers.
+            recordLearned(pending.corrected)
+            return false
+        }
+        val committed = pending.corrected + pending.delimiter
+        val before = connection.getTextBeforeCursor(committed.length, 0)
+        if (before == null || before.toString() != committed) {
+            // The cursor moved, or something else edited the field. Reverting blind would
+            // delete text nobody asked us to touch, so the correction stands and is accepted.
+            recordLearned(pending.corrected)
+            return false
+        }
+        connection.beginBatchEdit()
+        connection.deleteSurroundingText(committed.length, 0)
+        connection.commitText(pending.typed + pending.delimiter, 1)
+        connection.endBatchEdit()
+        previousWord1 = pending.typed
+        // Reverting is the user asserting that what they typed is a word, which is exactly the
+        // signal the personal dictionary exists to record. It is the only thing learned here:
+        // the correction they rejected is not.
+        recordLearned(pending.typed)
+        refreshContextFromEditor()
+        requestSuggestions()
+        return true
+    }
+
     private fun handleDelete() {
         val connection = currentInputConnection ?: return
+        if (revertCorrection(connection)) {
+            return
+        }
         if (composing.isNotEmpty()) {
             // A surrogate pair is one character to the user and two to the buffer.
             val length = composing.length
@@ -799,6 +923,9 @@ class BorderKeysService :
     }
 
     override fun onSuggestions(words: Array<String?>, count: Int) {
+        // Kept because the delimiter path needs it and the strip is a view, not a model. One
+        // reference assignment per suggestion round, off the hot path.
+        topSuggestion = if (count > 0) words[0] else null
         host?.suggestionStrip?.setSuggestions(words, count)
     }
 
@@ -826,6 +953,7 @@ class BorderKeysService :
     }
 
     private fun resetComposing() {
+        pendingCorrection = null
         composing.setLength(0)
         currentInputConnection?.finishComposingText()
         refreshContextFromEditor()
@@ -1056,6 +1184,15 @@ class BorderKeysService :
 
         const val CONTEXT_WINDOW_CHARS = 64
         const val MIN_LEARNED_LENGTH = 2
+
+        /**
+         * The shortest word a delimiter will replace.
+         *
+         * Three, because one- and two-letter words are where a correction is least likely to be
+         * right and most annoying when it is not: half the alphabet is one edit away from "a"
+         * or "la", and the strip is full of them.
+         */
+        const val MIN_CORRECTED_LENGTH = 3
         const val GESTURE_DECODING_NOTICE_MILLIS = 50L
         const val MAX_CLIP_LENGTH = 20_000
         const val MAX_INLINE_SUGGESTIONS = 5

@@ -56,6 +56,10 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
             open(Screen.Layout)
         }
         SettingRow("Swipe typing", "Gesture input and the trail it draws") { open(Screen.Swipe) }
+        SettingRow(
+            "Suggestions and corrections",
+            "The strip above the keys, and whether space applies what it offers",
+        ) { open(Screen.Corrections) }
         SettingRow("Personal dictionary", "What this device has learned") {
             open(Screen.Dictionary)
         }

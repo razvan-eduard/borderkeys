@@ -31,6 +31,7 @@ import com.borderkeys.settings.screen.LayoutScreen
 import com.borderkeys.settings.screen.PrivacyScreen
 import com.borderkeys.settings.screen.SetupScreen
 import com.borderkeys.settings.screen.SizeScreen
+import com.borderkeys.settings.screen.CorrectionsScreen
 import com.borderkeys.settings.screen.SwipeScreen
 import com.borderkeys.settings.screen.ThemeScreen
 
@@ -95,6 +96,7 @@ private fun SettingsApp() {
             Screen.Theme -> ThemeScreen(modifier)
             Screen.Size -> SizeScreen(modifier)
             Screen.Swipe -> SwipeScreen(modifier)
+            Screen.Corrections -> CorrectionsScreen(modifier)
             Screen.Dictionary -> DictionaryScreen(modifier)
             Screen.Clipboard -> ClipboardScreen(modifier)
             Screen.Assistant -> AssistantScreen(modifier)

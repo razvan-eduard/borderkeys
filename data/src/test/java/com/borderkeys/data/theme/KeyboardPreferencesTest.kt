@@ -99,6 +99,21 @@ class KeyboardPreferencesTest {
         assertEquals(reasonable, reasonable.sanitised())
     }
 
+    /**
+     * Applying a suggestion on space is opt-in, and taking it back is not.
+     *
+     * The pair is the whole argument for offering autocorrect at all: the objection to it is
+     * that undoing a wrong correction costs more than typing the word did. A build that shipped
+     * the first switch on, or the second off, would be the thing this keyboard argues against.
+     */
+    @Test
+    fun autoCorrectIsOffByDefaultAndItsUndoIsOn() {
+        val defaults = KeyboardPreferences()
+        assertFalse(defaults.autoCorrectOnSpace)
+        assertTrue(defaults.revertCorrectionOnBackspace)
+        assertTrue(defaults.showSuggestionStrip)
+    }
+
     /** The defaults are what a first run gets, and a first run should get an ordinary keyboard. */
     @Test
     fun theDefaultIsAPlainDockedKeyboard() {
