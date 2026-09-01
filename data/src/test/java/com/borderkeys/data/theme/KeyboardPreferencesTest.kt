@@ -149,6 +149,29 @@ class KeyboardPreferencesTest {
         )
     }
 
+    /**
+     * The strip's buffers are sized for the maximum, so the range has to stay inside it or a
+     * stored value would index past the end of an array on the keyboard's draw path.
+     */
+    @Test
+    fun theSuggestionCountIsClampedToWhatTheStripCanDraw() {
+        assertEquals(3, KeyboardPreferences.MIN_SUGGESTIONS)
+        assertEquals(8, KeyboardPreferences.MAX_SUGGESTIONS)
+        assertEquals(
+            KeyboardPreferences.MAX_SUGGESTIONS,
+            KeyboardPreferences(suggestionCount = 99).sanitised().suggestionCount,
+        )
+        assertEquals(
+            KeyboardPreferences.MIN_SUGGESTIONS,
+            KeyboardPreferences(suggestionCount = 0).sanitised().suggestionCount,
+        )
+        assertEquals(
+            KeyboardPreferences.MIN_SUGGESTIONS,
+            KeyboardPreferences(suggestionCount = -4).sanitised().suggestionCount,
+        )
+        assertEquals(5, KeyboardPreferences(suggestionCount = 5).sanitised().suggestionCount)
+    }
+
     /** The defaults are what a first run gets, and a first run should get an ordinary keyboard. */
     @Test
     fun theDefaultIsAPlainDockedKeyboard() {
@@ -159,6 +182,7 @@ class KeyboardPreferencesTest {
         assertEquals(0f, defaults.bottomOffsetDp, 0f)
         assertEquals(0f, defaults.horizontalOffsetDp, 0f)
         assertEquals(KeyboardPreferences.LEARNING_BALANCED, defaults.learningSpeed)
+        assertEquals(KeyboardPreferences.DEFAULT_SUGGESTIONS, defaults.suggestionCount)
         assertEquals(defaults, defaults.sanitised())
     }
 }

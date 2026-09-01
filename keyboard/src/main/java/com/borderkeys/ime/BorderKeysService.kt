@@ -139,6 +139,9 @@ class BorderKeysService :
 
     private var pendingCorrection: PendingCorrection? = null
 
+    /** The word the strip is currently asking about, between the hold and the answer. */
+    private var pendingForget: String? = null
+
     private var clipboardManager: ClipboardManager? = null
     private var clipboardListenerRegistered = false
 
@@ -294,6 +297,7 @@ class BorderKeysService :
                         pushQuickSettingsState(view)
                     }
                     view.keyboard.hapticEnabled = newPreferences.hapticFeedback
+                    view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
                     view.keyboard.swipeEnabled = newPreferences.swipeEnabled
                     // The number row is a layout change, not a colour change, so it has to be
                     // applied even when the paints are unchanged.
@@ -365,6 +369,19 @@ class BorderKeysService :
     }
 
     override fun onActionPicked(index: Int) {
+        // The strip's action mode is shared between the assistant's actions and the question a
+        // held suggestion asks. A pending word means the question is this one's.
+        val forgetting = pendingForget
+        if (forgetting != null) {
+            pendingForget = null
+            host?.suggestionStrip?.clear()
+            if (index == 0) {
+                forgetWord(forgetting)
+            } else {
+                requestSuggestions()
+            }
+            return
+        }
         val task = assistTasks.getOrNull(index) ?: return
         if (privateMode || assistSelection.isEmpty()) {
             return
@@ -1042,6 +1059,43 @@ class BorderKeysService :
         requestSuggestions()
     }
 
+    /**
+     * A suggestion held down: offer to forget it.
+     *
+     * The strip becomes a question with two answers rather than opening a dialog, because a
+     * dialog over a keyboard covers the text the decision is about. The word is not forgotten
+     * here; holding only asks.
+     */
+    override fun onSuggestionLongPressed(index: Int, word: String) {
+        if (privateMode || word.isEmpty()) {
+            return
+        }
+        pendingForget = word
+        host?.suggestionStrip?.setActions(arrayOf("Forget \u201C$word\u201D", "Cancel"), 2)
+    }
+
+    /**
+     * Forgets a word and cuts the chains it was part of.
+     *
+     * Both halves, and the second is the point. Deleting the word alone would leave the pairs
+     * that name it, so it would go on being predicted after the word before it -- forgotten from
+     * the dictionary and still suggested, which reads as the button not working. Deleting the
+     * pairs on both sides cuts the chain at that word: what came before it still leads to it no
+     * longer, and what came after is no longer reached through it. The head of the chain is
+     * untouched, because it is evidence about other words.
+     */
+    private fun forgetWord(word: String) {
+        scope.launch {
+            val dictionary = DataGraph.dictionary
+            // The repository suspends on its own dispatcher; the reloads only post to the
+            // prediction thread, so there is nothing here to move off the main thread.
+            dictionary.forget(word)
+            engine.loadUserWords(dictionary.topWords())
+            engine.loadUserBigrams(dictionary.topBigrams())
+            requestSuggestions()
+        }
+    }
+
     override fun onSuggestions(words: Array<String?>, count: Int) {
         // Kept because the delimiter path needs it and the strip is a view, not a model. One
         // reference assignment per suggestion round, off the hot path.
@@ -1074,6 +1128,7 @@ class BorderKeysService :
 
     private fun resetComposing() {
         pendingCorrection = null
+        pendingForget = null
         composing.setLength(0)
         currentInputConnection?.finishComposingText()
         refreshContextFromEditor()

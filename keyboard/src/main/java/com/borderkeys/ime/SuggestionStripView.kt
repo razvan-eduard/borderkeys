@@ -32,6 +32,15 @@ class SuggestionStripView(
         fun onSuggestionPicked(index: Int, word: String)
 
         /**
+         * A suggestion held down rather than tapped.
+         *
+         * The gesture for "not this one, ever": it offers to forget the word. Held rather than
+         * tapped because tapping is how a suggestion is accepted, and the two must not be one
+         * slip apart.
+         */
+        fun onSuggestionLongPressed(index: Int, word: String)
+
+        /**
          * One of the assistant's actions was tapped.
          *
          * The strip carries these because a text selection and a word in progress cannot both
@@ -75,9 +84,50 @@ class SuggestionStripView(
     private val words = arrayOfNulls<String>(MAX_SUGGESTIONS)
     private val chars = Array(MAX_SUGGESTIONS) { CharArray(MAX_WORD_CHARS) }
     private val charCount = IntArray(MAX_SUGGESTIONS)
+
+    /**
+     * The text size each slot is drawn at, so a long word in a narrow slot shrinks instead of
+     * running into its neighbour.
+     *
+     * Computed when the words change, when the strip is resized and when the number of slots
+     * changes -- never per frame. It is the same approach the keys use for "?123" on a key one
+     * and a half units wide, and for the same reason: measureText on the draw path is a cost
+     * paid sixty times a second for an answer that changes when a suggestion arrives.
+     */
+    private val slotTextSize = FloatArray(MAX_SUGGESTIONS)
     private var count = 0
 
     private var pressedIndex = -1
+
+    /** Fires once per press, at which point the press stops being a tap. */
+    private val longPressRunnable = Runnable {
+        val slot = pressedIndex
+        val word = if (slot >= 0) words[slot] else null
+        if (word != null && !actionMode) {
+            longPressFired = true
+            pressedIndex = -1
+            invalidate()
+            listener?.onSuggestionLongPressed(slot, word)
+        }
+    }
+
+    /** Set when a hold has already acted, so the lift does not also accept the suggestion. */
+    private var longPressFired = false
+
+    /**
+     * How many slots the user asked for. The engine is asked for this many, so `count` is
+     * normally already within it; the clamp is for the frame between the setting changing and
+     * the next request coming back.
+     */
+    var visibleLimit: Int = 3
+        set(value) {
+            val clamped = value.coerceIn(1, MAX_SUGGESTIONS)
+            if (field != clamped) {
+                field = clamped
+                measureSlots()
+                invalidate()
+            }
+        }
 
     /**
      * Replaces what is shown. Called on the UI thread from the prediction result callback.
@@ -112,8 +162,45 @@ class SuggestionStripView(
         }
         count = newCount
         if (changed) {
+            measureSlots()
             invalidate()
         }
+    }
+
+    /**
+     * Fixes each slot's text size so its word fits between the dividers.
+     *
+     * Shrinking rather than ellipsising: a suggestion is chosen by reading it, and "differe…"
+     * is not something anyone can choose confidently. There is a floor, below which the word is
+     * left to overflow -- at that point the slot is too narrow for any legible text and the
+     * honest answer is that the count is too high for this screen, which the preview in the
+     * settings screen is there to show before it is chosen.
+     */
+    private fun measureSlots() {
+        val base = paints.label.textSize
+        val shown = shownCount()
+        if (shown <= 0 || width == 0) {
+            for (index in 0 until MAX_SUGGESTIONS) {
+                slotTextSize[index] = base
+            }
+            return
+        }
+        val available = (width.toFloat() / shown) * SLOT_TEXT_FRACTION
+        for (index in 0 until MAX_SUGGESTIONS) {
+            val length = charCount[index]
+            if (length == 0) {
+                slotTextSize[index] = base
+                continue
+            }
+            paints.label.textSize = base
+            val measured = paints.label.measureText(chars[index], 0, length)
+            slotTextSize[index] = if (measured <= available || measured <= 0f) {
+                base
+            } else {
+                (base * available / measured).coerceAtLeast(base * MIN_TEXT_SCALE)
+            }
+        }
+        paints.label.textSize = base
     }
 
     /** Switches the strip to the assistant's actions for the current selection. */
@@ -136,6 +223,11 @@ class SuggestionStripView(
 
     /** The top candidate, or null. Used to commit on a space press. */
     fun topSuggestion(): String? = if (count > 0) words[0] else null
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        measureSlots()
+    }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
@@ -160,9 +252,10 @@ class SuggestionStripView(
                 return
             }
 
-            val slotWidth = width.toFloat() / count
+            val shown = if (count < visibleLimit) count else visibleLimit
+            val slotWidth = width.toFloat() / shown
             val baseline = height / 2f + paints.labelBaselineOffsetPx
-            for (index in 0 until count) {
+            for (index in 0 until shown) {
                 val length = charCount[index]
                 if (length == 0) {
                     continue
@@ -182,7 +275,15 @@ class SuggestionStripView(
                 // which would have described a keyboard that silently rewrites what you wrote:
                 // exactly the behaviour this project exists to avoid.
                 val paint = if (index == 0) paints.label else paints.labelSecondary
+                val previousSize = paint.textSize
+                val fitted = slotTextSize[index]
+                if (fitted != previousSize) {
+                    paint.textSize = fitted
+                }
                 canvas.drawText(chars[index], 0, length, left + slotWidth / 2f, baseline, paint)
+                if (fitted != previousSize) {
+                    paint.textSize = previousSize
+                }
 
                 if (index > 0) {
                     canvas.drawLine(left, height * 0.25f, left, height * 0.75f, paints.keyStroke)
@@ -209,16 +310,30 @@ class SuggestionStripView(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 pressedIndex = slotAt(event.x)
+                longPressFired = false
                 invalidate()
+                if (pressedIndex >= 0) {
+                    postDelayed(longPressRunnable, LONG_PRESS_MILLIS)
+                }
             }
             MotionEvent.ACTION_MOVE -> {
                 val slot = slotAt(event.x)
                 if (slot != pressedIndex) {
+                    // The finger moved to another slot, so the hold starts again from there.
+                    removeCallbacks(longPressRunnable)
                     pressedIndex = slot
                     invalidate()
+                    if (slot >= 0) {
+                        postDelayed(longPressRunnable, LONG_PRESS_MILLIS)
+                    }
                 }
             }
             MotionEvent.ACTION_UP -> {
+                removeCallbacks(longPressRunnable)
+                if (longPressFired) {
+                    longPressFired = false
+                    return true
+                }
                 val slot = slotAt(event.x)
                 val word = if (slot >= 0) words[slot] else null
                 pressedIndex = -1
@@ -230,6 +345,8 @@ class SuggestionStripView(
                 }
             }
             MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(longPressRunnable)
+                longPressFired = false
                 pressedIndex = -1
                 invalidate()
             }
@@ -237,12 +354,16 @@ class SuggestionStripView(
         return true
     }
 
+    /** How many slots are on screen. Hit-testing has to agree with drawing, not with `count`. */
+    private fun shownCount(): Int = if (count < visibleLimit) count else visibleLimit
+
     private fun slotAt(x: Float): Int {
-        if (count == 0) {
+        val shown = shownCount()
+        if (shown == 0) {
             return -1
         }
-        val slot = (x / (width.toFloat() / count)).toInt()
-        return if (slot in 0 until count) slot else -1
+        val slot = (x / (width.toFloat() / shown)).toInt()
+        return if (slot in 0 until shown) slot else -1
     }
 
     private val privateNoticeChars =
@@ -251,9 +372,23 @@ class SuggestionStripView(
         CharArray(DECODING_NOTICE.length).also { DECODING_NOTICE.toCharArray(it, 0, 0, it.size) }
 
     companion object {
-        const val MAX_SUGGESTIONS = 3
+        /**
+         * The most the strip can ever hold, which is what its buffers are sized for. How many
+         * are actually shown is [visibleLimit], a setting; this is the ceiling that lets the
+         * setting change without reallocating anything.
+         */
+        const val MAX_SUGGESTIONS = 8
         private const val MAX_WORD_CHARS = 48
         private const val HEIGHT_FRACTION = 0.78f
+
+        /** The same hold the keys use, so the two feel like one gesture. */
+        private const val LONG_PRESS_MILLIS = 380L
+
+        /** How much of a slot a word may occupy before it is shrunk, leaving room for a gap. */
+        private const val SLOT_TEXT_FRACTION = 0.80f
+
+        /** Past this the text is too small to read, so the word is allowed to overflow instead. */
+        private const val MIN_TEXT_SCALE = 0.62f
         private const val DEFAULT_HEIGHT_PX = 150f
 
         /**

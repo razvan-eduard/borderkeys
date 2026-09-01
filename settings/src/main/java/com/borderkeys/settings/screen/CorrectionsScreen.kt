@@ -5,19 +5,27 @@ package com.borderkeys.settings.screen
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SuggestionStripPreview
 import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.launch
 
@@ -32,6 +40,7 @@ import kotlinx.coroutines.launch
 fun CorrectionsScreen(modifier: Modifier = Modifier) {
     val repository = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
+    val theme by repository.theme.collectAsStateWithLifecycle(initialValue = KeyboardTheme())
     val preferences by repository.preferences
         .collectAsStateWithLifecycle(initialValue = KeyboardPreferences())
 
@@ -47,6 +56,30 @@ fun CorrectionsScreen(modifier: Modifier = Modifier) {
                 "typing and, once you finish one, the words that usually follow it.",
             checked = preferences.showSuggestionStrip,
         ) { value -> update { it.copy(showSuggestionStrip = value) } }
+
+        SectionHeader("How many suggestions")
+        SuggestionStripPreview(theme, preferences, Modifier.padding(vertical = 8.dp))
+        Text(
+            "${preferences.suggestionCount} at a time",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
+        Slider(
+            value = preferences.suggestionCount.toFloat(),
+            valueRange = KeyboardPreferences.MIN_SUGGESTIONS.toFloat()..
+                KeyboardPreferences.MAX_SUGGESTIONS.toFloat(),
+            steps = KeyboardPreferences.MAX_SUGGESTIONS - KeyboardPreferences.MIN_SUGGESTIONS - 1,
+            onValueChange = { value ->
+                update { it.copy(suggestionCount = value.toInt()) }
+            },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        )
+        Explanation(
+            "The strip is a fixed width, so every extra slot makes each one narrower and each " +
+                "target smaller. The preview above uses words of realistic length rather than " +
+                "short filler, because that is where the difference shows.",
+        )
 
         Divider()
         SectionHeader("Correcting as you type")

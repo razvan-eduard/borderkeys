@@ -86,6 +86,16 @@ data class KeyboardPreferences(
     val showSuggestionStrip: Boolean = true,
 
     /**
+     * How many suggestions the strip offers at once.
+     *
+     * Three by default, and more is not obviously better: the strip is a fixed width, so every
+     * extra slot makes each one narrower and each target smaller. Eight fits on a phone only
+     * because most words are short. The right number depends on how wide the screen is and how
+     * accurate the person's thumb is, which is why it is a setting and not a constant.
+     */
+    val suggestionCount: Int = DEFAULT_SUGGESTIONS,
+
+    /**
      * Whether a delimiter applies the leading suggestion instead of committing what was typed.
      *
      * Off, and the default is the argument. A keyboard that rewrites what you wrote because it
@@ -118,6 +128,7 @@ data class KeyboardPreferences(
         heightScale = heightScale.coerceIn(MIN_HEIGHT_SCALE, MAX_HEIGHT_SCALE),
         widthScale = widthScale.coerceIn(MIN_WIDTH_SCALE, 1f),
         positionMode = if (positionMode in MODE_DOCKED..MODE_FLOATING) positionMode else MODE_DOCKED,
+        suggestionCount = suggestionCount.coerceIn(MIN_SUGGESTIONS, MAX_SUGGESTIONS),
         learningSpeed = if (learningSpeed in LEARNING_CAUTIOUS..LEARNING_IMMEDIATE) {
             learningSpeed
         } else {
@@ -187,6 +198,14 @@ data class KeyboardPreferences(
             LEARNING_IMMEDIATE -> 3f
             else -> 1f
         }
+
+        /**
+         * Below three the strip stops being a choice and becomes an announcement; above eight
+         * the slots are narrower than a fingertip on any phone this runs on.
+         */
+        const val MIN_SUGGESTIONS = 3
+        const val MAX_SUGGESTIONS = 8
+        const val DEFAULT_SUGGESTIONS = 3
 
         const val MIN_HEIGHT_SCALE = 0.65f
         const val MAX_HEIGHT_SCALE = 1.6f
