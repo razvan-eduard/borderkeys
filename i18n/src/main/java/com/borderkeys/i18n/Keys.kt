@@ -200,6 +200,7 @@ object Keys {
     const val LANGUAGE_NAME_EN = "language_name_en"
     const val LANGUAGE_NAME_ES = "language_name_es"
     const val LANGUAGE_NAME_FR = "language_name_fr"
+    const val LANGUAGE_NAME_IT = "language_name_it"
     const val LANGUAGE_NAME_RO = "language_name_ro"
     const val LANGUAGES_A_PACK_S_HEADER_IS_VALIDATED = "languages_a_pack_s_header_is_validated"
     const val LANGUAGES_ADD = "languages_add"

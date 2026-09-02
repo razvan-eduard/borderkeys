@@ -186,6 +186,7 @@
   "language_name_en": "English",
   "language_name_es": "Español",
   "language_name_fr": "Français",
+  "language_name_it": "Italiano",
   "language_name_ro": "Română",
   "languages_a_pack_s_header_is_validated": "L'en-tête d'un pack est validé entièrement avant qu'aucune partie ne soit mappée — signature, version, somme de contrôle, et chaque décalage de section confronté à la taille réelle du fichier. Un pack qui ne passe pas est refusé plutôt qu'interprété.",
   "languages_add": "Ajouter",

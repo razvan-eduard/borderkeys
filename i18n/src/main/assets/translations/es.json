@@ -186,6 +186,7 @@
   "language_name_en": "English",
   "language_name_es": "Español",
   "language_name_fr": "Français",
+  "language_name_it": "Italiano",
   "language_name_ro": "Română",
   "languages_a_pack_s_header_is_validated": "La cabecera de un paquete se valida por completo antes de mapear ninguna parte de él: firma, versión, suma de control y cada desplazamiento de sección contra el tamaño real del archivo. Un paquete que no pasa se rechaza en lugar de interpretarse.",
   "languages_add": "Añadir",

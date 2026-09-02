@@ -186,6 +186,7 @@
   "language_name_en": "English",
   "language_name_es": "Español",
   "language_name_fr": "Français",
+  "language_name_it": "Italiano",
   "language_name_ro": "Română",
   "languages_a_pack_s_header_is_validated": "Antetul unui pachet este validat complet înainte ca vreo parte din el să fie mapată — semnătură, versiune, sumă de control și fiecare offset de secțiune verificat față de dimensiunea reală a fișierului. Un pachet care nu trece este refuzat, nu interpretat.",
   "languages_add": "Adaugă",
