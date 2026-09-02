@@ -27,15 +27,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
+import com.borderkeys.settings.ColourPickerDialog
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.KeyboardPreview
@@ -210,6 +214,17 @@ private fun ColourRow(
     preserveAlpha: Boolean = false,
     onPick: (Int) -> Unit,
 ) {
+    var picking by remember { mutableStateOf(false) }
+    if (picking) {
+        ColourPickerDialog(
+            initial = current,
+            onDismiss = { picking = false },
+            onPick = { colour ->
+                picking = false
+                onPick(if (preserveAlpha) (current and ALPHA_MASK) or (colour and RGB_MASK) else colour)
+            },
+        )
+    }
     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
         Row(
@@ -249,9 +264,39 @@ private fun ColourRow(
                         },
                 )
             }
+            // Last, after the ready-made colours, because it is the way out of them rather
+            // than one more of them. Ringed when the current colour is not in the row, which
+            // is exactly when the colour came from here.
+            val custom = PALETTE.none {
+                if (preserveAlpha) (it and RGB_MASK) == (current and RGB_MASK) else it == current
+            }
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .background(Brush.sweepGradient(HUE_WHEEL), CircleShape)
+                    .border(
+                        width = if (custom) 3.dp else 1.dp,
+                        color = if (custom) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        shape = CircleShape,
+                    )
+                    .clickable { picking = true },
+            )
         }
     }
 }
+
+/**
+ * The wheel drawn on the custom swatch. Its own list rather than the picker's, because this one
+ * is a sweep around a circle and that one is a strip across a rectangle.
+ */
+private val HUE_WHEEL = listOf(
+    Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
+    Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF), Color(0xFFFF0000),
+)
 
 private const val RGB_MASK = 0x00FFFFFF
 private const val ALPHA_MASK = 0xFF000000.toInt()
