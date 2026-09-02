@@ -33,6 +33,13 @@ class ThemePaints {
     val label: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val labelSecondary: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val accent: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    /**
+     * Label text in the accent colour, for the one chip on the suggestion strip that inserts
+     * something the user did not type. Its own paint rather than [label] recoloured per draw,
+     * because a Paint's colour is state and the draw path does not set state it can avoid.
+     */
+    val accentLabel: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val swipeTrail: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     var keyCornerRadiusPx: Float = 0f
@@ -98,6 +105,8 @@ class ThemePaints {
         label.typeface = Typeface.DEFAULT
         labelSecondary.textAlign = Paint.Align.CENTER
         labelSecondary.typeface = Typeface.DEFAULT
+        accentLabel.textAlign = Paint.Align.CENTER
+        accentLabel.typeface = Typeface.DEFAULT
 
         swipeTrail.style = Paint.Style.STROKE
         swipeTrail.strokeCap = Paint.Cap.ROUND
@@ -138,6 +147,7 @@ class ThemePaints {
         keyPressedFill.color = theme.keyPressedColor
         modifierKeyFill.color = theme.modifierKeyColor
         accent.color = theme.accentColor
+        accentLabel.color = theme.accentColor
 
         keyStroke.color = theme.secondaryTextColor
         keyStroke.strokeWidth = 1f * density
@@ -148,6 +158,8 @@ class ThemePaints {
         // The hint character on a long-press key, at two thirds the size. Fixed ratio rather
         // than a second theme field: it is a typographic relationship, not a preference.
         labelSecondary.textSize = theme.labelTextSizeSp * newScaledDensity * 0.62f
+        // Set after label, whose size it borrows.
+        accentLabel.textSize = label.textSize
 
         swipeTrail.color = theme.swipeTrailColor
         swipeTrail.strokeWidth = theme.swipeTrailWidthDp * density

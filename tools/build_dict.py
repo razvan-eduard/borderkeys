@@ -58,6 +58,12 @@ MAX_NGRAM_CAPACITY = 1 << 26
 # A tag index is one byte, so the matrix a pack may declare is bounded by what a byte can reach.
 MAX_POS_TAGS = 256
 
+# The marker tools/make_pack.py writes for "a sentence began here", and the index it becomes.
+# Reserved rather than allocated: it must not collide with a word, and the engine looks it up
+# by the same constant. The hash key is stored as index+1, so this stays inside 32 bits.
+SENTENCE_START = "\x02start"
+SENTENCE_START_INDEX = 0xFFFFFFFE
+
 FLAG_CASE_FOLDED = 1 << 0
 FLAG_CONTENT_CRC = 1 << 1
 
@@ -418,8 +424,23 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
     bigram_entries: dict[tuple[int, int], int] = {}
     trigram_entries: dict[tuple[int, int, int], int] = {}
     frequency_of = dict(zip(display, frequencies))
+    # How often a sentence opened at all, so the marker's pairs are probabilities like any
+    # other rather than raw counts on a different scale.
+    sentence_total = float(sum(
+        count for parts, count in ngrams.items()
+        if len(parts) == 2 and parts[0] == SENTENCE_START
+    )) or 1.0
+
     for parts, count in ngrams.items():
-        if any(part not in word_index_of for part in parts):
+        starts = len(parts) == 2 and parts[0] == SENTENCE_START
+        if any(part not in word_index_of for part in parts if part != SENTENCE_START):
+            continue
+        if starts:
+            quantised = quantise_log_prob(count / max(sentence_total, float(count)))
+            bigram_entries[(SENTENCE_START_INDEX, word_index_of[parts[1]])] = quantised
+            continue
+        if SENTENCE_START in parts:
+            # A marker anywhere but first is a corrupt count file, not a sentence start.
             continue
         context = frequency_of[parts[0]] if len(parts) == 2 else None
         if len(parts) == 2:

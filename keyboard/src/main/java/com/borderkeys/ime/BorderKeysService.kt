@@ -14,6 +14,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsRequest
 import android.view.inputmethod.InlineSuggestionsResponse
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputContentInfo
 import android.widget.inline.InlinePresentationSpec
 import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.common.TextViewStyle
@@ -587,6 +588,7 @@ class BorderKeysService :
 
         resetComposing()
         registerClipboardListener()
+        refreshClipboardChip()
         pushKeyGeometry()
     }
 
@@ -1277,6 +1279,10 @@ class BorderKeysService :
         currentInputConnection?.finishComposingText()
         refreshContextFromEditor()
         host?.suggestionStrip?.clear()
+        // Cleared and then asked again rather than left blank: on an empty field the engine
+        // answers with what sentences in this language actually open with, which is a better
+        // use of the row than an instruction to start typing.
+        requestSuggestions()
     }
 
     /**
@@ -1447,6 +1453,99 @@ class BorderKeysService :
         clipboardListenerRegistered = false
     }
 
+    // ---- the clipboard chip ---------------------------------------------------------------
+
+    /**
+     * Rebuilds the chip that offers what is on the clipboard.
+     *
+     * Reads the clip rather than the history, because what someone means by "what I copied" is
+     * the last thing they copied, not the last thing this keyboard happened to record. The
+     * label is built here and handed to the view as a finished string: the strip draws, it does
+     * not decide what to say.
+     */
+    private fun refreshClipboardChip() {
+        val strip = host?.suggestionStrip ?: return
+        if (privateMode || !preferences.clipboardSuggestion) {
+            strip.clipboardChip = null
+            return
+        }
+        val clip = clipboardManager?.primaryClip
+        val description = clip?.description
+        if (clip == null || clip.itemCount == 0 || description == null) {
+            strip.clipboardChip = null
+            return
+        }
+        strip.clipboardChip = when {
+            description.hasMimeType("image/*") -> strings[Keys.CLIP_PHOTO]
+            else -> {
+                val text = clip.getItemAt(0).coerceToText(this)?.toString()?.trim().orEmpty()
+                if (text.isEmpty()) {
+                    null
+                } else {
+                    // The first few words, so the chip says which of several copied things this
+                    // is without becoming a paragraph in a slot a thumb has to hit.
+                    val preview = text.take(CHIP_PREVIEW_CHARS).substringBeforeLast(' ', "")
+                        .ifEmpty { text.take(CHIP_PREVIEW_CHARS) }
+                    if (preview.length < text.length) {
+                        strings.getString(Keys.CLIP_TEXT, preview)
+                    } else {
+                        strings.getString(Keys.CLIP_TEXT_WHOLE, preview)
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onClipboardPicked() {
+        val connection = currentInputConnection ?: return
+        val clip = clipboardManager?.primaryClip ?: return
+        if (clip.itemCount == 0 || privateMode) {
+            return
+        }
+        val item = clip.getItemAt(0)
+        val uri = item.uri
+        val description = clip.description
+        if (uri != null && description != null && description.hasMimeType("image/*")) {
+            commitImage(connection, uri, description)
+            return
+        }
+        val text = item.coerceToText(this)?.toString() ?: return
+        finishComposing(connection)
+        connection.commitText(text, 1)
+        refreshContextFromEditor()
+        requestSuggestions()
+    }
+
+    /**
+     * Hands an image to the editor, if it said it would take one.
+     *
+     * commitContent is the only way an input method may insert anything that is not text, and
+     * it works solely where the editor advertised the type in contentMimeTypes -- a chat app
+     * usually does, a plain text field never. Where it is refused there is nothing to fall back
+     * to, so the chip is simply not honoured rather than pasting a content URI as text.
+     */
+    private fun commitImage(
+        connection: InputConnection,
+        uri: android.net.Uri,
+        description: android.content.ClipDescription,
+    ) {
+        val accepted = currentInputEditorInfo?.contentMimeTypes.orEmpty()
+        val supported = accepted.any { mime ->
+            description.hasMimeType(mime) || mime == "*/*"
+        }
+        if (!supported) {
+            return
+        }
+        val info = InputContentInfo(uri, description)
+        // The permission is granted for this one insertion and released by the platform when
+        // the target is done with it; without the flag the editor gets a URI it cannot read.
+        connection.commitContent(
+            info,
+            InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION,
+            null,
+        )
+    }
+
     private fun onClipboardChanged() {
         if (privateMode || !preferences.clipboardEnabled) {
             return
@@ -1455,6 +1554,7 @@ class BorderKeysService :
         if (clip.itemCount == 0) {
             return
         }
+        refreshClipboardChip()
         val text = clip.getItemAt(0).coerceToText(this)?.toString() ?: return
         if (text.isEmpty() || text.length > MAX_CLIP_LENGTH) {
             return
@@ -1563,6 +1663,9 @@ class BorderKeysService :
         const val DOUBLE_TAP_MILLIS = 400L
 
         const val CONTEXT_WINDOW_CHARS = 64
+
+        /** How much of a copied text the chip shows before it stops being a label. */
+        const val CHIP_PREVIEW_CHARS = 24
         const val MIN_LEARNED_LENGTH = 2
 
         /**

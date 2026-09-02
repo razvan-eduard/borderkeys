@@ -76,6 +76,11 @@ def tokenise(line: str) -> list[str]:
     ]
 
 
+# Not a word, and it cannot be one: the tokeniser only ever emits letters, so nothing in a
+# corpus can collide with it. The pack compiler turns it into a reserved index.
+SENTENCE_START = "\x02start"
+
+
 def count_corpus(paths: list[Path], order: int) -> tuple[Counter, Counter, Counter]:
     """Counts words, pairs and triples from plain text, in one pass, without holding the text."""
     words: Counter = Counter()
@@ -86,8 +91,16 @@ def count_corpus(paths: list[Path], order: int) -> tuple[Counter, Counter, Count
             previous1: str | None = None
             previous2: str | None = None
             for line in handle:
+                first = True
                 for token in tokenise(line):
                     words[token] += 1
+                    if first:
+                        # What a sentence opens with, counted as a pair with a marker that is
+                        # not a word. Raw frequency is a bad answer to "what might you write
+                        # next" on an empty field: the most common words in any language are
+                        # the ones that join clauses, and nobody starts a message with "de".
+                        bigrams[(SENTENCE_START, token)] += 1
+                        first = False
                     if previous1 is not None:
                         bigrams[(previous1, token)] += 1
                         if order >= 3 and previous2 is not None:
@@ -205,7 +218,9 @@ def main() -> int:
     # An n-gram naming a word that did not survive the cutoff cannot be looked up, and the writer
     # would drop it anyway. Filtering here keeps the intermediate files honest.
     def survives(key: tuple) -> bool:
-        return all(part in vocabulary for part in key)
+        # The sentence marker is not a word and will never be in the vocabulary; it is resolved
+        # to a reserved index by the pack compiler instead.
+        return all(part in vocabulary for part in key if part != SENTENCE_START)
 
     ngram_rows = []
     for key, count in bigrams.items():

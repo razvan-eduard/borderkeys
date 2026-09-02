@@ -125,6 +125,18 @@ data class KeyboardPreferences(
     val languageLock: Int = LANGUAGE_LOCK_BALANCED,
 
     /**
+     * Whether the first slot of the suggestion strip offers what is on the clipboard.
+     *
+     * Off by default, and not out of caution about the feature: the strip is glanced at while
+     * typing, and putting something there that inserts text nobody just wrote is a change to
+     * what that row means. Someone who wants it can have it.
+     *
+     * It takes one of the slots rather than adding one, so turning it on does not narrow every
+     * target on the row. Suppressed entirely in a password field, along with everything else.
+     */
+    val clipboardSuggestion: Boolean = false,
+
+    /**
      * A permanent row of digits above the letters.
      *
      * Off by default. It costs about a fifth of the keyboard's height, and on a touch surface

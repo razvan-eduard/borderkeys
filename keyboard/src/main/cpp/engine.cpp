@@ -215,6 +215,11 @@ constexpr float kLanguageDominanceShare = 0.7f;
 // people tap, and nobody reads the fifth.
 constexpr float kGrammarWeight = 0.75f;
 
+// The reserved bigram context for "a sentence began here". Mirrors tools/build_dict.py; it is
+// outside any possible word index, and the hash stores index+1, so it stays inside 32 bits.
+constexpr uint32_t kSentenceStartIndex = 0xFFFFFFFEu;
+
+
 // The scale the pack quantises log probabilities on, mirrored from tools/build_pos.py.
 constexpr float kLogProbScale = 10.0f;
 
@@ -740,6 +745,17 @@ float Engine::contextLogProb(int packIndex, uint32_t wordIndex) const {
     const LanguagePack& pack = packs_[packIndex];
     const int32_t w1 = contextWord1_[packIndex];
     const int32_t w2 = contextWord2_[packIndex];
+
+    // Nothing before the cursor: this is the first word of something. Raw frequency is a poor
+    // answer -- the most common words in any language are the ones that join clauses, and
+    // nobody opens a message with "de" or "and". The pack stores what sentences actually begin
+    // with, under an index reserved for the purpose, so ask that instead.
+    if (w1 < 0 && !hasContext1_) {
+        const float value = pack.ngrams().bigram(kSentenceStartIndex, wordIndex);
+        if (value <= 0.0f) {
+            return value;
+        }
+    }
 
     if (w1 >= 0 && w2 >= 0) {
         const float value = pack.ngrams().trigram(static_cast<uint32_t>(w2),

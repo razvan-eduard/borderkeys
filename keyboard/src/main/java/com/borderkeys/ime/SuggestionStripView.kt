@@ -51,6 +51,9 @@ class SuggestionStripView(
          * putting the actions where the user is already looking beats a button they must find.
          */
         fun onActionPicked(index: Int)
+
+        /** The clipboard chip was tapped. What is pasted is the service's decision, not ours. */
+        fun onClipboardPicked()
     }
 
     /** True while the strip is showing assistant actions rather than word suggestions. */
@@ -102,6 +105,34 @@ class SuggestionStripView(
             }
         }
 
+    /**
+     * A chip offering what is on the clipboard, or null when there is nothing to offer.
+     *
+     * Occupies the first slot and pushes the suggestions along. First rather than last because
+     * it is the one chip whose content the user already knows they want -- they copied it --
+     * and because a chip that moves as the number of suggestions changes is a chip nobody can
+     * aim at.
+     */
+    var clipboardChip: String? = null
+        set(value) {
+            if (field != value) {
+                field = value
+                val length = value?.length?.coerceAtMost(MAX_WORD_CHARS) ?: 0
+                value?.toCharArray(chipChars, 0, 0, length)
+                chipCharCount = length
+                measureSlots()
+                invalidate()
+            }
+        }
+
+    private val chipChars = CharArray(MAX_WORD_CHARS)
+    private var chipCharCount = 0
+    private var chipTextSize = 0f
+
+    /** One when the clipboard chip is showing, and it always takes the first slot. */
+    private val chipOffset: Int
+        get() = if (clipboardChip != null) 1 else 0
+
     private val words = arrayOfNulls<String>(MAX_SUGGESTIONS)
     private val chars = Array(MAX_SUGGESTIONS) { CharArray(MAX_WORD_CHARS) }
     private val charCount = IntArray(MAX_SUGGESTIONS)
@@ -122,13 +153,13 @@ class SuggestionStripView(
 
     /** Fires once per press, at which point the press stops being a tap. */
     private val longPressRunnable = Runnable {
-        val slot = pressedIndex
-        val word = if (slot >= 0) words[slot] else null
+        val index = pressedIndex - chipOffset
+        val word = if (index >= 0) words[index] else null
         if (word != null && !actionMode) {
             longPressFired = true
             pressedIndex = -1
             invalidate()
-            listener?.onSuggestionLongPressed(slot, word)
+            listener?.onSuggestionLongPressed(index, word)
         }
     }
 
@@ -207,21 +238,30 @@ class SuggestionStripView(
             return
         }
         val available = (width.toFloat() / shown) * SLOT_TEXT_FRACTION
+        chipTextSize = fitted(chipChars, chipCharCount, base, available)
         for (index in 0 until MAX_SUGGESTIONS) {
             val length = charCount[index]
             if (length == 0) {
                 slotTextSize[index] = base
                 continue
             }
-            paints.label.textSize = base
-            val measured = paints.label.measureText(chars[index], 0, length)
-            slotTextSize[index] = if (measured <= available || measured <= 0f) {
-                base
-            } else {
-                (base * available / measured).coerceAtLeast(base * MIN_TEXT_SCALE)
-            }
+            slotTextSize[index] = fitted(chars[index], length, base, available)
         }
         paints.label.textSize = base
+    }
+
+    /** [base], shrunk until [length] characters fit in [available], with a floor. */
+    private fun fitted(text: CharArray, length: Int, base: Float, available: Float): Float {
+        if (length == 0) {
+            return base
+        }
+        paints.label.textSize = base
+        val measured = paints.label.measureText(text, 0, length)
+        return if (measured <= available || measured <= 0f) {
+            base
+        } else {
+            (base * available / measured).coerceAtLeast(base * MIN_TEXT_SCALE)
+        }
     }
 
     /** Switches the strip to the assistant's actions for the current selection. */
@@ -269,7 +309,7 @@ class SuggestionStripView(
                 drawNotice(canvas, decodingNoticeChars, DECODING_NOTICE.length)
                 return
             }
-            if (count == 0) {
+            if (count == 0 && chipOffset == 0) {
                 // An empty strip with nothing drawn in it reads as a dead row rather than an
                 // idle one, so say what the row is waiting for -- but only while there is
                 // nothing to be about. Suppressed in action mode, where an empty strip means
@@ -280,15 +320,35 @@ class SuggestionStripView(
                 return
             }
 
-            val shown = if (count < visibleLimit) count else visibleLimit
+            val shown = shownCount()
             val slotWidth = width.toFloat() / shown
             val baseline = height / 2f + paints.labelBaselineOffsetPx
-            for (index in 0 until shown) {
+
+            if (chipOffset == 1) {
+                if (pressedIndex == 0) {
+                    canvas.drawRect(0f, 0f, slotWidth, height.toFloat(), paints.keyPressedFill)
+                }
+                // Drawn in the accent colour rather than the label colour: it is the one chip
+                // that inserts something the user did not type, and it should not be possible
+                // to tap it by muscle memory while aiming at a word.
+                val paint = paints.accentLabel
+                val previous = paint.textSize
+                paint.textSize = chipTextSize
+                canvas.drawText(chipChars, 0, chipCharCount, slotWidth / 2f, baseline, paint)
+                paint.textSize = previous
+                if (shown > 1) {
+                    canvas.drawLine(slotWidth, height * 0.25f, slotWidth, height * 0.75f,
+                        paints.keyStroke)
+                }
+            }
+
+            for (slot in chipOffset until shown) {
+                val index = slot - chipOffset
                 val length = charCount[index]
                 if (length == 0) {
                     continue
                 }
-                val left = slotWidth * index
+                val left = slotWidth * slot
                 if (index == pressedIndex) {
                     canvas.drawRect(left, 0f, left + slotWidth, height.toFloat(),
                         paints.keyPressedFill)
@@ -313,7 +373,7 @@ class SuggestionStripView(
                     paint.textSize = previousSize
                 }
 
-                if (index > 0) {
+                if (slot > chipOffset) {
                     canvas.drawLine(left, height * 0.25f, left, height * 0.75f, paints.keyStroke)
                 }
             }
@@ -332,7 +392,7 @@ class SuggestionStripView(
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (privateMode || count == 0) {
+        if (privateMode || (count == 0 && chipOffset == 0)) {
             return false
         }
         when (event.actionMasked) {
@@ -340,7 +400,9 @@ class SuggestionStripView(
                 pressedIndex = slotAt(event.x)
                 longPressFired = false
                 invalidate()
-                if (pressedIndex >= 0) {
+                // The chip has no hold behaviour: there is one thing on the clipboard and one
+                // thing to do with it.
+                if (pressedIndex > chipOffset - 1 && pressedIndex >= 0) {
                     postDelayed(longPressRunnable, LONG_PRESS_MILLIS)
                 }
             }
@@ -363,13 +425,18 @@ class SuggestionStripView(
                     return true
                 }
                 val slot = slotAt(event.x)
-                val word = if (slot >= 0) words[slot] else null
                 pressedIndex = -1
                 invalidate()
-                if (slot >= 0 && actionMode) {
-                    listener?.onActionPicked(slot)
+                if (slot == 0 && chipOffset == 1) {
+                    listener?.onClipboardPicked()
+                    return true
+                }
+                val index = slot - chipOffset
+                val word = if (index >= 0) words[index] else null
+                if (index >= 0 && actionMode) {
+                    listener?.onActionPicked(index)
                 } else if (word != null) {
-                    listener?.onSuggestionPicked(slot, word)
+                    listener?.onSuggestionPicked(index, word)
                 }
             }
             MotionEvent.ACTION_CANCEL -> {
@@ -383,7 +450,19 @@ class SuggestionStripView(
     }
 
     /** How many slots are on screen. Hit-testing has to agree with drawing, not with `count`. */
-    private fun shownCount(): Int = if (count < visibleLimit) count else visibleLimit
+    /**
+     * How many slots are drawn.
+     *
+     * The chip takes one of the slots the user asked for rather than adding one, so turning it
+     * on does not silently narrow every target on the row.
+     */
+    private fun shownCount(): Int {
+        val total = count + chipOffset
+        return if (total < visibleLimit) total else visibleLimit
+    }
+
+    /** How many of the drawn slots hold words rather than the chip. */
+    private fun wordSlots(): Int = shownCount() - chipOffset
 
     private fun slotAt(x: Float): Int {
         val shown = shownCount()
