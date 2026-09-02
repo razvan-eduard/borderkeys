@@ -97,6 +97,20 @@ fun CorrectionsScreen(modifier: Modifier = Modifier) {
                 strings[Keys.CORRECTIONS_ONLY_FROM_WHAT_YOU_HAVE_WRITTEN],
             )
         }
+        SettingsSectionCard(strings[Keys.CORRECTIONS_CAPITALISE]) {
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_CAPITALISE],
+                subtitle = strings[Keys.CORRECTIONS_CAPITALISE_NOTE],
+                checked = preferences.autoCapitalise,
+            ) { value -> update { it.copy(autoCapitalise = value) } }
+
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_DOUBLE_SPACE],
+                subtitle = strings[Keys.CORRECTIONS_DOUBLE_SPACE_NOTE],
+                checked = preferences.doubleSpacePeriod,
+            ) { value -> update { it.copy(doubleSpacePeriod = value) } }
+        }
+
         SettingsSectionCard(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE]) {
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_APPLY_THE_FIRST_SUGGESTION_WHEN_YOU],

@@ -72,11 +72,32 @@ class KeyboardCanvasView(
          * without also switching language on the way out.
          */
         fun onKeyLongPress(code: Int, keyIndex: Int): Boolean
+
+        /**
+         * The space bar was slid sideways by [steps] characters, positive to the right.
+         *
+         * Reported in characters rather than in pixels because the view has no idea how wide a
+         * character is in the field it is typing into, and the service moves the caret through
+         * the editor rather than by simulating arrow keys.
+         */
+        fun onCursorNudge(steps: Int)
     }
 
     var listener: Listener? = null
     var hapticEnabled: Boolean = true
     var swipeEnabled: Boolean = true
+
+    /**
+     * Whether a press makes a sound.
+     *
+     * Played through the platform's own keypress effect rather than an asset of our own, so it
+     * is the sound the rest of the phone makes, at the volume the user set for it, and the
+     * keyboard ships no audio file.
+     */
+    var soundEnabled: Boolean = false
+
+    /** Whether sliding along the space bar moves the cursor instead of typing a space. */
+    var spaceCursorEnabled: Boolean = true
 
     private var layout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
 
@@ -284,6 +305,26 @@ class KeyboardCanvasView(
     private var longPressPointer = -1
 
     private var repeatKey = NO_KEY
+
+    /** The pointer resting on the space bar, and how far it has taken the caret. */
+    private var spacePointer = -1
+    private var spaceStartX = 0f
+    private var spaceMovedBy = 0
+
+    /**
+     * How far the finger travels for one character.
+     *
+     * A fraction of a key rather than a fixed number of pixels, so the gesture feels the same
+     * on a narrow phone and a tablet, and so it scales with the width setting.
+     */
+    private fun spaceStepPx(): Float {
+        val width = if (geometry.keyCount > 0) {
+            geometry.keyRight[0] - geometry.keyLeft[0]
+        } else {
+            0f
+        }
+        return if (width > 0f) width * SPACE_STEP_FRACTION else DEFAULT_SPACE_STEP_PX
+    }
 
     // ---- gesture capture ---------------------------------------------------------------------
 
@@ -513,14 +554,50 @@ class KeyboardCanvasView(
         }
     }
 
+    /**
+     * Whether shift is off, held for one letter, or locked.
+     *
+     * The keyboard drew no shift state at all before this: the letters stayed lower case and
+     * the shift key looked the same whatever it was about to do, which made automatic
+     * capitalisation something you could only discover by typing a letter and looking at the
+     * field.
+     */
+    var shiftState: Int = SHIFT_OFF
+        set(value) {
+            if (field != value) {
+                field = value
+                // The labels live in the cached background layer, so it has to be
+                // re-recorded rather than merely redrawn over.
+                backgroundValid = false
+                invalidate()
+            }
+        }
+
+    /** One character, reused, so upper-casing a label allocates nothing on the draw path. */
+    private val shiftedLabel = CharArray(1)
+
     private fun drawLabel(canvas: Canvas, index: Int) {
         val length = geometry.labelLength[index]
         if (length == 0) {
             return
         }
         paints.label.textSize = labelTextSize[index]
+        // Upper-cased at the moment of drawing rather than in the geometry, so switching shift
+        // costs one invalidate and no relayout -- the caps are the same width as the letters
+        // they replace at this size, and the buffer they come from is shared with everything
+        // else on the row.
+        val chars = if (shiftState != SHIFT_OFF && length == 1 &&
+            Character.isLowerCase(geometry.labelChars[geometry.labelOffset[index]])
+        ) {
+            shiftedLabel[0] =
+                Character.toUpperCase(geometry.labelChars[geometry.labelOffset[index]])
+            shiftedLabel
+        } else {
+            geometry.labelChars
+        }
+        val offset = if (chars === shiftedLabel) 0 else geometry.labelOffset[index]
         canvas.drawText(
-            geometry.labelChars, geometry.labelOffset[index], length,
+            chars, offset, length,
             geometry.centerX[index], geometry.centerY[index] + paints.labelBaselineOffsetPx,
             paints.label,
         )
@@ -678,6 +755,20 @@ class KeyboardCanvasView(
             // Needs no VIBRATE permission, which is why the manifest has none.
             performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         }
+        if (soundEnabled) {
+            // Honours the phone's own "touch sounds" setting on top of ours: playSoundEffect
+            // is silent when the system has them off, so the two switches compose the way a
+            // reader would expect rather than one overriding the other.
+            playSoundEffect(android.view.SoundEffectConstants.CLICK)
+        }
+        // A press on the space bar is a cursor drag that has not started yet.
+        if (spaceCursorEnabled && KeyFlags.has(geometry.keyFlags[index], KeyFlags.REPEATABLE).not() &&
+            geometry.keyCode[index] == ' '.code
+        ) {
+            spacePointer = pointerId
+            spaceStartX = x
+            spaceMovedBy = 0
+        }
         listener?.onKeyDown(geometry.keyCode[index])
 
         if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.REPEATABLE)) {
@@ -706,6 +797,32 @@ class KeyboardCanvasView(
             updateAlternativesSelection(x)
             return
         }
+        // Sliding along the space bar moves the caret. Started only from the space bar, and
+        // only past a threshold wider than any tap wobble, so a press that happens to drift a
+        // few pixels still types a space.
+        if (pointerId == spacePointer) {
+            val travelled = x - spaceStartX
+            val step = spaceStepPx()
+            val wanted = (travelled / step).toInt()
+            if (wanted != spaceMovedBy) {
+                if (spaceMovedBy == 0) {
+                    // The drag has begun: this press will not be typing anything, so the key
+                    // is un-pressed and the hold that was armed for it is disarmed.
+                    removeCallbacks(longPressRunnable)
+                    val pressed = pointerKey[pointerId]
+                    pointerKey[pointerId] = NO_KEY
+                    if (pressed != NO_KEY) {
+                        endPress(pressed)
+                    }
+                }
+                listener?.onCursorNudge(wanted - spaceMovedBy)
+                spaceMovedBy = wanted
+            }
+            if (spaceMovedBy != 0) {
+                return
+            }
+        }
+
         val previous = pointerKey[pointerId]
         if (previous == NO_KEY) {
             return
@@ -749,6 +866,16 @@ class KeyboardCanvasView(
             finishGesture()
             pointerKey[pointerId] = NO_KEY
             return
+        }
+        if (pointerId == spacePointer) {
+            val dragged = spaceMovedBy != 0
+            spacePointer = -1
+            spaceMovedBy = 0
+            if (dragged) {
+                // The caret has already been moved; lifting must not also type a space.
+                pointerKey[pointerId] = NO_KEY
+                return
+            }
         }
         val index = pointerKey[pointerId]
         pointerKey[pointerId] = NO_KEY
@@ -981,11 +1108,20 @@ class KeyboardCanvasView(
     companion object {
         const val NO_KEY = -1
 
+        // Mirrors the service's shift states, so the view can be told one without depending on it.
+        const val SHIFT_OFF = 0
+        const val SHIFT_ON = 1
+        const val SHIFT_LOCKED = 2
+
         private const val MAX_POINTERS = 16
         private const val PRESS_POOL = 10
         private const val LABEL_WIDTH_FRACTION = 0.82f
         private const val DEFAULT_ROW_HEIGHT_PX = 150f
         private const val MIN_ALTERNATIVE_WIDTH_PX = 96f
+
+        /** One key width's fraction of finger travel per character of caret movement. */
+        private const val SPACE_STEP_FRACTION = 0.55f
+        private const val DEFAULT_SPACE_STEP_PX = 56f
 
         /**
          * Samples one swipe may hold before the buffer is decimated. Five hundred and twelve

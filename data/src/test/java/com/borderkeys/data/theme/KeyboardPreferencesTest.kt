@@ -311,4 +311,27 @@ class KeyboardPreferencesTest {
         assertFalse("images should be asked for", defaults.clipboardImages)
     }
 
+    /**
+     * The typing conveniences default on and the noisy one defaults off.
+     *
+     * Held together in one test because the difference is the rule: something that changes what
+     * you get is on, something that makes the phone do a thing it was not doing is off.
+     */
+    @Test
+    fun `typing helps are on and the sound is not`() {
+        val defaults = KeyboardPreferences()
+        assertTrue("capitalisation should be on", defaults.autoCapitalise)
+        assertTrue("two spaces should end a sentence", defaults.doubleSpacePeriod)
+        assertTrue("the space bar should move the cursor", defaults.spaceCursorControl)
+        assertFalse("a keypress should not make a sound unasked", defaults.keySound)
+    }
+
+    @Test
+    fun `emoji recents are bounded and drop empties`() {
+        val many = List(100) { "e$it" } + ""
+        val kept = KeyboardPreferences(emojiRecents = many).sanitised().emojiRecents
+        assertEquals(KeyboardPreferences.MAX_EMOJI_RECENTS, kept.size)
+        assertFalse("an empty entry is not an emoji", kept.contains(""))
+    }
+
 }

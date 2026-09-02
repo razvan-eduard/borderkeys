@@ -58,6 +58,32 @@ fun SizeScreen(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         KeyboardPreview(theme, preferences, Modifier.padding(vertical = 12.dp))
 
+        SettingsSectionCard(strings[Keys.SIZE_KEY_SOUND]) {
+
+            SwitchRow(
+
+                title = strings[Keys.SIZE_KEY_SOUND],
+
+                subtitle = strings[Keys.SIZE_KEY_SOUND_NOTE],
+
+                checked = preferences.keySound,
+
+            ) { value -> update { it.copy(keySound = value) } }
+
+
+            SwitchRow(
+
+                title = strings[Keys.SIZE_SPACE_CURSOR],
+
+                subtitle = strings[Keys.SIZE_SPACE_CURSOR_NOTE],
+
+                checked = preferences.spaceCursorControl,
+
+            ) { value -> update { it.copy(spaceCursorControl = value) } }
+
+        }
+
+
         SettingsSectionCard(strings[Keys.SIZE_HEIGHT]) {
             Explanation(
                 strings[Keys.SIZE_BIGGER_KEYS_ARE_EASIER_TO_HIT],

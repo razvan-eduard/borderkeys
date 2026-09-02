@@ -96,6 +96,16 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# The emoji palette, compiled by tools/build_emoji.py from Unicode's emoji-test.txt. What is
+# stored is the code points and the groups that file defines, in the order it recommends for
+# keyboard palettes. Unicode's data files are under the Unicode Licence, which is permissive
+# and BSD-shaped; the attribution it asks for is this entry and docs/licensing.md.
+[[annotations]]
+path = "keyboard/src/main/assets/emoji/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Unicode, Inc."
+SPDX-License-Identifier = "Unicode-3.0"
+
 # Keyboard layout descriptions. Plain data, authored here.
 [[annotations]]
 path = "keyboard/src/main/assets/layouts/**"

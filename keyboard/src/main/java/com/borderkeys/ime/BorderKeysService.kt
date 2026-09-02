@@ -115,6 +115,23 @@ class BorderKeysService :
     private var page = PAGE_ALPHABETIC
 
     private var shiftState = SHIFT_OFF
+
+    /**
+     * Set when the user pressed shift themselves, cleared by the character it applied to.
+     *
+     * Without it the automatic state overwrites a deliberate press the moment the caret moves,
+     * which is every time a character is typed.
+     */
+    private var shiftHeldByUser = false
+
+    /** When the last space was committed, for the two-spaces-make-a-full-stop window. */
+    private var lastSpaceAt = 0L
+
+    /** Set for exactly one keystroke after two spaces became a full stop, so backspace undoes it. */
+    private var pendingSpacePeriod = false
+
+    /** Whether the current lock came from the field asking for capitals rather than from shift. */
+    private var autoLockedShift = false
     private var lastShiftPressAt = 0L
 
     private val flushLearningRunnable = Runnable { flushLearning() }
@@ -343,6 +360,8 @@ class BorderKeysService :
                         pushQuickSettingsState(view)
                     }
                     view.keyboard.hapticEnabled = newPreferences.hapticFeedback
+                    view.keyboard.soundEnabled = newPreferences.keySound
+                    view.keyboard.spaceCursorEnabled = newPreferences.spaceCursorControl
                     view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
                     applyQuickActions(view)
                     refreshClipboardChip()
@@ -403,6 +422,9 @@ class BorderKeysService :
             } else if (!hasSelection) {
                 adoptWordAtCaret()
             }
+            // Shift is derived from the text before the caret, so moving the caret is exactly
+            // when it has to be looked at again.
+            applyAutoShift()
             return
         }
         offerAssistActions()
@@ -552,6 +574,8 @@ class BorderKeysService :
         view.keyboard.listener = this
         view.keyboard.hapticEnabled = preferences.hapticFeedback
         view.keyboard.swipeEnabled = preferences.swipeEnabled
+        view.keyboard.soundEnabled = preferences.keySound
+        view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
         view.keyboard.setLayout(
             if (preferences.numberRow) alphabeticLayout.withNumberRow() else alphabeticLayout,
         )
@@ -564,6 +588,8 @@ class BorderKeysService :
         view.assistSheet.listener = this
         view.quickActions.listener = this
         view.clipboardPanel.listener = this
+        view.emojiPanel.listener = EmojiPanelView.Listener { emoji -> onEmojiPicked(emoji) }
+        view.emojiPanel.recents = preferences.emojiRecents
         applyQuickActions(view)
         view.onMoveToOtherSide = { moveKeyboardToOtherSide() }
         view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> pushKeyGeometry() }
@@ -595,6 +621,8 @@ class BorderKeysService :
             view.suggestionStrip.clear()
             view.keyboard.hapticEnabled = preferences.hapticFeedback
             view.keyboard.swipeEnabled = preferences.swipeEnabled
+        view.keyboard.soundEnabled = preferences.keySound
+        view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
         }
         showPage(pageFor(info))
         // Asked once per field rather than once per selection: the answer is about whether the
@@ -604,10 +632,12 @@ class BorderKeysService :
         } else {
             assistAvailable = false
         }
-        shiftState = if (info != null && shouldAutoCapitalise(info)) SHIFT_ON else SHIFT_OFF
+        shiftHeldByUser = false
+        applyAutoShift()
 
         resetComposing()
         host?.setClipboardPanelVisible(false)
+        host?.setEmojiPanelVisible(false)
         registerClipboardListener()
         refreshClipboardChip()
         pushKeyGeometry()
@@ -728,6 +758,31 @@ class BorderKeysService :
     override fun onKeyDown(code: Int) = Unit
 
     /**
+     * Moves the caret by [steps] characters, from a slide along the space bar.
+     *
+     * Through setSelection rather than by sending arrow keys: an editor that treats an arrow
+     * key as navigation between fields would jump out of the text entirely, and the caret
+     * position is something we can ask for and set exactly.
+     */
+    override fun onCursorNudge(steps: Int) {
+        val connection = currentInputConnection ?: return
+        if (composing.isNotEmpty()) {
+            // Committing first, because moving the caret out of a composing region leaves the
+            // editor holding an underline around text nobody is editing any more.
+            finishComposing(connection)
+        }
+        val extracted = connection.getExtractedText(ExtractedTextRequest(), 0) ?: return
+        val length = extracted.text?.length ?: return
+        val target = (selectionEnd + steps).coerceIn(0, length)
+        if (target == selectionEnd) {
+            return
+        }
+        selectionStart = target
+        selectionEnd = target
+        connection.setSelection(target, target)
+    }
+
+    /**
      * A completed swipe.
      *
      * The word in progress is committed first: a swipe starts a new word, and leaving the
@@ -814,7 +869,7 @@ class BorderKeysService :
             )
             KeyCodes.LANGUAGE -> switchLanguage()
             KeyCodes.SETTINGS -> toggleQuickSettings()
-            KeyCodes.EMOJI -> Unit
+            KeyCodes.EMOJI -> host?.setEmojiPanelVisible(host?.emojiPanelVisible != true)
             else -> if (KeyCodes.isCharacter(code)) handleCharacter(code)
         }
     }
@@ -844,7 +899,9 @@ class BorderKeysService :
         }
         if (shiftState == SHIFT_ON) {
             shiftState = SHIFT_OFF
+            host?.keyboard?.shiftState = shiftState
         }
+        shiftHeldByUser = false
 
         if (isWordCharacter(shifted)) {
             composing.appendCodePoint(shifted)
@@ -868,6 +925,30 @@ class BorderKeysService :
         // Captured before anything commits: finishComposing and the correction branch both
         // advance previousWord1 to the word being written now.
         val contextWord = previousWord1
+
+        // Two spaces in quick succession end the sentence instead. Only after a word
+        // character, so it never fires on an empty line or after punctuation that already
+        // ended one, and only inside the window -- two spaces a minute apart are two spaces.
+        if (shifted == ' '.code && typed.isEmpty() && preferences.doubleSpacePeriod &&
+            System.currentTimeMillis() - lastSpaceAt < DOUBLE_SPACE_MILLIS &&
+            endsWithWordCharacterBeforeSpace(connection)
+        ) {
+            connection.beginBatchEdit()
+            connection.deleteSurroundingText(1, 0)
+            connection.commitText(". ", 1)
+            connection.endBatchEdit()
+            lastSpaceAt = 0L
+            pendingSpacePeriod = true
+            pendingCorrection = null
+            refreshContextFromEditor()
+            applyAutoShift()
+            requestSuggestions()
+            return
+        }
+        if (shifted == ' '.code) {
+            lastSpaceAt = System.currentTimeMillis()
+        }
+        pendingSpacePeriod = false
 
         connection.beginBatchEdit()
         val delimiter = String(Character.toChars(shifted))
@@ -982,6 +1063,22 @@ class BorderKeysService :
             requestSuggestions()
             return
         }
+        if (pendingSpacePeriod) {
+            // Undone the same way a correction is: the objection to a substitution is always
+            // that undoing it costs more than not having it.
+            pendingSpacePeriod = false
+            val before = connection.getTextBeforeCursor(2, 0)
+            if (before != null && before.toString() == ". ") {
+                connection.beginBatchEdit()
+                connection.deleteSurroundingText(2, 0)
+                connection.commitText("  ", 1)
+                connection.endBatchEdit()
+                refreshContextFromEditor()
+                applyAutoShift()
+                requestSuggestions()
+                return
+            }
+        }
         if (revertCorrection(connection)) {
             return
         }
@@ -1038,6 +1135,11 @@ class BorderKeysService :
             else -> SHIFT_ON
         }
         lastShiftPressAt = now
+        // Pressed deliberately, so the automatic state stops having an opinion until the next
+        // character consumes it.
+        shiftHeldByUser = shiftState != SHIFT_OFF
+        autoLockedShift = false
+        host?.keyboard?.shiftState = shiftState
     }
 
     /**
@@ -1440,16 +1542,91 @@ class BorderKeysService :
         previousWord2 = words.getOrNull(words.size - 2)
     }
 
-    private fun shiftAfterDelimiter(code: Int) {
-        if (shiftState == SHIFT_LOCKED) {
-            return
-        }
-        shiftState = if (code == '.'.code || code == '!'.code || code == '?'.code) SHIFT_ON
-        else SHIFT_OFF
+    /** True when what precedes the single trailing space is a word character. */
+    private fun endsWithWordCharacterBeforeSpace(connection: InputConnection): Boolean {
+        val before = connection.getTextBeforeCursor(2, 0) ?: return false
+        return before.length == 2 && before[1] == ' ' && isWordCharacter(before[0].code)
     }
 
-    private fun shouldAutoCapitalise(info: EditorInfo): Boolean =
-        (info.inputType and android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES) != 0
+    private fun shiftAfterDelimiter(code: Int) {
+        if (shiftState == SHIFT_LOCKED || shiftHeldByUser) {
+            return
+        }
+        applyAutoShift()
+    }
+
+    /**
+     * Sets shift from what the editor asked for and what is already written.
+     *
+     * Derived rather than remembered. The previous version set the state when the field opened
+     * and after a delimiter it had typed itself, which meant shift never came back after
+     * deleting to the start of a field, moving the caret there, or pasting -- and never came on
+     * at all in a field that asks for capitals on every word rather than every sentence.
+     *
+     * A shift the user pressed is left alone. Deciding for them immediately after they decided
+     * for themselves is the one thing worse than not deciding at all.
+     */
+    private fun applyAutoShift() {
+        if (shiftState == SHIFT_LOCKED && !autoLockedShift) {
+            return
+        }
+        if (shiftHeldByUser) {
+            return
+        }
+        val wanted = autoShiftState()
+        autoLockedShift = wanted == SHIFT_LOCKED
+        if (shiftState != wanted) {
+            shiftState = wanted
+            host?.keyboard?.shiftState = shiftState
+        }
+    }
+
+    /** What shift should be here, from the field's request and the text before the cursor. */
+    private fun autoShiftState(): Int {
+        if (!preferences.autoCapitalise) {
+            return SHIFT_OFF
+        }
+        val type = currentInputEditorInfo?.inputType ?: return SHIFT_OFF
+        if ((type and android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS) != 0) {
+            return SHIFT_LOCKED
+        }
+        val words = (type and android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS) != 0
+        val sentences = (type and android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES) != 0
+        if (!words && !sentences) {
+            return SHIFT_OFF
+        }
+        // The composing region is text the user is in the middle of; if there is any, they are
+        // inside a word and nothing should be capitalised.
+        if (composing.isNotEmpty()) {
+            return SHIFT_OFF
+        }
+        val before = currentInputConnection?.getTextBeforeCursor(CAP_LOOKBACK_CHARS, 0)
+        if (before.isNullOrEmpty()) {
+            // Start of the field: the first word of anything is the first word of a sentence.
+            return SHIFT_ON
+        }
+        if (words) {
+            return if (isWordCharacter(before[before.length - 1].code)) SHIFT_OFF else SHIFT_ON
+        }
+        // Sentences: walk back over the spaces, then look at what ended the last one.
+        var index = before.length - 1
+        var spaces = 0
+        while (index >= 0 && (before[index] == ' ' || before[index] == '\t')) {
+            spaces++
+            index--
+        }
+        if (index < 0) {
+            return SHIFT_ON
+        }
+        val last = before[index]
+        if (last == '\n') {
+            return SHIFT_ON
+        }
+        // A sentence ends at . ! ? and only counts once a space follows it: "e.g" is not the
+        // end of anything, and neither is a full stop the user is still typing after.
+        return if (spaces > 0 && (last == '.' || last == '!' || last == '?')) SHIFT_ON
+        else SHIFT_OFF
+    }
 
     private fun isWordCharacter(code: Int): Boolean =
         Character.isLetter(code) || code == '\''.code || code == '-'.code
@@ -1791,6 +1968,27 @@ class BorderKeysService :
         }
     }
 
+    /**
+     * Inserts an emoji and remembers that it was used.
+     *
+     * The panel stays open: choosing one emoji is very often choosing three, and a picker that
+     * closes on every pick is a picker reopened on every pick.
+     */
+    private fun onEmojiPicked(emoji: String) {
+        val connection = currentInputConnection ?: return
+        finishComposing(connection)
+        connection.commitText(emoji, 1)
+        refreshContextFromEditor()
+        requestSuggestions()
+
+        val updated = (listOf(emoji) + preferences.emojiRecents.filterNot { it == emoji })
+            .take(KeyboardPreferences.MAX_EMOJI_RECENTS)
+        host?.emojiPanel?.recents = updated
+        scope.launch {
+            DataGraph.themes.updatePreferences { it.copy(emojiRecents = updated) }
+        }
+    }
+
     override fun onClipboardPanelClosed() {
         host?.setClipboardPanelVisible(false)
     }
@@ -2082,6 +2280,12 @@ class BorderKeysService :
         const val DOUBLE_TAP_MILLIS = 400L
 
         const val CONTEXT_WINDOW_CHARS = 64
+
+        /** Enough to find what ended the last sentence, and no more. */
+        const val CAP_LOOKBACK_CHARS = 8
+
+        /** How close two spaces must be to mean the end of a sentence rather than two spaces. */
+        const val DOUBLE_SPACE_MILLIS = 1200L
 
         /** How much of a copied text the chip shows before it stops being a label. */
         const val CHIP_PREVIEW_CHARS = 24

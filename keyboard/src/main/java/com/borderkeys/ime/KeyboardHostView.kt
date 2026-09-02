@@ -54,6 +54,7 @@ class KeyboardHostView(
     val quickSettings = QuickSettingsView(context, paints, strings)
     val quickActions = QuickActionsView(context, paints, strings)
     val clipboardPanel = ClipboardPanelView(context, paints, strings)
+    val emojiPanel = EmojiPanelView(context, paints)
 
     /**
      * Which edge the quick-action bar sits against. Mirrors KeyboardPreferences; kept as an Int
@@ -155,6 +156,8 @@ class KeyboardHostView(
         // height in the window and drew nothing in it.
         addView(clipboardPanel)
         clipboardPanel.visibility = GONE
+        addView(emojiPanel)
+        emojiPanel.visibility = GONE
         addView(quickActions)
         inlineSuggestions.visibility = GONE
         assistSheet.visibility = GONE
@@ -226,6 +229,21 @@ class KeyboardHostView(
      * touch types through, and the window keeps its height either way because the panel is
      * measured to exactly the height the keys had.
      */
+    val emojiPanelVisible: Boolean get() = emojiPanel.visibility == VISIBLE
+
+    /** Shows or hides the emoji grid, standing the keys down while it is up. */
+    fun setEmojiPanelVisible(visible: Boolean) {
+        if (emojiPanelVisible == visible) {
+            return
+        }
+        if (visible) {
+            emojiPanel.load(context)
+        }
+        emojiPanel.visibility = if (visible) VISIBLE else GONE
+        keyboard.visibility = if (visible) GONE else VISIBLE
+        requestLayout()
+    }
+
     fun setClipboardPanelVisible(visible: Boolean) {
         if (clipboardPanelVisible == visible) {
             return
@@ -293,6 +311,12 @@ class KeyboardHostView(
                 keyboardHeightForPanel(bodyWidth), MeasureSpec.EXACTLY,
             ))
             height += clipboardPanel.measuredHeight
+        }
+        if (emojiPanel.visibility != GONE) {
+            emojiPanel.measure(exactBody, MeasureSpec.makeMeasureSpec(
+                keyboardHeightForPanel(bodyWidth), MeasureSpec.EXACTLY,
+            ))
+            height += emojiPanel.measuredHeight
         }
         if (quickActions.visibility != GONE) {
             if (sideBar) {
@@ -362,6 +386,10 @@ class KeyboardHostView(
         if (clipboardPanel.visibility != GONE) {
             clipboardPanel.layout(bodyLeft, y, bodyRight, y + clipboardPanel.measuredHeight)
             y += clipboardPanel.measuredHeight
+        }
+        if (emojiPanel.visibility != GONE) {
+            emojiPanel.layout(bodyLeft, y, bodyRight, y + emojiPanel.measuredHeight)
+            y += emojiPanel.measuredHeight
         }
         if (quickActions.visibility != GONE) {
             when (quickActionsPlacement) {

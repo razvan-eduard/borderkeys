@@ -67,6 +67,49 @@ data class KeyboardPreferences(
     val perAppLanguageMemory: Boolean = false,
     val hapticFeedback: Boolean = true,
 
+    /**
+     * Whether a keypress makes a sound.
+     *
+     * Off. The system has its own keypress sound setting and this respects it when both are
+     * on, but a keyboard that starts making noise on a phone that was quiet is a keyboard
+     * someone has to go and switch off.
+     */
+    val keySound: Boolean = false,
+
+    /**
+     * Whether the first letter of a sentence is capitalised for you.
+     *
+     * On, and read from the editor rather than assumed: a field can ask for every sentence,
+     * every word, or every character capitalised, and all three are honoured. A field that
+     * asks for none of them -- a password, a URL -- gets none.
+     */
+    val autoCapitalise: Boolean = true,
+
+    /**
+     * Whether two spaces become a full stop and a space.
+     *
+     * On, and undone by the backspace that follows it, like any other substitution this
+     * keyboard makes.
+     */
+    val doubleSpacePeriod: Boolean = true,
+
+    /**
+     * Whether sliding along the space bar moves the cursor.
+     *
+     * On. It costs nothing when unused -- the slide has to travel further than a tap ever
+     * does before it counts -- and it is the only way to place a cursor precisely without
+     * covering the text with a finger.
+     */
+    val spaceCursorControl: Boolean = true,
+
+    /**
+     * The emoji used most recently, newest first.
+     *
+     * Stored with the settings rather than in the encrypted database: it is a list of pictures
+     * someone sent, not of words they wrote, and the database exists for the second.
+     */
+    val emojiRecents: List<String> = emptyList(),
+
     // ---- size and position -------------------------------------------------------------
     //
     // A keyboard is the one part of the screen a person's thumb has to reach a hundred times a
@@ -265,6 +308,7 @@ data class KeyboardPreferences(
         // Read through the enum, which drops ids no build knows, then bounded: a stored file is
         // not a trusted file, and a bar of four hundred buttons is a bar with no buttons on it.
         quickActions = QuickAction.fromIds(quickActions).take(MAX_QUICK_ACTIONS).map { it.id },
+        emojiRecents = emojiRecents.filter { it.isNotEmpty() }.take(MAX_EMOJI_RECENTS),
         quickActionsMode = if (quickActionsMode in QUICK_ACTIONS_FULL..QUICK_ACTIONS_COLLAPSED) {
             quickActionsMode
         } else {
@@ -389,6 +433,9 @@ data class KeyboardPreferences(
 
         /** How many actions the bar will hold before it starts dropping them. */
         const val MAX_QUICK_ACTIONS = 10
+
+        /** How many recent emoji are kept: a row and a half on most phones. */
+        const val MAX_EMOJI_RECENTS = 24
 
         /**
          * How long unpinned entries are kept, as the values a slider steps through.
