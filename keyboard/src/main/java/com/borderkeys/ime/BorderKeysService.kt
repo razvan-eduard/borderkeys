@@ -64,6 +64,7 @@ class BorderKeysService :
     AssistSheetView.Listener,
     QuickSettingsView.Listener,
     QuickActionsView.Listener,
+    ClipboardPanelView.Listener,
     AssistClient.Listener,
     PredictionEngine.ResultListener {
 
@@ -428,25 +429,6 @@ class BorderKeysService :
     override fun onActionPicked(index: Int) {
         // The strip's action mode is shared between the assistant's actions and the question a
         // held suggestion asks. A pending word means the question is this one's.
-        // Three things share action mode now: the assistant's tasks, the question a held
-        // suggestion asks, and the clipboard history. Each clears its own state on the way out,
-        // so whichever put the chips there is the one that reads the tap.
-        val history = clipboardHistory
-        if (history.isNotEmpty()) {
-            clipboardHistory = emptyList()
-            host?.suggestionStrip?.clear()
-            val entry = history.getOrNull(index)
-            if (entry != null) {
-                val connection = currentInputConnection
-                if (connection != null) {
-                    finishComposing(connection)
-                    connection.commitText(entry, 1)
-                }
-            }
-            refreshContextFromEditor()
-            requestSuggestions()
-            return
-        }
         val forgetting = pendingForget
         if (forgetting != null) {
             pendingForget = null
@@ -577,6 +559,7 @@ class BorderKeysService :
         view.quickSettings.listener = this
         view.assistSheet.listener = this
         view.quickActions.listener = this
+        view.clipboardPanel.listener = this
         applyQuickActions(view)
         view.onMoveToOtherSide = { moveKeyboardToOtherSide() }
         view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> pushKeyGeometry() }
@@ -619,6 +602,7 @@ class BorderKeysService :
         shiftState = if (info != null && shouldAutoCapitalise(info)) SHIFT_ON else SHIFT_OFF
 
         resetComposing()
+        host?.setClipboardPanelVisible(false)
         registerClipboardListener()
         refreshClipboardChip()
         pushKeyGeometry()
@@ -1670,11 +1654,11 @@ class BorderKeysService :
     }
 
     /**
-     * Puts the last few things copied into the suggestion strip.
+     * Opens the clipboard history as a panel of cards.
      *
-     * In the strip rather than in a panel of its own: the strip is already the row that offers
-     * things to insert, it already knows how to be tapped, and a second panel would be a second
-     * thing to dismiss. Tapping one inserts it; typing anything replaces them with suggestions.
+     * A panel rather than the suggestion strip: the strip fits a few words, and the history is
+     * a list someone reads -- several lines of a copied paragraph, and a picture that can only
+     * be recognised by looking at it.
      */
     private fun offerClipboardHistory() {
         if (privateMode) {
@@ -1682,23 +1666,65 @@ class BorderKeysService :
         }
         scope.launch {
             val entries = withContext(Dispatchers.IO) {
-                DataGraph.clipboard.recent(SuggestionStripView.MAX_SUGGESTIONS)
+                DataGraph.clipboard.recent(MAX_CLIPBOARD_CARDS)
             }
-            if (entries.isEmpty()) {
-                return@launch
-            }
-            clipboardHistory = entries
-            val labels = arrayOfNulls<String>(SuggestionStripView.MAX_SUGGESTIONS)
-            val shown = entries.size.coerceAtMost(SuggestionStripView.MAX_SUGGESTIONS)
-            for (index in 0 until shown) {
-                labels[index] = entries[index].take(CHIP_PREVIEW_CHARS)
-            }
-            host?.suggestionStrip?.setActions(labels, shown)
+            val view = host ?: return@launch
+            view.clipboardPanel.setEntries(entries)
+            view.setClipboardPanelVisible(true)
         }
     }
 
-    /** What the strip is currently offering from the clipboard, so a tap knows what it meant. */
-    private var clipboardHistory: List<String> = emptyList()
+    override fun onClipPicked(entry: com.borderkeys.data.entity.ClipEntry) {
+        val view = host
+        view?.setClipboardPanelVisible(false)
+        val connection = currentInputConnection ?: return
+        if (entry.isImage) {
+            val uri = android.net.Uri.parse(entry.uri)
+            val description = android.content.ClipDescription(
+                null, arrayOf(entry.mimeType ?: "image/*"),
+            )
+            commitImage(connection, uri, description)
+        } else {
+            finishComposing(connection)
+            connection.commitText(entry.content, 1)
+        }
+        refreshContextFromEditor()
+        requestSuggestions()
+    }
+
+    override fun onClipPinToggled(entry: com.borderkeys.data.entity.ClipEntry) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                DataGraph.clipboard.setPinned(entry.id, !entry.isPinned)
+            }
+            refreshClipboardPanel()
+        }
+    }
+
+    override fun onClipDeleted(entry: com.borderkeys.data.entity.ClipEntry) {
+        scope.launch {
+            withContext(Dispatchers.IO) { DataGraph.clipboard.delete(entry.id) }
+            refreshClipboardPanel()
+        }
+    }
+
+    override fun onClipboardPanelClosed() {
+        host?.setClipboardPanelVisible(false)
+    }
+
+    /** Re-reads the history into an open panel, after something in it changed. */
+    private fun refreshClipboardPanel() {
+        val view = host ?: return
+        if (!view.clipboardPanelVisible) {
+            return
+        }
+        scope.launch {
+            val entries = withContext(Dispatchers.IO) {
+                DataGraph.clipboard.recent(MAX_CLIPBOARD_CARDS)
+            }
+            view.clipboardPanel.setEntries(entries)
+        }
+    }
 
     /** Selects the word the cursor is inside, so the next action can act on it. */
     private fun selectWordAtCursor(connection: InputConnection) {
@@ -1851,6 +1877,20 @@ class BorderKeysService :
             return
         }
         refreshClipboardChip()
+
+        val description = clip.description
+        val uri = clip.getItemAt(0).uri
+        if (uri != null && description != null && description.hasMimeType("image/*")) {
+            // Remembered by reference. The read grant that came with the clip is temporary, so
+            // the thumbnail may stop loading later -- which the panel says, rather than the
+            // alternative of copying megabytes into the database on every screenshot.
+            val mime = description.getMimeType(0) ?: "image/*"
+            scope.launch(Dispatchers.IO) {
+                DataGraph.clipboard.rememberImage(uri.toString(), mime)
+            }
+            return
+        }
+
         val text = clip.getItemAt(0).coerceToText(this)?.toString() ?: return
         if (text.isEmpty() || text.length > MAX_CLIP_LENGTH) {
             return
@@ -1962,6 +2002,9 @@ class BorderKeysService :
 
         /** How much of a copied text the chip shows before it stops being a label. */
         const val CHIP_PREVIEW_CHARS = 24
+
+        /** How many cards the history panel holds. Beyond this, scrolling stops being reading. */
+        const val MAX_CLIPBOARD_CARDS = 40
 
         /** How far either side of the cursor "the line" is looked for. */
         const val LINE_WINDOW_CHARS = 1024

@@ -42,7 +42,7 @@ import java.util.Arrays
         UserBigram::class,
         UserTrigram::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class BorderKeysDatabase : RoomDatabase() {
@@ -133,6 +133,19 @@ abstract class BorderKeysDatabase : RoomDatabase() {
          * Adds the table of three-word sequences, for predicting from two words of context
          * rather than one. Additive like the two before it.
          */
+        /**
+         * Clipboard entries gained a URI and a MIME type, so an image can be remembered
+         * alongside text. Added as nullable columns rather than a new table: an image clip is
+         * a clipboard entry in every respect that matters -- it expires, it pins, it is listed
+         * in the same order -- and a second table would have to be merged back on every read.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `uri` TEXT")
+                db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `mimeType` TEXT")
+            }
+        }
+
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -180,7 +193,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
                 DATABASE_NAME,
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 // The settings screen and the IME run in the same process, but the text
                 // assistant runs in ":assist" and opens this database too. Without this, a write
                 // in one process leaves the other's Flows showing stale rows indefinitely.

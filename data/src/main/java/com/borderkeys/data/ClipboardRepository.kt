@@ -36,6 +36,41 @@ class ClipboardRepository internal constructor(
      * index on the hash is what guarantees that, and the insert is attempted first so that the
      * common case is one statement rather than a lookup followed by one.
      */
+    /**
+     * Remembers a copied image by reference.
+     *
+     * The URI is stored, not the bytes. A clipboard image belongs to whatever produced it and
+     * the read grant we hold is temporary, so a thumbnail that sometimes cannot be loaded is a
+     * better trade than copying megabytes into the database on every screenshot.
+     */
+    suspend fun rememberImage(uri: String, mimeType: String): Boolean {
+        if (uri.isEmpty()) {
+            return false
+        }
+        val settings = preferences.first()
+        if (!settings.clipboardEnabled) {
+            return false
+        }
+        val hash = contentHash(uri)
+        val existing = dao.findByHash(hash)
+        val timestamp = now()
+        if (existing != null) {
+            dao.touch(existing.id, timestamp)
+            return false
+        }
+        dao.insert(
+            ClipEntry(
+                content = uri,
+                createdAt = timestamp,
+                contentHash = hash,
+                uri = uri,
+                mimeType = mimeType,
+            ),
+        )
+        dao.trimUnpinnedTo(settings.clipboardMaxEntries)
+        return true
+    }
+
     suspend fun remember(content: String): Boolean {
         val settings = preferences.first()
         if (!settings.clipboardEnabled || content.isEmpty()) {
@@ -62,8 +97,7 @@ class ClipboardRepository internal constructor(
      * a button press, not tracking the clipboard, and a subscription that outlives the press
      * would keep the database open for a row that has already been replaced by suggestions.
      */
-    suspend fun recent(limit: Int): List<String> =
-        entries.first().take(limit).map { it.content }
+    suspend fun recent(limit: Int): List<ClipEntry> = entries.first().take(limit)
 
     suspend fun setPinned(id: Long, pinned: Boolean) {
         dao.setPinned(id, if (pinned) now() else null)

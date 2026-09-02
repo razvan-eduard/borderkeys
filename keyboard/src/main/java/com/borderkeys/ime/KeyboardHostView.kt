@@ -53,6 +53,7 @@ class KeyboardHostView(
      */
     val quickSettings = QuickSettingsView(context, paints, strings)
     val quickActions = QuickActionsView(context, paints, strings)
+    val clipboardPanel = ClipboardPanelView(context, paints, strings)
 
     /**
      * Which edge the quick-action bar sits against. Mirrors KeyboardPreferences; kept as an Int
@@ -152,6 +153,8 @@ class KeyboardHostView(
         // measured and laid out by this class like the rest; being a child is what makes that
         // reach it at all -- the first version measured it and never added it, so it took up
         // height in the window and drew nothing in it.
+        addView(clipboardPanel)
+        clipboardPanel.visibility = GONE
         addView(quickActions)
         inlineSuggestions.visibility = GONE
         assistSheet.visibility = GONE
@@ -214,6 +217,24 @@ class KeyboardHostView(
 
     val quickSettingsVisible: Boolean get() = quickSettings.visibility == VISIBLE
 
+    val clipboardPanelVisible: Boolean get() = clipboardPanel.visibility == VISIBLE
+
+    /**
+     * Shows or hides the clipboard history, standing the keys down while it is up.
+     *
+     * The keys go rather than being covered: a panel drawn over live keys is a panel a stray
+     * touch types through, and the window keeps its height either way because the panel is
+     * measured to exactly the height the keys had.
+     */
+    fun setClipboardPanelVisible(visible: Boolean) {
+        if (clipboardPanelVisible == visible) {
+            return
+        }
+        clipboardPanel.visibility = if (visible) VISIBLE else GONE
+        keyboard.visibility = if (visible) GONE else VISIBLE
+        requestLayout()
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val contentWidth = (width * widthScale).toInt().coerceAtLeast(1)
@@ -264,6 +285,14 @@ class KeyboardHostView(
                 keyboardHeightForPanel(bodyWidth), MeasureSpec.EXACTLY,
             ))
             height += quickSettings.measuredHeight
+        }
+        if (clipboardPanel.visibility != GONE) {
+            // Same rule, same reason: the window keeps the height it had, so opening the
+            // history does not shove the conversation up the screen and back down again.
+            clipboardPanel.measure(exactBody, MeasureSpec.makeMeasureSpec(
+                keyboardHeightForPanel(bodyWidth), MeasureSpec.EXACTLY,
+            ))
+            height += clipboardPanel.measuredHeight
         }
         if (quickActions.visibility != GONE) {
             if (sideBar) {
@@ -329,6 +358,10 @@ class KeyboardHostView(
         if (quickSettings.visibility != GONE) {
             quickSettings.layout(bodyLeft, y, bodyRight, y + quickSettings.measuredHeight)
             y += quickSettings.measuredHeight
+        }
+        if (clipboardPanel.visibility != GONE) {
+            clipboardPanel.layout(bodyLeft, y, bodyRight, y + clipboardPanel.measuredHeight)
+            y += clipboardPanel.measuredHeight
         }
         if (quickActions.visibility != GONE) {
             when (quickActionsPlacement) {

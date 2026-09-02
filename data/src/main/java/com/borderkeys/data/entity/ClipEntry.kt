@@ -35,6 +35,23 @@ data class ClipEntry(
     /** Null while the entry is subject to expiry. A pinned entry is never deleted on a timer. */
     val pinnedAt: Long? = null,
     val contentHash: Long,
+
+    /**
+     * The content URI of a copied image, or null for text.
+     *
+     * A URI rather than the image: a clipboard image belongs to the application that produced
+     * it, the read permission we were granted with the clip is temporary, and copying hundreds
+     * of kilobytes into an encrypted database on every screenshot would be a worse trade than
+     * a thumbnail that sometimes cannot be loaded any more. When the grant is gone the entry
+     * still shows, and says so.
+     */
+    val uri: String? = null,
+
+    /** The clip's MIME type, so the panel knows what it is looking at without guessing. */
+    val mimeType: String? = null,
 ) {
     val isPinned: Boolean get() = pinnedAt != null
+
+    /** True when this entry is an image rather than text. */
+    val isImage: Boolean get() = uri != null && mimeType?.startsWith("image/") == true
 }
