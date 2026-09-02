@@ -421,6 +421,9 @@ private fun LanguageLock(preferences: KeyboardPreferences, update: (Int) -> Unit
     val strings = LocalStrings.current
 
     SectionHeader(strings[Keys.LANGUAGES_STICK_TO_ONE_LANGUAGE])
+    // Two rows rather than one. Five chips of translated text do not fit across a phone, and a
+    // fifth one that runs off the edge is a setting nobody knows exists -- which is how Strict
+    // was shipped for exactly one build.
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -431,6 +434,11 @@ private fun LanguageLock(preferences: KeyboardPreferences, update: (Int) -> Unit
             preferences, update)
         LockChip(strings[Keys.LANGUAGES_LOCK_BALANCED], KeyboardPreferences.LANGUAGE_LOCK_BALANCED,
             preferences, update)
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         LockChip(strings[Keys.LANGUAGES_LOCK_QUICK], KeyboardPreferences.LANGUAGE_LOCK_QUICK,
             preferences, update)
         LockChip(strings[Keys.LANGUAGES_LOCK_STRICT], KeyboardPreferences.LANGUAGE_LOCK_STRICT,
