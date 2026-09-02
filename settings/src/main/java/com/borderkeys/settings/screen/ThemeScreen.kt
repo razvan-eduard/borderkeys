@@ -63,104 +63,114 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
         scope.launch { repository.updateTheme(transform) }
     }
 
-    Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    // The preview is outside the scrolling column, so it stays on screen while the controls
+    // under it are scrolled. A preview that scrolls away is a preview you cannot see while you
+    // are changing the thing it previews, which is the only moment it is for.
+    Column(modifier = modifier.fillMaxSize()) {
         KeyboardPreview(theme, preferences, Modifier.padding(vertical = 12.dp))
-
-        SettingsSectionCard(strings[Keys.THEME_PRESETS]) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                TextButton(onClick = { update { KeyboardTheme() } }) { Text(strings[Keys.THEME_DARK]) }
-                TextButton(onClick = { update { LIGHT_THEME } }) { Text(strings[Keys.THEME_LIGHT]) }
-                TextButton(onClick = { update { HIGH_CONTRAST } }) { Text(strings[Keys.THEME_HIGH_CONTRAST]) }
-            }
-        }
-        SettingsSectionCard(strings[Keys.THEME_COLOURS]) {
-            ColourRow(strings[Keys.THEME_BACKGROUND], theme.backgroundColor) { update { t -> t.copy(backgroundColor = it) } }
-            ColourRow(strings[Keys.THEME_KEYS], theme.keyColor) { update { t -> t.copy(keyColor = it) } }
-            ColourRow(strings[Keys.THEME_PRESSED_KEY], theme.keyPressedColor) {
-                update { t -> t.copy(keyPressedColor = it) }
-            }
-            ColourRow(strings[Keys.THEME_MODIFIER_KEYS], theme.modifierKeyColor) {
-                update { t -> t.copy(modifierKeyColor = it) }
-            }
-            ColourRow(strings[Keys.THEME_LABELS], theme.textColor) { update { t -> t.copy(textColor = it) } }
-            ColourRow(strings[Keys.THEME_SECONDARY_LABELS], theme.secondaryTextColor) {
-                update { t -> t.copy(secondaryTextColor = it) }
-            }
-            ColourRow(strings[Keys.THEME_ACCENT], theme.accentColor) { update { t -> t.copy(accentColor = it) } }
-            ColourRow(strings[Keys.THEME_SWIPE_TRAIL], theme.swipeTrailColor, preserveAlpha = true) {
-                update { t -> t.copy(swipeTrailColor = it) }
-            }
-        }
-        SettingsSectionCard(strings[Keys.THEME_BACKGROUND_SECTION]) {
-            Text(
-                strings[Keys.THEME_PATTERN],
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                for (index in PATTERN_LABELS.indices) {
-                    val selected = theme.backgroundPattern == index
-                    FilterChip(
-                        selected = selected,
-                        onClick = { update { t -> t.copy(backgroundPattern = index) } },
-                        label = { Text(strings[PATTERN_LABELS[index]]) },
-                    )
+        Divider()
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            SettingsSectionCard(strings[Keys.THEME_PRESETS]) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextButton(onClick = { update { KeyboardTheme() } }) { Text(strings[Keys.THEME_DARK]) }
+                    TextButton(onClick = { update { LIGHT_THEME } }) { Text(strings[Keys.THEME_LIGHT]) }
+                    TextButton(onClick = { update { HIGH_CONTRAST } }) { Text(strings[Keys.THEME_HIGH_CONTRAST]) }
                 }
             }
-            ColourRow(strings[Keys.THEME_PATTERN_COLOUR], theme.patternColor, preserveAlpha = true) {
-                update { t -> t.copy(patternColor = it) }
+            SettingsSectionCard(strings[Keys.THEME_COLOURS]) {
+                ColourRow(strings[Keys.THEME_BACKGROUND], theme.backgroundColor) {
+                    update { t -> t.copy(backgroundColor = it) }
+                }
+                ColourRow(strings[Keys.THEME_KEYS], theme.keyColor) { update { t -> t.copy(keyColor = it) } }
+                ColourRow(strings[Keys.THEME_PRESSED_KEY], theme.keyPressedColor) {
+                    update { t -> t.copy(keyPressedColor = it) }
+                }
+                ColourRow(strings[Keys.THEME_MODIFIER_KEYS], theme.modifierKeyColor) {
+                    update { t -> t.copy(modifierKeyColor = it) }
+                }
+                ColourRow(strings[Keys.THEME_LABELS], theme.textColor) { update { t -> t.copy(textColor = it) } }
+                ColourRow(strings[Keys.THEME_SECONDARY_LABELS], theme.secondaryTextColor) {
+                    update { t -> t.copy(secondaryTextColor = it) }
+                }
+                ColourRow(strings[Keys.THEME_ACCENT], theme.accentColor) { update { t -> t.copy(accentColor = it) } }
+                ColourRow(strings[Keys.THEME_SWIPE_TRAIL], theme.swipeTrailColor, preserveAlpha = true) {
+                    update { t -> t.copy(swipeTrailColor = it) }
+                }
             }
-            ThemeSlider(strings[Keys.THEME_PATTERN_SIZE], theme.patternScaleDp, 8f..64f, "dp") {
-                update { t -> t.copy(patternScaleDp = it) }
+            SettingsSectionCard(strings[Keys.THEME_BACKGROUND_SECTION]) {
+                Text(
+                    strings[Keys.THEME_PATTERN],
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for (index in PATTERN_LABELS.indices) {
+                        val selected = theme.backgroundPattern == index
+                        FilterChip(
+                            selected = selected,
+                            onClick = { update { t -> t.copy(backgroundPattern = index) } },
+                            label = { Text(strings[PATTERN_LABELS[index]]) },
+                        )
+                    }
+                }
+                ColourRow(strings[Keys.THEME_PATTERN_COLOUR], theme.patternColor, preserveAlpha = true) {
+                    update { t -> t.copy(patternColor = it) }
+                }
+                ThemeSlider(strings[Keys.THEME_PATTERN_SIZE], theme.patternScaleDp, 8f..64f, "dp") {
+                    update { t -> t.copy(patternScaleDp = it) }
+                }
+                // Shown as the background's own colour when there is no second one, so the row
+                // has something ringed and picking that same colour is how a gradient is removed.
+                ColourRow(strings[Keys.THEME_SECOND_COLOUR], theme.gradientEnd()) {
+                    update { t -> t.copy(backgroundGradientColor = it) }
+                }
+                Explanation(strings[Keys.THEME_SECOND_COLOUR_NOTE])
+                SwitchRow(
+                    title = strings[Keys.THEME_FULL_WIDTH_BACKGROUND],
+                    subtitle = strings[Keys.THEME_FULL_WIDTH_BACKGROUND_NOTE],
+                    checked = theme.fullWidthBackground,
+                ) { value -> update { it.copy(fullWidthBackground = value) } }
             }
-            // Shown as the background's own colour when there is no second one, so the row
-            // has something ringed and picking that same colour is how a gradient is removed.
-            ColourRow(strings[Keys.THEME_SECOND_COLOUR], theme.gradientEnd()) {
-                update { t -> t.copy(backgroundGradientColor = it) }
+            SettingsSectionCard(strings[Keys.THEME_SHAPE]) {
+                ThemeSlider(
+                    strings[Keys.THEME_CORNER_RADIUS], theme.keyCornerRadiusDp, 0f..32f,
+                    strings[Keys.THEME_DP],
+                ) {
+                    update { t -> t.copy(keyCornerRadiusDp = it) }
+                }
+                ThemeSlider(strings[Keys.THEME_GAP_BETWEEN_KEYS], theme.keyGapDp, 0f..16f, "dp") {
+                    update { t -> t.copy(keyGapDp = it) }
+                }
+                ThemeSlider(strings[Keys.THEME_ROW_HEIGHT], theme.rowHeightDp, 28f..96f, "dp") {
+                    update { t -> t.copy(rowHeightDp = it) }
+                }
+                ThemeSlider(strings[Keys.THEME_LABEL_SIZE], theme.labelTextSizeSp, 8f..40f, "sp") {
+                    update { t -> t.copy(labelTextSizeSp = it) }
+                }
+                ThemeSlider(strings[Keys.THEME_PRESS_DEPTH], theme.pressedElevation, 0f..16f, "dp") {
+                    update { t -> t.copy(pressedElevation = it) }
+                }
+                ThemeSlider(strings[Keys.THEME_TRAIL_WIDTH], theme.swipeTrailWidthDp, 1f..24f, "dp") {
+                    update { t -> t.copy(swipeTrailWidthDp = it) }
+                }
+                SwitchRow(
+                    title = strings[Keys.THEME_OUTLINE_THE_KEYS],
+                    subtitle = strings[Keys.THEME_A_HAIRLINE_BORDER_HELPS_WHEN_THE],
+                    checked = theme.showKeyBorders,
+                ) { value -> update { it.copy(showKeyBorders = value) } }
+                Explanation(
+                    strings[Keys.THEME_VALUES_ARE_CLAMPED_WHEN_THEY_ARE],
+                )
             }
-            Explanation(strings[Keys.THEME_SECOND_COLOUR_NOTE])
-            SwitchRow(
-                title = strings[Keys.THEME_FULL_WIDTH_BACKGROUND],
-                subtitle = strings[Keys.THEME_FULL_WIDTH_BACKGROUND_NOTE],
-                checked = theme.fullWidthBackground,
-            ) { value -> update { it.copy(fullWidthBackground = value) } }
-        }
-        SettingsSectionCard(strings[Keys.THEME_SHAPE]) {
-            ThemeSlider(strings[Keys.THEME_CORNER_RADIUS], theme.keyCornerRadiusDp, 0f..32f, strings[Keys.THEME_DP]) {
-                update { t -> t.copy(keyCornerRadiusDp = it) }
-            }
-            ThemeSlider(strings[Keys.THEME_GAP_BETWEEN_KEYS], theme.keyGapDp, 0f..16f, "dp") {
-                update { t -> t.copy(keyGapDp = it) }
-            }
-            ThemeSlider(strings[Keys.THEME_ROW_HEIGHT], theme.rowHeightDp, 28f..96f, "dp") {
-                update { t -> t.copy(rowHeightDp = it) }
-            }
-            ThemeSlider(strings[Keys.THEME_LABEL_SIZE], theme.labelTextSizeSp, 8f..40f, "sp") {
-                update { t -> t.copy(labelTextSizeSp = it) }
-            }
-            ThemeSlider(strings[Keys.THEME_PRESS_DEPTH], theme.pressedElevation, 0f..16f, "dp") {
-                update { t -> t.copy(pressedElevation = it) }
-            }
-            ThemeSlider(strings[Keys.THEME_TRAIL_WIDTH], theme.swipeTrailWidthDp, 1f..24f, "dp") {
-                update { t -> t.copy(swipeTrailWidthDp = it) }
-            }
-            SwitchRow(
-                title = strings[Keys.THEME_OUTLINE_THE_KEYS],
-                subtitle = strings[Keys.THEME_A_HAIRLINE_BORDER_HELPS_WHEN_THE],
-                checked = theme.showKeyBorders,
-            ) { value -> update { it.copy(showKeyBorders = value) } }
-            Explanation(
-                strings[Keys.THEME_VALUES_ARE_CLAMPED_WHEN_THEY_ARE],
-            )
         }
     }
 }

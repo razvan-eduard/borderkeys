@@ -64,11 +64,9 @@ fun KeyboardPreview(
                 paints.update(theme, context.resources.displayMetrics, preferences.heightScale)
 
                 val width = frame.width
-                val effective = if (preferences.positionMode == KeyboardPreferences.MODE_DOCKED) {
-                    1f
-                } else {
-                    preferences.widthScale
-                }
+                // The dock honours the width like every other mode, because the resize handles
+                // narrow it there too.
+                val effective = preferences.widthScale
                 val params = view.layoutParams as FrameLayout.LayoutParams
                 params.width = if (width > 0) (width * effective).toInt() else params.width
                 params.gravity = when (preferences.positionMode) {
@@ -78,9 +76,19 @@ fun KeyboardPreview(
                 }
                 view.layoutParams = params
 
-                view.setLayout(
-                    if (preferences.numberRow) layout.withNumberRow() else layout,
-                )
+                // The same three settings the input method composes, in the same order, so
+                // that a key the keyboard does not have is not a key the preview shows.
+                var composed = layout
+                if (!preferences.emojiKey) {
+                    composed = composed.withoutEmojiKey()
+                }
+                if (!preferences.languageKey) {
+                    composed = composed.withoutLanguageKey()
+                }
+                if (preferences.numberRow) {
+                    composed = composed.withNumberRow()
+                }
+                view.setLayout(composed)
                 view.onThemeChanged()
                 view.requestLayout()
             },
