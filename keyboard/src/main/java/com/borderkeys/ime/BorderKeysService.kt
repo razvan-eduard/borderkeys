@@ -24,6 +24,7 @@ import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import com.borderkeys.assist.AssistClient
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.LanguagePackRepository
 import com.borderkeys.predict.LanguagePackInspector
 import com.borderkeys.data.entity.LanguagePackEntry
 import com.borderkeys.data.BundledDictionaries
@@ -224,8 +225,11 @@ class BorderKeysService :
      */
     private suspend fun loadDictionaries() {
         val repository = DataGraph.languagePacks
-        repository.verifyEnabled()
+        // Repaired before the integrity sweep runs, not after: the sweep switches off anything
+        // whose file no longer matches, and a pack that has been switched off is a pack the
+        // repair would never look at again.
         reinstallOutdatedBundledPacks(repository)
+        repository.verifyEnabled()
 
         val enabled = repository.enabledPacks()
         for (entry in enabled) {
@@ -1246,15 +1250,78 @@ class BorderKeysService :
         }
         // Kept because the delimiter path needs it and the strip is a view, not a model. One
         // reference assignment per suggestion round, off the hot path.
+        //
+        // Read before the verbatim word is placed, so it stays the engine's answer: the first
+        // chip is what space would take, and moving the typed word into the row must not change
+        // that.
         topSuggestion = if (count > 0) words[0] else null
-        host?.suggestionStrip?.setSuggestions(words, count)
+        val shown = placeVerbatim(words, count)
+        host?.suggestionStrip?.verbatimIndex = verbatimSlot
+        host?.suggestionStrip?.setSuggestions(words, shown)
+    }
+
+    /** Which slot the typed word ended up in, or -1 when it is not in the row. */
+    private var verbatimSlot = -1
+
+    /**
+     * The word the engine was last asked about.
+     *
+     * Not the composing region: suggestions are also asked for when the caret moves into a word
+     * nobody is composing, and the word on screen is the one the row is about either way. An
+     * editor that inserts text without going through our keys -- a paste, an automation -- also
+     * leaves the composing region empty while the strip is very much describing a word.
+     */
+    private var lastQuery: String = ""
+
+    /**
+     * Puts exactly what was typed into the middle of the row.
+     *
+     * A keyboard that only ever offers what it thinks you meant is a keyboard you have to argue
+     * with. The middle slot rather than an end one because both ends already mean something --
+     * the first is the engine's answer, the last is the one nobody reads -- and because a chip
+     * that changes position depending on how many suggestions came back is a chip that cannot
+     * be hit without looking.
+     *
+     * Returns the new count, which grows by one when the typed word was not already there.
+     */
+    private fun placeVerbatim(words: Array<String?>, count: Int): Int {
+        verbatimSlot = -1
+        val typed = lastQuery
+        if (typed.isEmpty() || !preferences.showSuggestionStrip) {
+            return count
+        }
+        val limit = preferences.suggestionCount.coerceAtMost(words.size)
+
+        // Already offered: mark where it is rather than adding it twice.
+        for (index in 0 until count.coerceAtMost(limit)) {
+            if (words[index] == typed) {
+                verbatimSlot = index
+                return count
+            }
+        }
+
+        // Inserted, pushing the rest along and dropping whatever fell off the end. The engine's
+        // best keeps slot zero because middle is never zero for a row of two or more -- and the
+        // middle is clamped into the row that will actually be drawn, which is shorter than the
+        // limit whenever the engine returned less than a full set.
+        val shown = (count + 1).coerceAtMost(limit)
+        val middle = (limit / 2).coerceAtMost(shown - 1).coerceAtLeast(0)
+        var index = shown - 1
+        while (index > middle) {
+            words[index] = words[index - 1]
+            index--
+        }
+        words[middle] = typed
+        verbatimSlot = middle
+        return shown
     }
 
     private fun requestSuggestions() {
         if (!preferences.showSuggestionStrip) {
             return
         }
-        engine.requestSuggestions(composing.toString(), previousWord1, previousWord2)
+        lastQuery = composing.toString()
+        engine.requestSuggestions(lastQuery, previousWord1, previousWord2)
     }
 
     /**
@@ -1329,13 +1396,20 @@ class BorderKeysService :
      */
     private fun adoptWordAtCaret() {
         composing.setLength(0)
-        pendingCorrection = null
+        // The pending correction is deliberately *not* cleared here.
+        //
+        // Committing a correction ends the composing region, so the selection change that
+        // follows our own commit lands in this branch -- and clearing it here meant the very
+        // next backspace had nothing to undo, which is the entire feature. Nothing is lost by
+        // keeping it: revertCorrection checks that the text immediately before the cursor is
+        // still exactly what it committed, and declines when the caret has really moved.
         currentInputConnection?.finishComposingText()
 
         val before = currentInputConnection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
         if (before.isNullOrEmpty()) {
             previousWord1 = null
             previousWord2 = null
+            lastQuery = ""
             engine.requestSuggestions("", null, null)
             return
         }
@@ -1349,6 +1423,7 @@ class BorderKeysService :
         val contextEnd = if (caretInsideWord) words.size - 1 else words.size
         previousWord1 = words.getOrNull(contextEnd - 1)
         previousWord2 = words.getOrNull(contextEnd - 2)
+        lastQuery = partial
         engine.requestSuggestions(partial, previousWord1, previousWord2)
     }
 
@@ -1497,18 +1572,19 @@ class BorderKeysService :
     private suspend fun repairBundledPacks(
         repository: com.borderkeys.data.LanguagePackRepository,
     ) {
-        for (entry in repository.enabledPacks()) {
-            val file = repository.fileFor(entry)
-            if (!file.isFile) {
-                continue
-            }
-            val verdict = LanguagePackInspector.inspect(file)
-            if (verdict !is LanguagePackInspector.Result.Refused ||
-                verdict.status != BKD_ERR_VERSION
-            ) {
-                continue
-            }
+        for (entry in repository.allPacks()) {
             val bundled = BundledDictionaries.ALL.firstOrNull { it.tag == entry.tag } ?: continue
+            val file = repository.fileFor(entry)
+            // Anything the running build cannot read, for any reason: a format it does not
+            // know, a file that no longer matches its recorded hash, a file that is gone. All
+            // three end the same way for a pack that came from inside the application -- the
+            // current one is in assets, so it is copied over whatever is there.
+            val stale = !file.isFile ||
+                LanguagePackInspector.inspect(file) !is LanguagePackInspector.Result.Valid ||
+                runCatching { LanguagePackRepository.sha256Of(file) }.getOrNull() != entry.sha256
+            if (!stale) {
+                continue
+            }
             val staged = runCatching {
                 BundledDictionaries.open(assets, bundled).use { stream ->
                     repository.stage(stream, bundled.fileName)
@@ -1531,8 +1607,12 @@ class BorderKeysService :
                     sizeBytes = staged.sizeBytes,
                     sha256 = staged.sha256,
                     importedAt = System.currentTimeMillis(),
-                    enabled = entry.enabled,
+                    // Switched back on only where the keyboard switched it off itself. A pack
+                    // the user turned off stays off: repairing a file is not permission to
+                    // start using it again.
+                    enabled = entry.enabled || entry.integrityFailedAt != null,
                     weight = entry.weight,
+                    integrityFailedAt = null,
                     licenseNote = entry.licenseNote,
                 ),
             )

@@ -133,6 +133,21 @@ class SuggestionStripView(
     private val chipOffset: Int
         get() = if (clipboardChip != null) 1 else 0
 
+    /**
+     * The slot holding exactly what was typed, or -1 when nothing does.
+     *
+     * Marked rather than merely present: the whole value of the verbatim word is knowing, at a
+     * glance and without reading, which chip leaves your spelling alone. A reader who has to
+     * compare it letter by letter against what they wrote has been given nothing.
+     */
+    var verbatimIndex: Int = -1
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
     private val words = arrayOfNulls<String>(MAX_SUGGESTIONS)
     private val chars = Array(MAX_SUGGESTIONS) { CharArray(MAX_WORD_CHARS) }
     private val charCount = IntArray(MAX_SUGGESTIONS)
@@ -150,6 +165,9 @@ class SuggestionStripView(
     private var count = 0
 
     private var pressedIndex = -1
+
+    /** Reused so the outline around the verbatim chip allocates nothing on the draw path. */
+    private val verbatimRect = android.graphics.RectF()
 
     /** Fires once per press, at which point the press stops being a tap. */
     private val longPressRunnable = Runnable {
@@ -272,6 +290,7 @@ class SuggestionStripView(
 
     fun clear() {
         actionMode = false
+        verbatimIndex = -1
         if (count != 0) {
             count = 0
             for (index in 0 until MAX_SUGGESTIONS) {
@@ -349,7 +368,10 @@ class SuggestionStripView(
                     continue
                 }
                 val left = slotWidth * slot
-                if (index == pressedIndex) {
+                // Compared against the drawn slot, not the word index: slotAt returns a slot,
+                // and with the clipboard chip present the two differ by one -- which lit the
+                // chip next to the one under the finger.
+                if (slot == pressedIndex) {
                     canvas.drawRect(left, 0f, left + slotWidth, height.toFloat(),
                         paints.keyPressedFill)
                 }
@@ -362,6 +384,20 @@ class SuggestionStripView(
                 // delimiter branch. An earlier version of this comment claimed the opposite,
                 // which would have described a keyboard that silently rewrites what you wrote:
                 // exactly the behaviour this project exists to avoid.
+                if (index == verbatimIndex) {
+                    // A traced outline, not a fill and not another colour. It has to be
+                    // distinguishable from the chip beside it without competing with the first
+                    // suggestion, which is still the engine's answer and still the one space
+                    // would take.
+                    verbatimRect.set(
+                        left + slotWidth * VERBATIM_INSET,
+                        height * VERBATIM_INSET,
+                        left + slotWidth * (1f - VERBATIM_INSET),
+                        height * (1f - VERBATIM_INSET),
+                    )
+                    val radius = height * VERBATIM_CORNER
+                    canvas.drawRoundRect(verbatimRect, radius, radius, paints.keyStroke)
+                }
                 val paint = if (index == 0) paints.label else paints.labelSecondary
                 val previousSize = paint.textSize
                 val fitted = slotTextSize[index]
@@ -492,6 +528,12 @@ class SuggestionStripView(
          * setting change without reallocating anything.
          */
         const val MAX_SUGGESTIONS = 8
+
+        /** How far the verbatim outline sits inside its slot, as a fraction of the slot. */
+        const val VERBATIM_INSET = 0.06f
+
+        /** Its corner radius, as a fraction of the strip's height. */
+        const val VERBATIM_CORNER = 0.22f
         private const val MAX_WORD_CHARS = 48
         private const val HEIGHT_FRACTION = 0.78f
 

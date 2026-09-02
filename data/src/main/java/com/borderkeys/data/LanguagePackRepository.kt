@@ -6,6 +6,7 @@ package com.borderkeys.data
 import com.borderkeys.data.dao.LanguagePackDao
 import com.borderkeys.data.entity.LanguagePackEntry
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -32,6 +33,15 @@ class LanguagePackRepository internal constructor(
     val packs: Flow<List<LanguagePackEntry>> = dao.observeAll()
 
     suspend fun enabledPacks(): List<LanguagePackEntry> = dao.enabledPacks()
+
+    /**
+     * Every installed pack, enabled or not.
+     *
+     * The repair path needs this: a pack that failed its integrity check has already been
+     * switched off, so looking only at the enabled ones is looking everywhere except where the
+     * problem is.
+     */
+    suspend fun allPacks(): List<LanguagePackEntry> = packs.first()
 
     fun fileFor(entry: LanguagePackEntry): File = File(packsDirectory, entry.fileName)
 
