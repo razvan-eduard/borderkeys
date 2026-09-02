@@ -381,6 +381,9 @@ data class KeyboardPreferences(
      */
     fun withPositionMode(mode: Int): KeyboardPreferences {
         val narrowing = positionMode == MODE_DOCKED && mode != MODE_DOCKED && widthScale == 1f
+        // The width survives the move. It is one value across every mode now that the resize
+        // handles honour it in the dock as well, so docking is a change of position and
+        // nothing else; a keyboard that is too narrow is widened by dragging its edge.
         return copy(
             positionMode = mode,
             widthScale = if (narrowing) ONE_HANDED_WIDTH_SCALE else widthScale,

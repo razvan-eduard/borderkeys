@@ -45,8 +45,14 @@ class QuickSettingsView(
     enum class Placement { DOCKED, LEFT, RIGHT, FLOATING }
 
     interface Listener {
-        fun onHeightScaleChanged(scale: Float)
-        fun onWidthScaleChanged(scale: Float)
+        /**
+         * Size the keyboard by dragging it, rather than by a slider.
+         *
+         * A slider asks you to guess a number, look at the result and guess again, with the
+         * keyboard you are sizing hidden behind the panel holding the slider. The handles are
+         * on the keyboard itself, so the size is the thing you are dragging.
+         */
+        fun onStartResize()
         fun onPlacementChanged(placement: Placement)
         fun onNumberRowChanged(enabled: Boolean)
         fun onOpenFullSettings()
@@ -55,8 +61,6 @@ class QuickSettingsView(
 
     var listener: Listener? = null
 
-    private var heightScale = 1f
-    private var widthScale = 1f
     private var placement = Placement.DOCKED
     private var numberRow = false
 
@@ -66,19 +70,10 @@ class QuickSettingsView(
      * The panel never holds the truth. It is told what the stored values are and it reports
      * taps; if a write fails or is clamped, what comes back is what is drawn.
      */
-    fun setState(
-        heightScale: Float,
-        widthScale: Float,
-        placement: Placement,
-        numberRow: Boolean,
-    ) {
-        if (this.heightScale == heightScale && this.widthScale == widthScale &&
-            this.placement == placement && this.numberRow == numberRow
-        ) {
+    fun setState(placement: Placement, numberRow: Boolean) {
+        if (this.placement == placement && this.numberRow == numberRow) {
             return
         }
-        this.heightScale = heightScale
-        this.widthScale = widthScale
         this.placement = placement
         this.numberRow = numberRow
         invalidate()
@@ -119,22 +114,16 @@ class QuickSettingsView(
 
     private var rowHeight = 0f
     private var padding = 0f
-    private var trackLeft = 0f
-    private var trackRight = 0f
+    private var resizeTop = 0f
+    private var resizeBottom = 0f
     private var chipTop = 0f
     private var chipBottom = 0f
     private var chipWidth = 0f
     private val chipLeft = FloatArray(Placement.entries.size)
 
-    private var heightRowCentre = 0f
-    private var widthRowCentre = 0f
     private var toggleTop = 0f
     private var toggleBottom = 0f
     private var footerTop = 0f
-
-    /** Which slider a finger is currently dragging, so a drag keeps its target when it strays. */
-    private var draggingHeight = false
-    private var draggingWidth = false
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
@@ -142,14 +131,12 @@ class QuickSettingsView(
             return
         }
         padding = w * 0.05f
-        rowHeight = h / 6f
-        trackLeft = padding + w * 0.22f
-        trackRight = w - padding
-        heightRowCentre = rowHeight * 1.5f
-        widthRowCentre = rowHeight * 2.5f
+        rowHeight = h / 5f
+        resizeTop = rowHeight * 1.15f
+        resizeBottom = rowHeight * 1.85f
 
-        chipTop = rowHeight * 3.15f
-        chipBottom = rowHeight * 3.85f
+        chipTop = rowHeight * 2.15f
+        chipBottom = rowHeight * 2.85f
         val available = w - padding * 2f
         val gap = w * 0.02f
         chipWidth = (available - gap * (Placement.entries.size - 1)) / Placement.entries.size
@@ -157,9 +144,9 @@ class QuickSettingsView(
             chipLeft[i] = padding + (chipWidth + gap) * i
         }
 
-        toggleTop = rowHeight * 4.15f
-        toggleBottom = rowHeight * 4.85f
-        footerTop = rowHeight * 5f
+        toggleTop = rowHeight * 3.15f
+        toggleBottom = rowHeight * 3.85f
+        footerTop = rowHeight * 4f
 
         titlePaint.textSize = rowHeight * 0.36f
         labelPaint.textSize = rowHeight * 0.30f
@@ -183,10 +170,15 @@ class QuickSettingsView(
         canvas.drawText(strings[Keys.PANEL_CLOSE], w - padding - accentPaint.measureText(strings[Keys.PANEL_CLOSE]),
             rowHeight * 0.5f + labelBaseline, accentPaint)
 
-        drawSlider(canvas, strings[Keys.PANEL_HEIGHT], heightRowCentre, fraction(heightScale, MIN_HEIGHT, MAX_HEIGHT),
-            enabled = true)
-        drawSlider(canvas, strings[Keys.PANEL_WIDTH], widthRowCentre, fraction(widthScale, MIN_WIDTH, 1f),
-            enabled = placement != Placement.DOCKED)
+        // The one control that used to be two sliders. Tapping it closes the panel and puts
+        // handles on the keyboard itself.
+        val resizeLabel = strings[Keys.PANEL_RESIZE]
+        canvas.drawRoundRect(padding, resizeTop, w - padding, resizeBottom, radius, radius,
+            paints.keyFill)
+        canvas.drawRoundRect(padding, resizeTop, w - padding, resizeBottom, radius, radius,
+            outlinePaint)
+        canvas.drawText(resizeLabel, (w - labelPaint.measureText(resizeLabel)) / 2f,
+            (resizeTop + resizeBottom) / 2f + labelBaseline, labelPaint)
 
         for (i in Placement.entries.indices) {
             val entry = Placement.entries[i]
@@ -226,25 +218,6 @@ class QuickSettingsView(
         canvas.drawText(strings[Keys.PANEL_ALL_SETTINGS], padding, footerTop + rowHeight * 0.5f + labelBaseline, accentPaint)
     }
 
-    private fun drawSlider(canvas: Canvas, label: String, centreY: Float, position: Float,
-                           enabled: Boolean) {
-        val paint = if (enabled) labelPaint else secondaryPaint
-        canvas.drawText(label, padding, centreY + labelBaseline, paint)
-        val trackHeight = rowHeight * 0.08f
-        canvas.drawRoundRect(trackLeft, centreY - trackHeight / 2f, trackRight,
-            centreY + trackHeight / 2f, trackHeight, trackHeight, paints.keyFill)
-        val knobX = trackLeft + (trackRight - trackLeft) * position
-        if (enabled) {
-            canvas.drawRoundRect(trackLeft, centreY - trackHeight / 2f, knobX,
-                centreY + trackHeight / 2f, trackHeight, trackHeight, paints.accent)
-        }
-        canvas.drawCircle(knobX, centreY, rowHeight * 0.22f,
-            if (enabled) paints.accent else paints.keyFill)
-    }
-
-    private fun fraction(value: Float, min: Float, max: Float): Float =
-        ((value - min) / (max - min)).coerceIn(0f, 1f)
-
     // ---- touch ---------------------------------------------------------------------------------
 
     @SuppressLint("ClickableViewAccessibility")
@@ -253,24 +226,14 @@ class QuickSettingsView(
         val y = event.y
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                draggingHeight = false
-                draggingWidth = false
                 if (y < rowHeight) {
                     if (x > width - padding * 2f - accentPaint.measureText(strings[Keys.PANEL_CLOSE])) {
                         listener?.onCloseQuickSettings()
                     }
                     return true
                 }
-                if (y < rowHeight * 2f) {
-                    draggingHeight = true
-                    applyHeight(x)
-                    return true
-                }
-                if (y < rowHeight * 3f) {
-                    if (placement != Placement.DOCKED) {
-                        draggingWidth = true
-                        applyWidth(x)
-                    }
+                if (y in resizeTop..resizeBottom && x >= padding && x <= width - padding) {
+                    listener?.onStartResize()
                     return true
                 }
                 if (y in chipTop..chipBottom) {
@@ -293,43 +256,11 @@ class QuickSettingsView(
                 return true
             }
 
-            MotionEvent.ACTION_MOVE -> {
-                // A drag that strays out of its row keeps its slider. Re-deciding per move would
-                // make a fast horizontal drag jump to whichever control it passed over.
-                if (draggingHeight) {
-                    applyHeight(x)
-                } else if (draggingWidth) {
-                    applyWidth(x)
-                }
-                return true
-            }
-
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                draggingHeight = false
-                draggingWidth = false
-                return true
-            }
         }
         return true
     }
 
-    private fun applyHeight(x: Float) {
-        val position = ((x - trackLeft) / (trackRight - trackLeft)).coerceIn(0f, 1f)
-        listener?.onHeightScaleChanged(MIN_HEIGHT + position * (MAX_HEIGHT - MIN_HEIGHT))
-    }
-
-    private fun applyWidth(x: Float) {
-        val position = ((x - trackLeft) / (trackRight - trackLeft)).coerceIn(0f, 1f)
-        listener?.onWidthScaleChanged(MIN_WIDTH + position * (1f - MIN_WIDTH))
-    }
-
     private companion object {
-        // Mirrors KeyboardPreferences, duplicated rather than imported so that :keyboard's view
-        // layer does not depend on :data for four numbers. The service clamps anyway.
-        const val MIN_HEIGHT = 0.65f
-        const val MAX_HEIGHT = 1.6f
-        const val MIN_WIDTH = 0.55f
-
         /**
          * Catalogue keys, not text: a companion object is built when the class is first
          * touched, which is before any instance has a catalogue to read from.

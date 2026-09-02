@@ -60,6 +60,38 @@ class KeyboardHostView(
      * Which edge the quick-action bar sits against. Mirrors KeyboardPreferences; kept as an Int
      * so this module does not depend on :data for four constants.
      */
+    /**
+     * Reports a drag on one of the resize handles, in the units the settings store.
+     *
+     * The view knows where the finger is; what a scale means is the service's business, and it
+     * is the one that can write it down.
+     */
+    var onResizeDrag: ((height: Float, width: Float, offset: Float) -> Unit)? = null
+
+    /** Called when a resize drag ends, so the result can be written once rather than per frame. */
+    var onResizeFinished: (() -> Unit)? = null
+
+    /** Called when the user is done resizing, from the overlay's own way out. */
+    var onResizeExit: (() -> Unit)? = null
+
+    /**
+     * Whether the keyboard is showing its resize handles.
+     *
+     * A mode rather than handles that are always there: a handle on the edge of a keyboard is
+     * a handle a thumb reaching for the outermost key finds by accident, every time.
+     */
+    var resizing: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                draggingHandle = HANDLE_NONE
+                resetHit.setEmpty()
+                doneHit.setEmpty()
+                onThemeChanged()
+                invalidate()
+            }
+        }
+
     var quickActionsPlacement: Int = 0
         set(value) {
             if (field != value) {
@@ -93,6 +125,33 @@ class KeyboardHostView(
     private var bottomOffsetPx = 0
     private var horizontalOffsetPx = 0
 
+    /** The height scale, kept so a drag can start from where the keyboard already is. */
+    var heightScaleForDrag: Float = 1f
+
+    private val handleFrame = android.graphics.RectF()
+    private val resetHit = android.graphics.RectF()
+    private val doneHit = android.graphics.RectF()
+    private val labelMetrics = android.graphics.Paint.FontMetrics()
+
+    /**
+     * The overlay's own paints.
+     *
+     * Not the theme's key stroke: that one is hairline-thin and, on a theme with borders turned
+     * off, has no width at all -- which would draw the resize frame as nothing.
+     */
+    private val resizeFrame = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+    }
+    private val resizeScrim = android.graphics.Paint()
+    private val pillFill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private val resizeLabel = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private var draggingHandle = HANDLE_NONE
+    private var dragStartX = 0f
+    private var dragStartY = 0f
+    private var dragStartWidth = 1f
+    private var dragStartHeight = 1f
+    private var dragBaseHeightPx = 1f
+
     /** Whether the empty space beside the keys offers a way to move it across. */
     var edgeArrows: Boolean = true
         set(value) {
@@ -115,9 +174,86 @@ class KeyboardHostView(
     private val arrowPath = android.graphics.Path()
     private var arrowPressed = false
 
+    /**
+     * Turns a drag on a handle into the three numbers the settings hold.
+     *
+     * Reported continuously so the keyboard resizes under the finger, and written once when the
+     * finger lifts -- a preferences write per frame would be sixty database writes a second for
+     * a value only the last of which matters.
+     */
+    private fun handleResizeTouch(event: android.view.MotionEvent): Boolean {
+        when (event.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                if (doneHit.contains(event.x, event.y)) {
+                    onResizeExit?.invoke()
+                    return true
+                }
+                if (resetHit.contains(event.x, event.y)) {
+                    onResizeDrag?.invoke(1f, 1f, 0f)
+                    onResizeFinished?.invoke()
+                    return true
+                }
+                draggingHandle = handleAt(event.x, event.y)
+                dragStartX = event.x
+                dragStartY = event.y
+                dragStartWidth = widthScale
+                dragStartHeight = heightScaleForDrag
+                // The height the keys would have at scale 1, captured once. Dividing the
+                // finger's travel by it makes the drag linear: the same distance is the same
+                // change in scale, whether the keyboard is currently short or tall.
+                dragBaseHeightPx = (keyboard.bottom - keyboardTopForResize()) /
+                    dragStartHeight.coerceAtLeast(0.01f)
+                invalidate()
+                return true
+            }
+
+            android.view.MotionEvent.ACTION_MOVE -> {
+                if (draggingHandle == HANDLE_NONE) {
+                    return true
+                }
+                val row = paints.rowHeightPx.takeIf { it > 0f } ?: 132f
+                when (draggingHandle) {
+                    // Up is taller. The keyboard grows from its bottom edge, so the height a
+                    // drag adds is the distance the finger travelled divided by the rows it
+                    // has to spread across.
+                    HANDLE_TOP -> {
+                        val rows = (keyboard.bottom - keyboard.top) / row
+                        val delta = (dragStartY - event.y) / (row * rows.coerceAtLeast(1f))
+                        onResizeDrag?.invoke(dragStartHeight + delta, widthScale,
+                            horizontalOffsetPx.toFloat())
+                    }
+                    // A side handle changes the width around the centre, so the keyboard grows
+                    // and shrinks in place instead of walking across the screen.
+                    HANDLE_LEFT, HANDLE_RIGHT -> {
+                        val direction = if (draggingHandle == HANDLE_LEFT) -1f else 1f
+                        val delta = direction * (event.x - dragStartX) * 2f /
+                            width.coerceAtLeast(1)
+                        onResizeDrag?.invoke(heightScaleForDrag, dragStartWidth + delta,
+                            horizontalOffsetPx.toFloat())
+                    }
+                }
+                return true
+            }
+
+            android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                val wasDragging = draggingHandle != HANDLE_NONE
+                draggingHandle = HANDLE_NONE
+                invalidate()
+                if (wasDragging) {
+                    onResizeFinished?.invoke()
+                }
+                return true
+            }
+        }
+        return true
+    }
+
     fun setPlacement(mode: Int, widthScale: Float, bottomOffsetPx: Int, horizontalOffsetPx: Int) {
         val docked = mode == MODE_DOCKED
-        val effectiveWidth = if (docked) 1f else widthScale.coerceIn(0.4f, 1f)
+        // The dock honours the width too: the resize handles are on the keyboard in every mode,
+        // and a side handle that does nothing in the mode most people are in is a broken
+        // handle. Docked and narrow means centred, which contentLeft does.
+        val effectiveWidth = widthScale.coerceIn(0.4f, 1f)
         if (this.positionMode == mode && this.widthScale == effectiveWidth &&
             this.bottomOffsetPx == bottomOffsetPx && this.horizontalOffsetPx == horizontalOffsetPx
         ) {
@@ -137,7 +273,9 @@ class KeyboardHostView(
         MODE_ONE_HANDED_RIGHT -> totalWidth - contentWidth
         MODE_FLOATING -> ((totalWidth - contentWidth) / 2 + horizontalOffsetPx)
             .coerceIn(0, totalWidth - contentWidth)
-        else -> 0
+        // Centred, not flush left: a docked keyboard narrowed by the resize handles should sit
+        // in the middle of the screen. At full width the two are the same expression.
+        else -> (totalWidth - contentWidth) / 2
     }
 
     init {
@@ -447,7 +585,170 @@ class KeyboardHostView(
     }
 
     @android.annotation.SuppressLint("ClickableViewAccessibility")
+    /**
+     * Re-measures every child after the shared metrics changed.
+     *
+     * `View.measure` skips a child whose measure spec has not changed, and the specs do not
+     * change when the row height does -- the children read that from the paints they share
+     * rather than from the spec. Without forcing each one, a taller row height only makes the
+     * key labels bigger inside a keyboard that keeps the height it had.
+     */
+    fun relayoutForNewMetrics() {
+        for (i in 0 until childCount) {
+            getChildAt(i).forceLayout()
+        }
+        requestLayout()
+    }
+
+    /** Re-reads the overlay's colours from the theme. Cheap, and only on a theme change. */
+    fun onThemeChanged() {
+        resizeFrame.color = paints.accent.color
+        resizeFrame.strokeWidth =
+            (paints.rowHeightPx.takeIf { it > 0f } ?: DEFAULT_ROW_PX) * RESIZE_FRAME_ROWS
+        resizeScrim.color = paints.background.color
+        resizeScrim.alpha = RESIZE_SCRIM_ALPHA
+        // Opaque, unlike the wash: the pill is what makes its label readable over the keys.
+        pillFill.color = paints.background.color
+        pillFill.alpha = 255
+        resizeLabel.color = paints.accent.color
+        if (resizing) {
+            invalidate()
+        }
+    }
+
+    /**
+     * Draws the resize overlay on top of the children.
+     *
+     * `dispatchDraw` rather than `onDraw`: a ViewGroup paints itself first and its children
+     * after, so the frame drawn in `onDraw` would end up underneath the keys it is framing.
+     */
+    override fun dispatchDraw(canvas: android.graphics.Canvas) {
+        super.dispatchDraw(canvas)
+        if (!resizing) {
+            return
+        }
+        val left = contentLeft(width, (width * widthScale).toInt().coerceAtLeast(1)).toFloat()
+        val right = left + (width * widthScale)
+        val top = keyboardTopForResize().toFloat()
+        val bottom = keyboard.bottom.toFloat()
+        if (bottom <= top) {
+            return
+        }
+        // A wash over the keys, so the frame reads as a frame rather than as a stray rectangle
+        // drawn across a keyboard that still looks live.
+        canvas.drawRect(left, top, right, bottom, resizeScrim)
+        handleFrame.set(left, top, right, bottom)
+        canvas.drawRect(handleFrame, resizeFrame)
+
+        val radius = handleRadiusPx()
+        // Top for height, sides for width. No bottom handle: the bottom edge is where the
+        // keyboard meets the screen, and dragging it would fight the offset setting rather
+        // than the size.
+        drawHandle(canvas, (left + right) / 2f, top, radius, draggingHandle == HANDLE_TOP)
+        drawHandle(canvas, left, (top + bottom) / 2f, radius, draggingHandle == HANDLE_LEFT)
+        drawHandle(canvas, right, (top + bottom) / 2f, radius, draggingHandle == HANDLE_RIGHT)
+
+        // Two words and no way to leave would be a trap, so the way out is drawn where the
+        // finger already is: inside the frame it is resizing. Both sit on a filled pill, or
+        // they would be blue text on top of key labels and legible in neither theme.
+        resizeLabel.textSize = density() * LABEL_TEXT_DP
+        resizeLabel.getFontMetrics(labelMetrics)
+        val labelTop = top + radius * 1.4f
+        drawPill(canvas, strings[Keys.RESIZE_RESET], left + radius * 1.4f, labelTop, resetHit)
+        val done = strings[Keys.RESIZE_DONE]
+        drawPill(canvas, done, right - radius * 1.4f - pillWidth(done), labelTop, doneHit)
+
+        // What to do, once, along the bottom edge where nothing else is drawn.
+        val hint = strings[Keys.RESIZE_HINT]
+        drawPill(canvas, hint, (left + right - pillWidth(hint)) / 2f,
+            bottom - radius * 1.4f - pillHeight(), null)
+    }
+
+    private fun pillWidth(text: String): Float =
+        resizeLabel.measureText(text) + density() * PILL_PADDING_DP * 2f
+
+    private fun pillHeight(): Float =
+        labelMetrics.descent - labelMetrics.ascent + density() * PILL_PADDING_DP * 2f
+
+    /** A label on a filled, outlined pill, with its own touch rectangle where it has one. */
+    private fun drawPill(
+        canvas: android.graphics.Canvas,
+        text: String,
+        left: Float,
+        top: Float,
+        hit: android.graphics.RectF?,
+    ) {
+        val width = pillWidth(text)
+        val height = pillHeight()
+        val radius = height / 2f
+        canvas.drawRoundRect(left, top, left + width, top + height, radius, radius, pillFill)
+        canvas.drawRoundRect(left, top, left + width, top + height, radius, radius, resizeFrame)
+        canvas.drawText(text, left + density() * PILL_PADDING_DP,
+            top + density() * PILL_PADDING_DP - labelMetrics.ascent, resizeLabel)
+        hit?.set(left, top, left + width, top + height)
+    }
+
+    private fun drawHandle(
+        canvas: android.graphics.Canvas,
+        x: Float,
+        y: Float,
+        radius: Float,
+        pressed: Boolean,
+    ) {
+        canvas.drawCircle(x, y, radius, if (pressed) paints.accent else paints.keyFill)
+        canvas.drawCircle(x, y, radius, resizeFrame)
+    }
+
+    /**
+     * The top of the frame.
+     *
+     * The keys, not the strip above them: height scales the key rows, so framing the strip too
+     * would show an edge that the top handle cannot move.
+     */
+    private fun keyboardTopForResize(): Int = keyboard.top
+
+    private fun density(): Float = resources.displayMetrics.density
+
+    /**
+     * Big enough to hit without looking, which is the whole point of dragging one.
+     *
+     * In dp rather than as a fraction of a key row: the row height is the thing being dragged,
+     * so tying the handle to it would make the handle hardest to grab exactly when the keyboard
+     * is at its smallest and the user most wants it back.
+     */
+    private fun handleRadiusPx(): Float = density() * HANDLE_RADIUS_DP
+
+    /** Which handle a touch is on, or HANDLE_NONE. */
+    private fun handleAt(x: Float, y: Float): Int {
+        val left = contentLeft(width, (width * widthScale).toInt().coerceAtLeast(1)).toFloat()
+        val right = left + (width * widthScale)
+        val top = keyboardTopForResize().toFloat()
+        val middle = (top + keyboard.bottom) / 2f
+        val reach = density() * HANDLE_TOUCH_DP
+        if (kotlin.math.hypot(x - (left + right) / 2f, y - top) <= reach) {
+            return HANDLE_TOP
+        }
+        if (kotlin.math.hypot(x - left, y - middle) <= reach) {
+            return HANDLE_LEFT
+        }
+        if (kotlin.math.hypot(x - right, y - middle) <= reach) {
+            return HANDLE_RIGHT
+        }
+        return HANDLE_NONE
+    }
+
+    /**
+     * Keeps every touch away from the children while resizing.
+     *
+     * Without this the keys would take the down event and type a letter, and the drag would
+     * never reach this class at all.
+     */
+    override fun onInterceptTouchEvent(event: android.view.MotionEvent): Boolean = resizing
+
     override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (resizing) {
+            return handleResizeTouch(event)
+        }
         if (arrowBounds.isEmpty) {
             return false
         }
@@ -504,6 +805,28 @@ class KeyboardHostView(
         const val PLACEMENT_BELOW_KEYS = 1
         const val PLACEMENT_LEFT = 2
         const val PLACEMENT_RIGHT = 3
+
+        const val HANDLE_NONE = -1
+        const val HANDLE_TOP = 0
+        const val HANDLE_LEFT = 1
+        const val HANDLE_RIGHT = 2
+
+        /** A handle's radius, and how far from its centre a touch still counts, both in dp. */
+        const val HANDLE_RADIUS_DP = 13f
+        const val HANDLE_TOUCH_DP = 34f
+
+        /** The overlay's label size and the padding inside the pill behind it, in dp. */
+        const val LABEL_TEXT_DP = 14f
+        const val PILL_PADDING_DP = 8f
+
+        /** Only reached before the first theme update, when the row height is still zero. */
+        const val DEFAULT_ROW_PX = 132f
+
+        /** How much of the keys the resize wash covers, out of 255. */
+        const val RESIZE_SCRIM_ALPHA = 96
+
+        /** The frame's stroke, as a fraction of a key row. */
+        const val RESIZE_FRAME_ROWS = 0.022f
         const val MODE_ONE_HANDED_LEFT = 1
         const val MODE_ONE_HANDED_RIGHT = 2
         const val MODE_FLOATING = 3

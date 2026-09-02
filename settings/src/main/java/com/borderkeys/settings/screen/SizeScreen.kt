@@ -82,6 +82,7 @@ fun SizeScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.SIZE_BIGGER_KEYS_ARE_EASIER_TO_HIT],
             )
+            Explanation(strings[Keys.SIZE_RESIZE_BY_HAND])
             LabelledSlider(
                 value = preferences.heightScale,
                 range = KeyboardPreferences.MIN_HEIGHT_SCALE..KeyboardPreferences.MAX_HEIGHT_SCALE,
@@ -104,48 +105,48 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                 ModeChip(strings[Keys.SIZE_FLOATING], KeyboardPreferences.MODE_FLOATING, preferences.positionMode,
                     ::update)
             }
-            if (preferences.positionMode != KeyboardPreferences.MODE_DOCKED) {
         }
+        // Not gated on the position mode any more: the dock honours the width too, so that a
+        // side resize handle does something in the mode most people are in.
         SettingsSectionCard(strings[Keys.SIZE_WIDTH]) {
-                LabelledSlider(
-                    value = preferences.widthScale,
-                    range = KeyboardPreferences.MIN_WIDTH_SCALE..1f,
-                    label = strings.getString(Keys.SIZE_TEXT, (preferences.widthScale * 100).toInt()),
-                ) { value -> update { it.copy(widthScale = value) } }
+            LabelledSlider(
+                value = preferences.widthScale,
+                range = KeyboardPreferences.MIN_WIDTH_SCALE..1f,
+                label = strings.getString(Keys.SIZE_TEXT, (preferences.widthScale * 100).toInt()),
+            ) { value -> update { it.copy(widthScale = value) } }
         }
         SettingsSectionCard(strings[Keys.SIZE_DISTANCE_FROM_THE_BOTTOM_EDGE]) {
-                Explanation(
-                    strings[Keys.SIZE_LIFTS_THE_KEYBOARD_OFF_THE_BOTTOM],
-                )
-                LabelledSlider(
-                    value = preferences.bottomOffsetDp,
-                    range = 0f..KeyboardPreferences.MAX_BOTTOM_OFFSET_DP,
-                    label = strings.getString(Keys.SIZE_DP_2, preferences.bottomOffsetDp.toInt()),
-                ) { value -> update { it.copy(bottomOffsetDp = value) } }
-            }
-            if (preferences.positionMode == KeyboardPreferences.MODE_FLOATING) {
+            Explanation(
+                strings[Keys.SIZE_LIFTS_THE_KEYBOARD_OFF_THE_BOTTOM],
+            )
+            LabelledSlider(
+                value = preferences.bottomOffsetDp,
+                range = 0f..KeyboardPreferences.MAX_BOTTOM_OFFSET_DP,
+                label = strings.getString(Keys.SIZE_DP_2, preferences.bottomOffsetDp.toInt()),
+            ) { value -> update { it.copy(bottomOffsetDp = value) } }
         }
-        SettingsSectionCard(strings[Keys.SIZE_HORIZONTAL_POSITION]) {
+        // Only the floating keyboard can be moved sideways; in every other mode the position is
+        // the mode, so a slider here would be a control with nothing to control.
+        if (preferences.positionMode == KeyboardPreferences.MODE_FLOATING) {
+            SettingsSectionCard(strings[Keys.SIZE_HORIZONTAL_POSITION]) {
                 LabelledSlider(
                     value = preferences.horizontalOffsetDp,
                     range = -160f..160f,
                     label = strings.getString(Keys.SIZE_DP, preferences.horizontalOffsetDp.toInt()),
                 ) { value -> update { it.copy(horizontalOffsetDp = value) } }
             }
-            if (preferences.positionMode != KeyboardPreferences.MODE_DOCKED) {
         }
         SettingsSectionCard(strings[Keys.SIZE_THE_SPACE_BESIDE_THE_KEYS]) {
-                SwitchRow(
-                    title = strings[Keys.SIZE_ARROW_TO_MOVE_IT_ACROSS],
-                    subtitle = strings[Keys.SIZE_AN_ARROW_IN_THE_EMPTY_STRIP],
-                    checked = preferences.edgeArrows,
-                ) { value -> update { it.copy(edgeArrows = value) } }
-                SwitchRow(
-                    title = strings[Keys.SIZE_BLUR_WHAT_SHOWS_THROUGH],
-                    subtitle = strings[Keys.SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY],
-                    checked = preferences.blurBehindKeyboard,
-                ) { value -> update { it.copy(blurBehindKeyboard = value) } }
-            }
+            SwitchRow(
+                title = strings[Keys.SIZE_ARROW_TO_MOVE_IT_ACROSS],
+                subtitle = strings[Keys.SIZE_AN_ARROW_IN_THE_EMPTY_STRIP],
+                checked = preferences.edgeArrows,
+            ) { value -> update { it.copy(edgeArrows = value) } }
+            SwitchRow(
+                title = strings[Keys.SIZE_BLUR_WHAT_SHOWS_THROUGH],
+                subtitle = strings[Keys.SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY],
+                checked = preferences.blurBehindKeyboard,
+            ) { value -> update { it.copy(blurBehindKeyboard = value) } }
         }
         SettingsSectionCard(strings[Keys.SIZE_NUMBER_ROW]) {
             SwitchRow(

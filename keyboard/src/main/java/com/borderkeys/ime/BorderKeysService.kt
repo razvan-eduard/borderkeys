@@ -392,7 +392,8 @@ class BorderKeysService :
                     if (changed) {
                         view.keyboard.onThemeChanged()
                         view.quickSettings.onThemeChanged()
-                        view.requestLayout()
+                        view.onThemeChanged()
+                        view.relayoutForNewMetrics()
                     }
                 }
             }
@@ -610,6 +611,9 @@ class BorderKeysService :
         view.emojiPanel.recents = preferences.emojiRecents
         applyQuickActions(view)
         view.onMoveToOtherSide = { moveKeyboardToOtherSide() }
+        view.onResizeDrag = { height, width, offset -> previewResize(height, width, offset) }
+        view.onResizeFinished = { commitResize() }
+        view.onResizeExit = { endResize() }
         view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> pushKeyGeometry() }
         host = view
         return view
@@ -1292,8 +1296,6 @@ class BorderKeysService :
 
     private fun pushQuickSettingsState(view: KeyboardHostView) {
         view.quickSettings.setState(
-            heightScale = preferences.heightScale,
-            widthScale = preferences.widthScale,
             placement = when (preferences.positionMode) {
                 KeyboardPreferences.MODE_ONE_HANDED_LEFT -> QuickSettingsView.Placement.LEFT
                 KeyboardPreferences.MODE_ONE_HANDED_RIGHT -> QuickSettingsView.Placement.RIGHT
@@ -1315,11 +1317,21 @@ class BorderKeysService :
         scope.launch { DataGraph.themes.updatePreferences(transform) }
     }
 
-    override fun onHeightScaleChanged(scale: Float) =
-        updatePreferences { it.copy(heightScale = scale) }
+    override fun onStartResize() {
+        val view = host ?: return
+        view.showQuickSettings(false)
+        draggedHeight = preferences.heightScale
+        draggedWidth = preferences.widthScale
+        view.heightScaleForDrag = draggedHeight
+        view.resizing = true
+    }
 
-    override fun onWidthScaleChanged(scale: Float) =
-        updatePreferences { it.copy(widthScale = scale) }
+    /** Leaves resize mode, writing whatever the last drag left. */
+    private fun endResize() {
+        val view = host ?: return
+        view.resizing = false
+        commitResize()
+    }
 
     override fun onPlacementChanged(placement: QuickSettingsView.Placement) {
         val mode = when (placement) {
@@ -1916,6 +1928,45 @@ class BorderKeysService :
      * in the settings app is visible the next time the keyboard is opened rather than after a
      * restart.
      */
+    /** The size a drag is proposing, before it is written down. */
+    private var draggedHeight = 1f
+    private var draggedWidth = 1f
+
+    /**
+     * Resizes the keyboard under the finger.
+     *
+     * Applied to the views and not to the store: a preferences write per frame would be sixty
+     * database writes a second for a value only the last of which matters, and the flow that
+     * comes back would fight the finger for who decides the size.
+     */
+    private fun previewResize(height: Float, width: Float, offset: Float) {
+        val view = host ?: return
+        draggedHeight = height.coerceIn(
+            KeyboardPreferences.MIN_HEIGHT_SCALE, KeyboardPreferences.MAX_HEIGHT_SCALE,
+        )
+        draggedWidth = width.coerceIn(KeyboardPreferences.MIN_WIDTH_SCALE, 1f)
+        view.heightScaleForDrag = draggedHeight
+        paints.update(theme, resources.displayMetrics, draggedHeight)
+        view.setPlacement(
+            preferences.positionMode,
+            draggedWidth,
+            (preferences.bottomOffsetDp * resources.displayMetrics.density).toInt(),
+            (preferences.horizontalOffsetDp * resources.displayMetrics.density).toInt(),
+        )
+        view.relayoutForNewMetrics()
+    }
+
+    /** Writes the size the finger stopped at, once. */
+    private fun commitResize() {
+        val height = draggedHeight
+        val width = draggedWidth
+        scope.launch {
+            DataGraph.themes.updatePreferences {
+                it.copy(heightScale = height, widthScale = width)
+            }
+        }
+    }
+
     private fun applyQuickActions(view: KeyboardHostView) {
         val bar = view.quickActions
         if (!preferences.quickActionsEnabled || privateMode) {
