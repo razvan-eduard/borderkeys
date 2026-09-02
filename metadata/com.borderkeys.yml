@@ -1,10 +1,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 #
-# F-Droid metadata. Only the `core` flavor is published here: it is the one that contains no
-# model files and no non-free assets, which is why the flavor split exists at all. If `plus`
-# is ever published it needs its own entry with AntiFeatures: [NonFreeAssets] — see
-# docs/licensing.md section 5.
+# F-Droid metadata. Only the `core` flavor is published here, because it is the one that carries
+# no inference runtime -- not because `plus` carries anything unfree.
+#
+# `plus` needs no AntiFeatures either. It adds llama.cpp (MIT, compiled from source) and the
+# libc++ it links against (Apache-2.0 with the LLVM exception), and it bundles no model: one
+# arrives only when the user chooses a file whose SHA-256 matches a known entry, and all of
+# those are Apache-2.0. See docs/licensing.md section 2.2.1.
+#
+# This comment used to claim `plus` would need NonFreeAssets. That was written while the plan
+# still included the FUTO Swipe weights, which are genuinely non-free -- they require a visible
+# "powered by FUTO" notice. That option was never taken: its runtime needs CMake 3.29 against
+# the 3.22.1 this project pins. The weights never shipped and the note outlived them.
 
 Categories:
   - System

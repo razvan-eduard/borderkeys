@@ -280,8 +280,10 @@ Recorded here so the option stays real rather than aspirational.
 - **Training:** a single mid-range GPU, on the order of days rather than weeks, at this
   parameter count. The pipeline itself is the real cost — feature extraction (64-point
   resampling, Savitzky-Golay, the 8-D vector), CTC training loop, evaluation harness.
-- **Payoff:** `plus` becomes fully free, `NonFreeAssets` disappears, and the extension point in
-  the decoder means swapping the weights touches no other code.
+- **Payoff:** swipe decoding gains a learned model without `plus` ever needing `NonFreeAssets`,
+  and the extension point in the decoder means swapping the weights touches no other code.
+  (`plus` is free as built today; this is about keeping it that way if option B1 is ever
+  reconsidered, not about undoing something.)
 
 The code must therefore keep the weights behind a clean extension point — which is what the
 `GestureDecoder` interface in step 6.4 is for.
