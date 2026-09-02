@@ -137,6 +137,34 @@ data class KeyboardPreferences(
     val clipboardSuggestion: Boolean = false,
 
     /**
+     * Whether the clipboard is emptied after its content is inserted from the chip.
+     *
+     * Off by default: the clipboard belongs to the system and to every other app, and a
+     * keyboard that quietly empties it is a keyboard that loses someone's copied text when
+     * they meant to paste it twice. On, it is a reasonable hygiene setting for anyone who
+     * copies things they would rather not leave lying there.
+     */
+    val clearClipboardAfterInsert: Boolean = false,
+
+    /** Whether the row of quick actions is shown at all. */
+    val quickActionsEnabled: Boolean = false,
+
+    /**
+     * The actions on the bar, in order, as [QuickAction] ids.
+     *
+     * Ids rather than ordinals so that removing an action from the enum later does not turn
+     * someone's saved bar into a different bar; an id this build does not know is dropped when
+     * the list is read.
+     */
+    val quickActions: List<Int> = QuickAction.DEFAULT.map { it.id },
+
+    /** Whether the bar starts open or as a single button that opens it. */
+    val quickActionsMode: Int = QUICK_ACTIONS_COLLAPSED,
+
+    /** Which edge the bar, and the button that stands in for it, sit against. */
+    val quickActionsPlacement: Int = QUICK_ACTIONS_ABOVE_STRIP,
+
+    /**
      * A permanent row of digits above the letters.
      *
      * Off by default. It costs about a fifth of the keyboard's height, and on a touch surface
@@ -221,6 +249,20 @@ data class KeyboardPreferences(
         } else {
             LANGUAGE_LOCK_BALANCED
         },
+        // Read through the enum, which drops ids no build knows, then bounded: a stored file is
+        // not a trusted file, and a bar of four hundred buttons is a bar with no buttons on it.
+        quickActions = QuickAction.fromIds(quickActions).take(MAX_QUICK_ACTIONS).map { it.id },
+        quickActionsMode = if (quickActionsMode in QUICK_ACTIONS_FULL..QUICK_ACTIONS_COLLAPSED) {
+            quickActionsMode
+        } else {
+            QUICK_ACTIONS_COLLAPSED
+        },
+        quickActionsPlacement =
+            if (quickActionsPlacement in QUICK_ACTIONS_ABOVE_STRIP..QUICK_ACTIONS_RIGHT) {
+                quickActionsPlacement
+            } else {
+                QUICK_ACTIONS_ABOVE_STRIP
+            },
     )
 
     val isOneHanded: Boolean
@@ -299,6 +341,32 @@ data class KeyboardPreferences(
          * "how many words" -- most of a sentence belongs to several dictionaries at once and
          * counts for neither.
          */
+        /** The bar is drawn in full, always. */
+        const val QUICK_ACTIONS_FULL = 0
+
+        /**
+         * One button stands in for the bar and opens it.
+         *
+         * The default, because the bar competes for height with the keys, and height is
+         * accuracy. Opening it costs a tap; leaving it open costs a row on every screen.
+         */
+        const val QUICK_ACTIONS_COLLAPSED = 1
+
+        /** Above the suggestion strip, spanning the keyboard. */
+        const val QUICK_ACTIONS_ABOVE_STRIP = 0
+
+        /** Below the keys, against the bottom edge. */
+        const val QUICK_ACTIONS_BELOW_KEYS = 1
+
+        /** A column down the left of the keys, for a thumb that lives on that side. */
+        const val QUICK_ACTIONS_LEFT = 2
+
+        /** A column down the right. */
+        const val QUICK_ACTIONS_RIGHT = 3
+
+        /** How many actions the bar will hold before it starts dropping them. */
+        const val MAX_QUICK_ACTIONS = 10
+
         fun languageLockEvidence(lock: Int): Float = when (lock) {
             LANGUAGE_LOCK_OFF -> 0f
             LANGUAGE_LOCK_PATIENT -> 3.4f

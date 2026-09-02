@@ -3,6 +3,7 @@
 
 package com.borderkeys.ime
 
+import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -10,6 +11,7 @@ import android.inputmethodservice.InputMethodService
 import android.os.Bundle
 import android.util.Size
 import android.view.View
+import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsRequest
 import android.view.inputmethod.InlineSuggestionsResponse
@@ -24,6 +26,7 @@ import com.borderkeys.assist.AssistClient
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
+import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.predict.LearningBuffer
@@ -31,6 +34,7 @@ import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.theme.ThemePaints
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.catch
@@ -56,6 +60,7 @@ class BorderKeysService :
     SuggestionStripView.Listener,
     AssistSheetView.Listener,
     QuickSettingsView.Listener,
+    QuickActionsView.Listener,
     AssistClient.Listener,
     PredictionEngine.ResultListener {
 
@@ -330,6 +335,8 @@ class BorderKeysService :
                     }
                     view.keyboard.hapticEnabled = newPreferences.hapticFeedback
                     view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
+                    applyQuickActions(view)
+                    refreshClipboardChip()
                     view.keyboard.swipeEnabled = newPreferences.swipeEnabled
                     // The number row is a layout change, not a colour change, so it has to be
                     // applied even when the paints are unchanged.
@@ -417,6 +424,25 @@ class BorderKeysService :
     override fun onActionPicked(index: Int) {
         // The strip's action mode is shared between the assistant's actions and the question a
         // held suggestion asks. A pending word means the question is this one's.
+        // Three things share action mode now: the assistant's tasks, the question a held
+        // suggestion asks, and the clipboard history. Each clears its own state on the way out,
+        // so whichever put the chips there is the one that reads the tap.
+        val history = clipboardHistory
+        if (history.isNotEmpty()) {
+            clipboardHistory = emptyList()
+            host?.suggestionStrip?.clear()
+            val entry = history.getOrNull(index)
+            if (entry != null) {
+                val connection = currentInputConnection
+                if (connection != null) {
+                    finishComposing(connection)
+                    connection.commitText(entry, 1)
+                }
+            }
+            refreshContextFromEditor()
+            requestSuggestions()
+            return
+        }
         val forgetting = pendingForget
         if (forgetting != null) {
             pendingForget = null
@@ -546,6 +572,8 @@ class BorderKeysService :
         // gutter was drawn, received its touch, and called nothing at all.
         view.quickSettings.listener = this
         view.assistSheet.listener = this
+        view.quickActions.listener = this
+        applyQuickActions(view)
         view.onMoveToOtherSide = { moveKeyboardToOtherSide() }
         view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> pushKeyGeometry() }
         host = view
@@ -1453,6 +1481,190 @@ class BorderKeysService :
         clipboardListenerRegistered = false
     }
 
+    // ---- quick actions --------------------------------------------------------------------
+
+    /**
+     * Puts the saved bar on the view: which buttons, in what order, open or collapsed, and
+     * against which edge.
+     *
+     * Called when the view is built and again whenever preferences change, so editing the bar
+     * in the settings app is visible the next time the keyboard is opened rather than after a
+     * restart.
+     */
+    private fun applyQuickActions(view: KeyboardHostView) {
+        val bar = view.quickActions
+        if (!preferences.quickActionsEnabled || privateMode) {
+            bar.visibility = View.GONE
+            return
+        }
+        val chosen = QuickAction.fromIds(preferences.quickActions)
+        if (chosen.isEmpty()) {
+            bar.visibility = View.GONE
+            return
+        }
+        bar.visibility = View.VISIBLE
+        bar.actions = chosen
+        bar.collapsible =
+            preferences.quickActionsMode == KeyboardPreferences.QUICK_ACTIONS_COLLAPSED
+        view.quickActionsPlacement = preferences.quickActionsPlacement
+    }
+
+
+    /**
+     * Runs one of the bar's buttons.
+     *
+     * Everything here goes through InputConnection rather than through key events: an editor
+     * that handles selection its own way -- a code editor, a rich text field -- gets the
+     * platform's own idea of "select all" rather than our idea of which keys mean that.
+     */
+    override fun onQuickAction(action: QuickAction) {
+        val connection = currentInputConnection ?: return
+        when (action) {
+            QuickAction.COPY_PREVIOUS_WORD -> copyToClipboard(wordBeforeCursor(connection))
+            QuickAction.COPY_LINE -> copyToClipboard(lineAroundCursor(connection))
+            QuickAction.COPY_ALL -> {
+                connection.performContextMenuAction(android.R.id.selectAll)
+                connection.performContextMenuAction(android.R.id.copy)
+            }
+            QuickAction.PASTE -> onClipboardPicked()
+            QuickAction.CLIPBOARD_HISTORY -> offerClipboardHistory()
+            QuickAction.SELECT_ALL -> connection.performContextMenuAction(android.R.id.selectAll)
+            QuickAction.CUT -> connection.performContextMenuAction(android.R.id.cut)
+            QuickAction.SELECT_WORD -> selectWordAtCursor(connection)
+            QuickAction.DELETE_WORD -> deleteWordBeforeCursor(connection)
+            QuickAction.CURSOR_START -> {
+                resetComposing()
+                connection.setSelection(0, 0)
+            }
+            QuickAction.CURSOR_END -> {
+                resetComposing()
+                val all = connection.getExtractedText(ExtractedTextRequest(), 0)?.text?.length ?: 0
+                connection.setSelection(all, all)
+            }
+            QuickAction.NEWLINE -> {
+                finishComposing(connection)
+                connection.commitText("\n", 1)
+            }
+            QuickAction.SWITCH_LAYOUT -> switchLanguage()
+            QuickAction.SETTINGS -> openSettings()
+            QuickAction.UNDO -> if (!revertCorrection(connection)) {
+                deleteWordBeforeCursor(connection)
+            }
+        }
+        if (action != QuickAction.CLIPBOARD_HISTORY) {
+            refreshContextFromEditor()
+            requestSuggestions()
+        }
+    }
+
+    /** The word immediately before the cursor, empty when the cursor follows a space. */
+    private fun wordBeforeCursor(connection: InputConnection): String {
+        val before = connection.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
+        if (before.isNullOrEmpty()) {
+            return ""
+        }
+        var end = before.length
+        while (end > 0 && !isWordCharacter(before[end - 1].code)) {
+            end--
+        }
+        var start = end
+        while (start > 0 && isWordCharacter(before[start - 1].code)) {
+            start--
+        }
+        return before.substring(start, end)
+    }
+
+    /** The line the cursor sits on, both sides of it. */
+    private fun lineAroundCursor(connection: InputConnection): String {
+        val before = connection.getTextBeforeCursor(LINE_WINDOW_CHARS, 0)?.toString().orEmpty()
+        val after = connection.getTextAfterCursor(LINE_WINDOW_CHARS, 0)?.toString().orEmpty()
+        val start = before.lastIndexOf('\n') + 1
+        val breakAfter = after.indexOf('\n')
+        val tail = if (breakAfter >= 0) after.substring(0, breakAfter) else after
+        return before.substring(start) + tail
+    }
+
+    private fun copyToClipboard(text: String) {
+        if (text.isEmpty() || privateMode) {
+            return
+        }
+        clipboardManager?.setPrimaryClip(ClipData.newPlainText(null, text))
+        refreshClipboardChip()
+    }
+
+    /**
+     * Puts the last few things copied into the suggestion strip.
+     *
+     * In the strip rather than in a panel of its own: the strip is already the row that offers
+     * things to insert, it already knows how to be tapped, and a second panel would be a second
+     * thing to dismiss. Tapping one inserts it; typing anything replaces them with suggestions.
+     */
+    private fun offerClipboardHistory() {
+        if (privateMode) {
+            return
+        }
+        scope.launch {
+            val entries = withContext(Dispatchers.IO) {
+                DataGraph.clipboard.recent(SuggestionStripView.MAX_SUGGESTIONS)
+            }
+            if (entries.isEmpty()) {
+                return@launch
+            }
+            clipboardHistory = entries
+            val labels = arrayOfNulls<String>(SuggestionStripView.MAX_SUGGESTIONS)
+            val shown = entries.size.coerceAtMost(SuggestionStripView.MAX_SUGGESTIONS)
+            for (index in 0 until shown) {
+                labels[index] = entries[index].take(CHIP_PREVIEW_CHARS)
+            }
+            host?.suggestionStrip?.setActions(labels, shown)
+        }
+    }
+
+    /** What the strip is currently offering from the clipboard, so a tap knows what it meant. */
+    private var clipboardHistory: List<String> = emptyList()
+
+    /** Selects the word the cursor is inside, so the next action can act on it. */
+    private fun selectWordAtCursor(connection: InputConnection) {
+        resetComposing()
+        val before = connection.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)?.toString().orEmpty()
+        val after = connection.getTextAfterCursor(CONTEXT_WINDOW_CHARS, 0)?.toString().orEmpty()
+        var back = 0
+        while (back < before.length && isWordCharacter(before[before.length - 1 - back].code)) {
+            back++
+        }
+        var forward = 0
+        while (forward < after.length && isWordCharacter(after[forward].code)) {
+            forward++
+        }
+        if (back == 0 && forward == 0) {
+            return
+        }
+        val caret = selectionEnd
+        connection.setSelection(caret - back, caret + forward)
+    }
+
+    /** Deletes back to the start of the word before the cursor, in one press. */
+    private fun deleteWordBeforeCursor(connection: InputConnection) {
+        if (selectionEnd > selectionStart) {
+            connection.commitText("", 1)
+            return
+        }
+        composing.setLength(0)
+        connection.finishComposingText()
+        val before = connection.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
+        if (before.isNullOrEmpty()) {
+            return
+        }
+        var count = 0
+        while (count < before.length && !isWordCharacter(before[before.length - 1 - count].code)) {
+            count++
+        }
+        while (count < before.length && isWordCharacter(before[before.length - 1 - count].code)) {
+            count++
+        }
+        connection.deleteSurroundingText(count.coerceAtLeast(1), 0)
+    }
+
     // ---- the clipboard chip ---------------------------------------------------------------
 
     /**
@@ -1512,6 +1724,13 @@ class BorderKeysService :
         val text = item.coerceToText(this)?.toString() ?: return
         finishComposing(connection)
         connection.commitText(text, 1)
+        if (preferences.clearClipboardAfterInsert) {
+            // Emptied by writing an empty clip rather than by any clear API, because there is
+            // no permission-free way to clear another app's clipboard and this is ours to set
+            // while we hold focus. The chip goes with it.
+            clipboardManager?.setPrimaryClip(ClipData.newPlainText(null, ""))
+            host?.suggestionStrip?.clipboardChip = null
+        }
         refreshContextFromEditor()
         requestSuggestions()
     }
@@ -1666,6 +1885,9 @@ class BorderKeysService :
 
         /** How much of a copied text the chip shows before it stops being a label. */
         const val CHIP_PREVIEW_CHARS = 24
+
+        /** How far either side of the cursor "the line" is looked for. */
+        const val LINE_WINDOW_CHARS = 1024
         const val MIN_LEARNED_LENGTH = 2
 
         /**

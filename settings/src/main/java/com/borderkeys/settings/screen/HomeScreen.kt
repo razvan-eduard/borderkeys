@@ -70,6 +70,10 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
         SettingRow(strings[Keys.HOME_CLIPBOARD], strings[Keys.HOME_HISTORY_PINNING_AND_HOW_LONG_IT]) {
             open(Screen.Clipboard)
         }
+        SettingRow(
+            strings[Keys.HOME_QUICK_ACTIONS],
+            strings[Keys.HOME_QUICK_ACTIONS_NOTE],
+        ) { open(Screen.QuickActions) }
         if (hasAssistant) {
             SettingRow(strings[Keys.HOME_TEXT_ASSISTANT], strings[Keys.HOME_SUMMARISE_CORRECT_AND_TRANSLATE_ON_THIS]) {
                 open(Screen.Assistant)

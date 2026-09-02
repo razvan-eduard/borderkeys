@@ -26,6 +26,7 @@ enum class Screen(val titleKey: String) {
     Corrections(Keys.SCREEN_SUGGESTIONS_AND_CORRECTIONS),
     Dictionary(Keys.SCREEN_PERSONAL_DICTIONARY),
     Clipboard(Keys.SCREEN_CLIPBOARD),
+    QuickActions(Keys.SCREEN_QUICK_ACTIONS),
     Assistant(Keys.SCREEN_TEXT_ASSISTANT),
     Privacy(Keys.SCREEN_PRIVACY),
     About(Keys.SCREEN_ABOUT),

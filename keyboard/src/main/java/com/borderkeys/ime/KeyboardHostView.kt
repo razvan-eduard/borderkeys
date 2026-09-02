@@ -52,6 +52,20 @@ class KeyboardHostView(
      * the keys are not useful while it is open.
      */
     val quickSettings = QuickSettingsView(context, paints, strings)
+    val quickActions = QuickActionsView(context, paints, strings)
+
+    /**
+     * Which edge the quick-action bar sits against. Mirrors KeyboardPreferences; kept as an Int
+     * so this module does not depend on :data for four constants.
+     */
+    var quickActionsPlacement: Int = 0
+        set(value) {
+            if (field != value) {
+                field = value
+                quickActions.vertical = value == PLACEMENT_LEFT || value == PLACEMENT_RIGHT
+                requestLayout()
+            }
+        }
 
     /**
      * Space the system's own IME navigation bar occupies along the bottom edge.
@@ -205,30 +219,58 @@ class KeyboardHostView(
             0, MeasureSpec.UNSPECIFIED,
         )
 
+        // A bar down the side takes width from the keys; one above or below takes height. Both
+        // are measured before anything else so the keys are laid out in what is left, rather
+        // than being pushed off the bottom of a window that was already sized.
+        val sideBar = quickActions.visibility != GONE &&
+            (quickActionsPlacement == PLACEMENT_LEFT || quickActionsPlacement == PLACEMENT_RIGHT)
+        var barThickness = 0
+        if (quickActions.visibility != GONE) {
+            quickActions.measure(
+                if (sideBar) unbounded else exactWidth,
+                if (sideBar) MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED) else unbounded,
+            )
+            barThickness = if (sideBar) quickActions.measuredWidth else quickActions.measuredHeight
+        }
+        val bodyWidth = (contentWidth - if (sideBar) barThickness else 0).coerceAtLeast(1)
+        val exactBody = MeasureSpec.makeMeasureSpec(bodyWidth, MeasureSpec.EXACTLY)
+
         var height = 0
         if (suggestionStrip.visibility != GONE) {
-            suggestionStrip.measure(exactWidth, unbounded)
+            suggestionStrip.measure(exactBody, unbounded)
             height += suggestionStrip.measuredHeight
         }
         if (inlineSuggestions.visibility != GONE) {
-            inlineSuggestions.measure(exactWidth, unbounded)
+            inlineSuggestions.measure(exactBody, unbounded)
             height += inlineSuggestions.measuredHeight
         }
         if (keyboard.visibility != GONE) {
-            keyboard.measure(exactWidth, unbounded)
+            keyboard.measure(exactBody, unbounded)
             height += keyboard.measuredHeight
         }
         if (assistSheet.visibility != GONE) {
-            assistSheet.measure(exactWidth, unbounded)
+            assistSheet.measure(exactBody, unbounded)
             height += assistSheet.measuredHeight
         }
         if (quickSettings.visibility != GONE) {
             // The panel takes exactly the height the keys would have had, so opening it does not
             // move the editor's text or resize the window under the user's finger.
-            quickSettings.measure(exactWidth, MeasureSpec.makeMeasureSpec(
-                keyboardHeightForPanel(exactWidth), MeasureSpec.EXACTLY,
+            quickSettings.measure(exactBody, MeasureSpec.makeMeasureSpec(
+                keyboardHeightForPanel(bodyWidth), MeasureSpec.EXACTLY,
             ))
             height += quickSettings.measuredHeight
+        }
+        if (quickActions.visibility != GONE) {
+            if (sideBar) {
+                // Re-measured now that the body's height is known, because a side bar is as tall
+                // as what it sits beside.
+                quickActions.measure(
+                    MeasureSpec.makeMeasureSpec(barThickness, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY),
+                )
+            } else {
+                height += barThickness
+            }
         }
 
         // The window is always full width; the keys are narrower and offset inside it. That
@@ -241,25 +283,55 @@ class KeyboardHostView(
         val contentWidth = (width * widthScale).toInt().coerceAtLeast(1)
         val left = contentLeft(width, contentWidth)
         val right = left + contentWidth
+        val sideBar = quickActions.visibility != GONE &&
+            (quickActionsPlacement == PLACEMENT_LEFT || quickActionsPlacement == PLACEMENT_RIGHT)
+        val barThickness = when {
+            quickActions.visibility == GONE -> 0
+            sideBar -> quickActions.measuredWidth
+            else -> quickActions.measuredHeight
+        }
+        val bodyLeft = if (sideBar && quickActionsPlacement == PLACEMENT_LEFT) {
+            left + barThickness
+        } else {
+            left
+        }
+        val bodyRight = if (sideBar && quickActionsPlacement == PLACEMENT_RIGHT) {
+            right - barThickness
+        } else {
+            right
+        }
         var y = 0
+        if (quickActions.visibility != GONE && quickActionsPlacement == PLACEMENT_ABOVE_STRIP) {
+            quickActions.layout(left, y, right, y + barThickness)
+            y += barThickness
+        }
         if (suggestionStrip.visibility != GONE) {
-            suggestionStrip.layout(left, y, right, y + suggestionStrip.measuredHeight)
+            suggestionStrip.layout(bodyLeft, y, bodyRight, y + suggestionStrip.measuredHeight)
             y += suggestionStrip.measuredHeight
         }
         if (inlineSuggestions.visibility != GONE) {
-            inlineSuggestions.layout(left, y, right, y + inlineSuggestions.measuredHeight)
+            inlineSuggestions.layout(bodyLeft, y, bodyRight, y + inlineSuggestions.measuredHeight)
             y += inlineSuggestions.measuredHeight
         }
         if (keyboard.visibility != GONE) {
-            keyboard.layout(left, y, right, y + keyboard.measuredHeight)
+            keyboard.layout(bodyLeft, y, bodyRight, y + keyboard.measuredHeight)
             y += keyboard.measuredHeight
         }
         if (assistSheet.visibility != GONE) {
-            assistSheet.layout(left, y, right, y + assistSheet.measuredHeight)
+            assistSheet.layout(bodyLeft, y, bodyRight, y + assistSheet.measuredHeight)
             y += assistSheet.measuredHeight
         }
         if (quickSettings.visibility != GONE) {
-            quickSettings.layout(left, y, right, y + quickSettings.measuredHeight)
+            quickSettings.layout(bodyLeft, y, bodyRight, y + quickSettings.measuredHeight)
+            y += quickSettings.measuredHeight
+        }
+        if (quickActions.visibility != GONE) {
+            when (quickActionsPlacement) {
+                PLACEMENT_BELOW_KEYS -> quickActions.layout(left, y, right, y + barThickness)
+                PLACEMENT_LEFT -> quickActions.layout(left, 0, left + barThickness, y)
+                PLACEMENT_RIGHT -> quickActions.layout(right - barThickness, 0, right, y)
+                else -> Unit
+            }
         }
         layoutArrow(width, left, right, keyboard.top, keyboard.bottom)
     }
@@ -359,6 +431,13 @@ class KeyboardHostView(
         // Mirrors KeyboardPreferences. Duplicated rather than imported so that :keyboard's view
         // layer does not depend on :data for four integers.
         const val MODE_DOCKED = 0
+
+        // Mirrors KeyboardPreferences.QUICK_ACTIONS_*. Duplicated rather than depended on, for
+        // the same reason MODE_DOCKED is: four integers are not worth a module edge.
+        const val PLACEMENT_ABOVE_STRIP = 0
+        const val PLACEMENT_BELOW_KEYS = 1
+        const val PLACEMENT_LEFT = 2
+        const val PLACEMENT_RIGHT = 3
         const val MODE_ONE_HANDED_LEFT = 1
         const val MODE_ONE_HANDED_RIGHT = 2
         const val MODE_FLOATING = 3

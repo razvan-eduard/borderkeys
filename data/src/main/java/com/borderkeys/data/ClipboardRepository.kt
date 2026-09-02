@@ -55,6 +55,16 @@ class ClipboardRepository internal constructor(
         return true
     }
 
+    /**
+     * The most recent entries, newest first, for the keyboard's own strip.
+     *
+     * A one-shot read rather than the flow the settings screen collects: the strip is answering
+     * a button press, not tracking the clipboard, and a subscription that outlives the press
+     * would keep the database open for a row that has already been replaced by suggestions.
+     */
+    suspend fun recent(limit: Int): List<String> =
+        entries.first().take(limit).map { it.content }
+
     suspend fun setPinned(id: Long, pinned: Boolean) {
         dao.setPinned(id, if (pinned) now() else null)
     }
