@@ -380,7 +380,11 @@ data class KeyboardPreferences(
      * deliberately gone back to 100% keeps what they chose.
      */
     fun withPositionMode(mode: Int): KeyboardPreferences {
-        val narrowing = positionMode == MODE_DOCKED && mode != MODE_DOCKED && widthScale == 1f
+        // "Effectively full width" rather than exactly 1, because the resize handles leave
+        // whatever the finger stopped at -- 0.99 after a drag to the edge is a keyboard the
+        // user thinks is full width, and it should still narrow when they go one-handed.
+        val narrowing = positionMode == MODE_DOCKED && mode != MODE_DOCKED &&
+            widthScale >= NEARLY_FULL_WIDTH
         // The width survives the move. It is one value across every mode now that the resize
         // handles honour it in the dock as well, so docking is a change of position and
         // nothing else; a keyboard that is too narrow is widened by dragging its edge.
@@ -564,6 +568,9 @@ data class KeyboardPreferences(
          * target the hit-testing assumes.
          */
         const val ONE_HANDED_WIDTH_SCALE = 0.82f
+
+        /** Close enough to the full width that the user means the full width. */
+        const val NEARLY_FULL_WIDTH = 0.98f
         const val MAX_BOTTOM_OFFSET_DP = 220f
     }
 }

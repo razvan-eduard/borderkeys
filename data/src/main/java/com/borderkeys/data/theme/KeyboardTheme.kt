@@ -38,6 +38,33 @@ data class KeyboardTheme(
     val pressedElevation: Float = 2f,
     val swipeTrailColor: Int = 0xCC6EA8FE.toInt(),
     val swipeTrailWidthDp: Float = 4f,
+
+    /**
+     * A second background colour: a vertical gradient from the top of the keyboard to its
+     * bottom edge. Zero means there is no second colour and the background is flat.
+     *
+     * Zero rather than "the same as the background" as the off state, so that a preset which
+     * changes only [backgroundColor] -- every preset does -- cannot accidentally leave a
+     * gradient running from its new colour to the old one.
+     */
+    val backgroundGradientColor: Int = 0,
+
+    /** One of the PATTERN_ constants, drawn over the background in [patternColor]. */
+    val backgroundPattern: Int = PATTERN_NONE,
+    val patternColor: Int = 0x1FFFFFFF,
+
+    /** The repeat of the pattern, edge to edge of one tile. */
+    val patternScaleDp: Float = 24f,
+
+    /**
+     * Whether the background reaches the edges of the screen.
+     *
+     * On by default. A one-handed keyboard is narrower than the window, and with this off the
+     * space beside it is a hole showing the application underneath -- which is what the space
+     * used to be. With it on the keyboard reads as a surface that the keys sit on, and the
+     * pattern is worth having because there is somewhere for it to show.
+     */
+    val fullWidthBackground: Boolean = true,
 ) {
     /**
      * Clamps every dimension into a range that can actually be drawn.
@@ -55,5 +82,28 @@ data class KeyboardTheme(
         labelTextSizeSp = labelTextSizeSp.coerceIn(8f, 40f),
         pressedElevation = pressedElevation.coerceIn(0f, 16f),
         swipeTrailWidthDp = swipeTrailWidthDp.coerceIn(1f, 24f),
+        backgroundPattern = if (backgroundPattern in 0 until PATTERN_COUNT) backgroundPattern else PATTERN_NONE,
+        patternScaleDp = patternScaleDp.coerceIn(8f, 64f),
     )
+
+    /** The colour the background fades to, which is its own colour when it fades to nothing. */
+    fun gradientEnd(): Int =
+        if (backgroundGradientColor == 0) backgroundColor else backgroundGradientColor
+
+    companion object {
+        /**
+         * The patterns, as indices rather than an enum.
+         *
+         * The theme is serialised to disk and read back by whatever version comes next; an int
+         * that falls outside the range is clamped to none by [sanitised], where an unknown enum
+         * name would be a parse failure that loses the whole theme.
+         */
+        const val PATTERN_NONE = 0
+        const val PATTERN_DOTS = 1
+        const val PATTERN_GRID = 2
+        const val PATTERN_DIAGONAL = 3
+        const val PATTERN_CHECKS = 4
+        const val PATTERN_STRIPES = 5
+        const val PATTERN_COUNT = 6
+    }
 }

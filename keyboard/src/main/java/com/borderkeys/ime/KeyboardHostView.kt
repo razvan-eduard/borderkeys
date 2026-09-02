@@ -125,6 +125,15 @@ class KeyboardHostView(
     private var bottomOffsetPx = 0
     private var horizontalOffsetPx = 0
 
+    /** Mirrors the theme's own flag; pushed in with the theme rather than read per frame. */
+    var fullWidthBackground: Boolean = true
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
     /** The height scale, kept so a drag can start from where the keyboard already is. */
     var heightScaleForDrag: Float = 1f
 
@@ -283,6 +292,11 @@ class KeyboardHostView(
         // when the keys have been narrowed enough to leave one.
         setWillNotDraw(false)
         isClickable = false
+        // One background for the whole window, painted here. A pattern drawn separately by each
+        // child would restart its tile at that child's corner, which shows as a seam along
+        // every edge where two children meet.
+        keyboard.drawsBackground = false
+        suggestionStrip.drawsBackground = false
         addView(suggestionStrip)
         addView(inlineSuggestions)
         addView(keyboard)
@@ -567,6 +581,7 @@ class KeyboardHostView(
     }
 
     override fun onDraw(canvas: android.graphics.Canvas) {
+        drawBackground(canvas)
         if (arrowBounds.isEmpty) {
             return
         }
@@ -585,6 +600,28 @@ class KeyboardHostView(
     }
 
     @android.annotation.SuppressLint("ClickableViewAccessibility")
+    /**
+     * Paints the surface the keys sit on.
+     *
+     * Full width by default, including the space beside a one-handed or floating keyboard: that
+     * space used to be a hole showing the application underneath, and a background that stops
+     * at the keys leaves the pattern nowhere to show. Down to the keyboard's own bottom rather
+     * than the view's, so the gap a floating keyboard is lifted by stays a gap.
+     */
+    private fun drawBackground(canvas: android.graphics.Canvas) {
+        val bottom = (height - bottomOffsetPx).toFloat()
+        if (bottom <= 0f) {
+            return
+        }
+        if (fullWidthBackground) {
+            paints.backgroundPainter.draw(canvas, 0f, 0f, width.toFloat(), bottom)
+            return
+        }
+        val contentWidth = (width * widthScale).toInt().coerceAtLeast(1)
+        val left = contentLeft(width, contentWidth).toFloat()
+        paints.backgroundPainter.draw(canvas, left, 0f, left + contentWidth, bottom)
+    }
+
     /**
      * Re-measures every child after the shared metrics changed.
      *

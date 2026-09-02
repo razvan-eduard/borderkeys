@@ -138,4 +138,28 @@ class KeyboardThemeSerializerTest {
         assertEquals(true, KeyboardPreferences().clipboardEnabled)
         assertEquals(60, KeyboardPreferences().clipboardRetentionMinutes)
     }
+
+    @Test
+    fun `a pattern from a future version falls back to none`() {
+        val fromLater = KeyboardTheme(backgroundPattern = 99).sanitised()
+        assertEquals(KeyboardTheme.PATTERN_NONE, fromLater.backgroundPattern)
+
+        val known = KeyboardTheme(backgroundPattern = KeyboardTheme.PATTERN_CHECKS).sanitised()
+        assertEquals(KeyboardTheme.PATTERN_CHECKS, known.backgroundPattern)
+    }
+
+    @Test
+    fun `a pattern tile is clamped to a size that can be drawn`() {
+        assertEquals(8f, KeyboardTheme(patternScaleDp = 0f).sanitised().patternScaleDp, 0f)
+        assertEquals(64f, KeyboardTheme(patternScaleDp = 4000f).sanitised().patternScaleDp, 0f)
+    }
+
+    @Test
+    fun `no second colour means the background does not fade into anything`() {
+        val flat = KeyboardTheme(backgroundColor = 0xFF102030.toInt())
+        assertEquals(flat.backgroundColor, flat.gradientEnd())
+
+        val faded = flat.copy(backgroundGradientColor = 0xFF405060.toInt())
+        assertEquals(0xFF405060.toInt(), faded.gradientEnd())
+    }
 }

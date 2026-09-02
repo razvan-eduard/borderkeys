@@ -389,6 +389,7 @@ class BorderKeysService :
                     // The number row is a layout change, not a colour change, so it has to be
                     // applied even when the paints are unchanged.
                     showPage(page)
+                    view.fullWidthBackground = theme.fullWidthBackground
                     if (changed) {
                         view.keyboard.onThemeChanged()
                         view.quickSettings.onThemeChanged()
@@ -614,6 +615,8 @@ class BorderKeysService :
         view.onResizeDrag = { height, width, offset -> previewResize(height, width, offset) }
         view.onResizeFinished = { commitResize() }
         view.onResizeExit = { endResize() }
+        view.fullWidthBackground = theme.fullWidthBackground
+        view.onThemeChanged()
         view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> pushKeyGeometry() }
         host = view
         return view
@@ -754,7 +757,9 @@ class BorderKeysService :
             return
         }
         val target = window?.window ?: return
-        val wanted = settings.blurBehindKeyboard &&
+        // Nothing shows through a background that reaches both edges, so blurring what is
+        // behind it is a per-frame cost for an effect nobody can see.
+        val wanted = settings.blurBehindKeyboard && !theme.fullWidthBackground &&
             settings.positionMode != KeyboardPreferences.MODE_DOCKED
         val radius = if (wanted) {
             (resources.displayMetrics.density * BLUR_RADIUS_DP).toInt()

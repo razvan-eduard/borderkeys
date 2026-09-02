@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -93,6 +94,46 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 update { t -> t.copy(swipeTrailColor = it) }
             }
         }
+        SettingsSectionCard(strings[Keys.THEME_BACKGROUND_SECTION]) {
+            Text(
+                strings[Keys.THEME_PATTERN],
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                for (index in PATTERN_LABELS.indices) {
+                    val selected = theme.backgroundPattern == index
+                    FilterChip(
+                        selected = selected,
+                        onClick = { update { t -> t.copy(backgroundPattern = index) } },
+                        label = { Text(strings[PATTERN_LABELS[index]]) },
+                    )
+                }
+            }
+            ColourRow(strings[Keys.THEME_PATTERN_COLOUR], theme.patternColor, preserveAlpha = true) {
+                update { t -> t.copy(patternColor = it) }
+            }
+            ThemeSlider(strings[Keys.THEME_PATTERN_SIZE], theme.patternScaleDp, 8f..64f, "dp") {
+                update { t -> t.copy(patternScaleDp = it) }
+            }
+            // Shown as the background's own colour when there is no second one, so the row
+            // has something ringed and picking that same colour is how a gradient is removed.
+            ColourRow(strings[Keys.THEME_SECOND_COLOUR], theme.gradientEnd()) {
+                update { t -> t.copy(backgroundGradientColor = it) }
+            }
+            Explanation(strings[Keys.THEME_SECOND_COLOUR_NOTE])
+            SwitchRow(
+                title = strings[Keys.THEME_FULL_WIDTH_BACKGROUND],
+                subtitle = strings[Keys.THEME_FULL_WIDTH_BACKGROUND_NOTE],
+                checked = theme.fullWidthBackground,
+            ) { value -> update { it.copy(fullWidthBackground = value) } }
+        }
         SettingsSectionCard(strings[Keys.THEME_SHAPE]) {
             ThemeSlider(strings[Keys.THEME_CORNER_RADIUS], theme.keyCornerRadiusDp, 0f..32f, strings[Keys.THEME_DP]) {
                 update { t -> t.copy(keyCornerRadiusDp = it) }
@@ -123,6 +164,21 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * The pattern names, as catalogue keys in the order of the PATTERN_ constants.
+ *
+ * Keys rather than text: this is a file-level value, built before any composition has a
+ * catalogue to read from.
+ */
+private val PATTERN_LABELS = arrayOf(
+    Keys.THEME_PATTERN_NONE,
+    Keys.THEME_PATTERN_DOTS,
+    Keys.THEME_PATTERN_GRID,
+    Keys.THEME_PATTERN_DIAGONAL,
+    Keys.THEME_PATTERN_CHECKS,
+    Keys.THEME_PATTERN_STRIPES,
+)
 
 /**
  * A label and the palette under it, with the current colour ringed.

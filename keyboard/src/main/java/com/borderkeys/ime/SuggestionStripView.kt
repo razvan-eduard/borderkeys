@@ -31,6 +31,15 @@ class SuggestionStripView(
     private val strings: LanguageManager,
 ) : View(context) {
 
+    /**
+     * Whether this view paints the surface behind itself.
+     *
+     * The keyboard host paints one background across the whole window, so that a pattern is
+     * continuous instead of restarting at every child's top-left corner and showing a seam
+     * where they meet. It turns this off. The settings preview has no host, so it stays on.
+     */
+    var drawsBackground: Boolean = true
+
     interface Listener {
         fun onSuggestionPicked(index: Int, word: String)
 
@@ -395,7 +404,9 @@ class SuggestionStripView(
     override fun onDraw(canvas: Canvas) {
         Trace.beginSection("SuggestionStripView.onDraw")
         try {
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paints.background)
+            if (drawsBackground) {
+                paints.backgroundPainter.draw(canvas, width.toFloat(), height.toFloat())
+            }
 
             if (privateMode) {
                 drawNotice(canvas, privateNoticeChars, privateNotice.length)

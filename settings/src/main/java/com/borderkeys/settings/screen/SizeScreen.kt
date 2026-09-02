@@ -142,11 +142,16 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.SIZE_AN_ARROW_IN_THE_EMPTY_STRIP],
                 checked = preferences.edgeArrows,
             ) { value -> update { it.copy(edgeArrows = value) } }
-            SwitchRow(
-                title = strings[Keys.SIZE_BLUR_WHAT_SHOWS_THROUGH],
-                subtitle = strings[Keys.SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY],
-                checked = preferences.blurBehindKeyboard,
-            ) { value -> update { it.copy(blurBehindKeyboard = value) } }
+            // Only when something can show through. With the background reaching both edges
+            // there is nothing behind the gutter to blur, and a switch that does nothing is
+            // worse than a switch that is not there.
+            if (!theme.fullWidthBackground) {
+                SwitchRow(
+                    title = strings[Keys.SIZE_BLUR_WHAT_SHOWS_THROUGH],
+                    subtitle = strings[Keys.SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY],
+                    checked = preferences.blurBehindKeyboard,
+                ) { value -> update { it.copy(blurBehindKeyboard = value) } }
+            }
         }
         SettingsSectionCard(strings[Keys.SIZE_NUMBER_ROW]) {
             SwitchRow(

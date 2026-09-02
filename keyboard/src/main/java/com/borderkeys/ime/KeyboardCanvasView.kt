@@ -48,6 +48,15 @@ class KeyboardCanvasView(
     private val strings: LanguageManager,
 ) : View(context) {
 
+    /**
+     * Whether this view paints the surface behind itself.
+     *
+     * The keyboard host paints one background across the whole window, so that a pattern is
+     * continuous instead of restarting at every child's top-left corner and showing a seam
+     * where they meet. It turns this off. The settings preview has no host, so it stays on.
+     */
+    var drawsBackground: Boolean = true
+
     /** What the service is told about. Called on the UI thread, inside a touch event. */
     interface Listener {
         fun onKey(code: Int, keyIndex: Int)
@@ -532,7 +541,9 @@ class KeyboardCanvasView(
     }
 
     private fun drawStatic(canvas: Canvas, viewWidth: Float, viewHeight: Float) {
-        canvas.drawRect(0f, 0f, viewWidth, viewHeight, paints.background)
+        if (drawsBackground) {
+            paints.backgroundPainter.draw(canvas, viewWidth, viewHeight)
+        }
         val radius = paints.keyCornerRadiusPx
         for (index in 0 until geometry.keyCount) {
             val fill = if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.MODIFIER)) {

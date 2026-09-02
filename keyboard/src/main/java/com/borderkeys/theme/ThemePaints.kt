@@ -26,6 +26,13 @@ import com.borderkeys.data.theme.KeyboardTheme
 class ThemePaints {
 
     val background: Paint = Paint()
+
+    /**
+     * The surface behind everything, which is more than a colour once a gradient or a pattern
+     * is in play. Kept here so the one tile and the one gradient are shared by every view that
+     * paints a background rather than built per view.
+     */
+    val backgroundPainter = KeyboardBackground()
     val keyFill: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val keyPressedFill: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val modifierKeyFill: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -143,6 +150,7 @@ class ThemePaints {
         scaledDensity = newScaledDensity
 
         background.color = theme.backgroundColor
+        backgroundPainter.update(theme, metrics.density)
         keyFill.color = theme.keyColor
         keyPressedFill.color = theme.keyPressedColor
         modifierKeyFill.color = theme.modifierKeyColor
