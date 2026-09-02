@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -34,14 +35,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
-import com.borderkeys.settings.ColourPickerDialog
+import com.borderkeys.settings.ColourPickerSheet
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.KeyboardPreview
@@ -229,12 +230,15 @@ private fun ColourRow(
 ) {
     var picking by remember { mutableStateOf(false) }
     if (picking) {
-        ColourPickerDialog(
+        ColourPickerSheet(
             initial = current,
+            palette = PALETTE,
             onDismiss = { picking = false },
             onPick = { colour ->
                 picking = false
-                onPick(if (preserveAlpha) (current and ALPHA_MASK) or (colour and RGB_MASK) else colour)
+                onPick(
+                    if (preserveAlpha) (current and ALPHA_MASK) or (colour and RGB_MASK) else colour,
+                )
             },
         )
     }
@@ -247,6 +251,23 @@ private fun ColourRow(
                 .padding(top = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            // A colour from the editor is in no swatch, so without this it would be the
+            // current colour and invisible: nothing shows it and nothing wears the ring. It
+            // appears at the head of the row instead, exactly as VoxApps does it.
+            val custom = current.takeIf {
+                PALETTE.none { entry ->
+                    if (preserveAlpha) (entry and RGB_MASK) == (it and RGB_MASK) else entry == it
+                }
+            }
+            if (custom != null) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .background(Color(custom), CircleShape)
+                        .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                        .clickable { picking = true },
+                )
+            }
             for (colour in PALETTE) {
                 val selected = if (preserveAlpha) {
                     (colour and RGB_MASK) == (current and RGB_MASK)
@@ -278,26 +299,23 @@ private fun ColourRow(
                 )
             }
             // Last, after the ready-made colours, because it is the way out of them rather
-            // than one more of them. Ringed when the current colour is not in the row, which
-            // is exactly when the colour came from here.
-            val custom = PALETTE.none {
-                if (preserveAlpha) (it and RGB_MASK) == (current and RGB_MASK) else it == current
-            }
-            Box(
+            // than one more of them. A pencil rather than a colour, as in VoxApps: it is the
+            // thing that opens the editor, not a colour to choose.
+            androidx.compose.foundation.layout.Box(
                 modifier = Modifier
                     .size(30.dp)
-                    .background(Brush.sweepGradient(HUE_WHEEL), CircleShape)
-                    .border(
-                        width = if (custom) 3.dp else 1.dp,
-                        color = if (custom) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        },
-                        shape = CircleShape,
-                    )
+                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
                     .clickable { picking = true },
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(android.R.drawable.ic_menu_edit),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -354,15 +372,6 @@ private fun PresetCard(
 
 /** A preset and the catalogue key for its name. */
 internal class Preset(val nameKey: String, val theme: KeyboardTheme)
-
-/**
- * The wheel drawn on the custom swatch. Its own list rather than the picker's, because this one
- * is a sweep around a circle and that one is a strip across a rectangle.
- */
-private val HUE_WHEEL = listOf(
-    Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
-    Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF), Color(0xFFFF0000),
-)
 
 private const val RGB_MASK = 0x00FFFFFF
 private const val ALPHA_MASK = 0xFF000000.toInt()
