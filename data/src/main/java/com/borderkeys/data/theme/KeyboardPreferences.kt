@@ -23,6 +23,19 @@ data class KeyboardPreferences(
     /** Minutes an unpinned clipboard entry survives. */
     val clipboardRetentionMinutes: Int = 60,
     val clipboardEnabled: Boolean = true,
+
+    /**
+     * Whether copied images are remembered alongside copied text.
+     *
+     * Off, although the history around it is on. A screenshot is the most revealing thing a
+     * clipboard holds -- a message, a balance, a code, a face -- and the difference between
+     * remembering a word and remembering a picture of a screen is large enough that it should
+     * be asked for rather than assumed.
+     *
+     * Turning it off deletes the images already remembered, because a switch that stops
+     * collecting but keeps what it collected is not the switch anyone thought they turned off.
+     */
+    val clipboardImages: Boolean = false,
     /** Hard cap on unpinned history, independent of the retention window. */
     val clipboardMaxEntries: Int = 60,
     /** Whether confirmed words are written to the personal dictionary at all. */

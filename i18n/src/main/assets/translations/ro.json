@@ -96,6 +96,8 @@
   "clipboard_panel": "Clipboard",
   "clipboard_pin": "Fixează",
   "clipboard_pinned_never_expires": "Fixat — nu expiră niciodată",
+  "clipboard_remember_images": "Reține pozele copiate",
+  "clipboard_remember_images_note": "Dezactivat, deși istoricul din jurul lui e pornit. O captură de ecran e cel mai revelator lucru pe care îl ține un clipboard — un mesaj, un sold, un cod, o față — deci se cere explicit, nu se presupune. Se stochează doar o referință, niciodată poza în sine, iar dezactivarea șterge pozele deja reținute.",
   "clipboard_remember_what_you_copy": "Reține ce copiezi",
   "clipboard_retention_note": "Cât de departe în urmă ajunge istoricul. Se aplică ambele limite: un element dispare când e mai vechi de atât, sau când e împins în afara listei — ce se întâmplă primul.",
   "clipboard_size_note": "Cel mai vechi dispare când lista e plină, indiferent ce spune cronometrul lui. Elementele fixate nu intră la socoteală și nu se pierd niciodată din cauza vechimii.",

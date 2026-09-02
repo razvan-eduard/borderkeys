@@ -61,6 +61,21 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
             scope.launch { themes.updatePreferences { it.copy(clipboardEnabled = value) } }
         }
 
+        SwitchRow(
+            title = strings[Keys.CLIPBOARD_REMEMBER_IMAGES],
+            subtitle = strings[Keys.CLIPBOARD_REMEMBER_IMAGES_NOTE],
+            checked = preferences.clipboardImages,
+        ) { value ->
+            scope.launch {
+                themes.updatePreferences { it.copy(clipboardImages = value) }
+                // Turning it off forgets what it collected. A switch that stops collecting and
+                // keeps the collection is not the switch anyone thought they turned off.
+                if (!value) {
+                    DataGraph.clipboard.deleteImages()
+                }
+            }
+        }
+
         SettingsSectionCard(strings[Keys.CLIPBOARD_HOW_MANY_ITEMS]) {
             StepSlider(
                 label = strings.getString(

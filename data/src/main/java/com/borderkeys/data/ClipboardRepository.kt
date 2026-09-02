@@ -48,7 +48,7 @@ class ClipboardRepository internal constructor(
             return false
         }
         val settings = preferences.first()
-        if (!settings.clipboardEnabled) {
+        if (!settings.clipboardEnabled || !settings.clipboardImages) {
             return false
         }
         val hash = contentHash(uri)
@@ -106,6 +106,9 @@ class ClipboardRepository internal constructor(
     suspend fun delete(id: Long) = dao.delete(id)
 
     suspend fun deleteAll() = dao.deleteAll()
+
+    /** Forgets every remembered image. Called when the images switch is turned off. */
+    suspend fun deleteImages(): Int = dao.deleteImages()
 
     /**
      * Deletes what the retention window has expired.

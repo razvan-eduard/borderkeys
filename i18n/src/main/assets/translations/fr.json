@@ -96,6 +96,8 @@
   "clipboard_panel": "Presse-papiers",
   "clipboard_pin": "Épingler",
   "clipboard_pinned_never_expires": "Épinglé — n'expire jamais",
+  "clipboard_remember_images": "Retenir les images copiées",
+  "clipboard_remember_images_note": "Désactivé, alors que l'historique autour est activé. Une capture d'écran est la chose la plus révélatrice qu'un presse-papiers contienne — un message, un solde, un code, un visage — c'est donc demandé plutôt que supposé. Seule une référence est conservée, jamais l'image, et désactiver cela supprime les images déjà retenues.",
   "clipboard_remember_what_you_copy": "Retenir ce que vous copiez",
   "clipboard_retention_note": "Jusqu'où remonte l'historique. Les deux limites s'appliquent : un élément part quand il est plus vieux que cela, ou quand il est poussé hors de la liste, selon ce qui arrive en premier.",
   "clipboard_size_note": "Le plus ancien s'en va quand la liste est pleine, quoi que dise son minuteur. Les éléments épinglés ne comptent pas là-dedans et ne partent jamais à cause de leur âge.",

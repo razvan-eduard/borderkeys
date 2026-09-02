@@ -53,6 +53,10 @@ interface ClipboardDao {
     @Query("DELETE FROM clip_entries")
     suspend fun deleteAll()
 
+    /** Drops every remembered image, pinned or not: switching the feature off means off. */
+    @Query("DELETE FROM clip_entries WHERE uri IS NOT NULL")
+    suspend fun deleteImages(): Int
+
     @Query("SELECT COUNT(*) FROM clip_entries")
     suspend fun count(): Int
 

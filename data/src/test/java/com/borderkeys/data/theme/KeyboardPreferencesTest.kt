@@ -274,4 +274,15 @@ class KeyboardPreferencesTest {
         assertEquals(60, steps[KeyboardPreferences.nearestStep(steps, 50)])
     }
 
+    /**
+     * The history is on by default and images are not, which is the whole point of the switch:
+     * a copied word and a picture of someone's screen are not the same thing to remember.
+     */
+    @Test
+    fun `images are off even though the history is on`() {
+        val defaults = KeyboardPreferences()
+        assertTrue("the history should still be on", defaults.clipboardEnabled)
+        assertFalse("images should be asked for", defaults.clipboardImages)
+    }
+
 }

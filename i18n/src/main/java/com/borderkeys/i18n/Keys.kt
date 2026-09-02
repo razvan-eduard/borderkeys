@@ -110,6 +110,8 @@ object Keys {
     const val CLIPBOARD_PANEL = "clipboard_panel"
     const val CLIPBOARD_PIN = "clipboard_pin"
     const val CLIPBOARD_PINNED_NEVER_EXPIRES = "clipboard_pinned_never_expires"
+    const val CLIPBOARD_REMEMBER_IMAGES = "clipboard_remember_images"
+    const val CLIPBOARD_REMEMBER_IMAGES_NOTE = "clipboard_remember_images_note"
     const val CLIPBOARD_REMEMBER_WHAT_YOU_COPY = "clipboard_remember_what_you_copy"
     const val CLIPBOARD_RETENTION_NOTE = "clipboard_retention_note"
     const val CLIPBOARD_SIZE_NOTE = "clipboard_size_note"

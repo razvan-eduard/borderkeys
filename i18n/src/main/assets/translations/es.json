@@ -96,6 +96,8 @@
   "clipboard_panel": "Portapapeles",
   "clipboard_pin": "Fijar",
   "clipboard_pinned_never_expires": "Fijado — nunca caduca",
+  "clipboard_remember_images": "Recordar las imágenes copiadas",
+  "clipboard_remember_images_note": "Desactivado, aunque el historial que lo rodea esté activado. Una captura de pantalla es lo más revelador que guarda un portapapeles —un mensaje, un saldo, un código, una cara—, así que se pide en lugar de darse por hecho. Solo se guarda una referencia, nunca la imagen, y desactivarlo borra las imágenes ya recordadas.",
   "clipboard_remember_what_you_copy": "Recordar lo que copias",
   "clipboard_retention_note": "Hasta dónde llega el historial. Se aplican ambos límites: un elemento se va cuando es más viejo que esto, o cuando lo empujan fuera de la lista, lo que ocurra antes.",
   "clipboard_size_note": "El más antiguo se va cuando la lista está llena, diga lo que diga su temporizador. Los elementos fijados no cuentan para esto y nunca se pierden por antigüedad.",

@@ -96,6 +96,8 @@
   "clipboard_panel": "Clipboard",
   "clipboard_pin": "Pin",
   "clipboard_pinned_never_expires": "Pinned — never expires",
+  "clipboard_remember_images": "Remember copied images",
+  "clipboard_remember_images_note": "Off, although the history around it is on. A screenshot is the most revealing thing a clipboard holds — a message, a balance, a code, a face — so it is asked for rather than assumed. Only a reference is stored, never the picture itself, and turning this off deletes the images already remembered.",
   "clipboard_remember_what_you_copy": "Remember what you copy",
   "clipboard_retention_note": "How far back the history reaches. Both limits apply: an entry goes when it is older than this, or when it is pushed off the end of the list, whichever happens first.",
   "clipboard_size_note": "The oldest goes when the list is full, whatever its timer says. Pinned entries do not count against this and are never dropped for age.",

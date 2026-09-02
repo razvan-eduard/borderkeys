@@ -96,6 +96,8 @@
   "clipboard_panel": "Appunti",
   "clipboard_pin": "Fissa",
   "clipboard_pinned_never_expires": "Fissato — non scade mai",
+  "clipboard_remember_images": "Ricorda le immagini copiate",
+  "clipboard_remember_images_note": "Disattivato, anche se la cronologia attorno è attiva. Uno screenshot è la cosa più rivelatrice che gli appunti possano contenere — un messaggio, un saldo, un codice, un volto — quindi viene chiesto invece che dato per scontato. Si salva solo un riferimento, mai l'immagine, e disattivarlo cancella le immagini già ricordate.",
   "clipboard_remember_what_you_copy": "Ricorda ciò che copi",
   "clipboard_retention_note": "Fin dove arriva la cronologia. Valgono entrambi i limiti: un elemento se ne va quando è più vecchio di così, oppure quando viene spinto fuori dalla lista, a seconda di cosa accade prima.",
   "clipboard_size_note": "Il più vecchio se ne va quando la lista è piena, qualunque cosa dica il suo timer. Gli elementi fissati non contano in questo e non si perdono mai per anzianità.",

@@ -96,6 +96,8 @@
   "clipboard_panel": "Zwischenablage",
   "clipboard_pin": "Anheften",
   "clipboard_pinned_never_expires": "Angeheftet — läuft nie ab",
+  "clipboard_remember_images": "Kopierte Bilder merken",
+  "clipboard_remember_images_note": "Aus, obwohl der Verlauf darum herum an ist. Ein Bildschirmfoto ist das Aufschlussreichste, was eine Zwischenablage enthält — eine Nachricht, ein Kontostand, ein Code, ein Gesicht — also wird danach gefragt statt es anzunehmen. Gespeichert wird nur ein Verweis, nie das Bild selbst, und das Ausschalten löscht die bereits gemerkten Bilder.",
   "clipboard_remember_what_you_copy": "Merken, was du kopierst",
   "clipboard_retention_note": "Wie weit der Verlauf zurückreicht. Beide Grenzen gelten: ein Eintrag geht, wenn er älter ist als das, oder wenn er hinten aus der Liste geschoben wird — was zuerst eintritt.",
   "clipboard_size_note": "Der älteste geht, wenn die Liste voll ist, was auch immer seine Frist sagt. Angeheftete Einträge zählen nicht dagegen und gehen nie wegen ihres Alters.",
