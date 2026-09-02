@@ -64,6 +64,12 @@ fun CorrectionsScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD_NOTE],
                 checked = preferences.clipboardSuggestion,
             ) { value -> update { it.copy(clipboardSuggestion = value) } }
+
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE],
+                subtitle = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE_NOTE],
+                checked = preferences.clipboardSuggestionOnce,
+            ) { value -> update { it.copy(clipboardSuggestionOnce = value) } }
         }
         SettingsSectionCard(strings[Keys.CORRECTIONS_HOW_MANY_SUGGESTIONS]) {
             SuggestionStripPreview(theme, preferences, Modifier.padding(vertical = 8.dp))

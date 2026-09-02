@@ -228,6 +228,17 @@ data class KeyboardPreferences(
     val clearClipboardAfterInsert: Boolean = false,
 
     /**
+     * Whether the clipboard chip is withdrawn after it has been used, or once the keyboard has
+     * been closed.
+     *
+     * On. Something copied is usually pasted once, and a chip that stays for the rest of the
+     * session is a slot the suggestions could have had. It withdraws the *offer* only: what was
+     * copied is still in the history panel, and the system clipboard is untouched -- the switch
+     * for emptying that is the one below.
+     */
+    val clipboardSuggestionOnce: Boolean = true,
+
+    /**
      * Whether the clipboard history is emptied when the keyboard closes.
      *
      * Off, and a much blunter instrument than the retention timer beside it: everything

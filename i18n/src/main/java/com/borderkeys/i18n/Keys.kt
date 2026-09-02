@@ -126,6 +126,8 @@ object Keys {
     const val CORRECTIONS_BACKSPACE_PUTS_BACK_WHAT_YOU_TYPED = "corrections_backspace_puts_back_what_you_typed"
     const val CORRECTIONS_CAPITALISE = "corrections_capitalise"
     const val CORRECTIONS_CAPITALISE_NOTE = "corrections_capitalise_note"
+    const val CORRECTIONS_CLIPBOARD_ONCE = "corrections_clipboard_once"
+    const val CORRECTIONS_CLIPBOARD_ONCE_NOTE = "corrections_clipboard_once_note"
     const val CORRECTIONS_CORRECTING_AS_YOU_TYPE = "corrections_correcting_as_you_type"
     const val CORRECTIONS_DOUBLE_SPACE = "corrections_double_space"
     const val CORRECTIONS_DOUBLE_SPACE_NOTE = "corrections_double_space_note"

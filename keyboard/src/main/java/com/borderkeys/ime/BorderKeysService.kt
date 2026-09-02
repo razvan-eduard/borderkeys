@@ -140,6 +140,16 @@ class BorderKeysService :
      */
     private var pendingAutoSpace = false
 
+    /**
+     * Set once the clipboard offer has served its purpose: it was used, or the keyboard has
+     * been closed.
+     *
+     * The offer only. What was copied is still in the history panel and still on the system
+     * clipboard; this is about whether the row above the keys keeps giving a slot to it.
+     * Cleared when something new is copied, because that is a new offer.
+     */
+    private var clipboardChipWithdrawn = false
+
     /** Whether the current lock came from the field asking for capitals rather than from shift. */
     private var autoLockedShift = false
     private var lastShiftPressAt = 0L
@@ -653,6 +663,12 @@ class BorderKeysService :
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
+        if (preferences.clipboardSuggestionOnce) {
+            // Shown for one session. Whatever was copied before this keyboard opened has had
+            // its chance to be offered; keeping the offer alive across every field afterwards
+            // is what makes it clutter rather than a convenience.
+            clipboardChipWithdrawn = true
+        }
         unregisterClipboardListener()
     }
 
@@ -2151,7 +2167,7 @@ class BorderKeysService :
      */
     private fun refreshClipboardChip() {
         val strip = host?.suggestionStrip ?: return
-        if (privateMode || !preferences.clipboardSuggestion) {
+        if (privateMode || !preferences.clipboardSuggestion || clipboardChipWithdrawn) {
             strip.clipboardChip = null
             return
         }
@@ -2198,6 +2214,10 @@ class BorderKeysService :
         val text = item.coerceToText(this)?.toString() ?: return
         finishComposing(connection)
         connection.commitText(text, 1)
+        if (preferences.clipboardSuggestionOnce) {
+            clipboardChipWithdrawn = true
+            host?.suggestionStrip?.clipboardChip = null
+        }
         if (preferences.clearClipboardAfterInsert) {
             // Emptied by writing an empty clip rather than by any clear API, because there is
             // no permission-free way to clear another app's clipboard and this is ours to set
@@ -2247,6 +2267,7 @@ class BorderKeysService :
         if (clip.itemCount == 0) {
             return
         }
+        clipboardChipWithdrawn = false
         refreshClipboardChip()
 
         val description = clip.description

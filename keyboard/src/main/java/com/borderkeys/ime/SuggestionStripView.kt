@@ -117,17 +117,33 @@ class SuggestionStripView(
         set(value) {
             if (field != value) {
                 field = value
-                val length = value?.length?.coerceAtMost(MAX_WORD_CHARS) ?: 0
-                value?.toCharArray(chipChars, 0, 0, length)
-                chipCharCount = length
+                layoutChipText()
                 measureSlots()
                 invalidate()
             }
         }
 
-    private val chipChars = CharArray(MAX_WORD_CHARS)
-    private var chipCharCount = 0
+    /**
+     * The chip's text, laid out over two lines.
+     *
+     * Two because one is not enough: a copied sentence at the strip's text size runs past its
+     * slot and over the suggestion beside it, and shrinking it far enough to fit on one line
+     * makes it unreadable. Two lines at a slightly smaller size shows about five words, which
+     * is enough to recognise what you copied.
+     */
+    private val chipLines = Array(CHIP_LINES) { CharArray(MAX_WORD_CHARS) }
+    private val chipLineLength = IntArray(CHIP_LINES)
+    private var chipLineCount = 0
     private var chipTextSize = 0f
+
+    /**
+     * The paste mark, drawn before the text.
+     *
+     * An icon rather than quotation marks. Quotes read as part of what was copied -- and the
+     * first thing anyone asked about this chip was why their text had gained a pair.
+     */
+    private val pasteIcon: android.graphics.drawable.Drawable? =
+        androidx.core.content.ContextCompat.getDrawable(context, com.borderkeys.keyboard.R.drawable.bk_action_paste)
 
     /** One when the clipboard chip is showing, and it always takes the first slot. */
     private val chipOffset: Int
@@ -256,7 +272,8 @@ class SuggestionStripView(
             return
         }
         val available = (width.toFloat() / shown) * SLOT_TEXT_FRACTION
-        chipTextSize = fitted(chipChars, chipCharCount, base, available)
+        chipTextSize = base * CHIP_TEXT_SCALE
+        layoutChipText()
         for (index in 0 until MAX_SUGGESTIONS) {
             val length = charCount[index]
             if (length == 0) {
@@ -267,6 +284,66 @@ class SuggestionStripView(
         }
         paints.label.textSize = base
     }
+
+    /**
+     * Breaks the chip's text into at most two lines that fit beside the icon.
+     *
+     * Word by word, falling back to a hard break for a single word longer than the slot -- a
+     * copied URL is one word and would otherwise take the whole chip and still not fit. The
+     * last line ends in an ellipsis when there is more text than lines.
+     */
+    private fun layoutChipText() {
+        chipLineCount = 0
+        val text = clipboardChip ?: return
+        val shown = shownCount()
+        if (shown <= 0 || width == 0) {
+            return
+        }
+        val slotWidth = width.toFloat() / shown
+        val available = slotWidth - iconSizePx() - CHIP_GAP_PX * 2f
+        if (available <= 0f) {
+            return
+        }
+        val paint = paints.label
+        val previous = paint.textSize
+        paint.textSize = if (chipTextSize > 0f) chipTextSize else previous
+
+        var start = 0
+        while (chipLineCount < CHIP_LINES && start < text.length) {
+            var end = start
+            var lastBreak = -1
+            while (end < text.length) {
+                if (text[end] == ' ') {
+                    lastBreak = end
+                }
+                if (paint.measureText(text, start, end + 1) > available) {
+                    break
+                }
+                end++
+            }
+            if (end >= text.length) {
+                end = text.length
+            } else if (lastBreak > start) {
+                end = lastBreak
+            } else if (end == start) {
+                // One character does not fit; take it anyway rather than loop forever.
+                end = start + 1
+            }
+            var line = text.substring(start, end)
+            if (chipLineCount == CHIP_LINES - 1 && end < text.length) {
+                line = line.dropLast(1) + "\u2026"
+            }
+            val length = line.length.coerceAtMost(MAX_WORD_CHARS)
+            line.toCharArray(chipLines[chipLineCount], 0, 0, length)
+            chipLineLength[chipLineCount] = length
+            chipLineCount++
+            start = if (end < text.length && text.getOrNull(end) == ' ') end + 1 else end
+        }
+        paint.textSize = previous
+    }
+
+    /** The paste mark is square and sized from the strip, like every other icon here. */
+    private fun iconSizePx(): Float = height * CHIP_ICON_FRACTION
 
     /** [base], shrunk until [length] characters fit in [available], with a floor. */
     private fun fitted(text: CharArray, length: Int, base: Float, available: Float): Float {
@@ -352,9 +429,35 @@ class SuggestionStripView(
                 // to tap it by muscle memory while aiming at a word.
                 val paint = paints.accentLabel
                 val previous = paint.textSize
+                val previousAlign = paint.textAlign
                 paint.textSize = chipTextSize
-                canvas.drawText(chipChars, 0, chipCharCount, slotWidth / 2f, baseline, paint)
+                paint.textAlign = android.graphics.Paint.Align.LEFT
+
+                val icon = pasteIcon
+                val side = iconSizePx().toInt()
+                var textLeft = CHIP_GAP_PX
+                if (icon != null) {
+                    val top = ((height - side) / 2f).toInt()
+                    icon.setBounds(
+                        CHIP_GAP_PX.toInt(), top, CHIP_GAP_PX.toInt() + side, top + side,
+                    )
+                    icon.setTint(paint.color)
+                    icon.draw(canvas)
+                    textLeft = CHIP_GAP_PX * 2f + side
+                }
+                // Both lines centred vertically around the middle of the strip, so a chip with
+                // one line and a chip with two sit on the same axis as the words beside them.
+                val lineHeight = chipTextSize * CHIP_LINE_SPACING
+                val first = height / 2f + paints.labelBaselineOffsetPx -
+                    lineHeight * (chipLineCount - 1) / 2f
+                for (line in 0 until chipLineCount) {
+                    canvas.drawText(
+                        chipLines[line], 0, chipLineLength[line],
+                        textLeft, first + lineHeight * line, paint,
+                    )
+                }
                 paint.textSize = previous
+                paint.textAlign = previousAlign
                 if (shown > 1) {
                     canvas.drawLine(slotWidth, height * 0.25f, slotWidth, height * 0.75f,
                         paints.keyStroke)
@@ -534,6 +637,17 @@ class SuggestionStripView(
 
         /** Its corner radius, as a fraction of the strip's height. */
         const val VERBATIM_CORNER = 0.22f
+
+        /** How many lines the clipboard chip wraps to, and how far apart they sit. */
+        const val CHIP_LINES = 2
+        const val CHIP_LINE_SPACING = 1.05f
+
+        /** The chip's text is smaller than a suggestion's: it is a preview, not a candidate. */
+        const val CHIP_TEXT_SCALE = 0.62f
+
+        /** The paste mark's share of the strip's height, and the gap around it. */
+        const val CHIP_ICON_FRACTION = 0.42f
+        const val CHIP_GAP_PX = 10f
         private const val MAX_WORD_CHARS = 48
         private const val HEIGHT_FRACTION = 0.78f
 
