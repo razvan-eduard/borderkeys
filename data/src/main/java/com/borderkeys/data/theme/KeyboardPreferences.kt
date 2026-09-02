@@ -110,6 +110,14 @@ data class KeyboardPreferences(
      */
     val emojiRecents: List<String> = emptyList(),
 
+    /**
+     * Whether the emoji key sits beside the space bar.
+     *
+     * On. Off removes it rather than hiding it, and the width it took goes back to the space
+     * bar -- which is where it came from, and which is the key most worth having wide.
+     */
+    val emojiKey: Boolean = true,
+
     // ---- size and position -------------------------------------------------------------
     //
     // A keyboard is the one part of the screen a person's thumb has to reach a hundred times a

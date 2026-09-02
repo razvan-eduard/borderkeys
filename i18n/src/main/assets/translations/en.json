@@ -367,6 +367,8 @@
   "size_docked": "Docked",
   "size_dp": "%s dp",
   "size_dp_2": "%s dp",
+  "size_emoji_key": "Emoji key",
+  "size_emoji_key_note": "A key beside the space bar that opens the emoji grid. Off removes it and gives the width back to the space bar, which is the key most worth having wide.",
   "size_floating": "Floating",
   "size_height": "Height",
   "size_horizontal_position": "Horizontal position",

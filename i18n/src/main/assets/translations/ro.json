@@ -367,6 +367,8 @@
   "size_docked": "Fixată",
   "size_dp": "%s dp",
   "size_dp_2": "%s dp",
+  "size_emoji_key": "Tasta de emoji",
+  "size_emoji_key_note": "O tastă lângă bara de spațiu care deschide grila de emoji. Dezactivată, o elimină și dă lățimea înapoi barei de spațiu, care e tasta care merită cel mai mult să fie lată.",
   "size_floating": "Plutitoare",
   "size_height": "Înălțime",
   "size_horizontal_position": "Poziție orizontală",

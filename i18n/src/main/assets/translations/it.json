@@ -367,6 +367,8 @@
   "size_docked": "Agganciata",
   "size_dp": "%s dp",
   "size_dp_2": "%s dp",
+  "size_emoji_key": "Tasto emoji",
+  "size_emoji_key_note": "Un tasto accanto alla barra spaziatrice che apre la griglia di emoji. Disattivato, viene rimosso e la larghezza torna alla barra spaziatrice, il tasto che più guadagna a essere largo.",
   "size_floating": "Fluttuante",
   "size_height": "Altezza",
   "size_horizontal_position": "Posizione orizzontale",

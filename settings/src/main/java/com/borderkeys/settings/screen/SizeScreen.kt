@@ -59,30 +59,24 @@ fun SizeScreen(modifier: Modifier = Modifier) {
         KeyboardPreview(theme, preferences, Modifier.padding(vertical = 12.dp))
 
         SettingsSectionCard(strings[Keys.SIZE_KEY_SOUND]) {
-
             SwitchRow(
-
                 title = strings[Keys.SIZE_KEY_SOUND],
-
                 subtitle = strings[Keys.SIZE_KEY_SOUND_NOTE],
-
                 checked = preferences.keySound,
-
             ) { value -> update { it.copy(keySound = value) } }
 
+            SwitchRow(
+                title = strings[Keys.SIZE_EMOJI_KEY],
+                subtitle = strings[Keys.SIZE_EMOJI_KEY_NOTE],
+                checked = preferences.emojiKey,
+            ) { value -> update { it.copy(emojiKey = value) } }
 
             SwitchRow(
-
                 title = strings[Keys.SIZE_SPACE_CURSOR],
-
                 subtitle = strings[Keys.SIZE_SPACE_CURSOR_NOTE],
-
                 checked = preferences.spaceCursorControl,
-
             ) { value -> update { it.copy(spaceCursorControl = value) } }
-
         }
-
 
         SettingsSectionCard(strings[Keys.SIZE_HEIGHT]) {
             Explanation(

@@ -576,9 +576,7 @@ class BorderKeysService :
         view.keyboard.swipeEnabled = preferences.swipeEnabled
         view.keyboard.soundEnabled = preferences.keySound
         view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
-        view.keyboard.setLayout(
-            if (preferences.numberRow) alphabeticLayout.withNumberRow() else alphabeticLayout,
-        )
+        view.keyboard.setLayout(composedLayout(alphabeticLayout))
         view.suggestionStrip.listener = this
         view.suggestionStrip.visibleLimit = preferences.suggestionCount
         // Bound here rather than beside the assistant's listeners, which are set on the path
@@ -1042,11 +1040,15 @@ class BorderKeysService :
         connection.endBatchEdit()
         previousWord1 = pending.typed
         // Reverting is the user asserting that what they typed is a word, which is exactly the
-        // signal the personal dictionary exists to record. It is the only thing learned here:
-        // the correction they rejected is not.
+        // signal the personal dictionary exists to record.
         recordLearned(pending.typed, pending.contextWord)
+        // And the word they rejected is unlearned. A correction is only offered that strongly
+        // because something taught it -- often this dictionary, from an earlier typo confirmed
+        // by accident -- and rejecting it is the clearest statement available that it should
+        // not have been. Harmless when the word came from the language pack instead: there is
+        // then nothing personal to forget, and the pack is not touched.
+        forgetWord(pending.corrected)
         refreshContextFromEditor()
-        requestSuggestions()
         return true
     }
 
@@ -1149,13 +1151,33 @@ class BorderKeysService :
      * assets per language that differ by one row is two assets to keep in step, and they would
      * drift the first time a key moved.
      */
+    /**
+     * Applies the layout settings that compose rather than replace: the number row and the
+     * emoji key.
+     *
+     * One place, because the pages are set from four of them and a page that forgot one was how
+     * the number row used to disappear when the symbols page came back.
+     */
+    private fun composedLayout(layout: KeyboardLayout): KeyboardLayout {
+        var result = layout
+        if (!preferences.emojiKey) {
+            result = result.withoutEmojiKey()
+        }
+        if (preferences.numberRow) {
+            result = result.withNumberRow()
+        }
+        return result
+    }
+
     private fun showPage(next: Int) {
         page = next
+        // The symbol pages carry an emoji key too, so they compose the same way. Only the
+        // numeric keypad is left alone: it has neither a space bar nor room for one.
         val layout = when (next) {
-            PAGE_SYMBOLS -> symbolsLayout
-            PAGE_SYMBOLS_SHIFT -> symbolsShiftLayout
+            PAGE_SYMBOLS -> composedLayout(symbolsLayout)
+            PAGE_SYMBOLS_SHIFT -> composedLayout(symbolsShiftLayout)
             PAGE_NUMPAD -> numpadLayout
-            else -> if (preferences.numberRow) alphabeticLayout.withNumberRow() else alphabeticLayout
+            else -> composedLayout(alphabeticLayout)
         }
         host?.keyboard?.setLayout(layout)
         pushKeyGeometry()

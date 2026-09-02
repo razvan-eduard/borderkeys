@@ -367,6 +367,8 @@
   "size_docked": "Ancré",
   "size_dp": "%s dp",
   "size_dp_2": "%s dp",
+  "size_emoji_key": "Touche emoji",
+  "size_emoji_key_note": "Une touche à côté de la barre d'espace qui ouvre la grille d'emoji. Désactivée, elle disparaît et rend sa largeur à la barre d'espace, la touche qui gagne le plus à être large.",
   "size_floating": "Flottant",
   "size_height": "Hauteur",
   "size_horizontal_position": "Position horizontale",

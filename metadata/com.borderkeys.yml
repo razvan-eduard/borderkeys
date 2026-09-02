@@ -85,7 +85,15 @@ Builds:
       - core
     ndk: 27.1.12297006
 
+  - versionName: 0.2.1
+    versionCode: 4
+    commit: v0.2.1
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
-CurrentVersion: 0.2.0
-CurrentVersionCode: 3
+CurrentVersion: 0.2.1
+CurrentVersionCode: 4

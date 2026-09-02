@@ -367,6 +367,8 @@
   "size_docked": "Anclado",
   "size_dp": "%s dp",
   "size_dp_2": "%s dp",
+  "size_emoji_key": "Tecla de emoji",
+  "size_emoji_key_note": "Una tecla junto a la barra espaciadora que abre la cuadrícula de emoji. Desactivada, se quita y devuelve el ancho a la barra espaciadora, que es la tecla a la que más le conviene ser ancha.",
   "size_floating": "Flotante",
   "size_height": "Altura",
   "size_horizontal_position": "Posición horizontal",

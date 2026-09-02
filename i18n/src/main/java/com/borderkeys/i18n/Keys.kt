@@ -381,6 +381,8 @@ object Keys {
     const val SIZE_DOCKED = "size_docked"
     const val SIZE_DP = "size_dp"
     const val SIZE_DP_2 = "size_dp_2"
+    const val SIZE_EMOJI_KEY = "size_emoji_key"
+    const val SIZE_EMOJI_KEY_NOTE = "size_emoji_key_note"
     const val SIZE_FLOATING = "size_floating"
     const val SIZE_HEIGHT = "size_height"
     const val SIZE_HORIZONTAL_POSITION = "size_horizontal_position"

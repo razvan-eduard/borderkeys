@@ -367,6 +367,8 @@
   "size_docked": "Angedockt",
   "size_dp": "%s dp",
   "size_dp_2": "%s dp",
+  "size_emoji_key": "Emoji-Taste",
+  "size_emoji_key_note": "Eine Taste neben der Leertaste, die das Emoji-Raster öffnet. Aus entfernt sie und gibt die Breite der Leertaste zurück, die am meisten davon profitiert.",
   "size_floating": "Schwebend",
   "size_height": "Höhe",
   "size_horizontal_position": "Waagerechte Position",

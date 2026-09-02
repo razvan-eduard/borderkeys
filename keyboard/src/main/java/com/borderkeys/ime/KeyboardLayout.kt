@@ -57,8 +57,51 @@ class KeyboardLayout(
      * The row is shorter than a letter row: digits are hit less often and need less area, and
      * taking a full row would cost the letters more than the digits gain.
      */
+    /**
+     * The same layout without its emoji key, with the width handed back to the space bar.
+     *
+     * Removed rather than hidden: a key that is drawn and does nothing is worse than no key,
+     * and the space bar is the one that lost the width when the emoji key took it, so it is
+     * the one that gets it back.
+     */
+    fun withoutEmojiKey(): KeyboardLayout {
+        if (rows.isEmpty()) {
+            return this
+        }
+        var found = false
+        val rewritten = rows.map { row ->
+            if (row.keys.none { it.code == KeyCodes.EMOJI }) {
+                row
+            } else {
+                found = true
+                val width = row.keys.filter { it.code == KeyCodes.EMOJI }
+                    .sumOf { it.widthUnits.toDouble() }.toFloat()
+                Row(
+                    row.indent, row.heightScale,
+                    row.keys.filterNot { it.code == KeyCodes.EMOJI }.map { key ->
+                        if (key.code == ' '.code) {
+                            Key(key.code, key.label, key.alternatives,
+                                key.widthUnits + width, key.flags)
+                        } else {
+                            key
+                        }
+                    },
+                )
+            }
+        }
+        if (!found) {
+            return this
+        }
+        return KeyboardLayout(
+            id = id + NO_EMOJI_SUFFIX,
+            label = label,
+            languageTag = languageTag,
+            rows = rewritten,
+        )
+    }
+
     fun withNumberRow(): KeyboardLayout {
-        if (rows.isEmpty() || id.endsWith(NUMBER_ROW_SUFFIX)) {
+        if (rows.isEmpty() || id.contains(NUMBER_ROW_SUFFIX)) {
             return this
         }
         // Digit on the key, the symbol a physical keyboard puts above it on the long press.
@@ -86,6 +129,8 @@ class KeyboardLayout(
 
     companion object {
         private const val NUMBER_ROW_SUFFIX = "+num"
+
+        private const val NO_EMOJI_SUFFIX = "-noemoji"
 
         /** The top row of a physical keyboard, unshifted and shifted. */
         private val DIGIT_ROW = "1234567890".zip("!@#$%^&*()")

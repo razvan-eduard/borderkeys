@@ -5,6 +5,7 @@ package com.borderkeys.ime
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
@@ -329,4 +330,44 @@ class NumberRowSymbolsTest {
         assertTrue(romanian.contains("\"a\", \"alt\": \"ă"))
         assertTrue(romanian.contains("\"i\", \"alt\": \"î"))
     }
+    /**
+     * Turning the emoji key off gives its width back rather than leaving a gap.
+     *
+     * A row that loses a key and keeps its total width is a row where every remaining key
+     * moves, which is worse than the key being there.
+     */
+    @Test
+    fun `removing the emoji key widens the space bar`() {
+        val withEmoji = KeyboardLayout(
+            id = "t", label = "t", languageTag = "und",
+            rows = listOf(
+                KeyboardLayout.Row(
+                    0f, 1f,
+                    listOf(
+                        KeyboardLayout.Key(KeyCodes.EMOJI, "\u263A", "", 1f, 0),
+                        KeyboardLayout.Key(' '.code, "", "", 3f, 0),
+                    ),
+                ),
+            ),
+        )
+        val without = withEmoji.withoutEmojiKey()
+        assertEquals("the key should be gone", 1, without.rows[0].keys.size)
+        assertEquals("the width should have moved", 4f, without.rows[0].keys[0].widthUnits)
+        assertEquals("the row is the same width", withEmoji.rows[0].units, without.rows[0].units)
+    }
+
+    /** A layout with no emoji key is returned unchanged, not rebuilt. */
+    @Test
+    fun `a layout without an emoji key is left alone`() {
+        val plain = KeyboardLayout(
+            id = "t", label = "t", languageTag = "und",
+            rows = listOf(
+                KeyboardLayout.Row(0f, 1f, listOf(
+                    KeyboardLayout.Key(' '.code, "", "", 4f, 0),
+                )),
+            ),
+        )
+        assertSame(plain, plain.withoutEmojiKey())
+    }
+
 }
