@@ -148,6 +148,11 @@ class KeyboardHostView(
         addView(keyboard)
         addView(assistSheet)
         addView(quickSettings)
+        // Last, so it draws over the others where a side bar overlaps a rounded corner. It is
+        // measured and laid out by this class like the rest; being a child is what makes that
+        // reach it at all -- the first version measured it and never added it, so it took up
+        // height in the window and drew nothing in it.
+        addView(quickActions)
         inlineSuggestions.visibility = GONE
         assistSheet.visibility = GONE
         quickSettings.visibility = GONE

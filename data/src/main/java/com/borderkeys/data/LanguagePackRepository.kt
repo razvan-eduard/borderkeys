@@ -96,6 +96,15 @@ class LanguagePackRepository internal constructor(
 
     suspend fun register(entry: LanguagePackEntry): Long = dao.insert(entry)
 
+    /**
+     * Replaces the record of a pack that was rewritten in place.
+     *
+     * An update rather than an insert, because staging writes over the file of the same name:
+     * the row still describes the right file, it just describes the old contents of it. Insert
+     * was tried first and failed on the primary key, which is the database being right.
+     */
+    suspend fun replace(entry: LanguagePackEntry) = dao.update(entry)
+
     /** True when a pack for this language is already installed, whatever it came from. */
     suspend fun hasLanguage(tag: String): Boolean = dao.findByTag(tag) != null
 

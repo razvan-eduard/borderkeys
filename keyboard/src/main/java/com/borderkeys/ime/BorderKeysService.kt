@@ -1501,6 +1501,17 @@ class BorderKeysService :
     private suspend fun reinstallOutdatedBundledPacks(
         repository: com.borderkeys.data.LanguagePackRepository,
     ) {
+        // Nothing in here may take the service down with it. This runs on the path that builds
+        // the keyboard, and a keyboard that fails to start is worse than any dictionary
+        // problem it was trying to repair -- which is exactly what happened when the first
+        // version of this used insert on a row that already existed.
+        runCatching { repairBundledPacks(repository) }
+            .onFailure { android.util.Log.w("BorderKeys", "pack repair failed", it) }
+    }
+
+    private suspend fun repairBundledPacks(
+        repository: com.borderkeys.data.LanguagePackRepository,
+    ) {
         for (entry in repository.enabledPacks()) {
             val file = repository.fileFor(entry)
             if (!file.isFile) {
@@ -1524,7 +1535,7 @@ class BorderKeysService :
                 staged.file.delete()
                 continue
             }
-            repository.register(
+            repository.replace(
                 LanguagePackEntry(
                     id = entry.id,
                     tag = checked.info.tag,
