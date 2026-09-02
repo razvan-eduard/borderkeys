@@ -203,15 +203,23 @@ class KeyboardHostView(
                     return true
                 }
                 draggingHandle = handleAt(event.x, event.y)
-                dragStartX = event.x
-                dragStartY = event.y
+                // Screen coordinates, not this view's.
+                //
+                // The view is the thing being resized: growing the keyboard by a hundred
+                // pixels moves this view's top edge a hundred pixels up the screen, so a
+                // finger that has not moved reads a hundred pixels further down in local
+                // coordinates. Measuring the drag that way makes every frame cancel the last
+                // one, and the keyboard bounces between two sizes instead of following the
+                // finger. rawX and rawY are fixed to the screen and do not move with it.
+                dragStartX = event.rawX
+                dragStartY = event.rawY
                 dragStartWidth = widthScale
                 dragStartHeight = heightScaleForDrag
                 // The height the keys would have at scale 1, captured once. Dividing the
                 // finger's travel by it makes the drag linear: the same distance is the same
                 // change in scale, whether the keyboard is currently short or tall.
-                dragBaseHeightPx = (keyboard.bottom - keyboardTopForResize()) /
-                    dragStartHeight.coerceAtLeast(0.01f)
+                dragBaseHeightPx = ((keyboard.bottom - keyboardTopForResize()) /
+                    dragStartHeight.coerceAtLeast(0.01f)).coerceAtLeast(1f)
                 invalidate()
                 return true
             }
@@ -220,22 +228,24 @@ class KeyboardHostView(
                 if (draggingHandle == HANDLE_NONE) {
                     return true
                 }
-                val row = paints.rowHeightPx.takeIf { it > 0f } ?: 132f
                 when (draggingHandle) {
-                    // Up is taller. The keyboard grows from its bottom edge, so the height a
-                    // drag adds is the distance the finger travelled divided by the rows it
-                    // has to spread across.
-                    HANDLE_TOP -> {
-                        val rows = (keyboard.bottom - keyboard.top) / row
-                        val delta = (dragStartY - event.y) / (row * rows.coerceAtLeast(1f))
-                        onResizeDrag?.invoke(dragStartHeight + delta, widthScale,
-                            horizontalOffsetPx.toFloat())
-                    }
-                    // A side handle changes the width around the centre, so the keyboard grows
-                    // and shrinks in place instead of walking across the screen.
+                    // Up is taller: the keyboard grows from its bottom edge, which stays put.
+                    HANDLE_TOP -> onResizeDrag?.invoke(
+                        dragStartHeight + (dragStartY - event.rawY) / dragBaseHeightPx,
+                        widthScale,
+                        horizontalOffsetPx.toFloat(),
+                    )
+
+                    // Dragging away from the keys widens it, whichever side the handle is on.
+                    // How fast depends on what the other edge is doing: a centred keyboard
+                    // grows at both ends at once, so the edge under the finger only accounts
+                    // for half the width, while a one-handed keyboard is pinned to its side
+                    // and the edge under the finger accounts for all of it. Using one factor
+                    // for both made the one-handed keyboard leap out from under the finger.
                     HANDLE_LEFT, HANDLE_RIGHT -> {
                         val direction = if (draggingHandle == HANDLE_LEFT) -1f else 1f
-                        val delta = direction * (event.x - dragStartX) * 2f /
+                        val edges = if (isOneHanded()) 1f else 2f
+                        val delta = direction * (event.rawX - dragStartX) * edges /
                             width.coerceAtLeast(1)
                         onResizeDrag?.invoke(heightScaleForDrag, dragStartWidth + delta,
                             horizontalOffsetPx.toFloat())
@@ -275,6 +285,10 @@ class KeyboardHostView(
         this.horizontalOffsetPx = if (mode == MODE_FLOATING) horizontalOffsetPx else 0
         requestLayout()
     }
+
+    /** True when one edge of the keys is pinned to the edge of the screen. */
+    private fun isOneHanded(): Boolean =
+        positionMode == MODE_ONE_HANDED_LEFT || positionMode == MODE_ONE_HANDED_RIGHT
 
     /** Where the keys start horizontally, given the mode. */
     private fun contentLeft(totalWidth: Int, contentWidth: Int): Int = when (positionMode) {
