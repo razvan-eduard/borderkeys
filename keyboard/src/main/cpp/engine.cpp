@@ -551,14 +551,27 @@ const PackedTrie* Engine::activeTrie(int packIndex) const {
     return (pack.isOpen() && pack.active) ? &pack.trie() : nullptr;
 }
 
-void Engine::setLanguageLock(float minimumEvidence) {
+void Engine::setLanguageLock(float minimumEvidence, bool strict) {
     languageLockMinimum_ = minimumEvidence;
+    strictLanguage_ = strict;
     // Turning it off has to take effect on the next word, not on the next sentence: the
     // evidence already gathered would otherwise keep a language locked after the user said
     // they did not want that.
     if (minimumEvidence <= 0.0f) {
         dominantPack_ = -1;
     }
+}
+
+int Engine::heaviestPack() const {
+    int best = -1;
+    float weight = -1.0f;
+    for (int i = 0; i < kMaxPacks; ++i) {
+        if (packs_[i].isOpen() && packs_[i].active && packs_[i].configuredWeight > weight) {
+            weight = packs_[i].configuredWeight;
+            best = i;
+        }
+    }
+    return best;
 }
 
 void Engine::observeContextLanguage(const uint32_t* folded, int length) {
@@ -1433,10 +1446,15 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     heap.reset(heapStorage_, kMaxCandidates);
 
     editCostCeiling_ = maxEditCostFor(foldedLength);
-    searchPacks(folded, foldedLength, dominantPack_, heap);
+    // Undecided, and told never to guess: one dictionary rather than all of them. The heaviest
+    // is the one the user weighted highest, which is the closest thing to "the language I
+    // write" available before any evidence has arrived.
+    const int restrictTo =
+        (dominantPack_ >= 0) ? dominantPack_ : (strictLanguage_ ? heaviestPack() : -1);
+    searchPacks(folded, foldedLength, restrictTo, heap);
     // A detected language that turns out to have nothing for this word must not leave the strip
     // empty; the detector is a guess about the sentence, not a verdict on the next word.
-    if (heap.size() == 0 && dominantPack_ >= 0) {
+    if (heap.size() == 0 && restrictTo >= 0 && !strictLanguage_) {
         searchPacks(folded, foldedLength, -1, heap);
     }
     if (foldedLength > 0) {

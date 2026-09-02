@@ -203,7 +203,7 @@ public:
      * How much one-sided evidence is wanted before the dictionaries for other languages stop
      * being searched. At or below zero they are always searched.
      */
-    void setLanguageLock(float minimumEvidence);
+    void setLanguageLock(float minimumEvidence, bool strict);
 
     /** Whether two-word suggestions are offered at all. Off unless the user asks for them. */
     void setPhraseSuggestions(bool enabled) { phraseSuggestions_ = enabled; }
@@ -290,7 +290,11 @@ private:
     /** The previous word's tag in each pack, resolved with contextWord1_. */
     uint32_t contextTag1_[kMaxPacks] = {};
 
+    /** The active dictionary with the highest configured weight, or -1 when none is open. */
+    int heaviestPack() const;
+
     float languageLockMinimum_ = 1.8f;
+    bool strictLanguage_ = false;
     float languageEvidence_[kMaxPacks] = {};
     int dominantPack_ = -1;
     uint32_t lastObservedWord_ = 0;

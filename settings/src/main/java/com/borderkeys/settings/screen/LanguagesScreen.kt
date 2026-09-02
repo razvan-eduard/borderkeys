@@ -433,13 +433,15 @@ private fun LanguageLock(preferences: KeyboardPreferences, update: (Int) -> Unit
             preferences, update)
         LockChip(strings[Keys.LANGUAGES_LOCK_QUICK], KeyboardPreferences.LANGUAGE_LOCK_QUICK,
             preferences, update)
+        LockChip(strings[Keys.LANGUAGES_LOCK_STRICT], KeyboardPreferences.LANGUAGE_LOCK_STRICT,
+            preferences, update)
     }
     Explanation(strings[Keys.LANGUAGES_LOCK_EXPLANATION])
     Explanation(
-        if (preferences.languageLock == KeyboardPreferences.LANGUAGE_LOCK_OFF) {
-            strings[Keys.LANGUAGES_LOCK_OFF_NOTE]
-        } else {
-            strings[Keys.LANGUAGES_LOCK_EVIDENCE_NOTE]
+        when (preferences.languageLock) {
+            KeyboardPreferences.LANGUAGE_LOCK_OFF -> strings[Keys.LANGUAGES_LOCK_OFF_NOTE]
+            KeyboardPreferences.LANGUAGE_LOCK_STRICT -> strings[Keys.LANGUAGES_LOCK_STRICT_NOTE]
+            else -> strings[Keys.LANGUAGES_LOCK_EVIDENCE_NOTE]
         },
     )
 }

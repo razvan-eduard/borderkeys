@@ -220,6 +220,32 @@ class KeyboardPreferencesTest {
         assertTrue("patient should be the largest threshold", balanced < patient)
     }
 
+    /** Strict is the only setting that stops consulting the others before it has decided. */
+    @Test
+    fun `only strict refuses to guess`() {
+        assertTrue(
+            KeyboardPreferences.languageLockStrict(KeyboardPreferences.LANGUAGE_LOCK_STRICT),
+        )
+        for (lock in listOf(
+            KeyboardPreferences.LANGUAGE_LOCK_OFF,
+            KeyboardPreferences.LANGUAGE_LOCK_PATIENT,
+            KeyboardPreferences.LANGUAGE_LOCK_BALANCED,
+            KeyboardPreferences.LANGUAGE_LOCK_QUICK,
+        )) {
+            assertFalse("$lock should still consult every dictionary",
+                KeyboardPreferences.languageLockStrict(lock))
+        }
+    }
+
+    @Test
+    fun `strict is a value the store keeps`() {
+        assertEquals(
+            KeyboardPreferences.LANGUAGE_LOCK_STRICT,
+            KeyboardPreferences(languageLock = KeyboardPreferences.LANGUAGE_LOCK_STRICT)
+                .sanitised().languageLock,
+        )
+    }
+
     @Test
     fun `an out-of-range lock is repaired rather than trusted`() {
         assertEquals(

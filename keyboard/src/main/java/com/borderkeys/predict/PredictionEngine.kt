@@ -246,10 +246,10 @@ class PredictionEngine(
      * How much one-sided evidence is wanted before words from other languages stop being
      * offered. Zero never stops offering them.
      */
-    fun setLanguageLock(minimumEvidence: Float) {
+    fun setLanguageLock(minimumEvidence: Float, strict: Boolean) {
         worker.post {
             withHandle(Unit) { current ->
-                NativePredictor.nativeSetLanguageLock(current, minimumEvidence)
+                NativePredictor.nativeSetLanguageLock(current, minimumEvidence, strict)
             }
         }
     }

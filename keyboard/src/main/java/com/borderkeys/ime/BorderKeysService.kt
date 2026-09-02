@@ -579,6 +579,7 @@ class BorderKeysService :
         )
         engine.setLanguageLock(
             KeyboardPreferences.languageLockEvidence(preferences.languageLock),
+            KeyboardPreferences.languageLockStrict(preferences.languageLock),
         )
         engine.setPhraseSuggestions(preferences.phraseSuggestions)
         if (privateMode) {
@@ -1583,10 +1584,12 @@ class BorderKeysService :
         when (action) {
             QuickAction.COPY_PREVIOUS_WORD -> copyToClipboard(wordBeforeCursor(connection))
             QuickAction.COPY_LINE -> copyToClipboard(lineAroundCursor(connection))
-            QuickAction.COPY_ALL -> {
-                connection.performContextMenuAction(android.R.id.selectAll)
-                connection.performContextMenuAction(android.R.id.copy)
-            }
+            // Read and copied here rather than asked of the editor as selectAll-then-copy: the
+            // editor applies a selection asynchronously, so the copy that follows in the same
+            // breath copies whatever was selected before -- usually nothing.
+            QuickAction.COPY_ALL -> copyToClipboard(
+                connection.getExtractedText(ExtractedTextRequest(), 0)?.text?.toString().orEmpty(),
+            )
             QuickAction.PASTE -> onClipboardPicked()
             QuickAction.CLIPBOARD_HISTORY -> offerClipboardHistory()
             QuickAction.SELECT_ALL -> connection.performContextMenuAction(android.R.id.selectAll)

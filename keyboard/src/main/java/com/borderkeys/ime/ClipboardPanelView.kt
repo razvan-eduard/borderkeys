@@ -152,6 +152,14 @@ class ClipboardPanelView(
         Trace.beginSection("ClipboardPanelView.onDraw")
         try {
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paints.background)
+            // A hairline where the panel begins, and nothing anywhere else.
+            //
+            // The top edge is the only boundary that needs saying: below and to the sides the
+            // panel ends where the screen does, and a frame there would be enclosing nothing.
+            // Drawn whatever the theme says about key borders, because this is not decoration
+            // on an element -- it is the line between two regions that are otherwise the same
+            // colour, and without it the strip and the panel read as one surface.
+            canvas.drawLine(0f, 0f, width.toFloat(), 0f, paints.keyStroke)
             if (entries.isEmpty()) {
                 canvas.drawText(
                     emptyChars, 0, emptyLength,

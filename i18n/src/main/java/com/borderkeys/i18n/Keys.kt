@@ -237,6 +237,8 @@ object Keys {
     const val LANGUAGES_LOCK_OFF_NOTE = "languages_lock_off_note"
     const val LANGUAGES_LOCK_PATIENT = "languages_lock_patient"
     const val LANGUAGES_LOCK_QUICK = "languages_lock_quick"
+    const val LANGUAGES_LOCK_STRICT = "languages_lock_strict"
+    const val LANGUAGES_LOCK_STRICT_NOTE = "languages_lock_strict_note"
     const val LANGUAGES_NONE_YET = "languages_none_yet"
     const val LANGUAGES_NOT_RECORDED_SET_BY_WHOEVER_BUILT = "languages_not_recorded_set_by_whoever_built"
     const val LANGUAGES_NOTHING_IS_DOWNLOADED_EVER_ADD_ONE = "languages_nothing_is_downloaded_ever_add_one"

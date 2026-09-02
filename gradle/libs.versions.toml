@@ -7,7 +7,7 @@
 
 [versions]
 # Toolchain. Pinned as a validated set; bumping one of these means re-validating all of them.
-agp = "9.3.1"
+agp = "9.3.2"
 kotlin = "2.4.10"
 ksp = "2.3.11"
 ndk = "27.1.12297006"

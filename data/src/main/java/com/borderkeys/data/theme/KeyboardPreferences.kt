@@ -257,7 +257,7 @@ data class KeyboardPreferences(
         // A language code, not free text. Bounded so a corrupt file cannot carry an arbitrarily
         // long string into every lookup; an unknown code resolves to English anyway.
         uiLanguage = uiLanguage.take(MAX_LANGUAGE_TAG),
-        languageLock = if (languageLock in LANGUAGE_LOCK_OFF..LANGUAGE_LOCK_QUICK) {
+        languageLock = if (languageLock in LANGUAGE_LOCK_OFF..LANGUAGE_LOCK_STRICT) {
             languageLock
         } else {
             LANGUAGE_LOCK_BALANCED
@@ -346,6 +346,16 @@ data class KeyboardPreferences(
         const val LANGUAGE_LOCK_QUICK = 3
 
         /**
+         * Never offers a language that has not been identified.
+         *
+         * The others all consult every dictionary until they have decided. This one does not:
+         * before anything is identified it uses the heaviest dictionary alone, and switches as
+         * soon as the evidence says something else. Nothing is ever offered from a language
+         * that has not been recognised in what is being written.
+         */
+        const val LANGUAGE_LOCK_STRICT = 4
+
+        /**
          * How much one-sided evidence the engine wants before it stops consulting the other
          * dictionaries, or a value at or below zero to never stop.
          *
@@ -417,9 +427,18 @@ data class KeyboardPreferences(
         fun languageLockEvidence(lock: Int): Float = when (lock) {
             LANGUAGE_LOCK_OFF -> 0f
             LANGUAGE_LOCK_PATIENT -> 3.4f
-            LANGUAGE_LOCK_QUICK -> 0.9f
+            LANGUAGE_LOCK_QUICK, LANGUAGE_LOCK_STRICT -> 0.9f
             else -> 1.8f
         }
+
+        /**
+         * Whether an undecided detector falls back to one dictionary rather than to all of them.
+         *
+         * The difference between "wait until you know" and "never guess": every other setting
+         * offers every language until it has decided, which is a sensible default and is
+         * exactly what someone who writes one language does not want to see.
+         */
+        fun languageLockStrict(lock: Int): Boolean = lock == LANGUAGE_LOCK_STRICT
 
         fun learningSpeedFactor(speed: Int): Float = when (speed) {
             LEARNING_CAUTIOUS -> 0.35f
