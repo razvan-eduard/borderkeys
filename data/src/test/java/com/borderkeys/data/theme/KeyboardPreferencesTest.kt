@@ -228,4 +228,50 @@ class KeyboardPreferencesTest {
         )
     }
 
+    /** Both step tables have to stay inside what sanitised() will accept, or a slider lies. */
+    @Test
+    fun `every retention step survives sanitising`() {
+        for (minutes in KeyboardPreferences.RETENTION_STEPS) {
+            assertEquals(
+                "$minutes was clamped",
+                minutes,
+                KeyboardPreferences(clipboardRetentionMinutes = minutes)
+                    .sanitised().clipboardRetentionMinutes,
+            )
+        }
+    }
+
+    @Test
+    fun `every history size step survives sanitising`() {
+        for (count in KeyboardPreferences.HISTORY_SIZE_STEPS) {
+            assertEquals(
+                "$count was clamped",
+                count,
+                KeyboardPreferences(clipboardMaxEntries = count).sanitised().clipboardMaxEntries,
+            )
+        }
+    }
+
+    @Test
+    fun `the steps are ordered, so a slider moves one way`() {
+        assertEquals(
+            KeyboardPreferences.RETENTION_STEPS.sorted(),
+            KeyboardPreferences.RETENTION_STEPS,
+        )
+        assertEquals(
+            KeyboardPreferences.HISTORY_SIZE_STEPS.sorted(),
+            KeyboardPreferences.HISTORY_SIZE_STEPS,
+        )
+    }
+
+    /** A stored value between two steps has to land on one of them, not fall off the slider. */
+    @Test
+    fun `a value between steps snaps to the nearer one`() {
+        val steps = KeyboardPreferences.RETENTION_STEPS
+        assertEquals(0, KeyboardPreferences.nearestStep(steps, 1))
+        assertEquals(steps.lastIndex, KeyboardPreferences.nearestStep(steps, 999_999))
+        // 50 minutes is nearer 60 than 30
+        assertEquals(60, steps[KeyboardPreferences.nearestStep(steps, 50)])
+    }
+
 }

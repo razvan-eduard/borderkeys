@@ -61,26 +61,33 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
             scope.launch { themes.updatePreferences { it.copy(clipboardEnabled = value) } }
         }
 
+        SettingsSectionCard(strings[Keys.CLIPBOARD_HOW_MANY_ITEMS]) {
+            StepSlider(
+                label = strings.getString(
+                    Keys.CLIPBOARD_ITEMS, preferences.clipboardMaxEntries,
+                ),
+                steps = KeyboardPreferences.HISTORY_SIZE_STEPS,
+                current = preferences.clipboardMaxEntries,
+            ) { value ->
+                scope.launch {
+                    themes.updatePreferences { it.copy(clipboardMaxEntries = value) }
+                }
+            }
+            Explanation(strings[Keys.CLIPBOARD_SIZE_NOTE])
+        }
+
         SettingsSectionCard(strings[Keys.CLIPBOARD_KEEP_UNPINNED_ITEMS_FOR]) {
-            Text(
-                formatRetention(strings, preferences.clipboardRetentionMinutes),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-            Slider(
-                value = preferences.clipboardRetentionMinutes.toFloat().coerceIn(1f, 1440f),
-                valueRange = 1f..1440f,
-                onValueChange = { value ->
-                    scope.launch {
-                        themes.updatePreferences { it.copy(clipboardRetentionMinutes = value.toInt()) }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            )
-            Explanation(
-                strings[Keys.CLIPBOARD_EXPIRED_ITEMS_ARE_DELETED_NOT_MERELY],
-            )
+            StepSlider(
+                label = formatRetention(strings, preferences.clipboardRetentionMinutes),
+                steps = KeyboardPreferences.RETENTION_STEPS,
+                current = preferences.clipboardRetentionMinutes,
+            ) { value ->
+                scope.launch {
+                    themes.updatePreferences { it.copy(clipboardRetentionMinutes = value) }
+                }
+            }
+            Explanation(strings[Keys.CLIPBOARD_RETENTION_NOTE])
+            Explanation(strings[Keys.CLIPBOARD_EXPIRED_ITEMS_ARE_DELETED_NOT_MERELY])
         }
         SettingsSectionCard(strings.getString(Keys.CLIPBOARD_HISTORY, entries.size)) {
             if (entries.isEmpty()) {
@@ -112,9 +119,50 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
     }
 }
 
-private fun formatRetention(strings: LanguageManager, minutes: Int): String = when {
-    minutes < 60 -> strings.getString(Keys.CLIPBOARD_MINUTES, minutes)
-    minutes == 60 -> strings[Keys.CLIPBOARD_1_HOUR]
-    minutes % 60 == 0 -> strings.getString(Keys.CLIPBOARD_HOURS, minutes / 60)
-    else -> strings.getString(Keys.CLIPBOARD_H_MIN, minutes / 60, minutes % 60)
+private fun formatRetention(strings: LanguageManager, minutes: Int): String {
+    val day = 24 * 60
+    return when {
+        minutes < 60 -> strings.getString(Keys.CLIPBOARD_MINUTES, minutes)
+        minutes == 60 -> strings[Keys.CLIPBOARD_1_HOUR]
+        minutes < day -> if (minutes % 60 == 0) {
+            strings.getString(Keys.CLIPBOARD_HOURS, minutes / 60)
+        } else {
+            strings.getString(Keys.CLIPBOARD_H_MIN, minutes / 60, minutes % 60)
+        }
+        minutes == day -> strings[Keys.CLIPBOARD_1_DAY]
+        minutes == 7 * day -> strings[Keys.CLIPBOARD_1_WEEK]
+        minutes == 30 * day -> strings[Keys.CLIPBOARD_1_MONTH]
+        minutes % (7 * day) == 0 -> strings.getString(Keys.CLIPBOARD_WEEKS, minutes / (7 * day))
+        else -> strings.getString(Keys.CLIPBOARD_DAYS, minutes / day)
+    }
+}
+
+/**
+ * A slider that moves between named values rather than across a range.
+ *
+ * The useful span for both of these settings covers three orders of magnitude, and a linear
+ * slider over that cannot be aimed: most of the travel lands on differences nobody can tell
+ * apart, and the interesting end is a few pixels wide. Stepping through a short list of the
+ * answers someone actually has makes every position mean something.
+ */
+@Composable
+private fun StepSlider(
+    label: String,
+    steps: List<Int>,
+    current: Int,
+    onPick: (Int) -> Unit,
+) {
+    Text(
+        label,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 20.dp),
+    )
+    Slider(
+        value = KeyboardPreferences.nearestStep(steps, current).toFloat(),
+        valueRange = 0f..(steps.size - 1).toFloat(),
+        steps = (steps.size - 2).coerceAtLeast(0),
+        onValueChange = { value -> onPick(steps[value.toInt().coerceIn(steps.indices)]) },
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+    )
 }

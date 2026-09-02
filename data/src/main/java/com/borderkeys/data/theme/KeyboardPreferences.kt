@@ -367,6 +367,40 @@ data class KeyboardPreferences(
         /** How many actions the bar will hold before it starts dropping them. */
         const val MAX_QUICK_ACTIONS = 10
 
+        /**
+         * How long unpinned entries are kept, as the values a slider steps through.
+         *
+         * Steps rather than a range, because the useful span is fifteen minutes to a month and
+         * a linear slider over 43,200 values cannot be aimed: every pixel would be about two
+         * hours at the top and the bottom third would be unreachable. These are the answers
+         * someone actually has to "how long".
+         */
+        val RETENTION_STEPS: List<Int> = listOf(
+            15, 30, 60, 4 * 60, 12 * 60, 24 * 60,
+            3 * 24 * 60, 7 * 24 * 60, 14 * 24 * 60, 30 * 24 * 60,
+        )
+
+        /**
+         * How many entries are kept, as the values a slider steps through.
+         *
+         * The same reasoning: the difference between 60 and 61 is nothing, and the difference
+         * between 10 and 200 is the whole decision.
+         */
+        val HISTORY_SIZE_STEPS: List<Int> = listOf(10, 20, 30, 50, 75, 100, 150, 200, 500)
+
+        /** The step nearest [value], for putting a stored number back on a slider. */
+        fun nearestStep(steps: List<Int>, value: Int): Int {
+            var best = 0
+            for (index in steps.indices) {
+                if (kotlin.math.abs(steps[index] - value) <
+                    kotlin.math.abs(steps[best] - value)
+                ) {
+                    best = index
+                }
+            }
+            return best
+        }
+
         fun languageLockEvidence(lock: Int): Float = when (lock) {
             LANGUAGE_LOCK_OFF -> 0f
             LANGUAGE_LOCK_PATIENT -> 3.4f
