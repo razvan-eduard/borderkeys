@@ -917,21 +917,18 @@ class BorderKeysService :
     /**
      * Holding a key that has nothing else to offer.
      *
-     * Only the globe, and only to open the quick panel. There is a `settings` key code in the
-     * layout format and no layout uses it: a whole key spent on settings is a key not spent on
-     * typing, and holding the key that is already about "which keyboard is this" is where people
-     * look for it anyway.
+     * Three keys reach the quick panel: the globe, the settings key, and enter. There is a
+     * `settings` key code in the layout format and no layout uses it -- a whole key spent on
+     * settings is a key not spent on typing -- so in practice it is the globe, which is already
+     * the key about "which keyboard is this" and where people look, and enter, which is the
+     * largest key on the board and the easiest to hold without looking.
      */
     override fun onKeyLongPress(code: Int, keyIndex: Int): Boolean {
-        // Enter opens the settings application; the globe and the settings key open the panel
-        // in the keyboard. Two different things, on purpose: the panel is for the handful of
-        // adjustments worth making without leaving the field you are typing in, and everything
-        // else is a screen with room to explain itself.
-        if (code == KeyCodes.ENTER) {
-            openSettings()
-            return true
-        }
-        if (code != KeyCodes.LANGUAGE && code != KeyCodes.SETTINGS) {
+        // Enter, the globe and the settings key all open the same panel. Enter used to open
+        // the settings application instead, which meant the one shortcut people find by
+        // accident threw them out of the field they were typing in; the panel has the "All
+        // settings" line for the times they wanted the application after all.
+        if (code != KeyCodes.ENTER && code != KeyCodes.LANGUAGE && code != KeyCodes.SETTINGS) {
             return false
         }
         toggleQuickSettings()
