@@ -588,6 +588,7 @@ class KeyboardCanvasView(
     private val shiftedLabel = CharArray(1)
 
     private fun drawLabel(canvas: Canvas, index: Int) {
+        drawHoldHint(canvas, index)
         val length = geometry.labelLength[index]
         if (length == 0) {
             return
@@ -612,16 +613,42 @@ class KeyboardCanvasView(
             geometry.centerX[index], geometry.centerY[index] + paints.labelBaselineOffsetPx,
             paints.label,
         )
-        // The long-press hint, in the corner. Drawn from the same shared buffer.
+    }
+
+    /**
+     * What a key offers when it is held, drawn in its corner.
+     *
+     * A key with alternatives shows the first of them, which is the character the hold would
+     * type. A key whose hold does something else -- enter and the globe open the panel, the
+     * space bar cycles the layouts -- has no character to show, so it gets three dots: the
+     * same "there is more here" mark a menu button carries, and no text to translate.
+     */
+    private fun drawHoldHint(canvas: Canvas, index: Int) {
+        val right = geometry.keyRight[index]
+        val hintX = right - (right - geometry.keyLeft[index]) * HINT_INSET_FRACTION
+        val hintY = geometry.keyTop[index] + paints.secondaryBaselineOffsetPx * 2.2f
         if (geometry.altLength[index] > 0) {
             canvas.drawText(
-                geometry.altChars, geometry.altOffset[index], 1,
-                geometry.keyRight[index] - (geometry.keyRight[index] - geometry.keyLeft[index]) * 0.22f,
-                geometry.keyTop[index] + paints.secondaryBaselineOffsetPx * 2.2f,
+                geometry.altChars, geometry.altOffset[index], 1, hintX, hintY,
                 paints.labelSecondary,
             )
+            return
+        }
+        if (!holdsAMenu(geometry.keyCode[index])) {
+            return
+        }
+        val radius = paints.labelSecondary.textSize * HINT_DOT_RADIUS_FRACTION
+        val gap = radius * 3f
+        val centreY = hintY - paints.secondaryBaselineOffsetPx
+        for (dot in -1..1) {
+            canvas.drawCircle(hintX + dot * gap, centreY, radius, paints.labelSecondary)
         }
     }
+
+    /** The keys whose hold opens something rather than typing something. */
+    private fun holdsAMenu(code: Int): Boolean =
+        code == KeyCodes.ENTER || code == KeyCodes.LANGUAGE ||
+            code == KeyCodes.SETTINGS || code == ' '.code
 
     override fun onDraw(canvas: Canvas) {
         Trace.beginSection("KeyboardCanvasView.onDraw")
@@ -1143,6 +1170,12 @@ class KeyboardCanvasView(
         private const val TRAIL_SEGMENTS = 4
 
         private const val LONG_PRESS_MILLIS = 380L
+
+        /** Where the corner hint sits, as a fraction of the key's width in from its right edge. */
+        private const val HINT_INSET_FRACTION = 0.22f
+
+        /** A hint dot's radius, as a fraction of the secondary label size. */
+        private const val HINT_DOT_RADIUS_FRACTION = 0.09f
         private const val REPEAT_DELAY_MILLIS = 400L
         private const val REPEAT_INTERVAL_MILLIS = 55L
 

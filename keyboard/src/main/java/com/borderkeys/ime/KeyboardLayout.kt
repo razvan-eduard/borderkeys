@@ -64,21 +64,38 @@ class KeyboardLayout(
      * and the space bar is the one that lost the width when the emoji key took it, so it is
      * the one that gets it back.
      */
-    fun withoutEmojiKey(): KeyboardLayout {
-        if (rows.isEmpty()) {
+    fun withoutEmojiKey(): KeyboardLayout = without(KeyCodes.EMOJI, NO_EMOJI_SUFFIX)
+
+    /**
+     * The same layout without its globe key.
+     *
+     * The globe cycles this keyboard's layouts, which most people do never and some do daily,
+     * so it is worth a key to them and worth nothing to everyone else. Off, the space bar takes
+     * the width and holding the space bar cycles the layouts instead.
+     */
+    fun withoutLanguageKey(): KeyboardLayout = without(KeyCodes.LANGUAGE, NO_LANGUAGE_SUFFIX)
+
+    /**
+     * Drops every key with the given code and gives their width to the space bar.
+     *
+     * The id gains a suffix because the keyboard caches compiled geometry by it: two layouts
+     * that differ by a key must not be able to answer to the same name.
+     */
+    private fun without(code: Int, suffix: String): KeyboardLayout {
+        if (rows.isEmpty() || id.contains(suffix)) {
             return this
         }
         var found = false
         val rewritten = rows.map { row ->
-            if (row.keys.none { it.code == KeyCodes.EMOJI }) {
+            if (row.keys.none { it.code == code }) {
                 row
             } else {
                 found = true
-                val width = row.keys.filter { it.code == KeyCodes.EMOJI }
+                val width = row.keys.filter { it.code == code }
                     .sumOf { it.widthUnits.toDouble() }.toFloat()
                 Row(
                     row.indent, row.heightScale,
-                    row.keys.filterNot { it.code == KeyCodes.EMOJI }.map { key ->
+                    row.keys.filterNot { it.code == code }.map { key ->
                         if (key.code == ' '.code) {
                             Key(key.code, key.label, key.alternatives,
                                 key.widthUnits + width, key.flags)
@@ -93,7 +110,7 @@ class KeyboardLayout(
             return this
         }
         return KeyboardLayout(
-            id = id + NO_EMOJI_SUFFIX,
+            id = id + suffix,
             label = label,
             languageTag = languageTag,
             rows = rewritten,
@@ -131,6 +148,7 @@ class KeyboardLayout(
         private const val NUMBER_ROW_SUFFIX = "+num"
 
         private const val NO_EMOJI_SUFFIX = "-noemoji"
+        private const val NO_LANGUAGE_SUFFIX = "-noglobe"
 
         /** The top row of a physical keyboard, unshifted and shifted. */
         private val DIGIT_ROW = "1234567890".zip("!@#$%^&*()")

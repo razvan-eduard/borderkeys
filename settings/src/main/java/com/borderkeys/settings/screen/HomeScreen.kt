@@ -94,6 +94,7 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
             // otherwise be discoverable only by accident.
             SettingRow(strings[Keys.SHORTCUTS_ENTER])
             SettingRow(strings[Keys.SHORTCUTS_GLOBE])
+            SettingRow(strings[Keys.SHORTCUTS_SPACE_HOLD])
             SettingRow(strings[Keys.SHORTCUTS_SPACE])
             SettingRow(strings[Keys.SHORTCUTS_SUGGESTION])
             PinShortcutRow()

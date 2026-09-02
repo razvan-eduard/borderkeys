@@ -135,6 +135,16 @@ data class KeyboardPreferences(
      */
     val emojiKey: Boolean = true,
 
+    /**
+     * Whether the globe key sits beside the space bar.
+     *
+     * Off. It cycles this keyboard's layouts, which is a thing some people do daily and most
+     * never do at all, and it was also a second way into the panel -- which holding the enter
+     * key now does. Holding the space bar cycles the layouts, so nothing is lost by giving the
+     * key's width back to the space bar.
+     */
+    val languageKey: Boolean = false,
+
     // ---- size and position -------------------------------------------------------------
     //
     // A keyboard is the one part of the screen a person's thumb has to reach a hundred times a

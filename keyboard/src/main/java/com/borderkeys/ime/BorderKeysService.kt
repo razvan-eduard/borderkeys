@@ -924,6 +924,14 @@ class BorderKeysService :
      * largest key on the board and the easiest to hold without looking.
      */
     override fun onKeyLongPress(code: Int, keyIndex: Int): Boolean {
+        // Holding the space bar cycles this keyboard's layouts. That is what the globe key
+        // did, and the globe is off by default now that the panel is on enter -- so the
+        // function moves to the key that is always there and impossible to miss. A press that
+        // slides instead of holding still moves the caret: the drag disarms the hold.
+        if (code == ' '.code) {
+            switchLanguage()
+            return true
+        }
         // Enter, the globe and the settings key all open the same panel. Enter used to open
         // the settings application instead, which meant the one shortcut people find by
         // accident threw them out of the field they were typing in; the panel has the "All
@@ -1220,8 +1228,8 @@ class BorderKeysService :
      * drift the first time a key moved.
      */
     /**
-     * Applies the layout settings that compose rather than replace: the number row and the
-     * emoji key.
+     * Applies the layout settings that compose rather than replace: the number row, the emoji
+     * key and the globe key.
      *
      * One place, because the pages are set from four of them and a page that forgot one was how
      * the number row used to disappear when the symbols page came back.
@@ -1230,6 +1238,9 @@ class BorderKeysService :
         var result = layout
         if (!preferences.emojiKey) {
             result = result.withoutEmojiKey()
+        }
+        if (!preferences.languageKey) {
+            result = result.withoutLanguageKey()
         }
         if (preferences.numberRow) {
             result = result.withNumberRow()
