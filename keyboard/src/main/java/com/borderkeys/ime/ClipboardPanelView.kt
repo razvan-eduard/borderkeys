@@ -179,9 +179,13 @@ class ClipboardPanelView(
         cardRect.set(paddingPx, top, width - paddingPx, top + cardHeightPx)
         val fill = if (index == pressedCard) paints.keyPressedFill else paints.keyFill
         canvas.drawRoundRect(cardRect, paints.keyCornerRadiusPx, paints.keyCornerRadiusPx, fill)
-        canvas.drawRoundRect(
-            cardRect, paints.keyCornerRadiusPx, paints.keyCornerRadiusPx, paints.keyStroke,
-        )
+        // The same decision the keys make. A theme with borders off and outlined cards would
+        // be one surface disagreeing with itself about whether this keyboard draws edges.
+        if (paints.showKeyBorders) {
+            canvas.drawRoundRect(
+                cardRect, paints.keyCornerRadiusPx, paints.keyCornerRadiusPx, paints.keyStroke,
+            )
+        }
 
         val inset = paddingPx
         var textLeft = cardRect.left + inset
