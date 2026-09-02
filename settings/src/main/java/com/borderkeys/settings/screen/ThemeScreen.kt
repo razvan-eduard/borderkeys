@@ -38,7 +38,7 @@ import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.KeyboardPreview
-import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.launch
 
@@ -64,65 +64,63 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         KeyboardPreview(theme, preferences, Modifier.padding(vertical = 12.dp))
-        Divider()
 
-        SectionHeader(strings[Keys.THEME_PRESETS])
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            TextButton(onClick = { update { KeyboardTheme() } }) { Text(strings[Keys.THEME_DARK]) }
-            TextButton(onClick = { update { LIGHT_THEME } }) { Text(strings[Keys.THEME_LIGHT]) }
-            TextButton(onClick = { update { HIGH_CONTRAST } }) { Text(strings[Keys.THEME_HIGH_CONTRAST]) }
+        SettingsSectionCard(strings[Keys.THEME_PRESETS]) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextButton(onClick = { update { KeyboardTheme() } }) { Text(strings[Keys.THEME_DARK]) }
+                TextButton(onClick = { update { LIGHT_THEME } }) { Text(strings[Keys.THEME_LIGHT]) }
+                TextButton(onClick = { update { HIGH_CONTRAST } }) { Text(strings[Keys.THEME_HIGH_CONTRAST]) }
+            }
         }
-
-        SectionHeader(strings[Keys.THEME_COLOURS])
-        ColourRow(strings[Keys.THEME_BACKGROUND], theme.backgroundColor) { update { t -> t.copy(backgroundColor = it) } }
-        ColourRow(strings[Keys.THEME_KEYS], theme.keyColor) { update { t -> t.copy(keyColor = it) } }
-        ColourRow(strings[Keys.THEME_PRESSED_KEY], theme.keyPressedColor) {
-            update { t -> t.copy(keyPressedColor = it) }
+        SettingsSectionCard(strings[Keys.THEME_COLOURS]) {
+            ColourRow(strings[Keys.THEME_BACKGROUND], theme.backgroundColor) { update { t -> t.copy(backgroundColor = it) } }
+            ColourRow(strings[Keys.THEME_KEYS], theme.keyColor) { update { t -> t.copy(keyColor = it) } }
+            ColourRow(strings[Keys.THEME_PRESSED_KEY], theme.keyPressedColor) {
+                update { t -> t.copy(keyPressedColor = it) }
+            }
+            ColourRow(strings[Keys.THEME_MODIFIER_KEYS], theme.modifierKeyColor) {
+                update { t -> t.copy(modifierKeyColor = it) }
+            }
+            ColourRow(strings[Keys.THEME_LABELS], theme.textColor) { update { t -> t.copy(textColor = it) } }
+            ColourRow(strings[Keys.THEME_SECONDARY_LABELS], theme.secondaryTextColor) {
+                update { t -> t.copy(secondaryTextColor = it) }
+            }
+            ColourRow(strings[Keys.THEME_ACCENT], theme.accentColor) { update { t -> t.copy(accentColor = it) } }
+            ColourRow(strings[Keys.THEME_SWIPE_TRAIL], theme.swipeTrailColor, preserveAlpha = true) {
+                update { t -> t.copy(swipeTrailColor = it) }
+            }
         }
-        ColourRow(strings[Keys.THEME_MODIFIER_KEYS], theme.modifierKeyColor) {
-            update { t -> t.copy(modifierKeyColor = it) }
+        SettingsSectionCard(strings[Keys.THEME_SHAPE]) {
+            ThemeSlider(strings[Keys.THEME_CORNER_RADIUS], theme.keyCornerRadiusDp, 0f..32f, strings[Keys.THEME_DP]) {
+                update { t -> t.copy(keyCornerRadiusDp = it) }
+            }
+            ThemeSlider(strings[Keys.THEME_GAP_BETWEEN_KEYS], theme.keyGapDp, 0f..16f, "dp") {
+                update { t -> t.copy(keyGapDp = it) }
+            }
+            ThemeSlider(strings[Keys.THEME_ROW_HEIGHT], theme.rowHeightDp, 28f..96f, "dp") {
+                update { t -> t.copy(rowHeightDp = it) }
+            }
+            ThemeSlider(strings[Keys.THEME_LABEL_SIZE], theme.labelTextSizeSp, 8f..40f, "sp") {
+                update { t -> t.copy(labelTextSizeSp = it) }
+            }
+            ThemeSlider(strings[Keys.THEME_PRESS_DEPTH], theme.pressedElevation, 0f..16f, "dp") {
+                update { t -> t.copy(pressedElevation = it) }
+            }
+            ThemeSlider(strings[Keys.THEME_TRAIL_WIDTH], theme.swipeTrailWidthDp, 1f..24f, "dp") {
+                update { t -> t.copy(swipeTrailWidthDp = it) }
+            }
+            SwitchRow(
+                title = strings[Keys.THEME_OUTLINE_THE_KEYS],
+                subtitle = strings[Keys.THEME_A_HAIRLINE_BORDER_HELPS_WHEN_THE],
+                checked = theme.showKeyBorders,
+            ) { value -> update { it.copy(showKeyBorders = value) } }
+            Explanation(
+                strings[Keys.THEME_VALUES_ARE_CLAMPED_WHEN_THEY_ARE],
+            )
         }
-        ColourRow(strings[Keys.THEME_LABELS], theme.textColor) { update { t -> t.copy(textColor = it) } }
-        ColourRow(strings[Keys.THEME_SECONDARY_LABELS], theme.secondaryTextColor) {
-            update { t -> t.copy(secondaryTextColor = it) }
-        }
-        ColourRow(strings[Keys.THEME_ACCENT], theme.accentColor) { update { t -> t.copy(accentColor = it) } }
-        ColourRow(strings[Keys.THEME_SWIPE_TRAIL], theme.swipeTrailColor, preserveAlpha = true) {
-            update { t -> t.copy(swipeTrailColor = it) }
-        }
-
-        SectionHeader(strings[Keys.THEME_SHAPE])
-        ThemeSlider(strings[Keys.THEME_CORNER_RADIUS], theme.keyCornerRadiusDp, 0f..32f, strings[Keys.THEME_DP]) {
-            update { t -> t.copy(keyCornerRadiusDp = it) }
-        }
-        ThemeSlider(strings[Keys.THEME_GAP_BETWEEN_KEYS], theme.keyGapDp, 0f..16f, "dp") {
-            update { t -> t.copy(keyGapDp = it) }
-        }
-        ThemeSlider(strings[Keys.THEME_ROW_HEIGHT], theme.rowHeightDp, 28f..96f, "dp") {
-            update { t -> t.copy(rowHeightDp = it) }
-        }
-        ThemeSlider(strings[Keys.THEME_LABEL_SIZE], theme.labelTextSizeSp, 8f..40f, "sp") {
-            update { t -> t.copy(labelTextSizeSp = it) }
-        }
-        ThemeSlider(strings[Keys.THEME_PRESS_DEPTH], theme.pressedElevation, 0f..16f, "dp") {
-            update { t -> t.copy(pressedElevation = it) }
-        }
-        ThemeSlider(strings[Keys.THEME_TRAIL_WIDTH], theme.swipeTrailWidthDp, 1f..24f, "dp") {
-            update { t -> t.copy(swipeTrailWidthDp = it) }
-        }
-
-        SwitchRow(
-            title = strings[Keys.THEME_OUTLINE_THE_KEYS],
-            subtitle = strings[Keys.THEME_A_HAIRLINE_BORDER_HELPS_WHEN_THE],
-            checked = theme.showKeyBorders,
-        ) { value -> update { it.copy(showKeyBorders = value) } }
-
-        Explanation(
-            strings[Keys.THEME_VALUES_ARE_CLAMPED_WHEN_THEY_ARE],
-        )
     }
 }
 

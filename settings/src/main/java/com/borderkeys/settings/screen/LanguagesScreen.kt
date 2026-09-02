@@ -45,6 +45,7 @@ import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.Dispatchers
@@ -90,85 +91,81 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
         InterfaceLanguage(preferences) { code ->
             scope.launch { DataGraph.themes.updatePreferences { it.copy(uiLanguage = code) } }
         }
-        Divider()
         LanguageLock(preferences) { lock ->
             scope.launch { DataGraph.themes.updatePreferences { it.copy(languageLock = lock) } }
         }
 
-        Divider()
-        SectionHeader(strings[Keys.LANGUAGES_INSTALLED_PACKS])
-        if (packs.isEmpty()) {
-            SettingRow(
-                title = strings[Keys.LANGUAGES_NONE_YET],
-                subtitle = strings[Keys.LANGUAGES_NOTHING_IS_DOWNLOADED_EVER_ADD_ONE],
-            )
-        }
-        for (pack in packs) {
-            PackRow(pack, repository, scope)
-            Divider()
-        }
-
-        val installable = BundledDictionaries.ALL.filter { candidate ->
-            packs.none { it.tag.equals(candidate.tag, ignoreCase = true) }
-        }
-        if (installable.isNotEmpty()) {
-            SectionHeader(strings[Keys.LANGUAGES_INCLUDED_WITH_THE_APP])
-            Explanation(
-                strings[Keys.LANGUAGES_THESE_ARE_IN_THE_APPLICATION_ITSELF],
-            )
-            for (candidate in installable) {
+        SettingsSectionCard(strings[Keys.LANGUAGES_INSTALLED_PACKS]) {
+            if (packs.isEmpty()) {
                 SettingRow(
-                    title = candidate.displayName,
-                    subtitle = strings.getString(Keys.LANGUAGES_WORDS_WRITTEN_IN_THIS_REPOSITORY_A, candidate.wordCount),
-                    trailing = {
-                        TextButton(
-                            enabled = !importing,
-                            onClick = {
-                                importing = true
-                                message = null
-                                scope.launch {
-                                    message = withContext(Dispatchers.IO) {
-                                        installBundled(strings, context, repository, candidate)
-                                    }
-                                    importing = false
-                                }
-                            },
-                        ) { Text(strings[Keys.LANGUAGES_ADD]) }
-                    },
+                    title = strings[Keys.LANGUAGES_NONE_YET],
+                    subtitle = strings[Keys.LANGUAGES_NOTHING_IS_DOWNLOADED_EVER_ADD_ONE],
                 )
             }
-            Divider()
+            for (pack in packs) {
+                PackRow(pack, repository, scope)
+            }
+            val installable = BundledDictionaries.ALL.filter { candidate ->
+                packs.none { it.tag.equals(candidate.tag, ignoreCase = true) }
+            }
+            if (installable.isNotEmpty()) {
         }
-
-        SectionHeader(strings[Keys.LANGUAGES_IMPORT_YOUR_OWN])
-        Button(
-            onClick = { picker.launch(arrayOf("*/*")) },
-            enabled = !importing,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        ) { Text(strings[Keys.LANGUAGES_CHOOSE_A_BKD_FILE]) }
-        if (importing) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(20.dp))
+        SettingsSectionCard(strings[Keys.LANGUAGES_INCLUDED_WITH_THE_APP]) {
+                Explanation(
+                    strings[Keys.LANGUAGES_THESE_ARE_IN_THE_APPLICATION_ITSELF],
+                )
+                for (candidate in installable) {
+                    SettingRow(
+                        title = candidate.displayName,
+                        subtitle = strings.getString(Keys.LANGUAGES_WORDS_WRITTEN_IN_THIS_REPOSITORY_A, candidate.wordCount),
+                        trailing = {
+                            TextButton(
+                                enabled = !importing,
+                                onClick = {
+                                    importing = true
+                                    message = null
+                                    scope.launch {
+                                        message = withContext(Dispatchers.IO) {
+                                            installBundled(strings, context, repository, candidate)
+                                        }
+                                        importing = false
+                                    }
+                                },
+                            ) { Text(strings[Keys.LANGUAGES_ADD]) }
+                        },
+                    )
+                }
+            }
         }
-        message?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        SettingsSectionCard(strings[Keys.LANGUAGES_IMPORT_YOUR_OWN]) {
+            Button(
+                onClick = { picker.launch(arrayOf("*/*")) },
+                enabled = !importing,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            ) { Text(strings[Keys.LANGUAGES_CHOOSE_A_BKD_FILE]) }
+            if (importing) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(20.dp))
+            }
+            message?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                )
+            }
+            Explanation(
+                strings[Keys.LANGUAGES_A_PACK_S_HEADER_IS_VALIDATED],
             )
         }
-        Explanation(
-            strings[Keys.LANGUAGES_A_PACK_S_HEADER_IS_VALIDATED],
-        )
-
-        Divider()
-        SectionHeader(strings[Keys.LANGUAGES_PER_APP_LANGUAGE_MEMORY])
-        SwitchRow(
-            title = strings[Keys.LANGUAGES_REMEMBER_WHICH_LANGUAGES_YOU_USE_IN],
-            subtitle = strings[Keys.LANGUAGES_OFF_BY_DEFAULT_IT_STORES_A],
-            checked = preferences.perAppLanguageMemory,
-        ) { value ->
-            scope.launch { themes.updatePreferences { it.copy(perAppLanguageMemory = value) } }
+        SettingsSectionCard(strings[Keys.LANGUAGES_PER_APP_LANGUAGE_MEMORY]) {
+            SwitchRow(
+                title = strings[Keys.LANGUAGES_REMEMBER_WHICH_LANGUAGES_YOU_USE_IN],
+                subtitle = strings[Keys.LANGUAGES_OFF_BY_DEFAULT_IT_STORES_A],
+                checked = preferences.perAppLanguageMemory,
+            ) { value ->
+                scope.launch { themes.updatePreferences { it.copy(perAppLanguageMemory = value) } }
+            }
         }
     }
 }

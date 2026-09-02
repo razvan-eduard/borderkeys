@@ -30,7 +30,7 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.launch
 
@@ -51,44 +51,42 @@ fun SwipeScreen(modifier: Modifier = Modifier) {
             checked = preferences.swipeEnabled,
         ) { value -> scope.launch { themes.updatePreferences { it.copy(swipeEnabled = value) } } }
 
-        Divider()
-        SectionHeader(strings[Keys.SWIPE_THE_TRAIL])
-        Text(
-            strings.getString(Keys.SWIPE_WIDTH_DP, theme.swipeTrailWidthDp.toInt()),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-        Slider(
-            value = theme.swipeTrailWidthDp.coerceIn(1f, 24f),
-            valueRange = 1f..24f,
-            onValueChange = { value ->
-                scope.launch { themes.updateTheme { it.copy(swipeTrailWidthDp = value) } }
-            },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-        )
-        Explanation(strings[Keys.SWIPE_THE_COLOUR_IS_ON_THE_THEME])
-
-        Divider()
-        SectionHeader(strings[Keys.SWIPE_TRY_IT_HERE])
-        OutlinedTextField(
-            value = probe,
-            onValueChange = { probe = it },
-            label = { Text(strings[Keys.SWIPE_SWIPE_A_WORD]) },
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
-        )
-        Explanation(strings[Keys.SWIPE_A_REAL_FIELD_NOTHING_TYPED_INTO])
-
-        Divider()
-        SectionHeader(strings[Keys.SWIPE_HOW_IT_DECODES])
-        Explanation(
-            strings[Keys.SWIPE_YOUR_GESTURE_IS_SMOOTHED_REDUCED_TO],
-        )
-        Explanation(
-            strings[Keys.SWIPE_ALL_OF_IT_RUNS_ON_THIS],
-        )
-        if (!preferences.swipeEnabled) {
-            Explanation(strings[Keys.SWIPE_SWIPE_TYPING_IS_CURRENTLY_OFF_SO])
+        SettingsSectionCard(strings[Keys.SWIPE_THE_TRAIL]) {
+            Text(
+                strings.getString(Keys.SWIPE_WIDTH_DP, theme.swipeTrailWidthDp.toInt()),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+            Slider(
+                value = theme.swipeTrailWidthDp.coerceIn(1f, 24f),
+                valueRange = 1f..24f,
+                onValueChange = { value ->
+                    scope.launch { themes.updateTheme { it.copy(swipeTrailWidthDp = value) } }
+                },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            )
+            Explanation(strings[Keys.SWIPE_THE_COLOUR_IS_ON_THE_THEME])
+        }
+        SettingsSectionCard(strings[Keys.SWIPE_TRY_IT_HERE]) {
+            OutlinedTextField(
+                value = probe,
+                onValueChange = { probe = it },
+                label = { Text(strings[Keys.SWIPE_SWIPE_A_WORD]) },
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+            )
+            Explanation(strings[Keys.SWIPE_A_REAL_FIELD_NOTHING_TYPED_INTO])
+        }
+        SettingsSectionCard(strings[Keys.SWIPE_HOW_IT_DECODES]) {
+            Explanation(
+                strings[Keys.SWIPE_YOUR_GESTURE_IS_SMOOTHED_REDUCED_TO],
+            )
+            Explanation(
+                strings[Keys.SWIPE_ALL_OF_IT_RUNS_ON_THIS],
+            )
+            if (!preferences.swipeEnabled) {
+                Explanation(strings[Keys.SWIPE_SWIPE_TYPING_IS_CURRENTLY_OFF_SO])
+            }
         }
     }
 }

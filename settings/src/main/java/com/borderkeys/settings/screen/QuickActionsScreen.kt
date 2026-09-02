@@ -196,21 +196,21 @@ private fun ButtonRow(
         if (onAdd == null) {
             IconButton(onClick = onMoveTop, enabled = index > 0, modifier = Modifier.size(36.dp)) {
                 Icon(
-                    painter = painterResource(R.drawable.bk_action_cursor_start),
+                    painter = painterResource(R.drawable.bk_reorder_top),
                     contentDescription = strings[Keys.QUICK_MOVE_TOP],
                     modifier = Modifier.size(18.dp),
                 )
             }
             IconButton(onClick = onMoveUp, enabled = index > 0, modifier = Modifier.size(36.dp)) {
                 Icon(
-                    painter = painterResource(R.drawable.bk_action_undo),
+                    painter = painterResource(R.drawable.bk_reorder_up),
                     contentDescription = strings[Keys.QUICK_MOVE_UP],
                     modifier = Modifier.size(18.dp),
                 )
             }
             IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
                 Icon(
-                    painter = painterResource(R.drawable.bk_action_delete_word),
+                    painter = painterResource(R.drawable.bk_reorder_remove),
                     contentDescription = strings[Keys.QUICK_REMOVE],
                     modifier = Modifier.size(18.dp),
                 )

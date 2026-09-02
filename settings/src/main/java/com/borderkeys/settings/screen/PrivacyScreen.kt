@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 
 /**
@@ -42,59 +42,57 @@ fun PrivacyScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader(strings[Keys.PRIVACY_PERMISSIONS])
-        if (permissions.isEmpty()) {
-            SettingRow(
-                title = strings[Keys.PRIVACY_NONE],
-                subtitle = strings[Keys.PRIVACY_READ_FROM_THE_INSTALLED_PACKAGE_JUST],
-            )
-        } else {
-            for (permission in permissions) {
-                SettingRow(title = permission)
+        SettingsSectionCard(strings[Keys.PRIVACY_PERMISSIONS]) {
+            if (permissions.isEmpty()) {
+                SettingRow(
+                    title = strings[Keys.PRIVACY_NONE],
+                    subtitle = strings[Keys.PRIVACY_READ_FROM_THE_INSTALLED_PACKAGE_JUST],
+                )
+            } else {
+                for (permission in permissions) {
+                    SettingRow(title = permission)
+                }
             }
+            Explanation(
+                strings[Keys.PRIVACY_HAPTIC_FEEDBACK_USES_THE_API_THAT],
+            )
         }
-        Explanation(
-            strings[Keys.PRIVACY_HAPTIC_FEEDBACK_USES_THE_API_THAT],
-        )
-
-        Divider()
-        SectionHeader(strings[Keys.PRIVACY_NETWORK])
-        SettingRow(
-            title = strings[Keys.PRIVACY_THERE_IS_NONE],
-            subtitle = strings[Keys.PRIVACY_NO_INTERNET_PERMISSION_AND_NO_HTTP],
-        )
-        Explanation(
-            strings[Keys.PRIVACY_THAT_IS_WHY_NOTHING_DOWNLOADS_DICTIONARIES],
-        )
-
-        Divider()
-        SectionHeader(strings[Keys.PRIVACY_WHAT_IS_STORED])
-        SettingRow(
-            title = strings[Keys.PRIVACY_ENCRYPTED_DATABASE],
-            subtitle = strings[Keys.PRIVACY_CLIPBOARD_HISTORY_THE_PERSONAL_DICTIONARY_AN],
-        )
-        SettingRow(
-            title = strings[Keys.PRIVACY_PAIRS_OF_WORDS_YOU_WRITE_TOGETHER],
-            subtitle = strings[Keys.PRIVACY_SO_THAT_AFTER_VREAU_IT_CAN],
-        )
-        SettingRow(
-            title = strings[Keys.PRIVACY_EXCLUDED_FROM_BACKUP],
-            subtitle = strings[Keys.PRIVACY_CLOUD_BACKUP_AND_DEVICE_TO_DEVICE],
-        )
-        SettingRow(
-            title = strings[Keys.PRIVACY_NOTHING_IS_LEARNED_IN_A_PASSWORD],
-            subtitle = strings[Keys.PRIVACY_IN_A_PASSWORD_FIELD_OR_WHEN],
-        )
-
-        Divider()
-        SectionHeader(strings[Keys.PRIVACY_WHAT_IS_NOT_STORED])
-        SettingRow(
-            title = strings[Keys.PRIVACY_NO_TELEMETRY_NO_CRASH_REPORTING_NO],
-            subtitle = strings[Keys.PRIVACY_NONE_OF_IT_EXISTS_TO_BE],
-        )
-        SettingRow(
-            title = strings[Keys.PRIVACY_PER_APP_LANGUAGE_MEMORY_IS_OFF],
-            subtitle = strings[Keys.PRIVACY_IT_WOULD_STORE_A_HASH_OF],
-        )
+        SettingsSectionCard(strings[Keys.PRIVACY_NETWORK]) {
+            SettingRow(
+                title = strings[Keys.PRIVACY_THERE_IS_NONE],
+                subtitle = strings[Keys.PRIVACY_NO_INTERNET_PERMISSION_AND_NO_HTTP],
+            )
+            Explanation(
+                strings[Keys.PRIVACY_THAT_IS_WHY_NOTHING_DOWNLOADS_DICTIONARIES],
+            )
+        }
+        SettingsSectionCard(strings[Keys.PRIVACY_WHAT_IS_STORED]) {
+            SettingRow(
+                title = strings[Keys.PRIVACY_ENCRYPTED_DATABASE],
+                subtitle = strings[Keys.PRIVACY_CLIPBOARD_HISTORY_THE_PERSONAL_DICTIONARY_AN],
+            )
+            SettingRow(
+                title = strings[Keys.PRIVACY_PAIRS_OF_WORDS_YOU_WRITE_TOGETHER],
+                subtitle = strings[Keys.PRIVACY_SO_THAT_AFTER_VREAU_IT_CAN],
+            )
+            SettingRow(
+                title = strings[Keys.PRIVACY_EXCLUDED_FROM_BACKUP],
+                subtitle = strings[Keys.PRIVACY_CLOUD_BACKUP_AND_DEVICE_TO_DEVICE],
+            )
+            SettingRow(
+                title = strings[Keys.PRIVACY_NOTHING_IS_LEARNED_IN_A_PASSWORD],
+                subtitle = strings[Keys.PRIVACY_IN_A_PASSWORD_FIELD_OR_WHEN],
+            )
+        }
+        SettingsSectionCard(strings[Keys.PRIVACY_WHAT_IS_NOT_STORED]) {
+            SettingRow(
+                title = strings[Keys.PRIVACY_NO_TELEMETRY_NO_CRASH_REPORTING_NO],
+                subtitle = strings[Keys.PRIVACY_NONE_OF_IT_EXISTS_TO_BE],
+            )
+            SettingRow(
+                title = strings[Keys.PRIVACY_PER_APP_LANGUAGE_MEMORY_IS_OFF],
+                subtitle = strings[Keys.PRIVACY_IT_WOULD_STORE_A_HASH_OF],
+            )
+        }
     }
 }

@@ -30,7 +30,7 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.launch
@@ -61,57 +61,54 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
             scope.launch { themes.updatePreferences { it.copy(clipboardEnabled = value) } }
         }
 
-        Divider()
-        SectionHeader(strings[Keys.CLIPBOARD_KEEP_UNPINNED_ITEMS_FOR])
-        Text(
-            formatRetention(strings, preferences.clipboardRetentionMinutes),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-        Slider(
-            value = preferences.clipboardRetentionMinutes.toFloat().coerceIn(1f, 1440f),
-            valueRange = 1f..1440f,
-            onValueChange = { value ->
-                scope.launch {
-                    themes.updatePreferences { it.copy(clipboardRetentionMinutes = value.toInt()) }
-                }
-            },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-        )
-        Explanation(
-            strings[Keys.CLIPBOARD_EXPIRED_ITEMS_ARE_DELETED_NOT_MERELY],
-        )
-
-        Divider()
-        SectionHeader(strings.getString(Keys.CLIPBOARD_HISTORY, entries.size))
-        if (entries.isEmpty()) {
-            SettingRow(title = strings[Keys.CLIPBOARD_EMPTY])
-        }
-        for (entry in entries) {
-            SettingRow(
-                title = entry.content.take(80).replace('\n', ' '),
-                subtitle = if (entry.isPinned) strings[Keys.CLIPBOARD_PINNED_NEVER_EXPIRES] else strings[Keys.CLIPBOARD_EXPIRES_ON_THE_TIMER],
-                trailing = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(
-                            onClick = {
-                                scope.launch { repository.setPinned(entry.id, !entry.isPinned) }
-                            },
-                        ) { Text(if (entry.isPinned) strings[Keys.CLIPBOARD_UNPIN] else strings[Keys.CLIPBOARD_PIN]) }
-                        TextButton(onClick = { scope.launch { repository.delete(entry.id) } }) {
-                            Text(strings[Keys.CLIPBOARD_DELETE])
-                        }
+        SettingsSectionCard(strings[Keys.CLIPBOARD_KEEP_UNPINNED_ITEMS_FOR]) {
+            Text(
+                formatRetention(strings, preferences.clipboardRetentionMinutes),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+            Slider(
+                value = preferences.clipboardRetentionMinutes.toFloat().coerceIn(1f, 1440f),
+                valueRange = 1f..1440f,
+                onValueChange = { value ->
+                    scope.launch {
+                        themes.updatePreferences { it.copy(clipboardRetentionMinutes = value.toInt()) }
                     }
                 },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            )
+            Explanation(
+                strings[Keys.CLIPBOARD_EXPIRED_ITEMS_ARE_DELETED_NOT_MERELY],
             )
         }
-
-        Divider()
-        TextButton(
-            onClick = { scope.launch { repository.deleteAll() } },
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-        ) { Text(strings[Keys.CLIPBOARD_DELETE_EVERYTHING_INCLUDING_PINNED]) }
+        SettingsSectionCard(strings.getString(Keys.CLIPBOARD_HISTORY, entries.size)) {
+            if (entries.isEmpty()) {
+                SettingRow(title = strings[Keys.CLIPBOARD_EMPTY])
+            }
+            for (entry in entries) {
+                SettingRow(
+                    title = entry.content.take(80).replace('\n', ' '),
+                    subtitle = if (entry.isPinned) strings[Keys.CLIPBOARD_PINNED_NEVER_EXPIRES] else strings[Keys.CLIPBOARD_EXPIRES_ON_THE_TIMER],
+                    trailing = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(
+                                onClick = {
+                                    scope.launch { repository.setPinned(entry.id, !entry.isPinned) }
+                                },
+                            ) { Text(if (entry.isPinned) strings[Keys.CLIPBOARD_UNPIN] else strings[Keys.CLIPBOARD_PIN]) }
+                            TextButton(onClick = { scope.launch { repository.delete(entry.id) } }) {
+                                Text(strings[Keys.CLIPBOARD_DELETE])
+                            }
+                        }
+                    },
+                )
+            }
+            TextButton(
+                onClick = { scope.launch { repository.deleteAll() } },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            ) { Text(strings[Keys.CLIPBOARD_DELETE_EVERYTHING_INCLUDING_PINNED]) }
+        }
     }
 }
 

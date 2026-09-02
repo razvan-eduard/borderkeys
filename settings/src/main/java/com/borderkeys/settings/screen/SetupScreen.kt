@@ -29,7 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingsSectionCard
 
 /**
  * Getting the keyboard switched on.
@@ -48,54 +48,55 @@ fun SetupScreen(modifier: Modifier = Modifier) {
     val isDefault = isDefault(context)
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader(strings[Keys.SETUP_STEP_1_ENABLE_IT])
-        Explanation(
-            if (enabled) {
-                strings[Keys.SETUP_DONE_BORDERKEYS_APPEARS_IN_THE_SYSTEM]
-            } else {
-                strings[Keys.SETUP_ANDROID_WILL_WARN_THAT_A_KEYBOARD]
-            },
-        )
-        Button(
-            onClick = {
-                context.startActivity(
-                    Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
-            },
-            modifier = Modifier.padding(horizontal = 20.dp),
-        ) { Text(if (enabled) strings[Keys.SETUP_OPEN_INPUT_METHOD_SETTINGS] else strings[Keys.SETUP_ENABLE_BORDERKEYS]) }
-
-        SectionHeader(strings[Keys.SETUP_STEP_2_SWITCH_TO_IT])
-        Explanation(
-            if (isDefault) {
-                strings[Keys.SETUP_DONE_BORDERKEYS_IS_THE_CURRENT_KEYBOARD]
-            } else {
-                strings[Keys.SETUP_ENABLED_BUT_NOT_SELECTED_THE_PICKER]
-            },
-        )
-        Button(
-            onClick = {
-                (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
-                    ?.showInputMethodPicker()
-            },
-            modifier = Modifier.padding(horizontal = 20.dp),
-        ) { Text(strings[Keys.SETUP_CHOOSE_KEYBOARD]) }
-
-        SectionHeader(strings[Keys.SETUP_TRY_IT])
-        Explanation(strings[Keys.SETUP_A_REAL_TEXT_FIELD_WHATEVER_YOU])
-        OutlinedTextField(
-            value = probe,
-            onValueChange = { probe = it },
-            label = { Text(strings[Keys.SETUP_TYPE_HERE]) },
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
-        )
-        Text(
-            strings[Keys.SETUP_THIS_FIELD_IS_NOT_SAVED_ANYWHERE],
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-        )
+        SettingsSectionCard(strings[Keys.SETUP_STEP_1_ENABLE_IT]) {
+            Explanation(
+                if (enabled) {
+                    strings[Keys.SETUP_DONE_BORDERKEYS_APPEARS_IN_THE_SYSTEM]
+                } else {
+                    strings[Keys.SETUP_ANDROID_WILL_WARN_THAT_A_KEYBOARD]
+                },
+            )
+            Button(
+                onClick = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                },
+                modifier = Modifier.padding(horizontal = 20.dp),
+            ) { Text(if (enabled) strings[Keys.SETUP_OPEN_INPUT_METHOD_SETTINGS] else strings[Keys.SETUP_ENABLE_BORDERKEYS]) }
+        }
+        SettingsSectionCard(strings[Keys.SETUP_STEP_2_SWITCH_TO_IT]) {
+            Explanation(
+                if (isDefault) {
+                    strings[Keys.SETUP_DONE_BORDERKEYS_IS_THE_CURRENT_KEYBOARD]
+                } else {
+                    strings[Keys.SETUP_ENABLED_BUT_NOT_SELECTED_THE_PICKER]
+                },
+            )
+            Button(
+                onClick = {
+                    (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                        ?.showInputMethodPicker()
+                },
+                modifier = Modifier.padding(horizontal = 20.dp),
+            ) { Text(strings[Keys.SETUP_CHOOSE_KEYBOARD]) }
+        }
+        SettingsSectionCard(strings[Keys.SETUP_TRY_IT]) {
+            Explanation(strings[Keys.SETUP_A_REAL_TEXT_FIELD_WHATEVER_YOU])
+            OutlinedTextField(
+                value = probe,
+                onValueChange = { probe = it },
+                label = { Text(strings[Keys.SETUP_TYPE_HERE]) },
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+            )
+            Text(
+                strings[Keys.SETUP_THIS_FIELD_IS_NOT_SAVED_ANYWHERE],
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+        }
     }
 }
 

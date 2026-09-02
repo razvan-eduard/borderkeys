@@ -27,7 +27,7 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SuggestionStripPreview
 import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.launch
@@ -53,70 +53,67 @@ fun CorrectionsScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader(strings[Keys.CORRECTIONS_SUGGESTIONS])
-        SwitchRow(
-            title = strings[Keys.CORRECTIONS_SHOW_THE_SUGGESTION_STRIP],
-            subtitle = strings[Keys.CORRECTIONS_THE_ROW_ABOVE_THE_KEYS_IT],
-            checked = preferences.showSuggestionStrip,
-        ) { value -> update { it.copy(showSuggestionStrip = value) } }
-
-        SwitchRow(
-            title = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD],
-            subtitle = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD_NOTE],
-            checked = preferences.clipboardSuggestion,
-        ) { value -> update { it.copy(clipboardSuggestion = value) } }
-
-        SectionHeader(strings[Keys.CORRECTIONS_HOW_MANY_SUGGESTIONS])
-        SuggestionStripPreview(theme, preferences, Modifier.padding(vertical = 8.dp))
-        Text(
-            strings.getString(Keys.CORRECTIONS_AT_A_TIME, preferences.suggestionCount),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-        Slider(
-            value = preferences.suggestionCount.toFloat(),
-            valueRange = KeyboardPreferences.MIN_SUGGESTIONS.toFloat()..
-                KeyboardPreferences.MAX_SUGGESTIONS.toFloat(),
-            steps = KeyboardPreferences.MAX_SUGGESTIONS - KeyboardPreferences.MIN_SUGGESTIONS - 1,
-            onValueChange = { value ->
-                update { it.copy(suggestionCount = value.toInt()) }
-            },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-        )
-        Explanation(
-            strings[Keys.CORRECTIONS_THE_STRIP_IS_A_FIXED_WIDTH],
-        )
-
-        Divider()
-        SectionHeader(strings[Keys.CORRECTIONS_TWO_WORDS_AT_ONCE])
-        SwitchRow(
-            title = strings[Keys.CORRECTIONS_SUGGEST_WHOLE_PHRASES],
-            subtitle = strings[Keys.CORRECTIONS_OFFERS_VREAU_S_WHERE_IT_WOULD],
-            checked = preferences.phraseSuggestions,
-        ) { value -> update { it.copy(phraseSuggestions = value) } }
-        Explanation(
-            strings[Keys.CORRECTIONS_ONLY_FROM_WHAT_YOU_HAVE_WRITTEN],
-        )
-
-        Divider()
-        SectionHeader(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE])
-        SwitchRow(
-            title = strings[Keys.CORRECTIONS_APPLY_THE_FIRST_SUGGESTION_WHEN_YOU],
-            subtitle = strings[Keys.CORRECTIONS_OFF_BY_DEFAULT_WITH_IT_OFF],
-            checked = preferences.autoCorrectOnSpace,
-        ) { value -> update { it.copy(autoCorrectOnSpace = value) } }
-        Explanation(
-            strings[Keys.CORRECTIONS_THE_USUAL_OBJECTION_TO_AUTOCORRECT_IS],
-        )
-
-        SwitchRow(
-            title = strings[Keys.CORRECTIONS_BACKSPACE_PUTS_BACK_WHAT_YOU_TYPED],
-            subtitle = strings[Keys.CORRECTIONS_THE_BACKSPACE_STRAIGHT_AFTER_A_CORRECTION],
-            checked = preferences.revertCorrectionOnBackspace,
-        ) { value -> update { it.copy(revertCorrectionOnBackspace = value) } }
-        Explanation(
-            strings[Keys.CORRECTIONS_A_CORRECTION_IS_ONLY_LEARNED_ONCE],
-        )
+        SettingsSectionCard(strings[Keys.CORRECTIONS_SUGGESTIONS]) {
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_SHOW_THE_SUGGESTION_STRIP],
+                subtitle = strings[Keys.CORRECTIONS_THE_ROW_ABOVE_THE_KEYS_IT],
+                checked = preferences.showSuggestionStrip,
+            ) { value -> update { it.copy(showSuggestionStrip = value) } }
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD],
+                subtitle = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD_NOTE],
+                checked = preferences.clipboardSuggestion,
+            ) { value -> update { it.copy(clipboardSuggestion = value) } }
+        }
+        SettingsSectionCard(strings[Keys.CORRECTIONS_HOW_MANY_SUGGESTIONS]) {
+            SuggestionStripPreview(theme, preferences, Modifier.padding(vertical = 8.dp))
+            Text(
+                strings.getString(Keys.CORRECTIONS_AT_A_TIME, preferences.suggestionCount),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+            Slider(
+                value = preferences.suggestionCount.toFloat(),
+                valueRange = KeyboardPreferences.MIN_SUGGESTIONS.toFloat()..
+                    KeyboardPreferences.MAX_SUGGESTIONS.toFloat(),
+                steps = KeyboardPreferences.MAX_SUGGESTIONS - KeyboardPreferences.MIN_SUGGESTIONS - 1,
+                onValueChange = { value ->
+                    update { it.copy(suggestionCount = value.toInt()) }
+                },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            )
+            Explanation(
+                strings[Keys.CORRECTIONS_THE_STRIP_IS_A_FIXED_WIDTH],
+            )
+        }
+        SettingsSectionCard(strings[Keys.CORRECTIONS_TWO_WORDS_AT_ONCE]) {
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_SUGGEST_WHOLE_PHRASES],
+                subtitle = strings[Keys.CORRECTIONS_OFFERS_VREAU_S_WHERE_IT_WOULD],
+                checked = preferences.phraseSuggestions,
+            ) { value -> update { it.copy(phraseSuggestions = value) } }
+            Explanation(
+                strings[Keys.CORRECTIONS_ONLY_FROM_WHAT_YOU_HAVE_WRITTEN],
+            )
+        }
+        SettingsSectionCard(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE]) {
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_APPLY_THE_FIRST_SUGGESTION_WHEN_YOU],
+                subtitle = strings[Keys.CORRECTIONS_OFF_BY_DEFAULT_WITH_IT_OFF],
+                checked = preferences.autoCorrectOnSpace,
+            ) { value -> update { it.copy(autoCorrectOnSpace = value) } }
+            Explanation(
+                strings[Keys.CORRECTIONS_THE_USUAL_OBJECTION_TO_AUTOCORRECT_IS],
+            )
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_BACKSPACE_PUTS_BACK_WHAT_YOU_TYPED],
+                subtitle = strings[Keys.CORRECTIONS_THE_BACKSPACE_STRAIGHT_AFTER_A_CORRECTION],
+                checked = preferences.revertCorrectionOnBackspace,
+            ) { value -> update { it.copy(revertCorrectionOnBackspace = value) } }
+            Explanation(
+                strings[Keys.CORRECTIONS_A_CORRECTION_IS_ONLY_LEARNED_ONCE],
+            )
+        }
     }
 }

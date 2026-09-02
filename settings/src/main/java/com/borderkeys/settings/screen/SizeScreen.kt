@@ -30,7 +30,7 @@ import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.KeyboardPreview
-import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.launch
 
@@ -57,103 +57,100 @@ fun SizeScreen(modifier: Modifier = Modifier) {
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         KeyboardPreview(theme, preferences, Modifier.padding(vertical = 12.dp))
-        Divider()
 
-        SectionHeader(strings[Keys.SIZE_HEIGHT])
-        Explanation(
-            strings[Keys.SIZE_BIGGER_KEYS_ARE_EASIER_TO_HIT],
-        )
-        LabelledSlider(
-            value = preferences.heightScale,
-            range = KeyboardPreferences.MIN_HEIGHT_SCALE..KeyboardPreferences.MAX_HEIGHT_SCALE,
-            label = strings.getString(Keys.SIZE_TEXT_2, (preferences.heightScale * 100).toInt()),
-        ) { value -> update { it.copy(heightScale = value) } }
-
-        SectionHeader(strings[Keys.SIZE_POSITION])
-        Explanation(
-            strings[Keys.SIZE_ONE_HANDED_MODE_NARROWS_THE_KEYBOARD],
-        )
-        androidx.compose.foundation.layout.Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-        ) {
-            ModeChip(strings[Keys.SIZE_DOCKED], KeyboardPreferences.MODE_DOCKED, preferences.positionMode, ::update)
-            ModeChip(strings[Keys.SIZE_LEFT], KeyboardPreferences.MODE_ONE_HANDED_LEFT, preferences.positionMode,
-                ::update)
-            ModeChip(strings[Keys.SIZE_RIGHT], KeyboardPreferences.MODE_ONE_HANDED_RIGHT, preferences.positionMode,
-                ::update)
-            ModeChip(strings[Keys.SIZE_FLOATING], KeyboardPreferences.MODE_FLOATING, preferences.positionMode,
-                ::update)
-        }
-
-        if (preferences.positionMode != KeyboardPreferences.MODE_DOCKED) {
-            SectionHeader(strings[Keys.SIZE_WIDTH])
-            LabelledSlider(
-                value = preferences.widthScale,
-                range = KeyboardPreferences.MIN_WIDTH_SCALE..1f,
-                label = strings.getString(Keys.SIZE_TEXT, (preferences.widthScale * 100).toInt()),
-            ) { value -> update { it.copy(widthScale = value) } }
-
-            SectionHeader(strings[Keys.SIZE_DISTANCE_FROM_THE_BOTTOM_EDGE])
+        SettingsSectionCard(strings[Keys.SIZE_HEIGHT]) {
             Explanation(
-                strings[Keys.SIZE_LIFTS_THE_KEYBOARD_OFF_THE_BOTTOM],
+                strings[Keys.SIZE_BIGGER_KEYS_ARE_EASIER_TO_HIT],
             )
             LabelledSlider(
-                value = preferences.bottomOffsetDp,
-                range = 0f..KeyboardPreferences.MAX_BOTTOM_OFFSET_DP,
-                label = strings.getString(Keys.SIZE_DP_2, preferences.bottomOffsetDp.toInt()),
-            ) { value -> update { it.copy(bottomOffsetDp = value) } }
+                value = preferences.heightScale,
+                range = KeyboardPreferences.MIN_HEIGHT_SCALE..KeyboardPreferences.MAX_HEIGHT_SCALE,
+                label = strings.getString(Keys.SIZE_TEXT_2, (preferences.heightScale * 100).toInt()),
+            ) { value -> update { it.copy(heightScale = value) } }
         }
-
-        if (preferences.positionMode == KeyboardPreferences.MODE_FLOATING) {
-            SectionHeader(strings[Keys.SIZE_HORIZONTAL_POSITION])
-            LabelledSlider(
-                value = preferences.horizontalOffsetDp,
-                range = -160f..160f,
-                label = strings.getString(Keys.SIZE_DP, preferences.horizontalOffsetDp.toInt()),
-            ) { value -> update { it.copy(horizontalOffsetDp = value) } }
+        SettingsSectionCard(strings[Keys.SIZE_POSITION]) {
+            Explanation(
+                strings[Keys.SIZE_ONE_HANDED_MODE_NARROWS_THE_KEYBOARD],
+            )
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            ) {
+                ModeChip(strings[Keys.SIZE_DOCKED], KeyboardPreferences.MODE_DOCKED, preferences.positionMode, ::update)
+                ModeChip(strings[Keys.SIZE_LEFT], KeyboardPreferences.MODE_ONE_HANDED_LEFT, preferences.positionMode,
+                    ::update)
+                ModeChip(strings[Keys.SIZE_RIGHT], KeyboardPreferences.MODE_ONE_HANDED_RIGHT, preferences.positionMode,
+                    ::update)
+                ModeChip(strings[Keys.SIZE_FLOATING], KeyboardPreferences.MODE_FLOATING, preferences.positionMode,
+                    ::update)
+            }
+            if (preferences.positionMode != KeyboardPreferences.MODE_DOCKED) {
         }
-
-        if (preferences.positionMode != KeyboardPreferences.MODE_DOCKED) {
-            SectionHeader(strings[Keys.SIZE_THE_SPACE_BESIDE_THE_KEYS])
+        SettingsSectionCard(strings[Keys.SIZE_WIDTH]) {
+                LabelledSlider(
+                    value = preferences.widthScale,
+                    range = KeyboardPreferences.MIN_WIDTH_SCALE..1f,
+                    label = strings.getString(Keys.SIZE_TEXT, (preferences.widthScale * 100).toInt()),
+                ) { value -> update { it.copy(widthScale = value) } }
+        }
+        SettingsSectionCard(strings[Keys.SIZE_DISTANCE_FROM_THE_BOTTOM_EDGE]) {
+                Explanation(
+                    strings[Keys.SIZE_LIFTS_THE_KEYBOARD_OFF_THE_BOTTOM],
+                )
+                LabelledSlider(
+                    value = preferences.bottomOffsetDp,
+                    range = 0f..KeyboardPreferences.MAX_BOTTOM_OFFSET_DP,
+                    label = strings.getString(Keys.SIZE_DP_2, preferences.bottomOffsetDp.toInt()),
+                ) { value -> update { it.copy(bottomOffsetDp = value) } }
+            }
+            if (preferences.positionMode == KeyboardPreferences.MODE_FLOATING) {
+        }
+        SettingsSectionCard(strings[Keys.SIZE_HORIZONTAL_POSITION]) {
+                LabelledSlider(
+                    value = preferences.horizontalOffsetDp,
+                    range = -160f..160f,
+                    label = strings.getString(Keys.SIZE_DP, preferences.horizontalOffsetDp.toInt()),
+                ) { value -> update { it.copy(horizontalOffsetDp = value) } }
+            }
+            if (preferences.positionMode != KeyboardPreferences.MODE_DOCKED) {
+        }
+        SettingsSectionCard(strings[Keys.SIZE_THE_SPACE_BESIDE_THE_KEYS]) {
+                SwitchRow(
+                    title = strings[Keys.SIZE_ARROW_TO_MOVE_IT_ACROSS],
+                    subtitle = strings[Keys.SIZE_AN_ARROW_IN_THE_EMPTY_STRIP],
+                    checked = preferences.edgeArrows,
+                ) { value -> update { it.copy(edgeArrows = value) } }
+                SwitchRow(
+                    title = strings[Keys.SIZE_BLUR_WHAT_SHOWS_THROUGH],
+                    subtitle = strings[Keys.SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY],
+                    checked = preferences.blurBehindKeyboard,
+                ) { value -> update { it.copy(blurBehindKeyboard = value) } }
+            }
+        }
+        SettingsSectionCard(strings[Keys.SIZE_NUMBER_ROW]) {
             SwitchRow(
-                title = strings[Keys.SIZE_ARROW_TO_MOVE_IT_ACROSS],
-                subtitle = strings[Keys.SIZE_AN_ARROW_IN_THE_EMPTY_STRIP],
-                checked = preferences.edgeArrows,
-            ) { value -> update { it.copy(edgeArrows = value) } }
+                title = strings[Keys.SIZE_SHOW_A_ROW_OF_DIGITS],
+                subtitle = strings[Keys.SIZE_COSTS_ABOUT_A_FIFTH_OF_THE],
+                checked = preferences.numberRow,
+            ) { value -> update { it.copy(numberRow = value) } }
             SwitchRow(
-                title = strings[Keys.SIZE_BLUR_WHAT_SHOWS_THROUGH],
-                subtitle = strings[Keys.SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY],
-                checked = preferences.blurBehindKeyboard,
-            ) { value -> update { it.copy(blurBehindKeyboard = value) } }
-            Divider()
+                title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
+                subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
+                checked = preferences.numericKeypad,
+            ) { value -> update { it.copy(numericKeypad = value) } }
+            TextButton(
+                onClick = {
+                    update {
+                        it.copy(
+                            heightScale = 1f, widthScale = 1f,
+                            positionMode = KeyboardPreferences.MODE_DOCKED,
+                            bottomOffsetDp = 0f, horizontalOffsetDp = 0f,
+                        )
+                    }
+                },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            ) { Text(strings[Keys.SIZE_RESET_SIZE_AND_POSITION]) }
         }
-
-        SectionHeader(strings[Keys.SIZE_NUMBER_ROW])
-        SwitchRow(
-            title = strings[Keys.SIZE_SHOW_A_ROW_OF_DIGITS],
-            subtitle = strings[Keys.SIZE_COSTS_ABOUT_A_FIFTH_OF_THE],
-            checked = preferences.numberRow,
-        ) { value -> update { it.copy(numberRow = value) } }
-        SwitchRow(
-            title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
-            subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
-            checked = preferences.numericKeypad,
-        ) { value -> update { it.copy(numericKeypad = value) } }
-
-        Divider()
-        TextButton(
-            onClick = {
-                update {
-                    it.copy(
-                        heightScale = 1f, widthScale = 1f,
-                        positionMode = KeyboardPreferences.MODE_DOCKED,
-                        bottomOffsetDp = 0f, horizontalOffsetDp = 0f,
-                    )
-                }
-            },
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-        ) { Text(strings[Keys.SIZE_RESET_SIZE_AND_POSITION]) }
     }
 }
 

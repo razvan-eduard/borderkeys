@@ -24,6 +24,9 @@ import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import com.borderkeys.assist.AssistClient
 import com.borderkeys.data.DataGraph
+import com.borderkeys.predict.LanguagePackInspector
+import com.borderkeys.data.entity.LanguagePackEntry
+import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
 import com.borderkeys.data.theme.QuickAction
@@ -221,6 +224,7 @@ class BorderKeysService :
     private suspend fun loadDictionaries() {
         val repository = DataGraph.languagePacks
         repository.verifyEnabled()
+        reinstallOutdatedBundledPacks(repository)
 
         val enabled = repository.enabledPacks()
         for (entry in enabled) {
@@ -1481,6 +1485,68 @@ class BorderKeysService :
         clipboardListenerRegistered = false
     }
 
+    /**
+     * Replaces bundled packs the running build can no longer read.
+     *
+     * The pack format is versioned and a version this build does not know is refused rather
+     * than misread -- correct, and it leaves the keyboard with no dictionary at all until
+     * someone works out that the fix is to add the language again. For a pack that came from
+     * inside the application there is nothing to work out: the current one is in assets, so it
+     * is copied over the old one and the entry is updated in place.
+     *
+     * Only for bundled packs. A file someone imported themselves cannot be regenerated here,
+     * and silently replacing it with a bundled dictionary of the same language would be worse
+     * than the refusal.
+     */
+    private suspend fun reinstallOutdatedBundledPacks(
+        repository: com.borderkeys.data.LanguagePackRepository,
+    ) {
+        for (entry in repository.enabledPacks()) {
+            val file = repository.fileFor(entry)
+            if (!file.isFile) {
+                continue
+            }
+            val verdict = LanguagePackInspector.inspect(file)
+            if (verdict !is LanguagePackInspector.Result.Refused ||
+                verdict.status != BKD_ERR_VERSION
+            ) {
+                continue
+            }
+            val bundled = BundledDictionaries.ALL.firstOrNull { it.tag == entry.tag } ?: continue
+            val staged = runCatching {
+                BundledDictionaries.open(assets, bundled).use { stream ->
+                    repository.stage(stream, bundled.fileName)
+                }
+            }.getOrNull()?.getOrNull() ?: continue
+
+            val checked = LanguagePackInspector.inspect(staged.file)
+            if (checked !is LanguagePackInspector.Result.Valid) {
+                staged.file.delete()
+                continue
+            }
+            repository.register(
+                LanguagePackEntry(
+                    id = entry.id,
+                    tag = checked.info.tag,
+                    displayName = entry.displayName,
+                    fileName = staged.file.name,
+                    formatVersion = checked.info.formatVersion,
+                    wordCount = checked.info.wordCount,
+                    sizeBytes = staged.sizeBytes,
+                    sha256 = staged.sha256,
+                    importedAt = System.currentTimeMillis(),
+                    enabled = entry.enabled,
+                    weight = entry.weight,
+                    licenseNote = entry.licenseNote,
+                ),
+            )
+            android.util.Log.i(
+                "BorderKeys",
+                "replaced the bundled ${entry.tag} pack, which this build cannot read",
+            )
+        }
+    }
+
     // ---- quick actions --------------------------------------------------------------------
 
     /**
@@ -1888,6 +1954,9 @@ class BorderKeysService :
 
         /** How far either side of the cursor "the line" is looked for. */
         const val LINE_WINDOW_CHARS = 1024
+
+        /** BkdStatus.kBkdErrVersion, mirrored so the service can tell that case from the rest. */
+        const val BKD_ERR_VERSION = -4
         const val MIN_LEARNED_LENGTH = 2
 
         /**

@@ -21,7 +21,7 @@ import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.Screen
-import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 
 @Composable
@@ -40,62 +40,61 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         if (!enabled || !isDefault) {
-            SectionHeader(strings[Keys.HOME_NOT_FINISHED_YET])
-            SettingRow(
-                title = strings[Keys.HOME_SET_UP_BORDERKEYS],
-                subtitle = when {
-                    !enabled -> strings[Keys.HOME_THE_KEYBOARD_IS_NOT_ENABLED_IN]
-                    else -> strings[Keys.HOME_ENABLED_BUT_ANOTHER_KEYBOARD_IS_STILL]
-                },
-                onClick = { open(Screen.Setup) },
-            )
-            Divider()
-        }
-
-        SectionHeader(strings[Keys.HOME_TYPING])
-        SettingRow(strings[Keys.HOME_LANGUAGES], strings[Keys.HOME_WHICH_DICTIONARIES_ARE_ACTIVE_AND_THEIR]) {
-            open(Screen.Languages)
-        }
-        SettingRow(strings[Keys.HOME_LAYOUT], strings[Keys.HOME_WHICH_KEYS_AND_WHERE_SEPARATE_FROM]) {
-            open(Screen.Layout)
-        }
-        SettingRow(strings[Keys.HOME_SWIPE_TYPING], strings[Keys.HOME_GESTURE_INPUT_AND_THE_TRAIL_IT]) { open(Screen.Swipe) }
-        SettingRow(
-            strings[Keys.HOME_SUGGESTIONS_AND_CORRECTIONS],
-            strings[Keys.HOME_THE_STRIP_ABOVE_THE_KEYS_AND],
-        ) { open(Screen.Corrections) }
-        SettingRow(strings[Keys.HOME_PERSONAL_DICTIONARY], strings[Keys.HOME_WHAT_THIS_DEVICE_HAS_LEARNED]) {
-            open(Screen.Dictionary)
-        }
-        SettingRow(strings[Keys.HOME_CLIPBOARD], strings[Keys.HOME_HISTORY_PINNING_AND_HOW_LONG_IT]) {
-            open(Screen.Clipboard)
-        }
-        SettingRow(
-            strings[Keys.HOME_QUICK_ACTIONS],
-            strings[Keys.HOME_QUICK_ACTIONS_NOTE],
-        ) { open(Screen.QuickActions) }
-        if (hasAssistant) {
-            SettingRow(strings[Keys.HOME_TEXT_ASSISTANT], strings[Keys.HOME_SUMMARISE_CORRECT_AND_TRANSLATE_ON_THIS]) {
-                open(Screen.Assistant)
+        SettingsSectionCard(strings[Keys.HOME_NOT_FINISHED_YET]) {
+                SettingRow(
+                    title = strings[Keys.HOME_SET_UP_BORDERKEYS],
+                    subtitle = when {
+                        !enabled -> strings[Keys.HOME_THE_KEYBOARD_IS_NOT_ENABLED_IN]
+                        else -> strings[Keys.HOME_ENABLED_BUT_ANOTHER_KEYBOARD_IS_STILL]
+                    },
+                    onClick = { open(Screen.Setup) },
+                )
             }
         }
-
-        SectionHeader(strings[Keys.HOME_APPEARANCE])
-        SettingRow(strings[Keys.HOME_THEME], strings[Keys.HOME_COLOURS_CORNERS_AND_SPACING_WITH_A]) {
-            open(Screen.Theme)
+        SettingsSectionCard(strings[Keys.HOME_TYPING]) {
+            SettingRow(strings[Keys.HOME_LANGUAGES], strings[Keys.HOME_WHICH_DICTIONARIES_ARE_ACTIVE_AND_THEIR]) {
+                open(Screen.Languages)
+            }
+            SettingRow(strings[Keys.HOME_LAYOUT], strings[Keys.HOME_WHICH_KEYS_AND_WHERE_SEPARATE_FROM]) {
+                open(Screen.Layout)
+            }
+            SettingRow(strings[Keys.HOME_SWIPE_TYPING], strings[Keys.HOME_GESTURE_INPUT_AND_THE_TRAIL_IT]) { open(Screen.Swipe) }
+            SettingRow(
+                strings[Keys.HOME_SUGGESTIONS_AND_CORRECTIONS],
+                strings[Keys.HOME_THE_STRIP_ABOVE_THE_KEYS_AND],
+            ) { open(Screen.Corrections) }
+            SettingRow(strings[Keys.HOME_PERSONAL_DICTIONARY], strings[Keys.HOME_WHAT_THIS_DEVICE_HAS_LEARNED]) {
+                open(Screen.Dictionary)
+            }
+            SettingRow(strings[Keys.HOME_CLIPBOARD], strings[Keys.HOME_HISTORY_PINNING_AND_HOW_LONG_IT]) {
+                open(Screen.Clipboard)
+            }
+            SettingRow(
+                strings[Keys.HOME_QUICK_ACTIONS],
+                strings[Keys.HOME_QUICK_ACTIONS_NOTE],
+            ) { open(Screen.QuickActions) }
+            if (hasAssistant) {
+                SettingRow(strings[Keys.HOME_TEXT_ASSISTANT], strings[Keys.HOME_SUMMARISE_CORRECT_AND_TRANSLATE_ON_THIS]) {
+                    open(Screen.Assistant)
+                }
+            }
         }
-        SettingRow(
-            strings[Keys.HOME_SIZE_AND_POSITION],
-            strings[Keys.HOME_HEIGHT_ONE_HANDED_MODE_FLOATING_AND],
-        ) { open(Screen.Size) }
-
-        SectionHeader(strings[Keys.HOME_ABOUT])
-        SettingRow(strings[Keys.HOME_PRIVACY], strings[Keys.HOME_WHAT_IS_STORED_WHERE_AND_WHAT]) { open(Screen.Privacy) }
-        SettingRow(strings[Keys.HOME_ABOUT_BORDERKEYS], strings[Keys.HOME_VERSION_SOURCE_CODE_AND_LICENCE]) { open(Screen.About) }
-
-        Explanation(
-            strings[Keys.HOME_BORDERKEYS_REQUESTS_NO_PERMISSIONS_AND_CONTA],
-        )
+        SettingsSectionCard(strings[Keys.HOME_APPEARANCE]) {
+            SettingRow(strings[Keys.HOME_THEME], strings[Keys.HOME_COLOURS_CORNERS_AND_SPACING_WITH_A]) {
+                open(Screen.Theme)
+            }
+            SettingRow(
+                strings[Keys.HOME_SIZE_AND_POSITION],
+                strings[Keys.HOME_HEIGHT_ONE_HANDED_MODE_FLOATING_AND],
+            ) { open(Screen.Size) }
+        }
+        SettingsSectionCard(strings[Keys.HOME_ABOUT]) {
+            SettingRow(strings[Keys.HOME_PRIVACY], strings[Keys.HOME_WHAT_IS_STORED_WHERE_AND_WHAT]) { open(Screen.Privacy) }
+            SettingRow(strings[Keys.HOME_ABOUT_BORDERKEYS], strings[Keys.HOME_VERSION_SOURCE_CODE_AND_LICENCE]) { open(Screen.About) }
+            Explanation(
+                strings[Keys.HOME_BORDERKEYS_REQUESTS_NO_PERMISSIONS_AND_CONTA],
+            )
+        }
     }
 }
 

@@ -24,7 +24,7 @@ import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.settings.BuildConfig
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 
 /**
@@ -50,42 +50,41 @@ fun AboutScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader(strings[Keys.ABOUT_THIS_BUILD])
-        SettingRow(strings[Keys.ABOUT_VERSION], version)
-        SettingRow(strings[Keys.ABOUT_FLAVOUR], if (hasAssistant) "plus" else "core")
-        SettingRow(strings[Keys.ABOUT_COMMIT], BuildConfig.GIT_COMMIT)
-        SettingRow(strings[Keys.ABOUT_SOURCE], BuildConfig.SOURCE_URL)
-        Button(
-            onClick = {
-                runCatching {
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, BuildConfig.SOURCE_URL.toUri())
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                }
-            },
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-        ) { Text(strings[Keys.ABOUT_OPEN_THE_SOURCE_REPOSITORY]) }
-        Explanation(
-            strings[Keys.ABOUT_THE_COMMIT_ABOVE_IS_THE_ONE],
-        )
-
-        Divider()
-        SectionHeader(strings[Keys.ABOUT_LICENCE])
-        SettingRow(
-            strings[Keys.ABOUT_GPL_3_0_OR_LATER],
-            strings[Keys.ABOUT_YOU_MAY_USE_STUDY_CHANGE_AND],
-        )
-        Explanation(
-            strings[Keys.ABOUT_EVERY_DEPENDENCY_AND_EVERY_ASSET_IS],
-        )
-
-        if (hasAssistant) {
-            Divider()
-            SectionHeader(strings[Keys.ABOUT_TEXT_ASSISTANT])
+        SettingsSectionCard(strings[Keys.ABOUT_THIS_BUILD]) {
+            SettingRow(strings[Keys.ABOUT_VERSION], version)
+            SettingRow(strings[Keys.ABOUT_FLAVOUR], if (hasAssistant) "plus" else "core")
+            SettingRow(strings[Keys.ABOUT_COMMIT], BuildConfig.GIT_COMMIT)
+            SettingRow(strings[Keys.ABOUT_SOURCE], BuildConfig.SOURCE_URL)
+            Button(
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, BuildConfig.SOURCE_URL.toUri())
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                },
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            ) { Text(strings[Keys.ABOUT_OPEN_THE_SOURCE_REPOSITORY]) }
             Explanation(
-                strings[Keys.ABOUT_INFERENCE_USES_LLAMA_CPP_MIT_LICENSED],
+                strings[Keys.ABOUT_THE_COMMIT_ABOVE_IS_THE_ONE],
             )
+        }
+        SettingsSectionCard(strings[Keys.ABOUT_LICENCE]) {
+            SettingRow(
+                strings[Keys.ABOUT_GPL_3_0_OR_LATER],
+                strings[Keys.ABOUT_YOU_MAY_USE_STUDY_CHANGE_AND],
+            )
+            Explanation(
+                strings[Keys.ABOUT_EVERY_DEPENDENCY_AND_EVERY_ASSET_IS],
+            )
+            if (hasAssistant) {
+        }
+        SettingsSectionCard(strings[Keys.ABOUT_TEXT_ASSISTANT]) {
+                Explanation(
+                    strings[Keys.ABOUT_INFERENCE_USES_LLAMA_CPP_MIT_LICENSED],
+                )
+            }
         }
     }
 }

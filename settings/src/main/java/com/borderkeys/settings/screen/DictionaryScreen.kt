@@ -35,7 +35,7 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.Dispatchers
@@ -107,116 +107,113 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader(strings[Keys.DICTIONARY_HOW_QUICKLY_IT_LEARNS])
-        Explanation(
-            strings[Keys.DICTIONARY_THIS_DOES_NOT_CHANGE_WHAT_IS],
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SpeedChip(strings[Keys.DICTIONARY_CAUTIOUS], KeyboardPreferences.LEARNING_CAUTIOUS, preferences, ::update)
-            SpeedChip(strings[Keys.DICTIONARY_BALANCED], KeyboardPreferences.LEARNING_BALANCED, preferences, ::update)
-            SpeedChip(strings[Keys.DICTIONARY_IMMEDIATE], KeyboardPreferences.LEARNING_IMMEDIATE, preferences, ::update)
-        }
-        Explanation(
-            when (preferences.learningSpeed) {
-                KeyboardPreferences.LEARNING_CAUTIOUS ->
-                    strings[Keys.DICTIONARY_ABOUT_SIX_REPETITIONS_BEFORE_A_PHRASE]
-                KeyboardPreferences.LEARNING_IMMEDIATE ->
-                    strings[Keys.DICTIONARY_THE_FIRST_TIME_COUNTS_BEST_IF]
-                else ->
-                    strings[Keys.DICTIONARY_A_PHRASE_WRITTEN_TWICE_STARTS_TO]
-            },
-        )
-        SwitchRow(
-            title = strings[Keys.DICTIONARY_LEARN_AT_ALL],
-            subtitle = strings[Keys.DICTIONARY_OFF_MEANS_NOTHING_NEW_IS_RECORDED],
-            checked = preferences.learningEnabled,
-        ) { value -> update { it.copy(learningEnabled = value) } }
-
-        Divider()
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            label = { Text(strings[Keys.DICTIONARY_SEARCH]) },
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
-        )
-
-        SectionHeader(strings.getString(Keys.DICTIONARY_LEARNED_WORDS, words.size))
-        if (words.isEmpty()) {
-            SettingRow(
-                title = if (query.isBlank()) strings[Keys.DICTIONARY_NOTHING_LEARNED_YET] else strings[Keys.DICTIONARY_NO_MATCH],
-                subtitle = if (query.isBlank()) {
-                    strings[Keys.DICTIONARY_A_WORD_IS_LEARNED_WHEN_YOU]
-                } else {
-                    null
+        SettingsSectionCard(strings[Keys.DICTIONARY_HOW_QUICKLY_IT_LEARNS]) {
+            Explanation(
+                strings[Keys.DICTIONARY_THIS_DOES_NOT_CHANGE_WHAT_IS],
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SpeedChip(strings[Keys.DICTIONARY_CAUTIOUS], KeyboardPreferences.LEARNING_CAUTIOUS, preferences, ::update)
+                SpeedChip(strings[Keys.DICTIONARY_BALANCED], KeyboardPreferences.LEARNING_BALANCED, preferences, ::update)
+                SpeedChip(strings[Keys.DICTIONARY_IMMEDIATE], KeyboardPreferences.LEARNING_IMMEDIATE, preferences, ::update)
+            }
+            Explanation(
+                when (preferences.learningSpeed) {
+                    KeyboardPreferences.LEARNING_CAUTIOUS ->
+                        strings[Keys.DICTIONARY_ABOUT_SIX_REPETITIONS_BEFORE_A_PHRASE]
+                    KeyboardPreferences.LEARNING_IMMEDIATE ->
+                        strings[Keys.DICTIONARY_THE_FIRST_TIME_COUNTS_BEST_IF]
+                    else ->
+                        strings[Keys.DICTIONARY_A_PHRASE_WRITTEN_TWICE_STARTS_TO]
                 },
             )
+            SwitchRow(
+                title = strings[Keys.DICTIONARY_LEARN_AT_ALL],
+                subtitle = strings[Keys.DICTIONARY_OFF_MEANS_NOTHING_NEW_IS_RECORDED],
+                checked = preferences.learningEnabled,
+            ) { value -> update { it.copy(learningEnabled = value) } }
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text(strings[Keys.DICTIONARY_SEARCH]) },
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+            )
         }
-        for (word in words.take(200)) {
-            SettingRow(
-                title = word.word,
-                subtitle = strings.getString(Keys.DICTIONARY_CHOSEN_TIMES_TYPED_ON, word.count, word.locale),
-                trailing = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = { scope.launch { repository.forget(word.word) } }) {
-                            Text(strings[Keys.DICTIONARY_FORGET])
+        SettingsSectionCard(strings.getString(Keys.DICTIONARY_LEARNED_WORDS, words.size)) {
+            if (words.isEmpty()) {
+                SettingRow(
+                    title = if (query.isBlank()) strings[Keys.DICTIONARY_NOTHING_LEARNED_YET] else strings[Keys.DICTIONARY_NO_MATCH],
+                    subtitle = if (query.isBlank()) {
+                        strings[Keys.DICTIONARY_A_WORD_IS_LEARNED_WHEN_YOU]
+                    } else {
+                        null
+                    },
+                )
+            }
+            for (word in words.take(200)) {
+                SettingRow(
+                    title = word.word,
+                    subtitle = strings.getString(Keys.DICTIONARY_CHOSEN_TIMES_TYPED_ON, word.count, word.locale),
+                    trailing = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = { scope.launch { repository.forget(word.word) } }) {
+                                Text(strings[Keys.DICTIONARY_FORGET])
+                            }
+                            TextButton(onClick = { scope.launch { repository.block(word.word) } }) {
+                                Text(strings[Keys.DICTIONARY_BLOCK])
+                            }
                         }
-                        TextButton(onClick = { scope.launch { repository.block(word.word) } }) {
-                            Text(strings[Keys.DICTIONARY_BLOCK])
+                    },
+                )
+            }
+            if (words.size > 200) {
+                Explanation(strings[Keys.DICTIONARY_SHOWING_THE_FIRST_200_USE_SEARCH])
+            }
+        }
+        SettingsSectionCard(strings.getString(Keys.DICTIONARY_BLOCKED, blocked.size)) {
+            Explanation(
+                strings[Keys.DICTIONARY_A_BLOCKED_WORD_IS_NEVER_SUGGESTED],
+            )
+            for (entry in blocked) {
+                SettingRow(
+                    title = entry.word,
+                    trailing = {
+                        TextButton(onClick = { scope.launch { repository.unblock(entry.word) } }) {
+                            Text(strings[Keys.DICTIONARY_UNBLOCK])
                         }
-                    }
-                },
-            )
-        }
-        if (words.size > 200) {
-            Explanation(strings[Keys.DICTIONARY_SHOWING_THE_FIRST_200_USE_SEARCH])
-        }
-
-        Divider()
-        SectionHeader(strings.getString(Keys.DICTIONARY_BLOCKED, blocked.size))
-        Explanation(
-            strings[Keys.DICTIONARY_A_BLOCKED_WORD_IS_NEVER_SUGGESTED],
-        )
-        for (entry in blocked) {
-            SettingRow(
-                title = entry.word,
-                trailing = {
-                    TextButton(onClick = { scope.launch { repository.unblock(entry.word) } }) {
-                        Text(strings[Keys.DICTIONARY_UNBLOCK])
-                    }
-                },
-            )
-        }
-
-        Divider()
-        SectionHeader(strings[Keys.DICTIONARY_MOVE_IT_TO_ANOTHER_PHONE])
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            TextButton(onClick = { exporter.launch("borderkeys-dictionary.csv") }) {
-                Text(strings[Keys.DICTIONARY_EXPORT_CSV])
-            }
-            TextButton(onClick = { importer.launch(arrayOf("text/*", "*/*")) }) {
-                Text(strings[Keys.DICTIONARY_IMPORT_CSV])
-            }
-            TextButton(onClick = { scope.launch { repository.forgetEverything() } }) {
-                Text(strings[Keys.DICTIONARY_FORGET_EVERYTHING])
+                    },
+                )
             }
         }
-        message?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        SettingsSectionCard(strings[Keys.DICTIONARY_MOVE_IT_TO_ANOTHER_PHONE]) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextButton(onClick = { exporter.launch("borderkeys-dictionary.csv") }) {
+                    Text(strings[Keys.DICTIONARY_EXPORT_CSV])
+                }
+                TextButton(onClick = { importer.launch(arrayOf("text/*", "*/*")) }) {
+                    Text(strings[Keys.DICTIONARY_IMPORT_CSV])
+                }
+                TextButton(onClick = { scope.launch { repository.forgetEverything() } }) {
+                    Text(strings[Keys.DICTIONARY_FORGET_EVERYTHING])
+                }
+            }
+            message?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                )
+            }
+            Explanation(
+                strings[Keys.DICTIONARY_THIS_IS_THE_ONLY_FORM_OF],
             )
         }
-        Explanation(
-            strings[Keys.DICTIONARY_THIS_IS_THE_ONLY_FORM_OF],
-        )
     }
 }
 

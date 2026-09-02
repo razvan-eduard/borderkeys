@@ -34,7 +34,7 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.assist.KnownAssistModels
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -89,70 +89,68 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SectionHeader(strings[Keys.ASSISTANT_INSTALLED])
-        if (models.isEmpty()) {
-            SettingRow(
-                title = strings[Keys.ASSISTANT_NO_MODEL],
-                subtitle = strings[Keys.ASSISTANT_THE_ASSISTANT_DOES_NOTHING_UNTIL_ONE],
+        SettingsSectionCard(strings[Keys.ASSISTANT_INSTALLED]) {
+            if (models.isEmpty()) {
+                SettingRow(
+                    title = strings[Keys.ASSISTANT_NO_MODEL],
+                    subtitle = strings[Keys.ASSISTANT_THE_ASSISTANT_DOES_NOTHING_UNTIL_ONE],
+                )
+            }
+            for (model in models) {
+                SettingRow(
+                    title = model.displayName + if (model.active) strings[Keys.ASSISTANT_ACTIVE] else "",
+                    subtitle = buildString {
+                        append("${model.sizeBytes / 1024 / 1024} MB · ${model.license}\n")
+                        append(model.source)
+                        if (model.integrityFailedAt != null) {
+                            append(strings[Keys.ASSISTANT_SWITCHED_OFF_THE_FILE_NO_LONGER])
+                        }
+                    },
+                    trailing = {
+                        TextButton(onClick = { scope.launch { repository.remove(model) } }) {
+                            Text(strings[Keys.ASSISTANT_REMOVE])
+                        }
+                    },
+                )
+            }
+        }
+        SettingsSectionCard(strings[Keys.ASSISTANT_IMPORT]) {
+            Button(
+                onClick = { picker.launch(arrayOf("*/*")) },
+                enabled = !importing,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            ) { Text(strings[Keys.ASSISTANT_CHOOSE_A_GGUF_FILE]) }
+            if (importing) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(20.dp))
+                Explanation(strings[Keys.ASSISTANT_COPYING_AND_HASHING_A_MODEL_IS])
+            }
+            message?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                )
+            }
+        }
+        SettingsSectionCard(strings[Keys.ASSISTANT_MODELS_THIS_BUILD_WILL_LOAD]) {
+            Explanation(
+                strings[Keys.ASSISTANT_A_GGUF_FILE_IS_NOT_A],
+            )
+            for (entry in KnownAssistModels.entries) {
+                SettingRow(
+                    title = entry.displayName,
+                    subtitle = strings.getString(Keys.ASSISTANT_MB_NEEDS_ABOUT_MB_OF_RAM, entry.sizeBytes / 1024 / 1024, entry.license, entry.approximateRamMb, entry.source, entry.sha256.take(24)),
+                )
+            }
+        }
+        SettingsSectionCard(strings[Keys.ASSISTANT_HOW_IT_RUNS]) {
+            Explanation(
+                strings[Keys.ASSISTANT_IN_A_SEPARATE_PROCESS_STARTED_WHEN],
+            )
+            Explanation(
+                strings[Keys.ASSISTANT_IT_IS_REACHED_ONLY_FROM_A],
             )
         }
-        for (model in models) {
-            SettingRow(
-                title = model.displayName + if (model.active) strings[Keys.ASSISTANT_ACTIVE] else "",
-                subtitle = buildString {
-                    append("${model.sizeBytes / 1024 / 1024} MB · ${model.license}\n")
-                    append(model.source)
-                    if (model.integrityFailedAt != null) {
-                        append(strings[Keys.ASSISTANT_SWITCHED_OFF_THE_FILE_NO_LONGER])
-                    }
-                },
-                trailing = {
-                    TextButton(onClick = { scope.launch { repository.remove(model) } }) {
-                        Text(strings[Keys.ASSISTANT_REMOVE])
-                    }
-                },
-            )
-        }
-
-        Divider()
-        SectionHeader(strings[Keys.ASSISTANT_IMPORT])
-        Button(
-            onClick = { picker.launch(arrayOf("*/*")) },
-            enabled = !importing,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        ) { Text(strings[Keys.ASSISTANT_CHOOSE_A_GGUF_FILE]) }
-        if (importing) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(20.dp))
-            Explanation(strings[Keys.ASSISTANT_COPYING_AND_HASHING_A_MODEL_IS])
-        }
-        message?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-            )
-        }
-
-        Divider()
-        SectionHeader(strings[Keys.ASSISTANT_MODELS_THIS_BUILD_WILL_LOAD])
-        Explanation(
-            strings[Keys.ASSISTANT_A_GGUF_FILE_IS_NOT_A],
-        )
-        for (entry in KnownAssistModels.entries) {
-            SettingRow(
-                title = entry.displayName,
-                subtitle = strings.getString(Keys.ASSISTANT_MB_NEEDS_ABOUT_MB_OF_RAM, entry.sizeBytes / 1024 / 1024, entry.license, entry.approximateRamMb, entry.source, entry.sha256.take(24)),
-            )
-        }
-
-        Divider()
-        SectionHeader(strings[Keys.ASSISTANT_HOW_IT_RUNS])
-        Explanation(
-            strings[Keys.ASSISTANT_IN_A_SEPARATE_PROCESS_STARTED_WHEN],
-        )
-        Explanation(
-            strings[Keys.ASSISTANT_IT_IS_REACHED_ONLY_FROM_A],
-        )
     }
 }
