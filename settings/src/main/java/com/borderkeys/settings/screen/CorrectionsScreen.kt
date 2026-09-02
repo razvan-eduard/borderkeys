@@ -109,6 +109,18 @@ fun CorrectionsScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.CORRECTIONS_DOUBLE_SPACE_NOTE],
                 checked = preferences.doubleSpacePeriod,
             ) { value -> update { it.copy(doubleSpacePeriod = value) } }
+
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_SPACE_AFTER],
+                subtitle = strings[Keys.CORRECTIONS_SPACE_AFTER_NOTE],
+                checked = preferences.spaceAfterPunctuation,
+            ) { value -> update { it.copy(spaceAfterPunctuation = value) } }
+
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_SPACE_BEFORE],
+                subtitle = strings[Keys.CORRECTIONS_SPACE_BEFORE_NOTE],
+                checked = preferences.removeSpaceBeforePunctuation,
+            ) { value -> update { it.copy(removeSpaceBeforePunctuation = value) } }
         }
 
         SettingsSectionCard(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE]) {

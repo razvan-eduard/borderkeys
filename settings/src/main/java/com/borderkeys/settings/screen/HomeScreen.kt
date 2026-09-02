@@ -88,6 +88,17 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
                 strings[Keys.HOME_HEIGHT_ONE_HANDED_MODE_FLOATING_AND],
             ) { open(Screen.Size) }
         }
+        SettingsSectionCard(strings[Keys.SHORTCUTS_TITLE]) {
+            // Listed because a gesture nobody is told about is a gesture nobody uses. Holding
+            // enter to reach this screen was added in the same change as this card, and would
+            // otherwise be discoverable only by accident.
+            SettingRow(strings[Keys.SHORTCUTS_ENTER])
+            SettingRow(strings[Keys.SHORTCUTS_GLOBE])
+            SettingRow(strings[Keys.SHORTCUTS_SPACE])
+            SettingRow(strings[Keys.SHORTCUTS_SUGGESTION])
+            PinShortcutRow()
+        }
+
         SettingsSectionCard(strings[Keys.HOME_ABOUT]) {
             SettingRow(strings[Keys.HOME_PRIVACY], strings[Keys.HOME_WHAT_IS_STORED_WHERE_AND_WHAT]) { open(Screen.Privacy) }
             SettingRow(strings[Keys.HOME_ABOUT_BORDERKEYS], strings[Keys.HOME_VERSION_SOURCE_CODE_AND_LICENCE]) { open(Screen.About) }
@@ -113,3 +124,42 @@ private fun isKeyboardDefault(context: Context): Boolean {
     )
     return current != null && current.startsWith(context.packageName)
 }
+
+/**
+ * Offers to put these settings on the home screen.
+ *
+ * A keyboard's settings are awkward to reach: the launcher icon is one of the few ways in, and
+ * on a phone with a full app drawer it is not a fast one. The launcher does the placing --
+ * requestPinShortcut asks, and the user accepts in whatever dialog their launcher shows -- so
+ * this needs no permission and cannot place anything on its own.
+ */
+@Composable
+private fun PinShortcutRow() {
+    val strings = LocalStrings.current
+    val context = LocalContext.current
+    val manager = remember(context) {
+        context.getSystemService(android.content.pm.ShortcutManager::class.java)
+    }
+    val supported = manager?.isRequestPinShortcutSupported == true
+    SettingRow(
+        title = strings[Keys.SHORTCUTS_ADD],
+        subtitle = if (supported) null else strings[Keys.SHORTCUTS_UNSUPPORTED],
+    ) {
+        if (!supported) {
+            return@SettingRow
+        }
+        val intent = android.content.Intent(android.content.Intent.ACTION_MAIN)
+            .setClassName(context.packageName, SETTINGS_ACTIVITY)
+        val shortcut = android.content.pm.ShortcutInfo.Builder(context, "settings")
+            .setShortLabel(strings[Keys.SCREEN_BORDERKEYS])
+            .setIcon(android.graphics.drawable.Icon.createWithResource(
+                context, com.borderkeys.keyboard.R.drawable.bk_action_settings,
+            ))
+            .setIntent(intent)
+            .build()
+        runCatching { manager?.requestPinShortcut(shortcut, null) }
+    }
+}
+
+/** The same class name method.xml uses, and the only reference to it from this screen. */
+private const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"

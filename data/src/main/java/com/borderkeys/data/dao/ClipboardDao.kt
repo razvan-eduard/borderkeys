@@ -57,6 +57,10 @@ interface ClipboardDao {
     @Query("DELETE FROM clip_entries WHERE uri IS NOT NULL")
     suspend fun deleteImages(): Int
 
+    /** Everything that is not pinned, whatever its age. Used when the keyboard closes. */
+    @Query("DELETE FROM clip_entries WHERE pinnedAt IS NULL")
+    suspend fun deleteUnpinned(): Int
+
     @Query("SELECT COUNT(*) FROM clip_entries")
     suspend fun count(): Int
 

@@ -76,6 +76,14 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
             }
         }
 
+        SwitchRow(
+            title = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE],
+            subtitle = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE_NOTE],
+            checked = preferences.clearClipboardOnClose,
+        ) { value ->
+            scope.launch { themes.updatePreferences { it.copy(clearClipboardOnClose = value) } }
+        }
+
         SettingsSectionCard(strings[Keys.CLIPBOARD_HOW_MANY_ITEMS]) {
             StepSlider(
                 label = strings.getString(

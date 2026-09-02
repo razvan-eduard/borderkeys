@@ -110,6 +110,9 @@ class ClipboardRepository internal constructor(
     /** Forgets every remembered image. Called when the images switch is turned off. */
     suspend fun deleteImages(): Int = dao.deleteImages()
 
+    /** Forgets everything unpinned, whatever its age. Called when the keyboard closes. */
+    suspend fun deleteUnpinned(): Int = dao.deleteUnpinned()
+
     /**
      * Deletes what the retention window has expired.
      *

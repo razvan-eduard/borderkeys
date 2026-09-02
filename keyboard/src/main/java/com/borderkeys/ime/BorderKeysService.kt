@@ -130,6 +130,16 @@ class BorderKeysService :
     /** Set for exactly one keystroke after two spaces became a full stop, so backspace undoes it. */
     private var pendingSpacePeriod = false
 
+    /**
+     * Set when a space was added after a sentence mark, so the space the user types next is
+     * swallowed rather than doubled.
+     *
+     * Muscle memory types the space anyway. Without this, "hello." followed by the space
+     * everyone presses out of habit produces two -- and then the two-spaces rule turns them
+     * into a second full stop.
+     */
+    private var pendingAutoSpace = false
+
     /** Whether the current lock came from the field asking for capitals rather than from shift. */
     private var autoLockedShift = false
     private var lastShiftPressAt = 0L
@@ -659,7 +669,14 @@ class BorderKeysService :
         flushLearning()
         engine.cancelPending()
         resetComposing()
-        scope.launch(Dispatchers.IO) { DataGraph.clipboard.purgeExpired() }
+        scope.launch(Dispatchers.IO) {
+            if (preferences.clearClipboardOnClose) {
+                // Everything unpinned, whether it was copied a second ago or an hour: the
+                // setting is deliberately blunter than the retention timer beside it.
+                DataGraph.clipboard.deleteUnpinned()
+            }
+            DataGraph.clipboard.purgeExpired()
+        }
     }
 
     override fun onDestroy() {
@@ -881,6 +898,14 @@ class BorderKeysService :
      * look for it anyway.
      */
     override fun onKeyLongPress(code: Int, keyIndex: Int): Boolean {
+        // Enter opens the settings application; the globe and the settings key open the panel
+        // in the keyboard. Two different things, on purpose: the panel is for the handful of
+        // adjustments worth making without leaving the field you are typing in, and everything
+        // else is a screen with room to explain itself.
+        if (code == KeyCodes.ENTER) {
+            openSettings()
+            return true
+        }
         if (code != KeyCodes.LANGUAGE && code != KeyCodes.SETTINGS) {
             return false
         }
@@ -902,6 +927,7 @@ class BorderKeysService :
         shiftHeldByUser = false
 
         if (isWordCharacter(shifted)) {
+            pendingAutoSpace = false
             composing.appendCodePoint(shifted)
             // One IPC for the whole update. setComposingText replaces the composing region, so
             // the editor is told the new word rather than the character that changed.
@@ -923,6 +949,13 @@ class BorderKeysService :
         // Captured before anything commits: finishComposing and the correction branch both
         // advance previousWord1 to the word being written now.
         val contextWord = previousWord1
+
+        // The space we just added ourselves, typed again out of habit. Swallowed, and the
+        // window for the two-spaces rule is not opened by it either.
+        if (shifted == ' '.code && typed.isEmpty() && pendingAutoSpace) {
+            pendingAutoSpace = false
+            return
+        }
 
         // Two spaces in quick succession end the sentence instead. Only after a word
         // character, so it never fires on an empty line or after punctuation that already
@@ -949,7 +982,20 @@ class BorderKeysService :
         pendingSpacePeriod = false
 
         connection.beginBatchEdit()
-        val delimiter = String(Character.toChars(shifted))
+        // "word ." is not something anyone means. A space before a sentence mark is taken back
+        // before the mark lands, which is what makes adding one after a mark safe: the pair of
+        // settings is one idea, and either half alone would be worse than neither.
+        if (typed.isEmpty() && preferences.removeSpaceBeforePunctuation &&
+            isTightPunctuation(shifted)
+        ) {
+            val before = connection.getTextBeforeCursor(1, 0)
+            if (before != null && before.length == 1 && before[0] == ' ') {
+                connection.deleteSurroundingText(1, 0)
+            }
+        }
+        val added = spaceAfter(shifted)
+        pendingAutoSpace = added.isNotEmpty()
+        val delimiter = String(Character.toChars(shifted)) + added
         if (correction != null) {
             // commitText replaces the composing region, which is the whole point: the letters
             // that are on screen become the correction in one edit. Calling finishComposingText
@@ -1568,6 +1614,28 @@ class BorderKeysService :
     private fun endsWithWordCharacterBeforeSpace(connection: InputConnection): Boolean {
         val before = connection.getTextBeforeCursor(2, 0) ?: return false
         return before.length == 2 && before[1] == ' ' && isWordCharacter(before[0].code)
+    }
+
+    /**
+     * Marks that close up against the word before them, so a space in front of one is a typo.
+     *
+     * Not every delimiter: a dash or an opening bracket is often preceded by a space on
+     * purpose, and taking it away would be the keyboard rewriting rather than tidying.
+     */
+    private fun isTightPunctuation(code: Int): Boolean =
+        code == '.'.code || code == ','.code || code == '!'.code || code == '?'.code ||
+            code == ';'.code || code == ':'.code
+
+    /** The space that follows a sentence mark, or nothing at all. */
+    private fun spaceAfter(code: Int): String {
+        if (!preferences.spaceAfterPunctuation || !isTightPunctuation(code)) {
+            return ""
+        }
+        // Not before something that is already a space, and not at the very end of a field the
+        // user may be about to leave -- an editor that trims trailing whitespace would then
+        // show the cursor jumping back on its own.
+        val after = currentInputConnection?.getTextAfterCursor(1, 0)
+        return if (after != null && after.isNotEmpty() && after[0] == ' ') "" else " "
     }
 
     private fun shiftAfterDelimiter(code: Int) {

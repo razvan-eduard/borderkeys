@@ -94,6 +94,23 @@ data class KeyboardPreferences(
     val doubleSpacePeriod: Boolean = true,
 
     /**
+     * Whether a space is added after a full stop, comma or the rest of the sentence marks.
+     *
+     * On. It is the space you were going to type, and it is what makes removing one before the
+     * next mark worth doing -- the two settings are halves of the same idea and both are here
+     * so either can be switched off alone.
+     */
+    val spaceAfterPunctuation: Boolean = true,
+
+    /**
+     * Whether a space before a punctuation mark is removed when the mark is typed.
+     *
+     * On. "word ." is not something anyone means, and it is what a keyboard that adds spaces
+     * after words produces if it does not also take them back.
+     */
+    val removeSpaceBeforePunctuation: Boolean = true,
+
+    /**
      * Whether sliding along the space bar moves the cursor.
      *
      * On. It costs nothing when unused -- the slide has to travel further than a tap ever
@@ -209,6 +226,15 @@ data class KeyboardPreferences(
      * copies things they would rather not leave lying there.
      */
     val clearClipboardAfterInsert: Boolean = false,
+
+    /**
+     * Whether the clipboard history is emptied when the keyboard closes.
+     *
+     * Off, and a much blunter instrument than the retention timer beside it: everything
+     * unpinned goes the moment you leave the field, whether it was copied a second ago or an
+     * hour. For someone who wants the history while they are writing and nothing afterwards.
+     */
+    val clearClipboardOnClose: Boolean = false,
 
     /** Whether the row of quick actions is shown at all. */
     val quickActionsEnabled: Boolean = false,
