@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import com.borderkeys.data.DataGraph
@@ -26,6 +27,7 @@ import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.settings.screen.AboutScreen
 import com.borderkeys.settings.screen.AssistantScreen
+import com.borderkeys.data.backup.TransferProtocol
 import com.borderkeys.settings.screen.BackupScreen
 import com.borderkeys.settings.screen.ClipboardScreen
 import com.borderkeys.settings.screen.ComposerScreen
@@ -36,6 +38,7 @@ import com.borderkeys.settings.screen.LayoutScreen
 import com.borderkeys.settings.screen.PrivacyScreen
 import com.borderkeys.settings.screen.QuickActionsScreen
 import com.borderkeys.settings.screen.SetupScreen
+import com.borderkeys.settings.screen.TransferScreen
 import com.borderkeys.settings.screen.SizeScreen
 import com.borderkeys.settings.screen.CorrectionsScreen
 import com.borderkeys.settings.screen.SwipeScreen
@@ -65,11 +68,59 @@ class SettingsActivity : ComponentActivity() {
         val strings = LanguageManager(this).apply {
             loadResolved(DataGraph.themes.currentPreferences().uiLanguage)
         }
+        // Started by the other build to ask for this one's settings, rather than by a person
+        // opening the application. Null when it is an ordinary launch, or when whoever asked
+        // is not who they would have to be.
+        val asking = transferRequester()
         setContent {
             CompositionLocalProvider(LocalStrings provides strings) {
-                BorderKeysSettingsTheme { SettingsApp() }
+                BorderKeysSettingsTheme {
+                    if (asking != null) {
+                        // Its own insets, because it is shown instead of the Scaffold that
+                        // would otherwise be supplying them, and a request to hand over
+                        // somebody's dictionary should not be half hidden behind the clock.
+                        TransferScreen(asking, Modifier.safeDrawingPadding())
+                    } else {
+                        SettingsApp()
+                    }
+                }
             }
         }
+    }
+
+    /**
+     * Who is asking for this build's settings, if anybody, and if they may.
+     *
+     * Two conditions, and neither is enough alone.
+     *
+     * The caller must be signed with the certificate this build was signed with. That is what
+     * makes it the other BorderKeys and not an application that has merely learned the name of
+     * an extra -- a name is public, a signature is not forgeable. `checkSignatures` compares
+     * the certificates the platform recorded at install time.
+     *
+     * And `callingPackage` must exist at all, which it only does for an activity started for a
+     * result. An application that fired this off and walked away could not receive the answer
+     * anyway, and would not be identifiable while asking.
+     *
+     * What neither condition can establish is that the person holding the phone meant any of
+     * this to happen, which is why what this returns is a screen with a button on it rather
+     * than a file.
+     */
+    private fun transferRequester(): String? {
+        if (!intent.getBooleanExtra(TransferProtocol.EXTRA_REQUEST, false)) {
+            return null
+        }
+        val caller = callingPackage ?: return null
+        val matches = packageManager.checkSignatures(caller, packageName) ==
+            android.content.pm.PackageManager.SIGNATURE_MATCH
+        if (!matches) {
+            return null
+        }
+        return runCatching {
+            packageManager.getApplicationLabel(
+                packageManager.getApplicationInfo(caller, 0),
+            ).toString()
+        }.getOrDefault(caller)
     }
 }
 

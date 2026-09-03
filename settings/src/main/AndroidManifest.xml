@@ -33,6 +33,24 @@
             </intent-filter>
         </activity>
 
+        <!--
+            Serves the one file a transfer writes, and nothing else.
+
+            Not exported, which is the whole point: an unexported provider cannot be queried by
+            another application at all. It can only be reached through a URI this application
+            handed out with a read grant attached, for one read, in the result of an activity
+            the user approved. That is a narrower thing than it looks like.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.transfer"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/transfer_paths" />
+        </provider>
+
     </application>
 
 </manifest>

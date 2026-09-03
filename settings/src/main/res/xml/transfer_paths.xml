@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    One directory, inside this application's own cache, holding one file. The provider that
+    serves it is not exported: no other application can reach it by asking, only by being handed
+    a URI this application granted for a single read.
+-->
+<paths>
+    <cache-path name="transfer" path="transfer/" />
+</paths>

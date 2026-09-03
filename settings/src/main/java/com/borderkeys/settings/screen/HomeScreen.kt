@@ -38,14 +38,26 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
         context.packageManager.resolveService(intent, 0) != null
     }
 
+    // Shown while anything in the setup is outstanding -- including, in the assistant build,
+    // the settings still sitting in the other one. Without that last condition the card would
+    // vanish the moment the keyboard was switched on, taking the transfer step with it, and the
+    // one thing somebody most wants right after installing would become unreachable.
+    val sibling = remember(context) { siblingPackage(context) }
+    val canTransfer = remember(context, sibling) {
+        sibling != null && runCatching {
+            context.packageManager.getPackageInfo(sibling, 0)
+        }.isSuccess
+    }
+
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        if (!enabled || !isDefault) {
-        SettingsSectionCard(strings[Keys.HOME_NOT_FINISHED_YET]) {
+        if (!enabled || !isDefault || canTransfer) {
+            SettingsSectionCard(strings[Keys.HOME_NOT_FINISHED_YET]) {
                 SettingRow(
                     title = strings[Keys.HOME_SET_UP_BORDERKEYS],
                     subtitle = when {
                         !enabled -> strings[Keys.HOME_THE_KEYBOARD_IS_NOT_ENABLED_IN]
-                        else -> strings[Keys.HOME_ENABLED_BUT_ANOTHER_KEYBOARD_IS_STILL]
+                        !isDefault -> strings[Keys.HOME_ENABLED_BUT_ANOTHER_KEYBOARD_IS_STILL]
+                        else -> strings[Keys.SETUP_IMPORT_NOTE]
                     },
                     onClick = { open(Screen.Setup) },
                 )
@@ -174,3 +186,15 @@ private fun PinShortcutRow() {
 
 /** The same class name method.xml uses, and the only reference to it from this screen. */
 private const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
+
+/**
+ * The package name of the other build, or null when this one has no sibling.
+ *
+ * The same derivation the setup screen uses, and for the same reason: the assistant build is
+ * this one's name with a suffix, so one is the other with the suffix removed rather than a
+ * second constant that could drift.
+ */
+private fun siblingPackage(context: android.content.Context): String? {
+    val self = context.packageName
+    return if (self.endsWith(".plus")) self.removeSuffix(".plus") else null
+}
