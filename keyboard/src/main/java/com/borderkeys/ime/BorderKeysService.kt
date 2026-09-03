@@ -507,8 +507,16 @@ class BorderKeysService :
         AssistTask.SUMMARISE -> strings[Keys.ASSISTANT_SUMMARY]
         AssistTask.CORRECT -> strings[Keys.ASSISTANT_CORRECTION]
         AssistTask.REWRITE_FORMAL -> strings[Keys.ASSISTANT_FORMAL_REWRITE]
+        AssistTask.REWRITE_CASUAL -> strings[Keys.ASSISTANT_CASUAL_REWRITE]
+        AssistTask.REWRITE_DIRECT -> strings[Keys.ASSISTANT_DIRECT_REWRITE]
+        AssistTask.SHORTEN -> strings[Keys.ASSISTANT_SHORTENING]
         AssistTask.TRANSLATE_TO_ENGLISH -> strings[Keys.ASSISTANT_TRANSLATION_INTO_ENGLISH]
         AssistTask.TRANSLATE_TO_ROMANIAN -> strings[Keys.ASSISTANT_TRADUCERE_N_ROM_N]
+        AssistTask.TRANSLATE_TO_GERMAN -> strings[Keys.ASSISTANT_TRANSLATION_INTO_GERMAN]
+        AssistTask.TRANSLATE_TO_SPANISH -> strings[Keys.ASSISTANT_TRANSLATION_INTO_SPANISH]
+        AssistTask.TRANSLATE_TO_FRENCH -> strings[Keys.ASSISTANT_TRANSLATION_INTO_FRENCH]
+        AssistTask.TRANSLATE_TO_ITALIAN -> strings[Keys.ASSISTANT_TRANSLATION_INTO_ITALIAN]
+        AssistTask.CUSTOM -> strings[Keys.ASSISTANT_YOUR_OWN_INSTRUCTION]
     }
 
     override fun onAssistResult(requestId: Int, text: String, modelName: String?) {

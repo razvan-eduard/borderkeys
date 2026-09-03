@@ -257,6 +257,33 @@ data class KeyboardPreferences(
      */
     val clearClipboardOnClose: Boolean = false,
 
+    /**
+     * Whether the draft box can be opened at all.
+     *
+     * On. It costs nothing when it is not open, and it is the only place in this keyboard where
+     * what you write is not immediately in somebody's application.
+     */
+    val composerEnabled: Boolean = true,
+
+    /**
+     * The buttons on the draft box's control bar, in order, as [ComposerAction] ids.
+     *
+     * Ids rather than ordinals, and read back through the enum, for the same reason the quick
+     * actions are: a bar written by a later build must open rather than fail.
+     */
+    val composerBar: List<Int> = ComposerAction.DEFAULT.map { it.id },
+
+    /**
+     * The language the translate button used last, as a tag.
+     *
+     * Remembered so that the second translation is one tap where the first was two. Empty until
+     * something has been chosen, which is when the chooser opens instead.
+     */
+    val composerTranslateTarget: String = "",
+
+    /** Instructions the user wrote and kept, in the order they were saved. */
+    val savedPrompts: List<SavedPrompt> = emptyList(),
+
     /** Whether the row of quick actions is shown at all. */
     val quickActionsEnabled: Boolean = false,
 
@@ -363,6 +390,20 @@ data class KeyboardPreferences(
         // Read through the enum, which drops ids no build knows, then bounded: a stored file is
         // not a trusted file, and a bar of four hundred buttons is a bar with no buttons on it.
         quickActions = QuickAction.fromIds(quickActions).take(MAX_QUICK_ACTIONS).map { it.id },
+        composerBar = ComposerAction.fromIds(composerBar).map { it.id },
+        composerTranslateTarget = composerTranslateTarget.take(MAX_LANGUAGE_TAG),
+        // Bounded on the way in as well as on the way out. These are written by the user, so
+        // the file is as trustworthy as the rest of it -- which is to say bounded and read back
+        // rather than trusted.
+        savedPrompts = savedPrompts
+            .filter { it.name.isNotBlank() && it.text.isNotBlank() }
+            .map {
+                it.copy(
+                    name = it.name.take(SavedPrompt.MAX_NAME_CHARS),
+                    text = it.text.take(SavedPrompt.MAX_TEXT_CHARS),
+                )
+            }
+            .take(SavedPrompt.MAX_SAVED),
         emojiRecents = emojiRecents.filter { it.isNotEmpty() }.take(MAX_EMOJI_RECENTS),
         quickActionsMode = if (quickActionsMode in QUICK_ACTIONS_FULL..QUICK_ACTIONS_COLLAPSED) {
             quickActionsMode

@@ -334,4 +334,47 @@ class KeyboardPreferencesTest {
         assertFalse("an empty entry is not an emoji", kept.contains(""))
     }
 
+
+    @Test
+    fun `the draft box is on and its bar has the buttons that work without a model`() {
+        val defaults = KeyboardPreferences()
+        assertTrue("the draft box should be available", defaults.composerEnabled)
+        val bar = ComposerAction.fromIds(defaults.composerBar)
+        assertTrue("insert has to be on the bar", bar.contains(ComposerAction.INSERT))
+        assertFalse(
+            "a button that opens an empty list should not be there on a new install",
+            bar.contains(ComposerAction.SAVED_PROMPTS),
+        )
+    }
+
+    @Test
+    fun `a bar written by a later build opens rather than failing`() {
+        val fromLater = KeyboardPreferences(composerBar = listOf(8, 9999, 1, 1))
+        val kept = fromLater.sanitised().composerBar
+        assertEquals(
+            "an unknown id should be dropped and a repeat should not be drawn twice",
+            listOf(ComposerAction.INSERT.id, ComposerAction.GRAMMAR.id),
+            kept,
+        )
+    }
+
+    @Test
+    fun `saved prompts are bounded and drop the blank ones`() {
+        val many = List(100) { SavedPrompt(name = "n$it", text = "t$it") } +
+            SavedPrompt(name = " ", text = "something") +
+            SavedPrompt(name = "something", text = "")
+        val kept = KeyboardPreferences(savedPrompts = many).sanitised().savedPrompts
+        assertEquals(SavedPrompt.MAX_SAVED, kept.size)
+        assertTrue("a prompt with no name or no text is not a prompt", kept.all {
+            it.name.isNotBlank() && it.text.isNotBlank()
+        })
+    }
+
+    @Test
+    fun `a saved prompt cannot carry an unbounded string out of a corrupt file`() {
+        val huge = SavedPrompt(name = "n".repeat(9000), text = "t".repeat(9000))
+        val kept = KeyboardPreferences(savedPrompts = listOf(huge)).sanitised().savedPrompts
+        assertEquals(SavedPrompt.MAX_NAME_CHARS, kept[0].name.length)
+        assertEquals(SavedPrompt.MAX_TEXT_CHARS, kept[0].text.length)
+    }
 }

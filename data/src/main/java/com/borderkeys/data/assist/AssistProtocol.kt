@@ -44,6 +44,12 @@ object AssistProtocol {
     const val KEY_MODEL_NAME = "model"
     const val KEY_REQUEST_ID = "request"
 
+    /**
+     * The instruction a user wrote, for AssistTask.CUSTOM. Absent for every other task, whose
+     * instruction is a constant the service already has.
+     */
+    const val KEY_INSTRUCTION = "instruction"
+
     // ---- errors ---------------------------------------------------------------------------
     //
     // Every one of these is a sentence the user can be shown. A failure that reaches the sheet
@@ -73,4 +79,7 @@ object AssistProtocol {
 
     /** The longest selection that may be sent, in characters. Enforced on both sides. */
     const val MAX_SELECTION_CHARS = 8000
+
+    /** A custom task arrived with no instruction, or one longer than the cap. */
+    const val ERROR_NO_INSTRUCTION = 8
 }

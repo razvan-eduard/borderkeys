@@ -24,9 +24,14 @@ class NoLanguageExamplesTest {
         "vreau", "Romanian", "rumeno", "rumano", "roumain", "Rumänisch", "românesc",
     )
 
-    /** Keys whose whole job is to name a language. */
+    /**
+     * Keys whose whole job is to name a language.
+     *
+     * `language_` covers both the names shown beside a dictionary and the draft box's list of
+     * translation targets -- a chooser that cannot say "Romanian" is not a chooser.
+     */
     private val labels = listOf(
-        "language_name_", "assistant_english", "assistant_rom", "assistant_traducere",
+        "language_", "assistant_english", "assistant_rom", "assistant_traducere",
         "assistant_translation", "screen_", "home_",
     )
 
