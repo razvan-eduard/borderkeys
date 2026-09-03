@@ -126,6 +126,15 @@ class QuickActionsView(
         QuickAction.COMPOSE -> R.drawable.bk_action_compose
     }
 
+    /**
+     * Whether to paint the surface, or leave it to whatever is behind.
+     *
+     * False inside the keyboard, where the host paints one surface across the whole of it: this
+     * row painting its own would restart a gradient or re-crop a picture at its own edges, and
+     * the seam would run across the top of the keyboard.
+     */
+    var drawsBackground: Boolean = true
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val thickness = barThicknessPx()
         if (vertical) {
@@ -175,7 +184,9 @@ class QuickActionsView(
     override fun onDraw(canvas: Canvas) {
         Trace.beginSection("QuickActionsView.onDraw")
         try {
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paints.background)
+            if (drawsBackground) {
+                paints.backgroundPainter.draw(canvas, width.toFloat(), height.toFloat())
+            }
             val shown = shownCount()
             val half = buttonSizePx / 2
             for (index in 0 until shown) {

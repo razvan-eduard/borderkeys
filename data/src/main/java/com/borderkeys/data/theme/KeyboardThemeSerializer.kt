@@ -7,6 +7,8 @@ import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.Serializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -37,7 +39,10 @@ object KeyboardThemeSerializer : Serializer<KeyboardTheme> {
             return defaultValue
         }
         return try {
-            json.decodeFromString(KeyboardTheme.serializer(), bytes.decodeToString()).sanitised()
+            val text = bytes.decodeToString()
+            json.decodeFromString(KeyboardTheme.serializer(), text)
+                .withLegacyPattern(text)
+                .sanitised()
         } catch (error: SerializationException) {
             // Translated rather than propagated. DataStore only recognises CorruptionException,
             // and only a CorruptionException reaches the replace handler that rewrites the file
@@ -49,6 +54,29 @@ object KeyboardThemeSerializer : Serializer<KeyboardTheme> {
             // overwritten file looks like.
             throw CorruptionException("the keyboard theme file is not valid UTF-8", error)
         }
+    }
+
+    /**
+     * Carries a theme written before patterns could layer.
+     *
+     * The single `backgroundPattern` became a list. `ignoreUnknownKeys` would drop the old key
+     * without a word, so the one that was chosen is read out of the raw text and becomes the
+     * only member of the new list. Read from the JSON rather than kept as a field on the class,
+     * so nothing writes the dead key back out.
+     */
+    private fun KeyboardTheme.withLegacyPattern(text: String): KeyboardTheme {
+        if (backgroundPatterns.isNotEmpty()) {
+            return this
+        }
+        val old = runCatching {
+            (json.parseToJsonElement(text) as? JsonObject)
+                ?.get("backgroundPattern")
+                ?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() }
+        }.getOrNull() ?: return this
+        if (old == KeyboardTheme.PATTERN_NONE) {
+            return this
+        }
+        return copy(backgroundPatterns = listOf(old))
     }
 
     override suspend fun writeTo(t: KeyboardTheme, output: OutputStream) {

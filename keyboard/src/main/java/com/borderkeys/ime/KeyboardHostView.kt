@@ -320,6 +320,7 @@ class KeyboardHostView(
         // every edge where two children meet.
         keyboard.drawsBackground = false
         suggestionStrip.drawsBackground = false
+        quickActions.drawsBackground = false
         composer.visibility = GONE
         addView(composer)
         addView(suggestionStrip)

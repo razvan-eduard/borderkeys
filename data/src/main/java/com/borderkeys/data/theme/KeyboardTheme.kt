@@ -49,12 +49,40 @@ data class KeyboardTheme(
      */
     val backgroundGradientColor: Int = 0,
 
-    /** One of the PATTERN_ constants, drawn over the background in [patternColor]. */
-    val backgroundPattern: Int = PATTERN_NONE,
+    /**
+     * The patterns drawn over the background, as PATTERN_ constants, in the order given.
+     *
+     * A list rather than one choice, because they layer: dots over a grid is a third thing, and
+     * there is no reason for the keyboard to be the one deciding that two of them together are
+     * not allowed. Empty for a plain surface.
+     *
+     * This replaced a single `backgroundPattern` field; the serializer reads that older key and
+     * carries whichever pattern it named in as the one member of this list.
+     */
+    val backgroundPatterns: List<Int> = emptyList(),
     val patternColor: Int = 0x1FFFFFFF,
 
     /** The repeat of the pattern, edge to edge of one tile. */
     val patternScaleDp: Float = 24f,
+
+    /**
+     * A picture behind the keys: the name of a file in this application's own directory, or
+     * empty.
+     *
+     * A name and not a path, because the two builds have different directories and a path
+     * copied from one would point at nothing in the other. Whoever draws it resolves the name.
+     */
+    val backgroundImage: String = "",
+
+    /**
+     * How far the picture is darkened before anything is drawn on it, from 0 to 1.
+     *
+     * Not decoration. Key labels are one colour and a photograph is every colour, so without
+     * this the letters disappear over whichever part of the picture happens to be behind them.
+     * The default is heavy on purpose: a background that competes with the labels is a
+     * background that makes the keyboard worse.
+     */
+    val backgroundImageDim: Float = 0.55f,
 
     /**
      * Whether the background reaches the edges of the screen.
@@ -82,8 +110,20 @@ data class KeyboardTheme(
         labelTextSizeSp = labelTextSizeSp.coerceIn(8f, 40f),
         pressedElevation = pressedElevation.coerceIn(0f, 16f),
         swipeTrailWidthDp = swipeTrailWidthDp.coerceIn(1f, 24f),
-        backgroundPattern = if (backgroundPattern in 0 until PATTERN_COUNT) backgroundPattern else PATTERN_NONE,
+        // Read through the known list and de-duplicated: a stored file is not a trusted file,
+        // and the same pattern drawn twice is the same pattern drawn once, more slowly.
+        backgroundPatterns = backgroundPatterns
+            .filter { it in PATTERN_DOTS until PATTERN_COUNT }
+            .distinct(),
         patternScaleDp = patternScaleDp.coerceIn(8f, 64f),
+        // A file name, never a path: anything with a separator in it is a way out of the
+        // directory this is supposed to name a file in.
+        backgroundImage = if (backgroundImage.contains('/') || backgroundImage.contains('\\')) {
+            ""
+        } else {
+            backgroundImage.take(MAX_IMAGE_NAME)
+        },
+        backgroundImageDim = backgroundImageDim.coerceIn(0f, 1f),
     )
 
     /** The colour the background fades to, which is its own colour when it fades to nothing. */
@@ -98,6 +138,7 @@ data class KeyboardTheme(
          * that falls outside the range is clamped to none by [sanitised], where an unknown enum
          * name would be a parse failure that loses the whole theme.
          */
+        /** No longer a value anything stores; kept because "none" is still a thing to say. */
         const val PATTERN_NONE = 0
         const val PATTERN_DOTS = 1
         const val PATTERN_GRID = 2
@@ -105,5 +146,8 @@ data class KeyboardTheme(
         const val PATTERN_CHECKS = 4
         const val PATTERN_STRIPES = 5
         const val PATTERN_COUNT = 6
+
+        /** Long enough for a generated name, short enough not to be a path in disguise. */
+        const val MAX_IMAGE_NAME = 64
     }
 }

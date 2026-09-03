@@ -48,7 +48,7 @@ fun SuggestionStripPreview(
                 SuggestionStripView(viewContext, paints, strings).apply { isEnabled = false }
             },
             update = { view ->
-                paints.update(theme, context.resources.displayMetrics, preferences.heightScale)
+                paints.update(theme, context.resources.displayMetrics, preferences.heightScale, context)
                 view.visibleLimit = preferences.suggestionCount
                 view.setSuggestions(sample, sample.size)
                 view.requestLayout()

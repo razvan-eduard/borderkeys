@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +41,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.theme.BackgroundImages
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.settings.ColourPickerSheet
@@ -68,6 +70,24 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
 
     fun update(transform: (KeyboardTheme) -> KeyboardTheme) {
         scope.launch { repository.updateTheme(transform) }
+    }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val picture = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            // Copied and shrunk off the main thread: a photograph straight off a camera is
+            // several thousand pixels across, and this runs while a settings screen is on
+            // screen.
+            val name = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                BackgroundImages.import(context, uri)
+            }
+            if (name != null) {
+                repository.updateTheme { it.copy(backgroundImage = name) }
+            }
+        }
     }
 
     // The preview is outside the scrolling column, so it stays on screen while the controls
@@ -131,11 +151,24 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                         .padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    for (index in PATTERN_LABELS.indices) {
-                        val selected = theme.backgroundPattern == index
+                    // Chips that toggle rather than a row where one wins. They layer -- dots
+                    // over a grid is a third thing -- and "none" is the state of having chosen
+                    // none of them rather than a choice of its own.
+                    for (index in KeyboardTheme.PATTERN_DOTS until KeyboardTheme.PATTERN_COUNT) {
+                        val selected = theme.backgroundPatterns.contains(index)
                         FilterChip(
                             selected = selected,
-                            onClick = { update { t -> t.copy(backgroundPattern = index) } },
+                            onClick = {
+                                update { t ->
+                                    t.copy(
+                                        backgroundPatterns = if (selected) {
+                                            t.backgroundPatterns - index
+                                        } else {
+                                            t.backgroundPatterns + index
+                                        },
+                                    )
+                                }
+                            },
                             label = { Text(strings[PATTERN_LABELS[index]]) },
                         )
                     }
@@ -148,7 +181,35 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 }
                 // Shown as the background's own colour when there is no second one, so the row
                 // has something ringed and picking that same colour is how a gradient is removed.
-                ColourRow(strings[Keys.THEME_SECOND_COLOUR], theme.gradientEnd()) {
+                // A picture is not an alternative to a pattern. Both are layers on the same
+            // surface, and choosing one has never been a reason to be refused the other.
+            Text(
+                strings[Keys.THEME_PICTURE],
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+            )
+            Explanation(strings[Keys.THEME_PICTURE_NOTE])
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextButton(onClick = { picture.launch(arrayOf("image/*")) }) {
+                    Text(strings[Keys.THEME_CHOOSE_PICTURE])
+                }
+                if (theme.backgroundImage.isNotEmpty()) {
+                    TextButton(onClick = {
+                        BackgroundImages.forget(context)
+                        update { t -> t.copy(backgroundImage = "") }
+                    }) { Text(strings[Keys.THEME_REMOVE_PICTURE]) }
+                }
+            }
+            if (theme.backgroundImage.isNotEmpty()) {
+                ThemeSlider(
+                    strings[Keys.THEME_PICTURE_DIM], theme.backgroundImageDim * 100f, 0f..100f, "%",
+                ) { update { t -> t.copy(backgroundImageDim = it / 100f) } }
+                Explanation(strings[Keys.THEME_PICTURE_DIM_NOTE])
+            }
+            ColourRow(strings[Keys.THEME_SECOND_COLOUR], theme.gradientEnd()) {
                     update { t -> t.copy(backgroundGradientColor = it) }
                 }
                 Explanation(strings[Keys.THEME_SECOND_COLOUR_NOTE])
@@ -421,11 +482,15 @@ private fun ThemeSlider(
  * lists together.
  */
 internal val PALETTE = listOf(
-    0xFF000000.toInt(), 0xFF14141A.toInt(), 0xFF1E1E26.toInt(), 0xFF2A2A34.toInt(),
-    0xFF3D3D4C.toInt(), 0xFF5A5A6E.toInt(), 0xFF9A9AAA.toInt(), 0xFFC6C6D0.toInt(),
-    0xFFD4D4DE.toInt(), 0xFFE6E6EE.toInt(), 0xFFF2F2F7.toInt(), 0xFFFFFFFF.toInt(),
-    0xFF6EA8FE.toInt(), 0xFF3B82F6.toInt(), 0xFF10B981.toInt(), 0xFFF59E0B.toInt(),
-    0xFFEF4444.toInt(), 0xFFA855F7.toInt(), 0xFFEC4899.toInt(), 0xFF14B8A6.toInt(),
+    // Colours first. The row scrolls, and twelve greys before the first colour meant scrolling
+    // past most of it to reach anything that was not grey -- while the greys themselves were
+    // eight shades nobody could tell apart at thirty density-independent pixels.
+    0xFF6EA8FE.toInt(), 0xFF3B82F6.toInt(), 0xFF1D4ED8.toInt(), 0xFF14B8A6.toInt(),
+    0xFF10B981.toInt(), 0xFF4ADE80.toInt(), 0xFFF59E0B.toInt(), 0xFFFF8A4C.toInt(),
+    0xFFEF4444.toInt(), 0xFFEC4899.toInt(), 0xFFA855F7.toInt(), 0xFF7AA2F7.toInt(),
+    // Then the neutrals, and only four: black, white, and one grey at each end of the middle.
+    // Anything between them is a job for the wheel at the end of the row.
+    0xFF000000.toInt(), 0xFF2A2A34.toInt(), 0xFFC6C6D0.toInt(), 0xFFFFFFFF.toInt(),
 )
 
 internal val LIGHT_THEME = KeyboardTheme(
@@ -472,7 +537,7 @@ internal val MIDNIGHT = KeyboardTheme(
     secondaryTextColor = 0xFF8E9AC0.toInt(),
     accentColor = 0xFF7AA2F7.toInt(),
     swipeTrailColor = 0xCC7AA2F7.toInt(),
-    backgroundPattern = KeyboardTheme.PATTERN_GRID,
+    backgroundPatterns = listOf(KeyboardTheme.PATTERN_GRID),
     patternColor = 0x14FFFFFF,
     patternScaleDp = 28f,
 )
@@ -498,7 +563,7 @@ internal val FOREST = KeyboardTheme(
     secondaryTextColor = 0xFF8FB39C.toInt(),
     accentColor = 0xFF4ADE80.toInt(),
     swipeTrailColor = 0xCC4ADE80.toInt(),
-    backgroundPattern = KeyboardTheme.PATTERN_DIAGONAL,
+    backgroundPatterns = listOf(KeyboardTheme.PATTERN_DIAGONAL),
     patternColor = 0x12FFFFFF,
     patternScaleDp = 20f,
 )
@@ -527,7 +592,7 @@ internal val PAPER = KeyboardTheme(
     accentColor = 0xFF8A5410.toInt(),
     swipeTrailColor = 0xCC8A5410.toInt(),
     keyCornerRadiusDp = 4f,
-    backgroundPattern = KeyboardTheme.PATTERN_DOTS,
+    backgroundPatterns = listOf(KeyboardTheme.PATTERN_DOTS),
     patternColor = 0x14000000,
     patternScaleDp = 18f,
 )
@@ -557,7 +622,7 @@ internal val NEON = KeyboardTheme(
     accentColor = 0xFFFF3DCB.toInt(),
     swipeTrailColor = 0xCCFF3DCB.toInt(),
     keyCornerRadiusDp = 14f,
-    backgroundPattern = KeyboardTheme.PATTERN_DOTS,
+    backgroundPatterns = listOf(KeyboardTheme.PATTERN_DOTS),
     patternColor = 0x1AFF3DCB,
     patternScaleDp = 22f,
 )

@@ -486,6 +486,7 @@ class BorderKeysService :
                 preferences = newPreferences
                 val changed = paints.update(
                     newTheme, resources.displayMetrics, newPreferences.heightScale,
+                    this@BorderKeysService,
                 )
                 host?.let { view ->
                     applyPlacement(view, newPreferences)
@@ -735,7 +736,7 @@ class BorderKeysService :
     override fun onCreateInputView(): View {
         // Built in code. LayoutInflater would parse XML and reflect to construct three views,
         // every time the keyboard is shown in a new editor.
-        paints.update(theme, resources.displayMetrics, preferences.heightScale)
+        paints.update(theme, resources.displayMetrics, preferences.heightScale, this)
         val view = KeyboardHostView(this, paints, strings)
         applyPlacement(view, preferences)
         view.keyboard.listener = this
@@ -2571,7 +2572,7 @@ class BorderKeysService :
         )
         draggedWidth = width.coerceIn(KeyboardPreferences.MIN_WIDTH_SCALE, 1f)
         view.heightScaleForDrag = draggedHeight
-        paints.update(theme, resources.displayMetrics, draggedHeight)
+        paints.update(theme, resources.displayMetrics, draggedHeight, this)
         view.setPlacement(
             preferences.positionMode,
             draggedWidth,

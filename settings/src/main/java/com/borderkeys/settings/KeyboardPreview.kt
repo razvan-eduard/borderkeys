@@ -61,19 +61,19 @@ fun KeyboardPreview(
             },
             update = { frame ->
                 val view = frame.getChildAt(0) as KeyboardCanvasView
-                paints.update(theme, context.resources.displayMetrics, preferences.heightScale)
+                paints.update(theme, context.resources.displayMetrics, preferences.heightScale, context)
 
                 val width = frame.width
-                // The dock honours the width like every other mode, because the resize handles
-                // narrow it there too.
-                val effective = preferences.widthScale
+                // Always the full width, whatever the keyboard itself is set to.
+                //
+                // The preview is here to show colours, shapes and which keys exist. Drawing it
+                // at sixty per cent because the keyboard is one-handed made it look like a
+                // mistake rather than like a setting, and the setting it was illustrating is on
+                // a different screen with its own preview of the placement.
+                val effective = 1f
                 val params = view.layoutParams as FrameLayout.LayoutParams
                 params.width = if (width > 0) (width * effective).toInt() else params.width
-                params.gravity = when (preferences.positionMode) {
-                    KeyboardPreferences.MODE_ONE_HANDED_LEFT -> android.view.Gravity.START
-                    KeyboardPreferences.MODE_ONE_HANDED_RIGHT -> android.view.Gravity.END
-                    else -> android.view.Gravity.CENTER_HORIZONTAL
-                }
+                params.gravity = android.view.Gravity.CENTER_HORIZONTAL
                 view.layoutParams = params
 
                 // The same three settings the input method composes, in the same order, so

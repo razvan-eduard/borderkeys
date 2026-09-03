@@ -140,12 +140,49 @@ class KeyboardThemeSerializerTest {
     }
 
     @Test
-    fun `a pattern from a future version falls back to none`() {
-        val fromLater = KeyboardTheme(backgroundPattern = 99).sanitised()
-        assertEquals(KeyboardTheme.PATTERN_NONE, fromLater.backgroundPattern)
+    fun `a pattern from a future version is dropped rather than drawn`() {
+        val fromLater = KeyboardTheme(backgroundPatterns = listOf(99)).sanitised()
+        assertEquals(emptyList<Int>(), fromLater.backgroundPatterns)
 
-        val known = KeyboardTheme(backgroundPattern = KeyboardTheme.PATTERN_CHECKS).sanitised()
-        assertEquals(KeyboardTheme.PATTERN_CHECKS, known.backgroundPattern)
+        val known = KeyboardTheme(
+            backgroundPatterns = listOf(KeyboardTheme.PATTERN_CHECKS, 99),
+        ).sanitised()
+        assertEquals(listOf(KeyboardTheme.PATTERN_CHECKS), known.backgroundPatterns)
+    }
+
+    @Test
+    fun `patterns layer, but the same one twice is once`() {
+        // They are drawn in the order given and each is one shader; the same tile twice would
+        // be a second full-surface draw for a difference nobody can see.
+        val doubled = KeyboardTheme(
+            backgroundPatterns = listOf(
+                KeyboardTheme.PATTERN_GRID,
+                KeyboardTheme.PATTERN_DOTS,
+                KeyboardTheme.PATTERN_GRID,
+            ),
+        ).sanitised()
+        assertEquals(
+            listOf(KeyboardTheme.PATTERN_GRID, KeyboardTheme.PATTERN_DOTS),
+            doubled.backgroundPatterns,
+        )
+    }
+
+    @Test
+    fun `a picture name that could leave its directory is refused`() {
+        // The name is joined to this application's own directory to find the file. A stored
+        // value carrying a separator would be a path, and a path can point anywhere.
+        assertEquals("", KeyboardTheme(backgroundImage = "../../databases/x").sanitised().backgroundImage)
+        assertEquals("", KeyboardTheme(backgroundImage = "a\\b").sanitised().backgroundImage)
+        assertEquals(
+            "background-1.webp",
+            KeyboardTheme(backgroundImage = "background-1.webp").sanitised().backgroundImage,
+        )
+    }
+
+    @Test
+    fun `the picture dim stays a fraction`() {
+        assertEquals(0f, KeyboardTheme(backgroundImageDim = -3f).sanitised().backgroundImageDim, 0f)
+        assertEquals(1f, KeyboardTheme(backgroundImageDim = 9f).sanitised().backgroundImageDim, 0f)
     }
 
     @Test
@@ -161,5 +198,23 @@ class KeyboardThemeSerializerTest {
 
         val faded = flat.copy(backgroundGradientColor = 0xFF405060.toInt())
         assertEquals(0xFF405060.toInt(), faded.gradientEnd())
+    }
+
+    @Test
+    fun `a theme written before patterns could layer keeps the one it had`() = runTest {
+        val old = """{"backgroundColor":-16777216,"backgroundPattern":4}"""
+        assertEquals(
+            listOf(KeyboardTheme.PATTERN_CHECKS),
+            read(old.encodeToByteArray()).backgroundPatterns,
+        )
+    }
+
+    @Test
+    fun `the older key is ignored once the newer one is present`() = runTest {
+        val both = """{"backgroundPatterns":[1],"backgroundPattern":4}"""
+        assertEquals(
+            listOf(KeyboardTheme.PATTERN_DOTS),
+            read(both.encodeToByteArray()).backgroundPatterns,
+        )
     }
 }

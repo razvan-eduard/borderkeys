@@ -137,7 +137,18 @@ class ThemePaints {
     var heightScale: Float = 1f
         private set
 
-    fun update(theme: KeyboardTheme, metrics: DisplayMetrics, heightScale: Float = 1f): Boolean {
+    /**
+     * The name of the picture currently decoded, so a theme change that did not touch it does
+     * not decode a megabyte of webp again.
+     */
+    private var loadedImage: String? = null
+
+    fun update(
+        theme: KeyboardTheme,
+        metrics: DisplayMetrics,
+        heightScale: Float = 1f,
+        context: android.content.Context? = null,
+    ): Boolean {
         val newScaledDensity = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 1f, metrics)
         if (this.theme == theme && density == metrics.density &&
             scaledDensity == newScaledDensity && this.heightScale == heightScale
@@ -151,6 +162,14 @@ class ThemePaints {
 
         background.color = theme.backgroundColor
         backgroundPainter.update(theme, metrics.density)
+        // Only when the name moved. Decoding happens on the UI thread, which is tolerable once
+        // on a theme change and would not be on every one of them.
+        if (context != null && theme.backgroundImage != loadedImage) {
+            loadedImage = theme.backgroundImage
+            backgroundPainter.setImage(
+                com.borderkeys.data.theme.BackgroundImages.load(context, theme.backgroundImage),
+            )
+        }
         keyFill.color = theme.keyColor
         keyPressedFill.color = theme.keyPressedColor
         modifierKeyFill.color = theme.modifierKeyColor
