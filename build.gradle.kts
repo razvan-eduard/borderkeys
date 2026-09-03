@@ -42,8 +42,16 @@ val borderkeysGitCommit: String = runCatching {
 val borderkeysSourceUrl: String =
     providers.gradleProperty("borderkeys.sourceUrl").getOrElse("unknown")
 
+val borderkeysRepoUrl: String =
+    providers.gradleProperty("borderkeys.repoUrl").getOrElse("")
+
+val borderkeysReleasesUrl: String =
+    providers.gradleProperty("borderkeys.releasesUrl").getOrElse("")
+
 extra["borderkeysGitCommit"] = borderkeysGitCommit
 extra["borderkeysSourceUrl"] = borderkeysSourceUrl
+extra["borderkeysRepoUrl"] = borderkeysRepoUrl
+extra["borderkeysReleasesUrl"] = borderkeysReleasesUrl
 
 // ---------------------------------------------------------------------------------------
 // Verification tasks.

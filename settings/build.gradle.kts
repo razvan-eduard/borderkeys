@@ -48,6 +48,8 @@ android {
 androidComponents {
     val gitCommit = rootProject.extra["borderkeysGitCommit"] as String
     val sourceUrl = rootProject.extra["borderkeysSourceUrl"] as String
+    val repoUrl = rootProject.extra["borderkeysRepoUrl"] as String
+    val releasesUrl = rootProject.extra["borderkeysReleasesUrl"] as String
     onVariants { variant ->
         variant.buildConfigFields?.put(
             "GIT_COMMIT",
@@ -55,6 +57,23 @@ androidComponents {
                 "String",
                 "\"$gitCommit\"",
                 "Commit this binary was built from; shown on the About screen.",
+            ),
+        )
+        variant.buildConfigFields?.put(
+            "REPO_URL",
+            com.android.build.api.variant.BuildConfigField(
+                "String",
+                "\"$repoUrl\"",
+                "The F-Droid repository that offers the assistant build. Empty when the build " +
+                    "was configured without one, and the row is then not shown.",
+            ),
+        )
+        variant.buildConfigFields?.put(
+            "RELEASES_URL",
+            com.android.build.api.variant.BuildConfigField(
+                "String",
+                "\"$releasesUrl\"",
+                "Where the same file can be downloaded once, for anyone not subscribing.",
             ),
         )
         variant.buildConfigFields?.put(

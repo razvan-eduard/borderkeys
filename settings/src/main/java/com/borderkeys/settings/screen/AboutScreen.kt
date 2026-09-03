@@ -56,19 +56,35 @@ fun AboutScreen(modifier: Modifier = Modifier) {
             SettingRow(strings[Keys.ABOUT_COMMIT], BuildConfig.GIT_COMMIT)
             SettingRow(strings[Keys.ABOUT_SOURCE], BuildConfig.SOURCE_URL)
             Button(
-                onClick = {
-                    runCatching {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, BuildConfig.SOURCE_URL.toUri())
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                        )
-                    }
-                },
+                onClick = { open(context, BuildConfig.SOURCE_URL) },
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             ) { Text(strings[Keys.ABOUT_OPEN_THE_SOURCE_REPOSITORY]) }
             Explanation(
                 strings[Keys.ABOUT_THE_COMMIT_ABOVE_IS_THE_ONE],
             )
+        }
+
+        // Only in the build that does not have it. Offering the assistant to somebody already
+        // running it would be an advertisement rather than an answer to a question.
+        if (!hasAssistant) {
+            SettingsSectionCard(strings[Keys.ABOUT_PLUS_TITLE]) {
+                Explanation(strings[Keys.ABOUT_PLUS_NOTE])
+                if (BuildConfig.REPO_URL.isNotEmpty()) {
+                    SettingRow(strings[Keys.ABOUT_PLUS_REPOSITORY], BuildConfig.REPO_URL)
+                    Button(
+                        onClick = { open(context, BuildConfig.REPO_URL) },
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    ) { Text(strings[Keys.ABOUT_PLUS_REPOSITORY]) }
+                }
+                if (BuildConfig.RELEASES_URL.isNotEmpty()) {
+                    SettingRow(strings[Keys.ABOUT_PLUS_RELEASES], BuildConfig.RELEASES_URL)
+                    Button(
+                        onClick = { open(context, BuildConfig.RELEASES_URL) },
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    ) { Text(strings[Keys.ABOUT_PLUS_RELEASES]) }
+                }
+                Explanation(strings[Keys.ABOUT_PLUS_REPOSITORY_NOTE])
+            }
         }
         SettingsSectionCard(strings[Keys.ABOUT_LICENCE]) {
             SettingRow(
@@ -86,5 +102,20 @@ fun AboutScreen(modifier: Modifier = Modifier) {
                 )
             }
         }
+    }
+}
+
+/**
+ * Hands an address to whatever opens addresses.
+ *
+ * This application has no INTERNET permission and does not need one: the browser has it. A
+ * device with nothing willing to handle the intent throws, which is caught -- a settings screen
+ * that crashes on a link is worse than a button that does nothing.
+ */
+private fun open(context: android.content.Context, url: String) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
     }
 }
