@@ -31,6 +31,7 @@ import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
 import com.borderkeys.data.theme.QuickAction
+import com.borderkeys.data.theme.ComposerAction
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.predict.LearningBuffer
@@ -66,6 +67,7 @@ class BorderKeysService :
     QuickSettingsView.Listener,
     QuickActionsView.Listener,
     ClipboardPanelView.Listener,
+    ComposerView.Listener,
     AssistClient.Listener,
     PredictionEngine.ResultListener {
 
@@ -524,6 +526,12 @@ class BorderKeysService :
         if (view.assistSheetVisible) {
             return
         }
+        if (composerActive) {
+            // The caret that moved is the application's, and what is being typed is not in the
+            // application. Re-deriving the word under it would take the composing region away
+            // from the box mid-word.
+            return
+        }
         val hasSelection = newSelEnd > newSelStart
         if (!hasSelection || privateMode || !assistAvailable) {
             if (view.suggestionStrip.actionMode) {
@@ -764,6 +772,7 @@ class BorderKeysService :
         applyAutoShift()
 
         resetComposing()
+        closeComposer()
         host?.setClipboardPanelVisible(false)
         host?.setEmojiPanelVisible(false)
         registerClipboardListener()
@@ -876,10 +885,15 @@ class BorderKeysService :
         val density = resources.displayMetrics.density
         view.edgeArrows = settings.edgeArrows
         applyBlur(settings)
+        // The draft box snaps the keyboard to the bottom edge for as long as it is open, and
+        // gives back whatever was stored the moment it closes. It adds two rows to a window
+        // that is already the bottom third of the screen, and a gap under the keys is space the
+        // box could have used to show another line of what is being written.
+        val bottom = if (composerActive) 0 else (settings.bottomOffsetDp * density).toInt()
         view.setPlacement(
             settings.positionMode,
             settings.widthScale,
-            (settings.bottomOffsetDp * density).toInt(),
+            bottom,
             (settings.horizontalOffsetDp * density).toInt(),
         )
     }
@@ -1412,6 +1426,183 @@ class BorderKeysService :
      * means looking at the keyboard, in the app where it felt wrong. The panel's last row opens
      * the full settings for everything else.
      */
+    // ---- the draft box --------------------------------------------------------------------------
+
+    /** The version line. Empty until the model has been asked for something. */
+    private val composerVersions = Composer()
+
+    /** What was selected in the application when the box opened, and where it was. */
+    private var composerSeed: String = ""
+    private var composerSelectionStart = -1
+    private var composerSelectionEnd = -1
+
+    /**
+     * Opens the draft box, seeded from the selection when there is one.
+     *
+     * Refused in a password field. Not because the box leaks -- it holds nothing after it closes
+     * -- but because the words typed into it are learned, and because the buttons on its bar
+     * send the text over a Binder to be rewritten. Neither belongs to a field the user was told
+     * would not be read.
+     */
+    private fun openComposer() {
+        val view = host ?: return
+        if (privateMode || !preferences.composerEnabled || composerActive) {
+            return
+        }
+        val selection = currentInputConnection?.getSelectedText(0)?.toString().orEmpty()
+        val seed = if (selection.length <= AssistProtocol.MAX_SELECTION_CHARS) selection else ""
+        composerSeed = seed
+        composerSelectionStart = if (seed.isEmpty()) -1 else selectionStart
+        composerSelectionEnd = if (seed.isEmpty()) -1 else selectionEnd
+
+        val connection = composerConnection
+            ?: ComposerInputConnection(view.composer) { onComposerBufferChanged() }
+                .also { composerConnection = it }
+        composerVersions.clear()
+        connection.reset(seed)
+        view.composer.bind(connection.text)
+        view.composer.listener = this
+        view.setComposerVisible(true)
+        // Nothing else may be writing while the box is: the autofill service's chips commit
+        // through their own connection, straight into the application, behind a box that is
+        // showing something else entirely.
+        view.showInlineSuggestions(false)
+        applyQuickActions(view)
+        switchTarget(true)
+        applyPlacement(view, preferences)
+        pushComposerState()
+    }
+
+    private fun closeComposer() {
+        val view = host ?: return
+        if (!composerActive) {
+            return
+        }
+        switchTarget(false)
+        view.setComposerVisible(false)
+        view.composer.showNotice("")
+        composerVersions.clear()
+        composerSeed = ""
+        composerSelectionStart = -1
+        composerSelectionEnd = -1
+        applyQuickActions(view)
+        applyPlacement(view, preferences)
+    }
+
+    /**
+     * Writes what is in the box into the application, and closes.
+     *
+     * The awkward case is a box that was opened over a selection which is no longer selected --
+     * the user tapped somewhere, or the application re-laid out. Committing then would replace
+     * nothing and insert at wherever the caret happens to be, which is how a paragraph ends up
+     * in the middle of a word. So: if there is still a selection, commit replaces it. If there
+     * is not, put the remembered range back and check it still holds the text the box started
+     * from before replacing it. If it does not, the text goes in at the caret and nothing is
+     * destroyed.
+     */
+    private fun insertFromComposer() {
+        val text = composerConnection?.snapshot().orEmpty()
+        val start = composerSelectionStart
+        val end = composerSelectionEnd
+        val seed = composerSeed
+        closeComposer()
+        if (text.isEmpty()) {
+            return
+        }
+        val connection = currentInputConnection ?: return
+        connection.beginBatchEdit()
+        if (selectionEnd <= selectionStart && start >= 0 && end > start) {
+            connection.setSelection(start, end)
+            val live = connection.getSelectedText(0)?.toString()
+            if (live != seed) {
+                // Not what we were shown. Leave the field as it was found and add rather than
+                // replace: an insertion in the wrong place is a nuisance, a replacement in the
+                // wrong place is somebody's text gone.
+                connection.setSelection(selectionEnd, selectionEnd)
+            }
+        }
+        connection.commitText(text, 1)
+        connection.endBatchEdit()
+        refreshContextFromEditor()
+        applyAutoShift()
+        requestSuggestions()
+    }
+
+    /** The buffer changed, so the box redraws and the bar reconsiders what can be pressed. */
+    private fun onComposerBufferChanged() {
+        host?.composer?.onBufferChanged()
+        host?.composer?.requestLayout()
+        pushComposerState()
+    }
+
+    /** Tells the box what its bar and its version line should show. */
+    private fun pushComposerState() {
+        val view = host ?: return
+        val hasText = composerConnection?.text?.isNotEmpty() == true
+        val actions = ComposerAction.fromIds(preferences.composerBar)
+            .filter { !it.needsAssistant || assistAvailable }
+        val enabled = BooleanArray(actions.size) { index ->
+            when (actions[index]) {
+                ComposerAction.INSERT -> hasText
+                ComposerAction.SHOW_ORIGINAL -> composerVersions.hasHistory
+                ComposerAction.SAVED_PROMPTS -> preferences.savedPrompts.isNotEmpty()
+                else -> hasText
+            }
+        }
+        view.composer.setBar(actions, enabled)
+        view.composer.setVersions(
+            composerVersions.size,
+            composerVersions.index,
+            composerVersions.canGoBack,
+            composerVersions.canGoForward,
+        )
+    }
+
+    /** Puts a version on screen without adding one. */
+    private fun showComposerVersion(text: String?) {
+        val connection = composerConnection ?: return
+        if (text == null) {
+            return
+        }
+        connection.replaceAll(text)
+        pushComposerState()
+    }
+
+    override fun onComposerAction(action: ComposerAction) {
+        when (action) {
+            ComposerAction.INSERT -> insertFromComposer()
+            ComposerAction.SHOW_ORIGINAL -> showComposerVersion(composerVersions.flip())
+            // Everything else needs a model, and the buttons that need one are not on the bar
+            // unless there is one. Wired in the step that adds the actions.
+            else -> Unit
+        }
+    }
+
+    override fun onComposerBack() {
+        // What is on screen may have been edited since this node was written, and an edit
+        // belongs to the node it was made on.
+        composerConnection?.let { composerVersions.updateCurrent(it.snapshot()) }
+        showComposerVersion(composerVersions.back())
+    }
+
+    override fun onComposerForward() {
+        composerConnection?.let { composerVersions.updateCurrent(it.snapshot()) }
+        showComposerVersion(composerVersions.forward())
+    }
+
+    override fun onComposerClose() {
+        closeComposer()
+    }
+
+    override fun onComposerVersionPicked(index: Int) {
+        composerConnection?.let { composerVersions.updateCurrent(it.snapshot()) }
+        showComposerVersion(composerVersions.goTo(index))
+    }
+
+    override fun onComposerCaretPlaced(offset: Int) {
+        composerConnection?.setSelection(offset, offset)
+    }
+
     private fun toggleQuickSettings() {
         val view = host ?: return
         val opening = !view.quickSettingsVisible
@@ -1445,6 +1636,7 @@ class BorderKeysService :
     }
 
     override fun onStartResize() {
+        closeComposer()
         val view = host ?: return
         view.showQuickSettings(false)
         draggedHeight = preferences.heightScale
@@ -2112,7 +2304,10 @@ class BorderKeysService :
 
     private fun applyQuickActions(view: KeyboardHostView) {
         val bar = view.quickActions
-        if (!preferences.quickActionsEnabled || privateMode) {
+        // Hidden while the draft box is open. Every button on it copies, pastes, selects or
+        // moves the caret in the application's field -- which is not the field being typed
+        // into, so a bar of them is a row of traps.
+        if (!preferences.quickActionsEnabled || privateMode || composerActive) {
             bar.visibility = View.GONE
             return
         }
@@ -2168,6 +2363,10 @@ class BorderKeysService :
             }
             QuickAction.SWITCH_LAYOUT -> switchLanguage()
             QuickAction.SETTINGS -> openSettings()
+            QuickAction.COMPOSE -> {
+                openComposer()
+                return
+            }
             QuickAction.UNDO -> if (!revertCorrection(connection)) {
                 deleteWordBeforeCursor(connection)
             }
@@ -2292,6 +2491,7 @@ class BorderKeysService :
     }
 
     override fun onClipboardPanelClosed() {
+        closeComposer()
         host?.setClipboardPanelVisible(false)
     }
 

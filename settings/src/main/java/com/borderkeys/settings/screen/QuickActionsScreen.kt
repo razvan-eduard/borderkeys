@@ -273,6 +273,7 @@ private fun iconFor(action: QuickAction): Int = when (action) {
     QuickAction.SWITCH_LAYOUT -> R.drawable.bk_action_switch_layout
     QuickAction.SETTINGS -> R.drawable.bk_action_settings
     QuickAction.UNDO -> R.drawable.bk_action_undo
+    QuickAction.COMPOSE -> R.drawable.bk_action_compose
 }
 
 private fun labelFor(action: QuickAction): String = when (action) {
@@ -291,4 +292,5 @@ private fun labelFor(action: QuickAction): String = when (action) {
     QuickAction.SWITCH_LAYOUT -> Keys.ACTION_SWITCH_LAYOUT
     QuickAction.SETTINGS -> Keys.ACTION_SETTINGS
     QuickAction.UNDO -> Keys.ACTION_UNDO
+    QuickAction.COMPOSE -> Keys.ACTION_COMPOSE
 }

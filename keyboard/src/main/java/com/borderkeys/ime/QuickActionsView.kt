@@ -123,6 +123,7 @@ class QuickActionsView(
         QuickAction.SWITCH_LAYOUT -> R.drawable.bk_action_switch_layout
         QuickAction.SETTINGS -> R.drawable.bk_action_settings
         QuickAction.UNDO -> R.drawable.bk_action_undo
+        QuickAction.COMPOSE -> R.drawable.bk_action_compose
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {

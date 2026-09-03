@@ -34,6 +34,15 @@ class KeyboardHostView(
     private val strings: LanguageManager,
 ) : ViewGroup(context) {
 
+    /**
+     * A place to write that the application cannot see, above everything else.
+     *
+     * The only child here that does *not* replace the keys. Every panel below is something you
+     * do instead of typing, so it takes the keys' place and the window keeps its height; this is
+     * something you type into, so the window grows to hold it and the keys stay where they are.
+     */
+    val composer = ComposerView(context, paints, strings)
+
     val suggestionStrip = SuggestionStripView(context, paints, strings)
     val inlineSuggestions = InlineSuggestionsHostView(context, paints)
     val keyboard = KeyboardCanvasView(context, paints, strings)
@@ -311,6 +320,8 @@ class KeyboardHostView(
         // every edge where two children meet.
         keyboard.drawsBackground = false
         suggestionStrip.drawsBackground = false
+        composer.visibility = GONE
+        addView(composer)
         addView(suggestionStrip)
         addView(inlineSuggestions)
         addView(keyboard)
@@ -446,6 +457,12 @@ class KeyboardHostView(
         val exactBody = MeasureSpec.makeMeasureSpec(bodyWidth, MeasureSpec.EXACTLY)
 
         var height = 0
+        // Measured unbounded, like the strip and the keys and unlike the panels: it chooses its
+        // own height from what has been written, and the window grows by whatever that is.
+        if (composer.visibility != GONE) {
+            composer.measure(exactBody, unbounded)
+            height += composer.measuredHeight
+        }
         if (suggestionStrip.visibility != GONE) {
             suggestionStrip.measure(exactBody, unbounded)
             height += suggestionStrip.measuredHeight
@@ -528,6 +545,10 @@ class KeyboardHostView(
         if (quickActions.visibility != GONE && quickActionsPlacement == PLACEMENT_ABOVE_STRIP) {
             quickActions.layout(left, y, right, y + barThickness)
             y += barThickness
+        }
+        if (composer.visibility != GONE) {
+            composer.layout(bodyLeft, y, bodyRight, y + composer.measuredHeight)
+            y += composer.measuredHeight
         }
         if (suggestionStrip.visibility != GONE) {
             suggestionStrip.layout(bodyLeft, y, bodyRight, y + suggestionStrip.measuredHeight)
@@ -635,6 +656,23 @@ class KeyboardHostView(
         val left = contentLeft(width, contentWidth).toFloat()
         paints.backgroundPainter.draw(canvas, left, 0f, left + contentWidth, bottom)
     }
+
+    /**
+     * Shows or hides the draft box.
+     *
+     * Note what is missing: the line every other panel here has, turning the keys off. Its
+     * absence is the design -- a box you cannot type into would be a box for nothing.
+     */
+    fun setComposerVisible(visible: Boolean) {
+        val wanted = if (visible) VISIBLE else GONE
+        if (composer.visibility == wanted) {
+            return
+        }
+        composer.visibility = wanted
+        requestLayout()
+    }
+
+    val composerVisible: Boolean get() = composer.visibility == VISIBLE
 
     /**
      * Re-measures every child after the shared metrics changed.

@@ -65,6 +65,14 @@ enum class QuickAction(val id: Int) {
 
     /** Undoes the last correction or insertion this keyboard made. */
     UNDO(15),
+
+    /**
+     * Opens the draft box: a place to write that the application cannot see.
+     *
+     * Seeded from the selection when there is one. Not in [DEFAULT] -- a bar of five is already
+     * a bar of five, and this is worth choosing rather than finding.
+     */
+    COMPOSE(16),
     ;
 
     companion object {
