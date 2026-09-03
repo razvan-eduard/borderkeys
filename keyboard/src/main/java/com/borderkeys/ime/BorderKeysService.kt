@@ -88,6 +88,101 @@ class BorderKeysService :
     private var selectionStart = 0
     private var selectionEnd = 0
 
+    /**
+     * Where typing goes: the application's field, or the draft box's buffer.
+     *
+     * Three things travel together because all three change at once. The connection is the
+     * obvious one. The selection is the second: the platform tells us where the caret is through
+     * onUpdateSelection, which never fires for a buffer, so reading the cached fields while
+     * typing into the box would leave backspace convinced there was still a selection to delete.
+     * And the editor's description is the third, because capitalisation and what the enter key
+     * does are both read from what the field asked for -- and a draft is not a chat box asking
+     * for its message to be sent.
+     *
+     * Composing state is per destination as well, and is cleared by [switchTarget] rather than
+     * carried across. See the comment there; it is the thing this design can get wrong.
+     */
+    private class EditTarget {
+        var connection: InputConnection? = null
+        var editorInfo: EditorInfo? = null
+        var selectionStart: Int = 0
+        var selectionEnd: Int = 0
+    }
+
+    /**
+     * One holder, refilled on each call to [target] and never retained.
+     *
+     * [handleCharacter] asks for this on every keystroke, and a keystroke has two milliseconds
+     * and no allocations. Four fields returned as an object would be four fields allocated sixty
+     * times a second while somebody types, so the object is made once and rewritten instead.
+     *
+     * The contract that comes with that: read what you need out of it immediately. Holding a
+     * reference across anything that might ask again -- and most of this class asks again --
+     * gives you a description of the other destination.
+     */
+    private val editTarget = EditTarget()
+
+    /** The buffer behind the draft box, once there is one. Null until the box is first opened. */
+    private var composerConnection: ComposerInputConnection? = null
+
+    /**
+     * Moves typing between the application's field and the draft box.
+     *
+     * The half-finished state has to go with it, and this is the one place in the design that
+     * can lose somebody else's text. Everything below is a single slot describing an edit that
+     * was made *somewhere*: a correction that backspace would put back, a full stop that two
+     * spaces produced, a space this keyboard added and would swallow if you typed one, the
+     * letters of the word in progress. Carried across a switch, they describe the wrong
+     * document -- and the worst of them, revertCorrection, deletes as many characters as the
+     * correction it thinks it is undoing. That is a backspace in the draft box eating the end of
+     * a sentence in the application.
+     *
+     * So they are cleared, and the context is re-derived from whichever side is now live.
+     */
+    private fun switchTarget(toComposer: Boolean) {
+        if (composerActive == toComposer) {
+            return
+        }
+        // Let go of the composing region on the side being left, or the application keeps an
+        // underlined word it can never be told about again.
+        target().connection?.finishComposingText()
+        composing.setLength(0)
+        pendingCorrection = null
+        pendingForget = null
+        pendingSpacePeriod = false
+        pendingAutoSpace = false
+        lastSpaceAt = 0L
+        composerActive = toComposer
+        refreshContextFromEditor()
+        applyAutoShift()
+        requestSuggestions()
+    }
+
+    /** Whether keystrokes are going to the draft box rather than to the application. */
+    private var composerActive = false
+
+    /**
+     * The destination for this keystroke.
+     *
+     * Rebuilt on each read rather than cached, because the selection inside it changes underneath
+     * us on both sides: the platform reports the application's, and the buffer keeps its own.
+     */
+    private fun target(): EditTarget {
+        val composer = composerConnection
+        if (composerActive && composer != null) {
+            editTarget.connection = composer
+            editTarget.editorInfo = composer.editorInfo
+            editTarget.selectionStart = composer.selectionStart
+            editTarget.selectionEnd = composer.selectionEnd
+        } else {
+            editTarget.connection = currentInputConnection
+            editTarget.editorInfo = currentInputEditorInfo
+            editTarget.selectionStart = selectionStart
+            editTarget.selectionEnd = selectionEnd
+        }
+        return editTarget
+    }
+
     /** Whether the field holds any text at all, which is not the same as "we are composing". */
     private var editorEmpty = true
     private var previousWord1: String? = null
@@ -813,7 +908,7 @@ class BorderKeysService :
      * position is something we can ask for and set exactly.
      */
     override fun onCursorNudge(steps: Int) {
-        val connection = currentInputConnection ?: return
+        val connection = target().connection ?: return
         if (composing.isNotEmpty()) {
             // Committing first, because moving the caret out of a composing region leaves the
             // editor holding an underline around text nobody is editing any more.
@@ -840,7 +935,7 @@ class BorderKeysService :
         if (!preferences.swipeEnabled) {
             return
         }
-        val connection = currentInputConnection
+        val connection = target().connection
         if (connection != null && composing.isNotEmpty()) {
             val contextWord = previousWord1
             connection.beginBatchEdit()
@@ -871,7 +966,7 @@ class BorderKeysService :
             view?.suggestionStrip?.clear()
             return
         }
-        val connection = currentInputConnection ?: return
+        val connection = target().connection ?: return
         val best = words[0] ?: return
 
         connection.beginBatchEdit()
@@ -890,7 +985,7 @@ class BorderKeysService :
     }
 
     override fun onText(text: CharSequence) {
-        val connection = currentInputConnection ?: return
+        val connection = target().connection ?: return
         connection.beginBatchEdit()
         finishComposing(connection)
         connection.commitText(text, 1)
@@ -952,7 +1047,7 @@ class BorderKeysService :
     }
 
     private fun handleCharacter(code: Int) {
-        val connection = currentInputConnection ?: return
+        val connection = target().connection ?: return
         val shifted = if (shiftState != SHIFT_OFF) {
             Character.toUpperCase(code)
         } else {
@@ -1137,11 +1232,18 @@ class BorderKeysService :
     }
 
     private fun handleDelete() {
-        val connection = currentInputConnection ?: return
+        val destination = target()
+        val connection = destination.connection ?: return
+        val hasSelection = destination.selectionEnd > destination.selectionStart
         // A selection is what backspace deletes, all of it, before anything else is considered.
         // deleteSurroundingText would not do it: it deletes *around* the selection and leaves
         // the selected text exactly where it was, which reads as the key having done nothing.
-        if (selectionEnd > selectionStart) {
+        //
+        // The selection comes from the destination rather than from the cached fields: the
+        // platform reports the application's caret and knows nothing about the draft box's, so
+        // reading the cache while typing in the box would leave this branch convinced there was
+        // still something selected long after the box had taken over.
+        if (hasSelection) {
             composing.setLength(0)
             pendingCorrection = null
             connection.commitText("", 1)
@@ -1193,11 +1295,15 @@ class BorderKeysService :
     }
 
     private fun handleEnter() {
-        val connection = currentInputConnection ?: return
+        val connection = target().connection ?: return
         val contextWord = previousWord1
         connection.beginBatchEdit()
         val finished = finishComposing(connection)
-        val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
+        // The destination's own description. The draft box declares no action, so enter is a
+        // newline there -- which is the whole reason it carries an EditorInfo of its own: the
+        // application's would say IME_ACTION_SEND and the first enter in a draft would send the
+        // message the draft was being written to replace.
+        val action = target().editorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
             ?: EditorInfo.IME_ACTION_NONE
         if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
             connection.endBatchEdit()
@@ -1390,7 +1496,7 @@ class BorderKeysService :
     // ---- suggestions ------------------------------------------------------------------------------
 
     override fun onSuggestionPicked(index: Int, word: String) {
-        val connection = currentInputConnection ?: return
+        val connection = target().connection ?: return
         // Read before the commit, for the same reason as everywhere else: what is being learned
         // is that this word followed the one already in the text, not that it followed itself.
         val contextWord = previousWord1
@@ -1565,7 +1671,7 @@ class BorderKeysService :
         strip.editorEmpty = if (hasTextBeforeCaret) {
             false
         } else {
-            currentInputConnection?.getTextAfterCursor(1, 0).isNullOrEmpty()
+            target().connection?.getTextAfterCursor(1, 0).isNullOrEmpty()
         }
     }
 
@@ -1589,7 +1695,7 @@ class BorderKeysService :
         pendingCorrection = null
         pendingForget = null
         composing.setLength(0)
-        currentInputConnection?.finishComposingText()
+        target().connection?.finishComposingText()
         refreshContextFromEditor()
         host?.suggestionStrip?.clear()
         // Cleared and then asked again rather than left blank: on an empty field the engine
@@ -1605,7 +1711,13 @@ class BorderKeysService :
      * what is on screen. Bounded to a short window: this is an IPC, and the n-gram model only
      * looks two words back anyway.
      */
-    /** True when the composing region is the run of letters immediately before [caret]. */
+    /**
+     * True when the composing region is the run of letters immediately before [caret].
+     *
+     * Deliberately the application's connection and not the target's: this answers a question
+     * asked by onUpdateSelection, which is the platform reporting where the application's caret
+     * went. It is never asked about the draft box, whose caret the platform knows nothing about.
+     */
     private fun composingMatchesCaret(caret: Int): Boolean {
         if (composing.isEmpty()) {
             return false
@@ -1632,9 +1744,9 @@ class BorderKeysService :
         // next backspace had nothing to undo, which is the entire feature. Nothing is lost by
         // keeping it: revertCorrection checks that the text immediately before the cursor is
         // still exactly what it committed, and declines when the caret has really moved.
-        currentInputConnection?.finishComposingText()
+        target().connection?.finishComposingText()
 
-        val before = currentInputConnection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
+        val before = target().connection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
         if (before.isNullOrEmpty()) {
             previousWord1 = null
             previousWord2 = null
@@ -1657,7 +1769,7 @@ class BorderKeysService :
     }
 
     private fun refreshContextFromEditor() {
-        val connection = currentInputConnection
+        val connection = target().connection
         val before = connection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
         if (before.isNullOrEmpty()) {
             previousWord1 = null
@@ -1693,7 +1805,7 @@ class BorderKeysService :
         // Not before something that is already a space, and not at the very end of a field the
         // user may be about to leave -- an editor that trims trailing whitespace would then
         // show the cursor jumping back on its own.
-        val after = currentInputConnection?.getTextAfterCursor(1, 0)
+        val after = target().connection?.getTextAfterCursor(1, 0)
         return if (after != null && after.isNotEmpty() && after[0] == ' ') "" else " "
     }
 
@@ -1735,7 +1847,7 @@ class BorderKeysService :
         if (!preferences.autoCapitalise) {
             return SHIFT_OFF
         }
-        val type = currentInputEditorInfo?.inputType ?: return SHIFT_OFF
+        val type = target().editorInfo?.inputType ?: return SHIFT_OFF
         if ((type and android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS) != 0) {
             return SHIFT_LOCKED
         }
@@ -1749,7 +1861,7 @@ class BorderKeysService :
         if (composing.isNotEmpty()) {
             return SHIFT_OFF
         }
-        val before = currentInputConnection?.getTextBeforeCursor(CAP_LOOKBACK_CHARS, 0)
+        val before = target().connection?.getTextBeforeCursor(CAP_LOOKBACK_CHARS, 0)
         if (before.isNullOrEmpty()) {
             // Start of the field: the first word of anything is the first word of a sentence.
             return SHIFT_ON
@@ -2125,13 +2237,15 @@ class BorderKeysService :
     override fun onClipPicked(entry: com.borderkeys.data.entity.ClipEntry) {
         val view = host
         view?.setClipboardPanelVisible(false)
-        val connection = currentInputConnection ?: return
+        // Text follows the draft box; an image cannot, and takes the branch below that needs the
+        // application's own connection to know what it will accept.
+        val connection = target().connection ?: return
         if (entry.isImage) {
             val uri = android.net.Uri.parse(entry.uri)
             val description = android.content.ClipDescription(
                 null, arrayOf(entry.mimeType ?: "image/*"),
             )
-            commitImage(connection, uri, description)
+            commitImage(uri, description)
         } else {
             finishComposing(connection)
             connection.commitText(entry.content, 1)
@@ -2163,7 +2277,7 @@ class BorderKeysService :
      * closes on every pick is a picker reopened on every pick.
      */
     private fun onEmojiPicked(emoji: String) {
-        val connection = currentInputConnection ?: return
+        val connection = target().connection ?: return
         finishComposing(connection)
         connection.commitText(emoji, 1)
         refreshContextFromEditor()
@@ -2281,7 +2395,7 @@ class BorderKeysService :
     }
 
     override fun onClipboardPicked() {
-        val connection = currentInputConnection ?: return
+        val connection = target().connection ?: return
         val clip = clipboardManager?.primaryClip ?: return
         if (clip.itemCount == 0 || privateMode) {
             return
@@ -2290,7 +2404,7 @@ class BorderKeysService :
         val uri = item.uri
         val description = clip.description
         if (uri != null && description != null && description.hasMimeType("image/*")) {
-            commitImage(connection, uri, description)
+            commitImage(uri, description)
             return
         }
         val text = item.coerceToText(this)?.toString() ?: return
@@ -2319,11 +2433,22 @@ class BorderKeysService :
      * usually does, a plain text field never. Where it is refused there is nothing to fall back
      * to, so the chip is simply not honoured rather than pasting a content URI as text.
      */
+    /**
+     * Always the application's own connection, whatever is being typed into.
+     *
+     * An image has no meaning in a text buffer, so a picture chosen while the draft box is open
+     * has nowhere to go -- and putting it into the application behind the box, which is the only
+     * other place it could land, would be an edit the user did not ask for and cannot see. It is
+     * refused the same way a field that does not accept images refuses one: nothing happens.
+     */
     private fun commitImage(
-        connection: InputConnection,
         uri: android.net.Uri,
         description: android.content.ClipDescription,
     ) {
+        if (composerActive) {
+            return
+        }
+        val connection = currentInputConnection ?: return
         val accepted = currentInputEditorInfo?.contentMimeTypes.orEmpty()
         val supported = accepted.any { mime ->
             description.hasMimeType(mime) || mime == "*/*"
