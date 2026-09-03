@@ -27,6 +27,7 @@ import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.settings.screen.AboutScreen
 import com.borderkeys.settings.screen.AssistantScreen
 import com.borderkeys.settings.screen.ClipboardScreen
+import com.borderkeys.settings.screen.ComposerScreen
 import com.borderkeys.settings.screen.DictionaryScreen
 import com.borderkeys.settings.screen.HomeScreen
 import com.borderkeys.settings.screen.LanguagesScreen
@@ -115,6 +116,7 @@ private fun SettingsApp() {
             Screen.Dictionary -> DictionaryScreen(modifier)
             Screen.Clipboard -> ClipboardScreen(modifier)
             Screen.QuickActions -> QuickActionsScreen(modifier)
+            Screen.Composer -> ComposerScreen(modifier)
             Screen.Assistant -> AssistantScreen(modifier)
             Screen.Privacy -> PrivacyScreen(modifier)
             Screen.About -> AboutScreen(modifier)

@@ -73,6 +73,12 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
                 strings[Keys.HOME_QUICK_ACTIONS],
                 strings[Keys.HOME_QUICK_ACTIONS_NOTE],
             ) { open(Screen.QuickActions) }
+            // Shown in both builds, unlike the assistant's own row: the box is worth having
+            // without a model, and the screen says which of its buttons need one.
+            SettingRow(
+                strings[Keys.SCREEN_DRAFT_BOX],
+                strings[Keys.HOME_DRAFT_BOX],
+            ) { open(Screen.Composer) }
             if (hasAssistant) {
                 SettingRow(strings[Keys.HOME_TEXT_ASSISTANT], strings[Keys.HOME_SUMMARISE_CORRECT_AND_TRANSLATE_ON_THIS]) {
                     open(Screen.Assistant)
