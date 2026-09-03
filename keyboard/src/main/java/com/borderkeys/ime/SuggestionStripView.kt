@@ -175,11 +175,12 @@ class SuggestionStripView(
         }
 
     /**
-     * The slot holding the word a delimiter would commit, or -1 when the row does not carry it.
+     * The slot holding the correction a delimiter would apply, or -1 when there is none.
      *
-     * The one chip on the row that does something without being touched, so it is the one worth
-     * pointing at. Where there is nothing to correct this is the typed word's own slot, and the
-     * outline says so: what a space does is insert what you wrote.
+     * The outline goes here and only here: the one chip that would change your word for you if
+     * you pressed space without tapping anything. When there is nothing to correct -- the word
+     * is known, auto-correction is off, or the word is too short to guess at -- there is no
+     * correction and no outline, and the typed word stands alone in italic.
      */
     var appliedIndex: Int = -1
         set(value) {
@@ -503,17 +504,17 @@ class SuggestionStripView(
                     canvas.drawRect(left, 0f, left + slotWidth, height.toFloat(),
                         paints.keyPressedFill)
                 }
-                // The outline marks what a delimiter would commit, which is the only chip on
-                // the row that acts without being touched. That is a correction when the
-                // service decided one applies, and otherwise the typed word itself -- space
-                // commits what was typed, letter for letter, unless auto-correction has a
-                // reason to disagree. See handleCharacter and AutoCorrection in
-                // BorderKeysService: the decision is made there and arrives here already made.
+                // The outline marks the correction -- the word a delimiter would put in place
+                // of what you typed. It is the only chip that acts without being touched, and
+                // it is present only when the service decided a correction applies; with
+                // nothing to correct there is no outline and the typed word stands alone. See
+                // handleCharacter and AutoCorrection in BorderKeysService: the decision is made
+                // there and arrives here already made.
                 if (index == appliedIndex) {
                     // A traced outline, not a fill and not another colour: it has to be
-                    // distinguishable from the chips beside it without shouting, and the row
-                    // has to stay readable when the outline lands on the italic chip because
-                    // the two marks describe the same word.
+                    // distinguishable from the chips beside it without shouting. It never lands
+                    // on the italic typed chip -- a correction is by definition a different
+                    // word, in a different slot.
                     appliedRect.set(
                         left + slotWidth * APPLIED_INSET,
                         height * APPLIED_INSET,

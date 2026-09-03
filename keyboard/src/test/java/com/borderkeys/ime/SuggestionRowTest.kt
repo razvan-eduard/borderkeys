@@ -56,15 +56,14 @@ class SuggestionRowTest {
     }
 
     @Test
-    fun `with nothing to correct the typed chip is the one that acts`() {
-        // A delimiter commits what was typed, so the mark for "this is what happens if you do
-        // nothing" belongs on the typed word -- not on the engine's first guess, which in this
-        // case is not going anywhere near the text.
+    fun `with nothing to correct nothing is outlined`() {
+        // The typed word is italic and unmarked; there is no correction, so no chip is
+        // outlined. Outlining the typed word would be pointing at what space already does.
         val words = words("carte", "cartea", "cărți")
         row.arrange(words, 3, typed = "carte", limit = 3, correcting = false)
 
         assertEquals(0, row.typedIndex)
-        assertEquals(0, row.appliedIndex)
+        assertEquals(-1, row.appliedIndex)
     }
 
     @Test
