@@ -51,6 +51,13 @@ fun SuggestionStripPreview(
                 paints.update(theme, context.resources.displayMetrics, preferences.heightScale, context)
                 view.visibleLimit = preferences.suggestionCount
                 view.setSuggestions(sample, sample.size)
+                // Marked the way the real row marks: the first chip is what was typed, and one
+                // in the middle is what a delimiter would put in its place. A preview that
+                // showed neither would be a preview of a row nobody sees.
+                view.typedIndex = 0
+                view.appliedIndex = (preferences.suggestionCount / 2)
+                    .coerceAtMost(sample.size - 1)
+                    .coerceAtLeast(0)
                 view.requestLayout()
                 view.invalidate()
             },

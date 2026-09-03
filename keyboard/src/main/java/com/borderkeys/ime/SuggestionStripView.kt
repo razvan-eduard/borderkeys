@@ -161,11 +161,27 @@ class SuggestionStripView(
     /**
      * The slot holding exactly what was typed, or -1 when nothing does.
      *
-     * Marked rather than merely present: the whole value of the verbatim word is knowing, at a
-     * glance and without reading, which chip leaves your spelling alone. A reader who has to
-     * compare it letter by letter against what they wrote has been given nothing.
+     * Drawn in italic rather than outlined. The whole value of the verbatim word is knowing, at
+     * a glance and without reading, which chip leaves your spelling alone -- and a reader who
+     * has to compare it letter by letter against what they wrote has been given nothing. The
+     * outline went to [appliedIndex], which is the chip that acts on its own.
      */
-    var verbatimIndex: Int = -1
+    var typedIndex: Int = -1
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
+    /**
+     * The slot holding the word a delimiter would commit, or -1 when the row does not carry it.
+     *
+     * The one chip on the row that does something without being touched, so it is the one worth
+     * pointing at. Where there is nothing to correct this is the typed word's own slot, and the
+     * outline says so: what a space does is insert what you wrote.
+     */
+    var appliedIndex: Int = -1
         set(value) {
             if (field != value) {
                 field = value
@@ -191,8 +207,8 @@ class SuggestionStripView(
 
     private var pressedIndex = -1
 
-    /** Reused so the outline around the verbatim chip allocates nothing on the draw path. */
-    private val verbatimRect = android.graphics.RectF()
+    /** Reused so the outline around the applied chip allocates nothing on the draw path. */
+    private val appliedRect = android.graphics.RectF()
 
     /** Fires once per press, at which point the press stops being a tap. */
     private val longPressRunnable = Runnable {
@@ -376,7 +392,8 @@ class SuggestionStripView(
 
     fun clear() {
         actionMode = false
-        verbatimIndex = -1
+        typedIndex = -1
+        appliedIndex = -1
         if (count != 0) {
             count = 0
             for (index in 0 until MAX_SUGGESTIONS) {
@@ -386,9 +403,6 @@ class SuggestionStripView(
             invalidate()
         }
     }
-
-    /** The top candidate, or null. Used to commit on a space press. */
-    fun topSuggestion(): String? = if (count > 0) words[0] else null
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
@@ -489,30 +503,34 @@ class SuggestionStripView(
                     canvas.drawRect(left, 0f, left + slotWidth, height.toFloat(),
                         paints.keyPressedFill)
                 }
-                // The first candidate is the engine's best guess, so it gets the full label
-                // colour and the rest get the secondary one.
-                //
-                // It is *not* what the space key commits. Space commits what was typed, letter
-                // for letter, and a suggestion is applied only when it is tapped -- see
-                // handleCharacter in BorderKeysService, where that is the whole point of the
-                // delimiter branch. An earlier version of this comment claimed the opposite,
-                // which would have described a keyboard that silently rewrites what you wrote:
-                // exactly the behaviour this project exists to avoid.
-                if (index == verbatimIndex) {
-                    // A traced outline, not a fill and not another colour. It has to be
-                    // distinguishable from the chip beside it without competing with the first
-                    // suggestion, which is still the engine's answer and still the one space
-                    // would take.
-                    verbatimRect.set(
-                        left + slotWidth * VERBATIM_INSET,
-                        height * VERBATIM_INSET,
-                        left + slotWidth * (1f - VERBATIM_INSET),
-                        height * (1f - VERBATIM_INSET),
+                // The outline marks what a delimiter would commit, which is the only chip on
+                // the row that acts without being touched. That is a correction when the
+                // service decided one applies, and otherwise the typed word itself -- space
+                // commits what was typed, letter for letter, unless auto-correction has a
+                // reason to disagree. See handleCharacter and AutoCorrection in
+                // BorderKeysService: the decision is made there and arrives here already made.
+                if (index == appliedIndex) {
+                    // A traced outline, not a fill and not another colour: it has to be
+                    // distinguishable from the chips beside it without shouting, and the row
+                    // has to stay readable when the outline lands on the italic chip because
+                    // the two marks describe the same word.
+                    appliedRect.set(
+                        left + slotWidth * APPLIED_INSET,
+                        height * APPLIED_INSET,
+                        left + slotWidth * (1f - APPLIED_INSET),
+                        height * (1f - APPLIED_INSET),
                     )
-                    val radius = height * VERBATIM_CORNER
-                    canvas.drawRoundRect(verbatimRect, radius, radius, paints.keyStroke)
+                    val radius = height * APPLIED_CORNER
+                    canvas.drawRoundRect(appliedRect, radius, radius, paints.keyStroke)
                 }
-                val paint = if (index == 0) paints.label else paints.labelSecondary
+                // Italic for what was typed, the full label colour for what would be applied,
+                // and the secondary colour for the rest. By meaning rather than by position:
+                // the first slot stopped being the engine's answer when the typed word took it.
+                val paint = when (index) {
+                    typedIndex -> paints.labelTyped
+                    appliedIndex -> paints.label
+                    else -> paints.labelSecondary
+                }
                 val previousSize = paint.textSize
                 val fitted = slotTextSize[index]
                 if (fitted != previousSize) {
@@ -643,11 +661,11 @@ class SuggestionStripView(
          */
         const val MAX_SUGGESTIONS = 8
 
-        /** How far the verbatim outline sits inside its slot, as a fraction of the slot. */
-        const val VERBATIM_INSET = 0.06f
+        /** How far the applied-word outline sits inside its slot, as a fraction of the slot. */
+        const val APPLIED_INSET = 0.06f
 
         /** Its corner radius, as a fraction of the strip's height. */
-        const val VERBATIM_CORNER = 0.22f
+        const val APPLIED_CORNER = 0.22f
 
         /** How many lines the clipboard chip wraps to, and how far apart they sit. */
         const val CHIP_LINES = 2

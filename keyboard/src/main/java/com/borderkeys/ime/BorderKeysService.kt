@@ -2060,17 +2060,27 @@ class BorderKeysService :
         // Kept because the delimiter path needs it and the strip is a view, not a model. One
         // reference assignment per suggestion round, off the hot path.
         //
-        // Read before the verbatim word is placed, so it stays the engine's answer: the first
-        // chip is what space would take, and moving the typed word into the row must not change
-        // that.
+        // Read before the row is rearranged, so it stays the engine's answer whatever the row
+        // ends up looking like: what a delimiter applies is a decision about words, not about
+        // which slot something was moved into.
         topSuggestion = if (count > 0) words[0] else null
-        val shown = placeVerbatim(words, count)
-        host?.suggestionStrip?.verbatimIndex = verbatimSlot
-        host?.suggestionStrip?.setSuggestions(words, shown)
+        val shown = if (preferences.showSuggestionStrip) {
+            suggestionRow.arrange(
+                words, count, lastQuery, preferences.suggestionCount,
+                correcting = correctionFor(lastQuery) != null,
+            )
+        } else {
+            count
+        }
+        host?.suggestionStrip?.let { strip ->
+            strip.typedIndex = suggestionRow.typedIndex
+            strip.appliedIndex = suggestionRow.appliedIndex
+            strip.setSuggestions(words, shown)
+        }
     }
 
-    /** Which slot the typed word ended up in, or -1 when it is not in the row. */
-    private var verbatimSlot = -1
+    /** Where the typed word and the word a delimiter would apply end up on the strip. */
+    private val suggestionRow = SuggestionRow()
 
     /**
      * The last query the dictionaries recognised, or empty.
@@ -2090,49 +2100,6 @@ class BorderKeysService :
      * leaves the composing region empty while the strip is very much describing a word.
      */
     private var lastQuery: String = ""
-
-    /**
-     * Puts exactly what was typed into the middle of the row.
-     *
-     * A keyboard that only ever offers what it thinks you meant is a keyboard you have to argue
-     * with. The middle slot rather than an end one because both ends already mean something --
-     * the first is the engine's answer, the last is the one nobody reads -- and because a chip
-     * that changes position depending on how many suggestions came back is a chip that cannot
-     * be hit without looking.
-     *
-     * Returns the new count, which grows by one when the typed word was not already there.
-     */
-    private fun placeVerbatim(words: Array<String?>, count: Int): Int {
-        verbatimSlot = -1
-        val typed = lastQuery
-        if (typed.isEmpty() || !preferences.showSuggestionStrip) {
-            return count
-        }
-        val limit = preferences.suggestionCount.coerceAtMost(words.size)
-
-        // Already offered: mark where it is rather than adding it twice.
-        for (index in 0 until count.coerceAtMost(limit)) {
-            if (words[index] == typed) {
-                verbatimSlot = index
-                return count
-            }
-        }
-
-        // Inserted, pushing the rest along and dropping whatever fell off the end. The engine's
-        // best keeps slot zero because middle is never zero for a row of two or more -- and the
-        // middle is clamped into the row that will actually be drawn, which is shorter than the
-        // limit whenever the engine returned less than a full set.
-        val shown = (count + 1).coerceAtMost(limit)
-        val middle = (limit / 2).coerceAtMost(shown - 1).coerceAtLeast(0)
-        var index = shown - 1
-        while (index > middle) {
-            words[index] = words[index - 1]
-            index--
-        }
-        words[middle] = typed
-        verbatimSlot = middle
-        return shown
-    }
 
     private fun requestSuggestions() {
         if (!preferences.showSuggestionStrip) {
