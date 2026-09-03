@@ -1415,6 +1415,47 @@ void Engine::searchPacks(const uint32_t* folded, int foldedLength, int onlyPack,
     }
 }
 
+int Engine::knownSpelling(const char* word, size_t length, char* out, int outBytes) const {
+    if (!created_ || word == nullptr || out == nullptr || outBytes <= 0 || length == 0) {
+        return 0;
+    }
+    uint32_t folded[kMaxComposing];
+    const int foldedLength = foldUtf8(word, length, folded, kMaxComposing);
+    if (foldedLength <= 0) {
+        return 0;
+    }
+    for (int index = 0; index < kMaxPacks; ++index) {
+        const LanguagePack& pack = packs_[index];
+        if (!pack.isOpen() || !pack.active) {
+            continue;
+        }
+        const int32_t wordIndex = pack.trie().lookupFolded(folded, foldedLength);
+        if (wordIndex < 0) {
+            continue;
+        }
+        uint32_t textLength = 0;
+        const char* const text = pack.trie().wordText(static_cast<uint32_t>(wordIndex),
+                                                      &textLength);
+        if (text == nullptr || textLength == 0 || textLength > static_cast<uint32_t>(outBytes)) {
+            continue;
+        }
+        std::memcpy(out, text, textLength);
+        return static_cast<int>(textLength);
+    }
+    // The personal dictionary counts. A word this device has learned is a word this device
+    // should not be arguing with.
+    const int32_t entry = userModel_.entryIndexFor(word, length);
+    if (entry >= 0) {
+        uint32_t textLength = 0;
+        const char* const text = userModel_.entryText(static_cast<uint32_t>(entry), &textLength);
+        if (text != nullptr && textLength > 0 && textLength <= static_cast<uint32_t>(outBytes)) {
+            std::memcpy(out, text, textLength);
+            return static_cast<int>(textLength);
+        }
+    }
+    return 0;
+}
+
 int Engine::suggest(const char* composing, size_t composingLength, const char* previous1,
                     size_t previous1Length, const char* previous2, size_t previous2Length,
                     Candidate* out, int maxOut) {

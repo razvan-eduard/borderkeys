@@ -38,7 +38,18 @@ class PredictionEngine(
 ) {
     /** Delivered on the UI thread, already filtered for staleness. */
     interface ResultListener {
-        fun onSuggestions(words: Array<String?>, count: Int)
+        /**
+         * [knownWord] is the word this answer is about when the dictionaries spell it, folded
+         * for case and diacritics, and empty otherwise.
+         *
+         * The word rather than a flag, so the caller can tell whether the answer is about what
+         * is on screen now: the question is only asked at the moment a delimiter is pressed,
+         * and by then a newer request may have been made.
+         *
+         * It travels with the answer because the engine has one thread, and a delimiter is not
+         * a moment to be blocking on it.
+         */
+        fun onSuggestions(words: Array<String?>, count: Int, knownWord: String)
 
         /**
          * A decoded swipe. Separate from [onSuggestions] because the service treats it
@@ -57,6 +68,9 @@ class PredictionEngine(
     private lateinit var worker: Handler
 
     private val queue = PredictionRequestQueue()
+
+    /** The last answered query when the dictionaries know it, else empty. Guarded by resultLock. */
+    private var nativeKnownWord = ""
 
     // Written by the prediction thread, copied out by the UI thread under [resultLock]. Both
     // are allocated once: the suggestion path may not allocate per keystroke, and JNI fills
@@ -403,7 +417,30 @@ class PredictionEngine(
             if (!queue.isCurrent(generation)) {
                 continue
             }
-            synchronized(resultLock) { nativeCount = count }
+            // Asked on this thread, beside the answer it belongs to. The word is the one the
+            // engine was just asked about, so the two can never disagree.
+            // Asked on this thread, beside the answer it belongs to, so the two can never be
+            // about different words.
+            val query = queue.currentComposing
+            // The dictionary's own spelling, compared with what was typed. Equal but for case
+            // means the word is spelled the way it is written, and a word spelled the way it is
+            // written is not something to correct. Differing otherwise -- "Daca" against "dacă"
+            // -- is a correction worth making, so it does not count as known.
+            val spelling = if (query.isEmpty()) {
+                null
+            } else {
+                withHandle<String?>(null) { current ->
+                    NativePredictor.nativeKnownSpelling(current, query)
+                }
+            }
+            synchronized(resultLock) {
+                nativeCount = count
+                nativeKnownWord = if (spelling != null && spelling.equals(query, ignoreCase = true)) {
+                    query
+                } else {
+                    ""
+                }
+            }
             mainHandler.removeCallbacks(publishResults)
             mainHandler.post(publishResults)
         }
@@ -415,7 +452,8 @@ class PredictionEngine(
      * moment this returns.
      */
     private fun publish() {
-        listener?.onSuggestions(displayWords, copyAndFilterResults())
+        val known = synchronized(resultLock) { nativeKnownWord }
+        listener?.onSuggestions(displayWords, copyAndFilterResults(), known)
     }
 
     /**

@@ -450,6 +450,26 @@ void nativeLoadUserTrigrams(JNIEnv* env, jobject /*thiz*/, jlong handle,
     delete[] countValues;
 }
 
+jstring nativeKnownSpelling(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || word == nullptr) {
+        return nullptr;
+    }
+    char buffer[kStringBufferBytes];
+    const jsize length = copyString(env, word, buffer, sizeof(buffer));
+    if (length <= 0) {
+        return nullptr;
+    }
+    char spelling[kStringBufferBytes];
+    const int written = engine->knownSpelling(buffer, static_cast<size_t>(length), spelling,
+                                              sizeof(spelling) - 1);
+    if (written <= 0) {
+        return nullptr;
+    }
+    spelling[written] = '\0';
+    return env->NewStringUTF(spelling);
+}
+
 void nativeSetPhraseSuggestions(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
                                 jboolean enabled) {
     Engine* const engine = engineFrom(handle);
@@ -753,6 +773,8 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeSetLanguageLock)},
     {"nativeSetPhraseSuggestions", "(JZ)V",
      reinterpret_cast<void*>(nativeSetPhraseSuggestions)},
+    {"nativeKnownSpelling", "(JLjava/lang/String;)Ljava/lang/String;",
+     reinterpret_cast<void*>(nativeKnownSpelling)},
     {"nativeLoadUserTrigrams",
      "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I)V",
      reinterpret_cast<void*>(nativeLoadUserTrigrams)},

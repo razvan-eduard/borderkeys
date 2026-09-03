@@ -151,6 +151,19 @@ public:
     bool setKeyGeometry(const int32_t* codes, const float* centersX, const float* centersY,
                         int count, float keyWidth, float keyHeight);
 
+    /**
+     * How the dictionaries spell this word, written into `out` and returned as a byte count.
+     *
+     * The lookup folds case and diacritics, because that is how the trie is keyed, but what
+     * comes back is the stored spelling -- and the caller compares it with what was typed. The
+     * distinction is the whole point: for "Daca" this returns "dacă", which is a correction
+     * worth making, while for "cana" it returns "cana", which is a word and must be left alone.
+     *
+     * Zero when no dictionary has it. One trie descent per active pack and one hash lookup, so
+     * it costs a few microseconds and can sit beside the answer to a suggestion request.
+     */
+    int knownSpelling(const char* word, size_t length, char* out, int outBytes) const;
+
     // Fills `out` with at most `maxOut` candidates, best first, and returns how many were
     // written. `composing` may be empty, in which case this answers "what word comes next".
     int suggest(const char* composing, size_t composingLength, const char* previous1,

@@ -167,6 +167,16 @@ internal object NativePredictor {
     /** Whether a suggestion may be two words. See KeyboardPreferences.phraseSuggestions. */
     external fun nativeSetPhraseSuggestions(handle: Long, enabled: Boolean)
 
+    /**
+     * How the dictionaries spell this word, or null when none of them has it.
+     *
+     * The lookup folds case and diacritics, because that is how the trie is keyed, but what
+     * comes back is the stored spelling: "Daca" answers "dacă", which is a correction worth
+     * making, and "cana" answers "cana", which is a word to leave alone. One trie descent per
+     * active language.
+     */
+    external fun nativeKnownSpelling(handle: Long, word: String): String?
+
     /** Replaces the remembered three-word sequences. Called after the pairs, same reason. */
     external fun nativeLoadUserTrigrams(
         handle: Long,

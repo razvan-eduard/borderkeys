@@ -1072,16 +1072,16 @@ class BorderKeysService :
     /**
      * The correction a delimiter should apply, or null to commit what was typed.
      *
-     * Null in every case where applying one would be a guess rather than a correction: the
-     * feature is off, nothing was typed, the suggestion is what was typed anyway, or the strip
-     * is showing a next-word prediction rather than a correction of the current word.
+     * The setting is checked here and the rest of the decision is [AutoCorrection]'s, which is
+     * where it can be tested without an editor, an input connection and a dictionary.
      */
     private fun correctionFor(typed: String): String? {
-        if (!preferences.autoCorrectOnSpace || typed.length < MIN_CORRECTED_LENGTH) {
+        if (!preferences.autoCorrectOnSpace) {
             return null
         }
-        val suggestion = topSuggestion ?: return null
-        return if (suggestion.isNotEmpty() && suggestion != typed) suggestion else null
+        return AutoCorrection.correctionFor(
+            typed, topSuggestion, knownQuery, MIN_CORRECTED_LENGTH,
+        )
     }
 
     /**
@@ -1452,7 +1452,8 @@ class BorderKeysService :
         }
     }
 
-    override fun onSuggestions(words: Array<String?>, count: Int) {
+    override fun onSuggestions(words: Array<String?>, count: Int, knownWord: String) {
+        knownQuery = knownWord
         // Settled here as well as in onUpdateSelection: an editor that does not report selection
         // changes -- and some do not, for their own reasons -- would otherwise leave the idle
         // line standing over a field the user has already written in.
@@ -1473,6 +1474,15 @@ class BorderKeysService :
 
     /** Which slot the typed word ended up in, or -1 when it is not in the row. */
     private var verbatimSlot = -1
+
+    /**
+     * The last query the dictionaries recognised, or empty.
+     *
+     * Stored as the word rather than as a flag, so a stale answer cannot be read as being about
+     * the word now being typed: the check is "is this the word we were told about", not "was
+     * something known recently".
+     */
+    private var knownQuery: String = ""
 
     /**
      * The word the engine was last asked about.
