@@ -95,6 +95,15 @@ android {
         create("plus") {
             dimension = "engine"
             versionNameSuffix = "-plus"
+            // Its own package, so the two are not a choice.
+            //
+            // With one applicationId, installing plus replaces core: the same repository could
+            // only ever offer one of them, and taking the assistant would mean giving up the
+            // settings and the learned dictionary of the build being replaced. As separate
+            // packages both can be listed, both can be installed, and someone can try the
+            // assistant without losing anything -- at the cost of them being two applications
+            // that learn separately, which is the honest half of the trade.
+            applicationIdSuffix = ".plus"
         }
     }
 

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    The two builds are separate packages and can be installed at the same time, so all three
+    names a user is shown have to tell them apart: the launcher, the settings activity, and the
+    input-method picker. Leaving any of them alone gives a list with two identical entries and
+    no way to know which is which without opening one.
+
+    The library modules own the last two, and an application's resources win over a library's,
+    which is why they are overridden here rather than in a flavour of each module.
+-->
+<resources>
+    <string name="app_name" translatable="false">BorderKeys +</string>
+    <string name="settings_activity_label" translatable="false">BorderKeys +</string>
+    <string name="ime_name" translatable="false">BorderKeys +</string>
+</resources>

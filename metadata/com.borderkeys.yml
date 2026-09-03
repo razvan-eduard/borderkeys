@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 #
-# F-Droid metadata. Only the `core` flavor is published here, because it is the one that carries
-# no inference runtime -- not because `plus` carries anything unfree.
+# F-Droid metadata for the `core` flavour: the one that carries no inference runtime at all.
 #
-# `plus` needs no AntiFeatures either. It adds llama.cpp (MIT, compiled from source) and the
-# libc++ it links against (Apache-2.0 with the LLVM exception), and it bundles no model: one
-# arrives only when the user chooses a file whose SHA-256 matches a known entry, and all of
-# those are Apache-2.0. See docs/licensing.md section 2.2.1.
+# `plus` is published too, as its own package, in com.borderkeys.plus.yml. It is a separate
+# application rather than a replacement, so the two can be installed side by side and choosing
+# the assistant does not cost anyone the settings and dictionary of the build it would have
+# replaced. It needs no AntiFeatures either: llama.cpp is MIT and compiled from source, the
+# libc++ it links against is Apache-2.0 with the LLVM exception, and it bundles no model. See
+# docs/licensing.md section 2.2.1.
 #
 # This comment used to claim `plus` would need NonFreeAssets. That was written while the plan
 # still included the FUTO Swipe weights, which are genuinely non-free -- they require a visible
@@ -51,7 +52,9 @@ Description: |-
       suggestions. The keyboard cannot read their contents — the platform guarantees that —
       and never sees your password.
 
-    This is the "core" build: it contains no machine-learning model of any kind.
+    This is the "core" build: it contains no machine-learning model of any kind, and no
+    code that could run one. A separate "BorderKeys +" is published alongside it for anyone
+    who wants the on-device text assistant; the two can be installed at the same time.
 
 RepoType: git
 Repo: https://github.com/razvan-eduard/borderkeys.git
