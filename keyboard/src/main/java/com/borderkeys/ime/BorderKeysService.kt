@@ -31,6 +31,7 @@ import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
 import com.borderkeys.data.theme.QuickAction
+import com.borderkeys.data.theme.SavedPrompt
 import com.borderkeys.data.theme.ComposerAction
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
@@ -1615,6 +1616,20 @@ class BorderKeysService :
     /** Which choice list the band is showing, so a tap on it can be read. */
     private var composerChoices: Array<AssistTask?> = emptyArray()
 
+    /** The kept prompts the band is offering, when it is offering those instead. */
+    private var composerPromptChoices: List<SavedPrompt> = emptyList()
+
+    /**
+     * The instruction that produced what is on screen, until it has been kept or passed over.
+     *
+     * Kept only after it has worked. An instruction that returned an error is not one anybody
+     * wants a button for.
+     */
+    private var composerLastInstruction = ""
+
+    /** Whether the row is being used to name a prompt rather than to write one. */
+    private var composerNamingPrompt = false
+
     private val composerBusy: Boolean get() = composerRequestId >= 0
 
     override fun onComposerAction(action: ComposerAction) {
@@ -1629,8 +1644,7 @@ class BorderKeysService :
             ComposerAction.TRANSLATE -> offerComposerChoices(TRANSLATE_TASKS)
             ComposerAction.TONE -> offerComposerChoices(TONE_TASKS)
             ComposerAction.PROMPT -> openComposerPrompt()
-            // Wired with the saved prompts.
-            ComposerAction.SAVED_PROMPTS -> Unit
+            ComposerAction.SAVED_PROMPTS -> offerSavedPrompts()
         }
     }
 
@@ -1667,12 +1681,17 @@ class BorderKeysService :
 
     /** Enter in the instruction row sends it, which is why the row exists. */
     private fun sendComposerPrompt() {
+        if (composerNamingPrompt) {
+            keepPrompt()
+            return
+        }
         val written = promptConnection?.snapshot().orEmpty().trim()
         if (written.isEmpty()) {
             closeComposerPrompt()
             return
         }
         closeComposerPrompt()
+        composerLastInstruction = written
         runComposerTask(AssistTask.CUSTOM, written)
     }
 
@@ -1682,6 +1701,10 @@ class BorderKeysService :
     }
 
     override fun onComposerPromptDismissed() {
+        // Passing over the offer to keep an instruction is a decision, so it is not offered
+        // again for the same one.
+        composerNamingPrompt = false
+        composerLastInstruction = ""
         closeComposerPrompt()
     }
 
@@ -1702,10 +1725,78 @@ class BorderKeysService :
     }
 
     override fun onComposerChoice(index: Int) {
+        val kept = composerPromptChoices.getOrNull(index)
+        if (kept != null) {
+            host?.composer?.showVersions()
+            composerPromptChoices = emptyList()
+            composerLastInstruction = kept.text
+            runComposerTask(AssistTask.CUSTOM, kept.text)
+            return
+        }
         val task = composerChoices.getOrNull(index) ?: return
         host?.composer?.showVersions()
         composerChoices = emptyArray()
         runComposerTask(task)
+    }
+
+    /** The prompts this device has kept, as a row to pick from. */
+    private fun offerSavedPrompts() {
+        val view = host ?: return
+        val kept = preferences.savedPrompts
+        if (kept.isEmpty()) {
+            view.composer.showNotice(strings[Keys.COMPOSER_NO_SAVED_PROMPTS])
+            return
+        }
+        composerChoices = emptyArray()
+        composerPromptChoices = kept
+        val labels = arrayOfNulls<String>(kept.size)
+        for (index in kept.indices) {
+            labels[index] = kept[index].name
+        }
+        view.composer.showChoices(labels, kept.size)
+    }
+
+    /**
+     * Offers to keep the instruction that just worked, with a name to edit.
+     *
+     * The name is proposed rather than asked for, because no instruction worth writing fits on a
+     * button and being handed an empty field after every prompt is a tax on using the feature.
+     * The proposal is a heuristic and not a second run of the model: that would cost seconds,
+     * come back wrong often enough to matter, and still need editing.
+     */
+    private fun offerToKeepPrompt() {
+        val view = host ?: return
+        val instruction = composerLastInstruction
+        if (instruction.isEmpty() || preferences.savedPrompts.any { it.text == instruction }) {
+            return
+        }
+        if (preferences.savedPrompts.size >= SavedPrompt.MAX_SAVED) {
+            return
+        }
+        val connection = promptConnection
+            ?: ComposerInputConnection(view.composer) { onComposerPromptChanged() }
+                .also { promptConnection = it }
+        connection.reset(Composer.suggestedName(instruction))
+        composerNamingPrompt = true
+        view.composer.showPrompt(connection.text, strings[Keys.COMPOSER_SAVE_PROMPT_NAME])
+        switchTarget(TARGET_PROMPT)
+        pushComposerState()
+    }
+
+    private fun keepPrompt() {
+        val name = promptConnection?.snapshot().orEmpty().trim()
+        val instruction = composerLastInstruction
+        composerNamingPrompt = false
+        composerLastInstruction = ""
+        closeComposerPrompt()
+        if (name.isEmpty() || instruction.isEmpty()) {
+            return
+        }
+        updatePreferences { current ->
+            current.copy(
+                savedPrompts = current.savedPrompts + SavedPrompt(name = name, text = instruction),
+            )
+        }
     }
 
     /**
@@ -1743,6 +1834,8 @@ class BorderKeysService :
         composerConnection?.replaceAll(text)
         host?.composer?.showNotice("")
         pushComposerState()
+        // An instruction is worth a button once it has done something, and not before.
+        offerToKeepPrompt()
     }
 
     private fun onComposerFailure(message: String) {

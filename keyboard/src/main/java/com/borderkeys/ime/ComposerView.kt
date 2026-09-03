@@ -100,6 +100,7 @@ class ComposerView(
     private var promptLayout: DynamicLayout? = null
     private val promptDismissBounds = android.graphics.RectF()
     private var pressedPromptDismiss = false
+    private var promptMark = PROMPT_MARK
     private val promptMarkPaint = TextPaint(TextPaint.ANTI_ALIAS_FLAG)
 
     /** Which buttons the bar carries, in the user's order, and whether each can be pressed. */
@@ -251,8 +252,9 @@ class ComposerView(
      * One line to start with, growing upward into the text as it is written, because an
      * instruction is usually short and occasionally is not.
      */
-    fun showPrompt(text: Editable) {
+    fun showPrompt(text: Editable, mark: String = PROMPT_MARK) {
         prompt = text
+        promptMark = mark
         promptLayout = null
         setBand(BAND_PROMPT)
         requestLayout()
@@ -361,7 +363,8 @@ class ComposerView(
     /** One row, then as many as the instruction needs, up to a stop. */
     private fun promptRows(): Float {
         val text = prompt ?: return PROMPT_ROWS
-        val available = width - paddingPx * 2f - promptMarkWidth() * 2f
+        val available = width - paddingPx * 3f - promptMarkWidth() -
+            promptMarkPaint.measureText(promptMark)
         if (available <= 0f) {
             return PROMPT_ROWS
         }
@@ -508,15 +511,17 @@ class ComposerView(
         promptMarkPaint.color = paints.accent.color
         val mark = promptMarkWidth()
         val baseline = railTop + rowHeight() * PROMPT_BASELINE_ROWS
-        canvas.drawText(PROMPT_MARK, paddingPx, baseline, promptMarkPaint)
+        canvas.drawText(promptMark, paddingPx, baseline, promptMarkPaint)
 
-        val available = width - paddingPx * 2f - mark * 2f
+        val available = width - paddingPx * 2f - mark -
+            promptMarkPaint.measureText(promptMark)
         if (available > 0f) {
             promptMarkPaint.color = paints.label.color
             val laid = ensurePromptLayout(text, available.toInt())
             canvas.save()
-            canvas.clipRect(paddingPx + mark, railTop, width - paddingPx - mark, railBottom)
-            canvas.translate(paddingPx + mark, railTop + paddingPx / 2f)
+            val textLeft = paddingPx + promptMarkPaint.measureText(promptMark) + paddingPx
+            canvas.clipRect(textLeft, railTop, width - paddingPx - mark, railBottom)
+            canvas.translate(textLeft, railTop + paddingPx / 2f)
             laid.draw(canvas)
             if (caretVisible) {
                 val offset = android.text.Selection.getSelectionEnd(text).coerceIn(0, text.length)
