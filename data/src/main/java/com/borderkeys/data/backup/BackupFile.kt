@@ -105,8 +105,15 @@ object BackupFile {
 
     const val FORMAT = 1
 
-    /** Named so the file is recognisable in a folder full of other files. */
-    const val EXTENSION = "bkbackup"
+    /**
+     * The name the picker is offered, without an extension.
+     *
+     * The system appends one from the type, so anything ending in ".bkbackup" came back as
+     * "borderkeys.bkbackup.json". The file really is JSON -- the envelope is readable even when
+     * the payload is not -- so the honest name is the one the system would have given it, and
+     * the base carries the identification instead.
+     */
+    const val SUGGESTED_NAME = "borderkeys-backup"
     const val MIME_TYPE = "application/json"
 
     private const val APPLICATION = "borderkeys"

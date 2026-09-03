@@ -165,7 +165,7 @@ fun BackupScreen(modifier: Modifier = Modifier) {
                 // Refused rather than written unprotected: the passphrase is the only thing
                 // standing between a dictionary and whatever else can read the folder it lands in.
                 enabled = parts.any && (!private || passphrase.isNotEmpty()),
-                onClick = { write.launch("borderkeys.${BackupFile.EXTENSION}") },
+                onClick = { write.launch(BackupFile.SUGGESTED_NAME) },
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             ) { Text(strings[Keys.BACKUP_WRITE]) }
         }
