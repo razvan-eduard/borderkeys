@@ -109,6 +109,17 @@ object DataGraph {
         )
     }
 
+    /**
+     * Reading what this keyboard knows out to a file, and back in from one.
+     *
+     * The only way anything crosses between the two builds: they are separate applications with
+     * separate private directories, and a file the user chooses costs a few taps where a content
+     * provider would cost a permission.
+     */
+    val backups: com.borderkeys.data.backup.BackupRepository by lazy {
+        com.borderkeys.data.backup.BackupRepository(database, themes)
+    }
+
     val assistModels: AssistModelRepository by lazy {
         AssistModelRepository(
             database.assistModelDao(),

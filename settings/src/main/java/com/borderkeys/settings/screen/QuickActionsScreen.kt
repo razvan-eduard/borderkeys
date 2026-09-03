@@ -133,6 +133,9 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                 if (picking) {
                     for (action in QuickAction.entries) {
                         if (action in chosen) continue
+                        // Not offered while the draft box is switched off, or the bar would
+                        // gain a button for something that cannot open.
+                        if (action == QuickAction.COMPOSE && !preferences.composerEnabled) continue
                         ButtonRow(
                             action = action,
                             index = -1,

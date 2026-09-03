@@ -5,6 +5,7 @@ package com.borderkeys.settings.screen
 
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.Screen
 
 import android.content.Context
 import android.content.Intent
@@ -40,12 +41,22 @@ import com.borderkeys.settings.SettingsSectionCard
  * open the right system dialog.
  */
 @Composable
-fun SetupScreen(modifier: Modifier = Modifier) {
+fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
     val strings = LocalStrings.current
     val context = LocalContext.current
     var probe by remember { mutableStateOf("") }
     val enabled = isEnabled(context)
     val isDefault = isDefault(context)
+
+    /**
+     * Whether the other build is on this device and this one is the newcomer.
+     *
+     * Only interesting in that direction. Somebody installing the assistant build beside one
+     * they have been using for months has a dictionary worth carrying; the reverse is a fresh
+     * install being offered something from an application it is not sure exists.
+     */
+    val sibling = remember { siblingPackage(context) }
+    val canImport = remember(sibling) { sibling != null && isInstalled(context, sibling) }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SettingsSectionCard(strings[Keys.SETUP_STEP_1_ENABLE_IT]) {
@@ -82,6 +93,16 @@ fun SetupScreen(modifier: Modifier = Modifier) {
                 modifier = Modifier.padding(horizontal = 20.dp),
             ) { Text(strings[Keys.SETUP_CHOOSE_KEYBOARD]) }
         }
+        if (canImport) {
+            SettingsSectionCard(strings[Keys.SETUP_STEP_IMPORT]) {
+                Explanation(strings[Keys.SETUP_IMPORT_NOTE])
+                Button(
+                    onClick = { open(Screen.Backup) },
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                ) { Text(strings[Keys.SETUP_OPEN_IMPORT]) }
+            }
+        }
+
         SettingsSectionCard(strings[Keys.SETUP_TRY_IT]) {
             Explanation(strings[Keys.SETUP_A_REAL_TEXT_FIELD_WHATEVER_YOU])
             OutlinedTextField(
@@ -109,3 +130,26 @@ private fun isEnabled(context: Context): Boolean {
 private fun isDefault(context: Context): Boolean =
     Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
         ?.startsWith(context.packageName) == true
+
+/**
+ * The package name of the other build, or null when this one has no sibling.
+ *
+ * Derived from this application's own name rather than written down twice: the assistant build
+ * is the core one with a suffix, so one of them is the other with the suffix removed.
+ */
+private fun siblingPackage(context: Context): String? {
+    val self = context.packageName
+    return if (self.endsWith(PLUS_SUFFIX)) self.removeSuffix(PLUS_SUFFIX) else null
+}
+
+/**
+ * Whether a package is on this device.
+ *
+ * Needs a <queries> entry in the manifest since API 30, which is a declaration of what this
+ * application may look for and not a permission: nothing is requested and nothing is granted.
+ */
+private fun isInstalled(context: Context, packageName: String): Boolean = runCatching {
+    context.packageManager.getPackageInfo(packageName, 0)
+}.isSuccess
+
+private const val PLUS_SUFFIX = ".plus"

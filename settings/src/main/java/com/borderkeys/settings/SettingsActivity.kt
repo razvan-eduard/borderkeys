@@ -26,6 +26,7 @@ import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.settings.screen.AboutScreen
 import com.borderkeys.settings.screen.AssistantScreen
+import com.borderkeys.settings.screen.BackupScreen
 import com.borderkeys.settings.screen.ClipboardScreen
 import com.borderkeys.settings.screen.ComposerScreen
 import com.borderkeys.settings.screen.DictionaryScreen
@@ -106,7 +107,7 @@ private fun SettingsApp() {
         val modifier = Modifier.padding(insets)
         when (current) {
             Screen.Home -> HomeScreen(modifier, open)
-            Screen.Setup -> SetupScreen(modifier)
+            Screen.Setup -> SetupScreen(modifier, open)
             Screen.Languages -> LanguagesScreen(modifier)
             Screen.Layout -> LayoutScreen(modifier)
             Screen.Theme -> ThemeScreen(modifier)
@@ -117,6 +118,7 @@ private fun SettingsApp() {
             Screen.Clipboard -> ClipboardScreen(modifier)
             Screen.QuickActions -> QuickActionsScreen(modifier)
             Screen.Composer -> ComposerScreen(modifier)
+            Screen.Backup -> BackupScreen(modifier)
             Screen.Assistant -> AssistantScreen(modifier)
             Screen.Privacy -> PrivacyScreen(modifier)
             Screen.About -> AboutScreen(modifier)

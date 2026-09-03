@@ -79,6 +79,10 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
                 strings[Keys.SCREEN_DRAFT_BOX],
                 strings[Keys.HOME_DRAFT_BOX],
             ) { open(Screen.Composer) }
+            SettingRow(
+                strings[Keys.SCREEN_BACKUP],
+                strings[Keys.HOME_BACKUP],
+            ) { open(Screen.Backup) }
             if (hasAssistant) {
                 SettingRow(strings[Keys.HOME_TEXT_ASSISTANT], strings[Keys.HOME_SUMMARISE_CORRECT_AND_TRANSLATE_ON_THIS]) {
                     open(Screen.Assistant)

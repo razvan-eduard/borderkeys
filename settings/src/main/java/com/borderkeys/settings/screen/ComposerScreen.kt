@@ -68,6 +68,12 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
             ) { value -> update { it.copy(composerEnabled = value) } }
         }
 
+        // Everything below describes the box. With the box switched off it would be a screen
+        // of settings for something that cannot happen.
+        if (!preferences.composerEnabled) {
+            return@Column
+        }
+
         SettingsSectionCard(strings[Keys.COMPOSER_SETTINGS_BAR]) {
             if (chosen.isEmpty()) {
                 Explanation(strings[Keys.COMPOSER_SETTINGS_NONE])

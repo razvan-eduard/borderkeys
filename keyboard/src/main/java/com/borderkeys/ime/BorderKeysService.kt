@@ -2601,7 +2601,11 @@ class BorderKeysService :
             bar.visibility = View.GONE
             return
         }
+        // The draft box's button goes with the draft box. Switching the feature off has to
+        // take away every way to reach it, not just the screen that explains it -- a button
+        // that does nothing is the worst of both.
         val chosen = QuickAction.fromIds(preferences.quickActions)
+            .filter { it != QuickAction.COMPOSE || preferences.composerEnabled }
         if (chosen.isEmpty()) {
             bar.visibility = View.GONE
             return
