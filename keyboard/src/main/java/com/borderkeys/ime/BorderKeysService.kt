@@ -625,6 +625,10 @@ class BorderKeysService :
     override fun onAssistResult(requestId: Int, text: String, modelName: String?) {
         // A late answer to a request the user has already dismissed is discarded rather than
         // shown over whatever they are doing now.
+        if (requestId == composerRequestId) {
+            onComposerResult(text)
+            return
+        }
         if (requestId != assistRequestId) {
             return
         }
@@ -632,24 +636,36 @@ class BorderKeysService :
     }
 
     override fun onAssistError(requestId: Int, error: Int) {
-        if (requestId != assistRequestId) {
+        if (requestId != composerRequestId) {
+            if (requestId != assistRequestId) {
+                return
+            }
+        }
+        val message = assistErrorMessage(error)
+        if (requestId == composerRequestId) {
+            onComposerFailure(message)
             return
         }
-        host?.assistSheet?.showError(
-            when (error) {
-                AssistProtocol.ERROR_NO_MODEL ->
-                    strings[Keys.ASSISTANT_NO_MODEL_IMPORTED_YET_SETTINGS_TEXT]
-                AssistProtocol.ERROR_MODEL_CHANGED ->
-                    strings[Keys.ASSISTANT_THE_MODEL_FILE_CHANGED_SINCE_IT]
-                AssistProtocol.ERROR_LOAD_FAILED ->
-                    strings[Keys.ASSISTANT_THE_MODEL_COULD_NOT_BE_LOADED]
-                AssistProtocol.ERROR_TOO_LONG ->
-                    strings[Keys.ASSISTANT_THE_SELECTION_IS_LONGER_THAN_THIS]
-                AssistProtocol.ERROR_BUSY -> strings[Keys.ASSISTANT_STILL_WORKING_ON_THE_PREVIOUS_REQUEST]
-                else -> strings[Keys.ASSISTANT_THE_ASSISTANT_COULD_NOT_FINISH]
-            },
-        )
+        host?.assistSheet?.showError(message)
     }
+
+    /** Every failure is a sentence somebody can act on, which is why none of them is "failed". */
+    private fun assistErrorMessage(error: Int): String =
+        when (error) {
+            AssistProtocol.ERROR_NO_MODEL ->
+                strings[Keys.ASSISTANT_NO_MODEL_IMPORTED_YET_SETTINGS_TEXT]
+            AssistProtocol.ERROR_MODEL_CHANGED ->
+                strings[Keys.ASSISTANT_THE_MODEL_FILE_CHANGED_SINCE_IT]
+            AssistProtocol.ERROR_LOAD_FAILED ->
+                strings[Keys.ASSISTANT_THE_MODEL_COULD_NOT_BE_LOADED]
+            AssistProtocol.ERROR_TOO_LONG ->
+                strings[Keys.ASSISTANT_THE_SELECTION_IS_LONGER_THAN_THIS]
+            AssistProtocol.ERROR_BUSY ->
+                strings[Keys.ASSISTANT_STILL_WORKING_ON_THE_PREVIOUS_REQUEST]
+            AssistProtocol.ERROR_NO_INSTRUCTION ->
+                strings[Keys.ASSISTANT_NO_INSTRUCTION_WAS_WRITTEN]
+            else -> strings[Keys.ASSISTANT_THE_ASSISTANT_COULD_NOT_FINISH]
+        }
 
     override fun onAssistAvailability(available: Boolean, modelName: String?) {
         assistAvailable = available
@@ -1061,6 +1077,7 @@ class BorderKeysService :
     }
 
     private fun handleCharacter(code: Int) {
+        cancelComposerRun()
         val connection = target().connection ?: return
         val shifted = if (shiftState != SHIFT_OFF) {
             Character.toUpperCase(code)
@@ -1246,6 +1263,7 @@ class BorderKeysService :
     }
 
     private fun handleDelete() {
+        cancelComposerRun()
         val destination = target()
         val connection = destination.connection ?: return
         val hasSelection = destination.selectionEnd > destination.selectionStart
@@ -1568,14 +1586,118 @@ class BorderKeysService :
         pushComposerState()
     }
 
+    /** The request the box is waiting on, or -1. */
+    private var composerRequestId = -1
+
+    /** Which choice list the band is showing, so a tap on it can be read. */
+    private var composerChoices: Array<AssistTask?> = emptyArray()
+
+    private val composerBusy: Boolean get() = composerRequestId >= 0
+
     override fun onComposerAction(action: ComposerAction) {
+        if (composerBusy) {
+            return
+        }
         when (action) {
             ComposerAction.INSERT -> insertFromComposer()
             ComposerAction.SHOW_ORIGINAL -> showComposerVersion(composerVersions.flip())
-            // Everything else needs a model, and the buttons that need one are not on the bar
-            // unless there is one. Wired in the step that adds the actions.
-            else -> Unit
+            ComposerAction.GRAMMAR -> runComposerTask(AssistTask.CORRECT)
+            ComposerAction.SHORTEN -> runComposerTask(AssistTask.SHORTEN)
+            ComposerAction.TRANSLATE -> offerComposerChoices(TRANSLATE_TASKS)
+            ComposerAction.TONE -> offerComposerChoices(TONE_TASKS)
+            // Wired with the prompt input.
+            ComposerAction.PROMPT, ComposerAction.SAVED_PROMPTS -> Unit
         }
+    }
+
+    /**
+     * Puts a row of tasks in the box's band.
+     *
+     * The band and not the suggestion strip: the strip belongs to the word being typed, and a
+     * row that turns into a language chooser mid-word is a row that cannot be trusted.
+     */
+    private fun offerComposerChoices(tasks: Array<AssistTask?>) {
+        val view = host ?: return
+        composerChoices = tasks
+        val labels = arrayOfNulls<String>(tasks.size)
+        for (index in tasks.indices) {
+            labels[index] = tasks[index]?.let { composerChoiceLabel(it) }
+        }
+        view.composer.showChoices(labels, tasks.size)
+    }
+
+    override fun onComposerChoice(index: Int) {
+        val task = composerChoices.getOrNull(index) ?: return
+        host?.composer?.showVersions()
+        composerChoices = emptyArray()
+        runComposerTask(task)
+    }
+
+    /**
+     * Sends what is in the box to the model.
+     *
+     * The text is snapshotted into the version line first, which is what makes the answer
+     * something you can walk back from -- and what makes running an action from the middle of
+     * the line the decision to take that version forward.
+     */
+    private fun runComposerTask(task: AssistTask, instruction: String = "") {
+        val view = host ?: return
+        val connection = composerConnection ?: return
+        val text = connection.snapshot()
+        if (text.isEmpty() || composerBusy) {
+            return
+        }
+        composerVersions.captureBeforeRun(text)
+        composerRequestId = assist.run(task, text, instruction)
+        if (composerRequestId < 0) {
+            view.composer.showNotice(strings[Keys.ASSISTANT_THE_ASSISTANT_IS_NOT_INSTALLED])
+            return
+        }
+        composerTranslateFrom = task
+        view.composer.showNotice(strings[Keys.COMPOSER_WORKING])
+        pushComposerState()
+    }
+
+    /** The task whose answer is being waited for, for the message if it fails. */
+    private var composerTranslateFrom: AssistTask? = null
+
+    /** A model's answer becomes the newest version, and the box shows it. */
+    private fun onComposerResult(text: String) {
+        composerRequestId = -1
+        composerVersions.addResult(text)
+        composerConnection?.replaceAll(text)
+        host?.composer?.showNotice("")
+        pushComposerState()
+    }
+
+    private fun onComposerFailure(message: String) {
+        composerRequestId = -1
+        host?.composer?.showNotice(message)
+        pushComposerState()
+    }
+
+    /** A keystroke while the model is working cancels it, rather than racing it. */
+    private fun cancelComposerRun() {
+        if (!composerBusy) {
+            return
+        }
+        composerRequestId = -1
+        assist.cancel()
+        host?.composer?.showNotice("")
+        pushComposerState()
+    }
+
+    private fun composerChoiceLabel(task: AssistTask): String = when (task) {
+        AssistTask.TRANSLATE_TO_ENGLISH -> strings[Keys.LANGUAGE_ENGLISH]
+        AssistTask.TRANSLATE_TO_ROMANIAN -> strings[Keys.LANGUAGE_ROMANIAN]
+        AssistTask.TRANSLATE_TO_GERMAN -> strings[Keys.LANGUAGE_GERMAN]
+        AssistTask.TRANSLATE_TO_SPANISH -> strings[Keys.LANGUAGE_SPANISH]
+        AssistTask.TRANSLATE_TO_FRENCH -> strings[Keys.LANGUAGE_FRENCH]
+        AssistTask.TRANSLATE_TO_ITALIAN -> strings[Keys.LANGUAGE_ITALIAN]
+        AssistTask.REWRITE_FORMAL -> strings[Keys.TONE_FORMAL]
+        AssistTask.REWRITE_CASUAL -> strings[Keys.TONE_CASUAL]
+        AssistTask.REWRITE_DIRECT -> strings[Keys.TONE_DIRECT]
+        else -> assistActionTitle(task)
     }
 
     override fun onComposerBack() {
@@ -2826,6 +2948,29 @@ class BorderKeysService :
          * or "la", and the strip is full of them.
          */
         const val MIN_CORRECTED_LENGTH = 3
+
+        /**
+         * What the translate button offers, in the order it offers them.
+         *
+         * The six the application itself speaks, because those are the six whose dictionaries
+         * are here and whose names the catalogues can print. One entry per target rather than a
+         * language argument: the task id is what crosses the process boundary, and a task that
+         * means different things depending on a second field is one whose request cannot be read.
+         */
+        val TRANSLATE_TASKS: Array<AssistTask?> = arrayOf(
+            AssistTask.TRANSLATE_TO_ENGLISH,
+            AssistTask.TRANSLATE_TO_ROMANIAN,
+            AssistTask.TRANSLATE_TO_GERMAN,
+            AssistTask.TRANSLATE_TO_SPANISH,
+            AssistTask.TRANSLATE_TO_FRENCH,
+            AssistTask.TRANSLATE_TO_ITALIAN,
+        )
+
+        val TONE_TASKS: Array<AssistTask?> = arrayOf(
+            AssistTask.REWRITE_FORMAL,
+            AssistTask.REWRITE_CASUAL,
+            AssistTask.REWRITE_DIRECT,
+        )
         const val GESTURE_DECODING_NOTICE_MILLIS = 50L
         const val MAX_CLIP_LENGTH = 20_000
         const val MAX_INLINE_SUGGESTIONS = 5

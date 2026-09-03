@@ -134,8 +134,15 @@ class AssistClient(private val context: Context) {
      * The id comes back with the answer, so a result arriving after the user has already closed
      * the sheet and started something else can be discarded rather than shown.
      */
-    fun run(task: AssistTask, text: String): Int {
+    fun run(task: AssistTask, text: String, instruction: String = ""): Int {
         if (text.isEmpty() || text.length > AssistProtocol.MAX_SELECTION_CHARS) {
+            return -1
+        }
+        // A custom task without an instruction is the caller's mistake, not the model's: the
+        // wrapper alone tells it to apply an instruction and then names none.
+        if (task == AssistTask.CUSTOM &&
+            (instruction.isBlank() || instruction.length > AssistTask.MAX_INSTRUCTION_CHARS)
+        ) {
             return -1
         }
         if (!connect()) {
@@ -148,6 +155,9 @@ class AssistClient(private val context: Context) {
                 putInt(AssistProtocol.KEY_REQUEST_ID, requestId)
                 putInt(AssistProtocol.KEY_TASK, task.id)
                 putString(AssistProtocol.KEY_TEXT, text)
+                if (instruction.isNotEmpty()) {
+                    putString(AssistProtocol.KEY_INSTRUCTION, instruction)
+                }
             }
         }
         dispatch(message)

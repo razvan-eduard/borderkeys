@@ -63,6 +63,9 @@ class ComposerView(
 
         /** The text was tapped, at this offset into the buffer. */
         fun onComposerCaretPlaced(offset: Int)
+
+        /** One of the choices in the band was picked, by its position. */
+        fun onComposerChoice(index: Int)
     }
 
     var listener: Listener? = null
@@ -74,6 +77,20 @@ class ComposerView(
     /** The version line: how many nodes, and which one is filled. */
     private var versionCount = 0
     private var currentVersion = 0
+
+    /**
+     * What the band under the text is showing.
+     *
+     * One strip doing three jobs, because the box is already as tall as it can afford to be and
+     * all three are about the same thing: which version, or what to do to it.
+     */
+    private var bandMode = BAND_VERSIONS
+
+    private var choices: Array<String?> = emptyArray()
+    private var choiceCount = 0
+    private var choiceBounds = FloatArray(0)
+    private var pressedChoice = NO_BUTTON
+    private val choicePaint = TextPaint(TextPaint.ANTI_ALIAS_FLAG)
 
     /** Which buttons the bar carries, in the user's order, and whether each can be pressed. */
     private var barActions: List<ComposerAction> = emptyList()
@@ -196,6 +213,40 @@ class ComposerView(
         invalidate()
     }
 
+    /**
+     * Puts a row of choices in the band: which language, which register.
+     *
+     * The strip above the keys is not used for this. It belongs to the words being typed, and a
+     * row that turns into something else while you are mid-word is a row you cannot trust.
+     */
+    fun showChoices(labels: Array<String?>, count: Int) {
+        choices = labels
+        choiceCount = count
+        if (choiceBounds.size != count * 2) {
+            choiceBounds = FloatArray(count * 2)
+        }
+        pressedChoice = NO_BUTTON
+        setBand(BAND_CHOICES)
+    }
+
+    fun showVersions() {
+        setBand(BAND_VERSIONS)
+    }
+
+    private fun setBand(mode: Int) {
+        if (bandMode == mode) {
+            return
+        }
+        val before = bandRows()
+        bandMode = mode
+        if (bandRows() != before) {
+            requestLayout()
+        }
+        invalidate()
+    }
+
+    val choosing: Boolean get() = bandMode == BAND_CHOICES
+
     /** A line over the text: what is running, or why nothing happened. */
     fun showNotice(text: String) {
         notice = text
@@ -268,12 +319,18 @@ class ComposerView(
         if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_ROW_PX
 
     /**
-     * The version line takes no room until there is a line to draw.
+     * The band takes no room when it has nothing to show.
      *
-     * A band reserved for one node is a band of nothing, and the box is already two rows and a
-     * bar tall before anything has been written in it.
+     * A strip reserved for one version is a strip of nothing, and the box is already a text area
+     * and a bar tall before anything has been written in it.
      */
-    private fun railHeight(): Float = if (versionCount >= 2) rowHeight() * RAIL_ROWS else 0f
+    private fun bandRows(): Float = when {
+        bandMode == BAND_CHOICES -> CHOICE_ROWS
+        versionCount >= 2 -> RAIL_ROWS
+        else -> 0f
+    }
+
+    private fun railHeight(): Float = rowHeight() * bandRows()
 
     private fun barHeight(): Float = rowHeight() * BAR_ROWS
 
@@ -292,6 +349,7 @@ class ComposerView(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         applyMetrics(rowHeight())
+        choicePaint.textSize = paints.labelSecondary.textSize
         textTop = paddingPx
         barTop = h - barHeight()
         railBottom = barTop
@@ -307,7 +365,11 @@ class ComposerView(
         val width = width.toFloat()
         paints.backgroundPainter.draw(canvas, width, height.toFloat())
         drawText(canvas)
-        drawRail(canvas)
+        if (bandMode == BAND_CHOICES) {
+            drawChoices(canvas)
+        } else {
+            drawRail(canvas)
+        }
         drawBar(canvas)
         drawClose(canvas)
     }
@@ -376,6 +438,47 @@ class ComposerView(
                 canvas.drawCircle(x, y, radius * NODE_FILL_FRACTION, nodeFill)
             }
         }
+    }
+
+    /**
+     * The choices, as chips across the band.
+     *
+     * Equal widths rather than measured ones: six language names of different lengths in
+     * unequal boxes is a row whose targets move every time it is opened.
+     */
+    private fun drawChoices(canvas: Canvas) {
+        if (choiceCount <= 0) {
+            return
+        }
+        val each = (width - paddingPx * 2f) / choiceCount
+        choicePaint.color = paints.label.color
+        val baseline = (railTop + railBottom) / 2f -
+            (choicePaint.ascent() + choicePaint.descent()) / 2f
+        for (index in 0 until choiceCount) {
+            val left = paddingPx + each * index
+            choiceBounds[index * 2] = left
+            choiceBounds[index * 2 + 1] = left + each
+            if (index == pressedChoice) {
+                canvas.drawRect(left, railTop, left + each, railBottom, paints.keyPressedFill)
+            }
+            val label = choices.getOrNull(index) ?: continue
+            val fitted = fit(label, each - paddingPx)
+            canvas.drawText(
+                fitted, left + (each - choicePaint.measureText(fitted)) / 2f, baseline, choicePaint,
+            )
+        }
+    }
+
+    /** Trims a label to what its chip can hold, rather than letting it run into the next one. */
+    private fun fit(label: String, available: Float): String {
+        if (choicePaint.measureText(label) <= available || label.length <= 2) {
+            return label
+        }
+        var end = label.length
+        while (end > 1 && choicePaint.measureText(label, 0, end) > available) {
+            end -= 1
+        }
+        return label.substring(0, end)
     }
 
     /** The first and the last node are the two anyone looks for, so they are not grey. */
@@ -539,6 +642,8 @@ class ComposerView(
                     pressedEnd = END_CLOSE
                 } else if (event.y >= barTop) {
                     onBarDown(event.x)
+                } else if (event.y >= railTop && bandMode == BAND_CHOICES) {
+                    pressedChoice = choiceAt(event.x)
                 } else if (event.y >= railTop && versionCount >= 2) {
                     draggingRail = true
                     railTo(event.x)
@@ -556,7 +661,9 @@ class ComposerView(
                     railTo(event.x)
                     return true
                 }
-                if (pressedBar != NO_BUTTON || pressedEnd != NO_BUTTON) {
+                if (pressedBar != NO_BUTTON || pressedEnd != NO_BUTTON ||
+                    pressedChoice != NO_BUTTON
+                ) {
                     return true
                 }
                 velocity?.addMovement(event)
@@ -580,6 +687,15 @@ class ComposerView(
                 }
                 if (pressedEnd != NO_BUTTON) {
                     releaseEnd(event.x, event.y)
+                    return true
+                }
+                if (pressedChoice != NO_BUTTON) {
+                    val index = pressedChoice
+                    pressedChoice = NO_BUTTON
+                    invalidate()
+                    if (choiceAt(event.x) == index && event.y >= railTop && event.y <= railBottom) {
+                        listener?.onComposerChoice(index)
+                    }
                     return true
                 }
                 if (pressedBar != NO_BUTTON) {
@@ -607,6 +723,7 @@ class ComposerView(
             MotionEvent.ACTION_CANCEL -> {
                 pressedBar = NO_BUTTON
                 pressedEnd = NO_BUTTON
+                pressedChoice = NO_BUTTON
                 dragging = false
                 draggingRail = false
                 velocity?.recycle()
@@ -652,6 +769,15 @@ class ComposerView(
         if (barEnabled.getOrElse(index) { true }) {
             listener?.onComposerAction(barActions[index])
         }
+    }
+
+    private fun choiceAt(x: Float): Int {
+        for (index in 0 until choiceCount) {
+            if (x >= choiceBounds[index * 2] && x <= choiceBounds[index * 2 + 1]) {
+                return index
+            }
+        }
+        return NO_BUTTON
     }
 
     private fun barAt(x: Float): Int {
@@ -715,7 +841,11 @@ class ComposerView(
         const val MIN_TEXT_ROWS = 1.6f
         const val MAX_TEXT_ROWS = 4f
 
+        const val BAND_VERSIONS = 0
+        const val BAND_CHOICES = 1
+
         const val RAIL_ROWS = 0.55f
+        const val CHOICE_ROWS = 0.7f
         const val BAR_ROWS = 0.9f
         const val PADDING_ROWS = 0.14f
         const val ICON_ROWS = 0.42f

@@ -142,9 +142,18 @@ class TextAssistService : Service() {
         val requestId = data.getInt(AssistProtocol.KEY_REQUEST_ID)
         val task = AssistTask.fromId(data.getInt(AssistProtocol.KEY_TASK))
         val text = data.getString(AssistProtocol.KEY_TEXT).orEmpty()
+        val written = data.getString(AssistProtocol.KEY_INSTRUCTION).orEmpty()
 
         if (task == null || text.isEmpty()) {
             replyWithError(reply, requestId, AssistProtocol.ERROR_FAILED)
+            return
+        }
+        // The instruction is checked on this side as well, for the reason the length below is:
+        // a rule enforced by the asker holds only while the asker is the one it was written for.
+        if (task == AssistTask.CUSTOM &&
+            (written.isBlank() || written.length > AssistTask.MAX_INSTRUCTION_CHARS)
+        ) {
+            replyWithError(reply, requestId, AssistProtocol.ERROR_NO_INSTRUCTION)
             return
         }
         // Checked here as well as in the keyboard. The keyboard is the only caller today, but a
@@ -183,7 +192,15 @@ class TextAssistService : Service() {
 
             val budget = task.outputTokenBudget(text.length)
             val status = IntArray(1)
-            val answer = AssistNative.nativeRun(current, task.instruction, text, budget, status)
+            // Every task but one carries its whole instruction. The exception is assembled here
+            // rather than sent whole, so what wraps the user's words is this build's constant
+            // and not something the request could have replaced.
+            val instruction = if (task == AssistTask.CUSTOM) {
+                AssistTask.customInstruction(written)
+            } else {
+                task.instruction
+            }
+            val answer = AssistNative.nativeRun(current, instruction, text, budget, status)
             if (answer == null) {
                 replyWithError(reply, requestId, mapNativeStatus(status[0]))
                 return@post
