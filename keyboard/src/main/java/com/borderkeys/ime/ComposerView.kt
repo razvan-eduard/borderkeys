@@ -66,6 +66,9 @@ class ComposerView(
 
         /** One of the choices in the band was picked, by its position. */
         fun onComposerChoice(index: Int)
+
+        /** The cross at the end of the prompt row: throw the instruction away. */
+        fun onComposerPromptDismissed()
     }
 
     var listener: Listener? = null
@@ -91,6 +94,13 @@ class ComposerView(
     private var choiceBounds = FloatArray(0)
     private var pressedChoice = NO_BUTTON
     private val choicePaint = TextPaint(TextPaint.ANTI_ALIAS_FLAG)
+
+    /** The instruction being written, when the band is showing one. */
+    private var prompt: Editable? = null
+    private var promptLayout: DynamicLayout? = null
+    private val promptDismissBounds = android.graphics.RectF()
+    private var pressedPromptDismiss = false
+    private val promptMarkPaint = TextPaint(TextPaint.ANTI_ALIAS_FLAG)
 
     /** Which buttons the bar carries, in the user's order, and whether each can be pressed. */
     private var barActions: List<ComposerAction> = emptyList()
@@ -230,8 +240,25 @@ class ComposerView(
     }
 
     fun showVersions() {
+        prompt = null
+        promptLayout = null
         setBand(BAND_VERSIONS)
     }
+
+    /**
+     * Opens the instruction row along the bottom of the box.
+     *
+     * One line to start with, growing upward into the text as it is written, because an
+     * instruction is usually short and occasionally is not.
+     */
+    fun showPrompt(text: Editable) {
+        prompt = text
+        promptLayout = null
+        setBand(BAND_PROMPT)
+        requestLayout()
+    }
+
+    val promptShowing: Boolean get() = bandMode == BAND_PROMPT
 
     private fun setBand(mode: Int) {
         if (bandMode == mode) {
@@ -326,9 +353,37 @@ class ComposerView(
      */
     private fun bandRows(): Float = when {
         bandMode == BAND_CHOICES -> CHOICE_ROWS
+        bandMode == BAND_PROMPT -> promptRows()
         versionCount >= 2 -> RAIL_ROWS
         else -> 0f
     }
+
+    /** One row, then as many as the instruction needs, up to a stop. */
+    private fun promptRows(): Float {
+        val text = prompt ?: return PROMPT_ROWS
+        val available = width - paddingPx * 2f - promptMarkWidth() * 2f
+        if (available <= 0f) {
+            return PROMPT_ROWS
+        }
+        val laid = ensurePromptLayout(text, available.toInt())
+        val rows = laid.height / rowHeight()
+        return rows.coerceIn(PROMPT_ROWS, MAX_PROMPT_ROWS)
+    }
+
+    private fun ensurePromptLayout(text: Editable, width: Int): DynamicLayout {
+        val existing = promptLayout
+        if (existing != null && existing.width == width) {
+            return existing
+        }
+        val built = DynamicLayout.Builder.obtain(text, promptMarkPaint, width)
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            .setIncludePad(false)
+            .build()
+        promptLayout = built
+        return built
+    }
+
+    private fun promptMarkWidth(): Float = rowHeight() * PROMPT_MARK_ROWS
 
     private fun railHeight(): Float = rowHeight() * bandRows()
 
@@ -350,6 +405,7 @@ class ComposerView(
         super.onSizeChanged(w, h, oldw, oldh)
         applyMetrics(rowHeight())
         choicePaint.textSize = paints.labelSecondary.textSize
+        promptMarkPaint.textSize = paints.label.textSize * TEXT_SCALE
         textTop = paddingPx
         barTop = h - barHeight()
         railBottom = barTop
@@ -365,10 +421,10 @@ class ComposerView(
         val width = width.toFloat()
         paints.backgroundPainter.draw(canvas, width, height.toFloat())
         drawText(canvas)
-        if (bandMode == BAND_CHOICES) {
-            drawChoices(canvas)
-        } else {
-            drawRail(canvas)
+        when (bandMode) {
+            BAND_CHOICES -> drawChoices(canvas)
+            BAND_PROMPT -> drawPrompt(canvas)
+            else -> drawRail(canvas)
         }
         drawBar(canvas)
         drawClose(canvas)
@@ -438,6 +494,50 @@ class ComposerView(
                 canvas.drawCircle(x, y, radius * NODE_FILL_FRACTION, nodeFill)
             }
         }
+    }
+
+    /**
+     * The instruction row: a mark, the words, and a cross to throw them away.
+     *
+     * The mark is there to say what this row is. A blank strip that has appeared under the text
+     * could be anything; one that opens with a prompt sign is a place to tell something to do
+     * something, which is what it is.
+     */
+    private fun drawPrompt(canvas: Canvas) {
+        val text = prompt ?: return
+        promptMarkPaint.color = paints.accent.color
+        val mark = promptMarkWidth()
+        val baseline = railTop + rowHeight() * PROMPT_BASELINE_ROWS
+        canvas.drawText(PROMPT_MARK, paddingPx, baseline, promptMarkPaint)
+
+        val available = width - paddingPx * 2f - mark * 2f
+        if (available > 0f) {
+            promptMarkPaint.color = paints.label.color
+            val laid = ensurePromptLayout(text, available.toInt())
+            canvas.save()
+            canvas.clipRect(paddingPx + mark, railTop, width - paddingPx - mark, railBottom)
+            canvas.translate(paddingPx + mark, railTop + paddingPx / 2f)
+            laid.draw(canvas)
+            if (caretVisible) {
+                val offset = android.text.Selection.getSelectionEnd(text).coerceIn(0, text.length)
+                val line = laid.getLineForOffset(offset)
+                canvas.drawRect(
+                    laid.getPrimaryHorizontal(offset), laid.getLineTop(line).toFloat(),
+                    laid.getPrimaryHorizontal(offset) + caretWidth(),
+                    laid.getLineBottom(line).toFloat(), caretPaint,
+                )
+            }
+            canvas.restore()
+        }
+
+        promptDismissBounds.set(width - paddingPx - mark, railTop, width - paddingPx, railBottom)
+        if (pressedPromptDismiss) {
+            canvas.drawRect(promptDismissBounds, paints.keyPressedFill)
+        }
+        drawIcon(
+            canvas, closeIcon, promptDismissBounds.centerX(), promptDismissBounds.centerY(),
+            true, false,
+        )
     }
 
     /**
@@ -642,6 +742,8 @@ class ComposerView(
                     pressedEnd = END_CLOSE
                 } else if (event.y >= barTop) {
                     onBarDown(event.x)
+                } else if (event.y >= railTop && bandMode == BAND_PROMPT) {
+                    pressedPromptDismiss = promptDismissBounds.contains(event.x, event.y)
                 } else if (event.y >= railTop && bandMode == BAND_CHOICES) {
                     pressedChoice = choiceAt(event.x)
                 } else if (event.y >= railTop && versionCount >= 2) {
@@ -689,6 +791,14 @@ class ComposerView(
                     releaseEnd(event.x, event.y)
                     return true
                 }
+                if (pressedPromptDismiss) {
+                    pressedPromptDismiss = false
+                    invalidate()
+                    if (promptDismissBounds.contains(event.x, event.y)) {
+                        listener?.onComposerPromptDismissed()
+                    }
+                    return true
+                }
                 if (pressedChoice != NO_BUTTON) {
                     val index = pressedChoice
                     pressedChoice = NO_BUTTON
@@ -724,6 +834,7 @@ class ComposerView(
                 pressedBar = NO_BUTTON
                 pressedEnd = NO_BUTTON
                 pressedChoice = NO_BUTTON
+                pressedPromptDismiss = false
                 dragging = false
                 draggingRail = false
                 velocity?.recycle()
@@ -843,9 +954,17 @@ class ComposerView(
 
         const val BAND_VERSIONS = 0
         const val BAND_CHOICES = 1
+        const val BAND_PROMPT = 2
+
+        /** What the instruction row opens with, so it reads as a place to give an order. */
+        const val PROMPT_MARK = "\u203a"
 
         const val RAIL_ROWS = 0.55f
         const val CHOICE_ROWS = 0.7f
+        const val PROMPT_ROWS = 0.8f
+        const val MAX_PROMPT_ROWS = 2.4f
+        const val PROMPT_MARK_ROWS = 0.4f
+        const val PROMPT_BASELINE_ROWS = 0.55f
         const val BAR_ROWS = 0.9f
         const val PADDING_ROWS = 0.14f
         const val ICON_ROWS = 0.42f

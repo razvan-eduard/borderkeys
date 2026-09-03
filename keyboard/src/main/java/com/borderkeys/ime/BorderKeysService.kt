@@ -141,8 +141,8 @@ class BorderKeysService :
      *
      * So they are cleared, and the context is re-derived from whichever side is now live.
      */
-    private fun switchTarget(toComposer: Boolean) {
-        if (composerActive == toComposer) {
+    private fun switchTarget(kind: Int) {
+        if (composerTargetKind == kind) {
             return
         }
         // Let go of the composing region on the side being left, or the application keeps an
@@ -154,14 +154,27 @@ class BorderKeysService :
         pendingSpacePeriod = false
         pendingAutoSpace = false
         lastSpaceAt = 0L
-        composerActive = toComposer
+        composerTargetKind = kind
         refreshContextFromEditor()
         applyAutoShift()
         requestSuggestions()
     }
 
-    /** Whether keystrokes are going to the draft box rather than to the application. */
-    private var composerActive = false
+    /**
+     * Where keystrokes are going: the application, the draft box, or the instruction row.
+     *
+     * Three rather than two, because the instruction is written with the same keys and must not
+     * land in the draft it is about. Each buffer carries its own EditorInfo, which is what makes
+     * enter a newline in the draft and a send in the prompt without a branch anywhere.
+     */
+    private var composerTargetKind = TARGET_FIELD
+
+    private val composerActive: Boolean get() = composerTargetKind != TARGET_FIELD
+
+    private val promptActive: Boolean get() = composerTargetKind == TARGET_PROMPT
+
+    /** The buffer the instruction is written into. Created the first time one is asked for. */
+    private var promptConnection: ComposerInputConnection? = null
 
     /**
      * The destination for this keystroke.
@@ -170,12 +183,16 @@ class BorderKeysService :
      * us on both sides: the platform reports the application's, and the buffer keeps its own.
      */
     private fun target(): EditTarget {
-        val composer = composerConnection
-        if (composerActive && composer != null) {
-            editTarget.connection = composer
-            editTarget.editorInfo = composer.editorInfo
-            editTarget.selectionStart = composer.selectionStart
-            editTarget.selectionEnd = composer.selectionEnd
+        val buffer = when (composerTargetKind) {
+            TARGET_DRAFT -> composerConnection
+            TARGET_PROMPT -> promptConnection
+            else -> null
+        }
+        if (buffer != null) {
+            editTarget.connection = buffer
+            editTarget.editorInfo = buffer.editorInfo
+            editTarget.selectionStart = buffer.selectionStart
+            editTarget.selectionEnd = buffer.selectionEnd
         } else {
             editTarget.connection = currentInputConnection
             editTarget.editorInfo = currentInputEditorInfo
@@ -1327,6 +1344,10 @@ class BorderKeysService :
     }
 
     private fun handleEnter() {
+        if (promptActive) {
+            sendComposerPrompt()
+            return
+        }
         val connection = target().connection ?: return
         val contextWord = previousWord1
         connection.beginBatchEdit()
@@ -1486,7 +1507,7 @@ class BorderKeysService :
         // showing something else entirely.
         view.showInlineSuggestions(false)
         applyQuickActions(view)
-        switchTarget(true)
+        switchTarget(TARGET_DRAFT)
         applyPlacement(view, preferences)
         pushComposerState()
     }
@@ -1496,8 +1517,10 @@ class BorderKeysService :
         if (!composerActive) {
             return
         }
-        switchTarget(false)
+        promptConnection?.reset("")
+        switchTarget(TARGET_FIELD)
         view.setComposerVisible(false)
+        view.composer.showVersions()
         view.composer.showNotice("")
         composerVersions.clear()
         composerSeed = ""
@@ -1605,9 +1628,61 @@ class BorderKeysService :
             ComposerAction.SHORTEN -> runComposerTask(AssistTask.SHORTEN)
             ComposerAction.TRANSLATE -> offerComposerChoices(TRANSLATE_TASKS)
             ComposerAction.TONE -> offerComposerChoices(TONE_TASKS)
-            // Wired with the prompt input.
-            ComposerAction.PROMPT, ComposerAction.SAVED_PROMPTS -> Unit
+            ComposerAction.PROMPT -> openComposerPrompt()
+            // Wired with the saved prompts.
+            ComposerAction.SAVED_PROMPTS -> Unit
         }
+    }
+
+    /**
+     * Opens the instruction row and points the keys at it.
+     *
+     * The draft keeps everything it had; the row is a second buffer, so writing an instruction
+     * about a paragraph cannot end up inside the paragraph.
+     */
+    private fun openComposerPrompt() {
+        val view = host ?: return
+        if (!composerActive || promptActive) {
+            return
+        }
+        val connection = promptConnection
+            ?: ComposerInputConnection(view.composer) { onComposerPromptChanged() }
+                .also { promptConnection = it }
+        connection.reset("")
+        view.composer.showPrompt(connection.text)
+        switchTarget(TARGET_PROMPT)
+        pushComposerState()
+    }
+
+    private fun closeComposerPrompt() {
+        val view = host ?: return
+        if (!promptActive) {
+            return
+        }
+        switchTarget(TARGET_DRAFT)
+        view.composer.showVersions()
+        promptConnection?.reset("")
+        pushComposerState()
+    }
+
+    /** Enter in the instruction row sends it, which is why the row exists. */
+    private fun sendComposerPrompt() {
+        val written = promptConnection?.snapshot().orEmpty().trim()
+        if (written.isEmpty()) {
+            closeComposerPrompt()
+            return
+        }
+        closeComposerPrompt()
+        runComposerTask(AssistTask.CUSTOM, written)
+    }
+
+    private fun onComposerPromptChanged() {
+        host?.composer?.onBufferChanged()
+        host?.composer?.requestLayout()
+    }
+
+    override fun onComposerPromptDismissed() {
+        closeComposerPrompt()
     }
 
     /**
@@ -2948,6 +3023,11 @@ class BorderKeysService :
          * or "la", and the strip is full of them.
          */
         const val MIN_CORRECTED_LENGTH = 3
+
+        /** Which buffer typing lands in. See BorderKeysService.target. */
+        const val TARGET_FIELD = 0
+        const val TARGET_DRAFT = 1
+        const val TARGET_PROMPT = 2
 
         /**
          * What the translate button offers, in the order it offers them.
