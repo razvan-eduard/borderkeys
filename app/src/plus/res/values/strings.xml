@@ -3,10 +3,12 @@
     SPDX-License-Identifier: GPL-3.0-or-later
     SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-    The two builds are separate packages and can be installed at the same time, so all three
-    names a user is shown have to tell them apart: the launcher, the settings activity, and the
-    input-method picker. Leaving any of them alone gives a list with two identical entries and
-    no way to know which is which without opening one.
+    The two builds are separate packages and can be installed at the same time, so all four
+    names a user is shown have to tell them apart: the launcher, the settings activity, the
+    input-method picker, and the entry in every application's text-selection menu. Leaving any
+    of them alone gives a list with two identical entries and no way to know which is which
+    without opening one — and the selection menu is the worst place for that, since both
+    entries would sit side by side with nothing else on screen to tell them apart by.
 
     The library modules own the last two, and an application's resources win over a library's,
     which is why they are overridden here rather than in a flavour of each module.
@@ -15,4 +17,5 @@
     <string name="app_name" translatable="false">BorderKeys +</string>
     <string name="settings_activity_label" translatable="false">BorderKeys +</string>
     <string name="ime_name" translatable="false">BorderKeys +</string>
+    <string name="process_text_label" translatable="false">Draft with BorderKeys +</string>
 </resources>

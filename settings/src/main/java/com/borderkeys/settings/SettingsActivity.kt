@@ -3,6 +3,7 @@
 
 package com.borderkeys.settings
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -36,6 +37,7 @@ import com.borderkeys.settings.screen.HomeScreen
 import com.borderkeys.settings.screen.LanguagesScreen
 import com.borderkeys.settings.screen.LayoutScreen
 import com.borderkeys.settings.screen.PrivacyScreen
+import com.borderkeys.settings.screen.ProcessTextScreen
 import com.borderkeys.settings.screen.QuickActionsScreen
 import com.borderkeys.settings.screen.SetupScreen
 import com.borderkeys.settings.screen.TransferScreen
@@ -72,10 +74,26 @@ class SettingsActivity : ComponentActivity() {
         // opening the application. Null when it is an ordinary launch, or when whoever asked
         // is not who they would have to be.
         val asking = transferRequester()
+        // A selection from another application's text-selection menu, reached through the
+        // PROCESS_TEXT alias in the manifest rather than the launcher. `getCharSequenceExtra`
+        // because that is the type the platform contract specifies; converted once here so the
+        // screen itself deals in a plain String like everything else in this application does.
+        val selection = intent.takeIf { it.action == Intent.ACTION_PROCESS_TEXT }
+            ?.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
         setContent {
             CompositionLocalProvider(LocalStrings provides strings) {
                 BorderKeysSettingsTheme {
-                    if (asking != null) {
+                    if (selection != null) {
+                        // Its own insets, for the same reason as the transfer screen below: it
+                        // stands in for the whole Scaffold rather than living inside one.
+                        ProcessTextScreen(
+                            text = selection,
+                            readOnly = intent.getBooleanExtra(
+                                Intent.EXTRA_PROCESS_TEXT_READONLY, false,
+                            ),
+                            modifier = Modifier.safeDrawingPadding(),
+                        )
+                    } else if (asking != null) {
                         // Its own insets, because it is shown instead of the Scaffold that
                         // would otherwise be supplying them, and a request to hand over
                         // somebody's dictionary should not be half hidden behind the clock.

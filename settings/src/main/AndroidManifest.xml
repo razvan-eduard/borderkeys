@@ -13,9 +13,11 @@
     <application>
 
         <!--
-            exported="true" solely because of the LAUNCHER filter below - this activity has no
-            other entry point and accepts no extras, so there is no surface for another app to
-            reach beyond "open the settings screen", which is what the launcher icon does.
+            exported="true" for the LAUNCHER filter below, and also now for the PROCESS_TEXT
+            alias further down, which points at this same activity. Neither surface is a way in
+            that was not already open: the launcher opens the settings screen, and PROCESS_TEXT
+            only ever fires from a selection toolbar the user tapped a menu entry in themselves
+            — nothing starts this activity without a person choosing to.
 
             No android:configChanges. A dark-mode toggle or a rotation recreates the activity,
             which is the correct behaviour for a settings screen and means the theme editor
@@ -32,6 +34,36 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            The same activity, reached from any app's text-selection toolbar rather than the
+            launcher — an alias rather than a second class, because it is the identical screen
+            answering a different intent, and `SettingsActivity.onCreate` already branches on
+            what it was started with.
+
+            A distinct label and no shared task affinity concern here: this shows up in the
+            selection menu of every application on the device, so it needs its own name rather
+            than borrowing the launcher's, and the platform starts a PROCESS_TEXT activity in
+            its own task regardless.
+
+            No `<uses-permission>` is involved — a PROCESS_TEXT filter is a declaration of what
+            this application will do with a selection, not a request for anything, which is why
+            it costs nothing against the zero-permission claim below. And nothing here reaches
+            the network either: the text stays on the device exactly as it does everywhere else
+            in this application.
+        -->
+        <activity-alias
+            android:name=".ProcessTextAlias"
+            android:targetActivity="com.borderkeys.settings.SettingsActivity"
+            android:exported="true"
+            android:label="@string/process_text_label"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
 
         <!--
             Serves the one file a transfer writes, and nothing else.

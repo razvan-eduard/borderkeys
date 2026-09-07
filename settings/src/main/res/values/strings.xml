@@ -8,4 +8,11 @@
     <!-- Launcher entry and task title. -->
     <string name="settings_activity_label" translatable="false">BorderKeys</string>
 
+    <!--
+        The entry in every application's text-selection menu. Read by the OS before this
+        application's own :i18n catalogue is loaded, the same as the two labels above; see
+        app/src/plus/res/values/strings.xml for why those are handled this way too.
+    -->
+    <string name="process_text_label" translatable="false">Draft with BorderKeys</string>
+
 </resources>
