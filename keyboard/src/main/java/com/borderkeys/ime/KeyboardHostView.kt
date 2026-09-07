@@ -48,14 +48,6 @@ class KeyboardHostView(
     val keyboard = KeyboardCanvasView(context, paints, strings)
 
     /**
-     * Covers the keys while the assistant's answer is on screen.
-     *
-     * Present in both flavors because the view is in `:keyboard`; it is only ever shown when
-     * `:assist` exists to fill it, which in the free build is never.
-     */
-    val assistSheet = AssistSheetView(context, paints, strings)
-
-    /**
      * Size and position, reachable without leaving the keyboard. Covers the keys the same way
      * the assistant's sheet does, because it is the same trade: the panel needs the space, and
      * the keys are not useful while it is open.
@@ -326,7 +318,6 @@ class KeyboardHostView(
         addView(suggestionStrip)
         addView(inlineSuggestions)
         addView(keyboard)
-        addView(assistSheet)
         addView(quickSettings)
         // Last, so it draws over the others where a side bar overlaps a rounded corner. It is
         // measured and laid out by this class like the rest; being a child is what makes that
@@ -338,7 +329,6 @@ class KeyboardHostView(
         emojiPanel.visibility = GONE
         addView(quickActions)
         inlineSuggestions.visibility = GONE
-        assistSheet.visibility = GONE
         quickSettings.visibility = GONE
 
         setOnApplyWindowInsetsListener { _, insets ->
@@ -373,18 +363,6 @@ class KeyboardHostView(
             requestLayout()
         }
     }
-
-    /** Puts the assistant's sheet over the keys, or takes it away. */
-    fun showAssistSheet(show: Boolean) {
-        val visibility = if (show) VISIBLE else GONE
-        if (assistSheet.visibility != visibility) {
-            assistSheet.visibility = visibility
-            keyboard.visibility = if (show) GONE else VISIBLE
-            requestLayout()
-        }
-    }
-
-    val assistSheetVisible: Boolean get() = assistSheet.visibility == VISIBLE
 
     /** Opens or closes the quick panel, hiding the keys underneath it while it is open. */
     fun showQuickSettings(show: Boolean) {
@@ -476,10 +454,6 @@ class KeyboardHostView(
             keyboard.measure(exactBody, unbounded)
             height += keyboard.measuredHeight
         }
-        if (assistSheet.visibility != GONE) {
-            assistSheet.measure(exactBody, unbounded)
-            height += assistSheet.measuredHeight
-        }
         if (quickSettings.visibility != GONE) {
             // The panel takes exactly the height the keys would have had, so opening it does not
             // move the editor's text or resize the window under the user's finger.
@@ -562,10 +536,6 @@ class KeyboardHostView(
         if (keyboard.visibility != GONE) {
             keyboard.layout(bodyLeft, y, bodyRight, y + keyboard.measuredHeight)
             y += keyboard.measuredHeight
-        }
-        if (assistSheet.visibility != GONE) {
-            assistSheet.layout(bodyLeft, y, bodyRight, y + assistSheet.measuredHeight)
-            y += assistSheet.measuredHeight
         }
         if (quickSettings.visibility != GONE) {
             quickSettings.layout(bodyLeft, y, bodyRight, y + quickSettings.measuredHeight)

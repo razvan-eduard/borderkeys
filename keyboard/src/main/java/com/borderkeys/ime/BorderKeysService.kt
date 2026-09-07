@@ -64,7 +64,6 @@ class BorderKeysService :
     InputMethodService(),
     KeyboardCanvasView.Listener,
     SuggestionStripView.Listener,
-    AssistSheetView.Listener,
     QuickSettingsView.Listener,
     QuickActionsView.Listener,
     ClipboardPanelView.Listener,
@@ -289,19 +288,6 @@ class BorderKeysService :
 
     private val assist by lazy { AssistClient(this).also { it.listener = this } }
     private var assistAvailable = false
-    private var assistRequestId = -1
-    private var assistSelection = ""
-    private var assistTask: AssistTask? = null
-
-    /**
-     * The actions offered for a selection.
-     *
-     * Three, because the strip has three slots and because a longer menu would need somewhere
-     * else to live. Translation is offered in one direction at a time, chosen by the layout's
-     * language: a Romanian keyboard offers English, and the other way round.
-     */
-    private val assistActions = arrayOfNulls<String>(SuggestionStripView.MAX_SUGGESTIONS)
-    private var assistTasks: Array<AssistTask> = emptyArray()
 
     private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
         onClipboardChanged()
@@ -542,9 +528,6 @@ class BorderKeysService :
         // covers a caret at zero with text after it.
         updateEditorEmpty(newSelEnd > 0)
         val view = host ?: return
-        if (view.assistSheetVisible) {
-            return
-        }
         if (composerActive) {
             // The caret that moved is the application's, and what is being typed is not in the
             // application. Re-deriving the word under it would take the composing region away
@@ -581,31 +564,15 @@ class BorderKeysService :
     }
 
     override fun onActionPicked(index: Int) {
-        // The strip's action mode is shared between the assistant's actions and the question a
-        // held suggestion asks. A pending word means the question is this one's.
-        val forgetting = pendingForget
-        if (forgetting != null) {
-            pendingForget = null
-            host?.suggestionStrip?.clear()
-            if (index == 0) {
-                forgetWord(forgetting)
-            } else {
-                requestSuggestions()
-            }
-            return
-        }
-        val task = assistTasks.getOrNull(index) ?: return
-        if (privateMode || assistSelection.isEmpty()) {
-            return
-        }
-        val view = host ?: return
-        assistTask = task
-        view.assistSheet.listener = this
-        view.assistSheet.showRunning(assistActionTitle(task), assistSelection)
-        view.showAssistSheet(true)
-        assistRequestId = assist.run(task, assistSelection)
-        if (assistRequestId < 0) {
-            view.assistSheet.showError(strings[Keys.ASSISTANT_THE_ASSISTANT_IS_NOT_INSTALLED])
+        // actionMode used to be shared with the assistant's own actions; it is only ever the
+        // "forget this word" question now, so a pending word is the only case there is.
+        val forgetting = pendingForget ?: return
+        pendingForget = null
+        host?.suggestionStrip?.clear()
+        if (index == 0) {
+            forgetWord(forgetting)
+        } else {
+            requestSuggestions()
         }
     }
 
@@ -627,29 +594,17 @@ class BorderKeysService :
 
     override fun onAssistResult(requestId: Int, text: String, modelName: String?) {
         // A late answer to a request the user has already dismissed is discarded rather than
-        // shown over whatever they are doing now.
+        // shown over whatever they are doing now. The draft box is the only thing left that
+        // ever asks.
         if (requestId == composerRequestId) {
             onComposerResult(text)
-            return
         }
-        if (requestId != assistRequestId) {
-            return
-        }
-        host?.assistSheet?.showResult(text, modelName)
     }
 
     override fun onAssistError(requestId: Int, error: Int) {
-        if (requestId != composerRequestId) {
-            if (requestId != assistRequestId) {
-                return
-            }
-        }
-        val message = assistErrorMessage(error)
         if (requestId == composerRequestId) {
-            onComposerFailure(message)
-            return
+            onComposerFailure(assistErrorMessage(error))
         }
-        host?.assistSheet?.showError(message)
     }
 
     /** Every failure is a sentence somebody can act on, which is why none of them is "failed". */
@@ -674,49 +629,6 @@ class BorderKeysService :
         assistAvailable = available
     }
 
-    /**
-     * The sheet's buttons.
-     *
-     * Replace is the only one that writes anything, and it writes in a single batch edit so the
-     * editor sees one change rather than a delete followed by an insert.
-     */
-    override fun onAssistButton(button: AssistSheetView.Button) {
-        val view = host ?: return
-        when (button) {
-            AssistSheetView.Button.REPLACE -> {
-                val text = view.assistSheet.currentProposal()
-                val connection = currentInputConnection
-                if (text.isNotEmpty() && connection != null) {
-                    connection.beginBatchEdit()
-                    connection.commitText(text, 1)
-                    connection.endBatchEdit()
-                }
-            }
-            AssistSheetView.Button.COPY -> {
-                val text = view.assistSheet.currentProposal()
-                if (text.isNotEmpty()) {
-                    clipboardManager?.setPrimaryClip(
-                        android.content.ClipData.newPlainText("BorderKeys", text),
-                    )
-                }
-            }
-            AssistSheetView.Button.DISCARD -> assist.cancel()
-        }
-        closeAssistSheet()
-    }
-
-    private fun closeAssistSheet() {
-        assistRequestId = -1
-        assistTask = null
-        assistSelection = ""
-        host?.showAssistSheet(false)
-        host?.suggestionStrip?.clear()
-        // The model unloads itself on its own timer; dropping the binding is what lets the
-        // process stop rather than lingering for the rest of the session.
-        assist.disconnect()
-        requestSuggestions()
-    }
-
     override fun onCreateInputView(): View {
         // Built in code. LayoutInflater would parse XML and reflect to construct three views,
         // every time the keyboard is shown in a new editor.
@@ -731,11 +643,7 @@ class BorderKeysService :
         view.keyboard.setLayout(composedLayout(alphabeticLayout))
         view.suggestionStrip.listener = this
         view.suggestionStrip.visibleLimit = preferences.suggestionCount
-        // Bound here rather than beside the assistant's listeners, which are set on the path
-        // that runs when an assistant action is picked. Putting it there meant the arrow in the
-        // gutter was drawn, received its touch, and called nothing at all.
         view.quickSettings.listener = this
-        view.assistSheet.listener = this
         view.quickActions.listener = this
         view.clipboardPanel.listener = this
         view.emojiPanel.listener = EmojiPanelView.Listener { emoji -> onEmojiPicked(emoji) }
@@ -812,11 +720,9 @@ class BorderKeysService :
 
     override fun onFinishInput() {
         super.onFinishInput()
-        if (host?.assistSheetVisible == true) {
-            closeAssistSheet()
-        } else {
-            assist.disconnect()
-        }
+        // The model unloads itself on its own timer; dropping the binding here is what lets the
+        // process stop rather than lingering for the rest of the session.
+        assist.disconnect()
         // The session is over, so everything held in memory is written now rather than waiting
         // for a debounce that may never fire: the process can be killed the moment the keyboard
         // is hidden.
