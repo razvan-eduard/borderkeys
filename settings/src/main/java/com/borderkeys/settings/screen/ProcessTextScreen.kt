@@ -42,6 +42,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -240,16 +241,28 @@ fun ProcessTextScreen(
                 // it, the same way a coloured LED says a microphone is live.
                 .background(ringBrush(ringShift)),
         ) {
-        Column(
-            modifier = Modifier
-                .padding(RING_WIDTH)
-                .clip(shape)
-                .background(MaterialTheme.colorScheme.surface),
+        // Surface, not a Column with a background modifier painted on: Surface is what sets
+        // LocalContentColor for everything inside it. A background modifier only paints a
+        // colour -- it does not say what reads against it -- so every icon below defaulted to
+        // Compose's own fallback of plain black, invisible against a dark surface in exactly
+        // the cases a background modifier cannot tell it apart from a light one.
+        Surface(
+            modifier = Modifier.padding(RING_WIDTH),
+            shape = shape,
+            color = MaterialTheme.colorScheme.surface,
         ) {
+            Column {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Close top-right, per spec -- title first so it starts at the left edge and
+                // the close button is what's left holding the right, not the reverse.
+                Text(
+                    strings[Keys.COMPOSER_TITLE],
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
                 IconButton(onClick = {
                     activity?.setResult(Activity.RESULT_CANCELED)
                     activity?.finish()
@@ -259,11 +272,6 @@ fun ProcessTextScreen(
                         contentDescription = strings[Keys.COMPOSER_CLOSE],
                     )
                 }
-                Text(
-                    strings[Keys.COMPOSER_TITLE],
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f).padding(start = 4.dp),
-                )
             }
 
             Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
@@ -480,6 +488,7 @@ fun ProcessTextScreen(
                         contentDescription = strings[Keys.COMPOSER_FORWARD],
                     )
                 }
+            }
             }
         }
         }
