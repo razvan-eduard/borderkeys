@@ -174,4 +174,63 @@ class ComposerTest {
             Composer.suggestedName("rewrite ".repeat(40)).length <= Composer.MAX_NAME_CHARS,
         )
     }
+
+    // The original is a promise: "the exact copy gathered from the initial page selection,
+    // nothing else." A hand edit made while standing on it -- before the first run, or after
+    // walking back to it -- must never be what that promise ends up meaning.
+
+    @Test
+    fun `a hand edit before the first run does not become the original`() {
+        val composer = Composer()
+        composer.captureBeforeRun("the selection")
+        // Typed over before any model action -- this is openComposer's own sequence: seed the
+        // graph, then whatever the user does before tapping a button.
+        composer.updateCurrent("the selection, fixed")
+
+        assertEquals(2, composer.size)
+        assertEquals("the selection", composer.versionAt(0))
+        assertEquals("the selection, fixed", composer.current())
+        assertFalse("standing on the edit, not the original", composer.atOriginal)
+    }
+
+    @Test
+    fun `a hand edit after flipping back to the original does not overwrite it`() {
+        val composer = Composer()
+        runFrom(composer, "the selection", "v1")
+        runFrom(composer, "v1", "v2")
+
+        composer.flip() // back to node 0
+        assertTrue(composer.atOriginal)
+        composer.updateCurrent("the selection, fixed")
+
+        assertEquals("the original is untouched", "the selection", composer.versionAt(0))
+        assertEquals("the edit became its own node", "the selection, fixed", composer.versionAt(1))
+        // Discards nothing, the same rule as every other hand edit: what used to be reachable
+        // from the original is still there, just one position further along.
+        assertEquals("v1", composer.versionAt(2))
+        assertEquals("v2", composer.versionAt(3))
+        assertEquals(4, composer.size)
+    }
+
+    @Test
+    fun `running the model after that edit runs from the edit, not the original`() {
+        val composer = Composer()
+        composer.captureBeforeRun("the selection")
+        composer.updateCurrent("the selection, fixed")
+        composer.addResult("Fixed and improved.")
+
+        assertEquals("the selection", composer.versionAt(0))
+        assertEquals("the selection, fixed", composer.versionAt(1))
+        assertEquals("Fixed and improved.", composer.current())
+        assertEquals("the selection", composer.flip())
+    }
+
+    @Test
+    fun `an edit that matches the original exactly is not a new node`() {
+        val composer = Composer()
+        composer.captureBeforeRun("the selection")
+        composer.updateCurrent("the selection")
+
+        assertEquals("typing back to the same text is not an edit", 1, composer.size)
+    }
 }

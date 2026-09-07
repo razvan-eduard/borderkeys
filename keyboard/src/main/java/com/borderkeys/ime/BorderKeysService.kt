@@ -552,48 +552,32 @@ class BorderKeysService :
             return
         }
         val hasSelection = newSelEnd > newSelStart
-        if (!hasSelection || privateMode || !assistAvailable) {
-            if (view.suggestionStrip.actionMode) {
-                view.suggestionStrip.clear()
-            }
+        if (view.suggestionStrip.actionMode) {
+            // Never the assistant's doing any more -- see below. What is left of actionMode
+            // (rejecting a suggestion, "Forget / Cancel") is dismissed the same way selecting
+            // text dismisses anything else stale on the strip.
+            view.suggestionStrip.clear()
+        }
+        if (!hasSelection) {
             // The caret moved. If our own edit moved it the composing region already agrees with
             // where it is, and re-deriving would be work for the same answer; if something else
             // moved it -- a tap into the middle of a sentence, an arrow key, a backspace out of
             // one word and into another -- then the word under the caret has changed and the
             // strip is describing a word the user has left. Re-deriving is what keeps it live.
-            if (!hasSelection && composingMatchesCaret(newSelEnd)) {
+            if (composingMatchesCaret(newSelEnd)) {
                 requestSuggestions()
-            } else if (!hasSelection) {
+            } else {
                 adoptWordAtCaret()
             }
             // Shift is derived from the text before the caret, so moving the caret is exactly
             // when it has to be looked at again.
             applyAutoShift()
-            return
         }
-        offerAssistActions()
-    }
-
-    private fun offerAssistActions() {
-        val view = host ?: return
-        val selection = currentInputConnection
-            ?.getSelectedText(0)?.toString().orEmpty()
-        if (selection.isEmpty() || selection.length > AssistProtocol.MAX_SELECTION_CHARS) {
-            return
-        }
-        assistSelection = selection
-
-        // The translation direction follows the layout: a Romanian keyboard offers English.
-        val translate = if (alphabeticLayout.languageTag.startsWith("ro")) {
-            AssistTask.TRANSLATE_TO_ENGLISH
-        } else {
-            AssistTask.TRANSLATE_TO_ROMANIAN
-        }
-        assistTasks = arrayOf(AssistTask.SUMMARISE, AssistTask.CORRECT, translate)
-        assistActions[0] = strings[Keys.ASSISTANT_SUMMARISE]
-        assistActions[1] = strings[Keys.ASSISTANT_CORRECT]
-        assistActions[2] = if (translate == AssistTask.TRANSLATE_TO_ENGLISH) strings[Keys.ASSISTANT_ENGLISH] else strings[Keys.ASSISTANT_ROM_N]
-        view.suggestionStrip.setActions(assistActions, assistTasks.size)
+        // A selection used to turn the strip into three assistant buttons here. It no longer
+        // does anything: the strip is corrections and predictions, never anything else -- the
+        // assistant is reached through the draft box now, opened deliberately from the quick
+        // action or (for a selection outside any field this keyboard is bound to) from the
+        // system's own text-selection menu, never by the mere act of selecting text.
     }
 
     override fun onActionPicked(index: Int) {
@@ -1500,6 +1484,14 @@ class BorderKeysService :
             ?: ComposerInputConnection(view.composer) { onComposerBufferChanged() }
                 .also { composerConnection = it }
         composerVersions.clear()
+        if (seed.isNotEmpty()) {
+            // The original is "the exact copy gathered from the initial page selection,
+            // nothing else" -- captured here, now, before a single keystroke can happen, so
+            // that typing before the first model run cannot become what "original" means. A
+            // box opened empty has no selection to be exact about, so it keeps the documented
+            // fallback: whatever was written when the model is first asked to do something.
+            composerVersions.captureBeforeRun(seed)
+        }
         connection.reset(seed)
         view.composer.bind(connection.text)
         view.composer.listener = this

@@ -63,17 +63,20 @@ class Composer {
      * Records what the text looked like before a model run, and returns the node it is at.
      *
      * Called with the box's live contents at the moment an action is tapped. The first call
-     * establishes the original. Later calls update the node being stood on, because the text may
-     * have been edited by hand since it was written -- an edit changes the node in place.
+     * establishes the original -- unless the caller already has, which is the normal case: a
+     * selection seeds node 0 the moment the box opens, before anything can be typed into it, so
+     * that a box opened empty is the only time this call is the one doing the establishing.
+     * Later calls fold in whatever was edited by hand since the node was last written, through
+     * [updateCurrent] and its rule about node 0.
      */
     fun captureBeforeRun(text: String): Int {
         if (versions.isEmpty()) {
             versions.add(text)
             index = 0
-        } else {
-            versions[index] = text
+            flippedFrom = -1
+            return index
         }
-        flippedFrom = -1
+        updateCurrent(text)
         return index
     }
 
@@ -98,9 +101,27 @@ class Composer {
         trim()
     }
 
-    /** Keeps an edit made by hand, without adding a node. */
+    /**
+     * Keeps an edit made by hand.
+     *
+     * Every node but the original updates in place, discarding nothing -- reading an old
+     * version and fixing a typo while you are there should not cost you the rest of the line.
+     * The original is the one thing this class promises never changes: "the exact copy
+     * gathered from the initial page selection, nothing else." Standing on it and typing does
+     * not get to be the exception, so the edit opens a new node right after it instead of
+     * overwriting it -- an insert, not the truncate-and-append a model result does from the
+     * middle of the line, so whatever already followed the original keeps following, now one
+     * position further along, rather than being taken as the thing this edit is replacing.
+     */
     fun updateCurrent(text: String) {
-        if (versions.isEmpty()) {
+        if (versions.isEmpty() || text == versions[index]) {
+            return
+        }
+        if (index == 0) {
+            versions.add(1, text)
+            index = 1
+            flippedFrom = -1
+            trim()
             return
         }
         versions[index] = text
