@@ -633,6 +633,18 @@ class ComposerView(
         }
     }
 
+    /**
+     * A play button reads as "send" by its colour before anyone reads its shape, and that
+     * colour is the one thing on this bar that is not the theme's: a keyboard themed red or
+     * orange would otherwise tint the one affirmative action to look like a stop, not a go.
+     * Fixed rather than derived, and one value rather than a light/dark pair -- this view's
+     * dark/light axis is the user's chosen keyboard theme, not the OS theme, and there is no
+     * theme-keyed choice between two greens that is not itself just picking a third colour.
+     * Checked against the darkest and lightest shipped preset key colours in
+     * `ThemePaletteTest`: 3.20:1 on the lightest, 3.97:1 on the darkest.
+     */
+    private val insertGreen = 0xFF43A047.toInt()
+
     private fun drawEnd(
         canvas: Canvas,
         bounds: android.graphics.RectF,
@@ -657,7 +669,7 @@ class ComposerView(
         centreX: Float,
         centreY: Float,
         enabled: Boolean,
-        accent: Boolean,
+        insert: Boolean,
     ) {
         if (icon == null) {
             return
@@ -670,11 +682,12 @@ class ComposerView(
         icon.bounds = iconBounds
         // Insert is the one affirmative button on the bar, so it is the one that is coloured;
         // a disabled button is drawn dim rather than hidden, or the bar would reflow under a
-        // thumb every time a version was added.
+        // thumb every time a version was added. Its colour is fixed rather than the theme's --
+        // see insertGreen.
         icon.setTint(
             when {
                 !enabled -> paints.labelSecondary.color
-                accent -> paints.accent.color
+                insert -> insertGreen
                 else -> paints.label.color
             },
         )
