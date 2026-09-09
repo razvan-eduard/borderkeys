@@ -85,6 +85,14 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
         }
 
         SwitchRow(
+            title = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT],
+            subtitle = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT_NOTE],
+            checked = preferences.clearClipboardAfterInsert,
+        ) { value ->
+            scope.launch { themes.updatePreferences { it.copy(clearClipboardAfterInsert = value) } }
+        }
+
+        SwitchRow(
             title = strings[Keys.CLIPBOARD_DELETE_AFTER_USE],
             subtitle = strings[Keys.CLIPBOARD_DELETE_AFTER_USE_NOTE],
             checked = preferences.clipboardDeleteAfterUse,

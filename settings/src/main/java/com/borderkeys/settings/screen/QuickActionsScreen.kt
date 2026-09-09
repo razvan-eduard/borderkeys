@@ -150,14 +150,6 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
-
-        SettingsSectionCard(strings[Keys.QUICK_CLEAR_CLIPBOARD]) {
-            SwitchRow(
-                title = strings[Keys.QUICK_CLEAR_CLIPBOARD],
-                subtitle = strings[Keys.QUICK_CLEAR_CLIPBOARD_NOTE],
-                checked = preferences.clearClipboardAfterInsert,
-            ) { value -> update { it.copy(clearClipboardAfterInsert = value) } }
-        }
     }
 }
 
