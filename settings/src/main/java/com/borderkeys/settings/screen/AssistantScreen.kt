@@ -6,6 +6,8 @@ package com.borderkeys.settings.screen
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
 
+import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -65,6 +68,11 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
     )
     var importing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    // Set only right after a successful import, to the URI just imported from -- asked about
+    // there rather than upfront, so the choice is "delete the file that became this model" with
+    // the model already sitting safely in the list, not a checkbox ticked in advance of an
+    // import that might still have failed.
+    var offeringDeleteSource by remember { mutableStateOf<Uri?>(null) }
 
     fun updatePreferences(transform: (KeyboardPreferences) -> KeyboardPreferences) {
         scope.launch { themes.updatePreferences(transform) }
@@ -85,6 +93,9 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                         repository.import(it, name)
                     }
                 }.getOrNull()
+            }
+            if (result is AssistModelRepository.ImportResult.Accepted) {
+                offeringDeleteSource = uri
             }
             importing = false
             message = when (result) {
@@ -245,6 +256,43 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 strings[Keys.ASSISTANT_IT_IS_REACHED_ONLY_FROM_A],
             )
         }
+    }
+
+    offeringDeleteSource?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { offeringDeleteSource = null },
+            title = { Text(strings[Keys.ASSISTANT_DELETE_THE_ORIGINAL_FILE]) },
+            text = { Text(strings[Keys.ASSISTANT_THE_MODEL_IS_IMPORTED_AND_WORKS]) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        offeringDeleteSource = null
+                        scope.launch {
+                            // Best-effort: OpenDocument grants a write URI alongside the read
+                            // one, but whether the provider on the other end honours a delete
+                            // through it belongs to that provider, not this application. Nothing
+                            // about the model just imported depends on this succeeding -- it
+                            // already has its own copy, independent of the source from here on.
+                            withContext(Dispatchers.IO) {
+                                runCatching {
+                                    DocumentsContract.deleteDocument(context.contentResolver, uri)
+                                }
+                            }
+                        }
+                    },
+                ) {
+                    Text(
+                        strings[Keys.ASSISTANT_DELETE],
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { offeringDeleteSource = null }) {
+                    Text(strings[Keys.ASSISTANT_CANCEL])
+                }
+            },
+        )
     }
 }
 
