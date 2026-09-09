@@ -90,6 +90,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.assist.AssistClient
 import com.borderkeys.assist.ChunkedAssistRunner
@@ -566,11 +567,13 @@ fun ProcessTextScreen(
                                 .offset(x = VERSION_TRANSITION_DISTANCE * versionSlide.value)
                                 .alpha(1f - kotlin.math.abs(versionSlide.value) * VERSION_TRANSITION_FADE),
                         )
-                        // Lifted half its own height above the field's border rather than set
-                        // inside its corner -- straddling the outline instead of the text means
-                        // FIELD_TOP_GAP alone keeps it clear of everything, with nothing needed
-                        // on the field's own internal padding, which nothing here can reach
-                        // without replacing OutlinedTextField's whole decoration.
+                        // Lifted above the field's border rather than set inside its corner --
+                        // straddling the outline instead of the text means FIELD_TOP_GAP alone
+                        // keeps it clear of everything, with nothing needed on the field's own
+                        // internal padding, which nothing here can reach without replacing
+                        // OutlinedTextField's whole decoration. zIndex on top of that, so it
+                        // always paints over the field and the scroll clip above it rather than
+                        // trusting declaration order alone for something straddling a boundary.
                         IconButton(
                             enabled = current.isNotEmpty() && !busy,
                             onClick = {
@@ -581,6 +584,7 @@ fun ProcessTextScreen(
                             },
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
+                                .zIndex(1f)
                                 .offset(x = -COPY_BADGE_SIDE_INSET, y = -COPY_BADGE_LIFT)
                                 .size(COPY_BADGE_SIZE)
                                 .shadow(elevation = 2.dp, shape = CircleShape)
@@ -1210,9 +1214,13 @@ private val COPY_BADGE_SIZE = 30.dp
 
 private val COPY_BADGE_ICON_SIZE = 16.dp
 
-/** Half the badge's own size, so it straddles the field's border rather than sitting inside its
- *  corner over the text -- the badge covers the border, never the content past it. */
-private val COPY_BADGE_LIFT = COPY_BADGE_SIZE / 2
+/**
+ * A third of the badge's own size, so it still straddles the field's border rather than sitting
+ * inside its corner over the text, but pokes only a little past it -- half its own size rose far
+ * enough above FIELD_TOP_GAP's clearance to graze the scrollable column's own clip boundary,
+ * cutting the badge's top rather than the field's.
+ */
+private val COPY_BADGE_LIFT = COPY_BADGE_SIZE / 3
 
 private val COPY_BADGE_SIDE_INSET = 6.dp
 
