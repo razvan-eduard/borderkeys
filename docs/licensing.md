@@ -217,7 +217,7 @@ prediction engine is the same code in the free build and the other one.
 | FUTO `swipe-library` C++ inference code | 6.3 | **GPL-3.0-or-later — verified via the GitLab API, `license.key = gpl-3.0+`.** That is not merely compatible with this project, it is the same licence. Not to be confused with the FUTO Keyboard *application*, which is under the FUTO Source First License 1.0 — not free, and it must never enter this repository. |
 | ExecuTorch v1.2.0 | 6.3 (option B1) | **BSD-3-Clause.** Compatible. Not previously accounted for: `swipe-library` vendors ExecuTorch as a git submodule and its models are `.pte` files, so option B1 means building PyTorch's runtime into `libborderkeys.so`, not the self-contained C++ library the plan assumed. It also requires CMake 3.29+, against the 3.22.1 this project pins. See section 2.4. |
 | FUTO gesture corpus, `futo-org/swipe.futo.org` | 6.3 (option B2) | **MIT — verified from the dataset's own licence tag.** Free. There is also `futo-org/swipe-negatives` under Apache-2.0. Together these are what make option B2 legally possible without asking anyone's permission. |
-| GGUF language model for the text assistant | 7 | **Never bundled, in either flavor.** A model arrives only because the user chose a file, and only if its SHA-256 matches an entry in `KnownAssistModels`. All three entries are **Apache-2.0**, verified from the publishing repositories' own file metadata: Qwen3-0.6B-Q8_0 (610 MB, `9465e63a…`), Qwen3-1.7B-Q8_0 (1.75 GB, `061b54da…`) and SmolLM3-Q4_K_M (1.83 GB, `8334b850…`). So `plus` carries no non-free asset on this account and declares no anti-feature for it. |
+| GGUF language model for the text assistant | 7 | **Never bundled, in either flavor.** A model arrives only because the user chose a file, and only if its SHA-256 matches an entry in `KnownAssistModels`. All five entries are **Apache-2.0**, verified from the publishing repositories' own file metadata: Qwen3-0.6B-Q8_0 (610 MB, `9465e63a…`), Qwen3-1.7B-Q8_0 (1.75 GB, `061b54da…`), SmolLM3-Q4_K_M (1.83 GB, `8334b850…`), EuroLLM-1.7B-Instruct-Q8_0 (1.68 GB, `c3672eb9…`) and EuroLLM-9B-Instruct-Q4_K_M (5.2 GB, `785a3b28…`). So `plus` carries no non-free asset on this account and declares no anti-feature for it. |
 
 ### 2.3 What the licence check actually found
 
@@ -258,7 +258,7 @@ project pins, unlike `swipe-library`, which needs 3.29+. It configures and links
 `cpp-httplib` once the server target is off, which was the one thing worth checking before
 putting an inference runtime inside a keyboard that holds no network permission.
 
-**Three of the candidate models are free software.** Qwen3 0.6B and 1.7B are Apache-2.0, as is
+**Five of the candidate models are free software.** Qwen3 0.6B and 1.7B are Apache-2.0, as is
 SmolLM3. Phi-4-mini is MIT. That matters more than it might look: it means the `plus` flavor can
 offer a text assistant **without a single non-free asset**, which is not true of the swipe
 weights in section 2.2. The two remaining candidates are not free and are not in the registry:
@@ -266,6 +266,15 @@ LFM2 is under a bespoke "LFM Open License", and Gemma 3 is under Google's Gemma 
 Gemma is the best of them on a weak phone — it fits in 4 GB — and that is the trade being
 declined, on the grounds that a keyboard whose free build has no anti-features should not need
 one in its paid-for-in-storage build either.
+
+Added later, same registry, same reasoning: **EuroLLM 1.7B and 9B**, both Instruct, both
+Apache-2.0. Not a substitute for the three above so much as a different trade -- Qwen3 and
+SmolLM3 are trained English-first, EuroLLM is trained for balanced coverage across the EU's own
+languages instead, which is what a keyboard whose whole premise is several languages typed at
+once actually wants from a translation task. The 9B build is the heaviest entry in the registry
+by a wide margin (5.2 GB, ~6.6 GB resident); it is offered anyway; a phone with the RAM to spare
+is a real phone, and the same is-it-usable question the smaller entries already leave to the
+person choosing one applies just as well to a larger one.
 
 Nothing is bundled either way. A 610 MB model in an APK is not a distribution mechanism, and
 F-Droid would be right to refuse it.

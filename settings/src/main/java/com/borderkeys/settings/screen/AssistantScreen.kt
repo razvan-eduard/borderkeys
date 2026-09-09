@@ -189,6 +189,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                         ),
                         entry.source,
                     )
+                    Explanation(strings[modelNoteFor(entry)])
                 }
             }
         }
@@ -319,4 +320,21 @@ private fun ModelRow(
         }
         trailing?.invoke()
     }
+}
+
+/**
+ * What each entry in [KnownAssistModels.entries] is actually good at, keyed by its file name --
+ * already a stable, unique identifier per entry, so nothing new has to be added to that class
+ * just to carry a piece of Settings-screen copy a pure data layer has no other reason to know
+ * about.
+ */
+private fun modelNoteFor(entry: KnownAssistModels.Entry): String = when (entry.fileName) {
+    "Qwen3-0.6B-Q8_0.gguf" -> Keys.ASSISTANT_MODEL_QWEN3_06B_NOTE
+    "Qwen3-1.7B-Q8_0.gguf" -> Keys.ASSISTANT_MODEL_QWEN3_17B_NOTE
+    "SmolLM3-Q4_K_M.gguf" -> Keys.ASSISTANT_MODEL_SMOLLM3_3B_NOTE
+    "EuroLLM-1.7B-Instruct.Q8_0.gguf" -> Keys.ASSISTANT_MODEL_EUROLLM_17B_NOTE
+    "EuroLLM-9B-Instruct-Q4_K_M.gguf" -> Keys.ASSISTANT_MODEL_EUROLLM_9B_NOTE
+    // Reached only if a future entry is added to KnownAssistModels.kt without a matching case
+    // here -- honest about being generic rather than silently wearing another model's note.
+    else -> Keys.ASSISTANT_MODEL_GENERAL_NOTE
 }

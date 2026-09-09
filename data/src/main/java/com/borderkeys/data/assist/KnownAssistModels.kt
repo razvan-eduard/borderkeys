@@ -76,6 +76,32 @@ object KnownAssistModels {
             contextTokens = 4096,
             approximateRamMb = 2400,
         ),
+        // The three above are general-purpose and trained English-first; a task that asks one of
+        // them to write fluently in a less-common language, rather than just read one, is where
+        // that shows. EuroLLM is trained for balanced coverage across the EU's own languages
+        // instead -- the other reasonable trade for a model this size, at the cost of being
+        // weaker outside them. Same publisher, same licence, two sizes for the same reason
+        // Qwen3 is offered at two.
+        Entry(
+            displayName = "EuroLLM 1.7B Instruct (Q8_0)",
+            fileName = "EuroLLM-1.7B-Instruct.Q8_0.gguf",
+            sha256 = "c3672eb97ff1eeac40f8cb227802467f7ba99264b7df0cf0a86995a4f3faf0ac",
+            sizeBytes = 1_763_775_616L,
+            license = "Apache-2.0",
+            source = "huggingface.co/QuantFactory/EuroLLM-1.7B-Instruct-GGUF",
+            contextTokens = 4096,
+            approximateRamMb = 2200,
+        ),
+        Entry(
+            displayName = "EuroLLM 9B Instruct (Q4_K_M)",
+            fileName = "EuroLLM-9B-Instruct-Q4_K_M.gguf",
+            sha256 = "785a3b2883532381704ef74f866f822f179a931801d1ed1cf12e6deeb838806b",
+            sizeBytes = 5_582_838_496L,
+            license = "Apache-2.0",
+            source = "huggingface.co/bartowski/EuroLLM-9B-Instruct-GGUF",
+            contextTokens = 4096,
+            approximateRamMb = 6600,
+        ),
     )
 
     fun bySha256(hash: String): Entry? = entries.firstOrNull { it.sha256.equals(hash, true) }
