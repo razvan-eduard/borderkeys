@@ -39,6 +39,16 @@ interface UserTrigramDao {
         }
     }
 
+    /** The triple equivalent of [UserWordDao.decayStale] -- see there for why this is a plain
+     *  conditional `UPDATE` rather than a read-modify-write. */
+    @Query(
+        """
+        UPDATE user_trigrams SET count = MAX(1, count / 2), lastUsedAt = :now
+        WHERE lastUsedAt < :cutoff AND count > 1
+        """,
+    )
+    suspend fun decayStale(cutoff: Long, now: Long)
+
     /** Forgets every triple a word takes part in, wherever it sits. */
     @Query(
         "DELETE FROM user_trigrams WHERE previousWord2 = :word OR previousWord1 = :word " +

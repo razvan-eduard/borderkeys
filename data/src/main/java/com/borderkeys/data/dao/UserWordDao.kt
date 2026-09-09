@@ -63,6 +63,26 @@ interface UserWordDao {
         }
     }
 
+    /**
+     * Halves the count of anything not used since [cutoff], and nothing else.
+     *
+     * A plain conditional `UPDATE`, not a read-modify-write: [increment] above is deliberately
+     * one atomic statement because the learning flush and a person editing Settings are two
+     * writers that must not lose one another's update, and reading a count here to decay it
+     * before writing it back would reintroduce exactly that race. This has no such race, because
+     * `lastUsedAt < :cutoff` can never be true of a row someone is writing to right now -- if it
+     * were being written to, its `lastUsedAt` would be recent enough to fail that test. The
+     * `lastUsedAt` bump on the rows it does touch is what stops the same row from being halved
+     * again on the very next flush, rather than waiting out a full half-life.
+     */
+    @Query(
+        """
+        UPDATE user_words SET count = MAX(1, count / 2), lastUsedAt = :now
+        WHERE lastUsedAt < :cutoff AND count > 1
+        """,
+    )
+    suspend fun decayStale(cutoff: Long, now: Long)
+
     @Query("DELETE FROM user_words WHERE word = :word")
     suspend fun delete(word: String)
 

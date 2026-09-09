@@ -45,6 +45,16 @@ interface UserBigramDao {
         }
     }
 
+    /** The pair equivalent of [UserWordDao.decayStale] -- see there for why this is a plain
+     *  conditional `UPDATE` rather than a read-modify-write. */
+    @Query(
+        """
+        UPDATE user_bigrams SET count = MAX(1, count / 2), lastUsedAt = :now
+        WHERE lastUsedAt < :cutoff AND count > 1
+        """,
+    )
+    suspend fun decayStale(cutoff: Long, now: Long)
+
     /**
      * Forgets every pair a word takes part in, on either side.
      *
