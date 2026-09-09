@@ -388,17 +388,34 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
                       key=lambda item: (item[0], item[1]))
 
     # A folded key that two different spellings share keeps the more frequent spelling as its
-    # display form; the other would be unreachable anyway, since the trie is keyed on the fold.
-    deduped: dict[tuple[int, ...], tuple[str, int]] = {}
+    # display form -- the other would be unreachable anyway, since the trie is keyed on the fold
+    # -- but the frequency is the *sum* of every colliding row, not just the winner's own.
+    #
+    # This was the winner's frequency alone until a Romanian-specific audit found it silently
+    # discarding real signal: "așa"/"aşa"/"asa" (comma-below, cedilla, and no diacritic at all --
+    # three spellings of one word, all present in a real corpus) folded to one trie key and only
+    # the most frequent variant's own count survived, throwing the other two away rather than
+    # merging them in. For Romanian specifically, whose corpus carries three ways to spell the
+    # same accented letter, this discarded close to a tenth of the language's total frequency
+    # mass and meant a folded word's effective frequency -- the one kEditPenalty's whole
+    # calibration argument depends on being a fair signal -- could be roughly a third to half of
+    # its true combined usage. Summing is what "the same word, spelled three ways in the source
+    # text" should have meant from the start: one word, one true frequency, one trie entry.
+    deduped: dict[tuple[int, ...], list] = {}
     for folded, word, frequency in prepared:
         existing = deduped.get(folded)
-        if existing is None or frequency > existing[1]:
-            deduped[folded] = (word, frequency)
+        if existing is None:
+            deduped[folded] = [word, frequency, frequency]
+        else:
+            if frequency > existing[1]:
+                existing[0] = word
+                existing[1] = frequency
+            existing[2] += frequency
     keys = sorted(deduped.keys())
 
     words_folded = keys
     display = [deduped[key][0] for key in keys]
-    frequencies = [deduped[key][1] for key in keys]
+    frequencies = [deduped[key][2] for key in keys]
     word_index_of = {word: index for index, word in enumerate(display)}
 
     alphabet = sorted({code_point for folded in words_folded for code_point in folded})
