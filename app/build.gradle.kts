@@ -70,8 +70,8 @@ android {
         applicationId = "com.borderkeys"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 7
-        versionName = "0.3.0"
+        versionCode = 8
+        versionName = "0.4.0"
 
         ndk {
             // Packaging-level filter, and the only one that decides what actually lands in
