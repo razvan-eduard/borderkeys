@@ -21,6 +21,14 @@ Licensed **GPL-3.0-or-later**.
 [![Release](https://img.shields.io/github/v/release/razvan-eduard/borderkeys)](https://github.com/razvan-eduard/borderkeys/releases)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 
+**F-Droid repo (custom, third-party):** https://razvan-eduard.github.io/vox-fdroid-repo/repo/
+
+Not yet on the official F-Droid repository — the submission is prepared (see
+[`metadata/`](metadata)) but not merged. Until then, add the URL above as a repository in your
+F-Droid client to get both builds and their updates. It also carries the other apps from
+[VoxApps](https://github.com/razvan-eduard/VoxApps), which is who hosts it. Or install a release
+directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/releases/latest).
+
 ## Two builds, one repository
 
 | | `core` | `plus` |
