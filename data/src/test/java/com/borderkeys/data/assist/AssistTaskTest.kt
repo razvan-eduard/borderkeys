@@ -97,4 +97,15 @@ class AssistTaskTest {
                 .startsWith(AssistTask.CUSTOM.instruction),
         )
     }
+
+    @Test
+    fun `only the two tasks that need the whole text stay unchunkable`() {
+        // SUMMARISE: three summaries of three chunks read as a summary repeating itself, not one
+        // summary of the whole. CUSTOM: an instruction someone wrote by hand could easily be a
+        // summarising one, and nothing here can tell the two apart to know it should refuse
+        // chunking too. Every other task transforms close to sentence by sentence already, so
+        // chunking it changes nothing about what the answer says.
+        val unchunkable = AssistTask.entries.filterNot { it.isChunkable }
+        assertEquals(setOf(AssistTask.SUMMARISE, AssistTask.CUSTOM), unchunkable.toSet())
+    }
 }

@@ -91,6 +91,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.assist.AssistClient
+import com.borderkeys.assist.ChunkedAssistRunner
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
@@ -108,6 +109,7 @@ import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -233,15 +235,27 @@ fun ProcessTextScreen(
         rail = Rail(composer.size, composer.index, composer.canGoBack, composer.canGoForward, composer.atOriginal)
     }
 
-    val assist = remember { AssistClient(context) }
+    val assistClient = remember { AssistClient(context) }
+    // ChunkedAssistRunner owns assistClient's listener from here on -- see its own class doc for
+    // why a caller talks to it instead of the client directly once it exists.
+    val assist = remember { ChunkedAssistRunner(assistClient) }
     // Resolved once: whether the plus flavor's assistant is even present does not change while
     // this screen is open, and asking again on every recomposition would be a PackageManager
     // call for an answer that cannot have changed.
     val assistAvailable = remember { assist.isAvailable() }
+    // The active model's own context window, for sizing chunks against -- see
+    // ChunkedAssistRunner.maxChunkChars's own doc for why this is asked for rather than assumed.
+    // A default rather than a wait for the first emission: the very first task run this screen
+    // ever sees can arrive before this flow has collected anything, and undersizing a chunk
+    // costs one extra request, not a wrong answer.
+    val activeModel by DataGraph.assistModels.models
+        .map { models -> models.firstOrNull { it.active } }
+        .collectAsStateWithLifecycle(initialValue = null)
+    val contextTokens = activeModel?.contextTokens ?: DEFAULT_CONTEXT_TOKENS
 
     DisposableEffect(Unit) {
-        assist.listener = object : AssistClient.Listener {
-            override fun onAssistResult(id: Int, resultText: String, modelName: String?) {
+        assist.listener = object : ChunkedAssistRunner.Listener {
+            override fun onChunkedResult(id: Int, resultText: String, modelName: String?) {
                 if (id != requestId) {
                     // An answer to a request this screen has already moved past -- a second
                     // action tapped before the first came back cancels it, and its answer
@@ -260,7 +274,7 @@ fun ProcessTextScreen(
                 }
             }
 
-            override fun onAssistError(id: Int, error: Int) {
+            override fun onChunkedError(id: Int, error: Int) {
                 if (id != requestId) {
                     return
                 }
@@ -283,7 +297,7 @@ fun ProcessTextScreen(
             return
         }
         composer.captureBeforeRun(current)
-        val id = assist.run(task, current, instruction)
+        val id = assist.run(task, current, contextTokens, instruction)
         if (id < 0) {
             notice = strings[Keys.ASSISTANT_THE_ASSISTANT_IS_NOT_INSTALLED]
             return
@@ -891,6 +905,15 @@ private val AI_RING_COLOURS = listOf(
     Color(0xFF6D28D9), // purple
     Color(0xFF8B5CF6), // back to violet -- the loop has no seam
 )
+
+/**
+ * The context window assumed for chunk sizing before the active model's own row has been
+ * collected from the database at least once. Smaller than every model KnownAssistModels.kt
+ * currently ships (all 4096) rather than the middle of that range: undersizing a chunk here
+ * costs one extra request the first time this runs in a session, oversizing it risks the
+ * request this whole mechanism exists to avoid.
+ */
+private const val DEFAULT_CONTEXT_TOKENS = 2048
 
 /** How long one pass of the ring takes to loop. */
 private const val RING_PERIOD_MILLIS = 5000

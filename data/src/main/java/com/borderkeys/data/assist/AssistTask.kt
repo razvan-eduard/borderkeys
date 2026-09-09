@@ -43,6 +43,19 @@ enum class AssistTask(
      */
     val outputRatio: Float,
     val minOutputTokens: Int,
+    /**
+     * Whether splitting the input into chunks and running each one separately still produces a
+     * correct answer, joined back together.
+     *
+     * True for anything that transforms each sentence roughly on its own terms -- a translation,
+     * a correction, a register change -- where chunk two never needed to know what chunk one
+     * said. False for [SUMMARISE], where that is the entire point: three summaries of three
+     * chunks are three summaries, not one summary of the whole, and stitching them together
+     * would read as a summary that repeats itself once per chunk. False for [CUSTOM] too, for
+     * the same reason -- an instruction someone wrote by hand could easily be a summarising one,
+     * and nothing here can tell the two apart to know it should refuse chunking anyway.
+     */
+    val isChunkable: Boolean = false,
 ) {
     SUMMARISE(
         id = 1,
@@ -57,6 +70,7 @@ enum class AssistTask(
             "and its language unchanged. Reply with the rewritten text and nothing else.",
         outputRatio = 1.4f,
         minOutputTokens = 64,
+        isChunkable = true,
     ),
     CORRECT(
         id = 3,
@@ -65,6 +79,7 @@ enum class AssistTask(
             "Reply with the corrected text and nothing else.",
         outputRatio = 1.3f,
         minOutputTokens = 64,
+        isChunkable = true,
     ),
     TRANSLATE_TO_ENGLISH(
         id = 4,
@@ -72,6 +87,7 @@ enum class AssistTask(
             "Reply with the translation and nothing else.",
         outputRatio = 1.5f,
         minOutputTokens = 64,
+        isChunkable = true,
     ),
     TRANSLATE_TO_ROMANIAN(
         id = 5,
@@ -79,6 +95,7 @@ enum class AssistTask(
             "Reply with the translation and nothing else.",
         outputRatio = 1.5f,
         minOutputTokens = 64,
+        isChunkable = true,
     ),
 
     // The remaining four languages the application itself speaks. One entry per target rather
@@ -91,6 +108,7 @@ enum class AssistTask(
             "Reply with the translation and nothing else.",
         outputRatio = 1.5f,
         minOutputTokens = 64,
+        isChunkable = true,
     ),
     TRANSLATE_TO_SPANISH(
         id = 7,
@@ -98,6 +116,7 @@ enum class AssistTask(
             "Reply with the translation and nothing else.",
         outputRatio = 1.5f,
         minOutputTokens = 64,
+        isChunkable = true,
     ),
     TRANSLATE_TO_FRENCH(
         id = 8,
@@ -105,6 +124,7 @@ enum class AssistTask(
             "Reply with the translation and nothing else.",
         outputRatio = 1.5f,
         minOutputTokens = 64,
+        isChunkable = true,
     ),
     TRANSLATE_TO_ITALIAN(
         id = 9,
@@ -112,6 +132,7 @@ enum class AssistTask(
             "Reply with the translation and nothing else.",
         outputRatio = 1.5f,
         minOutputTokens = 64,
+        isChunkable = true,
     ),
 
     REWRITE_CASUAL(
@@ -120,6 +141,7 @@ enum class AssistTask(
             "meaning and its language unchanged. Reply with the rewritten text and nothing else.",
         outputRatio = 1.4f,
         minOutputTokens = 64,
+        isChunkable = true,
     ),
     REWRITE_DIRECT(
         id = 11,
@@ -127,6 +149,7 @@ enum class AssistTask(
             "and its language unchanged. Reply with the rewritten text and nothing else.",
         outputRatio = 1.4f,
         minOutputTokens = 64,
+        isChunkable = true,
     ),
 
     /**
@@ -144,6 +167,7 @@ enum class AssistTask(
             "out. Reply with the shortened text and nothing else.",
         outputRatio = 0.8f,
         minOutputTokens = 48,
+        isChunkable = true,
     ),
 
     /**
