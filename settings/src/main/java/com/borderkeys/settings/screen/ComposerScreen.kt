@@ -52,7 +52,7 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
     val themes = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
     val preferences by themes.preferences
-        .collectAsStateWithLifecycle(initialValue = KeyboardPreferences())
+        .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
     val update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit = { transform ->
         scope.launch { themes.updatePreferences(transform) }
     }
