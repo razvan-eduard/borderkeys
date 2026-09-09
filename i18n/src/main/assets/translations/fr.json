@@ -143,6 +143,8 @@
   "clipboard_clear_on_close_note": "Plus brutal que le minuteur au-dessus : tout ce qui n'est pas épinglé part dès que vous quittez le champ, copié il y a une seconde ou une heure. Pour un historique pendant l'écriture et aucun après.",
   "clipboard_days": "%s jours",
   "clipboard_delete": "Supprimer",
+  "clipboard_delete_after_use": "Supprimer cet élément après usage",
+  "clipboard_delete_after_use_note": "Seulement l'élément que vous venez de coller depuis la puce, et seulement s'il n'est pas épinglé -- le reste de l'historique reste intact. Pour un code ou un mot de passe transmis une seule fois : utilisé, puis disparu, plutôt que de rester dans l'historique jusqu'à ce que la minuterie ou une suppression manuelle le rattrape.",
   "clipboard_delete_everything_including_pinned": "Tout supprimer, y compris les éléments épinglés",
   "clipboard_empty": "Vide",
   "clipboard_expired_items_are_deleted_not_merely": "Les éléments expirés sont supprimés, pas seulement masqués. Les filtrer hors de la liste laisserait le texte dans la base de données, à la portée de tout ce qui mettrait la main sur le fichier.",

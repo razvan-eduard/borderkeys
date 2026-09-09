@@ -84,6 +84,14 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
             scope.launch { themes.updatePreferences { it.copy(clearClipboardOnClose = value) } }
         }
 
+        SwitchRow(
+            title = strings[Keys.CLIPBOARD_DELETE_AFTER_USE],
+            subtitle = strings[Keys.CLIPBOARD_DELETE_AFTER_USE_NOTE],
+            checked = preferences.clipboardDeleteAfterUse,
+        ) { value ->
+            scope.launch { themes.updatePreferences { it.copy(clipboardDeleteAfterUse = value) } }
+        }
+
         SettingsSectionCard(strings[Keys.CLIPBOARD_HOW_MANY_ITEMS]) {
             StepSlider(
                 label = strings.getString(

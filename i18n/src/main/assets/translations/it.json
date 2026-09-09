@@ -143,6 +143,8 @@
   "clipboard_clear_on_close_note": "Più brusco del timer qui sopra: tutto ciò che non è fissato se ne va appena lasci il campo, copiato un secondo o un'ora fa. Per avere una cronologia mentre scrivi e nessuna dopo.",
   "clipboard_days": "%s giorni",
   "clipboard_delete": "Elimina",
+  "clipboard_delete_after_use": "Elimina questo elemento dopo l'uso",
+  "clipboard_delete_after_use_note": "Solo l'elemento appena incollato dal chip, e solo se non è fissato -- il resto della cronologia resta intatto. Per un codice o una password consegnati una sola volta: usato, poi sparito, invece di restare nella cronologia finché non lo raggiunge il timer o un'eliminazione manuale.",
   "clipboard_delete_everything_including_pinned": "Elimina tutto, anche gli elementi fissati",
   "clipboard_empty": "Vuoto",
   "clipboard_expired_items_are_deleted_not_merely": "Gli elementi scaduti vengono eliminati, non solo nascosti. Filtrarli dall'elenco lascerebbe il testo nel database, alla portata di qualsiasi cosa mettesse le mani sul file.",

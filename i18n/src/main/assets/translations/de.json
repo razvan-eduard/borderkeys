@@ -143,6 +143,8 @@
   "clipboard_clear_on_close_note": "Gröber als der Zeitgeber darüber: alles Nichtangeheftete geht in dem Moment, in dem du das Feld verlässt, ob vor einer Sekunde oder vor einer Stunde kopiert. Für einen Verlauf beim Schreiben und keinen danach.",
   "clipboard_days": "%s Tage",
   "clipboard_delete": "Löschen",
+  "clipboard_delete_after_use": "Diesen Eintrag nach Gebrauch löschen",
+  "clipboard_delete_after_use_note": "Nur der Eintrag, den du gerade über den Chip eingefügt hast, und nur wenn er nicht angeheftet ist -- der Rest des Verlaufs bleibt unberührt. Für einen Code oder ein Passwort, das nur einmal weitergegeben wird: benutzt, dann weg, statt im Verlauf zu bleiben, bis der Timer oder ein manuelles Löschen es einholt.",
   "clipboard_delete_everything_including_pinned": "Alles löschen, auch Angeheftetes",
   "clipboard_empty": "Leer",
   "clipboard_expired_items_are_deleted_not_merely": "Abgelaufene Einträge werden gelöscht, nicht nur ausgeblendet. Sie bloß aus der Liste zu filtern hieße, den Text in der Datenbank liegen zu lassen — für alles, was an die Datei kommt.",

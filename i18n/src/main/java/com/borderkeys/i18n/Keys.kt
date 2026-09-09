@@ -157,6 +157,8 @@ object Keys {
     const val CLIPBOARD_CLEAR_ON_CLOSE_NOTE = "clipboard_clear_on_close_note"
     const val CLIPBOARD_DAYS = "clipboard_days"
     const val CLIPBOARD_DELETE = "clipboard_delete"
+    const val CLIPBOARD_DELETE_AFTER_USE = "clipboard_delete_after_use"
+    const val CLIPBOARD_DELETE_AFTER_USE_NOTE = "clipboard_delete_after_use_note"
     const val CLIPBOARD_DELETE_EVERYTHING_INCLUDING_PINNED = "clipboard_delete_everything_including_pinned"
     const val CLIPBOARD_EMPTY = "clipboard_empty"
     const val CLIPBOARD_EXPIRED_ITEMS_ARE_DELETED_NOT_MERELY = "clipboard_expired_items_are_deleted_not_merely"

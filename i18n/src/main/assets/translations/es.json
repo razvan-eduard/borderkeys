@@ -143,6 +143,8 @@
   "clipboard_clear_on_close_note": "Más tosco que el temporizador de arriba: todo lo no fijado se va en cuanto sales del campo, se copiara hace un segundo o hace una hora. Para tener historial mientras escribes y ninguno después.",
   "clipboard_days": "%s días",
   "clipboard_delete": "Eliminar",
+  "clipboard_delete_after_use": "Eliminar este elemento después de usarlo",
+  "clipboard_delete_after_use_note": "Solo el elemento que acabas de pegar desde el chip, y solo si no está fijado -- el resto del historial queda intacto. Para un código o contraseña que se entrega una sola vez: usado y luego desaparecido, en lugar de quedarse en el historial hasta que lo alcance el temporizador o un borrado manual.",
   "clipboard_delete_everything_including_pinned": "Eliminar todo, incluido lo fijado",
   "clipboard_empty": "Vacío",
   "clipboard_expired_items_are_deleted_not_merely": "Los elementos caducados se eliminan, no solo se ocultan. Filtrarlos de la lista dejaría el texto en la base de datos, al alcance de cualquier cosa que se hiciera con el archivo.",

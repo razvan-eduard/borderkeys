@@ -143,6 +143,8 @@
   "clipboard_clear_on_close_note": "Blunter than the timer above: everything unpinned goes the moment you leave the field, whether it was copied a second ago or an hour. For keeping a history while you write and none afterwards.",
   "clipboard_days": "%s days",
   "clipboard_delete": "Delete",
+  "clipboard_delete_after_use": "Delete this item after it is used",
+  "clipboard_delete_after_use_note": "Only the item you just pasted from the chip, and only if it is not pinned -- the rest of the history is untouched. For a code or password handed off once: used, then gone, rather than sitting in the history until its timer or a manual delete catches up with it.",
   "clipboard_delete_everything_including_pinned": "Delete everything, including pinned",
   "clipboard_empty": "Empty",
   "clipboard_expired_items_are_deleted_not_merely": "Expired items are deleted, not merely hidden. Filtering them out of the list would leave the text sitting in the database for anything that got hold of the file.",

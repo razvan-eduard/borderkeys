@@ -249,6 +249,20 @@ data class KeyboardPreferences(
     val clipboardSuggestionOnce: Boolean = true,
 
     /**
+     * Whether inserting the current clipboard item also deletes it from the history panel, if it
+     * is not pinned.
+     *
+     * Off by default, and separate from every other clipboard switch here: [clipboardSuggestionOnce]
+     * only withdraws the chip's *offer*, [clearClipboardAfterInsert] only empties the *system*
+     * clipboard, and the retention timer expires whatever is old regardless of whether it was
+     * ever used. This is the one that removes the row itself, and only that one row -- the rest
+     * of the history is untouched -- the moment the item is actually pasted. For a one-time code
+     * or a password copied to hand off once: used, then gone, rather than sitting in an encrypted
+     * table until its timer or a manual delete catches up with it.
+     */
+    val clipboardDeleteAfterUse: Boolean = false,
+
+    /**
      * Whether the clipboard history is emptied when the keyboard closes.
      *
      * Off, and a much blunter instrument than the retention timer beside it: everything

@@ -2400,6 +2400,13 @@ class BorderKeysService :
             clipboardManager?.setPrimaryClip(ClipData.newPlainText(null, ""))
             host?.suggestionStrip?.clipboardChip = null
         }
+        if (preferences.clipboardDeleteAfterUse) {
+            // By content, not by an id kept from wherever this text was captured -- this reads
+            // straight from the system clipboard, never from a row in the history table, so
+            // there is no id to have kept. A no-op if it was never remembered at all (history
+            // switched off) or is pinned -- deleteIfUnpinned already refuses both on its own.
+            scope.launch(Dispatchers.IO) { DataGraph.clipboard.deleteIfUnpinned(text) }
+        }
         refreshContextFromEditor()
         requestSuggestions()
     }

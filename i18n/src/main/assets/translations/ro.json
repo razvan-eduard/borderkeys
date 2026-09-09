@@ -143,6 +143,8 @@
   "clipboard_clear_on_close_note": "Mai brutal decât cronometrul de mai sus: tot ce nu e fixat dispare în clipa în care părăsești câmpul, fie că a fost copiat acum o secundă sau acum o oră. Pentru cine vrea istoric cât scrie și niciunul după.",
   "clipboard_days": "%s zile",
   "clipboard_delete": "Șterge",
+  "clipboard_delete_after_use": "Șterge acest item după ce e folosit",
+  "clipboard_delete_after_use_note": "Doar item-ul tocmai lipit din chip, și doar dacă nu e fixat -- restul istoricului rămâne neatins. Pentru un cod sau o parolă transmisă o singură dată: folosit, apoi dispărut, în loc să stea în istoric până îl ajunge timer-ul sau o ștergere manuală.",
   "clipboard_delete_everything_including_pinned": "Șterge tot, inclusiv elementele fixate",
   "clipboard_empty": "Gol",
   "clipboard_expired_items_are_deleted_not_merely": "Elementele expirate sunt șterse, nu doar ascunse. Dacă ar fi filtrate din listă, textul ar rămâne în baza de date la îndemâna oricui ar pune mâna pe fișier.",

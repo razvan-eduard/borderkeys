@@ -105,6 +105,25 @@ class ClipboardRepository internal constructor(
 
     suspend fun delete(id: Long) = dao.delete(id)
 
+    /**
+     * Deletes the entry matching [content], unless it is pinned. Returns whether it was deleted.
+     *
+     * For "forget this one after I used it" -- one item leaving the moment it is inserted,
+     * distinct from the timer ([purgeExpired]) and from the everything-unpinned sweep
+     * ([deleteUnpinned]) that runs when the keyboard closes. Looked up by content hash rather
+     * than an id threaded in from wherever the insert happened, because the entry a paste came
+     * from is not always known there -- the quick clipboard chip reads straight from the system
+     * clipboard, not from a row in this table.
+     */
+    suspend fun deleteIfUnpinned(content: String): Boolean {
+        val entry = dao.findByHash(contentHash(content)) ?: return false
+        if (entry.isPinned) {
+            return false
+        }
+        dao.delete(entry.id)
+        return true
+    }
+
     suspend fun deleteAll() = dao.deleteAll()
 
     /** Forgets every remembered image. Called when the images switch is turned off. */
