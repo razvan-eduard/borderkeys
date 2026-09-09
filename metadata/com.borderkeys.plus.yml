@@ -58,11 +58,25 @@ Repo: https://github.com/razvan-eduard/borderkeys.git
 # rather than quietly accepted.
 AllowedAPKSigningKeys: f49409d101891a6d5c7254168b083cc4d0772cda2448cc853e8e2f331b4e5321
 
-# No historical entries on purpose. Every tag up to and including v0.2.3 built this flavour with
-# the same applicationId as core, so a build of one of those tags would produce a package called
-# com.borderkeys and would be rejected against this file. The first entry belongs to the first
-# tag cut after the package was split.
-Builds: []
+# The vendored llama.cpp checkout (assist/src/main/cpp/third_party/llama.cpp) is a git
+# submodule, and this is the flavour that actually compiles it -- without this, the build
+# server's checkout leaves that directory empty and the native build fails on missing source.
+Submodules: true
+
+# No historical entries before this one, on purpose. Every tag up to and including v0.2.3 built
+# this flavour with the same applicationId as core, so a build of one of those tags would
+# produce a package called com.borderkeys and would be rejected against this file. This is the
+# first tag cut after the package was split (d64fc7c).
+Builds:
+  - versionName: 0.3.0
+    versionCode: 7
+    commit: v0.3.0
+    subdir: app
+    gradle:
+      - plus
+    ndk: 27.1.12297006
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
+CurrentVersion: 0.3.0
+CurrentVersionCode: 7

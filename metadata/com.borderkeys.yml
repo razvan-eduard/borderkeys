@@ -112,7 +112,17 @@ Builds:
       - core
     ndk: 27.1.12297006
 
+  # First tag cut after `plus` became its own applicationId (d64fc7c) -- see
+  # com.borderkeys.plus.yml's own note on why its Builds list starts here rather than earlier.
+  - versionName: 0.3.0
+    versionCode: 7
+    commit: v0.3.0
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
-CurrentVersion: 0.2.3
-CurrentVersionCode: 6
+CurrentVersion: 0.3.0
+CurrentVersionCode: 7
