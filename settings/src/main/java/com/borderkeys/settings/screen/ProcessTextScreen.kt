@@ -501,55 +501,90 @@ fun ProcessTextScreen(
                         versionSlide.snapTo(versionDirection.toFloat())
                         versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
                     }
-                    OutlinedTextField(
-                        value = textFieldValue,
-                        enabled = !busy,
-                        onValueChange = { value ->
-                            textFieldValue = value
-                            current = value.text
-                            if (!composer.isEmpty()) {
-                                composer.updateCurrent(value.text)
-                            }
-                        },
-                        placeholder = { Text(strings[Keys.COMPOSER_EMPTY]) },
-                        // A tone step above the card's own surface -- without it the field had
-                        // no fill of its own at all, only its outline, and read as the same
-                        // surface as the card around it rather than as a distinct box on it.
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        ),
+                    // The field's own box, sized to it and nothing wider -- so TopEnd below lands
+                    // on the field's actual rendered corner rather than on some outer padding's
+                    // edge. FIELD_TOP_GAP (up from the plain 8.dp every other side still uses)
+                    // is what keeps the badge sitting in front of the version rail or the title
+                    // row above from happening -- the badge rises into that space, not into text.
+                    Box(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(horizontal = FIELD_SIDE_GAP, vertical = 8.dp)
-                            .focusRequester(textFieldFocus)
-                            .onFocusChanged { isFocused = it.isFocused }
-                            // Left/right on the text itself steps through versions, the same
-                            // move as the arrows at the bottom of the box or picking a node on
-                            // the rail -- reaching either of those means looking away from what
-                            // was just written to find them.
-                            .swipeToChangeVersion { delta, released ->
-                                if (!released) {
-                                    // Live: the text follows the finger, capped at ±1 exactly at
-                                    // versionThresholdPx -- which is also where a commit below
-                                    // hands off to the rail.index effect above, so the two never
-                                    // visibly disagree about where the text already is.
-                                    versionSlide.snapTo((delta / versionThresholdPx).coerceIn(-1f, 1f))
-                                    return@swipeToChangeVersion
+                            .padding(start = FIELD_SIDE_GAP, end = FIELD_SIDE_GAP, top = FIELD_TOP_GAP, bottom = 8.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = textFieldValue,
+                            enabled = !busy,
+                            onValueChange = { value ->
+                                textFieldValue = value
+                                current = value.text
+                                if (!composer.isEmpty()) {
+                                    composer.updateCurrent(value.text)
                                 }
-                                if (delta <= -versionThresholdPx) {
-                                    goTo { composer.forward() }
-                                } else if (delta >= versionThresholdPx) {
-                                    goTo { composer.back() }
-                                } else {
-                                    // Released short of the threshold -- nothing navigated, so
-                                    // nothing but this eases the text back to where it started.
-                                    versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
+                            },
+                            placeholder = { Text(strings[Keys.COMPOSER_EMPTY]) },
+                            // A tone step above the card's own surface -- without it the field had
+                            // no fill of its own at all, only its outline, and read as the same
+                            // surface as the card around it rather than as a distinct box on it.
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                                .focusRequester(textFieldFocus)
+                                .onFocusChanged { isFocused = it.isFocused }
+                                // Left/right on the text itself steps through versions, the same
+                                // move as the arrows at the bottom of the box or picking a node on
+                                // the rail -- reaching either of those means looking away from what
+                                // was just written to find them.
+                                .swipeToChangeVersion { delta, released ->
+                                    if (!released) {
+                                        // Live: the text follows the finger, capped at ±1 exactly at
+                                        // versionThresholdPx -- which is also where a commit below
+                                        // hands off to the rail.index effect above, so the two never
+                                        // visibly disagree about where the text already is.
+                                        versionSlide.snapTo((delta / versionThresholdPx).coerceIn(-1f, 1f))
+                                        return@swipeToChangeVersion
+                                    }
+                                    if (delta <= -versionThresholdPx) {
+                                        goTo { composer.forward() }
+                                    } else if (delta >= versionThresholdPx) {
+                                        goTo { composer.back() }
+                                    } else {
+                                        // Released short of the threshold -- nothing navigated, so
+                                        // nothing but this eases the text back to where it started.
+                                        versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
+                                    }
                                 }
-                            }
-                            .offset(x = VERSION_TRANSITION_DISTANCE * versionSlide.value)
-                            .alpha(1f - kotlin.math.abs(versionSlide.value) * VERSION_TRANSITION_FADE),
-                    )
+                                .offset(x = VERSION_TRANSITION_DISTANCE * versionSlide.value)
+                                .alpha(1f - kotlin.math.abs(versionSlide.value) * VERSION_TRANSITION_FADE),
+                        )
+                        // Lifted half its own height above the field's border rather than set
+                        // inside its corner -- straddling the outline instead of the text means
+                        // FIELD_TOP_GAP alone keeps it clear of everything, with nothing needed
+                        // on the field's own internal padding, which nothing here can reach
+                        // without replacing OutlinedTextField's whole decoration.
+                        IconButton(
+                            enabled = current.isNotEmpty() && !busy,
+                            onClick = {
+                                val manager = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                    as? ClipboardManager
+                                manager?.setPrimaryClip(ClipData.newPlainText(null, current))
+                                notice = strings[Keys.ASSIST_COPY]
+                            },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = -COPY_BADGE_SIDE_INSET, y = -COPY_BADGE_LIFT)
+                                .size(COPY_BADGE_SIZE)
+                                .shadow(elevation = 2.dp, shape = CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape),
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.bk_action_copy_all),
+                                contentDescription = strings[Keys.ASSIST_COPY],
+                                modifier = Modifier.size(COPY_BADGE_ICON_SIZE),
+                            )
+                        }
+                    }
 
                     if (rail.size > 1) {
                         VersionRail(
@@ -782,25 +817,11 @@ fun ProcessTextScreen(
                         }
                     }
                 }
-                if (readOnly) {
-                    // Nowhere to write back to -- the selection came from a view that never
-                    // offered to accept a replacement, which is what read-only means here.
-                    // Copying is the whole of what this screen can hand back.
-                    IconButton(
-                        enabled = current.isNotEmpty() && !busy,
-                        onClick = {
-                            val manager = context.getSystemService(Context.CLIPBOARD_SERVICE)
-                                as? ClipboardManager
-                            manager?.setPrimaryClip(ClipData.newPlainText(null, current))
-                            notice = strings[Keys.ASSIST_COPY]
-                        },
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.bk_action_copy_all),
-                            contentDescription = strings[Keys.ASSIST_COPY],
-                        )
-                    }
-                } else {
+                // Read-only (nowhere to write back to -- the selection came from a view that
+                // never offered to accept a replacement) has no affirmative action of its own
+                // any more: Copy is the badge on the field itself now, available either way this
+                // screen was reached, so there is nothing read-only still needs a bar button for.
+                if (!readOnly) {
                     IconButton(
                         enabled = current.isNotEmpty() && !busy,
                         onClick = {
@@ -1167,6 +1188,25 @@ private fun SwipeUpHint(ringShift: Float, focused: Boolean, modifier: Modifier =
 /** The field's own side gap, in from the card -- smaller than it used to be, so the field itself
  *  reads as wider inside the same card rather than floating in a wide margin. */
 private val FIELD_SIDE_GAP = 12.dp
+
+/**
+ * Above the field, in place of the plain 8.dp every other side of it still uses -- room for
+ * [COPY_BADGE_LIFT] to rise into above the border without reaching the row above the field.
+ */
+private val FIELD_TOP_GAP = 22.dp
+
+/** The copy badge's own touch target -- smaller on purpose than the 48.dp default IconButton
+ *  every bar button below still uses, since this one sits on the field rather than in the bar
+ *  competing with those for room. */
+private val COPY_BADGE_SIZE = 30.dp
+
+private val COPY_BADGE_ICON_SIZE = 16.dp
+
+/** Half the badge's own size, so it straddles the field's border rather than sitting inside its
+ *  corner over the text -- the badge covers the border, never the content past it. */
+private val COPY_BADGE_LIFT = COPY_BADGE_SIZE / 2
+
+private val COPY_BADGE_SIDE_INSET = 6.dp
 
 /** 70% of [MaterialTheme.typography.labelLarge]'s own size, doubled -- 1.4x in total. */
 private const val SWIPE_HINT_SIZE_MULTIPLIER = 1.4f
