@@ -58,10 +58,11 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# The word lists the bundled dictionaries are compiled from. Counted from the Wortschatz Leipzig
-# news corpora, which are published under CC BY 4.0: the attribution that licence asks for is
-# here, in docs/licensing.md section 2.1, and in the About screen's source link. What is stored
-# is counts of words and word pairs, not the sentences they were counted from.
+# The word lists the bundled dictionaries are compiled from. Counted from Wortschatz Leipzig
+# corpora -- wikipedia, news and newscrawl, combined -- which are published under CC BY 4.0: the
+# attribution that licence asks for is here, in docs/licensing.md section 2.1, and in the About
+# screen's source link. What is stored is counts of words and word pairs, not the sentences they
+# were counted from.
 [[annotations]]
 path = "dictionaries/**"
 precedence = "aggregate"
