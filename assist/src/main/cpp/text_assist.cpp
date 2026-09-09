@@ -233,18 +233,42 @@ int32_t TextAssist::load(const char* path, int contextTokens, int threads) {
         return kErrContext;
     }
 
-    // Low temperature and a tight nucleus. Every task here is a transformation of text the user
-    // wrote -- summarise it, correct it, make it formal -- and none of them wants invention.
-    // Greedy would be defensible; a little sampling avoids the degenerate repetition that pure
-    // argmax falls into on small models.
+    // Low temperature and a tight nucleus by default. Every task here is a transformation of
+    // text the user wrote -- summarise it, correct it, make it formal -- and none of them wants
+    // invention. Greedy would be defensible; a little sampling avoids the degenerate repetition
+    // that pure argmax falls into on small models. Both are adjustable -- see setSamplingParams.
+    rebuildSampler();
+    return kOk;
+}
+
+void TextAssist::rebuildSampler() {
+    if (sampler_ != nullptr) {
+        llama_sampler_free(sampler_);
+        sampler_ = nullptr;
+    }
     llama_sampler_chain_params chainParams = llama_sampler_chain_default_params();
     sampler_ = llama_sampler_chain_init(chainParams);
-    llama_sampler_chain_add(sampler_, llama_sampler_init_top_p(0.9f, 1));
-    llama_sampler_chain_add(sampler_, llama_sampler_init_temp(0.3f));
+    llama_sampler_chain_add(sampler_, llama_sampler_init_top_p(topP_, 1));
+    llama_sampler_chain_add(sampler_, llama_sampler_init_temp(temperature_));
     // A fixed seed, so the same selection and the same action give the same answer. A user who
     // taps the action twice and gets two different rewrites has been given a slot machine.
+    // Unaffected by setSamplingParams -- temperature and top-p change how the model gambles,
+    // not whether the same gamble always lands the same way.
     llama_sampler_chain_add(sampler_, llama_sampler_init_dist(kSamplerSeed));
-    return kOk;
+}
+
+void TextAssist::setSamplingParams(float temperature, float topP) {
+    // Clamped rather than trusted: this crosses JNI from a stored preference. Out of either
+    // range, the request would not fail -- llama.cpp does not validate these -- it would just
+    // quietly produce garbage or nothing but the single most likely token, forever.
+    temperature_ = (temperature > 0.0f && temperature <= 2.0f) ? temperature : 0.3f;
+    topP_ = (topP > 0.0f && topP <= 1.0f) ? topP : 0.9f;
+    if (context_ == nullptr) {
+        // Not loaded yet. load() reads temperature_ and topP_ when it builds the chain, so
+        // there is nothing further to do until then.
+        return;
+    }
+    rebuildSampler();
 }
 
 void TextAssist::unload() {

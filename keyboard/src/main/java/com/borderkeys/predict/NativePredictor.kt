@@ -157,6 +157,12 @@ internal object NativePredictor {
      */
     external fun nativeSetLearningSpeed(handle: Long, speed: Float)
 
+    /**
+     * How much evidence an edit needs before it outranks a word spelled as typed. A multiplier;
+     * 1 is the calibrated default, below it corrects more readily, above it less.
+     */
+    external fun nativeSetCorrectionStrictness(handle: Long, scale: Float)
+
     /** Zero, or less, keeps every dictionary in play whatever the sentence looks like. */
     external fun nativeSetLanguageLock(
         handle: Long,

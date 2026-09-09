@@ -560,6 +560,7 @@ class BorderKeysService :
         engine.setLearningSpeed(
             KeyboardPreferences.learningSpeedFactor(preferences.learningSpeed),
         )
+        engine.setCorrectionStrictness(preferences.correctionStrictness)
         engine.setLanguageLock(
             KeyboardPreferences.languageLockEvidence(preferences.languageLock),
             KeyboardPreferences.languageLockStrict(preferences.languageLock),

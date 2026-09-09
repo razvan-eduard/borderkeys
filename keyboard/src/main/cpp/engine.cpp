@@ -6,6 +6,7 @@
 #include "gesture/shark2_decoder.hpp"
 
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -95,6 +96,14 @@ constexpr float kMaxUserBoost = 3.0f;
 // that counted as a correction would put every accented word behind whatever short word happens
 // to be more frequent.
 constexpr float kCorrectionSurcharge = 3.0f;
+
+// The range setCorrectionStrictness() clamps to. Below the low end an edit costs so little that
+// the correction strip starts second-guessing words that were spelled correctly; above the high
+// end almost nothing outbids a typo left exactly as typed. 1.0 is kEditPenalty and
+// kCorrectionSurcharge exactly as calibrated above -- this is a multiplier on both of them
+// together, not a third constant with its own reasoning.
+constexpr float kMinCorrectionStrictness = 0.5f;
+constexpr float kMaxCorrectionStrictness = 2.0f;
 
 // The log-probability a word gets when the personal dictionary is the only place it exists.
 // Scores from the user model cannot be derived from its own totals: a word confirmed forty
@@ -880,6 +889,14 @@ void Engine::setLearningSpeed(float speed) {
     learningSpeed_ = (speed > 8.0f) ? 8.0f : speed;
 }
 
+void Engine::setCorrectionStrictness(float scale) {
+    if (!(scale > 0.0f)) {
+        correctionStrictness_ = 1.0f;
+        return;
+    }
+    correctionStrictness_ = std::clamp(scale, kMinCorrectionStrictness, kMaxCorrectionStrictness);
+}
+
 float Engine::userBoostFor(const char* text, uint32_t length) const {
     if (userModel_.size() == 0 || text == nullptr || length == 0) {
         return 0.0f;
@@ -1065,7 +1082,7 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
     const float weight = normalisedWeight_[packIndex];
     const float weightLog = std::log(weight);
     const float editComponent = endpoint.cost > 0.0f
-        ? -(kEditPenalty * endpoint.cost + kCorrectionSurcharge)
+        ? -correctionStrictness_ * (kEditPenalty * endpoint.cost + kCorrectionSurcharge)
         : 0.0f;
     // A corrected endpoint has already spent its one claim on the user's intent: this many
     // edits reach this word. Completing past it charges nothing extra beyond kCompletionPenalty

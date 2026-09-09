@@ -365,6 +365,30 @@ data class KeyboardPreferences(
     val minCorrectionLength: Int = 3,
 
     /**
+     * How much evidence an edit needs before it outranks a word spelled exactly as typed.
+     *
+     * 1.0 is the engine's own calibrated default. Below it, a correction needs a smaller
+     * frequency gap to win -- more of what is typed gets corrected, including some that should
+     * not have been. Above it, the gap has to be bigger -- fewer corrections, and the ones that
+     * still happen are closer to certain. It does not change which words exist, only how
+     * cautious the strip is about preferring one spelling over another.
+     */
+    val correctionStrictness: Float = DEFAULT_CORRECTION_STRICTNESS,
+
+    /**
+     * How far the text assistant's model may wander from the single most likely next word.
+     *
+     * `plus` only -- read by [com.borderkeys.assist.TextAssistService], not by anything in this
+     * module. Kept here rather than in a separate store because it is a preference like any
+     * other on this screen, not model state: it survives across models and is applied to
+     * whichever one is loaded next.
+     */
+    val assistTemperature: Float = DEFAULT_ASSIST_TEMPERATURE,
+
+    /** The nucleus (top-p) the same model samples from. See [assistTemperature]. */
+    val assistTopP: Float = DEFAULT_ASSIST_TOP_P,
+
+    /**
      * Whether the keyboard's palette follows the phone's wallpaper instead of the theme's own
      * stored colours.
      *
@@ -396,6 +420,21 @@ data class KeyboardPreferences(
 ) {
     fun sanitised(): KeyboardPreferences = copy(
         minCorrectionLength = minCorrectionLength.coerceIn(MIN_CORRECTION_LENGTH, MAX_CORRECTION_LENGTH),
+        correctionStrictness = if (correctionStrictness > 0f) {
+            correctionStrictness.coerceIn(MIN_CORRECTION_STRICTNESS, MAX_CORRECTION_STRICTNESS)
+        } else {
+            DEFAULT_CORRECTION_STRICTNESS
+        },
+        assistTemperature = if (assistTemperature > 0f) {
+            assistTemperature.coerceIn(MIN_ASSIST_TEMPERATURE, MAX_ASSIST_TEMPERATURE)
+        } else {
+            DEFAULT_ASSIST_TEMPERATURE
+        },
+        assistTopP = if (assistTopP > 0f) {
+            assistTopP.coerceIn(MIN_ASSIST_TOP_P, MAX_ASSIST_TOP_P)
+        } else {
+            DEFAULT_ASSIST_TOP_P
+        },
         themeMode = if (themeMode == THEME_MODE_AUTO_SYSTEM) THEME_MODE_AUTO_SYSTEM else THEME_MODE_MANUAL,
         clipboardRetentionMinutes = clipboardRetentionMinutes.coerceIn(1, 60 * 24 * 30),
         clipboardMaxEntries = clipboardMaxEntries.coerceIn(1, 1000),
@@ -647,6 +686,21 @@ data class KeyboardPreferences(
         /** The range [minCorrectionLength] is clamped to. */
         const val MIN_CORRECTION_LENGTH = 1
         const val MAX_CORRECTION_LENGTH = 5
+
+        /** The range [correctionStrictness] is clamped to, and the value "Reset" restores. */
+        const val MIN_CORRECTION_STRICTNESS = 0.5f
+        const val MAX_CORRECTION_STRICTNESS = 2.0f
+        const val DEFAULT_CORRECTION_STRICTNESS = 1.0f
+
+        /** The range [assistTemperature] is clamped to, and the value "Reset" restores. */
+        const val MIN_ASSIST_TEMPERATURE = 0.1f
+        const val MAX_ASSIST_TEMPERATURE = 1.5f
+        const val DEFAULT_ASSIST_TEMPERATURE = 0.3f
+
+        /** The range [assistTopP] is clamped to, and the value "Reset" restores. */
+        const val MIN_ASSIST_TOP_P = 0.1f
+        const val MAX_ASSIST_TOP_P = 1.0f
+        const val DEFAULT_ASSIST_TOP_P = 0.9f
 
         /** [themeMode] values. */
         const val THEME_MODE_MANUAL = 0

@@ -32,6 +32,13 @@ internal object AssistNative {
      */
     external fun nativeLoad(handle: Long, path: String, contextTokens: Int, threads: Int): Int
 
+    /**
+     * Replaces the sampler's temperature and nucleus (top-p). Safe before or after [nativeLoad]
+     * -- see `TextAssist::setSamplingParams`'s own doc, in text_assist.hpp, for what each case
+     * does. Out-of-range values fall back to the built-in default rather than being rejected.
+     */
+    external fun nativeSetSamplingParams(handle: Long, temperature: Float, topP: Float)
+
     /** Frees the model. Called on the idle timeout, so a finished session costs nothing. */
     external fun nativeUnload(handle: Long)
 

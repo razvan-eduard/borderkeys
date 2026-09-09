@@ -58,6 +58,17 @@ public:
     int contextTokens() const { return contextTokens_; }
 
     /**
+     * Replaces the sampler's temperature and nucleus (top-p) with the given values, clamping
+     * anything out of range rather than rejecting it -- the caller is a stored preference, not a
+     * one-off argument, and a bad file should not mean requests silently do nothing.
+     *
+     * Safe to call before [load] (the values are simply remembered for when the chain is first
+     * built) or any time after (the chain is freed and rebuilt on the spot, no model reload).
+     * The fixed sampler seed is untouched either way -- see kSamplerSeed in text_assist.cpp.
+     */
+    void setSamplingParams(float temperature, float topP);
+
+    /**
      * Runs one instruction over one piece of text and returns the whole answer.
      *
      * Streaming is deliberately absent. The result is shown in a sheet with a Replace button
@@ -77,12 +88,19 @@ public:
 private:
     std::string applyChatTemplate(const char* instruction, const char* text) const;
 
+    /** Frees [sampler_] if set and builds a new chain from [temperature_] and [topP_]. */
+    void rebuildSampler();
+
     llama_model* model_ = nullptr;
     llama_context* context_ = nullptr;
     llama_sampler* sampler_ = nullptr;
     int contextTokens_ = 0;
     bool cancelRequested_ = false;
     bool running_ = false;
+    // Low temperature and a tight nucleus by default -- see the reasoning in text_assist.cpp,
+    // right where these two used to be the only values that existed.
+    float temperature_ = 0.3f;
+    float topP_ = 0.9f;
 };
 
 }  // namespace borderkeys

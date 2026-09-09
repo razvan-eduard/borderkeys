@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.AssistModelRepository
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.assist.KnownAssistModels
+import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LinkedText
@@ -55,10 +57,18 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val context = LocalContext.current
     val repository = remember { DataGraph.assistModels }
+    val themes = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
     val models by repository.models.collectAsStateWithLifecycle(initialValue = emptyList())
+    val preferences by themes.preferences.collectAsStateWithLifecycle(
+        initialValue = remember { themes.currentPreferences() },
+    )
     var importing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+
+    fun updatePreferences(transform: (KeyboardPreferences) -> KeyboardPreferences) {
+        scope.launch { themes.updatePreferences(transform) }
+    }
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -160,6 +170,62 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                     )
                 }
             }
+        }
+        SettingsSectionCard(strings[Keys.ASSISTANT_HOW_IT_CHOOSES_WORDS]) {
+            Text(
+                strings[Keys.ASSISTANT_TEMPERATURE],
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            Text(
+                "%.2f".format(preferences.assistTemperature),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+            Slider(
+                value = preferences.assistTemperature,
+                valueRange = KeyboardPreferences.MIN_ASSIST_TEMPERATURE..
+                    KeyboardPreferences.MAX_ASSIST_TEMPERATURE,
+                onValueChange = { value ->
+                    updatePreferences { it.copy(assistTemperature = value) }
+                },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            )
+            Explanation(strings[Keys.ASSISTANT_TEMPERATURE_NOTE])
+            Text(
+                strings[Keys.ASSISTANT_TOP_P],
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            Text(
+                "%.2f".format(preferences.assistTopP),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+            Slider(
+                value = preferences.assistTopP,
+                valueRange = KeyboardPreferences.MIN_ASSIST_TOP_P..
+                    KeyboardPreferences.MAX_ASSIST_TOP_P,
+                onValueChange = { value ->
+                    updatePreferences { it.copy(assistTopP = value) }
+                },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            )
+            Explanation(strings[Keys.ASSISTANT_TOP_P_NOTE])
+            Button(
+                onClick = {
+                    updatePreferences {
+                        it.copy(
+                            assistTemperature = KeyboardPreferences.DEFAULT_ASSIST_TEMPERATURE,
+                            assistTopP = KeyboardPreferences.DEFAULT_ASSIST_TOP_P,
+                        )
+                    }
+                },
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULTS]) }
+            Explanation(strings[Keys.COMMON_RESET_TO_DEFAULTS_NOTE])
         }
         SettingsSectionCard(strings[Keys.ASSISTANT_HOW_IT_RUNS]) {
             Explanation(

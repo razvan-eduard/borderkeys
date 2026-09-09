@@ -271,6 +271,15 @@ class PredictionEngine(
         }
     }
 
+    /** Applied whenever the preference changes, not only at start. See KeyboardPreferences. */
+    fun setCorrectionStrictness(scale: Float) {
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeSetCorrectionStrictness(current, scale)
+            }
+        }
+    }
+
     /**
      * How much one-sided evidence is wanted before words from other languages stop being
      * offered. Zero never stops offering them.

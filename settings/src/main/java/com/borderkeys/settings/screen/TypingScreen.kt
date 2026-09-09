@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -145,6 +146,32 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.CORRECTIONS_THE_USUAL_OBJECTION_TO_AUTOCORRECT_IS],
             )
+            Text(
+                strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS],
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            Text(
+                strings.getString(
+                    Keys.CORRECTIONS_TIMES_THE_DEFAULT,
+                    "%.1f".format(preferences.correctionStrictness),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+            Slider(
+                value = preferences.correctionStrictness,
+                valueRange = KeyboardPreferences.MIN_CORRECTION_STRICTNESS..
+                    KeyboardPreferences.MAX_CORRECTION_STRICTNESS,
+                onValueChange = { value ->
+                    update { it.copy(correctionStrictness = value) }
+                },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            )
+            Explanation(
+                strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS_NOTE],
+            )
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_BACKSPACE_PUTS_BACK_WHAT_YOU_TYPED],
                 subtitle = strings[Keys.CORRECTIONS_THE_BACKSPACE_STRAIGHT_AFTER_A_CORRECTION],
@@ -178,6 +205,11 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH_NOTE],
             )
+            Button(
+                onClick = { update { resetCorrectionDefaults(it) } },
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULTS]) }
+            Explanation(strings[Keys.COMMON_RESET_TO_DEFAULTS_NOTE])
         }
 
         // Swipe typing, folded in from what used to be its own screen. One row, so the card
@@ -228,4 +260,30 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/**
+ * [preferences] with every field this screen's suggestion and correction cards control put back
+ * to [KeyboardPreferences]'s own default -- theme, swipe, language and everything outside those
+ * cards untouched. Swipe has no reset of its own here: its two controls are a trail width that
+ * is really a theme choice and a live probe field, neither the kind of setting someone tunes
+ * past usefulness and needs a way back from the way the correction knobs above it are.
+ */
+private fun resetCorrectionDefaults(preferences: KeyboardPreferences): KeyboardPreferences {
+    val defaults = KeyboardPreferences()
+    return preferences.copy(
+        showSuggestionStrip = defaults.showSuggestionStrip,
+        clipboardSuggestion = defaults.clipboardSuggestion,
+        clipboardSuggestionOnce = defaults.clipboardSuggestionOnce,
+        suggestionCount = defaults.suggestionCount,
+        phraseSuggestions = defaults.phraseSuggestions,
+        autoCapitalise = defaults.autoCapitalise,
+        doubleSpacePeriod = defaults.doubleSpacePeriod,
+        spaceAfterPunctuation = defaults.spaceAfterPunctuation,
+        removeSpaceBeforePunctuation = defaults.removeSpaceBeforePunctuation,
+        autoCorrectOnSpace = defaults.autoCorrectOnSpace,
+        correctionStrictness = defaults.correctionStrictness,
+        revertCorrectionOnBackspace = defaults.revertCorrectionOnBackspace,
+        minCorrectionLength = defaults.minCorrectionLength,
+    )
 }

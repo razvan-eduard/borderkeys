@@ -213,6 +213,15 @@ public:
     void setLearningSpeed(float speed);
 
     /**
+     * How much evidence an edit needs before it outranks a word spelled as typed. 1.0 is the
+     * calibrated default (see kEditPenalty and kCorrectionSurcharge in engine.cpp); below 1.0
+     * a correction needs less of a frequency gap to win, above 1.0 it needs more. Clamped to
+     * [kMinCorrectionStrictness, kMaxCorrectionStrictness] -- past either end the strip either
+     * stops correcting almost anything or corrects almost anything typed.
+     */
+    void setCorrectionStrictness(float scale);
+
+    /**
      * How much one-sided evidence is wanted before the dictionaries for other languages stop
      * being searched. At or below zero they are always searched.
      */
@@ -338,6 +347,8 @@ private:
      */
     /** Multiplier on how fast the personal model gains ground. 1.0 is the default. */
     float learningSpeed_ = 1.0f;
+    /** Multiplier on kEditPenalty and kCorrectionSurcharge. 1.0 is the calibrated default. */
+    float correctionStrictness_ = 1.0f;
 
     int32_t userContext1_ = -1;
     /** The word before that one, in the personal model. -1 when there is none. */

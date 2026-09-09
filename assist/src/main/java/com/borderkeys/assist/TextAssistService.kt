@@ -190,6 +190,16 @@ class TextAssistService : Service() {
                 loadedModelName = model.displayName
             }
 
+            // Read fresh on every request rather than only at load time: this process outlives
+            // one settings change, and a slider dragged in Settings should be felt on the next
+            // action, not only after the ninety-second idle timeout has thrown the model out and
+            // something reloads it. Cheap regardless -- it only rebuilds the sampler chain, the
+            // same few hundred bytes every time, never the model.
+            val preferences = DataGraph.themes.currentPreferences()
+            AssistNative.nativeSetSamplingParams(
+                current, preferences.assistTemperature, preferences.assistTopP,
+            )
+
             val budget = task.outputTokenBudget(text.length)
             val status = IntArray(1)
             // Every task but one carries its whole instruction. The exception is assembled here

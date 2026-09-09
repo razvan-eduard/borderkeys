@@ -487,6 +487,15 @@ void nativeSetLearningSpeed(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jfl
     engine->setLearningSpeed(static_cast<float>(speed));
 }
 
+void nativeSetCorrectionStrictness(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
+                                   jfloat scale) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return;
+    }
+    engine->setCorrectionStrictness(static_cast<float>(scale));
+}
+
 void nativeSetLanguageLock(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jfloat minimum,
                            jboolean strict) {
     Engine* const engine = engineFrom(handle);
@@ -769,6 +778,8 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeLoadUserBigrams)},
     {"nativeSetLearningSpeed", "(JF)V",
      reinterpret_cast<void*>(nativeSetLearningSpeed)},
+    {"nativeSetCorrectionStrictness", "(JF)V",
+     reinterpret_cast<void*>(nativeSetCorrectionStrictness)},
     {"nativeSetLanguageLock", "(JFZ)V",
      reinterpret_cast<void*>(nativeSetLanguageLock)},
     {"nativeSetPhraseSuggestions", "(JZ)V",

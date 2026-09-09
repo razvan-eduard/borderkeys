@@ -55,6 +55,15 @@ jint nativeLoad(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring path, jint 
     return status;
 }
 
+void nativeSetSamplingParams(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jfloat temperature,
+                             jfloat topP) {
+    TextAssist* const assist = assistFrom(handle);
+    if (assist == nullptr) {
+        return;
+    }
+    assist->setSamplingParams(static_cast<float>(temperature), static_cast<float>(topP));
+}
+
 void nativeUnload(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
     TextAssist* const assist = assistFrom(handle);
     if (assist != nullptr) {
@@ -128,6 +137,7 @@ const JNINativeMethod kMethods[] = {
     {"nativeCreate", "()J", reinterpret_cast<void*>(nativeCreate)},
     {"nativeDestroy", "(J)V", reinterpret_cast<void*>(nativeDestroy)},
     {"nativeLoad", "(JLjava/lang/String;II)I", reinterpret_cast<void*>(nativeLoad)},
+    {"nativeSetSamplingParams", "(JFF)V", reinterpret_cast<void*>(nativeSetSamplingParams)},
     {"nativeUnload", "(J)V", reinterpret_cast<void*>(nativeUnload)},
     {"nativeIsLoaded", "(J)Z", reinterpret_cast<void*>(nativeIsLoaded)},
     {"nativeContextTokens", "(J)I", reinterpret_cast<void*>(nativeContextTokens)},
