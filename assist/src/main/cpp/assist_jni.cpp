@@ -85,10 +85,12 @@ jint nativeContextTokens(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
  * Runs one instruction and returns the answer, or null with a status in `outStatus[0]`.
  *
  * The status comes back through a caller-supplied array rather than a second call, so a failure
- * and its reason cannot be separated by another thread's request.
+ * and its reason cannot be separated by another thread's request. See `TextAssist::run`'s own
+ * doc for what `useRemainingContext` does to `maxOutputTokens`.
  */
 jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instruction, jstring text,
-                  jint maxOutputTokens, jboolean cleanFormatting, jintArray outStatus) {
+                  jint maxOutputTokens, jboolean useRemainingContext, jboolean cleanFormatting,
+                  jintArray outStatus) {
     TextAssist* const assist = assistFrom(handle);
     jint status = TextAssist::kErrArgument;
     auto report = [&]() {
@@ -114,7 +116,8 @@ jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instructi
     }
 
     std::string answer;
-    status = assist->run(instructionUtf, textUtf, maxOutputTokens, cleanFormatting == JNI_TRUE, &answer);
+    status = assist->run(instructionUtf, textUtf, maxOutputTokens, useRemainingContext == JNI_TRUE,
+                         cleanFormatting == JNI_TRUE, &answer);
 
     env->ReleaseStringUTFChars(text, textUtf);
     env->ReleaseStringUTFChars(instruction, instructionUtf);
@@ -141,7 +144,7 @@ const JNINativeMethod kMethods[] = {
     {"nativeUnload", "(J)V", reinterpret_cast<void*>(nativeUnload)},
     {"nativeIsLoaded", "(J)Z", reinterpret_cast<void*>(nativeIsLoaded)},
     {"nativeContextTokens", "(J)I", reinterpret_cast<void*>(nativeContextTokens)},
-    {"nativeRun", "(JLjava/lang/String;Ljava/lang/String;IZ[I)Ljava/lang/String;",
+    {"nativeRun", "(JLjava/lang/String;Ljava/lang/String;IZZ[I)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeRun)},
     {"nativeCancel", "(J)V", reinterpret_cast<void*>(nativeCancel)},
 };

@@ -78,9 +78,18 @@ public:
      * `cleanFormatting` gates the half of cleanResult's cleanup that can disagree with what was
      * actually asked for -- see that function's own doc for why a custom, user-written
      * instruction is the one case this needs to be off for.
+     *
+     * `maxOutputTokens` is a starting guess, from the caller's own length-based estimate. When
+     * `useRemainingContext` is true it is only a floor: once the prompt is tokenised, the exact
+     * number of tokens actually left in the context window is at least as large (a guess can
+     * only have asked for too little, never too much, or this call would already have been
+     * refused) and generation is allowed to run to that instead, so a guess that undershot what
+     * the answer needed cannot cut it off mid-sentence. When false, `maxOutputTokens` is the real
+     * stop -- see [com.borderkeys.data.assist.AssistTask.usesRemainingContext]'s own doc for
+     * which tasks want which.
      */
     int32_t run(const char* instruction, const char* text, int maxOutputTokens,
-                bool cleanFormatting, std::string* out);
+                bool useRemainingContext, bool cleanFormatting, std::string* out);
 
     /** Asks the current run to stop at the next token boundary. Safe from another thread. */
     void requestCancel() { cancelRequested_ = true; }
@@ -97,8 +106,8 @@ private:
     int contextTokens_ = 0;
     bool cancelRequested_ = false;
     bool running_ = false;
-    // Low temperature and a tight nucleus by default -- see the reasoning in text_assist.cpp,
-    // right where these two used to be the only values that existed.
+    // Low temperature and a tight nucleus by default -- see rebuildSampler's own reasoning in
+    // text_assist.cpp for why.
     float temperature_ = 0.3f;
     float topP_ = 0.9f;
 };

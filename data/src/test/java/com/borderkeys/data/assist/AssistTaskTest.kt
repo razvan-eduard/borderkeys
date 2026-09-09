@@ -108,4 +108,15 @@ class AssistTaskTest {
         val unchunkable = AssistTask.entries.filterNot { it.isChunkable }
         assertEquals(setOf(AssistTask.SUMMARISE, AssistTask.CUSTOM), unchunkable.toSet())
     }
+
+    @Test
+    fun `only the two tasks that must answer shorter than the input stay off the real ceiling`() {
+        // SUMMARISE and SHORTEN are correct only when the answer is shorter than what was given,
+        // so outputRatio's guess is the ceiling generation should actually stop at. Every other
+        // task -- including CUSTOM, where a handwritten instruction could ask for anything -- can
+        // legitimately need more room than a length-based guess predicted, so the real space left
+        // in the context window governs instead.
+        val boundedByRatio = AssistTask.entries.filterNot { it.usesRemainingContext }
+        assertEquals(setOf(AssistTask.SUMMARISE, AssistTask.SHORTEN), boundedByRatio.toSet())
+    }
 }

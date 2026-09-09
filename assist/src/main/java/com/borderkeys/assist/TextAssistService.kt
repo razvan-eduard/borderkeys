@@ -214,7 +214,10 @@ class TextAssistService : Service() {
             // type there, and the native cleanup exists to remove formatting nobody asked for --
             // not formatting the request asked for by name. See AssistNative.nativeRun's own doc.
             val cleanFormatting = task != AssistTask.CUSTOM
-            val answer = AssistNative.nativeRun(current, instruction, text, budget, cleanFormatting, status)
+            val answer = AssistNative.nativeRun(
+                current, instruction, text, budget, task.usesRemainingContext, cleanFormatting,
+                status,
+            )
             if (answer == null) {
                 replyWithError(reply, requestId, mapNativeStatus(status[0]))
                 return@post

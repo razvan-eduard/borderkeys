@@ -57,12 +57,18 @@ internal object AssistNative {
      * true for every built-in task -- see `TextAssist::cleanResult`'s own doc, in text_assist.cpp,
      * for why a custom instruction is the one case the native side's own formatting cleanup has
      * to stay out of.
+     *
+     * `maxOutputTokens` should be [com.borderkeys.data.assist.AssistTask.outputTokenBudget], and
+     * `useRemainingContext` should be the same task's `usesRemainingContext` -- see that
+     * property's own doc for which tasks want the real space left in the context window to
+     * govern generation instead of the length-based guess.
      */
     external fun nativeRun(
         handle: Long,
         instruction: String,
         text: String,
         maxOutputTokens: Int,
+        useRemainingContext: Boolean,
         cleanFormatting: Boolean,
         outStatus: IntArray,
     ): String?

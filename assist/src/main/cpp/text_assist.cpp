@@ -23,6 +23,17 @@ constexpr int kMinContextTokens = 512;
 constexpr int kMaxContextTokens = 8192;
 
 /**
+ * Left unclaimed when `run`'s `useRemainingContext` raises the output cap to the real space left
+ * in the window, rather than filling every last token of it.
+ *
+ * The prompt's own token count comes from two separate `llama_tokenize` calls (one to size the
+ * buffer, one to fill it) that are expected to agree but are not proven to by anything this file
+ * checks -- a small, fixed reserve is cheaper than a mismatch between them turning into a decode
+ * past the context's actual capacity.
+ */
+constexpr int kOutputSafetyMarginTokens = 16;
+
+/**
  * Fixed, so that the same selection and the same action give the same answer.
  *
  * A user who taps "correct this" twice and gets two different corrections has been handed a
@@ -411,7 +422,7 @@ std::string TextAssist::applyChatTemplate(const char* instruction, const char* t
 }
 
 int32_t TextAssist::run(const char* instruction, const char* text, int maxOutputTokens,
-                        bool cleanFormatting, std::string* out) {
+                        bool useRemainingContext, bool cleanFormatting, std::string* out) {
     if (out == nullptr || instruction == nullptr || text == nullptr) {
         return kErrArgument;
     }
@@ -447,6 +458,19 @@ int32_t TextAssist::run(const char* instruction, const char* text, int maxOutput
     if (needed + maxOutputTokens >= contextTokens_) {
         running_ = false;
         return kErrTooLong;
+    }
+    if (useRemainingContext) {
+        // maxOutputTokens arrived as a guess from the input's character count; needed is now the
+        // prompt's exact token count. The real remaining room can only be at least as large as
+        // that guess (the check just above already refused anything smaller), so raising the cap
+        // to it cannot admit a request that would otherwise have been refused -- it only stops a
+        // guess that undershot what the answer needed from cutting a correct answer off
+        // mid-sentence.
+        const int32_t remaining = contextTokens_ - static_cast<int32_t>(needed) -
+                                  kOutputSafetyMarginTokens;
+        if (remaining > maxOutputTokens) {
+            maxOutputTokens = remaining;
+        }
     }
 
     std::vector<llama_token> tokens(static_cast<size_t>(needed));

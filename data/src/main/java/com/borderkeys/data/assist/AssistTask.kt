@@ -38,8 +38,13 @@ enum class AssistTask(
     /**
      * How much longer than the input the answer is allowed to be, as a multiplier, and a floor.
      * A summary is shorter than its source; a translation is about the same length; a correction
-     * is almost exactly the same length. Bounding the output per task is what stops a small
-     * model from running to the end of the context window when it loses the thread.
+     * is almost exactly the same length.
+     *
+     * For [SUMMARISE] and [SHORTEN] this is the actual ceiling generation stops at -- less than
+     * the input is the correct answer for both, so a small model that loses the thread and keeps
+     * going needs a real stop that is not "however much room the context window has." For every
+     * other task [usesRemainingContext] is true instead, and this ratio only sizes the initial
+     * request; see that property's own doc for why.
      */
     val outputRatio: Float,
     val minOutputTokens: Int,
@@ -56,6 +61,22 @@ enum class AssistTask(
      * and nothing here can tell the two apart to know it should refuse chunking anyway.
      */
     val isChunkable: Boolean = false,
+    /**
+     * Whether the native side is free to let generation run up to the real space left in the
+     * model's context window, rather than stopping at [outputRatio]'s guess.
+     *
+     * [outputRatio] is a guess from the input's character count, and a guess can be wrong in
+     * either direction -- a translation into a language that expands, a formal rewrite that adds
+     * a clause, or a correction that fills in a missing word can all legitimately need more room
+     * than a length-based estimate predicted, and stopping there cuts a correct answer off
+     * mid-sentence rather than protecting against anything. True for those tasks: the real
+     * ceiling is `TextAssist::run`'s prompt token count subtracted from the context window, exact
+     * rather than guessed, so it is never smaller than the room [ChunkedAssistRunner] already
+     * reserved when it decided how big a chunk could be. False for [SUMMARISE] and [SHORTEN],
+     * where less than the input is what a correct answer looks like, so [outputRatio]'s guess is
+     * a deliberate ceiling rather than a truncation risk.
+     */
+    val usesRemainingContext: Boolean = false,
 ) {
     SUMMARISE(
         id = 1,
@@ -71,6 +92,7 @@ enum class AssistTask(
         outputRatio = 1.4f,
         minOutputTokens = 64,
         isChunkable = true,
+        usesRemainingContext = true,
     ),
     CORRECT(
         id = 3,
@@ -80,6 +102,7 @@ enum class AssistTask(
         outputRatio = 1.3f,
         minOutputTokens = 64,
         isChunkable = true,
+        usesRemainingContext = true,
     ),
     TRANSLATE_TO_ENGLISH(
         id = 4,
@@ -88,6 +111,7 @@ enum class AssistTask(
         outputRatio = 1.5f,
         minOutputTokens = 64,
         isChunkable = true,
+        usesRemainingContext = true,
     ),
     TRANSLATE_TO_ROMANIAN(
         id = 5,
@@ -96,6 +120,7 @@ enum class AssistTask(
         outputRatio = 1.5f,
         minOutputTokens = 64,
         isChunkable = true,
+        usesRemainingContext = true,
     ),
 
     // The remaining four languages the application itself speaks. One entry per target rather
@@ -109,6 +134,7 @@ enum class AssistTask(
         outputRatio = 1.5f,
         minOutputTokens = 64,
         isChunkable = true,
+        usesRemainingContext = true,
     ),
     TRANSLATE_TO_SPANISH(
         id = 7,
@@ -117,6 +143,7 @@ enum class AssistTask(
         outputRatio = 1.5f,
         minOutputTokens = 64,
         isChunkable = true,
+        usesRemainingContext = true,
     ),
     TRANSLATE_TO_FRENCH(
         id = 8,
@@ -125,6 +152,7 @@ enum class AssistTask(
         outputRatio = 1.5f,
         minOutputTokens = 64,
         isChunkable = true,
+        usesRemainingContext = true,
     ),
     TRANSLATE_TO_ITALIAN(
         id = 9,
@@ -133,6 +161,7 @@ enum class AssistTask(
         outputRatio = 1.5f,
         minOutputTokens = 64,
         isChunkable = true,
+        usesRemainingContext = true,
     ),
 
     REWRITE_CASUAL(
@@ -142,6 +171,7 @@ enum class AssistTask(
         outputRatio = 1.4f,
         minOutputTokens = 64,
         isChunkable = true,
+        usesRemainingContext = true,
     ),
     REWRITE_DIRECT(
         id = 11,
@@ -150,6 +180,7 @@ enum class AssistTask(
         outputRatio = 1.4f,
         minOutputTokens = 64,
         isChunkable = true,
+        usesRemainingContext = true,
     ),
 
     /**
@@ -180,10 +211,13 @@ enum class AssistTask(
     CUSTOM(
         id = 13,
         instruction = CUSTOM_PREFIX,
-        // No way to know what was asked for, so the same allowance a translation gets: enough
-        // for a longer answer, still bounded by the ceiling below.
+        // No way to know what was asked for, so the same starting allowance a translation gets --
+        // and, same as a translation, the real ceiling below governs what it can grow into, since
+        // a handwritten instruction ("make this twice as long") can need far more than any guess
+        // from the input's own length would give it.
         outputRatio = 1.5f,
         minOutputTokens = 64,
+        usesRemainingContext = true,
     ),
     ;
 
