@@ -13,6 +13,18 @@ package com.borderkeys.i18n
  * The text itself is never here. This file holds identifiers.
  */
 object Keys {
+    const val ABOUT_APP_CALENDAR_NOTE = "about_app_calendar_note"
+    const val ABOUT_APP_CALENDAR_TITLE = "about_app_calendar_title"
+    const val ABOUT_APP_COMMANDER_NOTE = "about_app_commander_note"
+    const val ABOUT_APP_COMMANDER_TITLE = "about_app_commander_title"
+    const val ABOUT_APP_EXPENSES_NOTE = "about_app_expenses_note"
+    const val ABOUT_APP_EXPENSES_TITLE = "about_app_expenses_title"
+    const val ABOUT_APP_HUB_NOTE = "about_app_hub_note"
+    const val ABOUT_APP_HUB_TITLE = "about_app_hub_title"
+    const val ABOUT_APP_NOTES_NOTE = "about_app_notes_note"
+    const val ABOUT_APP_NOTES_TITLE = "about_app_notes_title"
+    const val ABOUT_APP_VISION_NOTE = "about_app_vision_note"
+    const val ABOUT_APP_VISION_TITLE = "about_app_vision_title"
     const val ABOUT_COMMIT = "about_commit"
     const val ABOUT_EVERY_DEPENDENCY_AND_EVERY_ASSET_IS = "about_every_dependency_and_every_asset_is"
     const val ABOUT_FLAVOUR = "about_flavour"
@@ -20,6 +32,9 @@ object Keys {
     const val ABOUT_INFERENCE_USES_LLAMA_CPP_MIT_LICENSED = "about_inference_uses_llama_cpp_mit_licensed"
     const val ABOUT_LICENCE = "about_licence"
     const val ABOUT_OPEN_THE_SOURCE_REPOSITORY = "about_open_the_source_repository"
+    const val ABOUT_OTHER_APPS = "about_other_apps"
+    const val ABOUT_OTHER_APPS_NOTE = "about_other_apps_note"
+    const val ABOUT_OTHER_APPS_REPOSITORY = "about_other_apps_repository"
     const val ABOUT_PLUS_NOTE = "about_plus_note"
     const val ABOUT_PLUS_RELEASES = "about_plus_releases"
     const val ABOUT_PLUS_REPOSITORY = "about_plus_repository"

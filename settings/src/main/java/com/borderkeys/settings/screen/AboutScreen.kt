@@ -94,16 +94,52 @@ fun AboutScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.ABOUT_EVERY_DEPENDENCY_AND_EVERY_ASSET_IS],
             )
-            if (hasAssistant) {
         }
-        SettingsSectionCard(strings[Keys.ABOUT_TEXT_ASSISTANT]) {
+        // Only in the build that actually has it -- a note about what inference is licensed
+        // under would otherwise sit in the core build, next to a feature that build does not
+        // carry at all.
+        if (hasAssistant) {
+            SettingsSectionCard(strings[Keys.ABOUT_TEXT_ASSISTANT]) {
                 Explanation(
                     strings[Keys.ABOUT_INFERENCE_USES_LLAMA_CPP_MIT_LICENSED],
                 )
             }
         }
+        SettingsSectionCard(strings[Keys.ABOUT_OTHER_APPS]) {
+            Explanation(strings[Keys.ABOUT_OTHER_APPS_NOTE])
+            for (app in OTHER_APPS) {
+                SettingRow(strings[app.titleKey], strings[app.noteKey])
+            }
+            Button(
+                onClick = { open(context, VOXAPPS_REPO_URL) },
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            ) { Text(strings[Keys.ABOUT_OTHER_APPS_REPOSITORY]) }
+        }
     }
 }
+
+/** One row in the [OTHER_APPS] list -- the pair of keys [SettingRow] needs, and nothing else:
+ *  every one of these apps shares the one repository and the one link at the bottom of the
+ *  card, so there is nothing here to link to per app. */
+private data class OtherApp(val titleKey: String, val noteKey: String)
+
+/**
+ * The rest of the same author's free and open-source Android apps, one repository
+ * (github.com/razvan-eduard/VoxApps) for all of them. A fixed list rather than something read
+ * from that repository at build or run time: this application has no `INTERNET` permission and
+ * is not going to grow a reason to fetch a list of other applications over the network just to
+ * describe them here.
+ */
+private val OTHER_APPS = listOf(
+    OtherApp(Keys.ABOUT_APP_COMMANDER_TITLE, Keys.ABOUT_APP_COMMANDER_NOTE),
+    OtherApp(Keys.ABOUT_APP_NOTES_TITLE, Keys.ABOUT_APP_NOTES_NOTE),
+    OtherApp(Keys.ABOUT_APP_VISION_TITLE, Keys.ABOUT_APP_VISION_NOTE),
+    OtherApp(Keys.ABOUT_APP_EXPENSES_TITLE, Keys.ABOUT_APP_EXPENSES_NOTE),
+    OtherApp(Keys.ABOUT_APP_CALENDAR_TITLE, Keys.ABOUT_APP_CALENDAR_NOTE),
+    OtherApp(Keys.ABOUT_APP_HUB_TITLE, Keys.ABOUT_APP_HUB_NOTE),
+)
+
+private const val VOXAPPS_REPO_URL = "https://github.com/razvan-eduard/VoxApps"
 
 /**
  * Hands an address to whatever opens addresses.
