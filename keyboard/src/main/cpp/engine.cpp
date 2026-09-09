@@ -1067,6 +1067,16 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
     const float editComponent = endpoint.cost > 0.0f
         ? -(kEditPenalty * endpoint.cost + kCorrectionSurcharge)
         : 0.0f;
+    // A corrected endpoint has already spent its one claim on the user's intent: this many
+    // edits reach this word. Completing past it charges nothing extra beyond kCompletionPenalty
+    // for however many further characters get guessed -- so a frequent long relative of the
+    // corrected word (an inflected form, usually) routinely outscored the correction itself.
+    // "rasuns" reached "raspuns" at a real edit cost, then kept walking for free and surfaced
+    // "raspunsul" ahead of it; "saptea" reached "șapte" the same way and lost to "săptămânii".
+    // Both are the same shape: an uncertain correction stacked with an unspoken guess about
+    // what comes after it, outbidding the plain reading on frequency alone. A word typed clean
+    // still completes -- "car" finding "carte" costs no edit at all, so this never touches it.
+    const bool allowCompletion = endpoint.cost <= 0.0f;
 
     while (stackSize > 0) {
         if (visitBudget_ <= 0) {
@@ -1100,8 +1110,8 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
         // probes into two arrays is cheap and predictable; it is the price the structure
         // charges for its constant-time transitions, and it is bounded here by the visit budget
         // rather than by the size of the subtree.
-        if (frame.depth >= 12) {
-            continue;  // completions this long are noise, not help
+        if (!allowCompletion || frame.depth >= 12) {
+            continue;  // corrected endpoints stop at the word reached; long completions are noise
         }
         for (int symbol = 1; symbol <= alphabetSize && stackSize < 1024; ++symbol) {
             const int32_t child = trie.walk(frame.node, symbol);
