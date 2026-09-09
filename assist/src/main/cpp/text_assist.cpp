@@ -129,6 +129,35 @@ std::string unwrapWhole(const std::string& text, const std::string& open,
 }
 
 /**
+ * Removes a short label line a model prepends before the actual answer -- "Traducere:", seen
+ * verbatim, with the translation itself on the next line -- when nothing after it needs the
+ * label to make sense. The task already told the model what it is doing and the UI already
+ * names the button that was pressed; a model announcing the same thing a second time, in its
+ * own words, is the model narrating rather than answering, the same class of thing reasoning-tag
+ * stripping exists for above.
+ *
+ * Narrow on purpose, the same way [unwrapWhole] is: only the first line, and only a short one --
+ * a genuine first sentence that happens to contain a colon (a time, a ratio, direct speech) runs
+ * on past forty characters or is the whole answer with nothing after the newline, either of
+ * which leaves it alone.
+ */
+std::string stripLeadingLabel(const std::string& text) {
+    const size_t newline = text.find('\n');
+    if (newline == std::string::npos || newline == 0) {
+        return text;
+    }
+    const std::string firstLine = trimmed(text.substr(0, newline));
+    if (firstLine.empty() || firstLine.size() > 40 || firstLine.back() != ':') {
+        return text;
+    }
+    const std::string rest = trimmed(text.substr(newline + 1));
+    if (rest.empty()) {
+        return text;
+    }
+    return rest;
+}
+
+/**
  * Turns whatever a small instruction-tuned model actually generated into the answer a task
  * asked for.
  *
@@ -157,6 +186,11 @@ std::string cleanResult(const std::string& raw, bool cleanFormatting) {
     if (!cleanFormatting) {
         return text;
     }
+    // Ahead of the fence and quote stripping below: a labelled preamble is often followed by
+    // the answer wrapped in one of those too ("Traducere:\n\"...\"", seen verbatim), and the
+    // label has to come off first for what is left to be the plain wrapped answer those steps
+    // already know how to handle.
+    text = stripLeadingLabel(text);
     // A plain-text answer to "translate this" or "correct this" is never legitimately fenced --
     // there is no task here whose real answer starts and ends with three backticks -- so this
     // one is removed unconditionally.
