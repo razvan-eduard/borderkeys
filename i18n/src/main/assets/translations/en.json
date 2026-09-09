@@ -213,6 +213,7 @@
   "composer_settings_none": "No buttons. Insert is drawn anyway, or the box would have no way out but the cross.",
   "composer_settings_saved": "Kept instructions",
   "composer_settings_saved_note": "Written in the box and kept after they worked. The name is what fits on a button; the instruction under it is what is sent.",
+  "composer_share": "Share",
   "composer_swipe_hint": "Swipe up for keyboard",
   "composer_title": "Draft",
   "composer_working_correct": "Correcting…",

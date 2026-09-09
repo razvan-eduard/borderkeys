@@ -227,6 +227,7 @@ object Keys {
     const val COMPOSER_SETTINGS_NONE = "composer_settings_none"
     const val COMPOSER_SETTINGS_SAVED = "composer_settings_saved"
     const val COMPOSER_SETTINGS_SAVED_NOTE = "composer_settings_saved_note"
+    const val COMPOSER_SHARE = "composer_share"
     const val COMPOSER_SWIPE_HINT = "composer_swipe_hint"
     const val COMPOSER_TITLE = "composer_title"
     const val COMPOSER_WORKING_CORRECT = "composer_working_correct"

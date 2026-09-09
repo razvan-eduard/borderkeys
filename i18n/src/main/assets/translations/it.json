@@ -213,6 +213,7 @@
   "composer_settings_none": "Nessun pulsante. Inserisci viene disegnato lo stesso, altrimenti il riquadro non avrebbe altra uscita che la croce.",
   "composer_settings_saved": "Istruzioni conservate",
   "composer_settings_saved_note": "Scritte nel riquadro e conservate dopo aver funzionato. Il nome è ciò che sta su un pulsante; l’istruzione sotto è ciò che viene inviato.",
+  "composer_share": "Condividi",
   "composer_swipe_hint": "Scorri verso l'alto per la tastiera",
   "composer_title": "Bozza",
   "composer_working_correct": "Correzione in corso…",

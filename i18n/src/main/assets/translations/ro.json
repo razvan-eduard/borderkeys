@@ -213,6 +213,7 @@
   "composer_settings_none": "Niciun buton. Inserarea se desenează oricum, altfel caseta nu ar avea altă ieșire decât crucea.",
   "composer_settings_saved": "Instrucțiuni păstrate",
   "composer_settings_saved_note": "Scrise în casetă și păstrate după ce au funcționat. Numele este ce încape pe buton; instrucțiunea de dedesubt este ce se trimite.",
+  "composer_share": "Distribuie",
   "composer_swipe_hint": "Glisează în sus pentru tastatură",
   "composer_title": "Ciornă",
   "composer_working_correct": "Se corectează…",

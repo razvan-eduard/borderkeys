@@ -213,6 +213,7 @@
   "composer_settings_none": "Aucun bouton. Insérer est dessiné quand même, sinon la zone n’aurait que la croix pour sortie.",
   "composer_settings_saved": "Consignes gardées",
   "composer_settings_saved_note": "Écrites dans la zone et gardées après avoir marché. Le nom est ce qui tient sur un bouton ; la consigne en dessous est ce qui est envoyé.",
+  "composer_share": "Partager",
   "composer_swipe_hint": "Glissez vers le haut pour le clavier",
   "composer_title": "Brouillon",
   "composer_working_correct": "Correction en cours…",

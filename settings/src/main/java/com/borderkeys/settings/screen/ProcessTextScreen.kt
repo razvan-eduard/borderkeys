@@ -822,6 +822,26 @@ fun ProcessTextScreen(
                         )
                     }
                 }
+                // Its own button rather than folded into Copy or Insert: sharing hands the text
+                // to another app entirely, neither the clipboard round trip Copy is nor the
+                // "send this screen's answer back to where the selection came from" Insert is,
+                // and available either way this screen was reached -- read-only or not, there is
+                // always somewhere else on the phone the current text could usefully go.
+                IconButton(
+                    enabled = current.isNotEmpty() && !busy,
+                    onClick = {
+                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, current)
+                        }
+                        context.startActivity(Intent.createChooser(sendIntent, null))
+                    },
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.bk_composer_share),
+                        contentDescription = strings[Keys.COMPOSER_SHARE],
+                    )
+                }
                 IconButton(onClick = { goTo { composer.forward() } }, enabled = rail.canForward) {
                     Icon(
                         painter = painterResource(R.drawable.bk_composer_forward),

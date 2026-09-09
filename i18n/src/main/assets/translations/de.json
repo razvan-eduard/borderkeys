@@ -213,6 +213,7 @@
   "composer_settings_none": "Keine Schaltflächen. Einfügen wird trotzdem gezeichnet, sonst hätte das Feld nur das Kreuz als Ausgang.",
   "composer_settings_saved": "Behaltene Anweisungen",
   "composer_settings_saved_note": "Im Feld geschrieben und behalten, nachdem sie funktioniert haben. Der Name ist, was auf eine Schaltfläche passt; die Anweisung darunter ist, was gesendet wird.",
+  "composer_share": "Teilen",
   "composer_swipe_hint": "Nach oben wischen für die Tastatur",
   "composer_title": "Entwurf",
   "composer_working_correct": "Wird korrigiert…",
