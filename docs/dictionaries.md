@@ -9,9 +9,13 @@ A language pack is a word list with frequencies, plus the pairs those words appe
 into the `.bkd` format. Nothing about it is learned or trained. The whole quality of the
 keyboard's suggestions is the quality of those counts.
 
-The two dictionaries that ship with the application are **starters**: about a thousand words
-each, written in this repository so their licence is this project's licence. They are enough to
-type with and they are not enough to be good. This is how to replace them.
+The six dictionaries that ship with the application (`en_US`, `ro_RO`, `de_DE`, `es_ES`, `fr_FR`,
+`it_IT`) are built from combined Wortschatz Leipzig corpora (wikipedia, news, and newscrawl
+together, not one genre alone -- a single-genre cut was found to be missing everyday words) via
+`tools/make_pack.py --corpus`, 90,000 to 120,000 words each. What each one actually used, and its
+licence, is recorded in `docs/licensing.md` section 2 rather than here, so there is one place to
+check rather than two that can disagree. This document is about replacing or adding to them, not
+about what currently ships.
 
 ## The one command
 
@@ -86,9 +90,9 @@ python3 tools/make_pack.py --wordlist ro_words.txt --tag ro-RO --out ro_RO.bkd
 ## Size
 
 `--max-words` defaults to 120,000 and `--min-count` to 3. A 120,000-word pack with 200,000
-n-grams is a few megabytes, which is fine for a pack the user imports and too much for several
-bundled in an APK. The bundled starters are small on purpose; anything larger belongs on the
-device rather than in the download.
+n-grams is a few megabytes -- what the six bundled dictionaries actually are, one to a few
+megabytes each. Larger than that, built from a bigger or less aggressively cut corpus, belongs on
+the device as an imported pack rather than bundled into every install of the application.
 
 ## Shipping one with the application
 
