@@ -76,6 +76,10 @@ internal object AssistNative {
      * `useRemainingContext` should be the task's `usesRemainingContext` -- see that property's
      * own doc for which tasks want the real space left in the context window to govern
      * generation instead of that budget.
+     *
+     * `reuseSharedPrefix` should be true only for a chunk after the first within one
+     * [com.borderkeys.assist.ChunkedAssistRunner] job -- see `TextAssist::run`'s own doc, in
+     * text_assist.hpp, for what it changes about how the prompt is decoded.
      */
     external fun nativeRun(
         handle: Long,
@@ -85,6 +89,7 @@ internal object AssistNative {
         minOutputTokens: Int,
         maxOutputTokensCeiling: Int,
         useRemainingContext: Boolean,
+        reuseSharedPrefix: Boolean,
         cleanFormatting: Boolean,
         outStatus: IntArray,
         outTruncated: BooleanArray,

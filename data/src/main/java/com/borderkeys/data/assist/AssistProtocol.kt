@@ -64,6 +64,15 @@ object AssistProtocol {
      */
     const val KEY_INSTRUCTION = "instruction"
 
+    /**
+     * Keyboard to service, on an MSG_RUN: true for a chunk after the first within one
+     * ChunkedAssistRunner job, telling the service it may decode against whatever the previous
+     * request left in the model's memory instead of clearing it first -- see
+     * `TextAssist::run`'s `reuseSharedPrefix` doc, in text_assist.hpp, for what that means and
+     * why it is safe. Absent (read as false) for every other request.
+     */
+    const val KEY_CONTINUE_JOB = "continue_job"
+
     // ---- errors ---------------------------------------------------------------------------
     //
     // Every one of these is a sentence the user can be shown. A failure that reaches the sheet

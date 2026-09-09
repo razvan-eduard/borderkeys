@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 struct llama_model;
 struct llama_context;
@@ -23,6 +24,11 @@ namespace borderkeys {
  * one answer, and the model goes away again.
  *
  * Not thread safe. One request at a time, from the service's worker thread.
+ *
+ * One exception to "no concept of a conversation": [run]'s `reuseSharedPrefix` lets consecutive
+ * calls share the part of the prompt neither one needed to recompute -- see [run]'s own doc. This
+ * is not state carried between actions; it is one action's own chunks of one long selection,
+ * decided entirely by the caller.
  */
 class TextAssist {
 public:
@@ -103,10 +109,17 @@ public:
      * a reason other than the model itself choosing to end the answer -- exhausting the token
      * budget, or [requestCancel]. Left untouched on every other return, since only a [kOk] answer
      * is something a truncation flag describes.
+     *
+     * `reuseSharedPrefix` is true only for a chunk after the first within one
+     * [com.borderkeys.assist.ChunkedAssistRunner] job -- see this class's own doc for what it
+     * changes about how the prompt is decoded, and [com.borderkeys.assist.ChunkedAssistRunner]'s
+     * for why chunks of one job are the one case two requests may share anything of each other's
+     * state at all.
      */
     int32_t run(const char* instruction, const char* text, float outputRatio,
                 int minOutputTokens, int maxOutputTokensCeiling, bool useRemainingContext,
-                bool cleanFormatting, std::string* out, bool* outTruncated);
+                bool reuseSharedPrefix, bool cleanFormatting, std::string* out,
+                bool* outTruncated);
 
     /** Asks the current run to stop at the next token boundary. Safe from another thread. */
     void requestCancel() { cancelRequested_ = true; }
@@ -124,6 +137,13 @@ private:
     float charsPerToken_ = 0.0f;
     bool cancelRequested_ = false;
     bool running_ = false;
+    // The exact tokens the context's memory currently holds as a prompt, in the positions
+    // decoding them originally put them at -- empty whenever that is not true of anything in the
+    // memory (nothing loaded yet, or the last attempt to establish it failed partway through).
+    // The one thing run's reuseSharedPrefix compares a new prompt against; see that parameter's
+    // own doc and its implementation in text_assist.cpp for why emptying this before a decode
+    // attempt and only restoring it after that attempt succeeds is what keeps it trustworthy.
+    std::vector<int32_t> lastPromptTokens_;
     // Low temperature and a tight nucleus by default -- see rebuildSampler's own reasoning in
     // text_assist.cpp for why.
     float temperature_ = 0.3f;

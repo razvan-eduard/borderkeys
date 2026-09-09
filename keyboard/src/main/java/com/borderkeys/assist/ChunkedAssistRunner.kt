@@ -22,6 +22,13 @@ import com.borderkeys.data.assist.AssistTask
  * results and chunked ones would have to arbitrate between two things claiming the same reply,
  * which is a problem this avoids by being the only thing that talks to the client. Every request
  * -- long or short, chunked or not -- goes through [run].
+ *
+ * A chunk after the first tells the service it may decode against whatever memory the previous
+ * chunk left rather than starting over (see [dispatch]'s `continueJob`), since consecutive chunks
+ * of one job share a prompt prefix byte for byte -- the same task's fixed instruction and
+ * template wrapper, nothing about either chunk's own text. This does not change what a chunk's
+ * answer can be transformed from: the pieces still never see each other's actual content, only
+ * the same fixed words every chunk of every job of that task starts from.
  */
 class ChunkedAssistRunner(private val client: AssistClient) {
 
@@ -168,8 +175,11 @@ class ChunkedAssistRunner(private val client: AssistClient) {
     }
 
     private fun dispatch(current: Job): Boolean {
+        // Every chunk after the first shares this job's task and instruction with the one
+        // before it -- the one case two requests are allowed to share anything of each other's
+        // state at all. See AssistClient.run's continueJob doc.
         val requestId = client.run(current.task, current.chunks[current.nextIndex],
-                                   current.instruction)
+                                   current.instruction, continueJob = current.nextIndex > 0)
         if (requestId < 0) {
             return false
         }

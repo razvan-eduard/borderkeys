@@ -154,6 +154,7 @@ class TextAssistService : Service() {
         val task = AssistTask.fromId(data.getInt(AssistProtocol.KEY_TASK))
         val text = data.getString(AssistProtocol.KEY_TEXT).orEmpty()
         val written = data.getString(AssistProtocol.KEY_INSTRUCTION).orEmpty()
+        val continueJob = data.getBoolean(AssistProtocol.KEY_CONTINUE_JOB)
 
         if (task == null || text.isEmpty()) {
             replyWithError(reply, requestId, AssistProtocol.ERROR_FAILED)
@@ -227,8 +228,8 @@ class TextAssistService : Service() {
             val cleanFormatting = task != AssistTask.CUSTOM
             val answer = AssistNative.nativeRun(
                 current, instruction, text, task.outputRatio, task.minOutputTokens,
-                AssistTask.MAX_OUTPUT_TOKENS, task.usesRemainingContext, cleanFormatting,
-                status, truncatedOut,
+                AssistTask.MAX_OUTPUT_TOKENS, task.usesRemainingContext, continueJob,
+                cleanFormatting, status, truncatedOut,
             )
             if (answer == null) {
                 replyWithError(reply, requestId, mapNativeStatus(status[0]))

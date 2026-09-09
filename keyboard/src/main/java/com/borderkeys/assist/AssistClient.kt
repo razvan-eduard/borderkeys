@@ -145,8 +145,12 @@ class AssistClient(private val context: Context) {
      *
      * The id comes back with the answer, so a result arriving after the user has already closed
      * the sheet and started something else can be discarded rather than shown.
+     *
+     * `continueJob` should be true only for a chunk after the first within one
+     * [ChunkedAssistRunner] job -- see [AssistProtocol.KEY_CONTINUE_JOB]'s own doc for what it
+     * lets the service do and why chunks of one job are the one case this is safe for.
      */
-    fun run(task: AssistTask, text: String, instruction: String = ""): Int {
+    fun run(task: AssistTask, text: String, instruction: String = "", continueJob: Boolean = false): Int {
         if (text.isEmpty() || text.length > AssistProtocol.MAX_SELECTION_CHARS) {
             return -1
         }
@@ -170,6 +174,7 @@ class AssistClient(private val context: Context) {
                 if (instruction.isNotEmpty()) {
                     putString(AssistProtocol.KEY_INSTRUCTION, instruction)
                 }
+                putBoolean(AssistProtocol.KEY_CONTINUE_JOB, continueJob)
             }
         }
         dispatch(message)

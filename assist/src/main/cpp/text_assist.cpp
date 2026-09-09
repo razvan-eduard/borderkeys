@@ -384,6 +384,8 @@ void TextAssist::unload() {
     }
     contextTokens_ = 0;
     charsPerToken_ = 0.0f;
+    // Whatever this claimed about the context's memory is meaningless once that memory is gone.
+    lastPromptTokens_.clear();
 }
 
 std::string TextAssist::applyChatTemplate(const char* instruction, const char* text) const {
@@ -446,7 +448,8 @@ std::string TextAssist::applyChatTemplate(const char* instruction, const char* t
 
 int32_t TextAssist::run(const char* instruction, const char* text, float outputRatio,
                         int minOutputTokens, int maxOutputTokensCeiling, bool useRemainingContext,
-                        bool cleanFormatting, std::string* out, bool* outTruncated) {
+                        bool reuseSharedPrefix, bool cleanFormatting, std::string* out,
+                        bool* outTruncated) {
     if (out == nullptr || instruction == nullptr || text == nullptr) {
         return kErrArgument;
     }
@@ -513,17 +516,48 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
         return kErrTokenise;
     }
 
-    // A fresh window for every request. This process may serve several actions before its idle
-    // timeout, and leaving the previous request's tokens in the cache would let one selection
-    // influence the answer to the next -- which is both wrong and a small information leak
-    // between two things the user thought were separate.
-    llama_memory_clear(llama_get_memory(context_), true);
+    // A fresh window for every request, unless the caller has said this one may share the start
+    // of the previous request's prompt: reuseSharedPrefix is true only for a chunk after the
+    // first within one ChunkedAssistRunner job, where the shared start is the same task's fixed
+    // instruction and template wrapper, identical for every chunk of that job by construction --
+    // never another selection's text, and never another action's. Leaving an unrelated request's
+    // tokens in the cache would let one selection influence the answer to the next, which is
+    // both wrong and a small information leak between two things the user thought were separate;
+    // this reuses only what was never that in the first place.
+    size_t commonLen = 0;
+    if (reuseSharedPrefix && !lastPromptTokens_.empty()) {
+        // Capped one short of the whole prompt: sampling the first generated token needs logits
+        // from a decode that actually just happened, and reusing every last token would leave
+        // nothing freshly decoded to produce them from.
+        const size_t limit = std::min(lastPromptTokens_.size(), tokens.size() - 1);
+        while (commonLen < limit && lastPromptTokens_[commonLen] == tokens[commonLen]) {
+            ++commonLen;
+        }
+    }
+    // Invalidated the instant the memory is about to change -- restored below only once the
+    // decode it would describe has actually succeeded, so a failure here never leaves this
+    // claiming content a later request could wrongly try to build on.
+    lastPromptTokens_.clear();
 
-    llama_batch batch = llama_batch_get_one(tokens.data(), static_cast<int32_t>(tokens.size()));
+    llama_memory_t memory = llama_get_memory(context_);
+    if (commonLen > 0) {
+        // Keeps [0, commonLen) -- the shared prefix -- and drops everything from there on: the
+        // rest of the previous prompt that did not match this one, and whatever was generated
+        // after it. Positions for what gets decoded next are assigned automatically by
+        // llama_decode, continuing from wherever the memory now actually ends -- exactly
+        // commonLen, once this call returns.
+        llama_memory_seq_rm(memory, 0, static_cast<llama_pos>(commonLen), -1);
+    } else {
+        llama_memory_clear(memory, true);
+    }
+
+    llama_batch batch = llama_batch_get_one(tokens.data() + commonLen,
+                                            static_cast<int32_t>(tokens.size() - commonLen));
     if (llama_decode(context_, batch) != 0) {
         running_ = false;
         return kErrDecode;
     }
+    lastPromptTokens_.assign(tokens.begin(), tokens.end());
 
     char piece[256];
     llama_token next = 0;

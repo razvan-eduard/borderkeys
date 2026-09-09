@@ -97,12 +97,12 @@ jfloat nativeCharsPerToken(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
  * says. Both travel back through arrays rather than a second call, so neither can be separated
  * from the request that produced it. See `TextAssist::run`'s own doc for how `outputRatio`,
  * `minOutputTokens`, `maxOutputTokensCeiling` and `useRemainingContext` together decide the
- * token budget.
+ * token budget, and for `reuseSharedPrefix`.
  */
 jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instruction, jstring text,
                   jfloat outputRatio, jint minOutputTokens, jint maxOutputTokensCeiling,
-                  jboolean useRemainingContext, jboolean cleanFormatting, jintArray outStatus,
-                  jbooleanArray outTruncated) {
+                  jboolean useRemainingContext, jboolean reuseSharedPrefix,
+                  jboolean cleanFormatting, jintArray outStatus, jbooleanArray outTruncated) {
     TextAssist* const assist = assistFrom(handle);
     jint status = TextAssist::kErrArgument;
     bool truncated = false;
@@ -135,7 +135,8 @@ jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instructi
     std::string answer;
     status = assist->run(instructionUtf, textUtf, static_cast<float>(outputRatio), minOutputTokens,
                          maxOutputTokensCeiling, useRemainingContext == JNI_TRUE,
-                         cleanFormatting == JNI_TRUE, &answer, &truncated);
+                         reuseSharedPrefix == JNI_TRUE, cleanFormatting == JNI_TRUE, &answer,
+                         &truncated);
 
     env->ReleaseStringUTFChars(text, textUtf);
     env->ReleaseStringUTFChars(instruction, instructionUtf);
@@ -163,7 +164,7 @@ const JNINativeMethod kMethods[] = {
     {"nativeIsLoaded", "(J)Z", reinterpret_cast<void*>(nativeIsLoaded)},
     {"nativeContextTokens", "(J)I", reinterpret_cast<void*>(nativeContextTokens)},
     {"nativeCharsPerToken", "(J)F", reinterpret_cast<void*>(nativeCharsPerToken)},
-    {"nativeRun", "(JLjava/lang/String;Ljava/lang/String;FIIZZ[I[Z)Ljava/lang/String;",
+    {"nativeRun", "(JLjava/lang/String;Ljava/lang/String;FIIZZZ[I[Z)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeRun)},
     {"nativeCancel", "(J)V", reinterpret_cast<void*>(nativeCancel)},
 };
