@@ -229,6 +229,8 @@ class BorderKeysService :
         val delimiter: String,
         /** The word before it, kept so the pair is learned against the right one. */
         val contextWord: String?,
+        /** The word before [contextWord], for the same reason -- see [recordLearned]. */
+        val grandContextWord: String?,
     )
 
     private var pendingCorrection: PendingCorrection? = null
@@ -764,11 +766,12 @@ class BorderKeysService :
         val connection = currentInputConnection
         if (connection != null && composing.isNotEmpty()) {
             val contextWord = previousWord1
+            val grandContextWord = previousWord2
             connection.beginBatchEdit()
             val finished = finishComposing(connection)
             connection.endBatchEdit()
             if (finished != null) {
-                recordLearned(finished, contextWord)
+                recordLearned(finished, contextWord, grandContextWord)
             }
         }
         host?.postDelayed(gestureDecodingRunnable, GESTURE_DECODING_NOTICE_MILLIS)
@@ -922,6 +925,7 @@ class BorderKeysService :
         // Captured before anything commits: finishComposing and the correction branch both
         // advance previousWord1 to the word being written now.
         val contextWord = previousWord1
+        val grandContextWord = previousWord2
 
         // The space we just added ourselves, typed again out of habit. Swallowed, and the
         // window for the two-spaces rule is not opened by it either.
@@ -989,10 +993,12 @@ class BorderKeysService :
             // Learning waits until the correction survives the next keystroke. Recording it
             // here would teach the personal dictionary a word the user is about to reject, and
             // the whole point of the revert is that rejecting it is expected.
-            pendingCorrection = PendingCorrection(typed, correction, delimiter, contextWord)
+            pendingCorrection = PendingCorrection(
+                typed, correction, delimiter, contextWord, grandContextWord,
+            )
         } else {
             if (typed.isNotEmpty()) {
-                recordLearned(typed, contextWord)
+                recordLearned(typed, contextWord, grandContextWord)
             }
             pendingCorrection = null
         }
@@ -1011,7 +1017,7 @@ class BorderKeysService :
     private fun confirmPendingCorrection() {
         val pending = pendingCorrection ?: return
         pendingCorrection = null
-        recordLearned(pending.corrected, pending.contextWord)
+        recordLearned(pending.corrected, pending.contextWord, pending.grandContextWord)
     }
 
     /**
@@ -1044,7 +1050,7 @@ class BorderKeysService :
             // Backspace is an ordinary backspace, so this is the correction being accepted the
             // same way any other key would accept it. Dropping it unlearned instead would make
             // the setting quietly change what the dictionary remembers.
-            recordLearned(pending.corrected, pending.contextWord)
+            recordLearned(pending.corrected, pending.contextWord, pending.grandContextWord)
             return false
         }
         val committed = pending.corrected + pending.delimiter
@@ -1052,7 +1058,7 @@ class BorderKeysService :
         if (before == null || before.toString() != committed) {
             // The cursor moved, or something else edited the field. Reverting blind would
             // delete text nobody asked us to touch, so the correction stands and is accepted.
-            recordLearned(pending.corrected, pending.contextWord)
+            recordLearned(pending.corrected, pending.contextWord, pending.grandContextWord)
             return false
         }
         connection.beginBatchEdit()
@@ -1062,7 +1068,7 @@ class BorderKeysService :
         previousWord1 = pending.typed
         // Reverting is the user asserting that what they typed is a word, which is exactly the
         // signal the personal dictionary exists to record.
-        recordLearned(pending.typed, pending.contextWord)
+        recordLearned(pending.typed, pending.contextWord, pending.grandContextWord)
         // And the word they rejected is unlearned. A correction is only offered that strongly
         // because something taught it -- often this dictionary, from an earlier typo confirmed
         // by accident -- and rejecting it is the clearest statement available that it should
@@ -1211,6 +1217,7 @@ class BorderKeysService :
     private fun handleEnter() {
         val connection = currentInputConnection ?: return
         val contextWord = previousWord1
+        val grandContextWord = previousWord2
         connection.beginBatchEdit()
         val finished = finishComposing(connection)
         val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
@@ -1224,7 +1231,7 @@ class BorderKeysService :
             checkpointField()
         }
         if (finished != null) {
-            recordLearned(finished, contextWord)
+            recordLearned(finished, contextWord, grandContextWord)
         }
         requestSuggestions()
     }
@@ -1408,9 +1415,16 @@ class BorderKeysService :
 
     override fun onSuggestionPicked(index: Int, word: String) {
         val connection = currentInputConnection ?: return
+        // Tapping a suggestion is one of the "every other key settles it" cases onKey's own
+        // comment describes -- it just does not arrive through onKey. A correction left pending
+        // past this point would still be sitting there for a later, unrelated backspace to find
+        // and act on, exactly the bug pendingCorrection's own "alive for exactly one keystroke"
+        // doc promises cannot happen.
+        confirmPendingCorrection()
         // Read before the commit, for the same reason as everywhere else: what is being learned
         // is that this word followed the one already in the text, not that it followed itself.
         val contextWord = previousWord1
+        val grandContextWord = previousWord2
         connection.beginBatchEdit()
         // While actively typing, commitText below replaces the composing region on its own --
         // that is what a composing region is for. But the strip also offers suggestions for a
@@ -1439,8 +1453,10 @@ class BorderKeysService :
         // offered as a completion of "vr" and never match anything the user typed.
         val words = word.split(' ').filter { it.isNotEmpty() }
         var previous = contextWord
+        var grandPrevious = grandContextWord
         for (part in words) {
-            recordLearned(part, previous)
+            recordLearned(part, previous, grandPrevious)
+            grandPrevious = previous
             previous = part
         }
         // The picked word is now the context for whatever comes next. Nothing else sets this on
@@ -1624,6 +1640,13 @@ class BorderKeysService :
     private fun resetComposing() {
         pendingCorrection = null
         pendingForget = null
+        // A new field starts with typed == "" and no in-flight request could ever answer for
+        // it, so correctionFor's own suggestionQuery guard already refuses these -- but only by
+        // coincidence, the same shape a real bug had earlier. Reset explicitly so that stays
+        // true on purpose rather than by accident.
+        topSuggestion = null
+        suggestionQuery = ""
+        knownQuery = ""
         composing.setLength(0)
         currentInputConnection?.finishComposingText()
         refreshContextFromEditor()
@@ -1798,15 +1821,19 @@ class BorderKeysService :
     // ---- learning -----------------------------------------------------------------------------------
 
     /**
-     * Records a confirmed word, and the pair it makes with the word before it.
+     * Records a confirmed word, and the pair and triple it makes with the words before it.
      *
-     * [contextWord] is passed rather than read from [previousWord1] because by the time a caller
-     * gets here that field has usually already been advanced to *this* word: `finishComposing`
-     * sets it as part of ending the composing region. Reading it here produced a pair of a word
-     * with itself, which the pair store rejects, so nothing was ever learned and the feature
-     * looked like it did not work at all. It has to be captured before the commit.
+     * [contextWord] and [grandContextWord] are passed rather than read from [previousWord1]/
+     * [previousWord2] because by the time a caller gets here, those fields have usually already
+     * been advanced to describe the word just committed: `finishComposing` (or the correction
+     * branch's own inline reassignment) sets them as part of ending the composing region, before
+     * this function ever runs. Reading them here produced a pair -- and a triple, and the
+     * argument this function hands to the native model -- of a word with itself, which the pair
+     * store rejects but the trigram store and the native model do not, so both were quietly
+     * fed corrupted context on nearly every word typed. Both have to be captured before the
+     * commit, at the same point every caller already captures [contextWord] alone.
      */
-    private fun recordLearned(word: String, contextWord: String?) {
+    private fun recordLearned(word: String, contextWord: String?, grandContextWord: String?) {
         if (!learning.enabled || word.length < MIN_LEARNED_LENGTH) {
             return
         }
@@ -1822,17 +1849,15 @@ class BorderKeysService :
         val locale = alphabeticLayout.languageTag
         val now = System.currentTimeMillis()
         contextWord?.let { learning.recordPair(it, word, now) }
-        // The triple uses the word before the context word, which the service still holds:
-        // recordLearned is called before previousWord2 is advanced.
-        if (contextWord != null && previousWord2 != null) {
-            learning.recordTriple(previousWord2!!, contextWord, word, now)
+        if (contextWord != null && grandContextWord != null) {
+            learning.recordTriple(grandContextWord, contextWord, word, now)
         }
         if (learning.record(word, locale, now)) {
             engine.learn(
                 listOf(
                     com.borderkeys.data.dao.LearnedWord(word, locale, 1, now),
                 ),
-                previousWord1, previousWord2,
+                contextWord, grandContextWord,
             )
         }
         val view = host ?: return
