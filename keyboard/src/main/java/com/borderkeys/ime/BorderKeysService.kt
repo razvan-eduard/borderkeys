@@ -1685,16 +1685,16 @@ class BorderKeysService :
      * is genuinely inside that word rather than having only landed beside it, the one typing
      * continues.
      *
-     * Marks a composing region on the adopted word now, which it deliberately did not used to:
-     * without one, a correction just reverted and its trailing delimiter deleted by hand left the
-     * caret sitting after real, plain-committed text with nothing marking it as part of a word in
-     * progress -- so the very next letter typed started a new composing run of its own, one
-     * character long, while the text on screen read as a single continuous word. The engine was
-     * then asked about "inta" for a caret that read "suferinta", and corrected the fragment
-     * nobody was asking about on its own terms. setComposingRegion marks the *existing* text as
-     * composing without touching it -- unlike setComposingText, which would insert the adopted
-     * word a second time -- so typing forward now extends the same word setComposingText already
-     * expects to be replacing, the ordinary path every other composing word already takes.
+     * Marks a composing region on the adopted word: without one, a correction just reverted and
+     * its trailing delimiter deleted by hand leaves the caret sitting after real, plain-committed
+     * text with nothing marking it as part of a word in progress -- so the very next letter typed
+     * starts a new composing run of its own, one character long, while the text on screen reads
+     * as a single continuous word. The engine is then asked about "inta" for a caret that reads
+     * "suferinta", and corrects the fragment nobody was asking about on its own terms.
+     * setComposingRegion marks the *existing* text as composing without touching it -- unlike
+     * setComposingText, which would insert the adopted word a second time -- so typing forward
+     * extends the same word setComposingText already expects to be replacing, the ordinary path
+     * every other composing word already takes.
      *
      * A caret that only landed beside a word -- one that followed a delimiter, or reached an
      * empty field -- gets no composing region, because there is no word to extend from there;

@@ -156,10 +156,10 @@ class AutoCorrectionTest {
 
     @Test
     fun `a suggestion identical to what was typed is not a correction`() {
-        // Covered elsewhere only as a side effect of other assertions until now -- every other
-        // test either supplies a genuinely different suggestion or one differing by case, which
-        // is the separate branch matchCase exists for. This is the plain "nothing to correct"
-        // case the doc comment lists first.
+        // Every other test here supplies a genuinely different suggestion or one differing by
+        // case, which is the separate branch matchCase exists for -- none of them exercises the
+        // exact-match branch directly. This is the plain "nothing to correct" case the doc
+        // comment lists first, asserted on its own rather than only as a side effect.
         assertNull(
             AutoCorrection.correctionFor(
                 typed = "canapea", suggestion = "canapea",

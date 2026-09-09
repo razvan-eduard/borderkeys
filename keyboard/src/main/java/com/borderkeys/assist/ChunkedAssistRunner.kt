@@ -10,19 +10,18 @@ import com.borderkeys.data.assist.AssistTask
  * Runs a task over text too long for one request by splitting it and stitching the answers back
  * together, one request at a time.
  *
- * The model has one context window, shared between the prompt and the answer. A selection long
- * enough to fill it was, until this, refused outright -- [AssistClient.run] returning -1, the
- * same answer it gives a genuinely absent assistant, for a request that was simply too big
- * rather than impossible. Splitting at sentence boundaries and running each piece as its own
- * request is what lets a long selection be answered at all, at the cost of the pieces never
- * seeing each other's context -- acceptable for [AssistTask.isChunkable] tasks, where each
- * sentence is transformed close to on its own terms anyway, and refused for the ones where it is
- * not (see that property's own doc).
+ * The model has one context window, shared between the prompt and the answer. A selection too
+ * long for it fails outright without this -- [AssistClient.run] returning -1, the same answer it
+ * gives a genuinely absent assistant, for a request that is simply too big rather than
+ * impossible. Splitting at sentence boundaries and running each piece as its own request answers
+ * a long selection instead, at the cost of the pieces never seeing each other's context --
+ * acceptable for [AssistTask.isChunkable] tasks, where each sentence is transformed close to on
+ * its own terms anyway, and refused for the ones where it is not (see that property's own doc).
  *
  * Owns [client]'s listener rather than sharing it: a caller that wants both raw single-request
  * results and chunked ones would have to arbitrate between two things claiming the same reply,
- * which is a problem this class removes by being the only thing that talks to the client at all
- * once it exists. Every request -- long or short, chunked or not -- goes through [run].
+ * which is a problem this avoids by being the only thing that talks to the client. Every request
+ * -- long or short, chunked or not -- goes through [run].
  */
 class ChunkedAssistRunner(private val client: AssistClient) {
 

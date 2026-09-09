@@ -237,7 +237,7 @@ fun ProcessTextScreen(
 
     val assistClient = remember { AssistClient(context) }
     // ChunkedAssistRunner owns assistClient's listener from here on -- see its own class doc for
-    // why a caller talks to it instead of the client directly once it exists.
+    // why a caller talks to it instead of the client directly.
     val assist = remember { ChunkedAssistRunner(assistClient) }
     // Resolved once: whether the plus flavor's assistant is even present does not change while
     // this screen is open, and asking again on every recomposition would be a PackageManager
