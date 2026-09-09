@@ -17,6 +17,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -75,8 +76,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -89,8 +95,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.assist.AssistClient
 import com.borderkeys.assist.ChunkedAssistRunner
@@ -503,14 +511,30 @@ fun ProcessTextScreen(
                         versionSlide.snapTo(versionDirection.toFloat())
                         versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
                     }
-                    // The field's own box, sized to it and nothing wider -- so TopEnd below lands
-                    // on the field's actual rendered corner rather than on some outer padding's
-                    // edge. FIELD_TOP_GAP (up from the plain 8.dp every other side still uses)
-                    // is what keeps the badge sitting in front of the version rail or the title
-                    // row above from happening -- the badge rises into that space, not into text.
+                    // One shape for the field and the copy notch together -- see
+                    // NotchedTopFieldShape's own doc for why this is a single outline rather
+                    // than two shapes placed so they touch.
+                    val fieldShape = remember {
+                        NotchedTopFieldShape(
+                            notchWidth = COPY_TAB_WIDTH,
+                            notchHeight = COPY_TAB_HEIGHT,
+                            fieldCornerRadius = FIELD_CORNER_RADIUS,
+                            notchCornerRadius = COPY_TAB_CORNER_RADIUS,
+                        )
+                    }
                     Box(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(start = FIELD_SIDE_GAP, end = FIELD_SIDE_GAP, top = FIELD_TOP_GAP, bottom = 8.dp),
+                            .padding(horizontal = FIELD_SIDE_GAP, vertical = 8.dp)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh, fieldShape)
+                            .border(
+                                FIELD_BORDER_WIDTH,
+                                if (isFocused) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.outline
+                                },
+                                fieldShape,
+                            ),
                     ) {
                         OutlinedTextField(
                             value = textFieldValue,
@@ -523,13 +547,17 @@ fun ProcessTextScreen(
                                 }
                             },
                             placeholder = { Text(strings[Keys.COMPOSER_EMPTY]) },
-                            // A tone step above the card's own surface -- without it the field had
-                            // no fill of its own at all, only its outline, and read as the same
-                            // surface as the card around it rather than as a distinct box on it.
+                            // Transparent everywhere the field would otherwise paint its own
+                            // border and background: fieldShape above is now the only outline
+                            // and fill this area has, and the field drawing its own on top would
+                            // either double that border or paint over the notch entirely.
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedBorderColor = Color.Transparent,
+                                disabledBorderColor = Color.Transparent,
                             ),
                             // A multiplier on the ambient size rather than a fixed sp value, so
                             // Small/Medium/Large still track a system font-size setting the same
@@ -539,6 +567,9 @@ fun ProcessTextScreen(
                                     composerFontScale(preferences.composerTextSize),
                             ),
                             modifier = Modifier.fillMaxWidth()
+                                // Clears the notch: the field's own text never reaches under it,
+                                // whatever the field's height ends up being.
+                                .padding(top = COPY_TAB_HEIGHT)
                                 .focusRequester(textFieldFocus)
                                 .onFocusChanged { isFocused = it.isFocused }
                                 // Left/right on the text itself steps through versions, the same
@@ -567,13 +598,9 @@ fun ProcessTextScreen(
                                 .offset(x = VERSION_TRANSITION_DISTANCE * versionSlide.value)
                                 .alpha(1f - kotlin.math.abs(versionSlide.value) * VERSION_TRANSITION_FADE),
                         )
-                        // Lifted above the field's border rather than set inside its corner --
-                        // straddling the outline instead of the text means FIELD_TOP_GAP alone
-                        // keeps it clear of everything, with nothing needed on the field's own
-                        // internal padding, which nothing here can reach without replacing
-                        // OutlinedTextField's whole decoration. zIndex on top of that, so it
-                        // always paints over the field and the scroll clip above it rather than
-                        // trusting declaration order alone for something straddling a boundary.
+                        // Sits in the notch fieldShape already cut for it -- no background, no
+                        // border and no offset of its own to place, since the shape both of
+                        // those belong to is drawn by the Box around this one already.
                         IconButton(
                             enabled = current.isNotEmpty() && !busy,
                             onClick = {
@@ -584,16 +611,12 @@ fun ProcessTextScreen(
                             },
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .zIndex(1f)
-                                .offset(x = -COPY_BADGE_SIDE_INSET, y = -COPY_BADGE_LIFT)
-                                .size(COPY_BADGE_SIZE)
-                                .shadow(elevation = 2.dp, shape = CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape),
+                                .size(width = COPY_TAB_WIDTH, height = COPY_TAB_HEIGHT),
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.bk_action_copy_all),
                                 contentDescription = strings[Keys.ASSIST_COPY],
-                                modifier = Modifier.size(COPY_BADGE_ICON_SIZE),
+                                modifier = Modifier.size(COPY_TAB_ICON_SIZE),
                             )
                         }
                     }
@@ -1202,27 +1225,90 @@ private fun SwipeUpHint(ringShift: Float, focused: Boolean, modifier: Modifier =
 private val FIELD_SIDE_GAP = 12.dp
 
 /**
- * Above the field, in place of the plain 8.dp every other side of it still uses -- room for
- * [COPY_BADGE_LIFT] to rise into above the border without reaching the row above the field.
+ * The copy notch's own width and height. The width is not a free choice: the close button
+ * above it is centred in the same 48.dp Material gives every icon button by default with no
+ * size of its own set, and both it and the notch sit the same [FIELD_SIDE_GAP] in from the
+ * card's right edge -- so a centred icon in a notch of that same width lands on the same
+ * vertical line as the close button above it, with no offset of its own needed to put it there.
+ * The height is free to stay smaller, since only the width decides where the icon sits sideways.
  */
-private val FIELD_TOP_GAP = 22.dp
+private val COPY_TAB_WIDTH = 48.dp
+private val COPY_TAB_HEIGHT = 32.dp
 
-/** The copy badge's own touch target -- smaller on purpose than the 48.dp default IconButton
- *  every bar button below still uses, since this one sits on the field rather than in the bar
- *  competing with those for room. */
-private val COPY_BADGE_SIZE = 30.dp
+private val COPY_TAB_ICON_SIZE = 16.dp
 
-private val COPY_BADGE_ICON_SIZE = 16.dp
+/** [OutlinedTextField]'s own default corner radius and outline width, matched here because
+ *  [NotchedTopFieldShape] replaces that field's own border and background entirely -- see its
+ *  colors in the field below for why -- and a border that used to belong to Material's default
+ *  shape now has to keep looking like it still does. */
+private val FIELD_CORNER_RADIUS = 4.dp
+private val COPY_TAB_CORNER_RADIUS = 4.dp
+private val FIELD_BORDER_WIDTH = 1.dp
 
 /**
- * A third of the badge's own size, so it still straddles the field's border rather than sitting
- * inside its corner over the text, but pokes only a little past it -- half its own size rose far
- * enough above FIELD_TOP_GAP's clearance to graze the scrollable column's own clip boundary,
- * cutting the badge's top rather than the field's.
+ * One outline around a field and a small notch clipped onto its top-right corner, rather than
+ * two separately bordered shapes placed so they touch -- the second reads as two things next to
+ * each other no matter how exactly they meet; only tracing both as one path reads as a single
+ * border going around both.
+ *
+ * The two inner corners, where the notch meets the field's own top edge, are left sharp on
+ * purpose: a notch cut into a corner has a corner of its own there, the same way a torn-off
+ * ticket stub does. Every other corner -- the field's own three, and the notch's two outer ones
+ * -- is rounded.
+ *
+ * LTR only: the notch is always at the end edge in a left-to-right layout, and nothing here
+ * mirrors it for a right-to-left one. None of this application's shipped languages are RTL.
  */
-private val COPY_BADGE_LIFT = COPY_BADGE_SIZE / 3
+private class NotchedTopFieldShape(
+    private val notchWidth: Dp,
+    private val notchHeight: Dp,
+    private val fieldCornerRadius: Dp,
+    private val notchCornerRadius: Dp,
+) : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density,
+    ): Outline {
+        val w = size.width
+        val h = size.height
+        val notchW = with(density) { notchWidth.toPx() }
+        val notchH = with(density) { notchHeight.toPx() }
+        val rf = with(density) { fieldCornerRadius.toPx() }
+        val rn = with(density) { notchCornerRadius.toPx() }
+        val notchLeft = w - notchW
 
-private val COPY_BADGE_SIDE_INSET = 6.dp
+        val path = Path().apply {
+            // Field's top edge, from just past its own top-left corner to where the notch's
+            // left edge begins.
+            moveTo(rf, notchH)
+            lineTo(notchLeft, notchH)
+            // Straight up into the notch -- the one sharp corner, unrounded on purpose.
+            lineTo(notchLeft, rn)
+            // Notch's top-left corner.
+            arcTo(Rect(notchLeft, 0f, notchLeft + 2 * rn, 2 * rn), 180f, 90f, false)
+            // Notch's top edge.
+            lineTo(w - rn, 0f)
+            // Notch's top-right corner, which is also the field's own top-right corner --
+            // their edges share the same x = w, so nothing marks where one becomes the other.
+            arcTo(Rect(w - 2 * rn, 0f, w, 2 * rn), 270f, 90f, false)
+            // Field's right edge.
+            lineTo(w, h - rf)
+            // Field's bottom-right corner.
+            arcTo(Rect(w - 2 * rf, h - 2 * rf, w, h), 0f, 90f, false)
+            // Field's bottom edge.
+            lineTo(rf, h)
+            // Field's bottom-left corner.
+            arcTo(Rect(0f, h - 2 * rf, 2 * rf, h), 90f, 90f, false)
+            // Field's left edge, back up to the top-left corner.
+            lineTo(0f, notchH + rf)
+            // Field's top-left corner, closing exactly where this path started.
+            arcTo(Rect(0f, notchH, 2 * rf, notchH + 2 * rf), 180f, 90f, false)
+            close()
+        }
+        return Outline.Generic(path)
+    }
+}
 
 /** 70% of [MaterialTheme.typography.labelLarge]'s own size, doubled -- 1.4x in total. */
 private const val SWIPE_HINT_SIZE_MULTIPLIER = 1.4f
