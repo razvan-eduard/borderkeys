@@ -22,21 +22,22 @@ import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.common.TextViewStyle
 import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
-import com.borderkeys.assist.AssistClient
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.DictionaryRepository
 import com.borderkeys.data.LanguagePackRepository
+import com.borderkeys.data.decayed
 import com.borderkeys.predict.LanguagePackInspector
 import com.borderkeys.data.entity.LanguagePackEntry
 import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.assist.AssistProtocol
-import com.borderkeys.data.assist.AssistTask
+import com.borderkeys.data.draft.DraftProtocol
 import com.borderkeys.data.theme.QuickAction
-import com.borderkeys.data.theme.SavedPrompt
-import com.borderkeys.data.theme.ComposerAction
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.predict.LearningBuffer
 import com.borderkeys.predict.PredictionEngine
+import com.borderkeys.theme.DynamicColors
+import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,8 +68,6 @@ class BorderKeysService :
     QuickSettingsView.Listener,
     QuickActionsView.Listener,
     ClipboardPanelView.Listener,
-    ComposerView.Listener,
-    AssistClient.Listener,
     PredictionEngine.ResultListener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -90,118 +89,6 @@ class BorderKeysService :
     private var selectionStart = 0
     private var selectionEnd = 0
 
-    /**
-     * Where typing goes: the application's field, or the draft box's buffer.
-     *
-     * Three things travel together because all three change at once. The connection is the
-     * obvious one. The selection is the second: the platform tells us where the caret is through
-     * onUpdateSelection, which never fires for a buffer, so reading the cached fields while
-     * typing into the box would leave backspace convinced there was still a selection to delete.
-     * And the editor's description is the third, because capitalisation and what the enter key
-     * does are both read from what the field asked for -- and a draft is not a chat box asking
-     * for its message to be sent.
-     *
-     * Composing state is per destination as well, and is cleared by [switchTarget] rather than
-     * carried across. See the comment there; it is the thing this design can get wrong.
-     */
-    private class EditTarget {
-        var connection: InputConnection? = null
-        var editorInfo: EditorInfo? = null
-        var selectionStart: Int = 0
-        var selectionEnd: Int = 0
-    }
-
-    /**
-     * One holder, refilled on each call to [target] and never retained.
-     *
-     * [handleCharacter] asks for this on every keystroke, and a keystroke has two milliseconds
-     * and no allocations. Four fields returned as an object would be four fields allocated sixty
-     * times a second while somebody types, so the object is made once and rewritten instead.
-     *
-     * The contract that comes with that: read what you need out of it immediately. Holding a
-     * reference across anything that might ask again -- and most of this class asks again --
-     * gives you a description of the other destination.
-     */
-    private val editTarget = EditTarget()
-
-    /** The buffer behind the draft box, once there is one. Null until the box is first opened. */
-    private var composerConnection: ComposerInputConnection? = null
-
-    /**
-     * Moves typing between the application's field and the draft box.
-     *
-     * The half-finished state has to go with it, and this is the one place in the design that
-     * can lose somebody else's text. Everything below is a single slot describing an edit that
-     * was made *somewhere*: a correction that backspace would put back, a full stop that two
-     * spaces produced, a space this keyboard added and would swallow if you typed one, the
-     * letters of the word in progress. Carried across a switch, they describe the wrong
-     * document -- and the worst of them, revertCorrection, deletes as many characters as the
-     * correction it thinks it is undoing. That is a backspace in the draft box eating the end of
-     * a sentence in the application.
-     *
-     * So they are cleared, and the context is re-derived from whichever side is now live.
-     */
-    private fun switchTarget(kind: Int) {
-        if (composerTargetKind == kind) {
-            return
-        }
-        // Let go of the composing region on the side being left, or the application keeps an
-        // underlined word it can never be told about again.
-        target().connection?.finishComposingText()
-        composing.setLength(0)
-        pendingCorrection = null
-        pendingForget = null
-        pendingSpacePeriod = false
-        pendingAutoSpace = false
-        lastSpaceAt = 0L
-        composerTargetKind = kind
-        refreshContextFromEditor()
-        applyAutoShift()
-        requestSuggestions()
-    }
-
-    /**
-     * Where keystrokes are going: the application, the draft box, or the instruction row.
-     *
-     * Three rather than two, because the instruction is written with the same keys and must not
-     * land in the draft it is about. Each buffer carries its own EditorInfo, which is what makes
-     * enter a newline in the draft and a send in the prompt without a branch anywhere.
-     */
-    private var composerTargetKind = TARGET_FIELD
-
-    private val composerActive: Boolean get() = composerTargetKind != TARGET_FIELD
-
-    private val promptActive: Boolean get() = composerTargetKind == TARGET_PROMPT
-
-    /** The buffer the instruction is written into. Created the first time one is asked for. */
-    private var promptConnection: ComposerInputConnection? = null
-
-    /**
-     * The destination for this keystroke.
-     *
-     * Rebuilt on each read rather than cached, because the selection inside it changes underneath
-     * us on both sides: the platform reports the application's, and the buffer keeps its own.
-     */
-    private fun target(): EditTarget {
-        val buffer = when (composerTargetKind) {
-            TARGET_DRAFT -> composerConnection
-            TARGET_PROMPT -> promptConnection
-            else -> null
-        }
-        if (buffer != null) {
-            editTarget.connection = buffer
-            editTarget.editorInfo = buffer.editorInfo
-            editTarget.selectionStart = buffer.selectionStart
-            editTarget.selectionEnd = buffer.selectionEnd
-        } else {
-            editTarget.connection = currentInputConnection
-            editTarget.editorInfo = currentInputEditorInfo
-            editTarget.selectionStart = selectionStart
-            editTarget.selectionEnd = selectionEnd
-        }
-        return editTarget
-    }
-
     /** Whether the field holds any text at all, which is not the same as "we are composing". */
     private var editorEmpty = true
     private var previousWord1: String? = null
@@ -220,6 +107,17 @@ class BorderKeysService :
     private lateinit var strings: LanguageManager
     private var theme = KeyboardTheme()
 
+    /** The theme shown instead of [theme] in [KeyboardPreferences.THEME_MODE_AUTO_SYSTEM] mode
+     *  when the system is not in dark mode. See [ThemeMode]. */
+    private var lightTheme = KeyboardTheme()
+
+    /** [theme] or [lightTheme], whichever [ThemeMode] picks, then recoloured from the wallpaper
+     *  when the setting asks for it. See [ThemeMode] and [DynamicColors]. */
+    private fun effectiveTheme(): KeyboardTheme {
+        val chosen = ThemeMode.resolve(theme, lightTheme, preferences, this)
+        return if (preferences.followSystemColors) DynamicColors.apply(chosen, this) else chosen
+    }
+
     private var alphabeticLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var symbolsLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var symbolsShiftLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
@@ -228,7 +126,7 @@ class BorderKeysService :
     /** Which page is on screen. The numeric one is chosen by the field, not by the user. */
     private var page = PAGE_ALPHABETIC
 
-    private var shiftState = SHIFT_OFF
+    private var shiftState = ShiftState.OFF
 
     /**
      * Set when the user pressed shift themselves, cleared by the character it applied to.
@@ -255,14 +153,36 @@ class BorderKeysService :
     private var pendingAutoSpace = false
 
     /**
-     * Set once the clipboard offer has served its purpose: it was used, or the keyboard has
-     * been closed.
+     * The clip whose chip has already served its purpose: it was used, or a session that
+     * offered it closed with "offer it only once" on. Null when nothing is withheld.
      *
-     * The offer only. What was copied is still in the history panel and still on the system
-     * clipboard; this is about whether the row above the keys keeps giving a slot to it.
-     * Cleared when something new is copied, because that is a new offer.
+     * The clip's own content, not a flag. A flag cannot tell "this exact thing was already
+     * offered" from "something copied while no field was focused, which never got the chance to
+     * be" -- and the platform only delivers a change notification to the input method that
+     * currently has focus (see [registerClipboardListener]), so a copy made between sessions
+     * reaches neither. Keying withdrawal off a boolean meant every session after the first
+     * stayed withdrawn regardless of what was actually on the clipboard by the time it opened;
+     * comparing content instead means a *different* clip always gets its own turn, seen or not.
+     *
+     * Set back to null whenever an actual copy is observed (see [onClipboardChanged]) -- a copy
+     * is always a new offer, even one that happens to repeat the same words.
      */
-    private var clipboardChipWithdrawn = false
+    private var withdrawnClip: String? = null
+
+    /**
+     * The signature of whatever clip the chip is actually showing right now, or null when it is
+     * showing nothing. Set alongside [SuggestionStripView.clipboardChip] in
+     * [refreshClipboardChip], and read (not re-derived) by [onFinishInputView] when deciding
+     * what "offer it only once" should withdraw.
+     *
+     * A fresh read of the live clipboard at close time would race a copy that happens in the
+     * same gesture as the field losing focus -- selecting text to copy often blurs the field as
+     * part of dismissing the selection toolbar, and by the time onFinishInputView runs the
+     * clipboard can already hold the *new* clip. Withdrawing that would mean a copy nobody has
+     * ever seen a chip for gets silently marked as already offered before its first chance,
+     * which read as the chip vanishing for a brand new copy rather than for the one before it.
+     */
+    private var shownClipSignature: String? = null
 
     /** Whether the current lock came from the field asking for capitals rather than from shift. */
     private var autoLockedShift = false
@@ -279,15 +199,6 @@ class BorderKeysService :
      * having been ignored.
      */
     private val gestureDecodingRunnable = Runnable { host?.suggestionStrip?.decoding = true }
-
-    // ---- text assistant ----------------------------------------------------------------------
-    //
-    // Everything below is inert in the free build: AssistClient resolves the service by name,
-    // :assist is attached only to the `plus` flavor, and resolution simply fails. There is no
-    // flag to check and nothing to disable.
-
-    private val assist by lazy { AssistClient(this).also { it.listener = this } }
-    private var assistAvailable = false
 
     private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
         onClipboardChanged()
@@ -311,6 +222,18 @@ class BorderKeysService :
     )
 
     private var pendingCorrection: PendingCorrection? = null
+
+    /**
+     * The field's own undo/redo history, for this input session only.
+     *
+     * The same version-graph class the draft box uses, unmodified: a step is the field's whole
+     * text after a discrete commit, and editing from a version that isn't the newest discards
+     * whatever came after it -- exactly the rule [QuickAction.UNDO] and [QuickAction.REDO] need,
+     * for the same reason [Composer] already has it. Scoped to the session and not the field --
+     * cleared and reseeded in [onStartInputView], the same place [pendingCorrection] is dropped
+     * for a new field -- rather than persisted across switching fields or reopening the keyboard.
+     */
+    private val fieldHistory = Composer()
 
     /** The word the strip is currently asking about, between the hold and the answer. */
     private var pendingForget: String? = null
@@ -394,14 +317,29 @@ class BorderKeysService :
         }
 
         val dictionary = DataGraph.dictionary
-        engine.loadUserWords(dictionary.topWords())
-        // After the words, never before: a pair names two words, and the model resolves those
-        // names against what it already holds.
-        engine.loadUserBigrams(dictionary.topBigrams())
-        engine.loadUserTrigrams(dictionary.topTrigrams())
+        loadPersonalModel(dictionary)
         val blockedWords = dictionary.blockedWordSet()
         engine.setBlockedWords(blockedWords)
         learning.setBlockedWords(blockedWords)
+    }
+
+    /**
+     * Pushes the personal dictionary into the native model, decayed for how long each entry has
+     * sat unused.
+     *
+     * This is "restore" in [com.borderkeys.data.PersonalWordDecay]'s sense: the counts stored in
+     * Room only shrink on the occasional sweep in [flushLearning]; what the engine actually
+     * scores against is decayed here, every single time it is loaded, so a word or phrase not
+     * written in months contributes less than one written this week without either of them ever
+     * having to be deleted.
+     */
+    private suspend fun loadPersonalModel(dictionary: DictionaryRepository) {
+        val now = System.currentTimeMillis()
+        engine.loadUserWords(dictionary.topWords().map { it.decayed(now) })
+        // After the words, never before: a pair names two words, and the model resolves those
+        // names against what it already holds.
+        engine.loadUserBigrams(dictionary.topBigrams().map { it.decayed(now) })
+        engine.loadUserTrigrams(dictionary.topTrigrams().map { it.decayed(now) })
     }
 
     /**
@@ -461,17 +399,28 @@ class BorderKeysService :
 
     private fun observeSettings() {
         scope.launch {
-            combine(DataGraph.themes.theme, DataGraph.themes.preferences) { theme, preferences ->
-                theme to preferences
+            combine(
+                DataGraph.themes.theme, DataGraph.themes.lightTheme, DataGraph.themes.preferences,
+            ) { theme, lightTheme, preferences ->
+                Triple(theme, lightTheme, preferences)
             }.catch { error ->
                 // The theme store failing is not a reason to have no keyboard either; the
                 // defaults are perfectly usable colours.
                 android.util.Log.e("BorderKeys", "settings unavailable, using defaults", error)
-            }.collect { (newTheme, newPreferences) ->
+            }.collect { (newTheme, newLightTheme, newPreferences) ->
                 theme = newTheme
+                lightTheme = newLightTheme
                 preferences = newPreferences
+                val resolvedTheme = ThemeMode.resolve(
+                    newTheme, newLightTheme, newPreferences, this@BorderKeysService,
+                )
+                val effectiveTheme = if (newPreferences.followSystemColors) {
+                    DynamicColors.apply(resolvedTheme, this@BorderKeysService)
+                } else {
+                    resolvedTheme
+                }
                 val changed = paints.update(
-                    newTheme, resources.displayMetrics, newPreferences.heightScale,
+                    effectiveTheme, resources.displayMetrics, newPreferences.heightScale,
                     this@BorderKeysService,
                 )
                 host?.let { view ->
@@ -491,7 +440,7 @@ class BorderKeysService :
                     // The number row is a layout change, not a colour change, so it has to be
                     // applied even when the paints are unchanged.
                     showPage(page)
-                    view.fullWidthBackground = theme.fullWidthBackground
+                    view.fullWidthBackground = resolvedTheme.fullWidthBackground
                     if (changed) {
                         view.keyboard.onThemeChanged()
                         view.quickSettings.onThemeChanged()
@@ -528,12 +477,6 @@ class BorderKeysService :
         // covers a caret at zero with text after it.
         updateEditorEmpty(newSelEnd > 0)
         val view = host ?: return
-        if (composerActive) {
-            // The caret that moved is the application's, and what is being typed is not in the
-            // application. Re-deriving the word under it would take the composing region away
-            // from the box mid-word.
-            return
-        }
         val hasSelection = newSelEnd > newSelStart
         if (view.suggestionStrip.actionMode) {
             // Never the assistant's doing any more -- see below. What is left of actionMode
@@ -576,63 +519,10 @@ class BorderKeysService :
         }
     }
 
-    private fun assistActionTitle(task: AssistTask): String = when (task) {
-        AssistTask.SUMMARISE -> strings[Keys.ASSISTANT_SUMMARY]
-        AssistTask.CORRECT -> strings[Keys.ASSISTANT_CORRECTION]
-        AssistTask.REWRITE_FORMAL -> strings[Keys.ASSISTANT_FORMAL_REWRITE]
-        AssistTask.REWRITE_CASUAL -> strings[Keys.ASSISTANT_CASUAL_REWRITE]
-        AssistTask.REWRITE_DIRECT -> strings[Keys.ASSISTANT_DIRECT_REWRITE]
-        AssistTask.SHORTEN -> strings[Keys.ASSISTANT_SHORTENING]
-        AssistTask.TRANSLATE_TO_ENGLISH -> strings[Keys.ASSISTANT_TRANSLATION_INTO_ENGLISH]
-        AssistTask.TRANSLATE_TO_ROMANIAN -> strings[Keys.ASSISTANT_TRADUCERE_N_ROM_N]
-        AssistTask.TRANSLATE_TO_GERMAN -> strings[Keys.ASSISTANT_TRANSLATION_INTO_GERMAN]
-        AssistTask.TRANSLATE_TO_SPANISH -> strings[Keys.ASSISTANT_TRANSLATION_INTO_SPANISH]
-        AssistTask.TRANSLATE_TO_FRENCH -> strings[Keys.ASSISTANT_TRANSLATION_INTO_FRENCH]
-        AssistTask.TRANSLATE_TO_ITALIAN -> strings[Keys.ASSISTANT_TRANSLATION_INTO_ITALIAN]
-        AssistTask.CUSTOM -> strings[Keys.ASSISTANT_YOUR_OWN_INSTRUCTION]
-    }
-
-    override fun onAssistResult(requestId: Int, text: String, modelName: String?) {
-        // A late answer to a request the user has already dismissed is discarded rather than
-        // shown over whatever they are doing now. The draft box is the only thing left that
-        // ever asks.
-        if (requestId == composerRequestId) {
-            onComposerResult(text)
-        }
-    }
-
-    override fun onAssistError(requestId: Int, error: Int) {
-        if (requestId == composerRequestId) {
-            onComposerFailure(assistErrorMessage(error))
-        }
-    }
-
-    /** Every failure is a sentence somebody can act on, which is why none of them is "failed". */
-    private fun assistErrorMessage(error: Int): String =
-        when (error) {
-            AssistProtocol.ERROR_NO_MODEL ->
-                strings[Keys.ASSISTANT_NO_MODEL_IMPORTED_YET_SETTINGS_TEXT]
-            AssistProtocol.ERROR_MODEL_CHANGED ->
-                strings[Keys.ASSISTANT_THE_MODEL_FILE_CHANGED_SINCE_IT]
-            AssistProtocol.ERROR_LOAD_FAILED ->
-                strings[Keys.ASSISTANT_THE_MODEL_COULD_NOT_BE_LOADED]
-            AssistProtocol.ERROR_TOO_LONG ->
-                strings[Keys.ASSISTANT_THE_SELECTION_IS_LONGER_THAN_THIS]
-            AssistProtocol.ERROR_BUSY ->
-                strings[Keys.ASSISTANT_STILL_WORKING_ON_THE_PREVIOUS_REQUEST]
-            AssistProtocol.ERROR_NO_INSTRUCTION ->
-                strings[Keys.ASSISTANT_NO_INSTRUCTION_WAS_WRITTEN]
-            else -> strings[Keys.ASSISTANT_THE_ASSISTANT_COULD_NOT_FINISH]
-        }
-
-    override fun onAssistAvailability(available: Boolean, modelName: String?) {
-        assistAvailable = available
-    }
-
     override fun onCreateInputView(): View {
         // Built in code. LayoutInflater would parse XML and reflect to construct three views,
         // every time the keyboard is shown in a new editor.
-        paints.update(theme, resources.displayMetrics, preferences.heightScale, this)
+        paints.update(effectiveTheme(), resources.displayMetrics, preferences.heightScale, this)
         val view = KeyboardHostView(this, paints, strings)
         applyPlacement(view, preferences)
         view.keyboard.listener = this
@@ -653,7 +543,7 @@ class BorderKeysService :
         view.onResizeDrag = { height, width, offset -> previewResize(height, width, offset) }
         view.onResizeFinished = { commitResize() }
         view.onResizeExit = { endResize() }
-        view.fullWidthBackground = theme.fullWidthBackground
+        view.fullWidthBackground = effectiveTheme().fullWidthBackground
         view.onThemeChanged()
         view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> pushKeyGeometry() }
         host = view
@@ -688,18 +578,11 @@ class BorderKeysService :
         view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
         }
         showPage(pageFor(info))
-        // Asked once per field rather than once per selection: the answer is about whether the
-        // flavor has an assistant and a verified model, neither of which changes mid-session.
-        if (!privateMode) {
-            assist.queryAvailability()
-        } else {
-            assistAvailable = false
-        }
         shiftHeldByUser = false
+        resetComposing()
+        resetFieldHistory()
         applyAutoShift()
 
-        resetComposing()
-        closeComposer()
         host?.setClipboardPanelVisible(false)
         host?.setEmojiPanelVisible(false)
         registerClipboardListener()
@@ -709,20 +592,19 @@ class BorderKeysService :
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
-        if (preferences.clipboardSuggestionOnce) {
-            // Shown for one session. Whatever was copied before this keyboard opened has had
-            // its chance to be offered; keeping the offer alive across every field afterwards
-            // is what makes it clutter rather than a convenience.
-            clipboardChipWithdrawn = true
+        // Shown for one session. A clip that actually had a chip has had its chance to be
+        // offered; keeping the offer alive across every field afterwards is what makes it
+        // clutter rather than a convenience. shownClipSignature, not a fresh read of the
+        // clipboard -- see its own doc comment for why the live clipboard can already be a clip
+        // nobody has seen a chip for yet by the time this runs.
+        if (preferences.clipboardSuggestionOnce && shownClipSignature != null) {
+            withdrawnClip = shownClipSignature
         }
         unregisterClipboardListener()
     }
 
     override fun onFinishInput() {
         super.onFinishInput()
-        // The model unloads itself on its own timer; dropping the binding here is what lets the
-        // process stop rather than lingering for the rest of the session.
-        assist.disconnect()
         // The session is over, so everything held in memory is written now rather than waiting
         // for a debounce that may never fire: the process can be killed the moment the keyboard
         // is hidden.
@@ -740,7 +622,6 @@ class BorderKeysService :
     }
 
     override fun onDestroy() {
-        assist.disconnect()
         unregisterClipboardListener()
         flushLearning()
         // Zeroes the handle under a lock before freeing, so a request already in flight
@@ -796,7 +677,7 @@ class BorderKeysService :
         val target = window?.window ?: return
         // Nothing shows through a background that reaches both edges, so blurring what is
         // behind it is a per-frame cost for an effect nobody can see.
-        val wanted = settings.blurBehindKeyboard && !theme.fullWidthBackground &&
+        val wanted = settings.blurBehindKeyboard && !effectiveTheme().fullWidthBackground &&
             settings.positionMode != KeyboardPreferences.MODE_DOCKED
         val radius = if (wanted) {
             (resources.displayMetrics.density * BLUR_RADIUS_DP).toInt()
@@ -810,15 +691,10 @@ class BorderKeysService :
         val density = resources.displayMetrics.density
         view.edgeArrows = settings.edgeArrows
         applyBlur(settings)
-        // The draft box snaps the keyboard to the bottom edge for as long as it is open, and
-        // gives back whatever was stored the moment it closes. It adds two rows to a window
-        // that is already the bottom third of the screen, and a gap under the keys is space the
-        // box could have used to show another line of what is being written.
-        val bottom = if (composerActive) 0 else (settings.bottomOffsetDp * density).toInt()
         view.setPlacement(
             settings.positionMode,
             settings.widthScale,
-            bottom,
+            (settings.bottomOffsetDp * density).toInt(),
             (settings.horizontalOffsetDp * density).toInt(),
         )
     }
@@ -847,7 +723,7 @@ class BorderKeysService :
      * position is something we can ask for and set exactly.
      */
     override fun onCursorNudge(steps: Int) {
-        val connection = target().connection ?: return
+        val connection = currentInputConnection ?: return
         if (composing.isNotEmpty()) {
             // Committing first, because moving the caret out of a composing region leaves the
             // editor holding an underline around text nobody is editing any more.
@@ -874,7 +750,7 @@ class BorderKeysService :
         if (!preferences.swipeEnabled) {
             return
         }
-        val connection = target().connection
+        val connection = currentInputConnection
         if (connection != null && composing.isNotEmpty()) {
             val contextWord = previousWord1
             connection.beginBatchEdit()
@@ -905,7 +781,7 @@ class BorderKeysService :
             view?.suggestionStrip?.clear()
             return
         }
-        val connection = target().connection ?: return
+        val connection = currentInputConnection ?: return
         val best = words[0] ?: return
 
         connection.beginBatchEdit()
@@ -924,11 +800,12 @@ class BorderKeysService :
     }
 
     override fun onText(text: CharSequence) {
-        val connection = target().connection ?: return
+        val connection = currentInputConnection ?: return
         connection.beginBatchEdit()
         finishComposing(connection)
         connection.commitText(text, 1)
         connection.endBatchEdit()
+        checkpointField()
     }
 
     override fun onKey(code: Int, keyIndex: Int) {
@@ -974,6 +851,19 @@ class BorderKeysService :
             switchLanguage()
             return true
         }
+        // Holding backspace takes the whole word before the cursor, not one more character than
+        // a tap would have. The correction gets first refusal, the same as the quick actions
+        // bar's own undo button does for the identical situation: a hold that lands right after
+        // an autocorrect reads as "put back what I typed", not "eat a word I did not mean to."
+        if (code == KeyCodes.DELETE) {
+            val connection = currentInputConnection
+            if (connection != null && !revertCorrection(connection)) {
+                deleteWordBeforeCursor(connection)
+            }
+            refreshContextFromEditor()
+            requestSuggestions()
+            return true
+        }
         // Enter, the globe and the settings key all open the same panel. Enter used to open
         // the settings application instead, which meant the one shortcut people find by
         // accident threw them out of the field they were typing in; the panel has the "All
@@ -986,15 +876,14 @@ class BorderKeysService :
     }
 
     private fun handleCharacter(code: Int) {
-        cancelComposerRun()
-        val connection = target().connection ?: return
-        val shifted = if (shiftState != SHIFT_OFF) {
+        val connection = currentInputConnection ?: return
+        val shifted = if (shiftState != ShiftState.OFF) {
             Character.toUpperCase(code)
         } else {
             code
         }
-        if (shiftState == SHIFT_ON) {
-            shiftState = SHIFT_OFF
+        if (shiftState == ShiftState.ON) {
+            shiftState = ShiftState.OFF
             host?.keyboard?.shiftState = shiftState
         }
         shiftHeldByUser = false
@@ -1044,6 +933,7 @@ class BorderKeysService :
             lastSpaceAt = 0L
             pendingSpacePeriod = true
             pendingCorrection = null
+            checkpointField()
             refreshContextFromEditor()
             applyAutoShift()
             requestSuggestions()
@@ -1095,6 +985,7 @@ class BorderKeysService :
             }
             pendingCorrection = null
         }
+        checkpointField()
         shiftAfterDelimiter(shifted)
         requestSuggestions()
     }
@@ -1123,7 +1014,7 @@ class BorderKeysService :
             return null
         }
         return AutoCorrection.correctionFor(
-            typed, topSuggestion, knownQuery, MIN_CORRECTED_LENGTH,
+            typed, topSuggestion, knownQuery, preferences.minCorrectionLength,
         )
     }
 
@@ -1171,19 +1062,90 @@ class BorderKeysService :
         return true
     }
 
+    /**
+     * Records the field's current text as a step in [fieldHistory], if it actually changed.
+     *
+     * Read fresh from the editor every time rather than trusting whatever this class last
+     * committed: a mismatch would mean something outside this keyboard changed the field, which
+     * is exactly the class of thing [revertCorrection] already guards against for the one
+     * keystroke it owns. The dedup check is what keeps a call from a site that turned out not to
+     * have changed anything from polluting the history with a version equal to the one before it.
+     */
+    private fun checkpointField() {
+        val connection = currentInputConnection ?: return
+        val text = connection.getExtractedText(
+            ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
+            0,
+        )?.text?.toString() ?: return
+        if (text == fieldHistory.current()) {
+            return
+        }
+        fieldHistory.addResult(text)
+    }
+
+    /**
+     * Starts a fresh undo/redo history for a field just opened, seeded with what was already in
+     * it.
+     *
+     * Without this, undoing the very first word typed this session would have nowhere to go
+     * back to -- there would be no "before" on record. Called once, from [onStartInputView]
+     * only: [resetComposing] is also called from actions that only move the cursor
+     * ([onQuickAction]'s CURSOR_START/CURSOR_END, [selectWordAtCursor]), and none of those are a
+     * new field to seed a history for.
+     */
+    private fun resetFieldHistory() {
+        fieldHistory.clear()
+        checkpointField()
+    }
+
+    /**
+     * Puts the field back to a version from [fieldHistory], touching only what differs from
+     * what is actually there right now.
+     *
+     * The live text is read fresh rather than trusting a cached copy, the same defensive choice
+     * [checkpointField] makes: whatever changed the field since the last step, comparing against
+     * what is on screen is what keeps this from ever landing on the wrong text -- only ever on a
+     * larger edit than strictly necessary. [FieldRestore.diff] is what trims that edit down to
+     * the part that actually differs, so a document that changed in one place doesn't get
+     * rewritten end to end for it.
+     */
+    private fun restoreFieldVersion(target: String?) {
+        if (target == null) {
+            return
+        }
+        val connection = currentInputConnection ?: return
+        val current = connection.getExtractedText(
+            ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
+            0,
+        )?.text?.toString() ?: return
+        if (current == target) {
+            return
+        }
+        val span = FieldRestore.diff(current, target)
+        connection.beginBatchEdit()
+        finishComposing(connection)
+        val boundary = span.deleteFrom + span.deleteCount
+        connection.setSelection(boundary, boundary)
+        if (span.deleteCount > 0) {
+            connection.deleteSurroundingText(span.deleteCount, 0)
+        }
+        if (span.insert.isNotEmpty()) {
+            connection.commitText(span.insert, 1)
+        }
+        connection.endBatchEdit()
+        // Not resetComposing(): that also drops previousWord1/2 and clears the strip in ways
+        // that belong to a genuinely new field, not to stepping through this one's own history.
+        pendingCorrection = null
+        refreshContextFromEditor()
+        requestSuggestions()
+    }
+
     private fun handleDelete() {
-        cancelComposerRun()
-        val destination = target()
-        val connection = destination.connection ?: return
-        val hasSelection = destination.selectionEnd > destination.selectionStart
+        val connection = currentInputConnection ?: return
+        val hasSelection = selectionEnd > selectionStart
         // A selection is what backspace deletes, all of it, before anything else is considered.
         // deleteSurroundingText would not do it: it deletes *around* the selection and leaves
         // the selected text exactly where it was, which reads as the key having done nothing.
-        //
-        // The selection comes from the destination rather than from the cached fields: the
-        // platform reports the application's caret and knows nothing about the draft box's, so
-        // reading the cache while typing in the box would leave this branch convinced there was
-        // still something selected long after the box had taken over.
         if (hasSelection) {
             composing.setLength(0)
             pendingCorrection = null
@@ -1236,19 +1198,11 @@ class BorderKeysService :
     }
 
     private fun handleEnter() {
-        if (promptActive) {
-            sendComposerPrompt()
-            return
-        }
-        val connection = target().connection ?: return
+        val connection = currentInputConnection ?: return
         val contextWord = previousWord1
         connection.beginBatchEdit()
         val finished = finishComposing(connection)
-        // The destination's own description. The draft box declares no action, so enter is a
-        // newline there -- which is the whole reason it carries an EditorInfo of its own: the
-        // application's would say IME_ACTION_SEND and the first enter in a draft would send the
-        // message the draft was being written to replace.
-        val action = target().editorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
+        val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
             ?: EditorInfo.IME_ACTION_NONE
         if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
             connection.endBatchEdit()
@@ -1256,6 +1210,7 @@ class BorderKeysService :
         } else {
             connection.commitText("\n", 1)
             connection.endBatchEdit()
+            checkpointField()
         }
         if (finished != null) {
             recordLearned(finished, contextWord)
@@ -1266,15 +1221,15 @@ class BorderKeysService :
     private fun handleShift() {
         val now = System.currentTimeMillis()
         shiftState = when {
-            shiftState == SHIFT_LOCKED -> SHIFT_OFF
-            shiftState == SHIFT_ON && now - lastShiftPressAt < DOUBLE_TAP_MILLIS -> SHIFT_LOCKED
-            shiftState == SHIFT_ON -> SHIFT_OFF
-            else -> SHIFT_ON
+            shiftState == ShiftState.LOCKED -> ShiftState.OFF
+            shiftState == ShiftState.ON && now - lastShiftPressAt < DOUBLE_TAP_MILLIS -> ShiftState.LOCKED
+            shiftState == ShiftState.ON -> ShiftState.OFF
+            else -> ShiftState.ON
         }
         lastShiftPressAt = now
         // Pressed deliberately, so the automatic state stops having an opinion until the next
         // character consumes it.
-        shiftHeldByUser = shiftState != SHIFT_OFF
+        shiftHeldByUser = shiftState != ShiftState.OFF
         autoLockedShift = false
         host?.keyboard?.shiftState = shiftState
     }
@@ -1357,441 +1312,6 @@ class BorderKeysService :
      * means looking at the keyboard, in the app where it felt wrong. The panel's last row opens
      * the full settings for everything else.
      */
-    // ---- the draft box --------------------------------------------------------------------------
-
-    /** The version line. Empty until the model has been asked for something. */
-    private val composerVersions = Composer()
-
-    /** What was selected in the application when the box opened, and where it was. */
-    private var composerSeed: String = ""
-    private var composerSelectionStart = -1
-    private var composerSelectionEnd = -1
-
-    /**
-     * Opens the draft box, seeded from the selection when there is one.
-     *
-     * Refused in a password field. Not because the box leaks -- it holds nothing after it closes
-     * -- but because the words typed into it are learned, and because the buttons on its bar
-     * send the text over a Binder to be rewritten. Neither belongs to a field the user was told
-     * would not be read.
-     */
-    private fun openComposer() {
-        val view = host ?: return
-        if (privateMode || !preferences.composerEnabled || composerActive) {
-            return
-        }
-        val selection = currentInputConnection?.getSelectedText(0)?.toString().orEmpty()
-        val seed = if (selection.length <= AssistProtocol.MAX_SELECTION_CHARS) selection else ""
-        composerSeed = seed
-        composerSelectionStart = if (seed.isEmpty()) -1 else selectionStart
-        composerSelectionEnd = if (seed.isEmpty()) -1 else selectionEnd
-
-        val connection = composerConnection
-            ?: ComposerInputConnection(view.composer) { onComposerBufferChanged() }
-                .also { composerConnection = it }
-        composerVersions.clear()
-        if (seed.isNotEmpty()) {
-            // The original is "the exact copy gathered from the initial page selection,
-            // nothing else" -- captured here, now, before a single keystroke can happen, so
-            // that typing before the first model run cannot become what "original" means. A
-            // box opened empty has no selection to be exact about, so it keeps the documented
-            // fallback: whatever was written when the model is first asked to do something.
-            composerVersions.captureBeforeRun(seed)
-        }
-        connection.reset(seed)
-        view.composer.bind(connection.text)
-        view.composer.listener = this
-        view.setComposerVisible(true)
-        // Nothing else may be writing while the box is: the autofill service's chips commit
-        // through their own connection, straight into the application, behind a box that is
-        // showing something else entirely.
-        view.showInlineSuggestions(false)
-        applyQuickActions(view)
-        switchTarget(TARGET_DRAFT)
-        applyPlacement(view, preferences)
-        pushComposerState()
-    }
-
-    private fun closeComposer() {
-        val view = host ?: return
-        if (!composerActive) {
-            return
-        }
-        promptConnection?.reset("")
-        switchTarget(TARGET_FIELD)
-        view.setComposerVisible(false)
-        view.composer.showVersions()
-        view.composer.showNotice("")
-        composerVersions.clear()
-        composerSeed = ""
-        composerSelectionStart = -1
-        composerSelectionEnd = -1
-        applyQuickActions(view)
-        applyPlacement(view, preferences)
-    }
-
-    /**
-     * Writes what is in the box into the application, and closes.
-     *
-     * The awkward case is a box that was opened over a selection which is no longer selected --
-     * the user tapped somewhere, or the application re-laid out. Committing then would replace
-     * nothing and insert at wherever the caret happens to be, which is how a paragraph ends up
-     * in the middle of a word. So: if there is still a selection, commit replaces it. If there
-     * is not, put the remembered range back and check it still holds the text the box started
-     * from before replacing it. If it does not, the text goes in at the caret and nothing is
-     * destroyed.
-     */
-    private fun insertFromComposer() {
-        val text = composerConnection?.snapshot().orEmpty()
-        val start = composerSelectionStart
-        val end = composerSelectionEnd
-        val seed = composerSeed
-        closeComposer()
-        if (text.isEmpty()) {
-            return
-        }
-        val connection = currentInputConnection ?: return
-        connection.beginBatchEdit()
-        if (selectionEnd <= selectionStart && start >= 0 && end > start) {
-            connection.setSelection(start, end)
-            val live = connection.getSelectedText(0)?.toString()
-            if (live != seed) {
-                // Not what we were shown. Leave the field as it was found and add rather than
-                // replace: an insertion in the wrong place is a nuisance, a replacement in the
-                // wrong place is somebody's text gone.
-                connection.setSelection(selectionEnd, selectionEnd)
-            }
-        }
-        connection.commitText(text, 1)
-        connection.endBatchEdit()
-        refreshContextFromEditor()
-        applyAutoShift()
-        requestSuggestions()
-    }
-
-    /** The buffer changed, so the box redraws and the bar reconsiders what can be pressed. */
-    private fun onComposerBufferChanged() {
-        host?.composer?.onBufferChanged()
-        host?.composer?.requestLayout()
-        pushComposerState()
-    }
-
-    /** Tells the box what its bar and its version line should show. */
-    private fun pushComposerState() {
-        val view = host ?: return
-        val hasText = composerConnection?.text?.isNotEmpty() == true
-        val actions = ComposerAction.fromIds(preferences.composerBar)
-            .filter { !it.needsAssistant || assistAvailable }
-        val enabled = BooleanArray(actions.size) { index ->
-            when (actions[index]) {
-                ComposerAction.INSERT -> hasText
-                ComposerAction.SHOW_ORIGINAL -> composerVersions.hasHistory
-                ComposerAction.SAVED_PROMPTS -> preferences.savedPrompts.isNotEmpty()
-                else -> hasText
-            }
-        }
-        view.composer.setBar(actions, enabled)
-        view.composer.setVersions(
-            composerVersions.size,
-            composerVersions.index,
-            composerVersions.canGoBack,
-            composerVersions.canGoForward,
-        )
-    }
-
-    /** Puts a version on screen without adding one. */
-    private fun showComposerVersion(text: String?) {
-        val connection = composerConnection ?: return
-        if (text == null) {
-            return
-        }
-        connection.replaceAll(text)
-        pushComposerState()
-    }
-
-    /** The request the box is waiting on, or -1. */
-    private var composerRequestId = -1
-
-    /** Which choice list the band is showing, so a tap on it can be read. */
-    private var composerChoices: Array<AssistTask?> = emptyArray()
-
-    /** The kept prompts the band is offering, when it is offering those instead. */
-    private var composerPromptChoices: List<SavedPrompt> = emptyList()
-
-    /**
-     * The instruction that produced what is on screen, until it has been kept or passed over.
-     *
-     * Kept only after it has worked. An instruction that returned an error is not one anybody
-     * wants a button for.
-     */
-    private var composerLastInstruction = ""
-
-    /** Whether the row is being used to name a prompt rather than to write one. */
-    private var composerNamingPrompt = false
-
-    private val composerBusy: Boolean get() = composerRequestId >= 0
-
-    override fun onComposerAction(action: ComposerAction) {
-        if (composerBusy) {
-            return
-        }
-        when (action) {
-            ComposerAction.INSERT -> insertFromComposer()
-            ComposerAction.SHOW_ORIGINAL -> showComposerVersion(composerVersions.flip())
-            ComposerAction.GRAMMAR -> runComposerTask(AssistTask.CORRECT)
-            ComposerAction.SHORTEN -> runComposerTask(AssistTask.SHORTEN)
-            ComposerAction.TRANSLATE -> offerComposerChoices(TRANSLATE_TASKS)
-            ComposerAction.TONE -> offerComposerChoices(TONE_TASKS)
-            ComposerAction.PROMPT -> openComposerPrompt()
-            ComposerAction.SAVED_PROMPTS -> offerSavedPrompts()
-        }
-    }
-
-    /**
-     * Opens the instruction row and points the keys at it.
-     *
-     * The draft keeps everything it had; the row is a second buffer, so writing an instruction
-     * about a paragraph cannot end up inside the paragraph.
-     */
-    private fun openComposerPrompt() {
-        val view = host ?: return
-        if (!composerActive || promptActive) {
-            return
-        }
-        val connection = promptConnection
-            ?: ComposerInputConnection(view.composer) { onComposerPromptChanged() }
-                .also { promptConnection = it }
-        connection.reset("")
-        view.composer.showPrompt(connection.text)
-        switchTarget(TARGET_PROMPT)
-        pushComposerState()
-    }
-
-    private fun closeComposerPrompt() {
-        val view = host ?: return
-        if (!promptActive) {
-            return
-        }
-        switchTarget(TARGET_DRAFT)
-        view.composer.showVersions()
-        promptConnection?.reset("")
-        pushComposerState()
-    }
-
-    /** Enter in the instruction row sends it, which is why the row exists. */
-    private fun sendComposerPrompt() {
-        if (composerNamingPrompt) {
-            keepPrompt()
-            return
-        }
-        val written = promptConnection?.snapshot().orEmpty().trim()
-        if (written.isEmpty()) {
-            closeComposerPrompt()
-            return
-        }
-        closeComposerPrompt()
-        composerLastInstruction = written
-        runComposerTask(AssistTask.CUSTOM, written)
-    }
-
-    private fun onComposerPromptChanged() {
-        host?.composer?.onBufferChanged()
-        host?.composer?.requestLayout()
-    }
-
-    override fun onComposerPromptDismissed() {
-        // Passing over the offer to keep an instruction is a decision, so it is not offered
-        // again for the same one.
-        composerNamingPrompt = false
-        composerLastInstruction = ""
-        closeComposerPrompt()
-    }
-
-    /**
-     * Puts a row of tasks in the box's band.
-     *
-     * The band and not the suggestion strip: the strip belongs to the word being typed, and a
-     * row that turns into a language chooser mid-word is a row that cannot be trusted.
-     */
-    private fun offerComposerChoices(tasks: Array<AssistTask?>) {
-        val view = host ?: return
-        composerChoices = tasks
-        val labels = arrayOfNulls<String>(tasks.size)
-        for (index in tasks.indices) {
-            labels[index] = tasks[index]?.let { composerChoiceLabel(it) }
-        }
-        view.composer.showChoices(labels, tasks.size)
-    }
-
-    override fun onComposerChoice(index: Int) {
-        val kept = composerPromptChoices.getOrNull(index)
-        if (kept != null) {
-            host?.composer?.showVersions()
-            composerPromptChoices = emptyList()
-            composerLastInstruction = kept.text
-            runComposerTask(AssistTask.CUSTOM, kept.text)
-            return
-        }
-        val task = composerChoices.getOrNull(index) ?: return
-        host?.composer?.showVersions()
-        composerChoices = emptyArray()
-        runComposerTask(task)
-    }
-
-    /** The prompts this device has kept, as a row to pick from. */
-    private fun offerSavedPrompts() {
-        val view = host ?: return
-        val kept = preferences.savedPrompts
-        if (kept.isEmpty()) {
-            view.composer.showNotice(strings[Keys.COMPOSER_NO_SAVED_PROMPTS])
-            return
-        }
-        composerChoices = emptyArray()
-        composerPromptChoices = kept
-        val labels = arrayOfNulls<String>(kept.size)
-        for (index in kept.indices) {
-            labels[index] = kept[index].name
-        }
-        view.composer.showChoices(labels, kept.size)
-    }
-
-    /**
-     * Offers to keep the instruction that just worked, with a name to edit.
-     *
-     * The name is proposed rather than asked for, because no instruction worth writing fits on a
-     * button and being handed an empty field after every prompt is a tax on using the feature.
-     * The proposal is a heuristic and not a second run of the model: that would cost seconds,
-     * come back wrong often enough to matter, and still need editing.
-     */
-    private fun offerToKeepPrompt() {
-        val view = host ?: return
-        val instruction = composerLastInstruction
-        if (instruction.isEmpty() || preferences.savedPrompts.any { it.text == instruction }) {
-            return
-        }
-        if (preferences.savedPrompts.size >= SavedPrompt.MAX_SAVED) {
-            return
-        }
-        val connection = promptConnection
-            ?: ComposerInputConnection(view.composer) { onComposerPromptChanged() }
-                .also { promptConnection = it }
-        connection.reset(Composer.suggestedName(instruction))
-        composerNamingPrompt = true
-        view.composer.showPrompt(connection.text, strings[Keys.COMPOSER_SAVE_PROMPT_NAME])
-        switchTarget(TARGET_PROMPT)
-        pushComposerState()
-    }
-
-    private fun keepPrompt() {
-        val name = promptConnection?.snapshot().orEmpty().trim()
-        val instruction = composerLastInstruction
-        composerNamingPrompt = false
-        composerLastInstruction = ""
-        closeComposerPrompt()
-        if (name.isEmpty() || instruction.isEmpty()) {
-            return
-        }
-        updatePreferences { current ->
-            current.copy(
-                savedPrompts = current.savedPrompts + SavedPrompt(name = name, text = instruction),
-            )
-        }
-    }
-
-    /**
-     * Sends what is in the box to the model.
-     *
-     * The text is snapshotted into the version line first, which is what makes the answer
-     * something you can walk back from -- and what makes running an action from the middle of
-     * the line the decision to take that version forward.
-     */
-    private fun runComposerTask(task: AssistTask, instruction: String = "") {
-        val view = host ?: return
-        val connection = composerConnection ?: return
-        val text = connection.snapshot()
-        if (text.isEmpty() || composerBusy) {
-            return
-        }
-        composerVersions.captureBeforeRun(text)
-        composerRequestId = assist.run(task, text, instruction)
-        if (composerRequestId < 0) {
-            view.composer.showNotice(strings[Keys.ASSISTANT_THE_ASSISTANT_IS_NOT_INSTALLED])
-            return
-        }
-        composerTranslateFrom = task
-        view.composer.showNotice(strings[Keys.COMPOSER_WORKING])
-        pushComposerState()
-    }
-
-    /** The task whose answer is being waited for, for the message if it fails. */
-    private var composerTranslateFrom: AssistTask? = null
-
-    /** A model's answer becomes the newest version, and the box shows it. */
-    private fun onComposerResult(text: String) {
-        composerRequestId = -1
-        composerVersions.addResult(text)
-        composerConnection?.replaceAll(text)
-        host?.composer?.showNotice("")
-        pushComposerState()
-        // An instruction is worth a button once it has done something, and not before.
-        offerToKeepPrompt()
-    }
-
-    private fun onComposerFailure(message: String) {
-        composerRequestId = -1
-        host?.composer?.showNotice(message)
-        pushComposerState()
-    }
-
-    /** A keystroke while the model is working cancels it, rather than racing it. */
-    private fun cancelComposerRun() {
-        if (!composerBusy) {
-            return
-        }
-        composerRequestId = -1
-        assist.cancel()
-        host?.composer?.showNotice("")
-        pushComposerState()
-    }
-
-    private fun composerChoiceLabel(task: AssistTask): String = when (task) {
-        AssistTask.TRANSLATE_TO_ENGLISH -> strings[Keys.LANGUAGE_ENGLISH]
-        AssistTask.TRANSLATE_TO_ROMANIAN -> strings[Keys.LANGUAGE_ROMANIAN]
-        AssistTask.TRANSLATE_TO_GERMAN -> strings[Keys.LANGUAGE_GERMAN]
-        AssistTask.TRANSLATE_TO_SPANISH -> strings[Keys.LANGUAGE_SPANISH]
-        AssistTask.TRANSLATE_TO_FRENCH -> strings[Keys.LANGUAGE_FRENCH]
-        AssistTask.TRANSLATE_TO_ITALIAN -> strings[Keys.LANGUAGE_ITALIAN]
-        AssistTask.REWRITE_FORMAL -> strings[Keys.TONE_FORMAL]
-        AssistTask.REWRITE_CASUAL -> strings[Keys.TONE_CASUAL]
-        AssistTask.REWRITE_DIRECT -> strings[Keys.TONE_DIRECT]
-        else -> assistActionTitle(task)
-    }
-
-    override fun onComposerBack() {
-        // What is on screen may have been edited since this node was written, and an edit
-        // belongs to the node it was made on.
-        composerConnection?.let { composerVersions.updateCurrent(it.snapshot()) }
-        showComposerVersion(composerVersions.back())
-    }
-
-    override fun onComposerForward() {
-        composerConnection?.let { composerVersions.updateCurrent(it.snapshot()) }
-        showComposerVersion(composerVersions.forward())
-    }
-
-    override fun onComposerClose() {
-        closeComposer()
-    }
-
-    override fun onComposerVersionPicked(index: Int) {
-        composerConnection?.let { composerVersions.updateCurrent(it.snapshot()) }
-        showComposerVersion(composerVersions.goTo(index))
-    }
-
-    override fun onComposerCaretPlaced(offset: Int) {
-        composerConnection?.setSelection(offset, offset)
-    }
-
     private fun toggleQuickSettings() {
         val view = host ?: return
         val opening = !view.quickSettingsVisible
@@ -1825,7 +1345,6 @@ class BorderKeysService :
     }
 
     override fun onStartResize() {
-        closeComposer()
         val view = host ?: return
         view.showQuickSettings(false)
         draggedHeight = preferences.heightScale
@@ -1877,11 +1396,26 @@ class BorderKeysService :
     // ---- suggestions ------------------------------------------------------------------------------
 
     override fun onSuggestionPicked(index: Int, word: String) {
-        val connection = target().connection ?: return
+        val connection = currentInputConnection ?: return
         // Read before the commit, for the same reason as everywhere else: what is being learned
         // is that this word followed the one already in the text, not that it followed itself.
         val contextWord = previousWord1
         connection.beginBatchEdit()
+        // While actively typing, commitText below replaces the composing region on its own --
+        // that is what a composing region is for. But the strip also offers suggestions for a
+        // word the cursor merely sits in, adopted by adoptWordAtCaret rather than composed
+        // (deliberately without a composing region -- see its own doc comment), and there
+        // commitText would only insert beside that word rather than replace it. lastQuery is
+        // "what the strip is about" either way, so composing being empty while lastQuery is not
+        // is exactly that case; the text immediately before the cursor is checked against it
+        // first, the same guard revertCorrection uses, so a stale lastQuery deletes nothing
+        // rather than deleting whatever happens to be there.
+        if (composing.isEmpty() && lastQuery.isNotEmpty()) {
+            val before = connection.getTextBeforeCursor(lastQuery.length, 0)
+            if (before != null && before.toString() == lastQuery) {
+                connection.deleteSurroundingText(lastQuery.length, 0)
+            }
+        }
         composing.setLength(0)
         composing.append(word)
         connection.commitText("$word ", 1)
@@ -1940,14 +1474,23 @@ class BorderKeysService :
             // The repository suspends on its own dispatcher; the reloads only post to the
             // prediction thread, so there is nothing here to move off the main thread.
             dictionary.forget(word)
-            engine.loadUserWords(dictionary.topWords())
-            engine.loadUserBigrams(dictionary.topBigrams())
-        engine.loadUserTrigrams(dictionary.topTrigrams())
+            loadPersonalModel(dictionary)
             requestSuggestions()
         }
     }
 
-    override fun onSuggestions(words: Array<String?>, count: Int, knownWord: String) {
+    override fun onSuggestions(words: Array<String?>, count: Int, knownWord: String, query: String) {
+        // This answer was asked for on an earlier keystroke and lost the race against a later
+        // one: the engine has one thread and posts its answer back rather than blocking, so an
+        // answer computed for "Ac" can still arrive after the strip -- and lastQuery -- have
+        // already moved on to "Acm". Rendering it here would border a word for "Ac" over text
+        // that now reads "Acm", or worse, let correctionFor below compare "Acm" against
+        // knownWord/topSuggestion that are actually about "Ac", the exact way a border ended up
+        // drawn on a correction that revertCorrection's own real-word guard would then refuse to
+        // apply. Dropping it leaves whatever the last genuinely current answer already drew.
+        if (query != lastQuery) {
+            return
+        }
         knownQuery = knownWord
         // Settled here as well as in onUpdateSelection: an editor that does not report selection
         // changes -- and some do not, for their own reasons -- would otherwise leave the idle
@@ -2019,7 +1562,7 @@ class BorderKeysService :
         strip.editorEmpty = if (hasTextBeforeCaret) {
             false
         } else {
-            target().connection?.getTextAfterCursor(1, 0).isNullOrEmpty()
+            currentInputConnection?.getTextAfterCursor(1, 0).isNullOrEmpty()
         }
     }
 
@@ -2043,7 +1586,7 @@ class BorderKeysService :
         pendingCorrection = null
         pendingForget = null
         composing.setLength(0)
-        target().connection?.finishComposingText()
+        currentInputConnection?.finishComposingText()
         refreshContextFromEditor()
         host?.suggestionStrip?.clear()
         // Cleared and then asked again rather than left blank: on an empty field the engine
@@ -2092,9 +1635,9 @@ class BorderKeysService :
         // next backspace had nothing to undo, which is the entire feature. Nothing is lost by
         // keeping it: revertCorrection checks that the text immediately before the cursor is
         // still exactly what it committed, and declines when the caret has really moved.
-        target().connection?.finishComposingText()
+        currentInputConnection?.finishComposingText()
 
-        val before = target().connection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
+        val before = currentInputConnection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
         if (before.isNullOrEmpty()) {
             previousWord1 = null
             previousWord2 = null
@@ -2117,7 +1660,7 @@ class BorderKeysService :
     }
 
     private fun refreshContextFromEditor() {
-        val connection = target().connection
+        val connection = currentInputConnection
         val before = connection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
         if (before.isNullOrEmpty()) {
             previousWord1 = null
@@ -2153,12 +1696,12 @@ class BorderKeysService :
         // Not before something that is already a space, and not at the very end of a field the
         // user may be about to leave -- an editor that trims trailing whitespace would then
         // show the cursor jumping back on its own.
-        val after = target().connection?.getTextAfterCursor(1, 0)
+        val after = currentInputConnection?.getTextAfterCursor(1, 0)
         return if (after != null && after.isNotEmpty() && after[0] == ' ') "" else " "
     }
 
     private fun shiftAfterDelimiter(code: Int) {
-        if (shiftState == SHIFT_LOCKED || shiftHeldByUser) {
+        if (shiftState == ShiftState.LOCKED || shiftHeldByUser) {
             return
         }
         applyAutoShift()
@@ -2176,65 +1719,38 @@ class BorderKeysService :
      * for themselves is the one thing worse than not deciding at all.
      */
     private fun applyAutoShift() {
-        if (shiftState == SHIFT_LOCKED && !autoLockedShift) {
+        if (shiftState == ShiftState.LOCKED && !autoLockedShift) {
             return
         }
         if (shiftHeldByUser) {
             return
         }
         val wanted = autoShiftState()
-        autoLockedShift = wanted == SHIFT_LOCKED
+        autoLockedShift = wanted == ShiftState.LOCKED
         if (shiftState != wanted) {
             shiftState = wanted
             host?.keyboard?.shiftState = shiftState
         }
     }
 
-    /** What shift should be here, from the field's request and the text before the cursor. */
+    /**
+     * What shift should be here, from the field's request and the text before the cursor.
+     *
+     * The decision itself lives in [AutoShift], pure and tested on its own; this is the thin
+     * Android-facing half, reading the current target and asking the platform's own
+     * [InputConnection.getCursorCapsMode] rather than walking the text before the cursor by
+     * hand -- the same computation the framework and every other IME already do, correctly
+     * handling word/sentence boundaries and an empty field without this class re-deriving them.
+     */
     private fun autoShiftState(): Int {
-        if (!preferences.autoCapitalise) {
-            return SHIFT_OFF
+        val info = currentInputEditorInfo ?: return ShiftState.OFF
+        return AutoShift.stateFor(
+            autoCapitaliseEnabled = preferences.autoCapitalise,
+            inputType = info.inputType,
+            composingIsEmpty = composing.isEmpty(),
+        ) {
+            currentInputConnection?.getCursorCapsMode(info.inputType) ?: info.initialCapsMode
         }
-        val type = target().editorInfo?.inputType ?: return SHIFT_OFF
-        if ((type and android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS) != 0) {
-            return SHIFT_LOCKED
-        }
-        val words = (type and android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS) != 0
-        val sentences = (type and android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES) != 0
-        if (!words && !sentences) {
-            return SHIFT_OFF
-        }
-        // The composing region is text the user is in the middle of; if there is any, they are
-        // inside a word and nothing should be capitalised.
-        if (composing.isNotEmpty()) {
-            return SHIFT_OFF
-        }
-        val before = target().connection?.getTextBeforeCursor(CAP_LOOKBACK_CHARS, 0)
-        if (before.isNullOrEmpty()) {
-            // Start of the field: the first word of anything is the first word of a sentence.
-            return SHIFT_ON
-        }
-        if (words) {
-            return if (isWordCharacter(before[before.length - 1].code)) SHIFT_OFF else SHIFT_ON
-        }
-        // Sentences: walk back over the spaces, then look at what ended the last one.
-        var index = before.length - 1
-        var spaces = 0
-        while (index >= 0 && (before[index] == ' ' || before[index] == '\t')) {
-            spaces++
-            index--
-        }
-        if (index < 0) {
-            return SHIFT_ON
-        }
-        val last = before[index]
-        if (last == '\n') {
-            return SHIFT_ON
-        }
-        // A sentence ends at . ! ? and only counts once a space follows it: "e.g" is not the
-        // end of anything, and neither is a full stop the user is still typing after.
-        return if (spaces > 0 && (last == '.' || last == '!' || last == '?')) SHIFT_ON
-        else SHIFT_OFF
     }
 
     private fun isWordCharacter(code: Int): Boolean =
@@ -2307,8 +1823,31 @@ class BorderKeysService :
             DataGraph.dictionary.applyLearned(updates)
             DataGraph.dictionary.applyLearnedBigrams(pairs)
             DataGraph.dictionary.applyLearnedTrigrams(triples)
+            maybeDecayPersonalDictionary()
             engine.snapshotUserModel(snapshotPath)
         }
+    }
+
+    /**
+     * Runs [DictionaryRepository.decayStaleEntries], at most once a day.
+     *
+     * This is "snapshot" in [com.borderkeys.data.PersonalWordDecay]'s sense: it is what actually
+     * shrinks a stale count on disk, rather than only correcting for it on the way into the
+     * native model ([loadPersonalModel], "restore"). [flushLearning] runs on a four-second
+     * debounce while the user is actively typing, and the sweep's own `WHERE lastUsedAt <
+     * :cutoff` already makes it safe to run repeatedly -- a row it just touched will not be due
+     * again for another ninety days -- but there is no reason to scan the whole table that
+     * often, so a one-line marker file throttles it to once a day instead.
+     */
+    private suspend fun maybeDecayPersonalDictionary() {
+        val prefs = getSharedPreferences(DECAY_PREFS, MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val lastSweep = prefs.getLong(DECAY_LAST_SWEEP_AT, 0L)
+        if (now - lastSweep < DECAY_SWEEP_INTERVAL_MILLIS) {
+            return
+        }
+        DataGraph.dictionary.decayStaleEntries(now)
+        prefs.edit().putLong(DECAY_LAST_SWEEP_AT, now).apply()
     }
 
     // ---- clipboard --------------------------------------------------------------------------------------
@@ -2437,7 +1976,7 @@ class BorderKeysService :
         )
         draggedWidth = width.coerceIn(KeyboardPreferences.MIN_WIDTH_SCALE, 1f)
         view.heightScaleForDrag = draggedHeight
-        paints.update(theme, resources.displayMetrics, draggedHeight, this)
+        paints.update(effectiveTheme(), resources.displayMetrics, draggedHeight, this)
         view.setPlacement(
             preferences.positionMode,
             draggedWidth,
@@ -2460,16 +1999,13 @@ class BorderKeysService :
 
     private fun applyQuickActions(view: KeyboardHostView) {
         val bar = view.quickActions
-        // Hidden while the draft box is open. Every button on it copies, pastes, selects or
-        // moves the caret in the application's field -- which is not the field being typed
-        // into, so a bar of them is a row of traps.
-        if (!preferences.quickActionsEnabled || privateMode || composerActive) {
+        if (!preferences.quickActionsEnabled || privateMode) {
             bar.visibility = View.GONE
             return
         }
-        // The draft box's button goes with the draft box. Switching the feature off has to
-        // take away every way to reach it, not just the screen that explains it -- a button
-        // that does nothing is the worst of both.
+        // Compose's own button goes with Compose. Switching the feature off has to take away
+        // every way to reach it, not just the screen that explains it -- a button that does
+        // nothing is the worst of both.
         val chosen = QuickAction.fromIds(preferences.quickActions)
             .filter { it != QuickAction.COMPOSE || preferences.composerEnabled }
         if (chosen.isEmpty()) {
@@ -2505,7 +2041,13 @@ class BorderKeysService :
             QuickAction.PASTE -> onClipboardPicked()
             QuickAction.CLIPBOARD_HISTORY -> offerClipboardHistory()
             QuickAction.SELECT_ALL -> connection.performContextMenuAction(android.R.id.selectAll)
-            QuickAction.CUT -> connection.performContextMenuAction(android.R.id.cut)
+            // The edit happens entirely inside the target app's own cut implementation --
+            // nothing here calls commitText or deleteSurroundingText for it. checkpointField()
+            // reads the live result back afterward, which is what lets a cut be undone at all.
+            QuickAction.CUT -> {
+                connection.performContextMenuAction(android.R.id.cut)
+                checkpointField()
+            }
             QuickAction.SELECT_WORD -> selectWordAtCursor(connection)
             QuickAction.DELETE_WORD -> deleteWordBeforeCursor(connection)
             QuickAction.CURSOR_START -> {
@@ -2520,16 +2062,23 @@ class BorderKeysService :
             QuickAction.NEWLINE -> {
                 finishComposing(connection)
                 connection.commitText("\n", 1)
+                checkpointField()
             }
             QuickAction.SWITCH_LAYOUT -> switchLanguage()
             QuickAction.SETTINGS -> openSettings()
             QuickAction.COMPOSE -> {
-                openComposer()
+                if (privateMode || !preferences.composerEnabled) return
+                val selection = currentInputConnection?.getSelectedText(0)?.toString().orEmpty()
+                val seed = if (selection.length <= AssistProtocol.MAX_SELECTION_CHARS) selection else ""
+                val intent = Intent(DraftProtocol.ACTION_QUICK_DRAFT)
+                    .setClassName(packageName, SETTINGS_ACTIVITY)
+                    .putExtra(Intent.EXTRA_PROCESS_TEXT, seed)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { startActivity(intent) }
                 return
             }
-            QuickAction.UNDO -> if (!revertCorrection(connection)) {
-                deleteWordBeforeCursor(connection)
-            }
+            QuickAction.UNDO -> restoreFieldVersion(fieldHistory.back())
+            QuickAction.REDO -> restoreFieldVersion(fieldHistory.forward())
         }
         if (action != QuickAction.CLIPBOARD_HISTORY) {
             refreshContextFromEditor()
@@ -2598,7 +2147,7 @@ class BorderKeysService :
         view?.setClipboardPanelVisible(false)
         // Text follows the draft box; an image cannot, and takes the branch below that needs the
         // application's own connection to know what it will accept.
-        val connection = target().connection ?: return
+        val connection = currentInputConnection ?: return
         if (entry.isImage) {
             val uri = android.net.Uri.parse(entry.uri)
             val description = android.content.ClipDescription(
@@ -2608,6 +2157,7 @@ class BorderKeysService :
         } else {
             finishComposing(connection)
             connection.commitText(entry.content, 1)
+            checkpointField()
         }
         refreshContextFromEditor()
         requestSuggestions()
@@ -2636,9 +2186,10 @@ class BorderKeysService :
      * closes on every pick is a picker reopened on every pick.
      */
     private fun onEmojiPicked(emoji: String) {
-        val connection = target().connection ?: return
+        val connection = currentInputConnection ?: return
         finishComposing(connection)
         connection.commitText(emoji, 1)
+        checkpointField()
         refreshContextFromEditor()
         requestSuggestions()
 
@@ -2651,7 +2202,6 @@ class BorderKeysService :
     }
 
     override fun onClipboardPanelClosed() {
-        closeComposer()
         host?.setClipboardPanelVisible(false)
     }
 
@@ -2693,6 +2243,7 @@ class BorderKeysService :
     private fun deleteWordBeforeCursor(connection: InputConnection) {
         if (selectionEnd > selectionStart) {
             connection.commitText("", 1)
+            checkpointField()
             return
         }
         composing.setLength(0)
@@ -2709,9 +2260,28 @@ class BorderKeysService :
             count++
         }
         connection.deleteSurroundingText(count.coerceAtLeast(1), 0)
+        checkpointField()
     }
 
     // ---- the clipboard chip ---------------------------------------------------------------
+
+    /**
+     * A stable identity for a clip, for telling "the same thing already offered" apart from
+     * "something new that happens to be sitting in the same slot."
+     *
+     * The text itself, or the image's URI -- not the [ClipData] object, which the platform hands
+     * out fresh on every read even when nothing has changed. Null for anything this chip would
+     * not offer anyway, so callers can compare it directly against [withdrawnClip].
+     */
+    private fun clipSignature(clip: ClipData?): String? {
+        val item = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0) ?: return null
+        val description = clip.description ?: return null
+        return if (description.hasMimeType("image/*")) {
+            item.uri?.toString()
+        } else {
+            item.coerceToText(this)?.toString()?.trim()?.ifEmpty { null }
+        }
+    }
 
     /**
      * Rebuilds the chip that offers what is on the clipboard.
@@ -2723,28 +2293,32 @@ class BorderKeysService :
      */
     private fun refreshClipboardChip() {
         val strip = host?.suggestionStrip ?: return
-        if (privateMode || !preferences.clipboardSuggestion || clipboardChipWithdrawn) {
+        if (privateMode || !preferences.clipboardSuggestion) {
             strip.clipboardChip = null
+            shownClipSignature = null
             return
         }
         val clip = clipboardManager?.primaryClip
         val description = clip?.description
-        if (clip == null || clip.itemCount == 0 || description == null) {
+        if (clip == null || clip.itemCount == 0 || description == null ||
+            clipSignature(clip) == withdrawnClip
+        ) {
             strip.clipboardChip = null
+            shownClipSignature = null
             return
         }
-        strip.clipboardChip = when {
+        val text = when {
             description.hasMimeType("image/*") -> strings[Keys.CLIP_PHOTO]
             else -> {
-                val text = clip.getItemAt(0).coerceToText(this)?.toString()?.trim().orEmpty()
-                if (text.isEmpty()) {
+                val plain = clip.getItemAt(0).coerceToText(this)?.toString()?.trim().orEmpty()
+                if (plain.isEmpty()) {
                     null
                 } else {
                     // The first few words, so the chip says which of several copied things this
                     // is without becoming a paragraph in a slot a thumb has to hit.
-                    val preview = text.take(CHIP_PREVIEW_CHARS).substringBeforeLast(' ', "")
-                        .ifEmpty { text.take(CHIP_PREVIEW_CHARS) }
-                    if (preview.length < text.length) {
+                    val preview = plain.take(CHIP_PREVIEW_CHARS).substringBeforeLast(' ', "")
+                        .ifEmpty { plain.take(CHIP_PREVIEW_CHARS) }
+                    if (preview.length < plain.length) {
                         strings.getString(Keys.CLIP_TEXT, preview)
                     } else {
                         strings.getString(Keys.CLIP_TEXT_WHOLE, preview)
@@ -2752,10 +2326,15 @@ class BorderKeysService :
                 }
             }
         }
+        strip.clipboardChip = text
+        // What is actually on screen right now, kept separately from re-reading the clipboard
+        // later: see shownClipSignature's own doc comment for why onFinishInputView needs this
+        // rather than a fresh read at close time.
+        shownClipSignature = if (text != null) clipSignature(clip) else null
     }
 
     override fun onClipboardPicked() {
-        val connection = target().connection ?: return
+        val connection = currentInputConnection ?: return
         val clip = clipboardManager?.primaryClip ?: return
         if (clip.itemCount == 0 || privateMode) {
             return
@@ -2770,8 +2349,9 @@ class BorderKeysService :
         val text = item.coerceToText(this)?.toString() ?: return
         finishComposing(connection)
         connection.commitText(text, 1)
+        checkpointField()
         if (preferences.clipboardSuggestionOnce) {
-            clipboardChipWithdrawn = true
+            withdrawnClip = clipSignature(clip)
             host?.suggestionStrip?.clipboardChip = null
         }
         if (preferences.clearClipboardAfterInsert) {
@@ -2793,21 +2373,10 @@ class BorderKeysService :
      * usually does, a plain text field never. Where it is refused there is nothing to fall back
      * to, so the chip is simply not honoured rather than pasting a content URI as text.
      */
-    /**
-     * Always the application's own connection, whatever is being typed into.
-     *
-     * An image has no meaning in a text buffer, so a picture chosen while the draft box is open
-     * has nowhere to go -- and putting it into the application behind the box, which is the only
-     * other place it could land, would be an edit the user did not ask for and cannot see. It is
-     * refused the same way a field that does not accept images refuses one: nothing happens.
-     */
     private fun commitImage(
         uri: android.net.Uri,
         description: android.content.ClipDescription,
     ) {
-        if (composerActive) {
-            return
-        }
         val connection = currentInputConnection ?: return
         val accepted = currentInputEditorInfo?.contentMimeTypes.orEmpty()
         val supported = accepted.any { mime ->
@@ -2834,7 +2403,7 @@ class BorderKeysService :
         if (clip.itemCount == 0) {
             return
         }
-        clipboardChipWithdrawn = false
+        withdrawnClip = null
         refreshClipboardChip()
 
         val description = clip.description
@@ -2872,7 +2441,7 @@ class BorderKeysService :
             return null
         }
         val chipBackground = ViewStyle.Builder()
-            .setBackgroundColor(theme.keyColor)
+            .setBackgroundColor(effectiveTheme().keyColor)
             .setPadding(CHIP_PADDING_PX, 0, CHIP_PADDING_PX, 0)
             .build()
         val style = InlineSuggestionUi.newStyleBuilder()
@@ -2880,21 +2449,21 @@ class BorderKeysService :
             .setChipStyle(chipBackground)
             .setTitleStyle(
                 TextViewStyle.Builder()
-                    .setTextColor(theme.textColor)
-                    .setTextSize(theme.labelTextSizeSp * 0.8f)
+                    .setTextColor(effectiveTheme().textColor)
+                    .setTextSize(effectiveTheme().labelTextSizeSp * 0.8f)
                     .build(),
             )
             .setSubtitleStyle(
                 TextViewStyle.Builder()
-                    .setTextColor(theme.secondaryTextColor)
-                    .setTextSize(theme.labelTextSizeSp * 0.62f)
+                    .setTextColor(effectiveTheme().secondaryTextColor)
+                    .setTextSize(effectiveTheme().labelTextSizeSp * 0.62f)
                     .build(),
             )
             .build()
 
         val styles = UiVersions.newStylesBuilder().addStyle(style).build()
         val density = resources.displayMetrics.density
-        val height = (theme.rowHeightDp * 0.78f * density).toInt()
+        val height = (effectiveTheme().rowHeightDp * 0.78f * density).toInt()
         val spec = InlinePresentationSpec
             .Builder(Size(MIN_CHIP_WIDTH_DP, height), Size(Int.MAX_VALUE, height))
             .setStyle(styles)
@@ -2917,7 +2486,7 @@ class BorderKeysService :
         }
 
         val density = resources.displayMetrics.density
-        val chipHeight = (theme.rowHeightDp * 0.78f * density).toInt().coerceAtLeast(1)
+        val chipHeight = (effectiveTheme().rowHeightDp * 0.78f * density).toInt().coerceAtLeast(1)
         val chipWidth = (view.width / 2).coerceAtLeast(MIN_CHIP_WIDTH_DP)
         val size = Size(chipWidth, chipHeight)
         val inflated = ArrayList<android.widget.inline.InlineContentView>(suggestions.size)
@@ -2952,15 +2521,31 @@ class BorderKeysService :
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
         const val USER_MODEL_SNAPSHOT = "user_model.bku"
 
-        const val SHIFT_OFF = 0
-        const val SHIFT_ON = 1
-        const val SHIFT_LOCKED = 2
+        /** Where [maybeDecayPersonalDictionary] remembers when it last ran. Its own small file
+         *  rather than a field on [KeyboardPreferences]: it is not a setting, nobody reads it,
+         *  and it has no business being in the same document a settings screen edits and writes
+         *  back whole. */
+        const val DECAY_PREFS = "personal_dictionary_decay"
+        const val DECAY_LAST_SWEEP_AT = "last_sweep_at"
+
+        /** How often [maybeDecayPersonalDictionary] is allowed to run its `UPDATE`s -- once a
+         *  day is plenty against a ninety-day half-life, and far less than the four-second
+         *  learning-flush debounce that would otherwise run it on every flush of an active
+         *  typing session. */
+        const val DECAY_SWEEP_INTERVAL_MILLIS = 24L * 60 * 60 * 1000
+
         const val DOUBLE_TAP_MILLIS = 400L
 
         const val CONTEXT_WINDOW_CHARS = 64
 
-        /** Enough to find what ended the last sentence, and no more. */
-        const val CAP_LOOKBACK_CHARS = 8
+        /**
+         * How much of the field [checkpointField] and [restoreFieldVersion] will read.
+         *
+         * A version list is not the place for an unbounded copy of a document -- the same
+         * reasoning [CONTEXT_WINDOW_CHARS] applies to the n-gram context read, at a scale that
+         * covers a real message or email rather than two words of it.
+         */
+        const val FIELD_HISTORY_CHARS = 20_000
 
         /** How close two spaces must be to mean the end of a sentence rather than two spaces. */
         const val DOUBLE_SPACE_MILLIS = 1200L
@@ -2978,42 +2563,6 @@ class BorderKeysService :
         const val BKD_ERR_VERSION = -4
         const val MIN_LEARNED_LENGTH = 2
 
-        /**
-         * The shortest word a delimiter will replace.
-         *
-         * Three, because one- and two-letter words are where a correction is least likely to be
-         * right and most annoying when it is not: half the alphabet is one edit away from "a"
-         * or "la", and the strip is full of them.
-         */
-        const val MIN_CORRECTED_LENGTH = 3
-
-        /** Which buffer typing lands in. See BorderKeysService.target. */
-        const val TARGET_FIELD = 0
-        const val TARGET_DRAFT = 1
-        const val TARGET_PROMPT = 2
-
-        /**
-         * What the translate button offers, in the order it offers them.
-         *
-         * The six the application itself speaks, because those are the six whose dictionaries
-         * are here and whose names the catalogues can print. One entry per target rather than a
-         * language argument: the task id is what crosses the process boundary, and a task that
-         * means different things depending on a second field is one whose request cannot be read.
-         */
-        val TRANSLATE_TASKS: Array<AssistTask?> = arrayOf(
-            AssistTask.TRANSLATE_TO_ENGLISH,
-            AssistTask.TRANSLATE_TO_ROMANIAN,
-            AssistTask.TRANSLATE_TO_GERMAN,
-            AssistTask.TRANSLATE_TO_SPANISH,
-            AssistTask.TRANSLATE_TO_FRENCH,
-            AssistTask.TRANSLATE_TO_ITALIAN,
-        )
-
-        val TONE_TASKS: Array<AssistTask?> = arrayOf(
-            AssistTask.REWRITE_FORMAL,
-            AssistTask.REWRITE_CASUAL,
-            AssistTask.REWRITE_DIRECT,
-        )
         const val GESTURE_DECODING_NOTICE_MILLIS = 50L
         const val MAX_CLIP_LENGTH = 20_000
         const val MAX_INLINE_SUGGESTIONS = 5

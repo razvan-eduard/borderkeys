@@ -63,7 +63,12 @@ enum class QuickAction(val id: Int) {
     /** Opens the settings app. */
     SETTINGS(14),
 
-    /** Undoes the last correction or insertion this keyboard made. */
+    /**
+     * Steps back through what this keyboard has done to the field this session, one word or
+     * paste or deletion at a time.
+     *
+     * Not in [DEFAULT] -- worth choosing rather than finding, the same as [COMPOSE].
+     */
     UNDO(15),
 
     /**
@@ -73,6 +78,9 @@ enum class QuickAction(val id: Int) {
      * a bar of five, and this is worth choosing rather than finding.
      */
     COMPOSE(16),
+
+    /** Steps forward again after [UNDO], as far as the last step back came from. */
+    REDO(17),
     ;
 
     companion object {

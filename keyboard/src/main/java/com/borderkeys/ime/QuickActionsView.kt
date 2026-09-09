@@ -124,6 +124,7 @@ class QuickActionsView(
         QuickAction.SETTINGS -> R.drawable.bk_action_settings
         QuickAction.UNDO -> R.drawable.bk_action_undo
         QuickAction.COMPOSE -> R.drawable.bk_action_compose
+        QuickAction.REDO -> R.drawable.bk_action_redo
     }
 
     /**

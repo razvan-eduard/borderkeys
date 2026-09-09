@@ -53,7 +53,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
     val themes = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
     val preferences by themes.preferences
-        .collectAsStateWithLifecycle(initialValue = KeyboardPreferences())
+        .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
     val update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit = { transform ->
         scope.launch { themes.updatePreferences(transform) }
     }
@@ -277,6 +277,7 @@ private fun iconFor(action: QuickAction): Int = when (action) {
     QuickAction.SETTINGS -> R.drawable.bk_action_settings
     QuickAction.UNDO -> R.drawable.bk_action_undo
     QuickAction.COMPOSE -> R.drawable.bk_action_compose
+    QuickAction.REDO -> R.drawable.bk_action_redo
 }
 
 private fun labelFor(action: QuickAction): String = when (action) {
@@ -296,4 +297,5 @@ private fun labelFor(action: QuickAction): String = when (action) {
     QuickAction.SETTINGS -> Keys.ACTION_SETTINGS
     QuickAction.UNDO -> Keys.ACTION_UNDO
     QuickAction.COMPOSE -> Keys.ACTION_COMPOSE
+    QuickAction.REDO -> Keys.ACTION_REDO
 }

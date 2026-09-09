@@ -6,6 +6,7 @@ package com.borderkeys.ime
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RenderNode
 import android.os.Trace
@@ -315,6 +316,19 @@ class KeyboardCanvasView(
 
     private var repeatKey = NO_KEY
 
+    /**
+     * The pointer whose held backspace already deleted one word and is now deleting more.
+     *
+     * Separate from [repeatKey]: that one repeats a character every [REPEAT_INTERVAL_MILLIS],
+     * and never gets the chance to arm for backspace because [LONG_PRESS_MILLIS] is shorter
+     * than [REPEAT_DELAY_MILLIS] and consumes the press first -- see [onLongPressElapsed]. This
+     * is what keeps going after it does: the same action, a whole word, for as long as the
+     * finger stays down, rather than a hold that deletes exactly one word and then nothing.
+     */
+    private var longPressRepeatPointer = -1
+    private var longPressRepeatCode = 0
+    private var longPressRepeatIndex = NO_KEY
+
     /** The pointer resting on the space bar, and how far it has taken the caret. */
     private var spacePointer = -1
     private var spaceStartX = 0f
@@ -407,6 +421,15 @@ class KeyboardCanvasView(
             }
             listener?.onKeyRepeat(geometry.keyCode[key])
             postDelayed(this, REPEAT_INTERVAL_MILLIS)
+        }
+    }
+    private val longPressRepeatRunnable = object : Runnable {
+        override fun run() {
+            if (longPressRepeatPointer == -1) {
+                return
+            }
+            listener?.onKeyLongPress(longPressRepeatCode, longPressRepeatIndex)
+            postDelayed(this, LONG_PRESS_REPEAT_INTERVAL_MILLIS)
         }
     }
     private val frameCallback = Choreographer.FrameCallback { frameTimeNanos ->
@@ -562,6 +585,9 @@ class KeyboardCanvasView(
                 )
             }
             drawLabel(canvas, index)
+            if (geometry.keyCode[index] == KeyCodes.SHIFT && shiftState == ShiftState.LOCKED) {
+                drawShiftLockLed(canvas, index)
+            }
         }
     }
 
@@ -573,7 +599,7 @@ class KeyboardCanvasView(
      * capitalisation something you could only discover by typing a letter and looking at the
      * field.
      */
-    var shiftState: Int = SHIFT_OFF
+    var shiftState: Int = ShiftState.OFF
         set(value) {
             if (field != value) {
                 field = value
@@ -587,6 +613,28 @@ class KeyboardCanvasView(
     /** One character, reused, so upper-casing a label allocates nothing on the draw path. */
     private val shiftedLabel = CharArray(1)
 
+    /**
+     * The lock light: caps lock is otherwise invisible, since every other letter on the board
+     * already looks identical whether shift is on for one character or locked -- see
+     * [shiftState]'s own doc. A fixed colour rather than a themed one, the same reasoning as
+     * `ComposerView.insertGreen`: a lit indicator reads by its colour before anything else, and
+     * a theme whose accent sits close to the key's own fill would make it hardest to notice on
+     * the one keyboard where it matters most that it is still on.
+     */
+    private val shiftLockLedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF43A047.toInt()
+        style = Paint.Style.FILL
+    }
+
+    private fun drawShiftLockLed(canvas: Canvas, index: Int) {
+        val width = geometry.keyRight[index] - geometry.keyLeft[index]
+        val height = geometry.keyBottom[index] - geometry.keyTop[index]
+        val radius = width * LED_RADIUS_FRACTION
+        val cx = geometry.keyRight[index] - width * LED_INSET_FRACTION
+        val cy = geometry.keyTop[index] + height * LED_INSET_FRACTION
+        canvas.drawCircle(cx, cy, radius, shiftLockLedPaint)
+    }
+
     private fun drawLabel(canvas: Canvas, index: Int) {
         drawHoldHint(canvas, index)
         val length = geometry.labelLength[index]
@@ -598,7 +646,7 @@ class KeyboardCanvasView(
         // costs one invalidate and no relayout -- the caps are the same width as the letters
         // they replace at this size, and the buffer they come from is shared with everything
         // else on the row.
-        val chars = if (shiftState != SHIFT_OFF && length == 1 &&
+        val chars = if (shiftState != ShiftState.OFF && length == 1 &&
             Character.isLowerCase(geometry.labelChars[geometry.labelOffset[index]])
         ) {
             shiftedLabel[0] =
@@ -900,6 +948,14 @@ class KeyboardCanvasView(
         if (pointerId >= MAX_POINTERS) {
             return
         }
+        if (pointerId == longPressRepeatPointer) {
+            // pointerKey[pointerId] was already cleared the moment the hold was consumed, so
+            // the ordinary path below -- built for a key that is still "down" as far as this
+            // view's own bookkeeping knows -- never runs for this pointer. Stopping it here is
+            // what a lifted finger means when the key it lifted from isn't tracked as pressed
+            // any more.
+            stopLongPressRepeat()
+        }
         if (gestureActive && pointerId == gesturePointer) {
             finishGesture()
             pointerKey[pointerId] = NO_KEY
@@ -950,6 +1006,16 @@ class KeyboardCanvasView(
         removeCallbacks(repeatRunnable)
         repeatKey = NO_KEY
         longPressPointer = -1
+        stopLongPressRepeat()
+    }
+
+    /** Stops a held backspace's continued word-at-a-time deletion. Idempotent. */
+    private fun stopLongPressRepeat() {
+        if (longPressRepeatPointer == -1) {
+            return
+        }
+        removeCallbacks(longPressRepeatRunnable)
+        longPressRepeatPointer = -1
     }
 
     // ---- long-press alternatives ------------------------------------------------------------------
@@ -970,7 +1036,22 @@ class KeyboardCanvasView(
             if (listener?.onKeyLongPress(geometry.keyCode[index], index) == true) {
                 endPress(index)
                 pointerKey[pointerId] = NO_KEY
-                longPressPointer = -1
+                // The full reset, not just longPressPointer: a REPEATABLE key (backspace is the
+                // only one today) already has repeatRunnable armed from ACTION_DOWN, and
+                // onPointerUp's own cancelPendingCallbacks() is never reached for this pointer --
+                // pointerKey was just cleared above, so onPointerUp takes its early-return branch
+                // and skips it. Leaving repeatRunnable running would keep firing onKeyRepeat
+                // every REPEAT_INTERVAL_MILLIS with no finger on the key at all.
+                cancelPendingCallbacks()
+                if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.REPEATABLE)) {
+                    // Holding on: a hold that stops after exactly one word is not what holding
+                    // means anywhere else on this board. The same action repeats now at its own
+                    // pace, still a whole word at a time, until the finger lifts.
+                    longPressRepeatPointer = pointerId
+                    longPressRepeatCode = geometry.keyCode[index]
+                    longPressRepeatIndex = index
+                    postDelayed(longPressRepeatRunnable, LONG_PRESS_REPEAT_INTERVAL_MILLIS)
+                }
             }
             return
         }
@@ -1144,12 +1225,12 @@ class KeyboardCanvasView(
     }
 
     companion object {
-        const val NO_KEY = -1
-
-        // Mirrors the service's shift states, so the view can be told one without depending on it.
-        const val SHIFT_OFF = 0
-        const val SHIFT_ON = 1
-        const val SHIFT_LOCKED = 2
+        // Read from KeyboardGeometry, which is the class that actually decides what "no key"
+        // means (nearestKey/findKeyAt returning it) -- kept here too, rather than qualified at
+        // every one of this view's own call sites, only because there are enough of them that
+        // renaming would be its own source of risk for no benefit: the value cannot drift on
+        // its own now, which is the only thing a second copy of -1 ever put at risk.
+        const val NO_KEY = KeyboardGeometry.NO_KEY
 
         private const val MAX_POINTERS = 16
         private const val PRESS_POOL = 10
@@ -1169,15 +1250,31 @@ class KeyboardCanvasView(
         private const val MIN_GESTURE_POINTS = 6
         private const val TRAIL_SEGMENTS = 4
 
-        private const val LONG_PRESS_MILLIS = 380L
+        /** Not private: [SuggestionStripView] holds a long press to the same threshold, so the
+         *  two gestures feel like one -- referencing this is what keeps that true instead of
+         *  being a second 380L typed by hand and promised to match. */
+        internal const val LONG_PRESS_MILLIS = 380L
 
         /** Where the corner hint sits, as a fraction of the key's width in from its right edge. */
         private const val HINT_INSET_FRACTION = 0.22f
 
         /** A hint dot's radius, as a fraction of the secondary label size. */
         private const val HINT_DOT_RADIUS_FRACTION = 0.09f
+
+        /** The lock light's radius and inset, as fractions of the shift key's own width/height. */
+        private const val LED_RADIUS_FRACTION = 0.08f
+        private const val LED_INSET_FRACTION = 0.2f
         private const val REPEAT_DELAY_MILLIS = 400L
         private const val REPEAT_INTERVAL_MILLIS = 55L
+
+        /**
+         * How often a held backspace deletes another whole word, after the first.
+         *
+         * Slower than [REPEAT_INTERVAL_MILLIS]: that paces single characters, where losing one
+         * extra to a slow reaction costs nothing. A word is bigger to lose by one beat too many,
+         * so the pace is closer to a deliberate rhythm than to a texture.
+         */
+        private const val LONG_PRESS_REPEAT_INTERVAL_MILLIS = 130L
 
         /** Progress per second. A press reaches full in about 60 ms, a release fades in 110 ms. */
         private const val PRESS_RATE = 16f
