@@ -4,6 +4,7 @@
 package com.borderkeys.settings.screen
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,6 +74,26 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
         // of settings for something that cannot happen.
         if (!preferences.composerEnabled) {
             return@Column
+        }
+
+        SettingsSectionCard(strings[Keys.COMPOSER_SETTINGS_TEXT_SIZE]) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextSizeChip(strings[Keys.COMPOSER_TEXT_SIZE_SMALL],
+                    KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL, preferences.composerTextSize) {
+                    update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL) }
+                }
+                TextSizeChip(strings[Keys.COMPOSER_TEXT_SIZE_MEDIUM],
+                    KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM, preferences.composerTextSize) {
+                    update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM) }
+                }
+                TextSizeChip(strings[Keys.COMPOSER_TEXT_SIZE_LARGE],
+                    KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE, preferences.composerTextSize) {
+                    update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE) }
+                }
+            }
         }
 
         SettingsSectionCard(strings[Keys.COMPOSER_SETTINGS_BAR]) {
@@ -214,6 +236,11 @@ private fun BarRow(
             }
         }
     }
+}
+
+@Composable
+private fun TextSizeChip(label: String, value: Int, current: Int, onPick: () -> Unit) {
+    FilterChip(selected = current == value, onClick = onPick, label = { Text(label) })
 }
 
 private fun moveTo(ids: List<Int>, from: Int, to: Int): List<Int> {

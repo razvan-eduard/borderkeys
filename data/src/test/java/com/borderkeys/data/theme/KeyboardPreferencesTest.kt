@@ -393,6 +393,33 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `the draft box's text size defaults to medium and rejects anything but its three steps`() {
+        assertEquals(
+            KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM,
+            KeyboardPreferences().composerTextSize,
+        )
+        assertEquals(
+            KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL,
+            KeyboardPreferences(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL)
+                .sanitised().composerTextSize,
+        )
+        assertEquals(
+            KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE,
+            KeyboardPreferences(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE)
+                .sanitised().composerTextSize,
+        )
+        assertEquals(
+            "an unrecognised step is not a fourth size",
+            KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM,
+            KeyboardPreferences(composerTextSize = 99).sanitised().composerTextSize,
+        )
+        assertEquals(
+            KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM,
+            KeyboardPreferences(composerTextSize = -1).sanitised().composerTextSize,
+        )
+    }
+
+    @Test
     fun `saved prompts are bounded and drop the blank ones`() {
         val many = List(100) { SavedPrompt(name = "n$it", text = "t$it") } +
             SavedPrompt(name = " ", text = "something") +

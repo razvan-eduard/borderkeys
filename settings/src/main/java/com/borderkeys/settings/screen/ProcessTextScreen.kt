@@ -48,6 +48,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -528,6 +529,13 @@ fun ProcessTextScreen(
                                 focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            ),
+                            // A multiplier on the ambient size rather than a fixed sp value, so
+                            // Small/Medium/Large still track a system font-size setting the same
+                            // way the field's unscaled default already does.
+                            textStyle = LocalTextStyle.current.copy(
+                                fontSize = LocalTextStyle.current.fontSize *
+                                    composerFontScale(preferences.composerTextSize),
                             ),
                             modifier = Modifier.fillMaxWidth()
                                 .focusRequester(textFieldFocus)
@@ -1364,6 +1372,17 @@ private fun SavePromptRow(
  * to AssistTask.kt without a line added here is a compile error, not a silent fallback to a
  * label that says nothing about what that new task does.
  */
+/**
+ * A multiplier on the field's own ambient text size for [KeyboardPreferences.composerTextSize]'s
+ * three steps -- Medium is exactly the size the field already had before this setting existed,
+ * so nobody's box changes size until they actually reach for the new control.
+ */
+private fun composerFontScale(step: Int): Float = when (step) {
+    KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL -> 0.85f
+    KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE -> 1.25f
+    else -> 1f
+}
+
 private fun workingLabel(strings: com.borderkeys.i18n.LanguageManager, task: AssistTask): String =
     when (task) {
         AssistTask.SUMMARISE -> strings[Keys.COMPOSER_WORKING_SUMMARISE]

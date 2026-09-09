@@ -287,6 +287,9 @@ data class KeyboardPreferences(
      */
     val composerBar: List<Int> = ComposerAction.DEFAULT.map { it.id },
 
+    /** The draft box's own text size, one of the `COMPOSER_TEXT_SIZE_*` steps below. */
+    val composerTextSize: Int = COMPOSER_TEXT_SIZE_MEDIUM,
+
     /** Instructions the user wrote and kept, in the order they were saved. */
     val savedPrompts: List<SavedPrompt> = emptyList(),
 
@@ -478,6 +481,12 @@ data class KeyboardPreferences(
         // not a trusted file, and a bar of four hundred buttons is a bar with no buttons on it.
         quickActions = QuickAction.fromIds(quickActions).take(MAX_QUICK_ACTIONS).map { it.id },
         composerBar = ComposerAction.fromIds(composerBar).map { it.id },
+        composerTextSize =
+            if (composerTextSize in COMPOSER_TEXT_SIZE_SMALL..COMPOSER_TEXT_SIZE_LARGE) {
+                composerTextSize
+            } else {
+                COMPOSER_TEXT_SIZE_MEDIUM
+            },
         // Bounded on the way in as well as on the way out. These are written by the user, so
         // the file is as trustworthy as the rest of it -- which is to say bounded and read back
         // rather than trusted.
@@ -622,6 +631,10 @@ data class KeyboardPreferences(
 
         /** How many actions the bar will hold before it starts dropping them. */
         const val MAX_QUICK_ACTIONS = 10
+
+        const val COMPOSER_TEXT_SIZE_SMALL = 0
+        const val COMPOSER_TEXT_SIZE_MEDIUM = 1
+        const val COMPOSER_TEXT_SIZE_LARGE = 2
 
         /** How many recent emoji are kept: a row and a half on most phones. */
         const val MAX_EMOJI_RECENTS = 24
