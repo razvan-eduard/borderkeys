@@ -8,7 +8,9 @@ import com.borderkeys.settings.LocalStrings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -25,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -34,6 +37,7 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.assist.KnownAssistModels
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.LinkedText
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 import kotlinx.coroutines.Dispatchers
@@ -97,21 +101,28 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 )
             }
             for (model in models) {
-                SettingRow(
+                ModelRow(
                     title = model.displayName + if (model.active) strings[Keys.ASSISTANT_ACTIVE] else "",
-                    subtitle = buildString {
-                        append("${model.sizeBytes / 1024 / 1024} MB · ${model.license}\n")
-                        append(model.source)
-                        if (model.integrityFailedAt != null) {
-                            append(strings[Keys.ASSISTANT_SWITCHED_OFF_THE_FILE_NO_LONGER])
-                        }
-                    },
                     trailing = {
                         TextButton(onClick = { scope.launch { repository.remove(model) } }) {
                             Text(strings[Keys.ASSISTANT_REMOVE])
                         }
                     },
-                )
+                ) {
+                    Text(
+                        "${model.sizeBytes / 1024 / 1024} MB · ${model.license}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    LinkedText(model.source, model.source)
+                    if (model.integrityFailedAt != null) {
+                        Text(
+                            strings[Keys.ASSISTANT_SWITCHED_OFF_THE_FILE_NO_LONGER],
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
         SettingsSectionCard(strings[Keys.ASSISTANT_IMPORT]) {
@@ -138,10 +149,16 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 strings[Keys.ASSISTANT_A_GGUF_FILE_IS_NOT_A],
             )
             for (entry in KnownAssistModels.entries) {
-                SettingRow(
-                    title = entry.displayName,
-                    subtitle = strings.getString(Keys.ASSISTANT_MB_NEEDS_ABOUT_MB_OF_RAM, entry.sizeBytes / 1024 / 1024, entry.license, entry.approximateRamMb, entry.source, entry.sha256.take(24)),
-                )
+                ModelRow(title = entry.displayName) {
+                    LinkedText(
+                        strings.getString(
+                            Keys.ASSISTANT_MB_NEEDS_ABOUT_MB_OF_RAM,
+                            entry.sizeBytes / 1024 / 1024, entry.license, entry.approximateRamMb,
+                            entry.source, entry.sha256.take(24),
+                        ),
+                        entry.source,
+                    )
+                }
             }
         }
         SettingsSectionCard(strings[Keys.ASSISTANT_HOW_IT_RUNS]) {
@@ -152,5 +169,30 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 strings[Keys.ASSISTANT_IT_IS_REACHED_ONLY_FROM_A],
             )
         }
+    }
+}
+
+/**
+ * [SettingRow]'s layout with the subtitle replaced by a composable slot.
+ *
+ * Needed here and only here: a model's row wants its source rendered as a tappable link, which a
+ * plain `String` subtitle cannot carry.
+ */
+@Composable
+private fun ModelRow(
+    title: String,
+    trailing: @Composable (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            content()
+        }
+        trailing?.invoke()
     }
 }
