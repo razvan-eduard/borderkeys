@@ -38,6 +38,11 @@ data class BackupPayload(
     val trigrams: List<BackupTrigram> = emptyList(),
     val blocked: List<String> = emptyList(),
     val clips: List<BackupClip> = emptyList(),
+    /** Which imported text-assistant model was active. Not the model itself -- hundreds of
+     *  megabytes that never leave the app's own private storage; see AssistModelEntry's own
+     *  doc. Reactivates a model the receiving device already has the same file for, same as
+     *  [packs] does for a language it already has the dictionary for. */
+    val models: List<BackupModel> = emptyList(),
 ) {
     /**
      * Whether this carries anything that would be a loss to leave lying around.
@@ -70,6 +75,9 @@ data class BackupTrigram(
 
 @Serializable
 data class BackupClip(val content: String, val createdAt: Long, val pinned: Boolean)
+
+@Serializable
+data class BackupModel(val fileName: String, val sha256: String, val active: Boolean)
 
 /**
  * The envelope on disk: what this is, and how to read the rest of it.

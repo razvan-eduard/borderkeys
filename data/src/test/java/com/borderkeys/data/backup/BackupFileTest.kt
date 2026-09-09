@@ -29,6 +29,7 @@ class BackupFileTest {
     private val settingsOnly = BackupPayload(
         preferences = KeyboardPreferences(numberRow = true),
         theme = KeyboardTheme(backgroundColor = 0xFF102030.toInt()),
+        models = listOf(BackupModel(fileName = "model.gguf", sha256 = "abc123", active = true)),
     )
 
     @Test
@@ -41,6 +42,10 @@ class BackupFileTest {
         assertNotNull(payload)
         assertEquals(true, payload?.preferences?.numberRow)
         assertEquals(0xFF102030.toInt(), payload?.theme?.backgroundColor)
+        // Which model was active, not the model itself -- a hash and a name are not a body of
+        // learned or copied text, so this travels with settings rather than needing its own
+        // sensitivity check.
+        assertEquals(listOf(BackupModel("model.gguf", "abc123", true)), payload?.models)
     }
 
     @Test

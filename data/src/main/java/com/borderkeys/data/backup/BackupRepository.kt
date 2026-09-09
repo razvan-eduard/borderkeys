@@ -43,6 +43,16 @@ class BackupRepository(
     suspend fun gather(parts: Parts): BackupPayload {
         val preferences = if (parts.settings) themes.preferences.first() else null
         val theme = if (parts.settings) themes.theme.first() else null
+        // Which model is active, not the model itself -- see BackupModel's own doc. Rides with
+        // settings rather than its own toggle: this is a choice of which assistant to use, the
+        // same kind of thing a theme or a layout is, not a body of learned or copied text.
+        val models = if (parts.settings) {
+            database.assistModelDao().observeAll().first().map {
+                BackupModel(fileName = it.fileName, sha256 = it.sha256, active = it.active)
+            }
+        } else {
+            emptyList()
+        }
 
         val packs = if (parts.languages) {
             database.languagePackDao().observeAll().first().map {
@@ -109,6 +119,7 @@ class BackupRepository(
             trigrams = trigrams,
             blocked = blocked,
             clips = clips,
+            models = models,
         )
     }
 
@@ -121,6 +132,7 @@ class BackupRepository(
         val blocked: Int = 0,
         val languages: Int = 0,
         val clips: Int = 0,
+        val assistModels: Int = 0,
     )
 
     suspend fun apply(payload: BackupPayload, parts: Parts): Applied {
@@ -133,6 +145,21 @@ class BackupRepository(
             }
             payload.theme?.let { incoming -> themes.updateTheme { incoming.sanitised() } }
             applied = applied.copy(settings = payload.preferences != null || payload.theme != null)
+
+            // Only a model this device already has the file for -- by hash, since the same file
+            // re-imported gets a new row and a new id every time. A model the payload names but
+            // this device has never imported is one nothing here can switch on, the same limit
+            // languages already has for a dictionary it does not carry.
+            var reactivated = 0
+            for (model in payload.models) {
+                if (!model.active) {
+                    continue
+                }
+                val existing = database.assistModelDao().findBySha256(model.sha256) ?: continue
+                database.assistModelDao().setActive(existing.id)
+                reactivated += 1
+            }
+            applied = applied.copy(assistModels = reactivated)
         }
 
         if (parts.dictionary) {
@@ -218,7 +245,8 @@ class BackupRepository(
 
     /** What a file turned out to contain, for the screen that offers to import it. */
     fun contentsOf(payload: BackupPayload): Parts = Parts(
-        settings = payload.preferences != null || payload.theme != null,
+        settings = payload.preferences != null || payload.theme != null ||
+            payload.models.isNotEmpty(),
         dictionary = payload.words.isNotEmpty() || payload.bigrams.isNotEmpty() ||
             payload.trigrams.isNotEmpty() || payload.blocked.isNotEmpty(),
         languages = payload.packs.isNotEmpty(),
