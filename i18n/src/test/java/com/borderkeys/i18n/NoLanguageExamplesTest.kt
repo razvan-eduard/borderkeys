@@ -29,10 +29,12 @@ class NoLanguageExamplesTest {
      *
      * `language_` covers both the names shown beside a dictionary and the draft box's list of
      * translation targets -- a chooser that cannot say "Romanian" is not a chooser.
+     * `composer_working_translate_` is the same job in the working overlay: "Translating to
+     * Romanian" needs the word "Romanian" for the same reason the picker that started it did.
      */
     private val labels = listOf(
         "language_", "assistant_english", "assistant_rom", "assistant_traducere",
-        "assistant_translation", "screen_", "home_",
+        "assistant_translation", "screen_", "home_", "composer_working_translate_",
     )
 
     @Test
