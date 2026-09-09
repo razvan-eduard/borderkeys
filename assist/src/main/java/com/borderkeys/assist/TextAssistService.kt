@@ -202,6 +202,7 @@ class TextAssistService : Service() {
 
             val budget = task.outputTokenBudget(text.length)
             val status = IntArray(1)
+            val truncatedOut = BooleanArray(1)
             // Every task but one carries its whole instruction. The exception is assembled here
             // rather than sent whole, so what wraps the user's words is this build's constant
             // and not something the request could have replaced.
@@ -216,7 +217,7 @@ class TextAssistService : Service() {
             val cleanFormatting = task != AssistTask.CUSTOM
             val answer = AssistNative.nativeRun(
                 current, instruction, text, budget, task.usesRemainingContext, cleanFormatting,
-                status,
+                status, truncatedOut,
             )
             if (answer == null) {
                 replyWithError(reply, requestId, mapNativeStatus(status[0]))
@@ -230,6 +231,7 @@ class TextAssistService : Service() {
                 // a second trim here repeating part of that job.
                 putString(AssistProtocol.KEY_RESULT, answer)
                 putString(AssistProtocol.KEY_MODEL_NAME, loadedModelName)
+                putBoolean(AssistProtocol.KEY_TRUNCATED, truncatedOut[0])
             }
             send(reply, AssistProtocol.MSG_RESULT, payload)
         }

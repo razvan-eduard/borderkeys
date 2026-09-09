@@ -63,6 +63,7 @@ object Keys {
     const val ACTION_SETTINGS = "action_settings"
     const val ACTION_SWITCH_LAYOUT = "action_switch_layout"
     const val ACTION_UNDO = "action_undo"
+    const val ASSIST_ANSWER_MAY_BE_INCOMPLETE = "assist_answer_may_be_incomplete"
     const val ASSIST_COPY = "assist_copy"
     const val ASSIST_DISCARD = "assist_discard"
     const val ASSIST_PRODUCED_ON_THIS_DEVICE = "assist_produced_on_this_device"

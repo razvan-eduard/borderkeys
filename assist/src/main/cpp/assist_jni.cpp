@@ -84,18 +84,28 @@ jint nativeContextTokens(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
 /**
  * Runs one instruction and returns the answer, or null with a status in `outStatus[0]`.
  *
- * The status comes back through a caller-supplied array rather than a second call, so a failure
- * and its reason cannot be separated by another thread's request. See `TextAssist::run`'s own
- * doc for what `useRemainingContext` does to `maxOutputTokens`.
+ * `outTruncated[0]`, meaningful only when a non-null result comes back, is set to whether the
+ * answer was cut short of where the model itself would have stopped -- see `TextAssist::run`'s
+ * `outTruncated` doc. A second caller-supplied array of its own kind rather than a second slot
+ * in `outStatus`: the two say different kinds of thing, and a status code that happens to share
+ * an array with an unrelated flag is a status code future output stops meaning what its name
+ * says. Both travel back through arrays rather than a second call, so neither can be separated
+ * from the request that produced it. See `TextAssist::run`'s own doc for what
+ * `useRemainingContext` does to `maxOutputTokens`.
  */
 jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instruction, jstring text,
                   jint maxOutputTokens, jboolean useRemainingContext, jboolean cleanFormatting,
-                  jintArray outStatus) {
+                  jintArray outStatus, jbooleanArray outTruncated) {
     TextAssist* const assist = assistFrom(handle);
     jint status = TextAssist::kErrArgument;
+    bool truncated = false;
     auto report = [&]() {
         if (outStatus != nullptr && env->GetArrayLength(outStatus) > 0) {
             env->SetIntArrayRegion(outStatus, 0, 1, &status);
+        }
+        if (outTruncated != nullptr && env->GetArrayLength(outTruncated) > 0) {
+            const jboolean truncatedValue = truncated ? JNI_TRUE : JNI_FALSE;
+            env->SetBooleanArrayRegion(outTruncated, 0, 1, &truncatedValue);
         }
     };
     if (assist == nullptr || instruction == nullptr || text == nullptr) {
@@ -117,7 +127,7 @@ jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instructi
 
     std::string answer;
     status = assist->run(instructionUtf, textUtf, maxOutputTokens, useRemainingContext == JNI_TRUE,
-                         cleanFormatting == JNI_TRUE, &answer);
+                         cleanFormatting == JNI_TRUE, &answer, &truncated);
 
     env->ReleaseStringUTFChars(text, textUtf);
     env->ReleaseStringUTFChars(instruction, instructionUtf);
@@ -144,7 +154,7 @@ const JNINativeMethod kMethods[] = {
     {"nativeUnload", "(J)V", reinterpret_cast<void*>(nativeUnload)},
     {"nativeIsLoaded", "(J)Z", reinterpret_cast<void*>(nativeIsLoaded)},
     {"nativeContextTokens", "(J)I", reinterpret_cast<void*>(nativeContextTokens)},
-    {"nativeRun", "(JLjava/lang/String;Ljava/lang/String;IZZ[I)Ljava/lang/String;",
+    {"nativeRun", "(JLjava/lang/String;Ljava/lang/String;IZZ[I[Z)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeRun)},
     {"nativeCancel", "(J)V", reinterpret_cast<void*>(nativeCancel)},
 };

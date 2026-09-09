@@ -50,8 +50,12 @@ internal object AssistNative {
      * Runs one instruction over one piece of text. Returns null on failure, with the reason in
      * `outStatus[0]`.
      *
-     * The status travels in a caller-supplied array rather than a second call, so that a failure
-     * and its reason cannot be separated by another request.
+     * `outTruncated[0]`, meaningful only when a non-null result comes back, is set to whether the
+     * answer was cut short of where the model itself would have stopped rather than reaching it.
+     * A separate array from `outStatus` on purpose -- a status code and a truncation flag are
+     * different kinds of thing, and sharing one array by position is how a later change quietly
+     * breaks what a given slot means. Both travel back through their own caller-supplied array
+     * rather than a second call, so neither can be separated from the request that produced it.
      *
      * `cleanFormatting` should be false for [com.borderkeys.data.assist.AssistTask.CUSTOM] and
      * true for every built-in task -- see `TextAssist::cleanResult`'s own doc, in text_assist.cpp,
@@ -71,6 +75,7 @@ internal object AssistNative {
         useRemainingContext: Boolean,
         cleanFormatting: Boolean,
         outStatus: IntArray,
+        outTruncated: BooleanArray,
     ): String?
 
     /** Asks the running generation to stop at the next token. Safe from another thread. */

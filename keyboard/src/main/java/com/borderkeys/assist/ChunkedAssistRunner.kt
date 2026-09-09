@@ -26,7 +26,13 @@ import com.borderkeys.data.assist.AssistTask
 class ChunkedAssistRunner(private val client: AssistClient) {
 
     interface Listener {
-        fun onChunkedResult(id: Int, resultText: String, modelName: String?)
+        /**
+         * `truncated` is true when [resultText] -- the whole job's stitched-together answer --
+         * has at least one chunk that stopped short of where the model itself would have
+         * stopped. One chunk cut short is enough to make the whole answer incomplete, whatever
+         * the other chunks did.
+         */
+        fun onChunkedResult(id: Int, resultText: String, modelName: String?, truncated: Boolean)
         fun onChunkedError(id: Int, error: Int)
         fun onAssistAvailability(available: Boolean, modelName: String?)
     }
@@ -43,6 +49,7 @@ class ChunkedAssistRunner(private val client: AssistClient) {
         var nextIndex = 0
         var inFlightRequestId = -1
         var modelName: String? = null
+        var truncated = false
     }
 
     private var job: Job? = null
@@ -50,7 +57,12 @@ class ChunkedAssistRunner(private val client: AssistClient) {
 
     init {
         client.listener = object : AssistClient.Listener {
-            override fun onAssistResult(requestId: Int, text: String, modelName: String?) {
+            override fun onAssistResult(
+                requestId: Int,
+                text: String,
+                modelName: String?,
+                truncated: Boolean,
+            ) {
                 val current = job ?: return
                 if (requestId != current.inFlightRequestId) {
                     return
@@ -59,6 +71,7 @@ class ChunkedAssistRunner(private val client: AssistClient) {
                 if (modelName != null) {
                     current.modelName = modelName
                 }
+                current.truncated = current.truncated || truncated
                 current.nextIndex++
                 advance(current)
             }
@@ -132,7 +145,7 @@ class ChunkedAssistRunner(private val client: AssistClient) {
             // for the one-chunk case that is almost every request, is the whole answer), so a
             // space is what separates two sentences that were never going to touch anyway.
             val joined = current.results.joinToString(" ") { it.orEmpty() }
-            listener?.onChunkedResult(current.jobId, joined, current.modelName)
+            listener?.onChunkedResult(current.jobId, joined, current.modelName, current.truncated)
             return
         }
         if (!dispatch(current)) {

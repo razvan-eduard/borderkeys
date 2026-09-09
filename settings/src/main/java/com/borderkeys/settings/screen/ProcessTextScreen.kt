@@ -255,7 +255,12 @@ fun ProcessTextScreen(
 
     DisposableEffect(Unit) {
         assist.listener = object : ChunkedAssistRunner.Listener {
-            override fun onChunkedResult(id: Int, resultText: String, modelName: String?) {
+            override fun onChunkedResult(
+                id: Int,
+                resultText: String,
+                modelName: String?,
+                truncated: Boolean,
+            ) {
                 if (id != requestId) {
                     // An answer to a request this screen has already moved past -- a second
                     // action tapped before the first came back cancels it, and its answer
@@ -265,7 +270,7 @@ fun ProcessTextScreen(
                 requestId = -1
                 composer.addResult(resultText)
                 syncFromComposer()
-                notice = ""
+                notice = if (truncated) strings[Keys.ASSIST_ANSWER_MAY_BE_INCOMPLETE] else ""
                 if (pendingInstruction.isNotEmpty() &&
                     preferences.savedPrompts.none { it.text == pendingInstruction } &&
                     preferences.savedPrompts.size < SavedPrompt.MAX_SAVED

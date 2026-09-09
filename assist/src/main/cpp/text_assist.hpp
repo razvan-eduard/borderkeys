@@ -87,9 +87,15 @@ public:
      * the answer needed cannot cut it off mid-sentence. When false, `maxOutputTokens` is the real
      * stop -- see [com.borderkeys.data.assist.AssistTask.usesRemainingContext]'s own doc for
      * which tasks want which.
+     *
+     * `outTruncated`, when not null, is set on a [kOk] return to whether generation stopped for
+     * a reason other than the model itself choosing to end the answer -- exhausting
+     * `maxOutputTokens`, or [requestCancel]. Left untouched on every other return, since only a
+     * [kOk] answer is something a truncation flag describes.
      */
     int32_t run(const char* instruction, const char* text, int maxOutputTokens,
-                bool useRemainingContext, bool cleanFormatting, std::string* out);
+                bool useRemainingContext, bool cleanFormatting, std::string* out,
+                bool* outTruncated);
 
     /** Asks the current run to stop at the next token boundary. Safe from another thread. */
     void requestCancel() { cancelRequested_ = true; }

@@ -422,7 +422,8 @@ std::string TextAssist::applyChatTemplate(const char* instruction, const char* t
 }
 
 int32_t TextAssist::run(const char* instruction, const char* text, int maxOutputTokens,
-                        bool useRemainingContext, bool cleanFormatting, std::string* out) {
+                        bool useRemainingContext, bool cleanFormatting, std::string* out,
+                        bool* outTruncated) {
     if (out == nullptr || instruction == nullptr || text == nullptr) {
         return kErrArgument;
     }
@@ -494,12 +495,14 @@ int32_t TextAssist::run(const char* instruction, const char* text, int maxOutput
 
     char piece[256];
     llama_token next = 0;
+    bool endedNaturally = false;
     for (int generated = 0; generated < maxOutputTokens; ++generated) {
         if (cancelRequested_) {
             break;
         }
         next = llama_sampler_sample(sampler_, context_, -1);
         if (llama_vocab_is_eog(vocab, next)) {
+            endedNaturally = true;
             break;
         }
         const int32_t length = llama_token_to_piece(vocab, next, piece,
@@ -513,6 +516,12 @@ int32_t TextAssist::run(const char* instruction, const char* text, int maxOutput
             running_ = false;
             return kErrDecode;
         }
+    }
+    // Not just the token-budget case: a cancelled request also leaves here with less than the
+    // whole answer, and the caller telling the two apart from the text alone has nothing to go
+    // on -- both look like an answer that simply stops.
+    if (outTruncated != nullptr) {
+        *outTruncated = !endedNaturally;
     }
 
     *out = cleanResult(*out, cleanFormatting);

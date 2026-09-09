@@ -31,7 +31,11 @@ import com.borderkeys.data.assist.AssistTask
 class AssistClient(private val context: Context) {
 
     interface Listener {
-        fun onAssistResult(requestId: Int, text: String, modelName: String?)
+        /**
+         * `truncated` is true when [text] stops short of where the model itself would have
+         * stopped -- the length limit was reached, or the request was cancelled mid-generation.
+         */
+        fun onAssistResult(requestId: Int, text: String, modelName: String?, truncated: Boolean)
         fun onAssistError(requestId: Int, error: Int)
         fun onAssistAvailability(available: Boolean, modelName: String?)
     }
@@ -53,6 +57,7 @@ class AssistClient(private val context: Context) {
                 if (error == AssistProtocol.ERROR_NONE && text != null) {
                     listener?.onAssistResult(
                         requestId, text, data.getString(AssistProtocol.KEY_MODEL_NAME),
+                        data.getBoolean(AssistProtocol.KEY_TRUNCATED),
                     )
                 } else {
                     listener?.onAssistError(requestId, error)

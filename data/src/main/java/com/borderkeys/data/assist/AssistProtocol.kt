@@ -45,6 +45,13 @@ object AssistProtocol {
     const val KEY_REQUEST_ID = "request"
 
     /**
+     * Service to keyboard, alongside a successful KEY_RESULT: the answer stops short of where
+     * the model itself would have stopped -- the length limit was reached, or the request was
+     * cancelled mid-generation.
+     */
+    const val KEY_TRUNCATED = "truncated"
+
+    /**
      * The instruction a user wrote, for AssistTask.CUSTOM. Absent for every other task, whose
      * instruction is a constant the service already has.
      */

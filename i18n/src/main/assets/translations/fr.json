@@ -49,6 +49,7 @@
   "action_settings": "Réglages",
   "action_switch_layout": "Disposition suivante",
   "action_undo": "Annuler",
+  "assist_answer_may_be_incomplete": "La réponse est peut-être incomplète.",
   "assist_copy": "Copier",
   "assist_discard": "Abandonner",
   "assist_produced_on_this_device": "Produit sur cet appareil",

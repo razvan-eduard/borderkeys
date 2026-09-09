@@ -49,6 +49,7 @@
   "action_settings": "Settings",
   "action_switch_layout": "Next layout",
   "action_undo": "Undo",
+  "assist_answer_may_be_incomplete": "The answer may be incomplete.",
   "assist_copy": "Copy",
   "assist_discard": "Discard",
   "assist_produced_on_this_device": "Produced on this device",
