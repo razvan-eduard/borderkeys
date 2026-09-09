@@ -34,6 +34,14 @@ constexpr uint32_t kSamplerSeed = 0xB0DE4Eu;
 constexpr const char* kNoThink = "/no_think";
 
 /**
+ * What applyChatTemplate wraps the text to transform in, and cleanResult strips from an answer
+ * that echoed it back. One pair of constants rather than the same literal typed at both call
+ * sites, so the two can never quietly drift out of agreement with each other.
+ */
+constexpr const char* kTextLabel = "\n\nText:\n";
+constexpr const char* kTextFence = "\"\"\"";
+
+/**
  * A tag pair a model may wrap part of its output in without being asked to.
  *
  * A plain open/close string pair rather than anything smarter -- these are not XML and nothing
@@ -155,6 +163,14 @@ std::string cleanResult(const std::string& raw, bool cleanFormatting) {
     text = unwrapWhole(text, "```\n", "\n```");
     text = unwrapWhole(text, "```", "```");
     text = trimmed(text);
+    // The same fence applyChatTemplate now wraps the input text in, echoed back around the
+    // answer -- a small model mirroring the shape of what it just read is exactly the kind of
+    // thing this whole function exists to undo. Its own pass, ahead of the single-quote unwrap
+    // below: that one only peels a single quote off each end, which would leave a triple-quote
+    // echo as "" rather than gone.
+    text = unwrapWhole(text, std::string(kTextFence) + "\n", std::string("\n") + kTextFence);
+    text = unwrapWhole(text, kTextFence, kTextFence);
+    text = trimmed(text);
     // Seen doing this on a plain translation with nothing quoted in the source at all -- Translate
     // wrapped in quote marks reads as "here is the translation," presentation the task never
     // asked for. See unwrapWhole's own doc for the one case this can be wrong about.
@@ -248,6 +264,21 @@ void TextAssist::rebuildSampler() {
     }
     llama_sampler_chain_params chainParams = llama_sampler_chain_default_params();
     sampler_ = llama_sampler_chain_init(chainParams);
+    // A mild penalty against repeating a recent token, ahead of top-p/temperature in the chain
+    // -- the order llama.cpp's own reference sampler uses, and the order that matters: this has
+    // to see the raw logits before top-p narrows them down to the tokens it can still choose
+    // between. Without it, a low temperature and a fixed seed -- both deliberate, see below --
+    // can walk a small model into a short loop it never breaks out of on its own: asked to
+    // translate a paragraph, it echoed a mistranslation of its own instruction's last sentence
+    // twice in a row instead of ever reaching the actual text. 1.15 is a light touch, enough to
+    // break a loop without visibly changing a correct answer; 64 tokens of lookback is long
+    // enough to catch the kind of short phrase that repeated here.
+    if (model_ != nullptr) {
+        const llama_vocab* const vocab = llama_model_get_vocab(model_);
+        llama_sampler_chain_add(
+            sampler_,
+            llama_sampler_init_penalties(llama_vocab_n_tokens(vocab), 64, 1.15f, 0.0f, 0.0f));
+    }
     llama_sampler_chain_add(sampler_, llama_sampler_init_top_p(topP_, 1));
     llama_sampler_chain_add(sampler_, llama_sampler_init_temp(temperature_));
     // A fixed seed, so the same selection and the same action give the same answer. A user who
@@ -292,7 +323,7 @@ std::string TextAssist::applyChatTemplate(const char* instruction, const char* t
     // turn: small instruction-tuned models follow a single concrete request far more reliably
     // than they follow a persona, and half the candidate models have no system role at all.
     std::string content;
-    content.reserve(std::strlen(instruction) + std::strlen(text) + 8 + std::strlen(kNoThink));
+    content.reserve(std::strlen(instruction) + std::strlen(text) + 24 + std::strlen(kNoThink));
     content += instruction;
     // Every model in KnownAssistModels.kt is Qwen3 or SmolLM3, and both read a literal
     // "/no_think" anywhere in the last turn as a request to skip their extended-thinking phase.
@@ -305,8 +336,22 @@ std::string TextAssist::applyChatTemplate(const char* instruction, const char* t
     // for instead of a switch outside the content being processed.
     content += " ";
     content += kNoThink;
-    content += "\n\n";
+    // Labelled and fenced rather than just a blank line before it: seen once with a short,
+    // ordinary paragraph -- three sentences, a couple of line breaks carried over from where it
+    // was written, no quotation marks or code of its own -- where the model answered with a
+    // translation of the instruction's own last sentence instead of the paragraph, twice, then
+    // stopped. Nothing marked where the instruction ended and the text nobody asked it to touch
+    // began; a blank line is not a boundary a small model reliably respects, especially once the
+    // text itself has line breaks in it that read the same way. A labelled, fenced block is an
+    // unambiguous one: everything between the two `"""` is data to transform, never part of the
+    // request, whatever it contains -- including a `"""` of its own, since text_assist only ever
+    // reads up to the end of generation, not up to a closing fence it went looking for.
+    content += kTextLabel;
+    content += kTextFence;
+    content += "\n";
     content += text;
+    content += "\n";
+    content += kTextFence;
 
     const char* templateText = llama_model_chat_template(model_, nullptr);
     if (templateText == nullptr) {
