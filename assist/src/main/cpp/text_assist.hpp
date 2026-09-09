@@ -58,6 +58,14 @@ public:
     int contextTokens() const { return contextTokens_; }
 
     /**
+     * This model's own chars-per-token ratio, measured against a fixed sample at [load] rather
+     * than assumed -- the "four characters to a token" rule of thumb [ChunkedAssistRunner] falls
+     * back to before this is ever known is a guess averaged across many tokenisers, and any one
+     * model's real vocabulary can sit meaningfully off it. 0 before a model has been loaded.
+     */
+    float charsPerToken() const { return charsPerToken_; }
+
+    /**
      * Replaces the sampler's temperature and nucleus (top-p) with the given values, clamping
      * anything out of range rather than rejecting it -- the caller is a stored preference, not a
      * one-off argument, and a bad file should not mean requests silently do nothing.
@@ -79,23 +87,26 @@ public:
      * actually asked for -- see that function's own doc for why a custom, user-written
      * instruction is the one case this needs to be off for.
      *
-     * `maxOutputTokens` is a starting guess, from the caller's own length-based estimate. When
-     * `useRemainingContext` is true it is only a floor: once the prompt is tokenised, the exact
-     * number of tokens actually left in the context window is at least as large (a guess can
-     * only have asked for too little, never too much, or this call would already have been
-     * refused) and generation is allowed to run to that instead, so a guess that undershot what
-     * the answer needed cannot cut it off mid-sentence. When false, `maxOutputTokens` is the real
-     * stop -- see [com.borderkeys.data.assist.AssistTask.usesRemainingContext]'s own doc for
+     * `outputRatio` and `minOutputTokens` come from the task being run --
+     * [com.borderkeys.data.assist.AssistTask.outputRatio] and its `minOutputTokens`, the same
+     * pair that class's own doc describes -- and `maxOutputTokensCeiling` is that class's shared
+     * `MAX_OUTPUT_TOKENS`. The actual token budget for this request is computed from these
+     * against the prompt's exact tokenised size, not guessed from the input's character count.
+     * When `useRemainingContext` is true that budget is only a floor: the exact number of tokens
+     * actually left in the context window is at least as large (or this call would already have
+     * been refused) and generation is allowed to run to that instead, so `outputRatio` guessing
+     * low cannot cut a correct answer off mid-sentence. When false, the computed budget is the
+     * real stop -- see [com.borderkeys.data.assist.AssistTask.usesRemainingContext]'s own doc for
      * which tasks want which.
      *
      * `outTruncated`, when not null, is set on a [kOk] return to whether generation stopped for
-     * a reason other than the model itself choosing to end the answer -- exhausting
-     * `maxOutputTokens`, or [requestCancel]. Left untouched on every other return, since only a
-     * [kOk] answer is something a truncation flag describes.
+     * a reason other than the model itself choosing to end the answer -- exhausting the token
+     * budget, or [requestCancel]. Left untouched on every other return, since only a [kOk] answer
+     * is something a truncation flag describes.
      */
-    int32_t run(const char* instruction, const char* text, int maxOutputTokens,
-                bool useRemainingContext, bool cleanFormatting, std::string* out,
-                bool* outTruncated);
+    int32_t run(const char* instruction, const char* text, float outputRatio,
+                int minOutputTokens, int maxOutputTokensCeiling, bool useRemainingContext,
+                bool cleanFormatting, std::string* out, bool* outTruncated);
 
     /** Asks the current run to stop at the next token boundary. Safe from another thread. */
     void requestCancel() { cancelRequested_ = true; }
@@ -110,6 +121,7 @@ private:
     llama_context* context_ = nullptr;
     llama_sampler* sampler_ = nullptr;
     int contextTokens_ = 0;
+    float charsPerToken_ = 0.0f;
     bool cancelRequested_ = false;
     bool running_ = false;
     // Low temperature and a tight nucleus by default -- see rebuildSampler's own reasoning in

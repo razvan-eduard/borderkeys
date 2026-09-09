@@ -45,6 +45,16 @@ constexpr uint32_t kSamplerSeed = 0xB0DE4Eu;
 constexpr const char* kNoThink = "/no_think";
 
 /**
+ * Tokenised once at load to measure this model's real chars-per-token ratio. Ordinary mixed-case
+ * prose with regular punctuation and spacing, long enough that a token or two of rounding error
+ * does not swing the result -- not a pangram or a word list, which tokenise differently from what
+ * a selection actually looks like.
+ */
+constexpr const char* kCalibrationSample =
+    "The quick brown fox jumps over the lazy dog. Please review this paragraph and let me "
+    "know what you think, including any changes you would suggest for tomorrow's meeting.";
+
+/**
  * What applyChatTemplate wraps the text to transform in, and cleanResult strips from an answer
  * that echoed it back. One pair of constants rather than the same literal typed at both call
  * sites, so the two can never quietly drift out of agreement with each other.
@@ -299,6 +309,18 @@ int32_t TextAssist::load(const char* path, int contextTokens, int threads) {
     // invention. Greedy would be defensible; a little sampling avoids the degenerate repetition
     // that pure argmax falls into on small models. Both are adjustable -- see setSamplingParams.
     rebuildSampler();
+
+    // No add_special/parse_special: this measures how the tokeniser splits ordinary content
+    // alone, the same thing chunk and budget sizing use it for, without a BOS or template
+    // overhead of a handful of tokens skewing a short sample's ratio.
+    const llama_vocab* const vocab = llama_model_get_vocab(model_);
+    const auto sampleLength = static_cast<int32_t>(std::strlen(kCalibrationSample));
+    const int32_t sampleTokens = -llama_tokenize(vocab, kCalibrationSample, sampleLength, nullptr,
+                                                 0, false, false);
+    charsPerToken_ = sampleTokens > 0
+        ? static_cast<float>(sampleLength) / static_cast<float>(sampleTokens)
+        : 0.0f;
+
     return kOk;
 }
 
@@ -361,6 +383,7 @@ void TextAssist::unload() {
         model_ = nullptr;
     }
     contextTokens_ = 0;
+    charsPerToken_ = 0.0f;
 }
 
 std::string TextAssist::applyChatTemplate(const char* instruction, const char* text) const {
@@ -421,9 +444,9 @@ std::string TextAssist::applyChatTemplate(const char* instruction, const char* t
     return std::string(buffer.data(), static_cast<size_t>(written));
 }
 
-int32_t TextAssist::run(const char* instruction, const char* text, int maxOutputTokens,
-                        bool useRemainingContext, bool cleanFormatting, std::string* out,
-                        bool* outTruncated) {
+int32_t TextAssist::run(const char* instruction, const char* text, float outputRatio,
+                        int minOutputTokens, int maxOutputTokensCeiling, bool useRemainingContext,
+                        bool cleanFormatting, std::string* out, bool* outTruncated) {
     if (out == nullptr || instruction == nullptr || text == nullptr) {
         return kErrArgument;
     }
@@ -455,18 +478,27 @@ int32_t TextAssist::run(const char* instruction, const char* text, int maxOutput
         running_ = false;
         return kErrTokenise;
     }
+
+    // outputRatio and minOutputTokens describe the task, not this specific request; needed is
+    // this request's exact prompt size, known only now that it has actually been tokenised. No
+    // guess from the input's character count is involved -- the budget below is arithmetic on a
+    // real number, not an estimate of one.
+    int32_t maxOutputTokens = std::clamp(
+        static_cast<int32_t>(static_cast<float>(needed) * outputRatio), minOutputTokens,
+        maxOutputTokensCeiling);
+
     // The prompt and the answer share one window, so the check is against both.
     if (needed + maxOutputTokens >= contextTokens_) {
         running_ = false;
         return kErrTooLong;
     }
     if (useRemainingContext) {
-        // maxOutputTokens arrived as a guess from the input's character count; needed is now the
-        // prompt's exact token count. The real remaining room can only be at least as large as
-        // that guess (the check just above already refused anything smaller), so raising the cap
-        // to it cannot admit a request that would otherwise have been refused -- it only stops a
-        // guess that undershot what the answer needed from cutting a correct answer off
-        // mid-sentence.
+        // The real room left for the answer can only be at least as large as maxOutputTokens
+        // above (the check just made already refused anything smaller), so raising the cap to it
+        // cannot admit a request that would otherwise have been refused -- it only stops
+        // outputRatio's guess about how long the answer will be, which is the one thing about
+        // this request that genuinely cannot be known in advance, from cutting a correct answer
+        // off mid-sentence.
         const int32_t remaining = contextTokens_ - static_cast<int32_t>(needed) -
                                   kOutputSafetyMarginTokens;
         if (remaining > maxOutputTokens) {

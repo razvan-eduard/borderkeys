@@ -55,6 +55,12 @@ class ChunkedAssistRunner(private val client: AssistClient) {
     private var job: Job? = null
     private var nextJobId = 1
 
+    // The measured ratio for whatever model is currently loaded on the other side of the
+    // process boundary, replacing the fixed guess in maxChunkChars's default as soon as one
+    // becomes known. Stays at the guess for the very first request of a session, before any
+    // status query or run has had a model loaded to measure.
+    private var charsPerToken = DEFAULT_CHARS_PER_TOKEN
+
     init {
         client.listener = object : AssistClient.Listener {
             override fun onAssistResult(
@@ -85,7 +91,14 @@ class ChunkedAssistRunner(private val client: AssistClient) {
                 listener?.onChunkedError(current.jobId, error)
             }
 
-            override fun onAssistAvailability(available: Boolean, modelName: String?) {
+            override fun onAssistAvailability(
+                available: Boolean,
+                modelName: String?,
+                charsPerToken: Float,
+            ) {
+                if (charsPerToken > 0f) {
+                    this@ChunkedAssistRunner.charsPerToken = charsPerToken
+                }
                 listener?.onAssistAvailability(available, modelName)
             }
         }
@@ -114,7 +127,7 @@ class ChunkedAssistRunner(private val client: AssistClient) {
             return -1
         }
         val chunks = if (task.isChunkable) {
-            splitIntoChunks(text, maxChunkChars(contextTokens))
+            splitIntoChunks(text, maxChunkChars(contextTokens, charsPerToken))
         } else {
             listOf(text)
         }
@@ -165,10 +178,11 @@ class ChunkedAssistRunner(private val client: AssistClient) {
     }
 
     companion object {
-        // Four characters to a token, the same rule of thumb AssistTask.outputTokenBudget
-        // already uses -- being wrong about it costs a chunk boundary landing a little early or
-        // late, not a request that fails.
-        private const val CHARS_PER_TOKEN = 4
+        // A rule of thumb, used only until the loaded model's own measured ratio is known (see
+        // the charsPerToken field) -- being wrong about it costs a chunk boundary landing a
+        // little early or late, not a request that fails, which is what makes a rough default
+        // safe to fall back on for the first request of a session.
+        private const val DEFAULT_CHARS_PER_TOKEN = 4f
 
         // Rough token count of the fixed parts of a prompt that are not the chunk itself: the
         // task's own instruction sentence, the chat template's turn markers, "/no_think", and
@@ -201,11 +215,14 @@ class ChunkedAssistRunner(private val client: AssistClient) {
          * sixteen times that window ever needed, and the reverse -- a fixed size picked for a
          * generous model -- would overflow a smaller one's context outright, the exact failure
          * this class exists to stop happening.
+         *
+         * [charsPerToken] defaults to a generic rule of thumb, and should be the loaded model's
+         * own measured ratio whenever one is known -- see the field of the same name's own doc.
          */
-        fun maxChunkChars(contextTokens: Int): Int {
+        fun maxChunkChars(contextTokens: Int, charsPerToken: Float = DEFAULT_CHARS_PER_TOKEN): Int {
             val safeTokens = (contextTokens * CONTEXT_SAFETY_FRACTION - FIXED_OVERHEAD_TOKENS) /
                 WORST_CASE_TOKENS_PER_CHUNK_TOKEN
-            val chars = (safeTokens * CHARS_PER_TOKEN).toInt()
+            val chars = (safeTokens * charsPerToken).toInt()
             return chars.coerceIn(MIN_CHUNK_CHARS, AssistProtocol.MAX_SELECTION_CHARS)
         }
 

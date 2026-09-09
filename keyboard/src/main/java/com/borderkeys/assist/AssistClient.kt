@@ -37,7 +37,13 @@ class AssistClient(private val context: Context) {
          */
         fun onAssistResult(requestId: Int, text: String, modelName: String?, truncated: Boolean)
         fun onAssistError(requestId: Int, error: Int)
-        fun onAssistAvailability(available: Boolean, modelName: String?)
+
+        /**
+         * `charsPerToken` is the loaded model's own tokeniser ratio, measured on the other side
+         * of the process boundary, or 0 when nothing has loaded yet to measure it against --
+         * routine before the first request of a session, not a failure.
+         */
+        fun onAssistAvailability(available: Boolean, modelName: String?, charsPerToken: Float)
     }
 
     var listener: Listener? = null
@@ -69,6 +75,7 @@ class AssistClient(private val context: Context) {
                 listener?.onAssistAvailability(
                     data.getInt(AssistProtocol.KEY_ERROR) == AssistProtocol.ERROR_NONE,
                     data.getString(AssistProtocol.KEY_MODEL_NAME),
+                    data.getFloat(AssistProtocol.KEY_CHARS_PER_TOKEN),
                 )
                 true
             }
@@ -125,7 +132,7 @@ class AssistClient(private val context: Context) {
 
     fun queryAvailability() {
         if (!connect()) {
-            listener?.onAssistAvailability(false, null)
+            listener?.onAssistAvailability(false, null, 0f)
             return
         }
         dispatch(

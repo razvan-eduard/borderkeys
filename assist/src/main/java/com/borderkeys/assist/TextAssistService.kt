@@ -131,6 +131,17 @@ class TextAssistService : Service() {
                     if (model == null) AssistProtocol.ERROR_NO_MODEL else AssistProtocol.ERROR_NONE,
                 )
                 putString(AssistProtocol.KEY_MODEL_NAME, model?.displayName)
+                // Only meaningful once something is actually loaded to have measured it against
+                // -- a status query is exactly the availability check made before the first
+                // request of a session, when nothing has loaded yet, so this is routinely absent
+                // and that is the expected case, not a failure.
+                val current = handle
+                if (current != 0L && AssistNative.nativeIsLoaded(current)) {
+                    val ratio = AssistNative.nativeCharsPerToken(current)
+                    if (ratio > 0f) {
+                        putFloat(AssistProtocol.KEY_CHARS_PER_TOKEN, ratio)
+                    }
+                }
             }
             send(reply, AssistProtocol.MSG_STATUS, data)
         }
@@ -200,7 +211,6 @@ class TextAssistService : Service() {
                 current, preferences.assistTemperature, preferences.assistTopP,
             )
 
-            val budget = task.outputTokenBudget(text.length)
             val status = IntArray(1)
             val truncatedOut = BooleanArray(1)
             // Every task but one carries its whole instruction. The exception is assembled here
@@ -216,7 +226,8 @@ class TextAssistService : Service() {
             // not formatting the request asked for by name. See AssistNative.nativeRun's own doc.
             val cleanFormatting = task != AssistTask.CUSTOM
             val answer = AssistNative.nativeRun(
-                current, instruction, text, budget, task.usesRemainingContext, cleanFormatting,
+                current, instruction, text, task.outputRatio, task.minOutputTokens,
+                AssistTask.MAX_OUTPUT_TOKENS, task.usesRemainingContext, cleanFormatting,
                 status, truncatedOut,
             )
             if (answer == null) {

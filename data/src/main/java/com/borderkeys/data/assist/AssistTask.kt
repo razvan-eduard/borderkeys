@@ -40,11 +40,14 @@ enum class AssistTask(
      * A summary is shorter than its source; a translation is about the same length; a correction
      * is almost exactly the same length.
      *
-     * For [SUMMARISE] and [SHORTEN] this is the actual ceiling generation stops at -- less than
-     * the input is the correct answer for both, so a small model that loses the thread and keeps
-     * going needs a real stop that is not "however much room the context window has." For every
-     * other task [usesRemainingContext] is true instead, and this ratio only sizes the initial
-     * request; see that property's own doc for why.
+     * Multiplied against the request's own exact tokenised size -- `TextAssist::run` computes
+     * this against `needed`, not a guess from the input's character count, since neither Kotlin
+     * side of the process boundary ever tokenises anything itself. For [SUMMARISE] and [SHORTEN]
+     * the result is the actual ceiling generation stops at -- less than the input is the correct
+     * answer for both, so a small model that loses the thread and keeps going needs a real stop
+     * that is not "however much room the context window has." For every other task
+     * [usesRemainingContext] is true instead, and this ratio only sets the starting budget before
+     * the real ceiling can take over; see that property's own doc for why.
      */
     val outputRatio: Float,
     val minOutputTokens: Int,
@@ -63,18 +66,18 @@ enum class AssistTask(
     val isChunkable: Boolean = false,
     /**
      * Whether the native side is free to let generation run up to the real space left in the
-     * model's context window, rather than stopping at [outputRatio]'s guess.
+     * model's context window, rather than stopping at [outputRatio]'s budget.
      *
-     * [outputRatio] is a guess from the input's character count, and a guess can be wrong in
-     * either direction -- a translation into a language that expands, a formal rewrite that adds
-     * a clause, or a correction that fills in a missing word can all legitimately need more room
-     * than a length-based estimate predicted, and stopping there cuts a correct answer off
-     * mid-sentence rather than protecting against anything. True for those tasks: the real
-     * ceiling is `TextAssist::run`'s prompt token count subtracted from the context window, exact
-     * rather than guessed, so it is never smaller than the room [ChunkedAssistRunner] already
-     * reserved when it decided how big a chunk could be. False for [SUMMARISE] and [SHORTEN],
-     * where less than the input is what a correct answer looks like, so [outputRatio]'s guess is
-     * a deliberate ceiling rather than a truncation risk.
+     * [outputRatio] is still only a multiplier chosen ahead of time for the task in general, not
+     * for what a specific answer turns out to need -- a translation into a language that expands,
+     * a formal rewrite that adds a clause, or a correction that fills in a missing word can all
+     * legitimately outgrow it, and stopping there cuts a correct answer off mid-sentence rather
+     * than protecting against anything. True for those tasks: the real ceiling is
+     * `TextAssist::run`'s exact prompt token count subtracted from the context window, so it is
+     * never smaller than the room [ChunkedAssistRunner] already reserved when it decided how big
+     * a chunk could be. False for [SUMMARISE] and [SHORTEN], where less than the input is what a
+     * correct answer looks like, so [outputRatio]'s budget is a deliberate ceiling rather than a
+     * truncation risk.
      */
     val usesRemainingContext: Boolean = false,
 ) {
@@ -221,17 +224,8 @@ enum class AssistTask(
     ),
     ;
 
-    /** A rough token budget for the answer, from the input's length in characters. */
-    fun outputTokenBudget(inputLength: Int): Int {
-        // Four characters to a token is the usual rule of thumb across these tokenisers, and
-        // being wrong in either direction here costs a slightly early stop or a slightly larger
-        // ceiling -- neither of which is worth a tokeniser call to avoid.
-        val inputTokens = inputLength / 4
-        val budget = (inputTokens * outputRatio).toInt()
-        return budget.coerceIn(minOutputTokens, MAX_OUTPUT_TOKENS)
-    }
-
     companion object {
+        /** The shared ceiling every task's ratio-derived budget is clamped under in `TextAssist::run`. */
         const val MAX_OUTPUT_TOKENS = 512
 
         /** As many characters of instruction as a person will type on a phone, and no more. */

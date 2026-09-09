@@ -47,6 +47,13 @@ internal object AssistNative {
     external fun nativeContextTokens(handle: Long): Int
 
     /**
+     * The loaded model's own chars-per-token ratio, measured against a fixed sample at load
+     * time, or 0 before anything has been loaded -- see `TextAssist::charsPerToken`'s own doc for
+     * why this beats a fixed guess.
+     */
+    external fun nativeCharsPerToken(handle: Long): Float
+
+    /**
      * Runs one instruction over one piece of text. Returns null on failure, with the reason in
      * `outStatus[0]`.
      *
@@ -62,16 +69,21 @@ internal object AssistNative {
      * for why a custom instruction is the one case the native side's own formatting cleanup has
      * to stay out of.
      *
-     * `maxOutputTokens` should be [com.borderkeys.data.assist.AssistTask.outputTokenBudget], and
-     * `useRemainingContext` should be the same task's `usesRemainingContext` -- see that
-     * property's own doc for which tasks want the real space left in the context window to
-     * govern generation instead of the length-based guess.
+     * `outputRatio`, `minOutputTokens` and `maxOutputTokensCeiling` should be the task's own
+     * [com.borderkeys.data.assist.AssistTask.outputRatio], `minOutputTokens` and the shared
+     * `MAX_OUTPUT_TOKENS` -- the native side turns these into an actual token budget against the
+     * request's exact tokenised size, which nothing on this side of the JNI boundary can compute.
+     * `useRemainingContext` should be the task's `usesRemainingContext` -- see that property's
+     * own doc for which tasks want the real space left in the context window to govern
+     * generation instead of that budget.
      */
     external fun nativeRun(
         handle: Long,
         instruction: String,
         text: String,
-        maxOutputTokens: Int,
+        outputRatio: Float,
+        minOutputTokens: Int,
+        maxOutputTokensCeiling: Int,
         useRemainingContext: Boolean,
         cleanFormatting: Boolean,
         outStatus: IntArray,

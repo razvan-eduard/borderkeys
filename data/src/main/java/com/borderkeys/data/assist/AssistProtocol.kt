@@ -52,6 +52,13 @@ object AssistProtocol {
     const val KEY_TRUNCATED = "truncated"
 
     /**
+     * Service to keyboard, on an MSG_STATUS reply: the loaded model's own chars-per-token ratio,
+     * or absent when nothing is loaded yet to measure it against -- see
+     * `TextAssist::charsPerToken`'s own doc for what it is measured from.
+     */
+    const val KEY_CHARS_PER_TOKEN = "chars_per_token"
+
+    /**
      * The instruction a user wrote, for AssistTask.CUSTOM. Absent for every other task, whose
      * instruction is a constant the service already has.
      */

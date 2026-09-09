@@ -59,17 +59,16 @@ class AssistTaskTest {
     }
 
     @Test
-    fun `the budget stays between the floor and the ceiling`() {
+    fun `every task's floor and ratio are values the native budget arithmetic can use`() {
+        // The actual clamp(needed * outputRatio, minOutputTokens, MAX_OUTPUT_TOKENS) now runs in
+        // TextAssist::run against the request's real tokenised size, not here -- this only pins
+        // down that the ingredients it is given stay sane, since nothing else in this module
+        // exercises that arithmetic.
         for (task in AssistTask.entries) {
-            assertEquals(
-                "${task.name} ignores its floor for an empty input",
-                task.minOutputTokens,
-                task.outputTokenBudget(0),
-            )
-            assertEquals(
-                "${task.name} runs past the ceiling for a long input",
-                AssistTask.MAX_OUTPUT_TOKENS,
-                task.outputTokenBudget(1_000_000),
+            assertTrue("${task.name}'s ratio is not positive", task.outputRatio > 0f)
+            assertTrue(
+                "${task.name}'s floor is above the shared ceiling",
+                task.minOutputTokens <= AssistTask.MAX_OUTPUT_TOKENS,
             )
         }
     }

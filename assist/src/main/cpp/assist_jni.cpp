@@ -81,6 +81,11 @@ jint nativeContextTokens(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
     return assist != nullptr ? assist->contextTokens() : 0;
 }
 
+jfloat nativeCharsPerToken(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+    TextAssist* const assist = assistFrom(handle);
+    return assist != nullptr ? assist->charsPerToken() : 0.0f;
+}
+
 /**
  * Runs one instruction and returns the answer, or null with a status in `outStatus[0]`.
  *
@@ -90,12 +95,14 @@ jint nativeContextTokens(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
  * in `outStatus`: the two say different kinds of thing, and a status code that happens to share
  * an array with an unrelated flag is a status code future output stops meaning what its name
  * says. Both travel back through arrays rather than a second call, so neither can be separated
- * from the request that produced it. See `TextAssist::run`'s own doc for what
- * `useRemainingContext` does to `maxOutputTokens`.
+ * from the request that produced it. See `TextAssist::run`'s own doc for how `outputRatio`,
+ * `minOutputTokens`, `maxOutputTokensCeiling` and `useRemainingContext` together decide the
+ * token budget.
  */
 jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instruction, jstring text,
-                  jint maxOutputTokens, jboolean useRemainingContext, jboolean cleanFormatting,
-                  jintArray outStatus, jbooleanArray outTruncated) {
+                  jfloat outputRatio, jint minOutputTokens, jint maxOutputTokensCeiling,
+                  jboolean useRemainingContext, jboolean cleanFormatting, jintArray outStatus,
+                  jbooleanArray outTruncated) {
     TextAssist* const assist = assistFrom(handle);
     jint status = TextAssist::kErrArgument;
     bool truncated = false;
@@ -126,7 +133,8 @@ jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instructi
     }
 
     std::string answer;
-    status = assist->run(instructionUtf, textUtf, maxOutputTokens, useRemainingContext == JNI_TRUE,
+    status = assist->run(instructionUtf, textUtf, static_cast<float>(outputRatio), minOutputTokens,
+                         maxOutputTokensCeiling, useRemainingContext == JNI_TRUE,
                          cleanFormatting == JNI_TRUE, &answer, &truncated);
 
     env->ReleaseStringUTFChars(text, textUtf);
@@ -154,7 +162,8 @@ const JNINativeMethod kMethods[] = {
     {"nativeUnload", "(J)V", reinterpret_cast<void*>(nativeUnload)},
     {"nativeIsLoaded", "(J)Z", reinterpret_cast<void*>(nativeIsLoaded)},
     {"nativeContextTokens", "(J)I", reinterpret_cast<void*>(nativeContextTokens)},
-    {"nativeRun", "(JLjava/lang/String;Ljava/lang/String;IZZ[I[Z)Ljava/lang/String;",
+    {"nativeCharsPerToken", "(J)F", reinterpret_cast<void*>(nativeCharsPerToken)},
+    {"nativeRun", "(JLjava/lang/String;Ljava/lang/String;FIIZZ[I[Z)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeRun)},
     {"nativeCancel", "(J)V", reinterpret_cast<void*>(nativeCancel)},
 };
