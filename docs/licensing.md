@@ -267,14 +267,13 @@ Gemma is the best of them on a weak phone — it fits in 4 GB — and that is th
 declined, on the grounds that a keyboard whose free build has no anti-features should not need
 one in its paid-for-in-storage build either.
 
-Added later, same registry, same reasoning: **EuroLLM 1.7B and 9B**, both Instruct, both
-Apache-2.0. Not a substitute for the three above so much as a different trade -- Qwen3 and
-SmolLM3 are trained English-first, EuroLLM is trained for balanced coverage across the EU's own
-languages instead, which is what a keyboard whose whole premise is several languages typed at
-once actually wants from a translation task. The 9B build is the heaviest entry in the registry
-by a wide margin (5.2 GB, ~6.6 GB resident); it is offered anyway; a phone with the RAM to spare
-is a real phone, and the same is-it-usable question the smaller entries already leave to the
-person choosing one applies just as well to a larger one.
+**EuroLLM 1.7B and 9B**, both Instruct, are in the same registry under the same terms -- both
+Apache-2.0. A different trade from the three above: Qwen3 and SmolLM3 are trained English-first,
+EuroLLM is trained for balanced coverage across the EU's own languages instead, which is what a
+keyboard whose whole premise is several languages typed at once actually wants from a translation
+task. The 9B build is the heaviest entry in the registry by a wide margin (5.2 GB, ~6.6 GB
+resident); a phone with the RAM to spare is a real phone, and the same is-it-usable question the
+smaller entries already leave to the person choosing one applies just as well to a larger one.
 
 Nothing is bundled either way. A 610 MB model in an APK is not a distribution mechanism, and
 F-Droid would be right to refuse it.
