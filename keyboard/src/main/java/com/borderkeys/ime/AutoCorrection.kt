@@ -3,6 +3,8 @@
 
 package com.borderkeys.ime
 
+import java.text.Normalizer
+
 /**
  * Whether a delimiter should replace what was typed, and with what.
  *
@@ -18,7 +20,10 @@ internal object AutoCorrection {
      *
      * Null in every case where applying one would be an argument rather than a correction:
      *
-     *  - the word is shorter than [minimumLength], where every guess is a coin toss;
+     *  - the word is shorter than [minimumLength] -- unless the only difference from what was
+     *    typed is a diacritic, which is not a guess at what the user meant, only at which key
+     *    they didn't reach for. "in" reaching "în" is exactly this: two real, unrelated words
+     *    that happen to be the same letters without their accents, not a coin toss;
      *  - the dictionaries spell the word, so it is a word, and a keyboard does not correct
      *    words -- the engine ranks by likelihood, so a real but uncommon word loses to a longer
      *    common one and was being replaced by it;
@@ -34,20 +39,37 @@ internal object AutoCorrection {
         knownWord: String,
         minimumLength: Int,
     ): String? {
-        if (typed.length < minimumLength) {
-            return null
-        }
-        if (typed == knownWord) {
-            return null
-        }
         if (suggestion.isNullOrEmpty() || suggestion == typed) {
             return null
         }
         if (suggestion.equals(typed, ignoreCase = true)) {
             return null
         }
+        if (typed.length < minimumLength && !isDiacriticOnlyDifference(typed, suggestion)) {
+            return null
+        }
+        if (typed == knownWord) {
+            return null
+        }
         return matchCase(typed, suggestion)
     }
+
+    /**
+     * Whether [typed] and [suggestion] are the same letters, differing only in accents and
+     * case -- "in"/"în", "sa"/"să". This is a separate, looser fold than the dictionary's own
+     * (`foldCodePoint` in proximity.cpp), which stays the single source of truth for what the
+     * engine considers the same word. This one only has to tell "restoring an accent" apart from
+     * "guessing a different word" for the [minimumLength] gate above, so Unicode's own canonical
+     * decomposition is enough -- it does not need to agree with the native fold character for
+     * character the way the Kotlin/C++ pair documented there does.
+     */
+    private fun isDiacriticOnlyDifference(typed: String, suggestion: String): Boolean =
+        stripDiacritics(typed) == stripDiacritics(suggestion)
+
+    private fun stripDiacritics(word: String): String =
+        Normalizer.normalize(word, Normalizer.Form.NFD)
+            .filterNot { Character.getType(it) == Character.NON_SPACING_MARK.toInt() }
+            .lowercase()
 
     /**
      * Gives a correction the capitalisation of the word it replaces.

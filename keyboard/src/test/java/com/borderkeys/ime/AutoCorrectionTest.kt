@@ -90,6 +90,37 @@ class AutoCorrectionTest {
     }
 
     @Test
+    fun `a diacritic restores even on a word shorter than the minimum`() {
+        // "in" and "în" are both real, unrelated Romanian words -- this is not a guess the way
+        // "ai" -> "aici" above is, so the short-word gate must not apply to it.
+        assertEquals(
+            "în",
+            AutoCorrection.correctionFor(
+                typed = "in", suggestion = "în", knownWord = "în", minimumLength = minimum,
+            ),
+        )
+    }
+
+    @Test
+    fun `a diacritic restoration on a short word keeps its capital`() {
+        assertEquals(
+            "În",
+            AutoCorrection.correctionFor(
+                typed = "In", suggestion = "în", knownWord = "în", minimumLength = minimum,
+            ),
+        )
+    }
+
+    @Test
+    fun `a short word that is not a diacritic match still needs the minimum`() {
+        assertNull(
+            AutoCorrection.correctionFor(
+                typed = "sa", suggestion = "salut", knownWord = "", minimumLength = minimum,
+            ),
+        )
+    }
+
+    @Test
     fun `nothing is corrected when there is no suggestion`() {
         assertNull(
             AutoCorrection.correctionFor(

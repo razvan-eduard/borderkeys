@@ -18,18 +18,42 @@ namespace {
 
 // Scoring constants, all in natural log units so they add to log-probabilities directly.
 
-// What one key width of finger error costs. Calibrated so that a neighbouring-key substitution
-// (about 1.0 key widths) is worth roughly one order of magnitude of probability: a typo is
-// forgiven when the intended word is much more likely, and not when it is not.
-constexpr float kEditPenalty = 2.3f;
+// What one key width of finger error costs.
+//
+// High enough that no realistic frequency gap ever buys an extra edit. "jicat" reaching "cât"
+// (delete two characters) ahead of "jucat" (substitute one) is the case that set this: "cât" was
+// only about five times more frequent than "jucat" and still won, because the old value (2.3)
+// priced a whole extra edit at less than an order of magnitude of probability -- cheap enough
+// for an unremarkable word to outbid a much closer match. That is backwards. Two edits is a
+// claim that the user made two mistakes; it should lose to a one-edit reading of the same typing
+// almost regardless of which word is more common, the same way a real, correctly spelled word
+// already never loses to a frequent correction of it (see kCorrectionSurcharge below).
+//
+// Calibrated against the worst case actually shipped: the least common word in a bundled pack
+// against the most common, about 320,000 to one (ln ≈ 12.7) in the English pack. One transposed
+// character (kTransposeCost, the cheapest possible edit) is the smallest gap between two
+// candidates that differ by one edit, so kEditPenalty * kTransposeCost has to clear that with
+// room to spare for a pack larger or more skewed than anything bundled -- comfortably true even
+// at kTransposeCost's current 0.80.
+//
+// Frequency still decides between candidates at the *same* cost -- that part of a suggestion
+// strip is unchanged, and completions (cost zero) are untouched entirely, per kCorrectionSurcharge.
+constexpr float kEditPenalty = 40.0f;
 
 // Insertions and deletions in key-width units. Slightly below a full neighbour substitution,
 // because a dropped or doubled letter is a more common slip than hitting the wrong key.
 constexpr float kInsertCost = 0.85f;
 constexpr float kDeleteCost = 0.85f;
 // Transposition is one gesture gone out of order rather than two independent errors, so it
-// costs less than the deletion plus insertion it would otherwise be decomposed into.
-constexpr float kTransposeCost = 0.65f;
+// costs a little less than the insertion or deletion it would otherwise be decomposed into --
+// deliberately a little rather than a lot now that kEditPenalty is 40: at the old value (0.65,
+// noticeably cheaper than 0.85) this and kInsertCost priced two categories of equally common
+// typing slips as though one were roughly a thousand times more likely than the other, which is
+// what let "acm" reach "cam" (one transposition) so cheaply that it crowded every insertion-based
+// candidate out of the sixteen kept, including "acum" itself -- a real word one inserted letter
+// away. A gap this small still keeps transposition the tie-breaker it was always meant to be
+// without letting that tie-break decide a candidate's fate on its own.
+constexpr float kTransposeCost = 0.80f;
 
 // Each character a completion adds beyond what was typed. Small: the unigram probability
 // already prefers common words, and this only breaks ties towards the shorter one.
@@ -979,12 +1003,19 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
 
         // Insertion: a character of the word was missed. Advance the trie without consuming
         // input, bounded by runAhead so this cannot descend forever.
+        //
+        // Every alphabet symbol, not just the neighbours of the next key -- a missed character
+        // is a keystroke that never happened at all, which has nothing to do with where the
+        // finger was next. "Beause" reaching "because" needs a 'c' inserted before an 'a', and
+        // 'c' is nowhere near 'a' on a keyboard; restricting the search to nearby keys meant
+        // "because" was never even a candidate, not merely a losing one. This is the same
+        // exhaustive-probe trick collectWords already uses for completions: trie.walk() on a
+        // symbol with no edge from this node is one array read, not a branch, so the symbols
+        // that lead nowhere from here cost nothing and only the ones the trie actually has push
+        // a frame.
         if (frame.runAhead < kMaxRunAhead && frame.cost + kInsertCost <= maxCost) {
-            for (int i = 0; i < neighbourCount && stackSize < 512; ++i) {
-                const int symbol = trie.symbolFor(neighbourCodes[i]);
-                if (symbol <= 0) {
-                    continue;
-                }
+            const int alphabetSize = trie.alphabetSize();
+            for (int symbol = 1; symbol <= alphabetSize && stackSize < 512; ++symbol) {
                 const int32_t child = trie.walk(frame.node, symbol);
                 if (child >= 0) {
                     stack[stackSize++] = Frame{child, frame.inputPos,

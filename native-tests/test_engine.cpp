@@ -107,6 +107,15 @@ void runEngineTests() {
         check(foldCodePoint(0x103) == 'a', "a-breve folds to a");
         check(foldCodePoint(0xE2) == 'a', "a-circumflex folds to a");
         check(foldCodePoint(0xEE) == 'i', "i-circumflex folds to i");
+        // æ and œ are deliberately NOT folded to a bare 'a'/'o': a French or English word
+        // spelled without the ligature is spelled with two letters ("coeur", "aetiology"), not
+        // one, and collapsing the ligature to a single vowel merges it with whatever unrelated
+        // word already occupies that shorter spelling. Folding "cœur" to 'o' once made it
+        // unreachable behind "cour" (a different, more frequent word, "yard") -- an ligature
+        // fold needs the two-letter expansion "oe"/"ae" this per-code-point function cannot
+        // produce, not a same-length substitute.
+        check(foldCodePoint(0xE6) == 0xE6u, "ae-ligature is left alone rather than merged into a");
+        check(foldCodePoint(0x153) == 0x153u, "oe-ligature is left alone rather than merged into o");
         check(foldCodePoint(0x4E2D) == 0x4E2Du, "a script we do not understand is left alone");
     }
 
@@ -182,6 +191,54 @@ void runEngineTests() {
               "which holds when the ratio is sixty to one");
         check(loaded.rankOf("masiv", "masiv") == 0,
               "and when the correction would also add a diacritic");
+
+        // Between two corrections -- neither exact -- the closer one wins almost regardless of
+        // frequency. "thexx" reaches "thex" at one edit (delete the trailing x) and "the" at
+        // two (delete both), and "the" is more than a thousand times more common than "thex" --
+        // yet "thex" still has to come first, because two edits is a claim that the user made
+        // two mistakes and that should lose to a one-edit reading of the same typing. This is
+        // the shape "jicat" reaching "cât" ahead of "jucat" had: not a completion (theme/the
+        // above), and not an exact word losing to a correction (also above) -- two different
+        // non-exact corrections, ranked by which one is the smaller mistake.
+        check(loaded.rankOf("thexx", "thex") == 0,
+              "the one-edit correction outranks a much more frequent two-edit one");
+        check(loaded.rankOf("thexx", "the") > 0,
+              "and the frequent, farther correction is still offered, just not first");
+
+        // Insertion has to be able to reach any character, not just the ones near whatever key
+        // comes next -- "kyboard" reaching "keyboard" needs an 'e' inserted before 'y', and 'e'
+        // is nowhere near 'y' on this keyboard. Restricting insertion to neighbouring keys meant
+        // this was never a candidate at all, the same way "because" was never reachable from
+        // "beause" (a 'c' nowhere near the 'a' after it).
+        check(loaded.rankOf("kyboard", "keyboard") >= 0,
+              "an inserted character reaches a word even when it is not a nearby key");
+
+        // The "acm"/"acum"/"cam" shape: "acum" is one insertion away and by far the most
+        // frequent word here, but "cam" is one (cheaper) transposition away and has a small
+        // bushy family of its own completions -- camera, campion, camion. At the old, much
+        // wider gap between kTransposeCost and kInsertCost, that family alone filled every kept
+        // candidate before "acum" was ever considered, the same way "cam" and its own real
+        // completions crowded "acum" out of the real Romanian pack entirely. "acum" has to
+        // still be found even with a cheaper, bushier alternative sitting right next to it.
+        check(loaded.rankOf("acm", "acum") >= 0,
+              "a frequent insertion is not crowded out by a bushy, cheaper transposition");
+
+        // "în" and "in" fold to the same key; the dictionary keeps only the more frequent
+        // spelling, so "in" reaches "în" at zero cost the same way "masina" reaches "mașina"
+        // above. This is what a keyboard-level short-word exemption must not break -- the guard
+        // belongs in AutoCorrection.kt, in front of a real suggestion, not in the search itself.
+        check(loaded.rankOf("in", "în") == 0,
+              "a two-letter word reaches its accented twin like any other folded spelling");
+
+        // One more typo-pattern sweep over an existing word, covering the shapes the cases
+        // above don't: a plain deletion, a doubled letter, and a transposition on a word that
+        // (unlike "acm"/"cam") has no bushy competing family to get lost behind.
+        check(loaded.rankOf("keybord", "keyboard") >= 0,
+              "a dropped letter still reaches the word");
+        check(loaded.rankOf("keyboarrd", "keyboard") >= 0,
+              "a doubled letter still reaches the word");
+        check(loaded.rankOf("kyeboard", "keyboard") >= 0,
+              "a transposition still reaches the word");
 
         // The surcharge is charged for correcting, not for completing. A completion costs no
         // edits, so it still competes on frequency alone: this is what a suggestion strip is
