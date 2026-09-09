@@ -7,6 +7,7 @@ import com.borderkeys.data.assist.KnownAssistModels
 import com.borderkeys.data.dao.AssistModelDao
 import com.borderkeys.data.entity.AssistModelEntry
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -125,9 +126,25 @@ class AssistModelRepository internal constructor(
         return entry
     }
 
+    /**
+     * Makes [entry] the model [activeVerifiedModel] and the service load. Exactly one model is
+     * ever active -- see [com.borderkeys.data.dao.AssistModelDao.setActive]'s own doc -- so this
+     * both activates [entry] and deactivates whichever one held that place before.
+     */
+    suspend fun activate(entry: AssistModelEntry) {
+        dao.setActive(entry.id)
+    }
+
     suspend fun remove(entry: AssistModelEntry) {
         fileFor(entry).delete()
         dao.delete(entry)
+        // Removing the active model must not leave none active while another, perfectly usable
+        // one is still sitting there imported -- the assistant would report "no model" for a
+        // reason nothing in the UI explains. The most recently imported survivor takes the place
+        // the removed one held, the same choice import() itself already makes for a fresh one.
+        if (entry.active) {
+            dao.observeAll().first().firstOrNull()?.let { dao.setActive(it.id) }
+        }
     }
 
     private companion object {

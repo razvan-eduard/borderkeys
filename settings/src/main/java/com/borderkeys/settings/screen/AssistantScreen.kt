@@ -114,8 +114,18 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 ModelRow(
                     title = model.displayName + if (model.active) strings[Keys.ASSISTANT_ACTIVE] else "",
                     trailing = {
-                        TextButton(onClick = { scope.launch { repository.remove(model) } }) {
-                            Text(strings[Keys.ASSISTANT_REMOVE])
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            // Only offered for the models not already carrying the load -- a
+                            // button whose entire effect is "this is already what happens"
+                            // would just be a second, redundant way to read the label above it.
+                            if (!model.active) {
+                                TextButton(onClick = { scope.launch { repository.activate(model) } }) {
+                                    Text(strings[Keys.ASSISTANT_ACTIVATE])
+                                }
+                            }
+                            TextButton(onClick = { scope.launch { repository.remove(model) } }) {
+                                Text(strings[Keys.ASSISTANT_REMOVE])
+                            }
                         }
                     },
                 ) {

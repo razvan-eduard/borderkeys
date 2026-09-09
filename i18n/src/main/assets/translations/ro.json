@@ -56,6 +56,7 @@
   "assist_replace": "Înlocuiește",
   "assist_working": "Se lucrează…",
   "assistant_a_gguf_file_is_not_a": "Un fișier GGUF nu este un document — sunt ponderi pe care un runtime le mapează și le execută într-un proces care îți ține textul selectat. De aceea un fișier este acceptat doar dacă SHA-256 al lui se potrivește cu unul dintre acestea, preluate din metadatele depozitului care le publică. Orice altceva este refuzat și șters.",
+  "assistant_activate": "Activează",
   "assistant_active": " · activ",
   "assistant_cancel": "Anulează",
   "assistant_casual_rewrite": "Rescriere relaxată",

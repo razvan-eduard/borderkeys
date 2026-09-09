@@ -56,6 +56,7 @@
   "assist_replace": "Reemplazar",
   "assist_working": "Trabajando…",
   "assistant_a_gguf_file_is_not_a": "Un archivo GGUF no es un documento: son pesos que un entorno de ejecución mapea y ejecuta en un proceso que contiene tu texto seleccionado. Por eso solo se acepta un archivo si su SHA-256 coincide con uno de estos, tomados de los metadatos del propio repositorio que los publica. Cualquier otra cosa se rechaza y se elimina.",
+  "assistant_activate": "Activar",
   "assistant_active": " · activo",
   "assistant_cancel": "Cancelar",
   "assistant_casual_rewrite": "Reescritura cercana",

@@ -70,6 +70,7 @@ object Keys {
     const val ASSIST_REPLACE = "assist_replace"
     const val ASSIST_WORKING = "assist_working"
     const val ASSISTANT_A_GGUF_FILE_IS_NOT_A = "assistant_a_gguf_file_is_not_a"
+    const val ASSISTANT_ACTIVATE = "assistant_activate"
     const val ASSISTANT_ACTIVE = "assistant_active"
     const val ASSISTANT_CANCEL = "assistant_cancel"
     const val ASSISTANT_CASUAL_REWRITE = "assistant_casual_rewrite"
