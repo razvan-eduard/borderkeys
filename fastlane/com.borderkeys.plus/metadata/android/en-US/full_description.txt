@@ -1,0 +1,22 @@
+Everything the core build is — an Android keyboard that requests zero permissions and
+contains no code capable of opening a network connection — plus a text assistant that runs
+on this device.
+
+The assistant is a draft box above the keys. You write in it, or it opens with the text you
+selected, and nothing reaches the application until you press insert. With a model
+installed, what is in the box can be corrected, translated, re-toned, shortened, or changed
+by an instruction you write yourself, and every version is kept so you can walk back to what
+you started with.
+
+* No model is bundled and none can be downloaded: there is still no INTERNET permission. A
+  model arrives only when you pick a GGUF file yourself, and it is refused unless its
+  SHA-256 matches one of three entries compiled into the build.
+* Inference runs in a separate process that is started when you ask for something and stops
+  ninety seconds after you stop asking. The model is unloaded with it.
+* Nothing is sent anywhere. The text goes to a process on this phone and the answer comes
+  back to the keyboard.
+* The assistant is refused entirely in password fields and wherever an application asks for
+  no personalised learning.
+
+Installing this does not replace the core build. They are separate applications and can be
+used side by side, which also means they keep separate settings and learn separately.

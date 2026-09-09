@@ -1,0 +1,25 @@
+An Android keyboard that requests zero permissions and contains no code capable of opening
+a network connection. Word prediction is a deterministic engine — a compact trie plus
+n-grams — written in C++ and running through JNI, not a language model.
+
+Nothing downloads at runtime. Dictionaries and language packs are either inside the APK or
+imported by you from a local file. There is no telemetry, no crash reporting, no account
+and no sync. Clipboard history and the personal dictionary live in a SQLCipher-encrypted
+database and are excluded from system backup and from device-to-device transfer.
+
+* No permissions at all. Haptic feedback uses the API that needs none.
+* The typing surface is a custom View drawing on a Canvas — no Compose and no XML layout
+  inflation in the keyboard process.
+* Several languages active at once, with no manual switching. Mixing two languages in one
+  sentence is the normal case, not an exception.
+* Swipe typing decoded geometrically on-device.
+* Private mode is automatic in password fields and whenever an app sets
+  IME_FLAG_NO_PERSONALIZED_LEARNING: no learning, no clipboard history, no personal
+  dictionary.
+* Works with any installed password manager through the platform's inline autofill
+  suggestions. The keyboard cannot read their contents — the platform guarantees that —
+  and never sees your password.
+
+This is the "core" build: it contains no machine-learning model of any kind, and no
+code that could run one. A separate "BorderKeys +" is published alongside it for anyone
+who wants the on-device text assistant; the two can be installed at the same time.

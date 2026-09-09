@@ -136,3 +136,22 @@ path = "data/schemas/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
+
+# The README's own header artwork. Own work, commissioned by the maintainer for this project,
+# not derived from anything else -- but a JPEG has no comment syntax to carry a header of its
+# own, the same reason every other binary asset in this file is here.
+[[annotations]]
+path = "docs/images/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 BorderKeys contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+# F-Droid/Fastlane store listing metadata: title, descriptions, and screenshots of this
+# application's own screens. The .txt files are read verbatim as the store listing itself, so
+# a header inside one of them would show up in the description text on a user's screen --
+# exactly the reason this belongs here and not in the file.
+[[annotations]]
+path = "fastlane/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 BorderKeys contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
