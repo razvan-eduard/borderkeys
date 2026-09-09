@@ -50,7 +50,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val entries by repository.entries.collectAsStateWithLifecycle(initialValue = emptyList())
     val preferences by themes.preferences
-        .collectAsStateWithLifecycle(initialValue = KeyboardPreferences())
+        .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SwitchRow(

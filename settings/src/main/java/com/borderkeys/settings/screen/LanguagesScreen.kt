@@ -68,7 +68,7 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val packs by repository.packs.collectAsStateWithLifecycle(initialValue = emptyList())
     val preferences by themes.preferences
-        .collectAsStateWithLifecycle(initialValue = KeyboardPreferences())
+        .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
 
     var importing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }

@@ -25,11 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
-import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.KeyboardPreview
+import com.borderkeys.settings.PlacementPreview
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.launch
@@ -47,9 +47,9 @@ fun SizeScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val repository = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
-    val theme by repository.theme.collectAsStateWithLifecycle(initialValue = KeyboardTheme())
-    val preferences by repository.preferences
-        .collectAsStateWithLifecycle(initialValue = KeyboardPreferences())
+    val appearance by repository.appearance
+        .collectAsStateWithLifecycle(initialValue = remember { repository.currentAppearance() })
+    val (theme, _, preferences) = appearance
 
     fun update(transform: (KeyboardPreferences) -> KeyboardPreferences) {
         scope.launch { repository.updatePreferences(transform) }
@@ -59,16 +59,10 @@ fun SizeScreen(modifier: Modifier = Modifier) {
     // under it are scrolled. A preview that scrolls away is a preview you cannot see while
     // you are changing the thing it previews, which is the only moment it is for.
     Column(modifier = modifier.fillMaxSize()) {
-        KeyboardPreview(theme, preferences, Modifier.padding(vertical = 12.dp))
+        PlacementPreview(appearance, Modifier.padding(vertical = 12.dp))
         Divider()
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            SettingsSectionCard(strings[Keys.SIZE_KEY_SOUND]) {
-                SwitchRow(
-                    title = strings[Keys.SIZE_KEY_SOUND],
-                    subtitle = strings[Keys.SIZE_KEY_SOUND_NOTE],
-                    checked = preferences.keySound,
-                ) { value -> update { it.copy(keySound = value) } }
-
+            SettingsSectionCard(strings[Keys.SIZE_EXTRA_KEYS]) {
                 SwitchRow(
                     title = strings[Keys.SIZE_EMOJI_KEY],
                     subtitle = strings[Keys.SIZE_EMOJI_KEY_NOTE],
@@ -85,6 +79,16 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                     subtitle = strings[Keys.SIZE_SPACE_CURSOR_NOTE],
                     checked = preferences.spaceCursorControl,
                 ) { value -> update { it.copy(spaceCursorControl = value) } }
+                SwitchRow(
+                    title = strings[Keys.SIZE_SHOW_A_ROW_OF_DIGITS],
+                    subtitle = strings[Keys.SIZE_COSTS_ABOUT_A_FIFTH_OF_THE],
+                    checked = preferences.numberRow,
+                ) { value -> update { it.copy(numberRow = value) } }
+                SwitchRow(
+                    title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
+                    subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
+                    checked = preferences.numericKeypad,
+                ) { value -> update { it.copy(numericKeypad = value) } }
             }
 
             SettingsSectionCard(strings[Keys.SIZE_HEIGHT]) {
@@ -163,17 +167,7 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                     ) { value -> update { it.copy(blurBehindKeyboard = value) } }
                 }
             }
-            SettingsSectionCard(strings[Keys.SIZE_NUMBER_ROW]) {
-                SwitchRow(
-                    title = strings[Keys.SIZE_SHOW_A_ROW_OF_DIGITS],
-                    subtitle = strings[Keys.SIZE_COSTS_ABOUT_A_FIFTH_OF_THE],
-                    checked = preferences.numberRow,
-                ) { value -> update { it.copy(numberRow = value) } }
-                SwitchRow(
-                    title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
-                    subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
-                    checked = preferences.numericKeypad,
-                ) { value -> update { it.copy(numericKeypad = value) } }
+            SettingsSectionCard(strings[Keys.SIZE_RESET]) {
                 TextButton(
                     onClick = {
                         update {

@@ -18,6 +18,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 
 /**
@@ -100,6 +106,51 @@ fun Divider() {
     HorizontalDivider(
         modifier = Modifier.padding(horizontal = 20.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
+    )
+}
+
+/**
+ * A line of text with one substring turned into a tappable link that opens the browser.
+ *
+ * Used for a model's source: something like "huggingface.co/Qwen/Qwen3-0.6B-GGUF" is a place a
+ * person can go to get the file, and text they cannot tap is a place they have to retype by hand
+ * instead. [link] is matched against [text] verbatim -- when it is not found the line is shown
+ * as plain text rather than silently dropping the link, since a substring not appearing is a
+ * caller mistake worth being visible about.
+ *
+ * No `https://` in [link] itself: the sources this renders are written short, for reading, and
+ * the scheme is added only for the URL actually opened, not for what is displayed.
+ */
+@Composable
+fun LinkedText(text: String, link: String) {
+    val start = text.indexOf(link)
+    if (start < 0) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    val linkColor = MaterialTheme.colorScheme.primary
+    val annotated = buildAnnotatedString {
+        append(text.substring(0, start))
+        withLink(
+            LinkAnnotation.Url(
+                url = "https://$link",
+                styles = TextLinkStyles(
+                    style = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline),
+                ),
+            ),
+        ) {
+            append(link)
+        }
+        append(text.substring(start + link.length))
+    }
+    Text(
+        annotated,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 

@@ -100,7 +100,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
 
     val themes = remember { DataGraph.themes }
     val preferences by themes.preferences
-        .collectAsStateWithLifecycle(initialValue = KeyboardPreferences())
+        .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
 
     fun update(transform: (KeyboardPreferences) -> KeyboardPreferences) {
         scope.launch { themes.updatePreferences(transform) }

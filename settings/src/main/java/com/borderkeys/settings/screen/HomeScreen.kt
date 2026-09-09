@@ -6,8 +6,6 @@ package com.borderkeys.settings.screen
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
 
-import android.content.Context
-import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.rememberScrollState
@@ -23,13 +21,15 @@ import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.Screen
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.isBorderKeysDefault
+import com.borderkeys.settings.isBorderKeysEnabled
 
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
     val strings = LocalStrings.current
     val context = LocalContext.current
-    val enabled = isKeyboardEnabled(context)
-    val isDefault = isKeyboardDefault(context)
+    val enabled = isBorderKeysEnabled(context)
+    val isDefault = isBorderKeysDefault(context)
     // Resolving the service is the only honest way to ask "is this the plus build": the class is
     // simply absent otherwise, and a BuildConfig flag would be a claim rather than a fact.
     val hasAssistant = remember(context) {
@@ -70,11 +70,10 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
             SettingRow(strings[Keys.HOME_LAYOUT], strings[Keys.HOME_WHICH_KEYS_AND_WHERE_SEPARATE_FROM]) {
                 open(Screen.Layout)
             }
-            SettingRow(strings[Keys.HOME_SWIPE_TYPING], strings[Keys.HOME_GESTURE_INPUT_AND_THE_TRAIL_IT]) { open(Screen.Swipe) }
             SettingRow(
                 strings[Keys.HOME_SUGGESTIONS_AND_CORRECTIONS],
-                strings[Keys.HOME_THE_STRIP_ABOVE_THE_KEYS_AND],
-            ) { open(Screen.Corrections) }
+                strings[Keys.HOME_THE_SUGGESTION_STRIP_AUTOCORRECT_AND_SWIPE],
+            ) { open(Screen.Typing) }
             SettingRow(strings[Keys.HOME_PERSONAL_DICTIONARY], strings[Keys.HOME_WHAT_THIS_DEVICE_HAS_LEARNED]) {
                 open(Screen.Dictionary)
             }
@@ -109,6 +108,10 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
                 strings[Keys.HOME_SIZE_AND_POSITION],
                 strings[Keys.HOME_HEIGHT_ONE_HANDED_MODE_FLOATING_AND],
             ) { open(Screen.Size) }
+            SettingRow(
+                strings[Keys.HOME_SOUND_AND_VIBRATION],
+                strings[Keys.HOME_SOUND_AND_VIBRATION_NOTE],
+            ) { open(Screen.Sound) }
         }
         SettingsSectionCard(strings[Keys.SHORTCUTS_TITLE]) {
             // Listed because a gesture nobody is told about is a gesture nobody uses. Holding
@@ -130,22 +133,6 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
             )
         }
     }
-}
-
-@Composable
-private fun isKeyboardEnabled(context: Context): Boolean {
-    val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        ?: return false
-    return manager.enabledInputMethodList.any { it.packageName == context.packageName }
-}
-
-@Composable
-private fun isKeyboardDefault(context: Context): Boolean {
-    val current = android.provider.Settings.Secure.getString(
-        context.contentResolver,
-        android.provider.Settings.Secure.DEFAULT_INPUT_METHOD,
-    )
-    return current != null && current.startsWith(context.packageName)
 }
 
 /**
