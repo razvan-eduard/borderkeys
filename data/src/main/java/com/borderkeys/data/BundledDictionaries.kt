@@ -39,12 +39,12 @@ object BundledDictionaries {
     )
 
     val ALL: List<Entry> = listOf(
-        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 18_000),
-        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 18_000),
-        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 18_000),
-        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 18_000),
-        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 18_000),
-        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 18_000),
+        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 96_026),
+        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 119_393),
+        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 87_474),
+        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 86_364),
+        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 89_201),
+        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 89_117),
     )
 
     /** Opens one for reading. The caller closes it; the install path copies and validates. */

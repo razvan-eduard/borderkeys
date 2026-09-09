@@ -21,7 +21,10 @@ object DictionaryCsv {
 
     const val HEADER = "word,locale,count,lastUsedAt"
 
-    private const val MAX_WORD_LENGTH = 64
+    /** The longest word considered plausible -- not private, because `:keyboard`'s
+     *  `LearningBuffer` reads the same ceiling for the same reason on the way in: a "word" past
+     *  this length is not one, whichever side is asking. */
+    const val MAX_WORD_LENGTH = 64
 
     fun encode(words: List<UserWord>): String = buildString {
         append(HEADER).append('\n')

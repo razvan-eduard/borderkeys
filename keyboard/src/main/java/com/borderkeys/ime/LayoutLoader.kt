@@ -91,6 +91,14 @@ object LayoutLoader {
         if (!KeyCodes.isCharacter(code)) {
             flags = flags or KeyFlags.MODIFIER
         }
+        // REPEATABLE, for backspace specifically: the long-press timer (380ms) always elapses
+        // before the character-repeat delay (400ms) would, so a held backspace goes straight to
+        // deleting a whole word rather than a character -- and once that first word is gone,
+        // KeyboardCanvasView's own longPressRepeatPointer/longPressRepeatRunnable is what keeps
+        // it going, one word at a time, for as long as the finger stays down. That mechanism
+        // only arms itself when this flag is set; without it a held backspace stops after
+        // exactly one word, which is the bug it exists to fix. See onKeyLongPress's
+        // KeyCodes.DELETE branch and onLongPressElapsed's REPEATABLE check.
         if (code == KeyCodes.DELETE) {
             flags = flags or KeyFlags.REPEATABLE
         }

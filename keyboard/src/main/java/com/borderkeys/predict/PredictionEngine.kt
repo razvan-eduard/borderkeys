@@ -36,9 +36,21 @@ import com.borderkeys.data.entity.UserWord
 class PredictionEngine(
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
 ) {
-    /** Delivered on the UI thread, already filtered for staleness. */
+    /**
+     * Delivered on the UI thread. Filtered for staleness against a field switch -- [clear] --
+     * but not against a keystroke: a request already computed and posted here can still lose a
+     * race against the very next character, and [query] is what lets the caller catch that case
+     * itself (compare it against whatever it currently considers "the word being typed"; a
+     * mismatch means this answer is about a moment that has already passed).
+     */
     interface ResultListener {
         /**
+         * [query] is the composing text this whole answer -- [words] and [knownWord] alike -- is
+         * about, exactly as it was asked. Not necessarily what is on screen by the time this
+         * runs: the engine has one thread and the UI thread does not wait for it, so a keystroke
+         * typed while this was being computed reaches the screen first and this answer arrives
+         * after, still describing the word before it.
+         *
          * [knownWord] is the word this answer is about when the dictionaries spell it, folded
          * for case and diacritics, and empty otherwise.
          *
@@ -49,7 +61,7 @@ class PredictionEngine(
          * It travels with the answer because the engine has one thread, and a delimiter is not
          * a moment to be blocking on it.
          */
-        fun onSuggestions(words: Array<String?>, count: Int, knownWord: String)
+        fun onSuggestions(words: Array<String?>, count: Int, knownWord: String, query: String)
 
         /**
          * A decoded swipe. Separate from [onSuggestions] because the service treats it
@@ -71,6 +83,9 @@ class PredictionEngine(
 
     /** The last answered query when the dictionaries know it, else empty. Guarded by resultLock. */
     private var nativeKnownWord = ""
+
+    /** The composing text the current [nativeKnownWord]/[nativeCount] answer is about. */
+    private var nativeQuery = ""
 
     // Written by the prediction thread, copied out by the UI thread under [resultLock]. Both
     // are allocated once: the suggestion path may not allocate per keystroke, and JNI fills
@@ -435,6 +450,7 @@ class PredictionEngine(
             }
             synchronized(resultLock) {
                 nativeCount = count
+                nativeQuery = query
                 nativeKnownWord = if (spelling != null && spelling.equals(query, ignoreCase = true)) {
                     query
                 } else {
@@ -452,8 +468,13 @@ class PredictionEngine(
      * moment this returns.
      */
     private fun publish() {
-        val known = synchronized(resultLock) { nativeKnownWord }
-        listener?.onSuggestions(displayWords, copyAndFilterResults(), known)
+        val known: String
+        val query: String
+        synchronized(resultLock) {
+            known = nativeKnownWord
+            query = nativeQuery
+        }
+        listener?.onSuggestions(displayWords, copyAndFilterResults(), known, query)
     }
 
     /**

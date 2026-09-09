@@ -3,6 +3,7 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.data.DictionaryCsv
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.LearnedWord
@@ -244,6 +245,10 @@ class LearningBuffer(
     companion object {
         const val DEFAULT_DEBOUNCE_MILLIS = 4_000L
         const val DEFAULT_MAX_ENTRIES = 64
-        const val MAX_WORD_LENGTH = 64
+
+        /** Read from [DictionaryCsv.MAX_WORD_LENGTH]: the same ceiling on the way in as on the
+         *  way back out through an import, so raising or lowering what counts as a plausible
+         *  word is one edit rather than two kept in sync by hand. */
+        const val MAX_WORD_LENGTH = DictionaryCsv.MAX_WORD_LENGTH
     }
 }

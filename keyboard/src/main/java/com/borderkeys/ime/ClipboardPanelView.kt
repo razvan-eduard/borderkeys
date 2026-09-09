@@ -142,7 +142,7 @@ class ClipboardPanelView(
     }
 
     private fun measureContent() {
-        val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_ROW_PX
+        val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else ThemePaints.DEFAULT_ROW_HEIGHT_PX
         cardHeightPx = row * CARD_HEIGHT_ROWS
         paddingPx = row * PADDING_ROWS
         contentHeight = ((cardHeightPx + paddingPx) * entries.size + paddingPx).toInt()
@@ -334,8 +334,6 @@ class ClipboardPanelView(
 
         /** The gap around and between cards, as a fraction of a key row. */
         const val PADDING_ROWS = 0.12f
-
-        const val DEFAULT_ROW_PX = 132f
 
         /** Never decode below this, however short the panel is when the list arrives. */
         const val MIN_THUMBNAIL_PX = 96

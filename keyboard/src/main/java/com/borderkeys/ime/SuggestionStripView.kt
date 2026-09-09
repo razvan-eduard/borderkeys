@@ -9,6 +9,7 @@ import android.graphics.Canvas
 import android.os.Trace
 import android.view.MotionEvent
 import android.view.View
+import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.theme.ThemePaints
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
@@ -412,8 +413,7 @@ class SuggestionStripView(
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
-        val rowHeight = if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_HEIGHT_PX
-        setMeasuredDimension(width, (rowHeight * HEIGHT_FRACTION).toInt())
+        setMeasuredDimension(width, paints.suggestionRowHeightPx())
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -511,10 +511,12 @@ class SuggestionStripView(
                 // handleCharacter and AutoCorrection in BorderKeysService: the decision is made
                 // there and arrives here already made.
                 if (index == appliedIndex) {
-                    // A traced outline, not a fill and not another colour: it has to be
+                    // An outline or a fill, whichever the theme says -- it has to be
                     // distinguishable from the chips beside it without shouting. It never lands
                     // on the italic typed chip -- a correction is by definition a different
-                    // word, in a different slot.
+                    // word, in a different slot. paints.appliedHighlight is its own Paint,
+                    // compiled from the theme once at update() time -- not keyStroke, which
+                    // several other views also share and mutate for their own drawing.
                     appliedRect.set(
                         left + slotWidth * APPLIED_INSET,
                         height * APPLIED_INSET,
@@ -522,7 +524,7 @@ class SuggestionStripView(
                         height * (1f - APPLIED_INSET),
                     )
                     val radius = height * APPLIED_CORNER
-                    canvas.drawRoundRect(appliedRect, radius, radius, paints.keyStroke)
+                    canvas.drawRoundRect(appliedRect, radius, radius, paints.appliedHighlight)
                 }
                 // Italic for what was typed, the full label colour for what would be applied,
                 // and the secondary colour for the rest. By meaning rather than by position:
@@ -572,7 +574,7 @@ class SuggestionStripView(
                 // The chip has no hold behaviour: there is one thing on the clipboard and one
                 // thing to do with it.
                 if (pressedIndex > chipOffset - 1 && pressedIndex >= 0) {
-                    postDelayed(longPressRunnable, LONG_PRESS_MILLIS)
+                    postDelayed(longPressRunnable, KeyboardCanvasView.LONG_PRESS_MILLIS)
                 }
             }
             MotionEvent.ACTION_MOVE -> {
@@ -583,7 +585,7 @@ class SuggestionStripView(
                     pressedIndex = slot
                     invalidate()
                     if (slot >= 0) {
-                        postDelayed(longPressRunnable, LONG_PRESS_MILLIS)
+                        postDelayed(longPressRunnable, KeyboardCanvasView.LONG_PRESS_MILLIS)
                     }
                 }
             }
@@ -658,9 +660,12 @@ class SuggestionStripView(
         /**
          * The most the strip can ever hold, which is what its buffers are sized for. How many
          * are actually shown is [visibleLimit], a setting; this is the ceiling that lets the
-         * setting change without reallocating anything.
+         * setting change without reallocating anything. Read from
+         * [KeyboardPreferences.MAX_SUGGESTIONS] rather than a second literal 8: that is the same
+         * ceiling from the other side, the highest [visibleLimit] is ever allowed to ask for, so
+         * the two cannot drift into a setting the buffers here are too small for.
          */
-        const val MAX_SUGGESTIONS = 8
+        const val MAX_SUGGESTIONS = KeyboardPreferences.MAX_SUGGESTIONS
 
         /** How far the applied-word outline sits inside its slot, as a fraction of the slot. */
         const val APPLIED_INSET = 0.06f
@@ -679,17 +684,12 @@ class SuggestionStripView(
         const val CHIP_ICON_FRACTION = 0.42f
         const val CHIP_GAP_PX = 10f
         private const val MAX_WORD_CHARS = 48
-        private const val HEIGHT_FRACTION = 0.78f
-
-        /** The same hold the keys use, so the two feel like one gesture. */
-        private const val LONG_PRESS_MILLIS = 380L
 
         /** How much of a slot a word may occupy before it is shrunk, leaving room for a gap. */
         private const val SLOT_TEXT_FRACTION = 0.80f
 
         /** Past this the text is too small to read, so the word is allowed to overflow instead. */
         private const val MIN_TEXT_SCALE = 0.62f
-        private const val DEFAULT_HEIGHT_PX = 150f
 
         /**
          * Deliberately not translatable through resources yet: it is drawn from a fixed

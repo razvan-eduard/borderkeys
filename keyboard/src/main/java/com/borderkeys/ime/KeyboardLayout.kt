@@ -184,6 +184,7 @@ class KeyboardLayout(
                         listOf(
                             Key(KeyCodes.SHIFT, "⇧", "", 1.5f, KeyFlags.MODIFIER),
                         ) + letters("zxcvbnm") + listOf(
+                            // REPEATABLE -- see LayoutLoader's identical note.
                             Key(
                                 KeyCodes.DELETE, "⌫", "", 1.5f,
                                 KeyFlags.MODIFIER or KeyFlags.REPEATABLE,

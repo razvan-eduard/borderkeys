@@ -79,8 +79,7 @@ class InlineSuggestionsHostView(
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
-        val rowHeight = if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_HEIGHT_PX
-        val height = (rowHeight * HEIGHT_FRACTION).toInt()
+        val height = paints.suggestionRowHeightPx()
 
         var total = 0
         val childHeightSpec = MeasureSpec.makeMeasureSpec(height, MeasureSpec.AT_MOST)
@@ -159,7 +158,5 @@ class InlineSuggestionsHostView(
 
     private companion object {
         const val GAP_PX = 8
-        const val HEIGHT_FRACTION = 0.78f
-        const val DEFAULT_HEIGHT_PX = 150f
     }
 }

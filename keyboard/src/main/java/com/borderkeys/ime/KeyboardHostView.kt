@@ -8,6 +8,7 @@ import android.content.Context
 import android.view.View.MeasureSpec
 import android.view.ViewGroup
 import android.view.WindowInsets
+import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.theme.ThemePaints
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.i18n.Keys
@@ -33,15 +34,6 @@ class KeyboardHostView(
     private val paints: ThemePaints,
     private val strings: LanguageManager,
 ) : ViewGroup(context) {
-
-    /**
-     * A place to write that the application cannot see, above everything else.
-     *
-     * The only child here that does *not* replace the keys. Every panel below is something you
-     * do instead of typing, so it takes the keys' place and the window keeps its height; this is
-     * something you type into, so the window grows to hold it and the keys stay where they are.
-     */
-    val composer = ComposerView(context, paints, strings)
 
     val suggestionStrip = SuggestionStripView(context, paints, strings)
     val inlineSuggestions = InlineSuggestionsHostView(context, paints)
@@ -313,8 +305,6 @@ class KeyboardHostView(
         keyboard.drawsBackground = false
         suggestionStrip.drawsBackground = false
         quickActions.drawsBackground = false
-        composer.visibility = GONE
-        addView(composer)
         addView(suggestionStrip)
         addView(inlineSuggestions)
         addView(keyboard)
@@ -436,12 +426,6 @@ class KeyboardHostView(
         val exactBody = MeasureSpec.makeMeasureSpec(bodyWidth, MeasureSpec.EXACTLY)
 
         var height = 0
-        // Measured unbounded, like the strip and the keys and unlike the panels: it chooses its
-        // own height from what has been written, and the window grows by whatever that is.
-        if (composer.visibility != GONE) {
-            composer.measure(exactBody, unbounded)
-            height += composer.measuredHeight
-        }
         if (suggestionStrip.visibility != GONE) {
             suggestionStrip.measure(exactBody, unbounded)
             height += suggestionStrip.measuredHeight
@@ -520,10 +504,6 @@ class KeyboardHostView(
         if (quickActions.visibility != GONE && quickActionsPlacement == PLACEMENT_ABOVE_STRIP) {
             quickActions.layout(left, y, right, y + barThickness)
             y += barThickness
-        }
-        if (composer.visibility != GONE) {
-            composer.layout(bodyLeft, y, bodyRight, y + composer.measuredHeight)
-            y += composer.measuredHeight
         }
         if (suggestionStrip.visibility != GONE) {
             suggestionStrip.layout(bodyLeft, y, bodyRight, y + suggestionStrip.measuredHeight)
@@ -629,23 +609,6 @@ class KeyboardHostView(
     }
 
     /**
-     * Shows or hides the draft box.
-     *
-     * Note what is missing: the line every other panel here has, turning the keys off. Its
-     * absence is the design -- a box you cannot type into would be a box for nothing.
-     */
-    fun setComposerVisible(visible: Boolean) {
-        val wanted = if (visible) VISIBLE else GONE
-        if (composer.visibility == wanted) {
-            return
-        }
-        composer.visibility = wanted
-        requestLayout()
-    }
-
-    val composerVisible: Boolean get() = composer.visibility == VISIBLE
-
-    /**
      * Re-measures every child after the shared metrics changed.
      *
      * `View.measure` skips a child whose measure spec has not changed, and the specs do not
@@ -664,7 +627,7 @@ class KeyboardHostView(
     fun onThemeChanged() {
         resizeFrame.color = paints.accent.color
         resizeFrame.strokeWidth =
-            (paints.rowHeightPx.takeIf { it > 0f } ?: DEFAULT_ROW_PX) * RESIZE_FRAME_ROWS
+            (paints.rowHeightPx.takeIf { it > 0f } ?: ThemePaints.DEFAULT_ROW_HEIGHT_PX) * RESIZE_FRAME_ROWS
         resizeScrim.color = paints.background.color
         resizeScrim.alpha = RESIZE_SCRIM_ALPHA
         // Opaque, unlike the wash: the pill is what makes its label readable over the keys.
@@ -855,16 +818,16 @@ class KeyboardHostView(
     }
 
     private companion object {
-        // Mirrors KeyboardPreferences. Duplicated rather than imported so that :keyboard's view
-        // layer does not depend on :data for four integers.
-        const val MODE_DOCKED = 0
+        // Read from KeyboardPreferences rather than retyped: :keyboard already depends on
+        // :data for the class itself (BorderKeysService holds a KeyboardPreferences directly),
+        // so there was no dependency this was actually avoiding -- only a second copy of four
+        // integers with nothing to stop it drifting from the first.
+        const val MODE_DOCKED = KeyboardPreferences.MODE_DOCKED
 
-        // Mirrors KeyboardPreferences.QUICK_ACTIONS_*. Duplicated rather than depended on, for
-        // the same reason MODE_DOCKED is: four integers are not worth a module edge.
-        const val PLACEMENT_ABOVE_STRIP = 0
-        const val PLACEMENT_BELOW_KEYS = 1
-        const val PLACEMENT_LEFT = 2
-        const val PLACEMENT_RIGHT = 3
+        const val PLACEMENT_ABOVE_STRIP = KeyboardPreferences.QUICK_ACTIONS_ABOVE_STRIP
+        const val PLACEMENT_BELOW_KEYS = KeyboardPreferences.QUICK_ACTIONS_BELOW_KEYS
+        const val PLACEMENT_LEFT = KeyboardPreferences.QUICK_ACTIONS_LEFT
+        const val PLACEMENT_RIGHT = KeyboardPreferences.QUICK_ACTIONS_RIGHT
 
         const val HANDLE_NONE = -1
         const val HANDLE_TOP = 0
@@ -879,17 +842,16 @@ class KeyboardHostView(
         const val LABEL_TEXT_DP = 14f
         const val PILL_PADDING_DP = 8f
 
-        /** Only reached before the first theme update, when the row height is still zero. */
-        const val DEFAULT_ROW_PX = 132f
-
         /** How much of the keys the resize wash covers, out of 255. */
         const val RESIZE_SCRIM_ALPHA = 96
 
         /** The frame's stroke, as a fraction of a key row. */
         const val RESIZE_FRAME_ROWS = 0.022f
-        const val MODE_ONE_HANDED_LEFT = 1
-        const val MODE_ONE_HANDED_RIGHT = 2
-        const val MODE_FLOATING = 3
+
+        // Read from KeyboardPreferences, same as MODE_DOCKED above.
+        const val MODE_ONE_HANDED_LEFT = KeyboardPreferences.MODE_ONE_HANDED_LEFT
+        const val MODE_ONE_HANDED_RIGHT = KeyboardPreferences.MODE_ONE_HANDED_RIGHT
+        const val MODE_FLOATING = KeyboardPreferences.MODE_FLOATING
 
         /** Below this there is not enough empty space for a target a thumb can hit. */
         const val MIN_ARROW_GUTTER_DP = 28f

@@ -130,7 +130,7 @@ class EmojiPanelView(
     }
 
     private fun measureContent() {
-        val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_ROW_PX
+        val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else ThemePaints.DEFAULT_ROW_HEIGHT_PX
         tabHeightPx = row * TAB_HEIGHT_ROWS
         cellPx = row * CELL_ROWS
         columns = if (width > 0) (width / cellPx).toInt().coerceAtLeast(1) else 1
@@ -327,7 +327,6 @@ class EmojiPanelView(
 
         const val TAB_HEIGHT_ROWS = 0.62f
         const val CELL_ROWS = 0.78f
-        const val DEFAULT_ROW_PX = 132f
 
         /** The glyph's share of its cell, and where its baseline sits in it. */
         const val GLYPH_FRACTION = 0.62f

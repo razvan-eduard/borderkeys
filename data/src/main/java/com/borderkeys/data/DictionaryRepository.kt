@@ -77,6 +77,25 @@ class DictionaryRepository internal constructor(
     }
 
     /**
+     * Halves the stored count of every word, pair and triple nobody has written in a
+     * [PersonalWordDecay.HALF_LIFE_MILLIS] or longer.
+     *
+     * Called occasionally from the learning flush, not on every one -- see the call site for the
+     * throttle. This is the half of decay that actually shrinks what is on disk; the other half
+     * ([PersonalWordDecay.decayed], applied to [topWords]/[topBigrams]/[topTriples] when they are
+     * pushed into the native model) makes the influence of a stale entry correct on every load
+     * even between sweeps, but never rewrites the row it read. Without this one, a count that
+     * stopped being touched years ago would still occupy one of the limited slots the native
+     * model or [topWords]'s own `LIMIT` keeps room for, crowding out something written last week.
+     */
+    suspend fun decayStaleEntries(now: Long = System.currentTimeMillis()) {
+        val cutoff = now - PersonalWordDecay.HALF_LIFE_MILLIS
+        userWords.decayStale(cutoff, now)
+        userBigrams.decayStale(cutoff, now)
+        userTrigrams.decayStale(cutoff, now)
+    }
+
+    /**
      * Forgets a word, and every phrase it was part of.
      *
      * The pairs go with it. Keeping them would leave the word being predicted through a phrase
