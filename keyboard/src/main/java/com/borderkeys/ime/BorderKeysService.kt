@@ -1681,12 +1681,24 @@ class BorderKeysService :
     }
 
     /**
-     * Makes the word the caret is sitting in the one the strip is about.
+     * Makes the word the caret is sitting in the one the strip is about -- and, when the caret
+     * is genuinely inside that word rather than having only landed beside it, the one typing
+     * continues.
      *
-     * Deliberately does *not* set a composing region on it. Marking text the user merely moved
-     * into would underline it and put it one keystroke away from being replaced wholesale, which
-     * is a surprise for someone who only wanted to look. The strip offers; nothing is committed
-     * until a chip is tapped.
+     * Marks a composing region on the adopted word now, which it deliberately did not used to:
+     * without one, a correction just reverted and its trailing delimiter deleted by hand left the
+     * caret sitting after real, plain-committed text with nothing marking it as part of a word in
+     * progress -- so the very next letter typed started a new composing run of its own, one
+     * character long, while the text on screen read as a single continuous word. The engine was
+     * then asked about "inta" for a caret that read "suferinta", and corrected the fragment
+     * nobody was asking about on its own terms. setComposingRegion marks the *existing* text as
+     * composing without touching it -- unlike setComposingText, which would insert the adopted
+     * word a second time -- so typing forward now extends the same word setComposingText already
+     * expects to be replacing, the ordinary path every other composing word already takes.
+     *
+     * A caret that only landed beside a word -- one that followed a delimiter, or reached an
+     * empty field -- gets no composing region, because there is no word to extend from there;
+     * [partial] is empty exactly when that is true, and nothing is marked for an empty region.
      */
     private fun adoptWordAtCaret() {
         composing.setLength(0)
@@ -1697,9 +1709,10 @@ class BorderKeysService :
         // next backspace had nothing to undo, which is the entire feature. Nothing is lost by
         // keeping it: revertCorrection checks that the text immediately before the cursor is
         // still exactly what it committed, and declines when the caret has really moved.
-        currentInputConnection?.finishComposingText()
+        val connection = currentInputConnection
+        connection?.finishComposingText()
 
-        val before = currentInputConnection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
+        val before = connection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
         if (before.isNullOrEmpty()) {
             previousWord1 = null
             previousWord2 = null
@@ -1718,6 +1731,11 @@ class BorderKeysService :
         previousWord1 = words.getOrNull(contextEnd - 1)
         previousWord2 = words.getOrNull(contextEnd - 2)
         lastQuery = partial
+        if (partial.isNotEmpty()) {
+            composing.append(partial)
+            val caret = selectionEnd
+            connection.setComposingRegion(caret - partial.length, caret)
+        }
         engine.requestSuggestions(partial, previousWord1, previousWord2)
     }
 
