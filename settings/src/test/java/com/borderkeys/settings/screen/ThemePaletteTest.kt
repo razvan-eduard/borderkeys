@@ -3,6 +3,7 @@
 
 package com.borderkeys.settings.screen
 
+import com.borderkeys.data.theme.ThemePalette
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -66,13 +67,14 @@ class ThemePaletteTest {
     /** A duplicate swatch would draw two rings for one colour. */
     @Test
     fun `the palette has no duplicates`() {
-        assertTrue("the palette repeats a colour", PALETTE.size == PALETTE.toSet().size)
+        val palette = ThemePalette.COLOURS
+        assertTrue("the palette repeats a colour", palette.size == palette.toSet().size)
     }
 
     /** Anything drawn behind a key label has to be opaque or the key shows the wallpaper. */
     @Test
     fun `every palette entry is opaque`() {
-        for (colour in PALETTE) {
+        for (colour in ThemePalette.COLOURS) {
             assertTrue("${hex(colour)} is not fully opaque", (colour ushr 24) == 0xFF)
         }
     }

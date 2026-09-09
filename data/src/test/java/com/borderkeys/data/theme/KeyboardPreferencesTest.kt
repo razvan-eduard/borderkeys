@@ -114,6 +114,40 @@ class KeyboardPreferencesTest {
         assertTrue(defaults.showSuggestionStrip)
     }
 
+    /** Three by default, and never outside the slider's own range once written back out. */
+    @Test
+    fun `the shortest word corrected defaults to three and stays on the slider`() {
+        assertEquals(3, KeyboardPreferences().minCorrectionLength)
+        assertEquals(
+            KeyboardPreferences.MIN_CORRECTION_LENGTH,
+            KeyboardPreferences(minCorrectionLength = -4).sanitised().minCorrectionLength,
+        )
+        assertEquals(
+            KeyboardPreferences.MAX_CORRECTION_LENGTH,
+            KeyboardPreferences(minCorrectionLength = 99).sanitised().minCorrectionLength,
+        )
+    }
+
+    /** Manual by default, and an unrecognised stored value falls back to manual rather than
+     *  being carried through -- there are only ever two valid modes. */
+    @Test
+    fun `theme mode defaults to manual and rejects anything but the two real modes`() {
+        assertEquals(KeyboardPreferences.THEME_MODE_MANUAL, KeyboardPreferences().themeMode)
+        assertEquals(
+            KeyboardPreferences.THEME_MODE_AUTO_SYSTEM,
+            KeyboardPreferences(themeMode = KeyboardPreferences.THEME_MODE_AUTO_SYSTEM)
+                .sanitised().themeMode,
+        )
+        assertEquals(
+            KeyboardPreferences.THEME_MODE_MANUAL,
+            KeyboardPreferences(themeMode = 99).sanitised().themeMode,
+        )
+        assertEquals(
+            KeyboardPreferences.THEME_MODE_MANUAL,
+            KeyboardPreferences(themeMode = -1).sanitised().themeMode,
+        )
+    }
+
     /**
      * The learning speed is one number applied to two curves, so the three settings have to be
      * ordered and the middle one has to be the identity.

@@ -87,7 +87,22 @@ object DataGraph {
         )
     }
 
-    val themes: ThemeRepository by lazy { ThemeRepository(themeStore, preferencesStore) }
+    /**
+     * The second theme "Auto: follow system dark/light" (see [KeyboardPreferences.themeMode])
+     * switches to when the system is not in dark mode. A separate file rather than a field on
+     * [KeyboardTheme]: it is a whole theme in its own right, customised on its own screen, not a
+     * colour belonging to the other one.
+     */
+    private val lightThemeStore by lazy {
+        DataStoreFactory.create(
+            serializer = KeyboardThemeSerializer,
+            corruptionHandler = ReplaceFileCorruptionHandler { KeyboardTheme() },
+            scope = storeScope,
+            produceFile = { requireContext.dataStoreFile("keyboard_theme_light.json") },
+        )
+    }
+
+    val themes: ThemeRepository by lazy { ThemeRepository(themeStore, lightThemeStore, preferencesStore) }
 
     val clipboard: ClipboardRepository by lazy {
         ClipboardRepository(database.clipboardDao(), themes.preferences)

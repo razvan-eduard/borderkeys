@@ -37,6 +37,15 @@ class ThemePaints {
     val keyPressedFill: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val modifierKeyFill: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val keyStroke: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    /**
+     * Marks the suggestion strip's applied word: a traced outline or a filled chip, whichever
+     * [KeyboardTheme.appliedHighlightStyle] says. Its own paint rather than [keyStroke] reused --
+     * [keyStroke] is shared by several views for their own drawing, mutated in place like
+     * everything here, and a style flip meant for this one chip has no business also being a
+     * style flip for whichever of them draws next.
+     */
+    val appliedHighlight: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val label: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val labelSecondary: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val accent: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -191,6 +200,23 @@ class ThemePaints {
         keyStroke.color = theme.secondaryTextColor
         keyStroke.strokeWidth = 1f * density
 
+        // The colour itself is stable -- appliedHighlightColorOrDefault() no longer depends on
+        // the style -- so what changes here with the style is purely how much of it is drawn:
+        // a thin opaque line for the outline (full opacity was never a problem for a 1dp
+        // stroke), a quarter-strength tint for the fill (full opacity would be a solid block
+        // sitting on top of the word it marks). Neither computation is visible outside this
+        // function, so the theme screen's own swatch row always rings the one colour underneath
+        // both looks.
+        val highlightBase = theme.appliedHighlightColorOrDefault()
+        val highlightFilled = theme.appliedHighlightStyle == KeyboardTheme.APPLIED_HIGHLIGHT_BACKGROUND
+        appliedHighlight.style = if (highlightFilled) Paint.Style.FILL else Paint.Style.STROKE
+        appliedHighlight.color = if (highlightFilled) {
+            (highlightBase and 0x00FFFFFF) or (0x40 shl 24)
+        } else {
+            highlightBase or 0xFF000000.toInt()
+        }
+        appliedHighlight.strokeWidth = 1f * density
+
         label.color = theme.textColor
         label.textSize = theme.labelTextSizeSp * newScaledDensity
         labelSecondary.color = theme.secondaryTextColor
@@ -218,5 +244,37 @@ class ThemePaints {
         secondaryBaselineOffset = -(fontMetrics.ascent + fontMetrics.descent) / 2f
 
         return true
+    }
+
+    /**
+     * The height [SuggestionStripView][com.borderkeys.ime.SuggestionStripView] and
+     * [InlineSuggestionsHostView][com.borderkeys.ime.InlineSuggestionsHostView] each measure
+     * themselves to -- one row's own fraction of [rowHeightPx], with its own fallback for the
+     * frame before that has ever been set. One function rather than the same three lines typed
+     * into both views' `onMeasure`: the two rows take one another's place depending on whether a
+     * password manager has anything to offer, so a change to how one is sized belongs to both.
+     */
+    fun suggestionRowHeightPx(): Int {
+        val row = if (rowHeightPx > 0f) rowHeightPx else SUGGESTION_ROW_DEFAULT_PX
+        return (row * SUGGESTION_ROW_HEIGHT_FRACTION).toInt()
+    }
+
+    companion object {
+        /**
+         * The row height assumed before the first theme update, when [rowHeightPx] is still
+         * zero -- read by every panel that can be measured on that first frame
+         * ([com.borderkeys.ime.EmojiPanelView], [com.borderkeys.ime.ClipboardPanelView],
+         * [com.borderkeys.ime.KeyboardHostView]'s resize frame) rather than each keeping its own
+         * copy of the same placeholder.
+         */
+        const val DEFAULT_ROW_HEIGHT_PX = 132f
+
+        /**
+         * The suggestion row's own fallback and fraction, for [suggestionRowHeightPx]. Its own
+         * value rather than [DEFAULT_ROW_HEIGHT_PX]: a suggestion row is a different shape from
+         * a full key row, tuned to look right at 78% of 150, not of 132.
+         */
+        private const val SUGGESTION_ROW_DEFAULT_PX = 150f
+        private const val SUGGESTION_ROW_HEIGHT_FRACTION = 0.78f
     }
 }

@@ -60,7 +60,15 @@ data class KeyboardTheme(
      * carries whichever pattern it named in as the one member of this list.
      */
     val backgroundPatterns: List<Int> = emptyList(),
-    val patternColor: Int = 0x1FFFFFFF,
+
+    // [ThemePalette.COLOURS]'s own first entry, computed rather than retyped as a second hex
+    // literal: the settings screen's swatch row rings whichever palette entry the current colour
+    // equals by RGB, and the previous default (0x1FFFFFFF) happened to equal the palette's
+    // *last* colour instead -- white, correctly ringed, but not the "first colour pre-selected"
+    // a default is supposed to read as. Low alpha kept as its own literal, since it is a drawing
+    // decision (how faint an untouched pattern tint should be) that has nothing to do with which
+    // hue the palette starts at.
+    val patternColor: Int = (ThemePalette.COLOURS.first() and 0x00FFFFFF) or (0x1F shl 24),
 
     /** The repeat of the pattern, edge to edge of one tile. */
     val patternScaleDp: Float = 24f,
@@ -93,6 +101,23 @@ data class KeyboardTheme(
      * pattern is worth having because there is somewhere for it to show.
      */
     val fullWidthBackground: Boolean = true,
+
+    /**
+     * How the suggestion strip marks the word a delimiter would apply: [APPLIED_HIGHLIGHT_OUTLINE]
+     * (a traced border, the chip's own surface showing through) or [APPLIED_HIGHLIGHT_BACKGROUND]
+     * (a filled chip, [appliedHighlightColor] painted behind the word).
+     *
+     * An int rather than a boolean for the same reason [backgroundPatterns] is: a third style
+     * added later reads as a value this build does not recognise rather than a schema change.
+     */
+    val appliedHighlightStyle: Int = APPLIED_HIGHLIGHT_OUTLINE,
+
+    /**
+     * The colour of that mark. Zero means unset -- [secondaryTextColor] is what draws, which is
+     * the outline's original colour and is what every theme already had before this existed.
+     * Picking a colour here is what turns it on; nothing else about a theme has to change.
+     */
+    val appliedHighlightColor: Int = 0,
 ) {
     /**
      * Clamps every dimension into a range that can actually be drawn.
@@ -124,11 +149,34 @@ data class KeyboardTheme(
             backgroundImage.take(MAX_IMAGE_NAME)
         },
         backgroundImageDim = backgroundImageDim.coerceIn(0f, 1f),
+        appliedHighlightStyle = if (appliedHighlightStyle in
+            APPLIED_HIGHLIGHT_OUTLINE..APPLIED_HIGHLIGHT_BACKGROUND
+        ) {
+            appliedHighlightStyle
+        } else {
+            APPLIED_HIGHLIGHT_OUTLINE
+        },
     )
 
     /** The colour the background fades to, which is its own colour when it fades to nothing. */
     fun gradientEnd(): Int =
         if (backgroundGradientColor == 0) backgroundColor else backgroundGradientColor
+
+    /**
+     * The colour for [appliedHighlightColor] when it is unset -- the accent, the colour already
+     * used for everything else on the strip that is not plain text.
+     *
+     * The same regardless of [appliedHighlightStyle], on purpose: this is also what the theme
+     * screen's swatch row rings to say "this is the colour," and a value that changed hue
+     * depending on the fill/outline switch made that row show a different ring for the same
+     * unset colour depending on which style happened to be selected -- indistinguishable from a
+     * bug, because functionally it was one: the picker looked like it forgot what was chosen.
+     * How much of this colour actually reaches the canvas -- a thin opaque line for the outline,
+     * a quarter-strength tint for the fill so a solid block does not sit on top of the word it
+     * marks -- is a drawing decision, made once in `ThemePaints.update`, and never surfaces here.
+     */
+    fun appliedHighlightColorOrDefault(): Int =
+        if (appliedHighlightColor != 0) appliedHighlightColor else accentColor
 
     companion object {
         /**
@@ -149,5 +197,11 @@ data class KeyboardTheme(
 
         /** Long enough for a generated name, short enough not to be a path in disguise. */
         const val MAX_IMAGE_NAME = 64
+
+        /** A traced border -- the chip's own surface, nothing painted behind the word. */
+        const val APPLIED_HIGHLIGHT_OUTLINE = 0
+
+        /** A filled chip -- [appliedHighlightColor] (or secondaryTextColor) behind the word. */
+        const val APPLIED_HIGHLIGHT_BACKGROUND = 1
     }
 }

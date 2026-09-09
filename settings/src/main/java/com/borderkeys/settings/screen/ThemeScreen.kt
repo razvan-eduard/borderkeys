@@ -10,7 +10,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -42,14 +45,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.BackgroundImages
+import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
-import com.borderkeys.settings.ColourPickerSheet
+import com.borderkeys.settings.ColourRow
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.KeyboardPreview
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
+import com.borderkeys.theme.DynamicColors
 import kotlinx.coroutines.launch
 
 /**
@@ -64,12 +69,17 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val repository = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
-    val theme by repository.theme.collectAsStateWithLifecycle(initialValue = KeyboardTheme())
-    val preferences by repository.preferences
-        .collectAsStateWithLifecycle(initialValue = KeyboardPreferences())
+    val appearance by repository.appearance
+        .collectAsStateWithLifecycle(initialValue = remember { repository.currentAppearance() })
+    val (theme, lightTheme, preferences) = appearance
+    val auto = preferences.themeMode == KeyboardPreferences.THEME_MODE_AUTO_SYSTEM
 
     fun update(transform: (KeyboardTheme) -> KeyboardTheme) {
         scope.launch { repository.updateTheme(transform) }
+    }
+
+    fun updatePreferences(transform: (KeyboardPreferences) -> KeyboardPreferences) {
+        scope.launch { repository.updatePreferences(transform) }
     }
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -85,7 +95,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 BackgroundImages.import(context, uri)
             }
             if (name != null) {
-                repository.updateTheme { it.copy(backgroundImage = name) }
+                update { it.copy(backgroundImage = name) }
             }
         }
     }
@@ -94,31 +104,79 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
     // under it are scrolled. A preview that scrolls away is a preview you cannot see while you
     // are changing the thing it previews, which is the only moment it is for.
     Column(modifier = modifier.fillMaxSize()) {
-        KeyboardPreview(theme, preferences, Modifier.padding(vertical = 12.dp))
+        // The real, live appearance -- including the auto dark/light switch, since editing is
+        // disabled while it is on (see the Theme card below) and there is nothing left for a
+        // preview to show except what is actually showing.
+        KeyboardPreview(appearance, Modifier.padding(vertical = 12.dp))
         Divider()
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            SettingsSectionCard(strings[Keys.THEME_PRESETS]) {
-                // A scrolling row of cards rather than a row of words: at ten of them the names
-                // stop being the useful part, and three dots of the actual colours say what a
-                // preset is faster than reading "Midnight" does.
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    for (preset in PRESETS) {
-                        PresetCard(
-                            name = strings[preset.nameKey],
-                            preset = preset.theme,
-                            selected = theme == preset.theme,
-                        ) { update { preset.theme } }
+            SettingsSectionCard(strings[Keys.SCREEN_THEME]) {
+                // Greyed out and untouchable while auto is on: the point of auto is that dark
+                // and light are decided for you, so a preset row that still looked pickable
+                // would be a control that lied about doing something.
+                Disableable(disabled = auto) {
+                    // A scrolling row of cards rather than a row of words: at ten of them the
+                    // names stop being the useful part, and three dots of the actual colours say
+                    // what a preset is faster than reading "Midnight" does.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        for (preset in PRESETS) {
+                            // showKeyBorders is excluded from what a preset overwrites: it is a
+                            // shape choice a preset happens to carry a value for, not a colour
+                            // the preset is actually about, and only two of the ten presets ever
+                            // bothered to set it -- so picking any of the other eight used to
+                            // turn borders off as a side effect of colours nobody asked to
+                            // change. Comparing and applying with it carried over from what is
+                            // already showing is what keeps that one switch a switch, not a coin
+                            // flip of which preset was tapped last.
+                            val presetTheme = preset.theme.copy(showKeyBorders = theme.showKeyBorders)
+                            PresetCard(
+                                name = strings[preset.nameKey],
+                                preset = preset.theme,
+                                selected = theme == presetTheme,
+                            ) { update { presetTheme } }
+                        }
+                    }
+                    Explanation(strings[Keys.THEME_PRESETS_NOTE])
+                }
+                SwitchRow(
+                    title = strings[Keys.THEME_AUTO_FOLLOW_SYSTEM],
+                    subtitle = strings[Keys.THEME_AUTO_FOLLOW_SYSTEM_NOTE],
+                    checked = auto,
+                ) { value ->
+                    // The light half of the switch, seeded once: without this, turning auto on
+                    // for the first time would show this theme's own colours for "light" too,
+                    // since the light store starts out equal to the plain default -- indistinguish
+                    // -able from never having been set. Only the first time; a light theme the
+                    // user has actually customised is never overwritten.
+                    if (value && lightTheme == KeyboardTheme()) {
+                        scope.launch { repository.updateLightTheme { LIGHT_THEME } }
+                    }
+                    updatePreferences {
+                        it.copy(
+                            themeMode = if (value) {
+                                KeyboardPreferences.THEME_MODE_AUTO_SYSTEM
+                            } else {
+                                KeyboardPreferences.THEME_MODE_MANUAL
+                            },
+                        )
                     }
                 }
-                Explanation(strings[Keys.THEME_PRESETS_NOTE])
+                if (DynamicColors.available) {
+                    SwitchRow(
+                        title = strings[Keys.THEME_FOLLOW_SYSTEM_COLOURS],
+                        subtitle = strings[Keys.THEME_FOLLOW_SYSTEM_COLOURS_NOTE],
+                        checked = preferences.followSystemColors,
+                    ) { value -> updatePreferences { it.copy(followSystemColors = value) } }
+                }
             }
             SettingsSectionCard(strings[Keys.THEME_COLOURS]) {
+              Disableable(disabled = auto) {
                 ColourRow(strings[Keys.THEME_BACKGROUND], theme.backgroundColor) {
                     update { t -> t.copy(backgroundColor = it) }
                 }
@@ -137,6 +195,29 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ColourRow(strings[Keys.THEME_SWIPE_TRAIL], theme.swipeTrailColor, preserveAlpha = true) {
                     update { t -> t.copy(swipeTrailColor = it) }
                 }
+              }
+            }
+            SettingsSectionCard(strings[Keys.THEME_APPLIED_HIGHLIGHT]) {
+                SwitchRow(
+                    title = strings[Keys.THEME_FILL_THE_CORRECTION_CHIP],
+                    subtitle = strings[Keys.THEME_FILL_THE_CORRECTION_CHIP_NOTE],
+                    checked = theme.appliedHighlightStyle == KeyboardTheme.APPLIED_HIGHLIGHT_BACKGROUND,
+                ) { value ->
+                    update {
+                        it.copy(
+                            appliedHighlightStyle = if (value) {
+                                KeyboardTheme.APPLIED_HIGHLIGHT_BACKGROUND
+                            } else {
+                                KeyboardTheme.APPLIED_HIGHLIGHT_OUTLINE
+                            },
+                        )
+                    }
+                }
+                ColourRow(
+                    strings[Keys.THEME_APPLIED_HIGHLIGHT_COLOUR],
+                    theme.appliedHighlightColorOrDefault(),
+                    preserveAlpha = true,
+                ) { update { t -> t.copy(appliedHighlightColor = it) } }
             }
             SettingsSectionCard(strings[Keys.THEME_BACKGROUND_SECTION]) {
                 Text(
@@ -270,118 +351,6 @@ private val PATTERN_LABELS = arrayOf(
 )
 
 /**
- * A label and the palette under it, with the current colour ringed.
- *
- * The row scrolls horizontally because the palette is wider than any phone: eighteen swatches at
- * 30dp with 10dp between them need about 710dp and a Pixel 5 offers 353dp inside the padding.
- * Without the scroll the accents past the ninth are drawn off the edge and cannot be tapped,
- * which is a colour picker that silently refuses to offer half its colours.
- *
- * `preserveAlpha` is for the swipe trail. The trail is drawn deliberately translucent, the
- * palette holds opaque colours, so an exact comparison never matches and the row shows nothing
- * selected. With the flag set the row matches on RGB and keeps the alpha the theme already has,
- * so picking a colour changes the hue of the trail and leaves it as see-through as it was.
- */
-@Composable
-private fun ColourRow(
-    label: String,
-    current: Int,
-    preserveAlpha: Boolean = false,
-    onPick: (Int) -> Unit,
-) {
-    var picking by remember { mutableStateOf(false) }
-    if (picking) {
-        ColourPickerSheet(
-            initial = current,
-            palette = PALETTE,
-            onDismiss = { picking = false },
-            onPick = { colour ->
-                picking = false
-                onPick(
-                    if (preserveAlpha) (current and ALPHA_MASK) or (colour and RGB_MASK) else colour,
-                )
-            },
-        )
-    }
-    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(top = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            // A colour from the editor is in no swatch, so without this it would be the
-            // current colour and invisible: nothing shows it and nothing wears the ring. It
-            // appears at the head of the row instead, exactly as VoxApps does it.
-            val custom = current.takeIf {
-                PALETTE.none { entry ->
-                    if (preserveAlpha) (entry and RGB_MASK) == (it and RGB_MASK) else entry == it
-                }
-            }
-            if (custom != null) {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .background(Color(custom), CircleShape)
-                        .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                        .clickable { picking = true },
-                )
-            }
-            for (colour in PALETTE) {
-                val selected = if (preserveAlpha) {
-                    (colour and RGB_MASK) == (current and RGB_MASK)
-                } else {
-                    colour == current
-                }
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .background(Color(colour), CircleShape)
-                        .border(
-                            width = if (selected) 3.dp else 1.dp,
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            },
-                            shape = CircleShape,
-                        )
-                        .clickable {
-                            onPick(
-                                if (preserveAlpha) {
-                                    (current and ALPHA_MASK) or (colour and RGB_MASK)
-                                } else {
-                                    colour
-                                },
-                            )
-                        },
-                )
-            }
-            // Last, after the ready-made colours, because it is the way out of them rather
-            // than one more of them. A pencil rather than a colour, as in VoxApps: it is the
-            // thing that opens the editor, not a colour to choose.
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                    .clickable { picking = true },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(android.R.drawable.ic_menu_edit),
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-/**
  * One preset, drawn as what it looks like.
  *
  * The three dots are the background, the keys and the accent, which is enough to tell the
@@ -434,12 +403,33 @@ private fun PresetCard(
 /** A preset and the catalogue key for its name. */
 internal class Preset(val nameKey: String, val theme: KeyboardTheme)
 
-private const val RGB_MASK = 0x00FFFFFF
-private const val ALPHA_MASK = 0xFF000000.toInt()
-
+/**
+ * Dims [content] and swallows every touch inside it, for a control that is turned off rather
+ * than removed -- turning auto back off restores exactly the same presets and colours, because
+ * nothing here ever stopped storing them, it only stopped being reachable.
+ *
+ * A transparent [clickable] laid over the top rather than an `enabled` flag threaded through
+ * every swatch and preset card below: those are drawn with plain `Modifier.clickable` blocks,
+ * none of which have an `enabled` parameter to thread one through, and one overlay is the same
+ * fix for all of them at once rather than a fix repeated at every call site.
+ */
 @Composable
-private fun Box(modifier: Modifier) {
-    androidx.compose.foundation.layout.Box(modifier = modifier) {}
+private fun Disableable(disabled: Boolean, content: @Composable () -> Unit) {
+    Box {
+        Column(modifier = Modifier.alpha(if (disabled) 0.4f else 1f)) { content() }
+        if (disabled) {
+            // Compose's own single-argument Box, which draws nothing -- the point of this one
+            // is only ever to sit in front of everything else and take the touch.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {},
+            )
+        }
+    }
 }
 
 @Composable
@@ -466,32 +456,6 @@ private fun ThemeSlider(
     }
 }
 
-/**
- * A fixed palette rather than a colour wheel.
- *
- * Sixteen values a person can pick from at a glance, instead of a picker that lets them choose
- * a label colour one step from the key colour and then wonder why the keyboard is unreadable.
- */
-/**
- * The colours a swatch row offers: a neutral ramp from black to white, then accents.
- *
- * Every colour used by any preset below appears here. That is a requirement, not a
- * coincidence: a swatch row draws a ring around the entry that matches the current value, so a
- * preset colour missing from the ramp leaves the row with nothing selected and the user with no
- * idea what the current colour is. `presetColoursAreInPalette` in the unit tests holds the two
- * lists together.
- */
-internal val PALETTE = listOf(
-    // Colours first. The row scrolls, and twelve greys before the first colour meant scrolling
-    // past most of it to reach anything that was not grey -- while the greys themselves were
-    // eight shades nobody could tell apart at thirty density-independent pixels.
-    0xFF6EA8FE.toInt(), 0xFF3B82F6.toInt(), 0xFF1D4ED8.toInt(), 0xFF14B8A6.toInt(),
-    0xFF10B981.toInt(), 0xFF4ADE80.toInt(), 0xFFF59E0B.toInt(), 0xFFFF8A4C.toInt(),
-    0xFFEF4444.toInt(), 0xFFEC4899.toInt(), 0xFFA855F7.toInt(), 0xFF7AA2F7.toInt(),
-    // Then the neutrals, and only four: black, white, and one grey at each end of the middle.
-    // Anything between them is a job for the wheel at the end of the row.
-    0xFF000000.toInt(), 0xFF2A2A34.toInt(), 0xFFC6C6D0.toInt(), 0xFFFFFFFF.toInt(),
-)
 
 internal val LIGHT_THEME = KeyboardTheme(
     backgroundColor = 0xFFE6E6EE.toInt(),

@@ -258,10 +258,10 @@ data class KeyboardPreferences(
     val clearClipboardOnClose: Boolean = false,
 
     /**
-     * Whether the draft box can be opened at all.
+     * Whether the Compose quick action can open the draft box at all.
      *
-     * On. It costs nothing when it is not open, and it is the only place in this keyboard where
-     * what you write is not immediately in somebody's application.
+     * On. It costs nothing while the box is not open, and turning it off is for someone who
+     * would rather the quick actions row not offer a way out to a separate screen at all.
      */
     val composerEnabled: Boolean = true,
 
@@ -272,14 +272,6 @@ data class KeyboardPreferences(
      * actions are: a bar written by a later build must open rather than fail.
      */
     val composerBar: List<Int> = ComposerAction.DEFAULT.map { it.id },
-
-    /**
-     * The language the translate button used last, as a tag.
-     *
-     * Remembered so that the second translation is one tap where the first was two. Empty until
-     * something has been chosen, which is when the chooser opens instead.
-     */
-    val composerTranslateTarget: String = "",
 
     /** Instructions the user wrote and kept, in the order they were saved. */
     val savedPrompts: List<SavedPrompt> = emptyList(),
@@ -361,8 +353,50 @@ data class KeyboardPreferences(
      * backspace deleting one character at a time, which is what it does everywhere else.
      */
     val revertCorrectionOnBackspace: Boolean = true,
+
+    /**
+     * The shortest word a delimiter will replace.
+     *
+     * Three by default: one- and two-letter words are where a correction is least likely to be
+     * right and most annoying when it is not -- half the alphabet is one edit away from "a" or
+     * "la", and the strip is full of them. Someone typing a language with a lot of short real
+     * words can raise it; someone who wants every word considered can lower it to one.
+     */
+    val minCorrectionLength: Int = 3,
+
+    /**
+     * Whether the keyboard's palette follows the phone's wallpaper instead of the theme's own
+     * stored colours.
+     *
+     * Off by default, and deliberately not a preset: turning it on does not overwrite the
+     * colours in [KeyboardTheme] on disk, it only changes which ones the draw path reads for as
+     * long as this stays on. Turning it back off is what gets the theme's own colours back
+     * exactly as they were, not a preset applied on top of them. See
+     * `com.borderkeys.theme.DynamicColors`, which is where the actual reading happens -- this
+     * flag lives here rather than on [KeyboardTheme] because it is a mode, not a colour, and
+     * [KeyboardTheme] is deliberately nothing but colours and shape.
+     */
+    val followSystemColors: Boolean = false,
+
+    /**
+     * Whether the keyboard switches between [KeyboardTheme] and the separate light theme on its
+     * own, following the phone's own dark/light setting, rather than always showing whichever
+     * one was picked by hand.
+     *
+     * [THEME_MODE_MANUAL] by default: the single stored theme, exactly as today. In
+     * [THEME_MODE_AUTO_SYSTEM], [KeyboardTheme] is shown when the system is in dark mode and
+     * `ThemeRepository.lightTheme` when it is not -- two themes a person can each customise on
+     * their own screen, switched between rather than one theme algorithmically inverted, because
+     * a keyboard's colours are a choice and dark-mode CSS tricks on somebody's carefully picked
+     * palette produce a theme nobody picked. Composes with [followSystemColors]: which of the
+     * two themes is showing is decided first, dynamic colours are layered on top of it second,
+     * the same order the resolving code applies them in.
+     */
+    val themeMode: Int = THEME_MODE_MANUAL,
 ) {
     fun sanitised(): KeyboardPreferences = copy(
+        minCorrectionLength = minCorrectionLength.coerceIn(MIN_CORRECTION_LENGTH, MAX_CORRECTION_LENGTH),
+        themeMode = if (themeMode == THEME_MODE_AUTO_SYSTEM) THEME_MODE_AUTO_SYSTEM else THEME_MODE_MANUAL,
         clipboardRetentionMinutes = clipboardRetentionMinutes.coerceIn(1, 60 * 24 * 30),
         clipboardMaxEntries = clipboardMaxEntries.coerceIn(1, 1000),
         // Clamped for the same reason the theme's dimensions are: a file that parses is not a
@@ -391,7 +425,6 @@ data class KeyboardPreferences(
         // not a trusted file, and a bar of four hundred buttons is a bar with no buttons on it.
         quickActions = QuickAction.fromIds(quickActions).take(MAX_QUICK_ACTIONS).map { it.id },
         composerBar = ComposerAction.fromIds(composerBar).map { it.id },
-        composerTranslateTarget = composerTranslateTarget.take(MAX_LANGUAGE_TAG),
         // Bounded on the way in as well as on the way out. These are written by the user, so
         // the file is as trustworthy as the rest of it -- which is to say bounded and read back
         // rather than trusted.
@@ -601,11 +634,23 @@ data class KeyboardPreferences(
 
         /**
          * Below three the strip stops being a choice and becomes an announcement; above eight
-         * the slots are narrower than a fingertip on any phone this runs on.
+         * the slots are narrower than a fingertip on any phone this runs on. [MAX_SUGGESTIONS]
+         * doubles as the hard ceiling `SuggestionStripView`'s own fixed-size buffers are sized
+         * for -- read from here rather than a second `8` typed in `:keyboard`, so a setting that
+         * allowed more than the view can actually hold is a contradiction the compiler would
+         * have to be told to create, not a number someone forgot to update twice.
          */
         const val MIN_SUGGESTIONS = 3
         const val MAX_SUGGESTIONS = 8
         const val DEFAULT_SUGGESTIONS = 3
+
+        /** The range [minCorrectionLength] is clamped to. */
+        const val MIN_CORRECTION_LENGTH = 1
+        const val MAX_CORRECTION_LENGTH = 5
+
+        /** [themeMode] values. */
+        const val THEME_MODE_MANUAL = 0
+        const val THEME_MODE_AUTO_SYSTEM = 1
 
         const val MIN_HEIGHT_SCALE = 0.65f
         const val MAX_HEIGHT_SCALE = 1.6f

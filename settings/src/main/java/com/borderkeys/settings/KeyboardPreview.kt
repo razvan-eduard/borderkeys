@@ -11,11 +11,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import com.borderkeys.data.theme.KeyboardPreferences
-import com.borderkeys.data.theme.KeyboardTheme
+import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.ime.KeyboardCanvasView
 import com.borderkeys.ime.KeyboardLayout
 import com.borderkeys.ime.LayoutLoader
+import com.borderkeys.theme.DynamicColors
+import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
 
 /**
@@ -28,11 +29,13 @@ import com.borderkeys.theme.ThemePaints
  *
  * It is inert. Touches are ignored, because a keyboard inside a settings screen that typed into
  * something would be a puzzle rather than a preview.
+ *
+ * Takes one [KeyboardAppearance] rather than a theme and a set of preferences as two loose
+ * parameters -- see [KeyboardAppearance] for why.
  */
 @Composable
 fun KeyboardPreview(
-    theme: KeyboardTheme,
-    preferences: KeyboardPreferences,
+    appearance: KeyboardAppearance,
     modifier: Modifier = Modifier,
     layoutId: String = "qwerty_ro",
 ) {
@@ -40,6 +43,7 @@ fun KeyboardPreview(
     val strings = LocalStrings.current
     val paints = remember { ThemePaints() }
     val layout = remember(layoutId) { LayoutLoader.load(context.assets, layoutId) }
+    val (theme, lightTheme, preferences) = appearance
 
     Box(modifier = modifier.fillMaxWidth()) {
         AndroidView(
@@ -61,7 +65,13 @@ fun KeyboardPreview(
             },
             update = { frame ->
                 val view = frame.getChildAt(0) as KeyboardCanvasView
-                paints.update(theme, context.resources.displayMetrics, preferences.heightScale, context)
+                val resolvedTheme = ThemeMode.resolve(theme, lightTheme, preferences, context)
+                val effectiveTheme = if (preferences.followSystemColors) {
+                    DynamicColors.apply(resolvedTheme, context)
+                } else {
+                    resolvedTheme
+                }
+                paints.update(effectiveTheme, context.resources.displayMetrics, preferences.heightScale, context)
 
                 val width = frame.width
                 // Always the full width, whatever the keyboard itself is set to.

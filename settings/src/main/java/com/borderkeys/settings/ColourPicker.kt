@@ -31,6 +31,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.borderkeys.data.theme.ThemePalette
 import com.borderkeys.i18n.Keys
 
 /**
@@ -179,3 +181,124 @@ private fun hexOf(colour: Int): String {
     }
     return String(out)
 }
+
+/**
+ * A label and the palette under it, with the current colour ringed.
+ *
+ * One implementation, called from every screen that edits a colour -- the theme's eight colours,
+ * the pattern colour, the applied-highlight colour, the gradient's second stop, all of them.
+ * Reused rather than each screen keeping its own copy of this row, which is exactly the failure
+ * that let two of the eleven call sites this had before drift apart: the same-shaped row was
+ * written out more than once and only one copy got a fix the other needed too.
+ *
+ * The row scrolls horizontally because the palette is wider than any phone: eighteen swatches at
+ * 30dp with 10dp between them need about 710dp and a Pixel 5 offers 353dp inside the padding.
+ * Without the scroll the accents past the ninth are drawn off the edge and cannot be tapped,
+ * which is a colour picker that silently refuses to offer half its colours.
+ *
+ * `preserveAlpha` is for the swipe trail. The trail is drawn deliberately translucent, the
+ * palette holds opaque colours, so an exact comparison never matches and the row shows nothing
+ * selected. With the flag set the row matches on RGB and keeps the alpha the theme already has,
+ * so picking a colour changes the hue of the trail and leaves it as see-through as it was.
+ */
+@Composable
+fun ColourRow(
+    label: String,
+    current: Int,
+    preserveAlpha: Boolean = false,
+    onPick: (Int) -> Unit,
+) {
+    var picking by remember { mutableStateOf(false) }
+    if (picking) {
+        ColourPickerSheet(
+            initial = current,
+            palette = ThemePalette.COLOURS,
+            onDismiss = { picking = false },
+            onPick = { colour ->
+                picking = false
+                onPick(
+                    if (preserveAlpha) (current and ALPHA_MASK) or (colour and RGB_MASK) else colour,
+                )
+            },
+        )
+    }
+    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // A colour from the editor is in no swatch, so without this it would be the
+            // current colour and invisible: nothing shows it and nothing wears the ring. It
+            // appears at the head of the row instead, exactly as VoxApps does it.
+            val custom = current.takeIf {
+                ThemePalette.COLOURS.none { entry ->
+                    if (preserveAlpha) (entry and RGB_MASK) == (it and RGB_MASK) else entry == it
+                }
+            }
+            if (custom != null) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .background(Color(custom), CircleShape)
+                        .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                        .clickable { picking = true },
+                )
+            }
+            for (colour in ThemePalette.COLOURS) {
+                val selected = if (preserveAlpha) {
+                    (colour and RGB_MASK) == (current and RGB_MASK)
+                } else {
+                    colour == current
+                }
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .background(Color(colour), CircleShape)
+                        .border(
+                            width = if (selected) 3.dp else 1.dp,
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                            shape = CircleShape,
+                        )
+                        .clickable {
+                            onPick(
+                                if (preserveAlpha) {
+                                    (current and ALPHA_MASK) or (colour and RGB_MASK)
+                                } else {
+                                    colour
+                                },
+                            )
+                        },
+                )
+            }
+            // Last, after the ready-made colours, because it is the way out of them rather
+            // than one more of them. A pencil rather than a colour, as in VoxApps: it is the
+            // thing that opens the editor, not a colour to choose.
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                    .clickable { picking = true },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(android.R.drawable.ic_menu_edit),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+private const val RGB_MASK = 0x00FFFFFF
+private const val ALPHA_MASK = 0xFF000000.toInt()

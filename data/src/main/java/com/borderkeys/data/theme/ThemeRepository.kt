@@ -5,6 +5,7 @@ package com.borderkeys.data.theme
 
 import androidx.datastore.core.DataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
@@ -19,13 +20,28 @@ import kotlinx.coroutines.runBlocking
  */
 class ThemeRepository internal constructor(
     private val themeStore: DataStore<KeyboardTheme>,
+    private val lightThemeStore: DataStore<KeyboardTheme>,
     private val preferencesStore: DataStore<KeyboardPreferences>,
 ) {
     val theme: Flow<KeyboardTheme> = themeStore.data
+
+    /** The theme shown instead of [theme] when [KeyboardPreferences.themeMode] is
+     *  [KeyboardPreferences.THEME_MODE_AUTO_SYSTEM] and the system is not in dark mode. */
+    val lightTheme: Flow<KeyboardTheme> = lightThemeStore.data
     val preferences: Flow<KeyboardPreferences> = preferencesStore.data
+
+    /** [theme], [lightTheme] and [preferences], combined -- see [KeyboardAppearance]. What
+     *  anything that draws or previews the keyboard should collect, rather than the three flows
+     *  above separately. */
+    val appearance: Flow<KeyboardAppearance> =
+        combine(theme, lightTheme, preferences, ::KeyboardAppearance)
 
     suspend fun updateTheme(transform: (KeyboardTheme) -> KeyboardTheme) {
         themeStore.updateData { current -> transform(current).sanitised() }
+    }
+
+    suspend fun updateLightTheme(transform: (KeyboardTheme) -> KeyboardTheme) {
+        lightThemeStore.updateData { current -> transform(current).sanitised() }
     }
 
     suspend fun updatePreferences(transform: (KeyboardPreferences) -> KeyboardPreferences) {
@@ -36,14 +52,30 @@ class ThemeRepository internal constructor(
         themeStore.updateData { KeyboardTheme() }
     }
 
+    /** The blocking-read counterpart to [currentPreferences], for the same "must already be
+     *  correct on the very first frame" reason. */
+    fun currentLightTheme(): KeyboardTheme = runBlocking { lightTheme.first() }
+
+    /** The blocking-read counterpart to [appearance], seeding a screen that shows a preview
+     *  before the flow has had a chance to emit. */
+    fun currentAppearance(): KeyboardAppearance = runBlocking { appearance.first() }
+
     /**
      * The stored preferences, read on the calling thread.
      *
-     * The one sanctioned blocking read, and only for what has to be known before anything is
-     * drawn: which language the interface is in. Collecting it as a flow instead would draw the
-     * first frame in the wrong language and then correct it, which is a visible flash on every
-     * launch. DataStore is a small file and this is a single read at startup, not a pattern to
-     * copy -- everything else goes through [preferences] and re-renders when it re-emits.
+     * The sanctioned blocking read, for whatever has to be right on the very first frame drawn.
+     * Collecting a preference as a flow instead means that first frame shows this class's own
+     * defaults, correcting a moment later once the flow delivers what is actually stored --
+     * invisible for most of what a settings screen draws, but not for a `Switch`: Material's own
+     * sliding animation plays whenever the value changes, so a preference whose default differs
+     * from what the user actually has stored visibly slides from the wrong position to the right
+     * one the instant the screen opens. A screen that seeds `collectAsStateWithLifecycle` with
+     * this instead of a bare `KeyboardPreferences()` is spared that -- wrapped in `remember` at
+     * the call site, so it is read once per composition rather than on every recomposition.
+     * DataStore is a small file that is already open and cached well before any settings screen
+     * can be reached, so this is one fast, already-resident read, not a disk access -- reserved
+     * for exactly this "must already be correct" moment, not a substitute for collecting
+     * [preferences] everywhere else.
      */
     fun currentPreferences(): KeyboardPreferences = runBlocking { preferences.first() }
 }
