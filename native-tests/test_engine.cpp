@@ -48,6 +48,34 @@ struct LoadedEngine {
                                      layout.keyWidth, layout.keyHeight);
     }
 
+    /**
+     * Loads the same test pack again under a second tag and activates both.
+     *
+     * Same content twice rather than a second real pack: the point of the multi-pack tests this
+     * enables is exercising the search loop over more than one active slot (visitBudget_ being
+     * reset per pack rather than shared across the request, in particular), not testing a second
+     * language's own vocabulary.
+     */
+    bool openSecondPack(const char* secondTag) {
+        struct stat info {};
+        if (stat(BORDERKEYS_TEST_PACK, &info) != 0) {
+            return false;
+        }
+        const int fd = ::open(BORDERKEYS_TEST_PACK, O_RDONLY);
+        if (fd < 0) {
+            return false;
+        }
+        const int32_t status = engine.loadLanguage(secondTag, fd, 0, info.st_size, 1.0f);
+        ::close(fd);
+        if (status != kBkdOk) {
+            return false;
+        }
+        const char* tags[2] = {"ro-RO", secondTag};
+        const float weights[2] = {1.0f, 1.0f};
+        engine.setActiveLanguages(tags, weights, 2);
+        return true;
+    }
+
     /** The rank of `expected` among the suggestions for `composing`, or -1. */
     int rankOf(const char* composing, const char* expected, const char* previous = nullptr) {
         Candidate out[Engine::kMaxCandidates];
@@ -273,6 +301,51 @@ void runEngineTests() {
         check(!duplicate, "no word appears twice in one set of suggestions");
     }
 
+    section("more than one active pack");
+    {
+        // Nothing before this exercised more than one active language pack -- every case above
+        // uses exactly one. visitBudget_ (the fuzzy-search node-visit allowance) used to be a
+        // single counter shared across every active pack in one request rather than reset per
+        // pack, so a pack searched earlier in the loop could exhaust it before a later pack's
+        // own fuzzy walk ever ran; that pack's exact matches and frequent-prefix shortlist still
+        // worked, so the strip was never empty, just silently missing that pack's corrections.
+        // The tiny self-test dictionary is nowhere near large enough to exhaust the budget on
+        // its own (that needs a real, much larger pack), so this cannot reproduce the starvation
+        // itself -- it instead pins down that activating a second pack changes nothing about
+        // what a fuzzy correction the first pack alone already finds, which is what the fix
+        // (resetting visitBudget_ inside the per-pack loop rather than once for the request)
+        // guarantees regardless of pack size.
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads the first pack");
+        check(loaded.openSecondPack("en-US"), "and a second pack, same content, different tag");
+
+        check(loaded.rankOf("keyboarf", "keyboard") >= 0,
+              "a neighbouring-key slip is still corrected with two packs active");
+        check(loaded.rankOf("kyboard", "keyboard") >= 0,
+              "an inserted-character correction still reaches its word");
+        check(loaded.rankOf("thexx", "thex") == 0,
+              "the closer of two corrections still outranks the farther, more frequent one");
+        check(loaded.rankOf("theme", "theme") == 0,
+              "a correctly spelled word still outranks a frequent correction of it");
+
+        // Duplicated across packs, "keyboard" is now reachable from two active slots with
+        // identical text -- offerCandidate's text-based dedup (not (pack,index)) is what this
+        // exercises for the first time with a genuine duplicate rather than a same-pack repeat.
+        Candidate out[Engine::kMaxCandidates];
+        const int found = loaded.engine.suggest("keyboard", 8, nullptr, 0, nullptr, 0, out,
+                                                Engine::kMaxCandidates);
+        int keyboardCount = 0;
+        for (int i = 0; i < found; ++i) {
+            uint32_t length = 0;
+            const char* const text = loaded.engine.candidateText(out[i], &length);
+            if (text != nullptr && length == 8 && std::memcmp(text, "keyboard", 8) == 0) {
+                ++keyboardCount;
+            }
+        }
+        check(keyboardCount == 1,
+              "the same word reached from two active packs still appears once");
+    }
+
     section("personal dictionary");
     {
         LoadedEngine loaded;
@@ -402,6 +475,43 @@ void runEngineTests() {
               "a zero speed falls back to the default rather than disabling learning");
         guarded.engine.setLearningSpeed(-5.0f);
         check(guarded.rankOf("test", "testing") >= 0, "and so does a negative one");
+    }
+
+    section("correction strictness is a bounded multiplier, not an override");
+    {
+        // kEditPenalty (40) so dominates any realistic frequency gap that even the most lenient
+        // end of the range this multiplies (0.5x) still prices a one-edit correction at roughly
+        // seventeen log-units -- far past any ratio this test pack, or a real one, can produce.
+        // So unlike setLearningSpeed's own test above, this cannot demonstrate a ranking flip:
+        // that is by design, the strictness dial is a fine adjustment on top of the calibration,
+        // not a way to turn it off. What it can and must verify is what setCorrectionStrictness
+        // shares with every other JNI-facing setter here -- that a value crossing from a stored
+        // preference cannot be trusted, and an invalid one falls back to sane rather than
+        // disabling correction or crashing.
+        LoadedEngine lenient;
+        lenient.open();
+        lenient.engine.setCorrectionStrictness(0.5f);
+        check(lenient.rankOf("keyboarf", "keyboard") >= 0,
+              "the most lenient setting still corrects a neighbouring-key slip");
+        check(lenient.rankOf("theme", "theme") == 0,
+              "and still does not displace a correctly spelled word");
+
+        LoadedEngine strict;
+        strict.open();
+        strict.engine.setCorrectionStrictness(2.0f);
+        check(strict.rankOf("keyboarf", "keyboard") >= 0,
+              "the strictest setting still corrects the same slip");
+
+        LoadedEngine guardedStrictness;
+        guardedStrictness.open();
+        guardedStrictness.engine.setCorrectionStrictness(0.0f);
+        check(guardedStrictness.rankOf("keyboarf", "keyboard") >= 0,
+              "a zero falls back to the default rather than disabling correction");
+        guardedStrictness.engine.setCorrectionStrictness(-1.0f);
+        check(guardedStrictness.rankOf("keyboarf", "keyboard") >= 0, "and so does a negative one");
+        guardedStrictness.engine.setCorrectionStrictness(1000.0f);
+        check(guardedStrictness.rankOf("keyboarf", "keyboard") >= 0,
+              "and an absurdly large one is clamped rather than pricing every edit at infinity");
     }
 
     section("a word is not its own successor");

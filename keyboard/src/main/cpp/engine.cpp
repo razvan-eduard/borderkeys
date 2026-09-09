@@ -31,11 +31,18 @@ namespace {
 // already never loses to a frequent correction of it (see kCorrectionSurcharge below).
 //
 // Calibrated against the worst case actually shipped: the least common word in a bundled pack
-// against the most common, about 320,000 to one (ln ≈ 12.7) in the English pack. One transposed
+// against the most common. This is deliberately not a fixed number in this comment any more --
+// it was 320,000 to one when this constant was last tuned, then read as roughly 640,000 to one
+// after the dictionaries were regrown twice without anyone coming back to update the figure
+// here, and it will move again the next time a pack grows or its dedup changes (see
+// tools/build_dict.py's frequency-summing dedup, added alongside a Romanian dictionary rebuild).
+// What has to stay true, checked by hand against whatever the packs' current worst ratio is
+// rather than asserted in code (the ratio is data, not a compile-time constant): one transposed
 // character (kTransposeCost, the cheapest possible edit) is the smallest gap between two
-// candidates that differ by one edit, so kEditPenalty * kTransposeCost has to clear that with
-// room to spare for a pack larger or more skewed than anything bundled -- comfortably true even
-// at kTransposeCost's current 0.80.
+// candidates that differ by one edit, so kEditPenalty * kTransposeCost has to clear ln(worst
+// ratio) with room to spare for a pack larger or more skewed than anything bundled today --
+// comfortably true at kTransposeCost's current 0.80 against every pack shipped as of this
+// comment, with roughly a two-times margin even at the least favourable (English).
 //
 // Frequency still decides between candidates at the *same* cost -- that part of a suggestion
 // strip is unchanged, and completions (cost zero) are untouched entirely, per kCorrectionSurcharge.
@@ -87,9 +94,15 @@ constexpr float kMaxUserBoost = 3.0f;
 // alone, which is what a suggestion strip is for. Corrections still appear; they just stop
 // displacing a word that was spelled correctly.
 //
-// Three units of log-probability is about twenty to one. It is safe to be firm precisely
-// because nothing is ever applied automatically: ranking the typed word first costs the user
-// nothing, since the correction is still one tap away.
+// Three units of log-probability is about twenty to one. By default nothing is applied
+// automatically, which is most of why it is safe to be firm: ranking the typed word first costs
+// nothing, since the correction is still one tap away. That stops being true when
+// autoCorrectOnSpace is on -- see AutoCorrection.kt -- which commits the top suggestion with no
+// tap, for a word the dictionary has simply never seen (a name, a neologism) rather than a
+// known one, since only known words get that protection. This surcharge does not change that
+// trade-off; it only decides how firmly a needed correction competes against words that needed
+// none, and the existing controls on the auto-apply itself (off by default, one keystroke to
+// revert, the correctionStrictness multiplier) are what actually mitigate it.
 //
 // Note that "no correction needed" is measured after folding, so typing "totusi" reaches
 // "totuși" at zero cost. That is the point. On a Romanian keyboard a diacritic-free spelling
@@ -104,6 +117,20 @@ constexpr float kCorrectionSurcharge = 3.0f;
 // together, not a third constant with its own reasoning.
 constexpr float kMinCorrectionStrictness = 0.5f;
 constexpr float kMaxCorrectionStrictness = 2.0f;
+
+// kMaxUserBoost happens to equal kCorrectionSurcharge exactly (both 3.0), which is fine only
+// because no edit this engine prices ever gets cheap enough for that coincidence to matter --
+// checked here, at compile time, against the smallest cost either an edit-distance operation or
+// a real key substitution (KeyGeometry::kMinSubstitutionCost, see its own comment) can produce,
+// and against the most lenient end of the correction-strictness range a user can dial in. If a
+// future change to any of these five numbers lets a heavily-used personal word reached by one
+// cheap edit tie or beat a correctly-typed real word, this fails the build instead of waiting
+// for another live report.
+static_assert(
+    kMinCorrectionStrictness *
+            (kEditPenalty * KeyGeometry::kMinSubstitutionCost + kCorrectionSurcharge) >
+        kMaxUserBoost,
+    "the correction-vs-personal-word safety margin has eroded -- see the comment above");
 
 // The log-probability a word gets when the personal dictionary is the only place it exists.
 // Scores from the user model cannot be derived from its own totals: a word confirmed forty
@@ -1468,6 +1495,15 @@ void Engine::searchPacks(const uint32_t* folded, int foldedLength, int onlyPack,
             // raises the heap's floor -- which then lets the descent reject most of what it
             // finds on one comparison instead of scoring it.
             searchFrequentWithPrefix(i, folded, foldedLength, heap);
+            // Reset per pack, not once for the whole request: visitBudget_ is a consumable
+            // counter spent inside collectEndpoints/collectWords, and a request with more than
+            // one active pack used to share a single allowance across all of them. A large
+            // fuzzy walk in an earlier pack's slot could exhaust it before a later pack ever got
+            // to try -- that pack's exact matches and frequent-prefix shortlist still worked, so
+            // the strip was never empty, just silently missing that pack's fuzzy corrections for
+            // no reason discoverable from the strip itself. Each pack now gets its own full
+            // budget, matching what this field's own doc comment already claims is true.
+            visitBudget_ = nodeVisitBudgetFor(foldedLength);
             searchPack(i, folded, foldedLength, heap);
         }
     }
@@ -1539,7 +1575,7 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     refreshWeights();
 
     resolveContext(previous1, previous1Length, previous2, previous2Length);
-    visitBudget_ = nodeVisitBudgetFor(foldedLength);
+    // visitBudget_ itself is now reset per pack, inside searchPacks -- see its own comment there.
 
     TopK<Candidate> heap;
     heap.reset(heapStorage_, kMaxCandidates);
@@ -1562,11 +1598,10 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
         // word is further from every entry than the ordinary ceiling allows -- which is the
         // case where an empty strip is least useful, because the writer cannot tell whether the
         // keyboard has no idea or has stopped working. One wider pass, on the requests that
-        // would otherwise show nothing, and the budget is refreshed because the first pass has
-        // usually spent it.
+        // would otherwise show nothing -- the per-pack budget searchPacks resets internally
+        // means this pass starts fresh for every pack too, without a separate reset here.
         if (heap.size() == 0) {
             editCostCeiling_ = kFallbackEditCost;
-            visitBudget_ = nodeVisitBudgetFor(foldedLength);
             searchPacks(folded, foldedLength, -1, heap);
         }
     } else {

@@ -375,9 +375,12 @@ private:
     bool hasContext1_ = false;
     bool hasContext2_ = false;
 
-    // The remaining node-visit allowance for the current request. This, not a timer, is what
-    // holds the 8 ms budget: a wall-clock check would make the result depend on how busy the
-    // device happened to be, so two identical requests could return different suggestions.
+    // The remaining node-visit allowance for the pack currently being searched. This, not a
+    // timer, is what holds the 8 ms budget: a wall-clock check would make the result depend on
+    // how busy the device happened to be, so two identical requests could return different
+    // suggestions. Reset fresh for each active pack inside Engine::searchPacks, not once for the
+    // whole request -- a shared counter let one pack's fuzzy walk exhaust it before a later
+    // pack's ever ran, silently starving that pack's corrections for that keystroke.
     int32_t visitBudget_ = 0;
 
     float normalisedWeight_[kMaxPacks] = {};

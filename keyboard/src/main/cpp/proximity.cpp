@@ -3,6 +3,7 @@
 
 #include "proximity.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -321,7 +322,7 @@ float KeyGeometry::substitutionCost(uint32_t typedFolded, uint32_t intendedFolde
     }
     const float dx = (centersX_[a] - centersX_[b]) / keyWidth_;
     const float dy = (centersY_[a] - centersY_[b]) / keyHeight_;
-    return std::sqrt(dx * dx + dy * dy);
+    return std::max(std::sqrt(dx * dx + dy * dy), kMinSubstitutionCost);
 }
 
 bool KeyGeometry::centreOf(uint32_t folded, float* x, float* y) const {

@@ -98,6 +98,16 @@ public:
     // Beyond this many key widths apart, two keys are not confusable and the pair is left out
     // of the neighbour ring entirely.
     static constexpr float kNeighbourRadius = 1.45f;
+    // The floor substitutionCost() clamps to for two genuinely different keys. Nothing about the
+    // geometry math otherwise stops two distinct keys placed unusually close together (a bug in
+    // a layout file, or a future very dense layout) from pricing a substitution near zero --
+    // and engine.cpp's own scoring assumes no edit ever gets that cheap: kMaxUserBoost happens
+    // to equal kCorrectionSurcharge exactly, so a near-zero-cost substitution is the one case
+    // that could let a heavily-used personal word tie a correctly-typed real word instead of
+    // losing to it, the same shape as the completion bug fixed earlier. Comfortably below any
+    // distance two non-identical keys produce on a real layout (adjacent keys are ~1.0 key
+    // widths apart), so this only ever guards the degenerate case, never real typing.
+    static constexpr float kMinSubstitutionCost = 0.2f;
 
 private:
     int indexOf(uint32_t folded) const;
