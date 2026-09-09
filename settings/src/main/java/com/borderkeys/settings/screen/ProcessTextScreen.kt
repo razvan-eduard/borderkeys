@@ -587,8 +587,16 @@ fun ProcessTextScreen(
                     // what it is actually touching reads as the same event, not two.
                     val workingShape = RoundedCornerShape(WORKING_CORNER_RADIUS)
                     Box(
+                        // matchParentSize, not fillMaxSize: fillMaxSize asks for as much room as
+                        // the box's own weight(1f, fill = false) constraint allows -- up to
+                        // heightIn's 480.dp ceiling -- and a Box sizes itself to its largest
+                        // child, so the whole draft box grew to that ceiling the moment a request
+                        // was running, whatever the actual text's own height was. matchParentSize
+                        // is excluded from that sizing pass and instead takes whatever size the
+                        // Column of real content already settled on, which is what this overlay
+                        // is covering and the only size it should ever take.
                         modifier = Modifier
-                            .fillMaxSize()
+                            .matchParentSize()
                             .padding(WORKING_INSET)
                             .shadow(elevation = BOX_ELEVATION, shape = workingShape)
                             .clip(workingShape)
