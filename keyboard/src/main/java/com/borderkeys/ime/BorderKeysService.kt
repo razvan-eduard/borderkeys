@@ -207,6 +207,16 @@ class BorderKeysService :
     private var topSuggestion: String? = null
 
     /**
+     * The word [topSuggestion] is actually an answer about.
+     *
+     * Set alongside [topSuggestion] in [onSuggestions], and passed to
+     * [AutoCorrection.correctionFor] -- see that parameter's own doc for why a delimiter can be
+     * typed before the answer for the word just finished has arrived at all, and what trusting
+     * [topSuggestion] anyway would have corrected the word being committed to instead.
+     */
+    private var suggestionQuery: String = ""
+
+    /**
      * A correction that has been applied and can still be taken back.
      *
      * Alive for exactly one keystroke: the next key either reverts it, if it is backspace, or
@@ -1015,7 +1025,7 @@ class BorderKeysService :
             return null
         }
         return AutoCorrection.correctionFor(
-            typed, topSuggestion, knownQuery, preferences.minCorrectionLength,
+            typed, topSuggestion, suggestionQuery, knownQuery, preferences.minCorrectionLength,
         )
     }
 
@@ -1507,6 +1517,7 @@ class BorderKeysService :
         // AutoCorrection.correctionFor already applies matchCase to this on its own, and doing
         // it here first would just be the same rule read twice for one decision.
         topSuggestion = if (count > 0) words[0] else null
+        suggestionQuery = query
         // The rest of the row is not a decision the way the one correction above is -- it is
         // what the strip shows, and showing "welcome" one slot over from a correction that
         // already reads "Welcome" is the same word told two different ways for a difference the

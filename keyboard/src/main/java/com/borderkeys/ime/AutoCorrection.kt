@@ -29,17 +29,26 @@ internal object AutoCorrection {
      *    common one and was being replaced by it;
      *  - the suggestion is what was typed;
      *  - the suggestion is what was typed in a different case, which changes nothing but the
-     *    capital the user chose.
+     *    capital the user chose;
+     *  - [suggestionQuery] -- the word the engine's answer is actually about -- is not [typed].
+     *    The engine has one thread and answers by posting back rather than blocking, so a
+     *    delimiter can be typed before the answer for the word just finished has arrived at all.
+     *    [suggestion] would then still be whatever an earlier, unrelated word last resolved to,
+     *    and applying it would correct the word being committed to a word never asked about --
+     *    not a bad ranking, an answer to a different question. "tinde" reaching "idependent" is
+     *    this: no edit-distance budget this engine uses reaches "idependent" from "tinde", so it
+     *    was never the engine's answer for "tinde" to begin with.
      *
      * Otherwise the correction, carrying the capitalisation of the word it replaces.
      */
     fun correctionFor(
         typed: String,
         suggestion: String?,
+        suggestionQuery: String,
         knownWord: String,
         minimumLength: Int,
     ): String? {
-        if (suggestion.isNullOrEmpty() || suggestion == typed) {
+        if (suggestion.isNullOrEmpty() || suggestion == typed || typed != suggestionQuery) {
             return null
         }
         if (suggestion.equals(typed, ignoreCase = true)) {

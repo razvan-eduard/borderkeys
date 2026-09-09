@@ -24,7 +24,8 @@ class AutoCorrectionTest {
         assertNull(
             "a real word was replaced by a more likely one",
             AutoCorrection.correctionFor(
-                typed = "cana", suggestion = "canapea", knownWord = "cana",
+                typed = "cana", suggestion = "canapea",
+                suggestionQuery = "cana", knownWord = "cana",
                 minimumLength = minimum,
             ),
         )
@@ -35,7 +36,8 @@ class AutoCorrectionTest {
         assertEquals(
             "canapea",
             AutoCorrection.correctionFor(
-                typed = "canapae", suggestion = "canapea", knownWord = "",
+                typed = "canapae", suggestion = "canapea",
+                suggestionQuery = "canapae", knownWord = "",
                 minimumLength = minimum,
             ),
         )
@@ -46,7 +48,8 @@ class AutoCorrectionTest {
         assertNull(
             "the capital the user typed was taken away",
             AutoCorrection.correctionFor(
-                typed = "Daca", suggestion = "daca", knownWord = "",
+                typed = "Daca", suggestion = "daca",
+                suggestionQuery = "Daca", knownWord = "",
                 minimumLength = minimum,
             ),
         )
@@ -57,7 +60,8 @@ class AutoCorrectionTest {
         assertEquals(
             "Dacă",
             AutoCorrection.correctionFor(
-                typed = "Daca", suggestion = "dacă", knownWord = "",
+                typed = "Daca", suggestion = "dacă",
+                suggestionQuery = "Daca", knownWord = "",
                 minimumLength = minimum,
             ),
         )
@@ -84,7 +88,8 @@ class AutoCorrectionTest {
     fun `a word shorter than the minimum is never corrected`() {
         assertNull(
             AutoCorrection.correctionFor(
-                typed = "ai", suggestion = "aici", knownWord = "", minimumLength = minimum,
+                typed = "ai", suggestion = "aici",
+                suggestionQuery = "ai", knownWord = "", minimumLength = minimum,
             ),
         )
     }
@@ -96,7 +101,8 @@ class AutoCorrectionTest {
         assertEquals(
             "în",
             AutoCorrection.correctionFor(
-                typed = "in", suggestion = "în", knownWord = "în", minimumLength = minimum,
+                typed = "in", suggestion = "în",
+                suggestionQuery = "in", knownWord = "în", minimumLength = minimum,
             ),
         )
     }
@@ -106,7 +112,8 @@ class AutoCorrectionTest {
         assertEquals(
             "În",
             AutoCorrection.correctionFor(
-                typed = "In", suggestion = "în", knownWord = "în", minimumLength = minimum,
+                typed = "In", suggestion = "în",
+                suggestionQuery = "In", knownWord = "în", minimumLength = minimum,
             ),
         )
     }
@@ -115,7 +122,8 @@ class AutoCorrectionTest {
     fun `a short word that is not a diacritic match still needs the minimum`() {
         assertNull(
             AutoCorrection.correctionFor(
-                typed = "sa", suggestion = "salut", knownWord = "", minimumLength = minimum,
+                typed = "sa", suggestion = "salut",
+                suggestionQuery = "sa", knownWord = "", minimumLength = minimum,
             ),
         )
     }
@@ -124,7 +132,24 @@ class AutoCorrectionTest {
     fun `nothing is corrected when there is no suggestion`() {
         assertNull(
             AutoCorrection.correctionFor(
-                typed = "qwrt", suggestion = null, knownWord = "", minimumLength = minimum,
+                typed = "qwrt", suggestion = null,
+                suggestionQuery = "qwrt", knownWord = "", minimumLength = minimum,
+            ),
+        )
+    }
+
+    @Test
+    fun `an answer about an earlier word is not applied to this one`() {
+        // The engine posts its answer back rather than blocking, so a delimiter can be typed
+        // before the answer for the word just finished has arrived -- suggestion would then
+        // still be whatever "tinde" resolved to two words ago, not an answer about "harta" at
+        // all. This shipped as "tinde" reaching "idependent": no edit-distance budget this
+        // engine uses gets from one to the other, because it was never asked to.
+        assertNull(
+            "a suggestion answering for a different word than the one being committed was applied",
+            AutoCorrection.correctionFor(
+                typed = "harta", suggestion = "idependent",
+                suggestionQuery = "tinde", knownWord = "", minimumLength = minimum,
             ),
         )
     }
