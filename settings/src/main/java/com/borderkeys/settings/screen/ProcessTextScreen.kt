@@ -8,13 +8,18 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,15 +31,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -42,32 +50,51 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.assist.AssistClient
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
+import com.borderkeys.data.theme.ComposerAction
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.SavedPrompt
 import com.borderkeys.i18n.Keys
@@ -75,6 +102,12 @@ import com.borderkeys.ime.Composer
 import com.borderkeys.keyboard.R
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.openKeyboardPicker
+import com.borderkeys.settings.rememberBorderKeysDefaultState
+import kotlin.math.PI
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -100,6 +133,12 @@ fun ProcessTextScreen(
     text: String,
     readOnly: Boolean,
     modifier: Modifier = Modifier,
+    // On for the quick-draft path (see the LaunchedEffect below for why: a fresh task started
+    // from the service has no keyboard to inherit and no swipe to have discovered yet). Off for
+    // a real selection reached through the platform's PROCESS_TEXT menu -- there the box now
+    // opens closed by default, with the swipe hint below teaching the one way to open it, rather
+    // than a keyboard appearing over a paragraph the user may only have meant to read.
+    autoFocus: Boolean = true,
 ) {
     val strings = LocalStrings.current
     val context = LocalContext.current
@@ -107,7 +146,19 @@ fun ProcessTextScreen(
     val scope = rememberCoroutineScope()
     val themes = remember { DataGraph.themes }
     val preferences by themes.preferences
-        .collectAsStateWithLifecycle(initialValue = KeyboardPreferences())
+        .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
+
+    // This screen is reached from any application's selection menu, through the manifest alias,
+    // whether or not BorderKeys is the keyboard actually in use -- Android does not gate a
+    // PROCESS_TEXT entry on that. The box itself is the keyboard's own feature wearing a
+    // different host (see the class doc), so offering it while some other keyboard is the one
+    // in use would be a box that opens but belongs to nothing currently typing anything.
+    // Kept live the same way Setup's own step 2 is, sharing that implementation: this activity
+    // survives a trip to the system keyboard picker and back, and picking BorderKeys there
+    // doesn't even pause this one, so this needs the same picker-timing wait and the same poll
+    // that plain resume-tracking alone would miss -- not just re-reading on resume, which is
+    // all this used to do, and which is exactly the gap rememberBorderKeysDefaultState closes.
+    val isDefaultKeyboard by rememberBorderKeysDefaultState()
 
     // The original is "the exact copy gathered from the initial page selection, nothing else"
     // -- captured immediately, before a single keystroke can happen, the same as the in-keyboard
@@ -115,6 +166,23 @@ fun ProcessTextScreen(
     // this correct even if some caller ever hands over an empty one.
     val composer = remember { Composer().apply { if (text.isNotEmpty()) captureBeforeRun(text) } }
     var current by remember { mutableStateOf(text) }
+    // The field's own selection, alongside current rather than instead of it: everything but
+    // the swipe gesture below only ever needs the text itself, and rewriting every one of those
+    // sites to unwrap a TextFieldValue for a plain string would be a second, wider change for a
+    // feature this narrow. Kept in sync with current whenever something other than typing moves
+    // it -- a version switch, an assistant result, the initial selection -- so a stale selection
+    // range is never carried onto text that replaced what it was measured against.
+    var textFieldValue by remember { mutableStateOf(TextFieldValue(text)) }
+    // Whether the field itself currently has focus -- not the same question as whether the
+    // keyboard is on screen (the two can drift apart for a moment around an animation), but the
+    // one the swipe hint below actually needs: once the field is focused there is nothing left
+    // for the hint to teach.
+    var isFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(current) {
+        if (textFieldValue.text != current) {
+            textFieldValue = TextFieldValue(current, selection = TextRange(current.length))
+        }
+    }
     var rail by remember {
         mutableStateOf(
             Rail(composer.size, composer.index, composer.canGoBack, composer.canGoForward, composer.atOriginal),
@@ -131,6 +199,34 @@ fun ProcessTextScreen(
     var savedMenuOpen by remember { mutableStateOf(false) }
 
     val busy = requestId >= 0
+
+    // Requested once, on the first composition, when autoFocus asks for it -- see the parameter
+    // doc for which path that is and why. A launch from the keyboard's own Quick Action has no
+    // calling activity handing a result back and no field left focused anywhere -- unlike the
+    // platform's own PROCESS_TEXT toolbar, which starts this from inside a foreground activity,
+    // this one starts it from a service and needs FLAG_ACTIVITY_NEW_TASK to do it at all, and a
+    // fresh task does not inherit anyone's keyboard.
+    val textFieldFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { if (autoFocus) textFieldFocus.requestFocus() }
+
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    // The swipe-up/down gesture on the draft box itself, the same idea as the FastMap rules
+    // window's own swipe handle in VoxApps -- a drag decides it, nothing drawn for it. Cursor
+    // moved to the end rather than left wherever it was: a swipe is "I want to keep writing",
+    // and continuing from the end is what that means for a box with no caret visible to aim at
+    // yet.
+    fun showKeyboardAtEnd() {
+        textFieldValue = textFieldValue.copy(selection = TextRange(textFieldValue.text.length))
+        textFieldFocus.requestFocus()
+        keyboardController?.show()
+    }
+
+    fun hideKeyboardAndUnfocus() {
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
 
     fun syncFromComposer() {
         current = composer.current() ?: current
@@ -194,14 +290,29 @@ fun ProcessTextScreen(
         }
         requestId = id
         pendingInstruction = if (task == AssistTask.CUSTOM) instruction else ""
-        notice = strings[Keys.COMPOSER_WORKING]
+        notice = workingLabel(strings, task)
     }
 
+    // Which way the version transition below slides in from -- derived here, the one place
+    // every navigation path (the arrows, the rail, the horizontal swipe) already funnels
+    // through, rather than threaded in separately by each of them. Left at 0 until the first
+    // real navigation happens, which is also what tells the transition effect not to play on
+    // the box's very first appearance -- there is nothing to have slid in from yet.
+    var versionDirection by remember { mutableIntStateOf(0) }
+
     fun goTo(step: () -> String?) {
+        if (busy) {
+            return
+        }
         if (!composer.isEmpty()) {
             composer.updateCurrent(current)
         }
+        val before = composer.index
         step() ?: return
+        val moved = composer.index - before
+        if (moved != 0) {
+            versionDirection = if (moved > 0) 1 else -1
+        }
         syncFromComposer()
     }
 
@@ -225,6 +336,52 @@ fun ProcessTextScreen(
         ),
     )
 
+    if (!isDefaultKeyboard) {
+        Column(modifier = modifier.fillMaxSize()) {
+            Spacer(Modifier.weight(1f).clickable {
+                activity?.setResult(Activity.RESULT_CANCELED)
+                activity?.finish()
+            })
+            NotDefaultKeyboardBox(
+                shape = shape,
+                ringShift = ringShift,
+                onChooseKeyboard = { openKeyboardPicker(context) },
+                onDismiss = {
+                    activity?.setResult(Activity.RESULT_CANCELED)
+                    activity?.finish()
+                },
+            )
+        }
+        return
+    }
+
+    // Both gestures' commit thresholds, in px once rather than re-derived on every drag event --
+    // read from the same Density both the live-drag callbacks below and the gesture detectors
+    // themselves use, so a swipe that visually looks like it crossed the line is exactly the one
+    // that did.
+    val density = LocalDensity.current
+    val swipeThresholdPx = with(density) { SWIPE_THRESHOLD.toPx() }
+    val versionThresholdPx = with(density) { VERSION_SWIPE_THRESHOLD.toPx() }
+
+    // Tracks the drag itself, live -- 1f at rest, shrinking towards FOCUS_SETTLE_SCALE as the
+    // swipe crosses towards SWIPE_THRESHOLD, not a fixed pulse played back only once the finger
+    // has already lifted. The system's own keyboard slides up or down on its own timeline this
+    // application has no hold over at all, but the box that asked for it can still visibly
+    // follow the swipe that did, which is as close to "an effect on the keyboard" as reaching
+    // into a separate process's window is ever going to get.
+    //
+    // Also caught by a plain focus change that did not come from this drag at all -- tapping
+    // straight into the field skips the gesture below entirely, and this is what still gives
+    // that path the same small settle, landing on FOCUS_SETTLE_SCALE exactly where the drag's
+    // own live tracking already would have by the time a swipe actually commits (see
+    // SWIPE_THRESHOLD's relation to FOCUS_SETTLE_SCALE below), so the two meet without a visible
+    // jump between them.
+    val focusSettle = remember { Animatable(1f) }
+    LaunchedEffect(isFocused) {
+        focusSettle.snapTo(FOCUS_SETTLE_SCALE)
+        focusSettle.animateTo(1f, tween(FOCUS_SETTLE_MILLIS, easing = FastOutSlowInEasing))
+    }
+
     Column(modifier = modifier.fillMaxSize()) {
         Spacer(Modifier.weight(1f).clickable {
             activity?.setResult(Activity.RESULT_CANCELED)
@@ -235,11 +392,34 @@ fun ProcessTextScreen(
                 .fillMaxWidth()
                 .imePadding()
                 .heightIn(max = 480.dp)
+                // Drawn before the clip, which is what puts it outside the rounded corners
+                // instead of underneath them.
+                .shadow(elevation = BOX_ELEVATION, shape = shape)
                 .clip(shape)
                 // The ring around the box, not a plain outline: the moving gradient is what
                 // says "a model may touch this" before anyone reads a word of the bar beneath
                 // it, the same way a coloured LED says a microphone is live.
-                .background(ringBrush(ringShift)),
+                .background(ringBrush(ringShift))
+                .swipeToToggleKeyboard { delta, released ->
+                    if (!released) {
+                        // Live: the box eases towards FOCUS_SETTLE_SCALE as the drag approaches
+                        // swipeThresholdPx, following the finger rather than waiting for it to
+                        // lift.
+                        val t = (kotlin.math.abs(delta) / swipeThresholdPx).coerceIn(0f, 1f)
+                        focusSettle.snapTo(1f - t * (1f - FOCUS_SETTLE_SCALE))
+                        return@swipeToToggleKeyboard
+                    }
+                    if (delta <= -swipeThresholdPx) {
+                        showKeyboardAtEnd()
+                    } else if (delta >= swipeThresholdPx) {
+                        hideKeyboardAndUnfocus()
+                    } else {
+                        // Released short of the threshold -- nothing committed, so nothing but
+                        // this eases the box back; a real commit instead lets the
+                        // isFocused-driven effect above pick it up already this close to rest.
+                        focusSettle.animateTo(1f, tween(FOCUS_SETTLE_MILLIS, easing = FastOutSlowInEasing))
+                    }
+                },
         ) {
         // Surface, not a Column with a background modifier painted on: Surface is what sets
         // LocalContentColor for everything inside it. A background modifier only paints a
@@ -247,26 +427,35 @@ fun ProcessTextScreen(
         // Compose's own fallback of plain black, invisible against a dark surface in exactly
         // the cases a background modifier cannot tell it apart from a light one.
         Surface(
-            modifier = Modifier.padding(RING_WIDTH),
+            modifier = Modifier.padding(RING_WIDTH).scale(focusSettle.value),
             shape = shape,
             color = MaterialTheme.colorScheme.surface,
         ) {
             Column {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Close top-right, per spec -- title first so it starts at the left edge and
-                // the close button is what's left holding the right, not the reverse.
+            // A Box, not a Row -- the hint below belongs truly centred between the title and the
+            // close button, not sharing a weight with either of them, which is what a Row of
+            // three weighted children would give instead.
+            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Text(
                     strings[Keys.COMPOSER_TITLE],
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.align(Alignment.CenterStart),
                 )
-                IconButton(onClick = {
-                    activity?.setResult(Activity.RESULT_CANCELED)
-                    activity?.finish()
-                }) {
+                if (!busy) {
+                    SwipeUpHint(
+                        ringShift = ringShift,
+                        focused = isFocused,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
+                // Close top-right, per spec.
+                IconButton(
+                    onClick = {
+                        activity?.setResult(Activity.RESULT_CANCELED)
+                        activity?.finish()
+                    },
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                ) {
                     Icon(
                         painter = painterResource(R.drawable.bk_composer_close),
                         contentDescription = strings[Keys.COMPOSER_CLOSE],
@@ -274,29 +463,142 @@ fun ProcessTextScreen(
                 }
             }
 
-            Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-                OutlinedTextField(
-                    value = current,
-                    onValueChange = { value ->
-                        current = value
-                        if (!composer.isEmpty()) {
-                            composer.updateCurrent(value)
+            Box(modifier = Modifier.weight(1f, fill = false)) {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    // -1..1, where 0 is at rest. Driven two ways: live, by the horizontal swipe
+                    // below, following the finger as it drags (see that gesture's onChange); and
+                    // by this effect, for a version reached any other way -- the arrows, the
+                    // rail, or a swipe that already released past versionThresholdPx, which is
+                    // handed off to here rather than finished by the gesture itself (see that
+                    // callback for why the two meet without a visible jump). versionDirection
+                    // (set in goTo) is what says which side a non-drag change slides in from, and
+                    // 0 (nothing navigated yet) is what keeps this from playing on the box's own
+                    // first appearance.
+                    val versionSlide = remember { Animatable(0f) }
+                    LaunchedEffect(rail.index) {
+                        if (versionDirection == 0) {
+                            return@LaunchedEffect
                         }
-                    },
-                    placeholder = { Text(strings[Keys.COMPOSER_EMPTY]) },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-                )
-
-                if (rail.size > 1) {
-                    VersionRail(
-                        rail = rail,
-                        onSelect = { index -> goTo { composer.goTo(index) } },
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                        versionSlide.snapTo(versionDirection.toFloat())
+                        versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
+                    }
+                    OutlinedTextField(
+                        value = textFieldValue,
+                        enabled = !busy,
+                        onValueChange = { value ->
+                            textFieldValue = value
+                            current = value.text
+                            if (!composer.isEmpty()) {
+                                composer.updateCurrent(value.text)
+                            }
+                        },
+                        placeholder = { Text(strings[Keys.COMPOSER_EMPTY]) },
+                        // A tone step above the card's own surface -- without it the field had
+                        // no fill of its own at all, only its outline, and read as the same
+                        // surface as the card around it rather than as a distinct box on it.
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(horizontal = FIELD_SIDE_GAP, vertical = 8.dp)
+                            .focusRequester(textFieldFocus)
+                            .onFocusChanged { isFocused = it.isFocused }
+                            // Left/right on the text itself steps through versions, the same
+                            // move as the arrows at the bottom of the box or picking a node on
+                            // the rail -- reaching either of those means looking away from what
+                            // was just written to find them.
+                            .swipeToChangeVersion { delta, released ->
+                                if (!released) {
+                                    // Live: the text follows the finger, capped at ±1 exactly at
+                                    // versionThresholdPx -- which is also where a commit below
+                                    // hands off to the rail.index effect above, so the two never
+                                    // visibly disagree about where the text already is.
+                                    versionSlide.snapTo((delta / versionThresholdPx).coerceIn(-1f, 1f))
+                                    return@swipeToChangeVersion
+                                }
+                                if (delta <= -versionThresholdPx) {
+                                    goTo { composer.forward() }
+                                } else if (delta >= versionThresholdPx) {
+                                    goTo { composer.back() }
+                                } else {
+                                    // Released short of the threshold -- nothing navigated, so
+                                    // nothing but this eases the text back to where it started.
+                                    versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
+                                }
+                            }
+                            .offset(x = VERSION_TRANSITION_DISTANCE * versionSlide.value)
+                            .alpha(1f - kotlin.math.abs(versionSlide.value) * VERSION_TRANSITION_FADE),
                     )
-                }
 
-                if (notice.isNotEmpty()) {
-                    Explanation(notice)
+                    if (rail.size > 1) {
+                        VersionRail(
+                            rail = rail,
+                            onSelect = { index -> goTo { composer.goTo(index) } },
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                        )
+                    }
+
+                    // While busy this would just repeat "Working" a second time -- the overlay
+                    // below already says it. An error notice (busy is false by the time one is
+                    // set; see onAssistError) still shows here as before.
+                    if (notice.isNotEmpty() && !busy) {
+                        Explanation(notice)
+                    }
+                }
+                // A model may be rewriting what's on screen, so what's on screen has to stop
+                // being editable while it does -- typing into text that is about to be replaced
+                // is a race the user cannot win. The tint is the ring's own gradient at low
+                // alpha, not a fresh colour: the same "a model may touch this" signal the border
+                // already gives, now covering the thing it is actually touching.
+                if (busy) {
+                    val pulse = rememberInfiniteTransition()
+                    val workingAlpha by pulse.animateFloat(
+                        initialValue = 1f,
+                        targetValue = 0.35f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(WORKING_PULSE_MILLIS, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse,
+                        ),
+                    )
+                    // Its own frame, the same shape and the same ring -- ringShift, not a
+                    // second animation -- rather than a plain scrim: the border already says
+                    // "a model may touch this" for the box as a whole, and the overlay covering
+                    // what it is actually touching reads as the same event, not two.
+                    val workingShape = RoundedCornerShape(WORKING_CORNER_RADIUS)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(WORKING_INSET)
+                            .shadow(elevation = BOX_ELEVATION, shape = workingShape)
+                            .clip(workingShape)
+                            .background(ringBrush(ringShift, alpha = WORKING_SCRIM_ALPHA))
+                            .padding(RING_WIDTH)
+                            .clip(workingShape)
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = WORKING_SURFACE_ALPHA)),
+                    ) {
+                        Text(
+                            // notice is exactly this task's label the whole time busy is true --
+                            // runTask is the only place that sets it before this reads it, and
+                            // nothing touches it again until requestId (and so busy) goes false,
+                            // in onAssistResult/onAssistError. Reading it here rather than
+                            // recomputing workingLabel is what keeps the two from being able to
+                            // say two different things about the same running request.
+                            notice,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = workingAlpha),
+                            style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.align(Alignment.Center),
+                        )
+                        Button(
+                            onClick = {
+                                assist.cancel()
+                                requestId = -1
+                                notice = ""
+                            },
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                        ) { Text(strings[Keys.ASSISTANT_CANCEL]) }
+                    }
                 }
 
                 if (offeringSaveName != null) {
@@ -376,69 +678,80 @@ fun ProcessTextScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (assistAvailable) {
-                        ActionIcon(R.drawable.bk_composer_grammar, strings[Keys.COMPOSER_ACTION_GRAMMAR], busy) {
-                            runTask(AssistTask.CORRECT)
-                        }
-                        Box {
-                            ActionIcon(
-                                R.drawable.bk_composer_translate, strings[Keys.COMPOSER_ACTION_TRANSLATE], busy,
-                            ) { translateMenuOpen = true }
-                            DropdownMenu(translateMenuOpen, onDismissRequest = { translateMenuOpen = false }) {
-                                for (task in TRANSLATE_TASKS) {
-                                    DropdownMenuItem(
-                                        text = { Text(translateLabel(strings, task)) },
-                                        onClick = { translateMenuOpen = false; runTask(task) },
-                                    )
-                                }
-                            }
-                        }
-                        Box {
-                            ActionIcon(
-                                R.drawable.bk_composer_tone, strings[Keys.COMPOSER_ACTION_TONE], busy,
-                            ) { toneMenuOpen = true }
-                            DropdownMenu(toneMenuOpen, onDismissRequest = { toneMenuOpen = false }) {
-                                for (task in TONE_TASKS) {
-                                    DropdownMenuItem(
-                                        text = { Text(toneLabel(strings, task)) },
-                                        onClick = { toneMenuOpen = false; runTask(task) },
-                                    )
-                                }
-                            }
-                        }
-                        ActionIcon(R.drawable.bk_composer_shorten, strings[Keys.COMPOSER_ACTION_SHORTEN], busy) {
-                            runTask(AssistTask.SHORTEN)
-                        }
-                        ActionIcon(R.drawable.bk_composer_prompt, strings[Keys.COMPOSER_ACTION_PROMPT], busy) {
-                            promptOpen = !promptOpen
-                        }
-                        if (preferences.savedPrompts.isNotEmpty()) {
-                            Box {
-                                ActionIcon(
-                                    R.drawable.bk_composer_saved, strings[Keys.COMPOSER_ACTION_SAVED], busy,
-                                ) { savedMenuOpen = true }
-                                DropdownMenu(savedMenuOpen, onDismissRequest = { savedMenuOpen = false }) {
-                                    for (prompt in preferences.savedPrompts) {
-                                        DropdownMenuItem(
-                                            text = { Text(prompt.name) },
-                                            onClick = {
-                                                savedMenuOpen = false
-                                                runTask(AssistTask.CUSTOM, prompt.text)
-                                            },
-                                        )
+                        // In the user's own order -- the same preference the in-keyboard bar
+                        // used to read, ComposerAction.fromIds(preferences.composerBar), so
+                        // reordering it in Settings means the same thing here as it always did.
+                        // INSERT is skipped: it stays the fixed button at the bar's end, because
+                        // what it does (Insert vs Copy) already depends on how this screen was
+                        // reached in a way a reorderable slot does not fit.
+                        for (action in ComposerAction.fromIds(preferences.composerBar)) {
+                            when (action) {
+                                ComposerAction.GRAMMAR -> ActionIcon(
+                                    R.drawable.bk_composer_grammar, strings[Keys.COMPOSER_ACTION_GRAMMAR], busy,
+                                ) { runTask(AssistTask.CORRECT) }
+                                ComposerAction.TRANSLATE -> Box {
+                                    ActionIcon(
+                                        R.drawable.bk_composer_translate, strings[Keys.COMPOSER_ACTION_TRANSLATE], busy,
+                                    ) { translateMenuOpen = true }
+                                    DropdownMenu(translateMenuOpen, onDismissRequest = { translateMenuOpen = false }) {
+                                        for (task in TRANSLATE_TASKS) {
+                                            DropdownMenuItem(
+                                                text = { Text(translateLabel(strings, task)) },
+                                                onClick = { translateMenuOpen = false; runTask(task) },
+                                            )
+                                        }
                                     }
                                 }
+                                ComposerAction.TONE -> Box {
+                                    ActionIcon(
+                                        R.drawable.bk_composer_tone, strings[Keys.COMPOSER_ACTION_TONE], busy,
+                                    ) { toneMenuOpen = true }
+                                    DropdownMenu(toneMenuOpen, onDismissRequest = { toneMenuOpen = false }) {
+                                        for (task in TONE_TASKS) {
+                                            DropdownMenuItem(
+                                                text = { Text(toneLabel(strings, task)) },
+                                                onClick = { toneMenuOpen = false; runTask(task) },
+                                            )
+                                        }
+                                    }
+                                }
+                                ComposerAction.SHORTEN -> ActionIcon(
+                                    R.drawable.bk_composer_shorten, strings[Keys.COMPOSER_ACTION_SHORTEN], busy,
+                                ) { runTask(AssistTask.SHORTEN) }
+                                ComposerAction.PROMPT -> ActionIcon(
+                                    R.drawable.bk_composer_prompt, strings[Keys.COMPOSER_ACTION_PROMPT], busy,
+                                ) { promptOpen = !promptOpen }
+                                ComposerAction.SAVED_PROMPTS -> if (preferences.savedPrompts.isNotEmpty()) {
+                                    Box {
+                                        ActionIcon(
+                                            R.drawable.bk_composer_saved, strings[Keys.COMPOSER_ACTION_SAVED], busy,
+                                        ) { savedMenuOpen = true }
+                                        DropdownMenu(savedMenuOpen, onDismissRequest = { savedMenuOpen = false }) {
+                                            for (prompt in preferences.savedPrompts) {
+                                                DropdownMenuItem(
+                                                    text = { Text(prompt.name) },
+                                                    onClick = {
+                                                        savedMenuOpen = false
+                                                        runTask(AssistTask.CUSTOM, prompt.text)
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                ComposerAction.SHOW_ORIGINAL -> if (rail.hasHistory) {
+                                    ActionIcon(
+                                        R.drawable.bk_composer_original,
+                                        if (rail.atOriginal) {
+                                            strings[Keys.COMPOSER_ACTION_SHOW_CURRENT]
+                                        } else {
+                                            strings[Keys.COMPOSER_ACTION_SHOW_ORIGINAL]
+                                        },
+                                        busy,
+                                    ) { goTo { composer.flip() } }
+                                }
+                                ComposerAction.INSERT -> Unit
                             }
-                        }
-                        if (rail.hasHistory) {
-                            ActionIcon(
-                                R.drawable.bk_composer_original,
-                                if (rail.atOriginal) {
-                                    strings[Keys.COMPOSER_ACTION_SHOW_CURRENT]
-                                } else {
-                                    strings[Keys.COMPOSER_ACTION_SHOW_ORIGINAL]
-                                },
-                                busy,
-                            ) { goTo { composer.flip() } }
                         }
                     }
                 }
@@ -495,6 +808,60 @@ fun ProcessTextScreen(
     }
 }
 
+/**
+ * What the box shows instead of itself when BorderKeys is not the keyboard in use.
+ *
+ * Same frame as the real box -- shape, ring and all -- so this reads as the draft box declining
+ * to open rather than as a different screen. The one thing it can offer is the system's own
+ * keyboard picker; it cannot switch the keyboard itself; see [openKeyboardPicker].
+ */
+@Composable
+private fun NotDefaultKeyboardBox(
+    shape: RoundedCornerShape,
+    ringShift: Float,
+    onChooseKeyboard: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val strings = LocalStrings.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .imePadding()
+            .clip(shape)
+            .background(ringBrush(ringShift)),
+    ) {
+        Surface(
+            modifier = Modifier.padding(RING_WIDTH),
+            shape = shape,
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        strings[Keys.COMPOSER_TITLE],
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            painter = painterResource(R.drawable.bk_composer_close),
+                            contentDescription = strings[Keys.COMPOSER_CLOSE],
+                        )
+                    }
+                }
+                Explanation(strings[Keys.PROCESS_TEXT_NEEDS_BORDERKEYS_AS_THE_KEYBOARD])
+                Button(
+                    onClick = onChooseKeyboard,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                ) { Text(strings[Keys.SETUP_CHOOSE_KEYBOARD]) }
+            }
+        }
+    }
+}
+
 /** Mirrors ComposerView.insertGreen; kept as its own constant rather than shared across a
  *  Compose/Canvas boundary neither side has a reason to cross for one colour. */
 private val INSERT_GREEN = Color(0xFF43A047)
@@ -506,11 +873,12 @@ private val INSERT_GREEN = Color(0xFF43A047)
  * asymmetry would spin the corners out of place with it. Sliding the gradient's own start and
  * end along the diagonal instead moves the colours without moving the shape.
  */
-private fun ringBrush(shift: Float): Brush {
+private fun ringBrush(shift: Float, alpha: Float = 1f): Brush {
     val span = 900f
     val x = (shift * span * 2f) - span
+    val colours = if (alpha >= 1f) AI_RING_COLOURS else AI_RING_COLOURS.map { it.copy(alpha = alpha) }
     return Brush.linearGradient(
-        colors = AI_RING_COLOURS,
+        colors = colours,
         start = Offset(x, 0f),
         end = Offset(x + span, span),
     )
@@ -530,6 +898,270 @@ private const val RING_PERIOD_MILLIS = 5000
 /** The ring's own thickness. */
 private val RING_WIDTH = 2.5.dp
 
+/** The drop shadow both the draft box and the working overlay cast under their own frame. */
+private val BOX_ELEVATION = 16.dp
+
+/** The working overlay's own corner radius -- fully rounded, unlike the draft box's
+ *  edge-anchored shape, since the overlay floats inside it rather than sitting on a screen edge. */
+private val WORKING_CORNER_RADIUS = 20.dp
+
+/** How far the working overlay's own frame sits in from the draft box's edges, so its shadow
+ *  and the draft box's own ring both stay visible rather than overlapping. */
+private val WORKING_INSET = 8.dp
+
+/**
+ * A vertical swipe on the draft box shows or hides the keyboard -- the same drag-decides-it
+ * gesture as VoxApps' Commander/FastMap rules window, with no handle drawn for it here either.
+ *
+ * SWIPE_THRESHOLD is the distance a drag has to cross to *commit* (checked by the caller, in its
+ * own onChange -- see where this is called), which is a separate question from [SWIPE_DEAD_ZONE]
+ * below, the much smaller distance this claims the gesture at, past which it is already live and
+ * following the finger rather than waiting for the commit line to be crossed.
+ */
+private val SWIPE_THRESHOLD = 56.dp
+
+/** A little more forgiving than [SWIPE_THRESHOLD] -- dragging across letters to select a word or
+ *  a phrase is a common, legitimate horizontal drag on this field, and this stays clear of it. */
+private val VERSION_SWIPE_THRESHOLD = 72.dp
+
+/**
+ * How far a drag has to move, on its dominant axis, before either gesture below claims it and
+ * starts reporting it live. Small on purpose, and the same for both: a tap to place the cursor
+ * or a press on a button never reaches this distance at all, so neither gesture ever touches it,
+ * but a real swipe is claimed early enough to visibly follow the finger well before it reaches
+ * an actual commit threshold, which is what makes either one read as a live drag rather than an
+ * effect that only appears once the finger has already lifted.
+ */
+private val SWIPE_DEAD_ZONE = 12.dp
+
+/**
+ * Claims a vertical drag once it clears [SWIPE_DEAD_ZONE] and is more vertical than horizontal,
+ * then calls [onChange] with the running total on every further move (`released = false`) and
+ * once more when the pointer lifts (`released = true`, total 0f if the drag was never claimed at
+ * all). Deciding what a given total means -- committed, or short of the threshold -- is the
+ * caller's job; see where this is used for that half of it.
+ *
+ * Read in [PointerEventPass.Initial] -- before the text field beneath gets its own turn at the
+ * same events in the Main pass -- so a swipe that passes over the text is seen here first. Only
+ * once it is claimed (past the dead zone) is anything actually consumed; everything before that
+ * point is left unconsumed and reaches the field or a button exactly as if this modifier were
+ * not here at all.
+ */
+private fun Modifier.swipeToToggleKeyboard(onChange: suspend (delta: Float, released: Boolean) -> Unit): Modifier =
+    pointerInput(Unit) {
+        val deadZone = SWIPE_DEAD_ZONE.toPx()
+        awaitAxisSwipe(deadZone, primary = { it.y }, secondary = { it.x }, onChange)
+    }
+
+/**
+ * A horizontal swipe on the draft text steps through versions -- right for the previous one,
+ * left for the next -- the same move as the back/forward arrows at the bottom of the box or a
+ * node picked on the rail, reached without looking away from what was just written to find
+ * either of those.
+ *
+ * Shares [awaitAxisSwipe] with [swipeToToggleKeyboard] above, axes swapped: a drag that commits
+ * to horizontal is this gesture's, one that commits to vertical is that one's, and the same
+ * "nothing claimed below the dead zone" rule is what leaves an ordinary tap or a drag to select
+ * text in the field beneath reaching it untouched either way.
+ */
+private fun Modifier.swipeToChangeVersion(onChange: suspend (delta: Float, released: Boolean) -> Unit): Modifier =
+    pointerInput(Unit) {
+        val deadZone = SWIPE_DEAD_ZONE.toPx()
+        awaitAxisSwipe(deadZone, primary = { it.x }, secondary = { it.y }, onChange)
+    }
+
+/**
+ * The engine both directional swipes above share: track a drag until it clearly commits to one
+ * axis past [deadZone] -- more of that axis's own movement than the other's -- claim the rest of
+ * that one gesture once it does (consuming every further event, which is what keeps it from also
+ * being read as a tap or a text selection by whatever is underneath), and report the running
+ * signed total to [onChange] on every claimed move, then once more on release. A drag that never
+ * crosses [deadZone] is never claimed at all, and reaches whatever is underneath exactly as if
+ * this modifier were not there.
+ */
+private suspend fun PointerInputScope.awaitAxisSwipe(
+    deadZone: Float,
+    primary: (Offset) -> Float,
+    secondary: (Offset) -> Float,
+    onChange: suspend (delta: Float, released: Boolean) -> Unit,
+) = coroutineScope {
+    // PointerInputScope is not itself a CoroutineScope (only Density), and
+    // awaitEachGesture's own scope permits awaiting only its own suspend functions
+    // (awaitPointerEvent and the like) -- onChange, an arbitrary suspend lambda that ends up
+    // calling Animatable.snapTo/animateTo, needs a real one to run as a child of, which is what
+    // wrapping this in coroutineScope actually provides. this@coroutineScope, not a bare
+    // launch, because the closest implicit receiver inside the block below is
+    // AwaitPointerEventScope, not this one. Each call is its own short-lived launch rather than
+    // a single long-running collector: a drag reports a handful of moves, not a stream worth a
+    // channel over.
+    awaitEachGesture {
+        val down = awaitFirstDown(pass = PointerEventPass.Initial)
+        var totalPrimary = 0f
+        var totalSecondary = 0f
+        var claimed = false
+        while (true) {
+            val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            if (!change.pressed) {
+                val total = if (claimed) totalPrimary else 0f
+                this@coroutineScope.launch { onChange(total, true) }
+                break
+            }
+            val delta = change.position - change.previousPosition
+            totalPrimary += primary(delta)
+            totalSecondary += secondary(delta)
+            if (!claimed && kotlin.math.abs(totalPrimary) >= deadZone &&
+                kotlin.math.abs(totalPrimary) > kotlin.math.abs(totalSecondary)
+            ) {
+                claimed = true
+            }
+            if (claimed) {
+                change.consume()
+                val total = totalPrimary
+                this@coroutineScope.launch { onChange(total, false) }
+            }
+        }
+    }
+}
+
+/**
+ * Whether the swipe hint has already played, for the lifetime of this process.
+ *
+ * Not saved anywhere, and deliberately not -- this is "have I already shown this once this
+ * session," not a permanent "the user has seen onboarding" preference, and the two do not
+ * belong in the same kind of storage. A fresh process is a fresh session; the same process
+ * being backgrounded and brought back, even if the activity hosting it gets torn down and
+ * recreated along the way (this device does that fairly readily), is not.
+ */
+private var swipeHintShown = false
+
+/**
+ * "Swipe up for keyboard," rising and fading a handful of times and then gone -- the same idea
+ * as the arrows a chat app pulses over its own input the first time it opens, teaching the
+ * gesture above without a word of onboarding copy and without staying on screen once it has had
+ * its chances to be seen.
+ *
+ * Plays once per process, [SWIPE_HINT_REPEAT_COUNT] times, via [swipeHintShown] above -- not
+ * once per composition, which a naive `remember` would give for free right up until the first
+ * thing that removes and re-adds this composable (a focus blip, a return from the background),
+ * at which point it would play again. [focused] is read reactively instead, through
+ * [rememberUpdatedState], so the caller can leave this mounted continuously and still have it
+ * stop the moment focus actually happens, without either of them tearing the other down.
+ *
+ * Painted with [ringShift]'s own moving gradient rather than a flat theme colour -- the same
+ * brush the box's border animates with, so the hint reads as coming from the border itself
+ * ("this colour is what a swipe reaches for") instead of as an unrelated label sitting near it.
+ *
+ * One [progress] Animatable drives both position and opacity, rather than the two separately
+ * timed ones this used to be -- a rise-then-snap-then-fade-in built from independently-timed
+ * pieces reads as three small events, and a single value swept smoothly from 0 to 1 is what
+ * makes it read as one: alpha follows a half sine of it ([kotlin.math.sin], peaking mid-flight),
+ * so the text is already transparent at both ends of the sweep and the [Animatable.snapTo] that
+ * starts the next cycle over at the bottom is invisible when it happens, not a visible jump --
+ * which is the whole of what "finishes at the top, starts again at the bottom" needs, done in
+ * one motion instead of stitched from several.
+ */
+@Composable
+private fun SwipeUpHint(ringShift: Float, focused: Boolean, modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
+    val progress = remember { Animatable(0f) }
+    // A second, independent fader for focus alone -- progress keeps meaning "how far through
+    // this rise," and this is what actually hides the text the instant focus happens, whatever
+    // point of the rise it happened at. Multiplied together below rather than fighting over the
+    // same value.
+    val focusFade = remember { Animatable(1f) }
+    val latestFocused = rememberUpdatedState(focused)
+    LaunchedEffect(Unit) {
+        if (swipeHintShown) {
+            return@LaunchedEffect
+        }
+        // Marked immediately, not after the loop below finishes -- an attempt interrupted by an
+        // early focus still counts as this session's one chance, the same as one that ran to
+        // its last rep untouched.
+        swipeHintShown = true
+        repeat(SWIPE_HINT_REPEAT_COUNT) {
+            if (latestFocused.value) {
+                return@LaunchedEffect
+            }
+            progress.snapTo(0f)
+            progress.animateTo(1f, tween(SWIPE_HINT_CYCLE_MILLIS, easing = FastOutSlowInEasing))
+        }
+    }
+    // Focus can happen mid-cycle (the user swiped before the hint finished its run) -- faded
+    // out right away rather than left to finish its current rise, since it would otherwise be
+    // sitting over a field the keyboard is now covering.
+    LaunchedEffect(focused) {
+        if (focused) {
+            focusFade.animateTo(0f, tween(SWIPE_HINT_FOCUS_FADE_MILLIS))
+        }
+    }
+    val baseStyle = MaterialTheme.typography.labelLarge
+    val eased = progress.value
+    val alpha = sin(eased * PI.toFloat()).coerceIn(0f, 1f) * focusFade.value
+    Text(
+        strings[Keys.COMPOSER_SWIPE_HINT],
+        style = baseStyle.copy(
+            fontSize = baseStyle.fontSize * SWIPE_HINT_SIZE_MULTIPLIER,
+            brush = ringBrush(ringShift, alpha = alpha),
+        ),
+        modifier = modifier.offset(y = -SWIPE_HINT_DISTANCE * eased),
+    )
+}
+
+/** The field's own side gap, in from the card -- smaller than it used to be, so the field itself
+ *  reads as wider inside the same card rather than floating in a wide margin. */
+private val FIELD_SIDE_GAP = 12.dp
+
+/** 70% of [MaterialTheme.typography.labelLarge]'s own size, doubled -- 1.4x in total. */
+private const val SWIPE_HINT_SIZE_MULTIPLIER = 1.4f
+
+/** How many times the hint rises and fades before it stops appearing for good, this process. */
+private const val SWIPE_HINT_REPEAT_COUNT = 2
+
+/** A slow, deliberate float rather than a snap -- what "cursive" means for a one-shot nudge. */
+private const val SWIPE_HINT_SPEED_DP_PER_SECOND = 16f
+
+/** How far each rise travels. */
+private val SWIPE_HINT_DISTANCE = 22.dp
+
+/** [SWIPE_HINT_DISTANCE] at [SWIPE_HINT_SPEED_DP_PER_SECOND] -- computed from the two, rather
+ *  than a duration guessed at and left to drift out of sync with either if one of them changes. */
+private val SWIPE_HINT_CYCLE_MILLIS =
+    (SWIPE_HINT_DISTANCE.value / SWIPE_HINT_SPEED_DP_PER_SECOND * 1000).roundToInt()
+
+/** How quickly the hint gets out of the way once the field is actually focused -- quick, since
+ *  by then it is sitting on top of what the keyboard is about to cover. */
+private const val SWIPE_HINT_FOCUS_FADE_MILLIS = 150
+
+/** How far the field slides in from, on a version change -- a nudge, the same scale as the
+ *  swipe hint's own rise, not a full page's worth of travel. */
+private val VERSION_TRANSITION_DISTANCE = 24.dp
+
+/** How much of the field's opacity the slide dips at its furthest point (versionSlide at ±1). */
+private const val VERSION_TRANSITION_FADE = 0.6f
+
+private const val VERSION_TRANSITION_MILLIS = 220
+
+/** How far the box shrinks for its own settle, each time focus flips -- barely there on
+ *  purpose: a hint that something changed, not a bounce that competes with the system
+ *  keyboard's own slide for attention. */
+private const val FOCUS_SETTLE_SCALE = 0.985f
+
+private const val FOCUS_SETTLE_MILLIS = 220
+
+/**
+ * The busy overlay's two layers: the ring's own gradient over a surface-coloured scrim
+ * underneath it. Scrim higher than surface -- more of the moving colour, less of the flat
+ * tint -- is what keeps this reading as "the model is working," not "this box is disabled";
+ * the surface tint under it still keeps the box legibly unavailable, in both light and dark
+ * theme.
+ */
+private const val WORKING_SCRIM_ALPHA = 0.55f
+private const val WORKING_SURFACE_ALPHA = 0.4f
+
+/** How long one breath of the "Working" text's fade takes, in each direction. */
+private const val WORKING_PULSE_MILLIS = 1100
+
 /** A snapshot of [Composer]'s state that Compose can observe, taken after every mutation. */
 private data class Rail(
     val size: Int = 0,
@@ -543,10 +1175,38 @@ private data class Rail(
 
 @Composable
 private fun ActionIcon(icon: Int, label: String, busy: Boolean, onClick: () -> Unit) {
-    IconButton(onClick = onClick, enabled = !busy) {
-        Icon(painter = painterResource(icon), contentDescription = label)
+    // What an icon alone left to guessing: "the wand" told you nothing about grammar versus
+    // tone versus a saved prompt until you had pressed it once and remembered. The label is the
+    // same string the icon used to carry only as a screen reader's contentDescription -- now
+    // said once, out loud on the button itself, so the icon's own description is redundant and
+    // dropped rather than read twice.
+    val alpha = if (busy) DISABLED_ALPHA else 1f
+    Column(
+        modifier = Modifier
+            .clickable(enabled = !busy, onClick = onClick)
+            .padding(vertical = 4.dp)
+            .widthIn(min = 52.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            tint = LocalContentColor.current.copy(alpha = alpha),
+            modifier = Modifier.size(22.dp),
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = LocalContentColor.current.copy(alpha = alpha),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }
+
+/** Matches the alpha Compose's own `IconButton` uses for a disabled icon. */
+private const val DISABLED_ALPHA = 0.38f
 
 /**
  * The dots between the two arrows: one per version, the current one filled, the ends coloured
@@ -600,6 +1260,31 @@ private fun SavePromptRow(
         TextButton(onClick = onSkip) { Text(strings[Keys.COMPOSER_PROMPT_DISMISS]) }
     }
 }
+
+/**
+ * What the working overlay says while a request is in flight -- what it is actually doing,
+ * not a generic "Working," and specific about which language or which tone rather than a bare
+ * "Translating" or "Changing tone." An exhaustive `when` on purpose and no `else`: a task added
+ * to AssistTask.kt without a line added here is a compile error, not a silent fallback to a
+ * label that says nothing about what that new task does.
+ */
+private fun workingLabel(strings: com.borderkeys.i18n.LanguageManager, task: AssistTask): String =
+    when (task) {
+        AssistTask.SUMMARISE -> strings[Keys.COMPOSER_WORKING_SUMMARISE]
+        AssistTask.CORRECT -> strings[Keys.COMPOSER_WORKING_CORRECT]
+        AssistTask.SHORTEN -> strings[Keys.COMPOSER_WORKING_SHORTEN]
+        AssistTask.TRANSLATE_TO_ENGLISH -> strings[Keys.COMPOSER_WORKING_TRANSLATE_ENGLISH]
+        AssistTask.TRANSLATE_TO_ROMANIAN -> strings[Keys.COMPOSER_WORKING_TRANSLATE_ROMANIAN]
+        AssistTask.TRANSLATE_TO_GERMAN -> strings[Keys.COMPOSER_WORKING_TRANSLATE_GERMAN]
+        AssistTask.TRANSLATE_TO_SPANISH -> strings[Keys.COMPOSER_WORKING_TRANSLATE_SPANISH]
+        AssistTask.TRANSLATE_TO_FRENCH -> strings[Keys.COMPOSER_WORKING_TRANSLATE_FRENCH]
+        AssistTask.TRANSLATE_TO_ITALIAN -> strings[Keys.COMPOSER_WORKING_TRANSLATE_ITALIAN]
+        AssistTask.REWRITE_FORMAL -> strings[Keys.COMPOSER_WORKING_TONE_FORMAL]
+        AssistTask.REWRITE_CASUAL -> strings[Keys.COMPOSER_WORKING_TONE_CASUAL]
+        AssistTask.REWRITE_DIRECT -> strings[Keys.COMPOSER_WORKING_TONE_DIRECT]
+        // Nothing fixed to name -- the instruction is whatever the user wrote.
+        AssistTask.CUSTOM -> strings[Keys.COMPOSER_WORKING_CUSTOM]
+    }
 
 private fun translateLabel(strings: com.borderkeys.i18n.LanguageManager, task: AssistTask): String =
     when (task) {

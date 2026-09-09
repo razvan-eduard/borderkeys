@@ -18,12 +18,15 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.draft.DraftProtocol
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.settings.screen.AboutScreen
@@ -42,8 +45,8 @@ import com.borderkeys.settings.screen.QuickActionsScreen
 import com.borderkeys.settings.screen.SetupScreen
 import com.borderkeys.settings.screen.TransferScreen
 import com.borderkeys.settings.screen.SizeScreen
-import com.borderkeys.settings.screen.CorrectionsScreen
-import com.borderkeys.settings.screen.SwipeScreen
+import com.borderkeys.settings.screen.SoundScreen
+import com.borderkeys.settings.screen.TypingScreen
 import com.borderkeys.settings.screen.ThemeScreen
 
 /**
@@ -80,6 +83,18 @@ class SettingsActivity : ComponentActivity() {
         // screen itself deals in a plain String like everything else in this application does.
         val selection = intent.takeIf { it.action == Intent.ACTION_PROCESS_TEXT }
             ?.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
+        // The keyboard's own "Compose" quick action, tapped mid-typing rather than reached
+        // through a selection menu. There is no calling activity on this path, so the draft box
+        // opens exactly as it would for a selection that was never editable -- the same
+        // Insert-becomes-Copy switch, for the same reason: nothing to write back into
+        // automatically. Empty is a real value here (nothing was selected when Compose was
+        // tapped, so the box opens blank), which is why this checks the intent's action rather
+        // than the extra's presence.
+        val quickDraft = if (intent.action == DraftProtocol.ACTION_QUICK_DRAFT) {
+            intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString().orEmpty()
+        } else {
+            null
+        }
         setContent {
             CompositionLocalProvider(LocalStrings provides strings) {
                 BorderKeysSettingsTheme {
@@ -91,6 +106,16 @@ class SettingsActivity : ComponentActivity() {
                             readOnly = intent.getBooleanExtra(
                                 Intent.EXTRA_PROCESS_TEXT_READONLY, false,
                             ),
+                            modifier = Modifier.safeDrawingPadding(),
+                            // Closed by default here -- see the parameter's own doc. A
+                            // selection was just made to read or act on, not necessarily to
+                            // type into, and the swipe hint teaches the way in for when it is.
+                            autoFocus = false,
+                        )
+                    } else if (quickDraft != null) {
+                        ProcessTextScreen(
+                            text = quickDraft,
+                            readOnly = true,
                             modifier = Modifier.safeDrawingPadding(),
                         )
                     } else if (asking != null) {
@@ -146,10 +171,42 @@ class SettingsActivity : ComponentActivity() {
 @Composable
 private fun SettingsApp() {
     val strings = LocalStrings.current
+    val context = LocalContext.current
+    // Read once, at launch, purely to pick the first screen below -- unlike isDefault further
+    // down (from rememberBorderKeysDefaultState), this one is deliberately not kept live: which
+    // screen the app opens *to* should not jump under the person's feet just because they
+    // finished Setup while looking at some other screen already.
+    val isDefaultAtLaunch = remember { isBorderKeysDefault(context) }
+
     // A list, used as a back stack. Ten screens with no arguments between them do not need a
     // navigation graph, a route parser or argument encoding.
-    val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
+    //
+    // Opens straight to Setup, not Home, when BorderKeys is not yet the selected keyboard --
+    // the same condition Home's own banner already reacts to, just met on the first frame
+    // instead of after noticing a card and tapping it.
+    val stack = remember {
+        mutableStateListOf<Screen>(if (isDefaultAtLaunch) Screen.Home else Screen.Setup)
+    }
     val current = stack.last()
+
+    // The one step Setup cannot do by itself -- enabling BorderKeys sends the user out to system
+    // settings, which this application has no way to detect finishing, so that step stays a
+    // button the person presses on purpose -- and the one it can offer unasked, the same way a
+    // permission prompt is safe to bring up unasked: the picker, kept live across both that trip
+    // and picking an entry from the picker's own dialog. See its own doc for why either of those
+    // needs more than a plain LaunchedEffect(Unit).
+    val isDefault by rememberBorderKeysDefaultState()
+
+    // Leaves Setup for Home the moment isDefault above actually goes true. Scoped to "the
+    // keyboard switch happened," not to the whole of Setup -- a pending import from a sibling
+    // build (see canTransfer in SetupScreen/HomeScreen) is a second, separate task the person
+    // may still want to do, and this does not walk them away from it just because step 2 finished.
+    LaunchedEffect(current, isDefault) {
+        if (current == Screen.Setup && isDefault) {
+            stack.clear()
+            stack.add(Screen.Home)
+        }
+    }
 
     androidx.activity.compose.BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.size - 1) }
 
@@ -181,8 +238,8 @@ private fun SettingsApp() {
             Screen.Layout -> LayoutScreen(modifier)
             Screen.Theme -> ThemeScreen(modifier)
             Screen.Size -> SizeScreen(modifier)
-            Screen.Swipe -> SwipeScreen(modifier)
-            Screen.Corrections -> CorrectionsScreen(modifier)
+            Screen.Sound -> SoundScreen(modifier)
+            Screen.Typing -> TypingScreen(modifier)
             Screen.Dictionary -> DictionaryScreen(modifier)
             Screen.Clipboard -> ClipboardScreen(modifier)
             Screen.QuickActions -> QuickActionsScreen(modifier)

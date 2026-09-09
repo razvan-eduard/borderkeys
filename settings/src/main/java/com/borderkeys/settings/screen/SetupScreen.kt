@@ -7,7 +7,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
-import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -45,6 +44,9 @@ import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.Screen
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.isBorderKeysDefault
+import com.borderkeys.settings.isBorderKeysEnabled
+import com.borderkeys.settings.openKeyboardPicker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -85,8 +87,8 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    val enabled = remember(resumed) { isEnabled(context) }
-    val isDefault = remember(resumed) { isDefault(context) }
+    val enabled = remember(resumed) { isBorderKeysEnabled(context) }
+    val isDefault = remember(resumed) { isBorderKeysDefault(context) }
 
     /**
      * Whether the other build is on this device and this one is the newcomer.
@@ -168,10 +170,7 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 },
             )
             Button(
-                onClick = {
-                    (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
-                        ?.showInputMethodPicker()
-                },
+                onClick = { openKeyboardPicker(context) },
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             ) { Text(strings[Keys.SETUP_CHOOSE_KEYBOARD]) }
         }
@@ -304,27 +303,6 @@ private fun Step(
 @Composable
 private fun doneColour(): Color =
     if (isSystemInDarkTheme()) Color(0xFF81C784) else Color(0xFF2E7D32)
-
-private fun isEnabled(context: Context): Boolean {
-    val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        ?: return false
-    return manager.enabledInputMethodList.any { it.packageName == context.packageName }
-}
-
-/**
- * Whether *this* build is the keyboard in use.
- *
- * The package is compared exactly, not as a prefix. Since the assistant build's name is this
- * one's with a suffix, "com.borderkeys" is a prefix of "com.borderkeys.plus/..." -- so a prefix
- * test made the core build believe it was the current keyboard whenever the other one was.
- */
-private fun isDefault(context: Context): Boolean {
-    val current = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.DEFAULT_INPUT_METHOD,
-    ) ?: return false
-    return current.substringBefore('/') == context.packageName
-}
 
 /**
  * The package name of the other build, or null when this one has no sibling.
