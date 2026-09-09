@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.draft.DraftProtocol
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
@@ -178,6 +179,15 @@ private fun SettingsApp() {
     // finished Setup while looking at some other screen already.
     val isDefaultAtLaunch = remember { isBorderKeysDefault(context) }
 
+    // Whether the assistant service can be resolved at all is what tells the two flavours
+    // apart at runtime, the same check AboutScreen and HomeScreen already make -- neither this
+    // module nor :data can name a build flavour directly, since the flavour is a Gradle-time
+    // concept and this is asking about the actual installed package.
+    val hasAssistant = remember(context) {
+        val intent = Intent().setClassName(context.packageName, AssistProtocol.SERVICE_CLASS)
+        context.packageManager.resolveService(intent, 0) != null
+    }
+
     // A list, used as a back stack. Ten screens with no arguments between them do not need a
     // navigation graph, a route parser or argument encoding.
     //
@@ -213,7 +223,16 @@ private fun SettingsApp() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(strings[current.titleKey]) },
+                // Home's title is the app's own name, and the plus flavor says so the same way
+                // its launcher icon, its keyboard-picker entry and its About screen already do --
+                // see app/src/plus/res/values/strings.xml's own comment for why every one of
+                // those is spelled out rather than left to whichever build happens to be
+                // installed. Every other screen's title is its own, not the app's, so this is
+                // the one place that distinction applies.
+                title = {
+                    val title = strings[current.titleKey]
+                    Text(if (current == Screen.Home && hasAssistant) "$title +" else title)
+                },
                 navigationIcon = {
                     if (stack.size > 1) {
                         IconButton(onClick = { stack.removeAt(stack.size - 1) }) {
