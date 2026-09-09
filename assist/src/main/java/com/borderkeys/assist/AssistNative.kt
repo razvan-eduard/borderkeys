@@ -45,12 +45,18 @@ internal object AssistNative {
      *
      * The status travels in a caller-supplied array rather than a second call, so that a failure
      * and its reason cannot be separated by another request.
+     *
+     * `cleanFormatting` should be false for [com.borderkeys.data.assist.AssistTask.CUSTOM] and
+     * true for every built-in task -- see `TextAssist::cleanResult`'s own doc, in text_assist.cpp,
+     * for why a custom instruction is the one case the native side's own formatting cleanup has
+     * to stay out of.
      */
     external fun nativeRun(
         handle: Long,
         instruction: String,
         text: String,
         maxOutputTokens: Int,
+        cleanFormatting: Boolean,
         outStatus: IntArray,
     ): String?
 

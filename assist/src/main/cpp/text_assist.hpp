@@ -63,9 +63,13 @@ public:
      * Streaming is deliberately absent. The result is shown in a sheet with a Replace button
      * next to it, so a half-finished answer has nothing to be done with -- and a token-by-token
      * callback across a process boundary would cost an IPC per token.
+     *
+     * `cleanFormatting` gates the half of cleanResult's cleanup that can disagree with what was
+     * actually asked for -- see that function's own doc for why a custom, user-written
+     * instruction is the one case this needs to be off for.
      */
     int32_t run(const char* instruction, const char* text, int maxOutputTokens,
-                std::string* out);
+                bool cleanFormatting, std::string* out);
 
     /** Asks the current run to stop at the next token boundary. Safe from another thread. */
     void requestCancel() { cancelRequested_ = true; }

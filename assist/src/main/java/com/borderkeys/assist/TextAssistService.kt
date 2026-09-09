@@ -200,7 +200,11 @@ class TextAssistService : Service() {
             } else {
                 task.instruction
             }
-            val answer = AssistNative.nativeRun(current, instruction, text, budget, status)
+            // Off for a custom instruction: "wrap the answer in quotes" is a reasonable thing to
+            // type there, and the native cleanup exists to remove formatting nobody asked for --
+            // not formatting the request asked for by name. See AssistNative.nativeRun's own doc.
+            val cleanFormatting = task != AssistTask.CUSTOM
+            val answer = AssistNative.nativeRun(current, instruction, text, budget, cleanFormatting, status)
             if (answer == null) {
                 replyWithError(reply, requestId, mapNativeStatus(status[0]))
                 return@post
@@ -208,7 +212,10 @@ class TextAssistService : Service() {
             val payload = android.os.Bundle().apply {
                 putInt(AssistProtocol.KEY_REQUEST_ID, requestId)
                 putInt(AssistProtocol.KEY_ERROR, AssistProtocol.ERROR_NONE)
-                putString(AssistProtocol.KEY_RESULT, answer.trim())
+                // Already cleaned and trimmed on the native side (TextAssist::run's cleanResult)
+                // -- the one place that turns a small model's raw generation into an answer, not
+                // a second trim here repeating part of that job.
+                putString(AssistProtocol.KEY_RESULT, answer)
                 putString(AssistProtocol.KEY_MODEL_NAME, loadedModelName)
             }
             send(reply, AssistProtocol.MSG_RESULT, payload)

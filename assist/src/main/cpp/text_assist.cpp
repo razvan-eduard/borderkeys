@@ -30,6 +30,139 @@ constexpr int kMaxContextTokens = 8192;
  */
 constexpr uint32_t kSamplerSeed = 0xB0DE4Eu;
 
+/** See the comment at its one call site, in applyChatTemplate. */
+constexpr const char* kNoThink = "/no_think";
+
+/**
+ * A tag pair a model may wrap part of its output in without being asked to.
+ *
+ * A plain open/close string pair rather than anything smarter -- these are not XML and nothing
+ * here needs to parse them as a document, only find and remove one kind of thing a small model
+ * does that a task instruction did not ask for.
+ */
+struct WrapTag {
+    const char* open;
+    const char* close;
+};
+
+/**
+ * Every reasoning-block spelling this application has reason to expect. `<think>` is what Qwen3
+ * and SmolLM3 -- the two families in KnownAssistModels.kt today -- actually emit; the other two
+ * are the same idea under the names used elsewhere in the wider GGUF ecosystem. Kept as a list a
+ * model addition might extend, rather than one pair hardcoded to today's two families.
+ */
+constexpr WrapTag kReasoningTags[] = {
+    {"<think>", "</think>"},
+    {"<thinking>", "</thinking>"},
+    {"<reasoning>", "</reasoning>"},
+};
+
+constexpr const char* kWhitespace = " \t\n\r";
+
+std::string trimmed(const std::string& text) {
+    const size_t begin = text.find_first_not_of(kWhitespace);
+    if (begin == std::string::npos) {
+        return std::string();
+    }
+    const size_t end = text.find_last_not_of(kWhitespace);
+    return text.substr(begin, end - begin + 1);
+}
+
+/**
+ * Removes every closed instance of `tag` from `text`, and truncates at the first one that never
+ * closes.
+ *
+ * A closed block is cut out whole, tags included -- the text before and after it is what the
+ * model meant as its answer. An opened-but-never-closed block (generation stopped, by the output
+ * budget or by cancellation, before the model finished) is cut from the opening tag to the end:
+ * there is no answer inside an unfinished thought, and a fragment of one is worse to show than
+ * nothing.
+ */
+std::string stripTag(std::string text, const WrapTag& tag) {
+    for (;;) {
+        const size_t open = text.find(tag.open);
+        if (open == std::string::npos) {
+            return text;
+        }
+        const size_t closeTag = text.find(tag.close, open);
+        if (closeTag == std::string::npos) {
+            text.erase(open);
+            return text;
+        }
+        text.erase(open, (closeTag + std::strlen(tag.close)) - open);
+    }
+}
+
+/**
+ * Peels one delimiter pair off `text`, but only when it wraps the *whole* trimmed string.
+ *
+ * A translation that happens to start and end with a quotation mark as part of its own content
+ * is legitimate, ordinary text -- only the whole-string case, the entire answer quoted or
+ * fenced as if it were being handed over rather than written, is presentation formatting nobody
+ * asked for, and the whole-string check is what tells the two apart in the common case: a
+ * sentence that legitimately opens with a quote almost never also happens to close the string
+ * with one. It is not a perfect test -- a real answer that is itself one short quoted phrase,
+ * start to end, looks identical to the model's own wrapping and gets peeled the same way -- but
+ * a model reflexively quoting a plain translation nobody asked to have quoted is the case this
+ * was actually seen doing, and the rarer one it trades away is a smaller cost than that.
+ */
+std::string unwrapWhole(const std::string& text, const std::string& open,
+                        const std::string& close) {
+    if (text.size() < open.size() + close.size()) {
+        return text;
+    }
+    if (text.compare(0, open.size(), open) != 0) {
+        return text;
+    }
+    if (text.compare(text.size() - close.size(), close.size(), close) != 0) {
+        return text;
+    }
+    return text.substr(open.size(), text.size() - open.size() - close.size());
+}
+
+/**
+ * Turns whatever a small instruction-tuned model actually generated into the answer a task
+ * asked for.
+ *
+ * None of this is guaranteed by the prompt -- kNoThink is asked for up front, and even that is a
+ * request, not a contract -- it is what stays true after asking nicely. Each cleanup here is
+ * independent and narrow rather than one pattern tuned to today's two model families, because a
+ * future model added to KnownAssistModels.kt is not obliged to behave like the ones this list
+ * was written against.
+ *
+ * `cleanFormatting` splits these into two different kinds of claim. Reasoning-tag stripping is
+ * unconditional: nothing a task or a custom instruction legitimately asks for looks like a leaked
+ * `<think>` block, so there is nothing it could be disagreeing with. The fence and quote
+ * unwrapping are the opposite -- both are guesses about what the *task* asked for, and a task
+ * built into this application never asks for either, but AssistTask.CUSTOM carries whatever the
+ * user actually typed, and "wrap the answer in quotes" is a perfectly reasonable thing to type.
+ * Peeling quotes off a result that were requested on purpose is not a smaller version of the bug
+ * this was added for -- it is the opposite of it -- so the caller passes false for a custom
+ * instruction and this leaves that half alone.
+ */
+std::string cleanResult(const std::string& raw, bool cleanFormatting) {
+    std::string text = trimmed(raw);
+    for (const WrapTag& tag : kReasoningTags) {
+        text = stripTag(std::move(text), tag);
+    }
+    text = trimmed(text);
+    if (!cleanFormatting) {
+        return text;
+    }
+    // A plain-text answer to "translate this" or "correct this" is never legitimately fenced --
+    // there is no task here whose real answer starts and ends with three backticks -- so this
+    // one is removed unconditionally.
+    text = unwrapWhole(text, "```\n", "\n```");
+    text = unwrapWhole(text, "```", "```");
+    text = trimmed(text);
+    // Seen doing this on a plain translation with nothing quoted in the source at all -- Translate
+    // wrapped in quote marks reads as "here is the translation," presentation the task never
+    // asked for. See unwrapWhole's own doc for the one case this can be wrong about.
+    text = unwrapWhole(text, "\"", "\"");
+    text = unwrapWhole(text, "'", "'");
+    return trimmed(text);
+}
+
 /**
  * Silences llama.cpp's own logging.
  *
@@ -135,8 +268,19 @@ std::string TextAssist::applyChatTemplate(const char* instruction, const char* t
     // turn: small instruction-tuned models follow a single concrete request far more reliably
     // than they follow a persona, and half the candidate models have no system role at all.
     std::string content;
-    content.reserve(std::strlen(instruction) + std::strlen(text) + 8);
+    content.reserve(std::strlen(instruction) + std::strlen(text) + 8 + std::strlen(kNoThink));
     content += instruction;
+    // Every model in KnownAssistModels.kt is Qwen3 or SmolLM3, and both read a literal
+    // "/no_think" anywhere in the last turn as a request to skip their extended-thinking phase.
+    // Without it, a reasoning-tuned model spends the entire (small, task-sized) output budget
+    // narrating its reasoning and never reaches the actual answer -- which reads as "translate
+    // does nothing" rather than as a formatting problem, because nothing resembling an answer
+    // ever arrives. Placed right after the instruction and before the user's own text, not at
+    // the very end of the turn: appended after the text, it would sit inside the very thing a
+    // task like Translate or Correct is asked to transform, and become one more word to answer
+    // for instead of a switch outside the content being processed.
+    content += " ";
+    content += kNoThink;
     content += "\n\n";
     content += text;
 
@@ -164,7 +308,7 @@ std::string TextAssist::applyChatTemplate(const char* instruction, const char* t
 }
 
 int32_t TextAssist::run(const char* instruction, const char* text, int maxOutputTokens,
-                        std::string* out) {
+                        bool cleanFormatting, std::string* out) {
     if (out == nullptr || instruction == nullptr || text == nullptr) {
         return kErrArgument;
     }
@@ -244,6 +388,7 @@ int32_t TextAssist::run(const char* instruction, const char* text, int maxOutput
         }
     }
 
+    *out = cleanResult(*out, cleanFormatting);
     running_ = false;
     return kOk;
 }

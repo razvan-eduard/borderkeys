@@ -13,7 +13,15 @@
 # JNI_OnLoad resolves classes and methods by name through RegisterNatives. Renaming either
 # turns a link error into a crash on the first keystroke, at which point the keyboard is
 # already on screen.
--keepclasseswithmembernames,includedescriptorclasses class * {
+#
+# Without members, not just -keepclasseswithmembernames: "names" only stops R8 renaming a
+# native method that survives shrinking, it does not stop the method being shrunk away in the
+# first place. AssistNative.nativeContextTokens has no Kotlin caller (its only use is the C++
+# side's own RegisterNatives table, invisible to R8's reachability analysis) and R8 correctly
+# read that as dead code -- removing it from the release DEX while the native library still
+# tried to bind it, which is JNI_ERR at JNI_OnLoad, a crash before the assistant's first
+# request rather than the first keystroke this comment already worried about.
+-keepclasseswithmembers,includedescriptorclasses class * {
     native <methods>;
 }
 
