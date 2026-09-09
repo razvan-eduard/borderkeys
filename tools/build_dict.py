@@ -709,6 +709,22 @@ SAMPLE_WORDS = [
     ("time", 26000), ("timer", 400), ("test", 5000), ("testing", 900), ("water", 4000),
     ("keyboard", 700), ("key", 3000), ("keys", 1500), ("border", 800), ("borders", 300),
     ("privacy", 600), ("private", 1400), ("prediction", 250), ("predict", 300), ("press", 2000),
+    # "thex" is not a word; it exists only so a test can reach it at one edit from "thexx" while
+    # "the" sits two edits away and vastly more frequent -- see kEditPenalty's own comment for
+    # why the near, rare candidate has to win anyway.
+    ("thex", 60),
+    # This cluster reproduces the "acm"/"acum"/"cam" shape kTransposeCost's own comment
+    # describes: "acum" is one insertion from "acm" and much the most frequent word here, but
+    # "cam" is one (cheaper) transposition away and has a small bushy family of its own
+    # completions -- enough, at the old kTransposeCost, to fill the sixteen kept candidates
+    # before "acum" was ever considered.
+    ("acum", 900), ("cam", 60), ("camera", 55), ("campion", 50), ("camion", 45),
+    # "în" and "in" are two real, unrelated Romanian words -- a preposition and the plant fibre
+    # -- that fold to the same key. The dedup above already keeps whichever spelling is more
+    # frequent for a shared fold, which in the real dictionaries is "în" by a wide margin; this
+    # entry reproduces that so a test can check the two-letter word still reaches its accented
+    # twin instead of being turned away by the short-word guard meant for actual guesses.
+    ("în", 9000),
     # The words the committed gesture corpus is recorded against. Kept here so the replay
     # harness has a dictionary to decode into without shipping a real lexicon, whose licence is
     # still an open question.
