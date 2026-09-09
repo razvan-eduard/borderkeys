@@ -1501,10 +1501,19 @@ class BorderKeysService :
         // Kept because the delimiter path needs it and the strip is a view, not a model. One
         // reference assignment per suggestion round, off the hot path.
         //
-        // Read before the row is rearranged, so it stays the engine's answer whatever the row
-        // ends up looking like: what a delimiter applies is a decision about words, not about
-        // which slot something was moved into.
+        // Read before the row is rearranged, and before the case-matching just below, so it
+        // stays the engine's own lower-case answer whatever the row ends up looking like:
+        // AutoCorrection.correctionFor already applies matchCase to this on its own, and doing
+        // it here first would just be the same rule read twice for one decision.
         topSuggestion = if (count > 0) words[0] else null
+        // The rest of the row is not a decision the way the one correction above is -- it is
+        // what the strip shows, and showing "welcome" one slot over from a correction that
+        // already reads "Welcome" is the same word told two different ways for a difference the
+        // user never made. The dictionaries only ever store the lower-case spelling, so every
+        // candidate needs this, not only the one AutoCorrection separately decides to apply.
+        for (index in 0 until count) {
+            words[index] = words[index]?.let { AutoCorrection.matchCase(lastQuery, it) }
+        }
         val shown = if (preferences.showSuggestionStrip) {
             suggestionRow.arrange(
                 words, count, lastQuery, preferences.suggestionCount,
