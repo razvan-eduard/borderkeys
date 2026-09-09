@@ -1511,8 +1511,26 @@ class BorderKeysService :
         // already reads "Welcome" is the same word told two different ways for a difference the
         // user never made. The dictionaries only ever store the lower-case spelling, so every
         // candidate needs this, not only the one AutoCorrection separately decides to apply.
+        //
+        // Two different sources of truth for it, depending on whether there is a typed prefix
+        // to read: mid-word, the prefix already answers the question definitively -- "WELCO"
+        // means the rest is "WELCOME", even though shiftState itself auto-released back to OFF
+        // after the first letter and no longer says so. Nothing typed yet is the opposite case:
+        // there is no prefix to match, so these are the keyboard's own next-word predictions,
+        // and what they should look like is exactly what shiftState says the next letter typed
+        // right now would come out as.
         for (index in 0 until count) {
-            words[index] = words[index]?.let { AutoCorrection.matchCase(lastQuery, it) }
+            words[index] = words[index]?.let { word ->
+                if (lastQuery.isNotEmpty()) {
+                    AutoCorrection.matchCase(lastQuery, word)
+                } else {
+                    when (shiftState) {
+                        ShiftState.LOCKED -> word.uppercase()
+                        ShiftState.ON -> word.replaceFirstChar { it.uppercaseChar() }
+                        else -> word
+                    }
+                }
+            }
         }
         val shown = if (preferences.showSuggestionStrip) {
             suggestionRow.arrange(
