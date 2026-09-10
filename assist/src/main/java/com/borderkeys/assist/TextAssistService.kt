@@ -13,6 +13,7 @@ import android.os.Message
 import android.os.Messenger
 import android.os.Process
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.assist.AssistCategory
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
 import kotlinx.coroutines.runBlocking
@@ -42,6 +43,10 @@ class TextAssistService : Service() {
 
     private var handle = 0L
     private var loadedModelName: String? = null
+
+    /** The file name of the model currently mapped, so a task that wants a different one for its
+     *  category knows to switch and a task that wants the same one does not reload it. */
+    private var loadedModelFile: String? = null
 
     /**
      * Unloads the model after a period of silence, then stops the process.
@@ -116,6 +121,7 @@ class TextAssistService : Service() {
             workerHandler.post { AssistNative.nativeUnload(current) }
         }
         loadedModelName = null
+        loadedModelFile = null
         stopSelf()
     }
 
@@ -183,31 +189,51 @@ class TextAssistService : Service() {
                 return@post
             }
 
-            if (!AssistNative.nativeIsLoaded(current)) {
-                val model = runBlocking { DataGraph.assistModels.activeVerifiedModel() }
-                if (model == null) {
-                    // Either nothing was imported, or the file no longer hashes to what it did.
-                    // The distinction is in the database, and Settings shows it.
-                    replyWithError(reply, requestId, AssistProtocol.ERROR_NO_MODEL)
-                    return@post
+            // Read fresh on every request rather than only at load time: this process outlives
+            // one settings change, and a slider dragged in Settings should be felt on the next
+            // action, not only after the ninety-second idle timeout has thrown the model out and
+            // something reloads it.
+            val preferences = DataGraph.themes.currentPreferences()
+
+            // Which model this task's category is pointed at, falling back to the active one --
+            // see AssistCategory. A file it names but no longer has, or one whose bytes no
+            // longer match, is ignored the same way.
+            val preferredFile = when (task.category) {
+                AssistCategory.TRANSLATE -> preferences.assistTranslateModel
+                AssistCategory.WRITE -> preferences.assistWriteModel
+            }
+            val model = runBlocking {
+                DataGraph.assistModels.verifiedModelByFileName(preferredFile)
+                    ?: DataGraph.assistModels.activeVerifiedModel()
+            }
+            if (model == null) {
+                // Either nothing was imported, or the file no longer hashes to what it did. The
+                // distinction is in the database, and Settings shows it.
+                replyWithError(reply, requestId, AssistProtocol.ERROR_NO_MODEL)
+                return@post
+            }
+            // A load only when the model in memory is not the one this task wants -- a category
+            // switch pays a cold load, staying on one model does not.
+            if (!AssistNative.nativeIsLoaded(current) || loadedModelFile != model.fileName) {
+                if (AssistNative.nativeIsLoaded(current)) {
+                    AssistNative.nativeUnload(current)
                 }
                 val path = DataGraph.assistModels.fileFor(model).absolutePath
                 val status = AssistNative.nativeLoad(
                     current, path, model.contextTokens, inferenceThreads(),
                 )
                 if (status != 0) {
+                    loadedModelFile = null
+                    loadedModelName = null
                     replyWithError(reply, requestId, AssistProtocol.ERROR_LOAD_FAILED)
                     return@post
                 }
+                loadedModelFile = model.fileName
                 loadedModelName = model.displayName
             }
 
-            // Read fresh on every request rather than only at load time: this process outlives
-            // one settings change, and a slider dragged in Settings should be felt on the next
-            // action, not only after the ninety-second idle timeout has thrown the model out and
-            // something reloads it. Cheap regardless -- it only rebuilds the sampler chain, the
-            // same few hundred bytes every time, never the model.
-            val preferences = DataGraph.themes.currentPreferences()
+            // Cheap regardless -- it only rebuilds the sampler chain, the same few hundred bytes
+            // every time, never the model.
             AssistNative.nativeSetSamplingParams(
                 current, preferences.assistTemperature, preferences.assistTopP,
             )

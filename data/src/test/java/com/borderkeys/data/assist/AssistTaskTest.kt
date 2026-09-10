@@ -118,4 +118,22 @@ class AssistTaskTest {
         val boundedByRatio = AssistTask.entries.filterNot { it.usesRemainingContext }
         assertEquals(setOf(AssistTask.SUMMARISE, AssistTask.SHORTEN), boundedByRatio.toSet())
     }
+
+    @Test
+    fun `only the translations are their own model category`() {
+        val translating = AssistTask.entries.filter { it.category == AssistCategory.TRANSLATE }
+        assertEquals(
+            setOf(
+                AssistTask.TRANSLATE_TO_ENGLISH, AssistTask.TRANSLATE_TO_ROMANIAN,
+                AssistTask.TRANSLATE_TO_GERMAN, AssistTask.TRANSLATE_TO_SPANISH,
+                AssistTask.TRANSLATE_TO_FRENCH, AssistTask.TRANSLATE_TO_ITALIAN,
+            ),
+            translating.toSet(),
+        )
+        assertTrue(
+            "everything else is on the write side",
+            AssistTask.entries.filter { it.category == AssistCategory.WRITE }
+                .containsAll(listOf(AssistTask.CORRECT, AssistTask.SUMMARISE, AssistTask.CUSTOM)),
+        )
+    }
 }

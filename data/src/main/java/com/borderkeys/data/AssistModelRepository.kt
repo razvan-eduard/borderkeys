@@ -113,8 +113,24 @@ class AssistModelRepository internal constructor(
      * gigabyte costs a couple of seconds, which is a fraction of loading it -- and this is the
      * last point at which a substituted file can be caught before it is executed.
      */
-    suspend fun activeVerifiedModel(): AssistModelEntry? {
-        val entry = dao.activeModel() ?: return null
+    suspend fun activeVerifiedModel(): AssistModelEntry? = verified(dao.activeModel())
+
+    /**
+     * The imported model with this file name, re-hashed the same way [activeVerifiedModel] does,
+     * or null if there is no such model or its bytes no longer match. For a per-category model
+     * override -- see [com.borderkeys.data.theme.KeyboardPreferences.assistTranslateModel].
+     */
+    suspend fun verifiedModelByFileName(fileName: String): AssistModelEntry? {
+        if (fileName.isBlank()) {
+            return null
+        }
+        return verified(dao.observeAll().first().firstOrNull { it.fileName == fileName })
+    }
+
+    private suspend fun verified(entry: AssistModelEntry?): AssistModelEntry? {
+        if (entry == null) {
+            return null
+        }
         val file = fileFor(entry)
         val actual = runCatching { LanguagePackRepository.sha256Of(file) }.getOrNull()
         if (actual == null || !actual.equals(entry.sha256, ignoreCase = true) ||

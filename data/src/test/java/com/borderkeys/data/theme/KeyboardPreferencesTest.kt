@@ -397,6 +397,17 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `the per-category assist models default to empty and are length-bounded`() {
+        assertEquals("", KeyboardPreferences().assistTranslateModel)
+        assertEquals("", KeyboardPreferences().assistWriteModel)
+        val long = "x".repeat(1000)
+        val kept = KeyboardPreferences(assistTranslateModel = long, assistWriteModel = long)
+            .sanitised()
+        assertEquals(KeyboardPreferences.MAX_MODEL_FILE_NAME_CHARS, kept.assistTranslateModel.length)
+        assertEquals(KeyboardPreferences.MAX_MODEL_FILE_NAME_CHARS, kept.assistWriteModel.length)
+    }
+
+    @Test
     fun `the draft box's text size defaults to medium and rejects anything but its three steps`() {
         assertEquals(
             KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM,

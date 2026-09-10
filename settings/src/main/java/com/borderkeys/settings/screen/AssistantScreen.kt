@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.AssistModelRepository
 import com.borderkeys.data.DataGraph
+import androidx.compose.material3.FilterChip
 import com.borderkeys.data.assist.KnownAssistModels
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.Divider
@@ -154,6 +156,26 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                         )
                     }
                 }
+            }
+        }
+        // Only worth showing with a choice to make. One model runs everything.
+        if (models.size >= 2) {
+            SettingsSectionCard(strings[Keys.ASSISTANT_WHICH_MODEL_FOR_WHAT]) {
+                ModelForCategoryRow(
+                    label = strings[Keys.ASSISTANT_TRANSLATING],
+                    models = models,
+                    selectedFile = preferences.assistTranslateModel,
+                    onPick = { file -> updatePreferences { it.copy(assistTranslateModel = file) } },
+                    activeLabel = strings[Keys.ASSISTANT_ACTIVE_MODEL],
+                )
+                ModelForCategoryRow(
+                    label = strings[Keys.ASSISTANT_REWRITING_AND_CORRECTING],
+                    models = models,
+                    selectedFile = preferences.assistWriteModel,
+                    onPick = { file -> updatePreferences { it.copy(assistWriteModel = file) } },
+                    activeLabel = strings[Keys.ASSISTANT_ACTIVE_MODEL],
+                )
+                Explanation(strings[Keys.ASSISTANT_SWITCHING_MODEL_RELOADS_IT])
             }
         }
         SettingsSectionCard(strings[Keys.ASSISTANT_IMPORT]) {
@@ -294,6 +316,34 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 }
             },
         )
+    }
+}
+
+/** One task category and the models it can be pointed at, the first chip being "the active one". */
+@Composable
+private fun ModelForCategoryRow(
+    label: String,
+    models: List<com.borderkeys.data.entity.AssistModelEntry>,
+    selectedFile: String,
+    onPick: (String) -> Unit,
+    activeLabel: String,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = selectedFile.isBlank(),
+                onClick = { onPick("") },
+                label = { Text(activeLabel) },
+            )
+            for (model in models) {
+                FilterChip(
+                    selected = selectedFile == model.fileName,
+                    onClick = { onPick(model.fileName) },
+                    label = { Text(model.displayName) },
+                )
+            }
+        }
     }
 }
 

@@ -415,6 +415,18 @@ data class KeyboardPreferences(
     val assistTopP: Float = DEFAULT_ASSIST_TOP_P,
 
     /**
+     * The imported model, by file name, that translation runs on -- empty to run it on the
+     * active model like everything else. Only has an effect with more than one model imported;
+     * a name that no longer matches an imported model is ignored. See
+     * [com.borderkeys.data.assist.AssistCategory].
+     */
+    val assistTranslateModel: String = "",
+
+    /** The model, by file name, that correcting, rewriting and summarising run on. Empty for the
+     *  active model. See [assistTranslateModel]. */
+    val assistWriteModel: String = "",
+
+    /**
      * Whether the keyboard's palette follows the phone's wallpaper instead of the theme's own
      * stored colours.
      *
@@ -461,6 +473,8 @@ data class KeyboardPreferences(
         } else {
             DEFAULT_ASSIST_TOP_P
         },
+        assistTranslateModel = assistTranslateModel.take(MAX_MODEL_FILE_NAME_CHARS),
+        assistWriteModel = assistWriteModel.take(MAX_MODEL_FILE_NAME_CHARS),
         themeMode = if (themeMode == THEME_MODE_AUTO_SYSTEM) THEME_MODE_AUTO_SYSTEM else THEME_MODE_MANUAL,
         clipboardRetentionMinutes = clipboardRetentionMinutes.coerceIn(1, 60 * 24 * 30),
         clipboardMaxEntries = clipboardMaxEntries.coerceIn(1, 1000),
@@ -640,6 +654,9 @@ data class KeyboardPreferences(
 
         /** How many actions the bar will hold before it starts dropping them. */
         const val MAX_QUICK_ACTIONS = 10
+
+        /** A model file name longer than any real one; a stored value past it is truncated. */
+        const val MAX_MODEL_FILE_NAME_CHARS = 255
 
         const val COMPOSER_TEXT_SIZE_SMALL = 0
         const val COMPOSER_TEXT_SIZE_MEDIUM = 1

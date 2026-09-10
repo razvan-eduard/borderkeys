@@ -80,6 +80,13 @@ enum class AssistTask(
      * truncation risk.
      */
     val usesRemainingContext: Boolean = false,
+    /**
+     * Which kind of model does this task best. When more than one model is imported, each
+     * category can be pointed at a different one -- a translation-tuned model translates, a
+     * chat-tuned model rewrites -- so a task runs on whichever is set for its category rather
+     * than always on the one active model. See [AssistCategory].
+     */
+    val category: AssistCategory = AssistCategory.WRITE,
 ) {
     SUMMARISE(
         id = 1,
@@ -115,6 +122,7 @@ enum class AssistTask(
         minOutputTokens = 64,
         isChunkable = true,
         usesRemainingContext = true,
+        category = AssistCategory.TRANSLATE,
     ),
     TRANSLATE_TO_ROMANIAN(
         id = 5,
@@ -124,6 +132,7 @@ enum class AssistTask(
         minOutputTokens = 64,
         isChunkable = true,
         usesRemainingContext = true,
+        category = AssistCategory.TRANSLATE,
     ),
 
     // The remaining four languages the application itself speaks. One entry per target rather
@@ -138,6 +147,7 @@ enum class AssistTask(
         minOutputTokens = 64,
         isChunkable = true,
         usesRemainingContext = true,
+        category = AssistCategory.TRANSLATE,
     ),
     TRANSLATE_TO_SPANISH(
         id = 7,
@@ -147,6 +157,7 @@ enum class AssistTask(
         minOutputTokens = 64,
         isChunkable = true,
         usesRemainingContext = true,
+        category = AssistCategory.TRANSLATE,
     ),
     TRANSLATE_TO_FRENCH(
         id = 8,
@@ -156,6 +167,7 @@ enum class AssistTask(
         minOutputTokens = 64,
         isChunkable = true,
         usesRemainingContext = true,
+        category = AssistCategory.TRANSLATE,
     ),
     TRANSLATE_TO_ITALIAN(
         id = 9,
@@ -165,6 +177,7 @@ enum class AssistTask(
         minOutputTokens = 64,
         isChunkable = true,
         usesRemainingContext = true,
+        category = AssistCategory.TRANSLATE,
     ),
 
     REWRITE_CASUAL(
