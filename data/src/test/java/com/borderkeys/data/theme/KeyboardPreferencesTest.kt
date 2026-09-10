@@ -373,6 +373,10 @@ class KeyboardPreferencesTest {
     fun `the draft box is on and its bar has the buttons that work without a model`() {
         val defaults = KeyboardPreferences()
         assertTrue("the draft box should be available", defaults.composerEnabled)
+        assertTrue(
+            "a selection grows to whole words by default",
+            defaults.composerSnapSelectionToWords,
+        )
         val bar = ComposerAction.fromIds(defaults.composerBar)
         assertTrue("insert has to be on the bar", bar.contains(ComposerAction.INSERT))
         assertFalse(

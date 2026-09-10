@@ -2150,8 +2150,14 @@ class BorderKeysService :
             QuickAction.SETTINGS -> openSettings()
             QuickAction.COMPOSE -> {
                 if (privateMode || !preferences.composerEnabled) return
+                // A selection seeds the box with just that; nothing selected seeds it with the
+                // whole field, so "open the draft box" on a field already written in does not
+                // start from a blank one.
                 val selection = currentInputConnection?.getSelectedText(0)?.toString().orEmpty()
-                val seed = if (selection.length <= AssistProtocol.MAX_SELECTION_CHARS) selection else ""
+                val whole = selection.ifEmpty {
+                    connection.getExtractedText(ExtractedTextRequest(), 0)?.text?.toString().orEmpty()
+                }
+                val seed = if (whole.length <= AssistProtocol.MAX_SELECTION_CHARS) whole else ""
                 val intent = Intent(DraftProtocol.ACTION_QUICK_DRAFT)
                     .setClassName(packageName, SETTINGS_ACTIVITY)
                     .putExtra(Intent.EXTRA_PROCESS_TEXT, seed)

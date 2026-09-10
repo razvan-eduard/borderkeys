@@ -205,6 +205,10 @@ fun ProcessTextScreen(
     var promptOpen by remember { mutableStateOf(false) }
     var promptText by remember { mutableStateOf("") }
     var pendingInstruction by remember { mutableStateOf("") }
+    // The span of `current` a running task was asked about, when it was asked about only part of
+    // it -- null when the whole text was sent. The task works on the substring; its answer goes
+    // back into exactly this range, leaving everything outside it untouched.
+    var pendingSpan by remember { mutableStateOf<TextRange?>(null) }
     var offeringSaveName by remember { mutableStateOf<String?>(null) }
     var translateMenuOpen by remember { mutableStateOf(false) }
     var toneMenuOpen by remember { mutableStateOf(false) }
@@ -278,8 +282,24 @@ fun ProcessTextScreen(
                     return
                 }
                 requestId = -1
-                composer.addResult(resultText)
-                syncFromComposer()
+                val span = pendingSpan
+                pendingSpan = null
+                if (span != null && span.max <= current.length) {
+                    // Back into the range it came from, with everything outside it kept exactly.
+                    val whole = current.substring(0, span.min) + resultText +
+                        current.substring(span.max)
+                    composer.addResult(whole)
+                    syncFromComposer()
+                    // Leave the replaced part selected -- it is what changed, and running another
+                    // action now works on it rather than on the whole line again.
+                    textFieldValue = TextFieldValue(
+                        current,
+                        selection = TextRange(span.min, span.min + resultText.length),
+                    )
+                } else {
+                    composer.addResult(resultText)
+                    syncFromComposer()
+                }
                 notice = if (truncated) strings[Keys.ASSIST_ANSWER_MAY_BE_INCOMPLETE] else ""
                 if (pendingInstruction.isNotEmpty() &&
                     preferences.savedPrompts.none { it.text == pendingInstruction } &&
@@ -294,6 +314,7 @@ fun ProcessTextScreen(
                     return
                 }
                 requestId = -1
+                pendingSpan = null
                 notice = assistErrorMessage(strings, error)
             }
 
@@ -311,13 +332,44 @@ fun ProcessTextScreen(
         if (busy || current.isEmpty()) {
             return
         }
+        // A real selection in the field means "this part, not the rest": the task is sent only
+        // the selected substring, and its answer is spliced back into exactly that range below.
+        // A bare cursor (collapsed selection) is not a selection -- the whole text is sent then,
+        // the way it always was.
+        //
+        // Grown out to whole words first, unless that has been switched off: a selection that
+        // starts or ends inside a word ("st text este de sel") is not something a model can
+        // translate or correct sensibly, so each end that landed mid-word is pushed out to that
+        // word's edge before anything is sent. The field's own selection is moved to match, so
+        // what will be worked on is what is shown selected.
+        val selection = textFieldValue.selection
+        val span = selection.takeIf {
+            !it.collapsed && it.min >= 0 && it.max <= current.length
+        }?.let { raw ->
+            if (!preferences.composerSnapSelectionToWords) {
+                return@let TextRange(raw.min, raw.max)
+            }
+            var start = raw.min
+            var end = raw.max
+            while (start > 0 && !current[start - 1].isWhitespace()) start--
+            while (end < current.length && !current[end].isWhitespace()) end++
+            TextRange(start, end)
+        }
+        if (span != null && (span.min != selection.min || span.max != selection.max)) {
+            textFieldValue = textFieldValue.copy(selection = span)
+        }
+        val sent = if (span != null) current.substring(span.min, span.max) else current
+        if (sent.isBlank()) {
+            return
+        }
         composer.captureBeforeRun(current)
-        val id = assist.run(task, current, contextTokens, instruction)
+        val id = assist.run(task, sent, contextTokens, instruction)
         if (id < 0) {
             notice = strings[Keys.ASSISTANT_THE_ASSISTANT_IS_NOT_INSTALLED]
             return
         }
         requestId = id
+        pendingSpan = span
         pendingInstruction = if (task == AssistTask.CUSTOM) instruction else ""
         notice = workingLabel(strings, task)
     }

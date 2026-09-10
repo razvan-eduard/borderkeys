@@ -290,6 +290,15 @@ data class KeyboardPreferences(
     /** The draft box's own text size, one of the `COMPOSER_TEXT_SIZE_*` steps below. */
     val composerTextSize: Int = COMPOSER_TEXT_SIZE_MEDIUM,
 
+    /**
+     * Whether a selection in the draft box grows out to whole words before an action runs on it.
+     *
+     * On: a selection that starts or ends inside a word is pushed to that word's edge first, so
+     * what a model is asked to translate or correct is always a whole phrase. Off: the selection
+     * is sent exactly as it was made, mid-word or not.
+     */
+    val composerSnapSelectionToWords: Boolean = true,
+
     /** Instructions the user wrote and kept, in the order they were saved. */
     val savedPrompts: List<SavedPrompt> = emptyList(),
 

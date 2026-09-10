@@ -96,6 +96,14 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
             }
         }
 
+        SettingsSectionCard(strings[Keys.COMPOSER_SETTINGS_SELECTION]) {
+            SwitchRow(
+                title = strings[Keys.COMPOSER_SETTINGS_SNAP_SELECTION],
+                subtitle = strings[Keys.COMPOSER_SETTINGS_SNAP_SELECTION_NOTE],
+                checked = preferences.composerSnapSelectionToWords,
+            ) { value -> update { it.copy(composerSnapSelectionToWords = value) } }
+        }
+
         SettingsSectionCard(strings[Keys.COMPOSER_SETTINGS_BAR]) {
             if (chosen.isEmpty()) {
                 Explanation(strings[Keys.COMPOSER_SETTINGS_NONE])
