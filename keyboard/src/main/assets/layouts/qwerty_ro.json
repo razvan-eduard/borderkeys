@@ -33,7 +33,7 @@
         { "code": "language" },
         { "c": ",", "alt": ";:" },
         { "code": "emoji" }, { "code": "space", "w": 3 },
-        { "c": ".", "alt": "…!?" },
+        { "c": ".", "alt": "-_,!?" },
         { "code": "enter", "w": 1.5 }
       ]
     }

@@ -1094,16 +1094,7 @@ class KeyboardCanvasView(
             updateAlternativesSelection(x)
             val position = alternativesSelection
             if (position >= 0 && position < geometry.altLength[index]) {
-                val char = geometry.altChars[geometry.altOffset[index] + position]
-                // A horizontal ellipsis in a long-press strip is the "there is more here" mark,
-                // the same one a menu button carries -- it opens the symbols page rather than
-                // typing a character. Nothing types the ellipsis itself from here; the symbols
-                // page has it if it is ever wanted.
-                if (char == ELLIPSIS) {
-                    listener?.onKey(KeyCodes.SYMBOLS, index)
-                } else {
-                    listener?.onKey(char.code, index)
-                }
+                listener?.onKey(geometry.altChars[geometry.altOffset[index] + position].code, index)
             }
         }
         dismissAlternatives()
@@ -1246,9 +1237,6 @@ class KeyboardCanvasView(
         private const val LABEL_WIDTH_FRACTION = 0.82f
         private const val DEFAULT_ROW_HEIGHT_PX = 150f
         private const val MIN_ALTERNATIVE_WIDTH_PX = 96f
-
-        /** A long-press strip entry that opens the symbols page instead of typing itself. */
-        private const val ELLIPSIS = '…'
 
         /** One key width's fraction of finger travel per character of caret movement. */
         private const val SPACE_STEP_FRACTION = 0.55f
