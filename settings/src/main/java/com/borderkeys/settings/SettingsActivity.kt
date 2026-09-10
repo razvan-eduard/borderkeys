@@ -254,7 +254,7 @@ private fun SettingsApp() {
             Screen.Home -> HomeScreen(modifier, open)
             Screen.Setup -> SetupScreen(modifier, open)
             Screen.Languages -> LanguagesScreen(modifier)
-            Screen.Layout -> LayoutScreen(modifier)
+            Screen.Layout -> LayoutScreen(modifier, open)
             Screen.Theme -> ThemeScreen(modifier)
             Screen.Size -> SizeScreen(modifier)
             Screen.Sound -> SoundScreen(modifier)

@@ -408,6 +408,37 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `the layout and keys settings default sensibly and are repaired on read`() {
+        val fresh = KeyboardPreferences()
+        assertEquals(KeyboardPreferences.SYMBOLS_NUMBER_TOP, fresh.symbolsNumberPosition)
+        assertEquals(true, fresh.accentedCharacters)
+        assertEquals(true, fresh.longPressHints)
+        assertEquals(false, fresh.largeKeyText)
+        assertEquals(KeyboardPreferences.DEFAULT_LONG_PRESS_MILLIS, fresh.longPressMillis)
+
+        // An out-of-range digit position is not a fourth arrangement.
+        assertEquals(
+            KeyboardPreferences.SYMBOLS_NUMBER_TOP,
+            KeyboardPreferences(symbolsNumberPosition = 9).sanitised().symbolsNumberPosition,
+        )
+        assertEquals(
+            KeyboardPreferences.SYMBOLS_NUMBER_RIGHT,
+            KeyboardPreferences(symbolsNumberPosition = KeyboardPreferences.SYMBOLS_NUMBER_RIGHT)
+                .sanitised().symbolsNumberPosition,
+        )
+        // The long-press delay is clamped to a range a deliberate tap never trips and a hold
+        // never feels stuck in.
+        assertEquals(
+            KeyboardPreferences.MIN_LONG_PRESS_MILLIS,
+            KeyboardPreferences(longPressMillis = 1).sanitised().longPressMillis,
+        )
+        assertEquals(
+            KeyboardPreferences.MAX_LONG_PRESS_MILLIS,
+            KeyboardPreferences(longPressMillis = 100_000).sanitised().longPressMillis,
+        )
+    }
+
+    @Test
     fun `the draft box's text size defaults to medium and rejects anything but its three steps`() {
         assertEquals(
             KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM,

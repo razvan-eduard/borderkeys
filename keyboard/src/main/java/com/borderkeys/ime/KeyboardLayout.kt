@@ -117,6 +117,80 @@ class KeyboardLayout(
         )
     }
 
+    /**
+     * The same layout with diacritics merged onto the letter keys' long press.
+     *
+     * [overlays] maps a lowercase letter to the accented forms of it that an enabled language
+     * pack contributes, already concatenated in enabled order. They go in front of whatever the
+     * base layout put on the key, so the corner hint shows a diacritic rather than a symbol,
+     * and a character already reachable is not added twice.
+     *
+     * [signature] distinguishes one merged result from another in the id, because the compiled
+     * geometry is cached by id and two accent sets must not answer to the same name.
+     */
+    fun withAccents(overlays: Map<Char, String>, signature: String): KeyboardLayout {
+        if (rows.isEmpty() || overlays.isEmpty() || id.contains(ACCENTS_SUFFIX)) {
+            return this
+        }
+        if (rows.none { row -> row.keys.any { KeyFlags.has(it.flags, KeyFlags.LETTER) } }) {
+            return this
+        }
+        val rewritten = rows.map { row ->
+            Row(
+                row.indent, row.heightScale,
+                row.keys.map { key ->
+                    val extra = if (KeyFlags.has(key.flags, KeyFlags.LETTER) && key.label.length == 1) {
+                        overlays[key.label[0].lowercaseChar()].orEmpty()
+                    } else {
+                        ""
+                    }
+                    if (extra.isEmpty()) key else key.withAlternatives(merge(extra, key.alternatives))
+                },
+            )
+        }
+        return KeyboardLayout("$id$ACCENTS_SUFFIX$signature", label, languageTag, rewritten)
+    }
+
+    /**
+     * The same layout with a digit on each key of the top letter row's long press.
+     *
+     * For when there is no number row: q holds 1, w holds 2, on to p holds 0, the digit ahead
+     * of any diacritic so it is what the corner shows. With the number row on this is not
+     * applied -- the digits are already a tap away and a second copy on the long press is the
+     * duplication this exists to avoid.
+     */
+    fun withTopRowDigits(): KeyboardLayout {
+        if (rows.isEmpty() || id.contains(TOP_ROW_DIGITS_SUFFIX) || id.contains(NUMBER_ROW_SUFFIX)) {
+            return this
+        }
+        val firstLetterRow = rows.indexOfFirst { row -> row.keys.any { KeyFlags.has(it.flags, KeyFlags.LETTER) } }
+        if (firstLetterRow < 0) {
+            return this
+        }
+        var digit = 0
+        val rewritten = rows.mapIndexed { index, row ->
+            if (index != firstLetterRow) {
+                return@mapIndexed row
+            }
+            Row(
+                row.indent, row.heightScale,
+                row.keys.map { key ->
+                    if (!KeyFlags.has(key.flags, KeyFlags.LETTER)) {
+                        key
+                    } else {
+                        val character = ('0' + (digit + 1) % 10)
+                        digit++
+                        key.withAlternatives(merge(character.toString(), key.alternatives))
+                    }
+                },
+            )
+        }
+        return KeyboardLayout("$id$TOP_ROW_DIGITS_SUFFIX", label, languageTag, rewritten)
+    }
+
+    private fun Key.withAlternatives(alternatives: String): Key =
+        Key(code, label, alternatives, widthUnits, flags or KeyFlags.HAS_ALTERNATIVES)
+
     fun withNumberRow(): KeyboardLayout {
         if (rows.isEmpty() || id.contains(NUMBER_ROW_SUFFIX)) {
             return this
@@ -146,9 +220,22 @@ class KeyboardLayout(
 
     companion object {
         private const val NUMBER_ROW_SUFFIX = "+num"
+        private const val ACCENTS_SUFFIX = "+acc"
+        private const val TOP_ROW_DIGITS_SUFFIX = "+dig"
 
         private const val NO_EMOJI_SUFFIX = "-noemoji"
         private const val NO_LANGUAGE_SUFFIX = "-noglobe"
+
+        /** [prefix] then [rest], dropping any character already present earlier in the result. */
+        private fun merge(prefix: String, rest: String): String {
+            val seen = StringBuilder(prefix.length + rest.length)
+            for (character in prefix + rest) {
+                if (seen.indexOf(character.toString()) < 0) {
+                    seen.append(character)
+                }
+            }
+            return seen.toString()
+        }
 
         /** The top row of a physical keyboard, unshifted and shifted. */
         private val DIGIT_ROW = "1234567890".zip("!@#$%^&*()")

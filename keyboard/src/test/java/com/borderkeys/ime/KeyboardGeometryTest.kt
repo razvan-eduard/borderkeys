@@ -303,32 +303,72 @@ class NumberRowSymbolsTest {
     }
 
     @Test
-    fun `no shipped letter layout puts a digit under a letter`() {
-        // The whole point of moving the digits into their own row: a long press on "t" belongs
-        // to the Romanian comma, not to a five. Asserted against the asset files themselves,
-        // read as text -- org.json is stubbed in a JVM unit test, and this invariant is about
-        // what ships rather than about the parser.
-        for (name in listOf("qwerty_ro", "qwerty_en")) {
-            val file = java.io.File("src/main/assets/layouts/$name.json")
-            assertTrue("$name.json is missing", file.isFile)
-            val text = file.readText()
-            val alternates = Regex("\"alt\"\\s*:\\s*\"([^\"]*)\"").findAll(text)
-                .map { it.groupValues[1] }.toList()
-            assertTrue("$name has no long-press alternates at all", alternates.isNotEmpty())
-            for (value in alternates) {
+    fun `the base layout ships no digits and no language diacritics`() {
+        // There is one QWERTY now. Its long presses are symbols only: the digits are added by
+        // withTopRowDigits when there is no number row, and the accents by withAccents from the
+        // enabled packs. Read as text -- org.json is stubbed in a JVM unit test, and this is
+        // about what ships.
+        val file = java.io.File("src/main/assets/layouts/qwerty.json")
+        assertTrue("qwerty.json is missing", file.isFile)
+        val alternates = Regex("\"alt\"\\s*:\\s*\"([^\"]*)\"").findAll(file.readText())
+            .map { it.groupValues[1] }.toList()
+        assertTrue("qwerty.json has no long-press alternates at all", alternates.isNotEmpty())
+        for (value in alternates) {
+            assertTrue("qwerty.json puts a digit in a long press: \"$value\"", value.none { it.isDigit() })
+            assertTrue(
+                "qwerty.json carries a diacritic that belongs in an accent overlay: \"$value\"",
+                value.all { it.code < 0x80 },
+            )
+        }
+        // Every bundled dictionary has a matching accent overlay, and every overlay maps a
+        // single plain letter to a string of accented forms -- nothing ASCII on the value side.
+        for (tag in listOf("ro-RO", "en-US", "es-ES", "fr-FR", "de-DE", "it-IT")) {
+            val overlay = java.io.File("src/main/assets/accents/$tag.json")
+            assertTrue("accents/$tag.json is missing", overlay.isFile)
+            val pairs = Regex("\"(\\w)\"\\s*:\\s*\"([^\"]+)\"").findAll(overlay.readText())
+                .filter { it.groupValues[1].length == 1 }.toList()
+            assertTrue("accents/$tag.json has no letter to accent mappings", pairs.isNotEmpty())
+            for (pair in pairs) {
                 assertTrue(
-                    "$name puts a digit in a long press: \"$value\"",
-                    value.none { it.isDigit() },
+                    "accents/$tag.json maps ${pair.groupValues[1]} to something ASCII",
+                    pair.groupValues[2].all { it.code >= 0x80 },
                 )
             }
         }
-        // And the Romanian diacritics are still where they belong.
-        val romanian = java.io.File("src/main/assets/layouts/qwerty_ro.json").readText()
-        for (pair in listOf("\"t\", \"alt\": \"ț", "\"s\", \"alt\": \"ș")) {
-            assertTrue("qwerty_ro lost $pair", romanian.contains(pair))
-        }
-        assertTrue(romanian.contains("\"a\", \"alt\": \"ă"))
-        assertTrue(romanian.contains("\"i\", \"alt\": \"î"))
+    }
+
+    @Test
+    fun `without a number row the top letter row holds the digits`() {
+        val digits = KeyboardLayout.fallbackQwerty().withTopRowDigits()
+        // q..p carry 1..0, the digit first so the corner hint shows it.
+        assertEquals('1', digits.rows[0].keys[0].alternatives.first())
+        assertEquals('0', digits.rows[0].keys[9].alternatives.first())
+        // The second and third rows are untouched.
+        assertEquals(
+            KeyboardLayout.fallbackQwerty().rows[1].keys.map { it.code },
+            digits.rows[1].keys.map { it.code },
+        )
+        // Mutually exclusive with the number row: applying digits after it is a no-op.
+        val withRow = KeyboardLayout.fallbackQwerty().withNumberRow()
+        assertEquals(withRow.keyCount, withRow.withTopRowDigits().keyCount)
+    }
+
+    @Test
+    fun `an accent overlay goes in front of the base symbols and dedupes`() {
+        val base = KeyboardLayout.fallbackQwerty()
+        val a0 = base.rows[1].keys[0]
+        val overlaid = base.withAccents(mapOf('a' to "ăâ"), "ro-RO")
+        val a1 = overlaid.rows[1].keys[0]
+        assertEquals(a0.code, a1.code)
+        assertTrue("the diacritic is not first", a1.alternatives.startsWith("ăâ"))
+        assertTrue(
+            "the base alternate was dropped",
+            a1.alternatives.length >= a0.alternatives.length + 2,
+        )
+        // A letter the overlay says nothing about is untouched.
+        assertEquals(base.rows[1].keys[1].alternatives, overlaid.rows[1].keys[1].alternatives)
+        // Idempotent by id suffix: the service recomposes on every setting change.
+        assertEquals(overlaid.keyCount, overlaid.withAccents(mapOf('a' to "ă"), "ro-RO").keyCount)
     }
     /**
      * Turning the emoji key off gives its width back rather than leaving a gap.

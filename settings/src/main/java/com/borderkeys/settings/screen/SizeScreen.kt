@@ -62,35 +62,6 @@ fun SizeScreen(modifier: Modifier = Modifier) {
         PlacementPreview(appearance, Modifier.padding(vertical = 12.dp))
         Divider()
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            SettingsSectionCard(strings[Keys.SIZE_EXTRA_KEYS]) {
-                SwitchRow(
-                    title = strings[Keys.SIZE_EMOJI_KEY],
-                    subtitle = strings[Keys.SIZE_EMOJI_KEY_NOTE],
-                    checked = preferences.emojiKey,
-                ) { value -> update { it.copy(emojiKey = value) } }
-
-                SwitchRow(
-                    title = strings[Keys.SIZE_LANGUAGE_KEY],
-                    subtitle = strings[Keys.SIZE_LANGUAGE_KEY_NOTE],
-                    checked = preferences.languageKey,
-                ) { value -> update { it.copy(languageKey = value) } }
-                SwitchRow(
-                    title = strings[Keys.SIZE_SPACE_CURSOR],
-                    subtitle = strings[Keys.SIZE_SPACE_CURSOR_NOTE],
-                    checked = preferences.spaceCursorControl,
-                ) { value -> update { it.copy(spaceCursorControl = value) } }
-                SwitchRow(
-                    title = strings[Keys.SIZE_SHOW_A_ROW_OF_DIGITS],
-                    subtitle = strings[Keys.SIZE_COSTS_ABOUT_A_FIFTH_OF_THE],
-                    checked = preferences.numberRow,
-                ) { value -> update { it.copy(numberRow = value) } }
-                SwitchRow(
-                    title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
-                    subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
-                    checked = preferences.numericKeypad,
-                ) { value -> update { it.copy(numericKeypad = value) } }
-            }
-
             SettingsSectionCard(strings[Keys.SIZE_HEIGHT]) {
                 Explanation(
                     strings[Keys.SIZE_BIGGER_KEYS_ARE_EASIER_TO_HIT],

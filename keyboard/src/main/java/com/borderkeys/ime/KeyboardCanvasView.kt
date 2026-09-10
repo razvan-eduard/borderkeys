@@ -109,6 +109,48 @@ class KeyboardCanvasView(
     /** Whether sliding along the space bar moves the cursor instead of typing a space. */
     var spaceCursorEnabled: Boolean = true
 
+    /**
+     * How long a key is held before its long press fires, in milliseconds.
+     *
+     * A repeatable key -- backspace is the only one -- is never allowed past [LONG_PRESS_MILLIS]
+     * here, because its long press has to win the race against the character repeat that
+     * [REPEAT_DELAY_MILLIS] arms on the same press. See [longPressDelayFor].
+     */
+    var longPressDelayMillis: Long = LONG_PRESS_MILLIS
+
+    /** Whether a key draws the small corner character showing what its long press would type. */
+    var holdHintsEnabled: Boolean = true
+        set(value) {
+            if (field != value) {
+                field = value
+                backgroundValid = false
+                invalidate()
+            }
+        }
+
+    /**
+     * Larger key labels, at the cost of the wide ones being shrunk to fit sooner.
+     *
+     * A multiplier on the theme's own label size, applied where the sizes are fixed in
+     * [measureLabels], so the draw path is unchanged.
+     */
+    var largeKeyText: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                measureLabels()
+                backgroundValid = false
+                invalidate()
+            }
+        }
+
+    private fun longPressDelayFor(index: Int): Long =
+        if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.REPEATABLE)) {
+            minOf(longPressDelayMillis, LONG_PRESS_MILLIS)
+        } else {
+            longPressDelayMillis
+        }
+
     private var layout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
 
     /**
@@ -528,7 +570,8 @@ class KeyboardCanvasView(
      * every frame or silently overflowing their key.
      */
     private fun measureLabels() {
-        val base = paints.label.textSize
+        val themeSize = paints.label.textSize
+        val base = themeSize * if (largeKeyText) LARGE_KEY_TEXT_SCALE else 1f
         for (index in 0 until geometry.keyCount) {
             val length = geometry.labelLength[index]
             if (length == 0) {
@@ -544,7 +587,7 @@ class KeyboardCanvasView(
                 base
             }
         }
-        paints.label.textSize = base
+        paints.label.textSize = themeSize
     }
 
     /** O(1). Delegated to the compiled geometry, where it can be tested. */
@@ -672,6 +715,9 @@ class KeyboardCanvasView(
      * same "there is more here" mark a menu button carries, and no text to translate.
      */
     private fun drawHoldHint(canvas: Canvas, index: Int) {
+        if (!holdHintsEnabled) {
+            return
+        }
         val right = geometry.keyRight[index]
         val hintX = right - (right - geometry.keyLeft[index]) * HINT_INSET_FRACTION
         val hintY = geometry.keyTop[index] + paints.secondaryBaselineOffsetPx * 2.2f
@@ -866,7 +912,7 @@ class KeyboardCanvasView(
         // The cost is one postDelayed and one removeCallbacks per press, both of which the
         // repeatable keys above were already paying, and neither allocates.
         longPressPointer = pointerId
-        postDelayed(longPressRunnable, LONG_PRESS_MILLIS)
+        postDelayed(longPressRunnable, longPressDelayFor(index))
     }
 
     private fun onPointerMove(
@@ -940,7 +986,7 @@ class KeyboardCanvasView(
         startPress(index)
         run {
             longPressPointer = pointerId
-            postDelayed(longPressRunnable, LONG_PRESS_MILLIS)
+            postDelayed(longPressRunnable, longPressDelayFor(index))
         }
     }
 
@@ -1254,6 +1300,9 @@ class KeyboardCanvasView(
          *  two gestures feel like one -- referencing this is what keeps that true instead of
          *  being a second 380L typed by hand and promised to match. */
         internal const val LONG_PRESS_MILLIS = 380L
+
+        /** How much [largeKeyText] enlarges the theme's label size. */
+        private const val LARGE_KEY_TEXT_SCALE = 1.28f
 
         /** Where the corner hint sits, as a fraction of the key's width in from its right edge. */
         private const val HINT_INSET_FRACTION = 0.22f

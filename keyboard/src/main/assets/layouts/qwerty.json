@@ -1,0 +1,40 @@
+{
+  "id": "qwerty",
+  "label": "QWERTY",
+  "languageTag": "und",
+  "rows": [
+    {
+      "keys": [
+        { "c": "q" }, { "c": "w" }, { "c": "e" }, { "c": "r" }, { "c": "t" },
+        { "c": "y" }, { "c": "u" }, { "c": "i" }, { "c": "o" }, { "c": "p" }
+      ]
+    },
+    {
+      "indent": 0.5,
+      "keys": [
+        { "c": "a", "alt": "@" }, { "c": "s", "alt": "#" }, { "c": "d", "alt": "&" },
+        { "c": "f", "alt": "*" }, { "c": "g", "alt": "-" }, { "c": "h", "alt": "+" },
+        { "c": "j", "alt": "=" }, { "c": "k", "alt": "(" }, { "c": "l", "alt": ")" }
+      ]
+    },
+    {
+      "keys": [
+        { "code": "shift", "w": 1.5 },
+        { "c": "z", "alt": "_" }, { "c": "x", "alt": "$" }, { "c": "c", "alt": "\"" },
+        { "c": "v", "alt": "'" }, { "c": "b", "alt": ":" }, { "c": "n", "alt": ";" },
+        { "c": "m", "alt": "/" },
+        { "code": "delete", "w": 1.5 }
+      ]
+    },
+    {
+      "keys": [
+        { "code": "symbols", "w": 1.5 },
+        { "code": "language" },
+        { "c": ",", "alt": ";:" },
+        { "code": "emoji" }, { "code": "space", "w": 3 },
+        { "c": ".", "alt": "-_,!?" },
+        { "code": "enter", "w": 1.5 }
+      ]
+    }
+  ]
+}

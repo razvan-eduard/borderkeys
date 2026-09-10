@@ -328,6 +328,36 @@ data class KeyboardPreferences(
      * either way.
      */
     val numberRow: Boolean = false,
+
+    /**
+     * Where the digits sit on the number-and-symbols page.
+     *
+     * [SYMBOLS_NUMBER_TOP] is a row above the symbols, the arrangement a physical keyboard
+     * uses. The two number-pad choices move them into a 3x3 block down one side, within a
+     * thumb's arc, at the cost of the symbols packing tighter. One of [SYMBOLS_NUMBER_TOP],
+     * [SYMBOLS_NUMBER_LEFT], [SYMBOLS_NUMBER_RIGHT].
+     */
+    val symbolsNumberPosition: Int = SYMBOLS_NUMBER_TOP,
+
+    /**
+     * The diacritics merged onto the letter keys' long press, taken from the enabled language
+     * packs. On, a Romanian pack puts ă, â on `a`; off, the letter keys carry only their
+     * symbols. The base layout has none of its own -- see the `accents/` assets.
+     */
+    val accentedCharacters: Boolean = true,
+
+    /** The small character drawn in a key's corner showing what its long press would type. */
+    val longPressHints: Boolean = true,
+
+    /** Larger text on the keys, for legibility over density. */
+    val largeKeyText: Boolean = false,
+
+    /**
+     * How long a key must be held before the long press fires, in milliseconds. Clamped to
+     * [MIN_LONG_PRESS_MILLIS]..[MAX_LONG_PRESS_MILLIS] on read.
+     */
+    val longPressMillis: Int = DEFAULT_LONG_PRESS_MILLIS,
+
     /** Switch to a numeric keypad automatically in numeric and phone fields. */
     val numericKeypad: Boolean = true,
     val showSuggestionStrip: Boolean = true,
@@ -484,6 +514,12 @@ data class KeyboardPreferences(
         heightScale = heightScale.coerceIn(MIN_HEIGHT_SCALE, MAX_HEIGHT_SCALE),
         widthScale = widthScale.coerceIn(MIN_WIDTH_SCALE, 1f),
         positionMode = if (positionMode in MODE_DOCKED..MODE_FLOATING) positionMode else MODE_DOCKED,
+        symbolsNumberPosition = if (symbolsNumberPosition in SYMBOLS_NUMBER_TOP..SYMBOLS_NUMBER_RIGHT) {
+            symbolsNumberPosition
+        } else {
+            SYMBOLS_NUMBER_TOP
+        },
+        longPressMillis = longPressMillis.coerceIn(MIN_LONG_PRESS_MILLIS, MAX_LONG_PRESS_MILLIS),
         suggestionCount = suggestionCount.coerceIn(MIN_SUGGESTIONS, MAX_SUGGESTIONS),
         learningSpeed = if (learningSpeed in LEARNING_CAUTIOUS..LEARNING_IMMEDIATE) {
             learningSpeed
@@ -661,6 +697,23 @@ data class KeyboardPreferences(
         const val COMPOSER_TEXT_SIZE_SMALL = 0
         const val COMPOSER_TEXT_SIZE_MEDIUM = 1
         const val COMPOSER_TEXT_SIZE_LARGE = 2
+
+        /** Digits as a row above the symbols. */
+        const val SYMBOLS_NUMBER_TOP = 0
+
+        /** Digits as a number pad down the left of the symbols. */
+        const val SYMBOLS_NUMBER_LEFT = 1
+
+        /** Digits as a number pad down the right of the symbols. */
+        const val SYMBOLS_NUMBER_RIGHT = 2
+
+        const val DEFAULT_LONG_PRESS_MILLIS = 380
+
+        /** Fast enough that a deliberate tap never trips it. */
+        const val MIN_LONG_PRESS_MILLIS = 150
+
+        /** Slow enough to be a wait, not so slow the key feels stuck. */
+        const val MAX_LONG_PRESS_MILLIS = 700
 
         /** How many recent emoji are kept: a row and a half on most phones. */
         const val MAX_EMOJI_RECENTS = 24

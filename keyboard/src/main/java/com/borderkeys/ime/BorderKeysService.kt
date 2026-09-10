@@ -120,8 +120,16 @@ class BorderKeysService :
 
     private var alphabeticLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var symbolsLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
+    private var symbolsNumpadLeftLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
+    private var symbolsNumpadRightLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var symbolsShiftLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var numpadLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
+
+    /** Diacritics for the enabled languages, merged onto the letter keys by [composedLayout]. */
+    private var accentOverlays: Map<Char, String> = emptyMap()
+
+    /** Distinguishes one enabled-language set from another in the compiled-geometry cache key. */
+    private var accentSignature: String = ""
 
     /** Which page is on screen. The numeric one is chosen by the field, not by the user. */
     private var page = PAGE_ALPHABETIC
@@ -272,6 +280,8 @@ class BorderKeysService :
         scope.launch(Dispatchers.IO) {
             alphabeticLayout = LayoutLoader.load(assets, DEFAULT_ALPHABETIC_LAYOUT)
             symbolsLayout = LayoutLoader.load(assets, SYMBOLS_LAYOUT)
+            symbolsNumpadLeftLayout = LayoutLoader.load(assets, SYMBOLS_NUMPAD_LEFT_LAYOUT)
+            symbolsNumpadRightLayout = LayoutLoader.load(assets, SYMBOLS_NUMPAD_RIGHT_LAYOUT)
             symbolsShiftLayout = LayoutLoader.load(assets, SYMBOLS_SHIFT_LAYOUT)
             numpadLayout = LayoutLoader.load(assets, NUMPAD_LAYOUT)
             // A keyboard that cannot start is one the user cannot replace without already
@@ -305,6 +315,14 @@ class BorderKeysService :
         repository.verifyEnabled()
 
         val enabled = repository.enabledPacks()
+
+        // The accent overlays follow the enabled packs: turn a language on and its diacritics
+        // appear on the letter keys, turn it off and they are gone. Built here, on the same
+        // list, so the two can never disagree.
+        accentOverlays = AccentOverlays.merge(enabled.map { AccentOverlays.load(assets, it.tag) })
+        accentSignature = enabled.joinToString(",") { it.tag }
+        withContext(Dispatchers.Main) { host?.let { showPage(page) } }
+
         for (entry in enabled) {
             val file = repository.fileFor(entry)
             if (!file.isFile) {
@@ -395,10 +413,13 @@ class BorderKeysService :
                         return@collect
                     }
                     // The first emission arrives after loadDictionaries has already run, and
-                    // repeating that work would map every pack a second time for nothing.
+                    // repeating that work would map every pack a second time for nothing. The
+                    // layout is still redrawn once, in case a view was created before that run
+                    // finished building the accent overlays.
                     val first = previous == null
                     previous = signature
                     if (first) {
+                        host?.let { showPage(page) }
                         return@collect
                     }
                     runCatching { loadDictionaries() }
@@ -445,6 +466,9 @@ class BorderKeysService :
                     view.keyboard.hapticEnabled = newPreferences.hapticFeedback
                     view.keyboard.soundEnabled = newPreferences.keySound
                     view.keyboard.spaceCursorEnabled = newPreferences.spaceCursorControl
+                    view.keyboard.holdHintsEnabled = newPreferences.longPressHints
+                    view.keyboard.largeKeyText = newPreferences.largeKeyText
+                    view.keyboard.longPressDelayMillis = newPreferences.longPressMillis.toLong()
                     view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
                     applyQuickActions(view)
                     refreshClipboardChip()
@@ -542,6 +566,9 @@ class BorderKeysService :
         view.keyboard.swipeEnabled = preferences.swipeEnabled
         view.keyboard.soundEnabled = preferences.keySound
         view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
+        view.keyboard.holdHintsEnabled = preferences.longPressHints
+        view.keyboard.largeKeyText = preferences.largeKeyText
+        view.keyboard.longPressDelayMillis = preferences.longPressMillis.toLong()
         view.keyboard.setLayout(composedLayout(alphabeticLayout))
         view.suggestionStrip.listener = this
         view.suggestionStrip.visibleLimit = preferences.suggestionCount
@@ -1260,24 +1287,37 @@ class BorderKeysService :
      * drift the first time a key moved.
      */
     /**
-     * Applies the layout settings that compose rather than replace: the number row, the emoji
-     * key and the globe key.
+     * Applies the layout settings that compose rather than replace: the accent overlays, the
+     * digits on the top row or in a row of their own, the emoji key and the globe key.
      *
      * One place, because the pages are set from four of them and a page that forgot one was how
-     * the number row used to disappear when the symbols page came back.
+     * the number row used to disappear when the symbols page came back. The accent and digit
+     * steps look only at letter keys, so they pass a symbols page through untouched.
      */
     private fun composedLayout(layout: KeyboardLayout): KeyboardLayout {
         var result = layout
+        if (preferences.accentedCharacters && accentOverlays.isNotEmpty()) {
+            result = result.withAccents(accentOverlays, accentSignature)
+        }
+        if (preferences.numberRow) {
+            result = result.withNumberRow()
+        } else {
+            result = result.withTopRowDigits()
+        }
         if (!preferences.emojiKey) {
             result = result.withoutEmojiKey()
         }
         if (!preferences.languageKey) {
             result = result.withoutLanguageKey()
         }
-        if (preferences.numberRow) {
-            result = result.withNumberRow()
-        }
         return result
+    }
+
+    /** The number-and-symbols page the [KeyboardPreferences.symbolsNumberPosition] setting asks for. */
+    private fun symbolsPage(): KeyboardLayout = when (preferences.symbolsNumberPosition) {
+        KeyboardPreferences.SYMBOLS_NUMBER_LEFT -> symbolsNumpadLeftLayout
+        KeyboardPreferences.SYMBOLS_NUMBER_RIGHT -> symbolsNumpadRightLayout
+        else -> symbolsLayout
     }
 
     private fun showPage(next: Int) {
@@ -1285,7 +1325,7 @@ class BorderKeysService :
         // The symbol pages carry an emoji key too, so they compose the same way. Only the
         // numeric keypad is left alone: it has neither a space bar nor room for one.
         val layout = when (next) {
-            PAGE_SYMBOLS -> composedLayout(symbolsLayout)
+            PAGE_SYMBOLS -> composedLayout(symbolsPage())
             PAGE_SYMBOLS_SHIFT -> composedLayout(symbolsShiftLayout)
             PAGE_NUMPAD -> numpadLayout
             else -> composedLayout(alphabeticLayout)
@@ -1311,6 +1351,14 @@ class BorderKeysService :
             -> PAGE_NUMPAD
             else -> PAGE_ALPHABETIC
         }
+    }
+
+    /** The language tag of the input-method subtype the globe key last selected, or "und". */
+    private fun currentSubtypeTag(): String {
+        val manager = getSystemService(Context.INPUT_METHOD_SERVICE)
+            as? android.view.inputmethod.InputMethodManager
+        val tag = manager?.currentInputMethodSubtype?.languageTag
+        return if (tag.isNullOrBlank()) "und" else tag
     }
 
     private fun switchLanguage() {
@@ -1859,16 +1907,13 @@ class BorderKeysService :
         if (!learning.enabled || word.length < MIN_LEARNED_LENGTH) {
             return
         }
-        // The layout being typed on, not the system input-method subtype.
-        //
-        // The subtype is one tag declared in method.xml, and this keyboard's premise is that
-        // several languages are active at once with no switching between them -- so the subtype
-        // said "en-US" for a Romanian word typed on a Romanian layout, and the personal
-        // dictionary displayed that. The layout is at least something the user chose and can
-        // see. It is still not a claim about which language the word belongs to: nothing here
-        // can know that for a word that was typed rather than picked from a suggestion, which
-        // is why the settings screen says "typed on" rather than naming a language.
-        val locale = alphabeticLayout.languageTag
+        // The input-method subtype the globe key last landed on, not a claim about the word's
+        // language. There is one QWERTY layout now -- the accents come from the enabled packs,
+        // not from a per-language layout -- so the subtype is the only thing the user chose
+        // that is visible here. It is still just a tag: nothing on this path can know which
+        // language a *typed* word belongs to when several packs are active at once, which is
+        // why the settings screen says "typed on" rather than naming a language.
+        val locale = currentSubtypeTag()
         val now = System.currentTimeMillis()
         contextWord?.let { learning.recordPair(it, word, now) }
         if (contextWord != null && grandContextWord != null) {
@@ -2608,8 +2653,10 @@ class BorderKeysService :
     }
 
     private companion object {
-        const val DEFAULT_ALPHABETIC_LAYOUT = "qwerty_ro"
+        const val DEFAULT_ALPHABETIC_LAYOUT = "qwerty"
         const val SYMBOLS_LAYOUT = "symbols"
+        const val SYMBOLS_NUMPAD_LEFT_LAYOUT = "symbols_numpad_left"
+        const val SYMBOLS_NUMPAD_RIGHT_LAYOUT = "symbols_numpad_right"
         const val SYMBOLS_SHIFT_LAYOUT = "symbols_shift"
         const val NUMPAD_LAYOUT = "numpad"
 
