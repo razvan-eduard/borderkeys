@@ -16,6 +16,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +26,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,6 +48,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -842,8 +845,13 @@ fun ProcessTextScreen(
                                     ActionIcon(
                                         R.drawable.bk_composer_translate, strings[Keys.COMPOSER_ACTION_TRANSLATE], busy,
                                     ) { translateMenuOpen = true }
-                                    DropdownMenu(translateMenuOpen, onDismissRequest = { translateMenuOpen = false }) {
-                                        for (task in TRANSLATE_TASKS) {
+                                    AssistMenu(
+                                        translateMenuOpen,
+                                        onDismissRequest = { translateMenuOpen = false },
+                                        ringShift = ringShift,
+                                    ) {
+                                        TRANSLATE_TASKS.forEachIndexed { index, task ->
+                                            if (index > 0) AssistMenuDivider()
                                             DropdownMenuItem(
                                                 text = { Text(translateLabel(strings, task)) },
                                                 onClick = { translateMenuOpen = false; runTask(task) },
@@ -855,8 +863,13 @@ fun ProcessTextScreen(
                                     ActionIcon(
                                         R.drawable.bk_composer_tone, strings[Keys.COMPOSER_ACTION_TONE], busy,
                                     ) { toneMenuOpen = true }
-                                    DropdownMenu(toneMenuOpen, onDismissRequest = { toneMenuOpen = false }) {
-                                        for (task in TONE_TASKS) {
+                                    AssistMenu(
+                                        toneMenuOpen,
+                                        onDismissRequest = { toneMenuOpen = false },
+                                        ringShift = ringShift,
+                                    ) {
+                                        TONE_TASKS.forEachIndexed { index, task ->
+                                            if (index > 0) AssistMenuDivider()
                                             DropdownMenuItem(
                                                 text = { Text(toneLabel(strings, task)) },
                                                 onClick = { toneMenuOpen = false; runTask(task) },
@@ -875,8 +888,13 @@ fun ProcessTextScreen(
                                         ActionIcon(
                                             R.drawable.bk_composer_saved, strings[Keys.COMPOSER_ACTION_SAVED], busy,
                                         ) { savedMenuOpen = true }
-                                        DropdownMenu(savedMenuOpen, onDismissRequest = { savedMenuOpen = false }) {
-                                            for (prompt in preferences.savedPrompts) {
+                                        AssistMenu(
+                                            savedMenuOpen,
+                                            onDismissRequest = { savedMenuOpen = false },
+                                            ringShift = ringShift,
+                                        ) {
+                                            preferences.savedPrompts.forEachIndexed { index, prompt ->
+                                                if (index > 0) AssistMenuDivider()
                                                 DropdownMenuItem(
                                                     text = { Text(prompt.name) },
                                                     onClick = {
@@ -1276,6 +1294,10 @@ private fun SwipeUpHint(ringShift: Float, focused: Boolean, modifier: Modifier =
  *  reads as wider inside the same card rather than floating in a wide margin. */
 private val FIELD_SIDE_GAP = 12.dp
 
+private val MENU_CORNER_RADIUS = 14.dp
+private val MENU_SHADOW_ELEVATION = 10.dp
+private val MENU_BORDER_WIDTH = 1.5.dp
+
 /**
  * The copy notch's own width and height. The width is not a free choice: the close button
  * above it is centred in the same 48.dp Material gives every icon button by default with no
@@ -1421,6 +1443,43 @@ private data class Rail(
     val atOriginal: Boolean = false,
 ) {
     val hasHistory: Boolean get() = size > 1
+}
+
+/**
+ * The dropdown a bar action with more than one target opens -- translate into which language,
+ * which register, which saved prompt.
+ *
+ * Not a plain [DropdownMenu]: rounded, dropped well clear of the bar with a real shadow, and
+ * edged with the same moving gradient the box's own ring is drawn in, so a menu the assistant
+ * opens looks like it belongs to the assistant rather than to the platform.
+ */
+@Composable
+private fun AssistMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    ringShift: Float,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        shape = RoundedCornerShape(MENU_CORNER_RADIUS),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 2.dp,
+        shadowElevation = MENU_SHADOW_ELEVATION,
+        border = BorderStroke(MENU_BORDER_WIDTH, ringBrush(ringShift)),
+        content = content,
+    )
+}
+
+/** A hairline between two [AssistMenu] rows -- inset from the border so it does not run into it. */
+@Composable
+private fun AssistMenuDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 12.dp),
+        thickness = Dp.Hairline,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+    )
 }
 
 @Composable
