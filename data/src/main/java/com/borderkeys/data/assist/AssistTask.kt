@@ -87,6 +87,13 @@ enum class AssistTask(
      * than always on the one active model. See [AssistCategory].
      */
     val category: AssistCategory = AssistCategory.WRITE,
+    /**
+     * The fewest words of input this task does anything useful with. Summarising three words is
+     * the three words back; shortening or changing the register of one needs a phrase to work
+     * on. A correction or a translation is worth running on a single word, so most tasks leave
+     * this at 1. The draft box greys the button out below it -- see ProcessTextScreen.
+     */
+    val minWords: Int = 1,
 ) {
     SUMMARISE(
         id = 1,
@@ -94,6 +101,7 @@ enum class AssistTask(
             "Reply with the summary and nothing else.",
         outputRatio = 0.5f,
         minOutputTokens = 48,
+        minWords = 15,
     ),
     REWRITE_FORMAL(
         id = 2,
@@ -103,6 +111,7 @@ enum class AssistTask(
         minOutputTokens = 64,
         isChunkable = true,
         usesRemainingContext = true,
+        minWords = 3,
     ),
     CORRECT(
         id = 3,
@@ -188,6 +197,7 @@ enum class AssistTask(
         minOutputTokens = 64,
         isChunkable = true,
         usesRemainingContext = true,
+        minWords = 3,
     ),
     REWRITE_DIRECT(
         id = 11,
@@ -197,6 +207,7 @@ enum class AssistTask(
         minOutputTokens = 64,
         isChunkable = true,
         usesRemainingContext = true,
+        minWords = 3,
     ),
 
     /**
@@ -215,6 +226,7 @@ enum class AssistTask(
         outputRatio = 0.8f,
         minOutputTokens = 48,
         isChunkable = true,
+        minWords = 5,
     ),
 
     /**

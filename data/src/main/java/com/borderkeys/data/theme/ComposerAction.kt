@@ -32,6 +32,15 @@ enum class ComposerAction(val id: Int) {
     /** The same text in fewer words. Not a summary. */
     SHORTEN(4),
 
+    /** A short summary of the text. Needs enough text to be worth it -- see [AssistTask.minWords]. */
+    SUMMARISE(9),
+
+    /**
+     * Drops everything but the selected span, as a new version -- no model. Shown only while
+     * something is selected: it is the "carry just this part forward" step.
+     */
+    KEEP_SELECTION(10),
+
     /** Opens the prompt input at the bottom of the box. */
     PROMPT(5),
 
@@ -62,7 +71,7 @@ enum class ComposerAction(val id: Int) {
          * button that opens an empty list. It appears the first time one is saved.
          */
         val DEFAULT: List<ComposerAction> = listOf(
-            GRAMMAR, TRANSLATE, TONE, SHORTEN, PROMPT, SHOW_ORIGINAL, INSERT,
+            GRAMMAR, TRANSLATE, TONE, SHORTEN, SUMMARISE, KEEP_SELECTION, PROMPT, SHOW_ORIGINAL, INSERT,
         )
 
         fun fromId(id: Int): ComposerAction? = entries.firstOrNull { it.id == id }

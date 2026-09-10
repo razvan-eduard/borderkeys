@@ -331,22 +331,17 @@ fun ProcessTextScreen(
         }
     }
 
-    fun runTask(task: AssistTask, instruction: String = "") {
-        if (busy || current.isEmpty()) {
-            return
-        }
-        // A real selection in the field means "this part, not the rest": the task is sent only
-        // the selected substring, and its answer is spliced back into exactly that range below.
-        // A bare cursor (collapsed selection) is not a selection -- the whole text is sent then,
-        // the way it always was.
-        //
-        // Grown out to whole words first, unless that has been switched off: a selection that
-        // starts or ends inside a word ("st text este de sel") is not something a model can
-        // translate or correct sensibly, so each end that landed mid-word is pushed out to that
-        // word's edge before anything is sent. The field's own selection is moved to match, so
-        // what will be worked on is what is shown selected.
+    // The span a task will actually be sent -- a real selection grown out to whole words
+    // (unless that has been switched off), or null for "the whole field". One place, because
+    // runTask, keepSelection and the word-count gate all have to agree on what "the selection"
+    // means. A bare cursor (collapsed selection) is not a selection.
+    //
+    // Growing the ends: a selection that starts or ends inside a word ("st text este de sel")
+    // is not something a model can translate or correct sensibly, so each end that landed
+    // mid-word is pushed out to that word's edge.
+    fun resolveSpan(): TextRange? {
         val selection = textFieldValue.selection
-        val span = selection.takeIf {
+        return selection.takeIf {
             !it.collapsed && it.min >= 0 && it.max <= current.length
         }?.let { raw ->
             if (!preferences.composerSnapSelectionToWords) {
@@ -358,11 +353,45 @@ fun ProcessTextScreen(
             while (end < current.length && !current[end].isWhitespace()) end++
             TextRange(start, end)
         }
-        if (span != null && (span.min != selection.min || span.max != selection.max)) {
+    }
+
+    /** The text a task/gate looks at: the [resolveSpan] substring, or the whole field. */
+    fun targetText(): String = resolveSpan()?.let { current.substring(it.min, it.max) } ?: current
+
+    /**
+     * Drops everything but the selection, as a new version -- no model. The "carry just this
+     * part forward" step: after it, Insert and the next action work on the kept span alone.
+     */
+    fun keepSelection() {
+        if (busy) {
+            return
+        }
+        val span = resolveSpan() ?: return
+        val kept = current.substring(span.min, span.max).trim()
+        if (kept.isEmpty() || kept == current) {
+            return
+        }
+        composer.captureBeforeRun(current)
+        composer.addResult(kept)
+        syncFromComposer()
+        textFieldValue = textFieldValue.copy(selection = TextRange(current.length))
+        notice = ""
+    }
+
+    fun runTask(task: AssistTask, instruction: String = "") {
+        if (busy || current.isEmpty()) {
+            return
+        }
+        val span = resolveSpan()
+        // The field's own selection is moved to match the grown span, so what will be worked
+        // on is what is shown selected.
+        if (span != null && (span.min != textFieldValue.selection.min || span.max != textFieldValue.selection.max)) {
             textFieldValue = textFieldValue.copy(selection = span)
         }
         val sent = if (span != null) current.substring(span.min, span.max) else current
-        if (sent.isBlank()) {
+        // Below the task's own floor -- the button that started this is greyed out at the same
+        // threshold, so this catches only a bypass (a menu item, a saved prompt).
+        if (sent.isBlank() || composerWordCount(sent) < task.minWords) {
             return
         }
         composer.captureBeforeRun(current)
@@ -674,6 +703,56 @@ fun ProcessTextScreen(
                                 modifier = Modifier.size(COPY_TAB_ICON_SIZE),
                             )
                         }
+
+                        // A model may be rewriting what's on screen, so what's on screen has to
+                        // stop being editable while it does -- typing into text that is about to
+                        // be replaced is a race the user cannot win. Cut to the field's own
+                        // outline, notch and all: the same shape the border draws, so the "a
+                        // model may touch this" signal covers exactly the thing it is touching.
+                        if (busy) {
+                            val pulse = rememberInfiniteTransition()
+                            val workingAlpha by pulse.animateFloat(
+                                initialValue = 1f,
+                                targetValue = 0.35f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(WORKING_PULSE_MILLIS, easing = LinearEasing),
+                                    repeatMode = RepeatMode.Reverse,
+                                ),
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .clip(fieldShape)
+                                    .background(ringBrush(ringShift, alpha = WORKING_SCRIM_ALPHA))
+                                    .padding(RING_WIDTH)
+                                    .clip(fieldShape)
+                                    .background(
+                                        MaterialTheme.colorScheme.surface.copy(alpha = WORKING_SURFACE_ALPHA),
+                                    ),
+                            ) {
+                                Text(
+                                    // notice is exactly this task's label the whole time busy is
+                                    // true -- runTask is the only place that sets it before this
+                                    // reads it, and nothing touches it again until requestId (and
+                                    // so busy) goes false. Reading it rather than recomputing
+                                    // workingLabel keeps the two from disagreeing about the same run.
+                                    notice,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = workingAlpha),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .padding(horizontal = 24.dp),
+                                )
+                                Button(
+                                    onClick = {
+                                        assist.cancel()
+                                        requestId = -1
+                                        notice = ""
+                                    },
+                                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                                ) { Text(strings[Keys.ASSISTANT_CANCEL]) }
+                            }
+                        }
                     }
 
                     if (rail.size > 1) {
@@ -691,68 +770,6 @@ fun ProcessTextScreen(
                         Explanation(notice)
                     }
                 }
-                // A model may be rewriting what's on screen, so what's on screen has to stop
-                // being editable while it does -- typing into text that is about to be replaced
-                // is a race the user cannot win. The tint is the ring's own gradient at low
-                // alpha, not a fresh colour: the same "a model may touch this" signal the border
-                // already gives, now covering the thing it is actually touching.
-                if (busy) {
-                    val pulse = rememberInfiniteTransition()
-                    val workingAlpha by pulse.animateFloat(
-                        initialValue = 1f,
-                        targetValue = 0.35f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(WORKING_PULSE_MILLIS, easing = LinearEasing),
-                            repeatMode = RepeatMode.Reverse,
-                        ),
-                    )
-                    // Its own frame, the same shape and the same ring -- ringShift, not a
-                    // second animation -- rather than a plain scrim: the border already says
-                    // "a model may touch this" for the box as a whole, and the overlay covering
-                    // what it is actually touching reads as the same event, not two.
-                    val workingShape = RoundedCornerShape(WORKING_CORNER_RADIUS)
-                    Box(
-                        // matchParentSize, not fillMaxSize: fillMaxSize asks for as much room as
-                        // the box's own weight(1f, fill = false) constraint allows -- up to
-                        // heightIn's 480.dp ceiling -- and a Box sizes itself to its largest
-                        // child, so the whole draft box grew to that ceiling the moment a request
-                        // was running, whatever the actual text's own height was. matchParentSize
-                        // is excluded from that sizing pass and instead takes whatever size the
-                        // Column of real content already settled on, which is what this overlay
-                        // is covering and the only size it should ever take.
-                        modifier = Modifier
-                            .matchParentSize()
-                            .padding(WORKING_INSET)
-                            .shadow(elevation = BOX_ELEVATION, shape = workingShape)
-                            .clip(workingShape)
-                            .background(ringBrush(ringShift, alpha = WORKING_SCRIM_ALPHA))
-                            .padding(RING_WIDTH)
-                            .clip(workingShape)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = WORKING_SURFACE_ALPHA)),
-                    ) {
-                        Text(
-                            // notice is exactly this task's label the whole time busy is true --
-                            // runTask is the only place that sets it before this reads it, and
-                            // nothing touches it again until requestId (and so busy) goes false,
-                            // in onAssistResult/onAssistError. Reading it here rather than
-                            // recomputing workingLabel is what keeps the two from being able to
-                            // say two different things about the same running request.
-                            notice,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = workingAlpha),
-                            style = MaterialTheme.typography.headlineSmall,
-                            modifier = Modifier.align(Alignment.Center),
-                        )
-                        Button(
-                            onClick = {
-                                assist.cancel()
-                                requestId = -1
-                                notice = ""
-                            },
-                            modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
-                        ) { Text(strings[Keys.ASSISTANT_CANCEL]) }
-                    }
-                }
-
                 if (offeringSaveName != null) {
                     SavePromptRow(
                         name = offeringSaveName.orEmpty(),
@@ -836,6 +853,10 @@ fun ProcessTextScreen(
                         // INSERT is skipped: it stays the fixed button at the bar's end, because
                         // what it does (Insert vs Copy) already depends on how this screen was
                         // reached in a way a reorderable slot does not fit.
+                        // Words in what an action would actually be sent -- the selection, grown
+                        // to whole words, or the whole field. Below a task's own floor its
+                        // button greys out: summarising three words is the three words back.
+                        val targetWords = composerWordCount(targetText())
                         for (action in ComposerAction.fromIds(preferences.composerBar)) {
                             when (action) {
                                 ComposerAction.GRAMMAR -> ActionIcon(
@@ -861,7 +882,8 @@ fun ProcessTextScreen(
                                 }
                                 ComposerAction.TONE -> Box {
                                     ActionIcon(
-                                        R.drawable.bk_composer_tone, strings[Keys.COMPOSER_ACTION_TONE], busy,
+                                        R.drawable.bk_composer_tone, strings[Keys.COMPOSER_ACTION_TONE],
+                                        busy || targetWords < AssistTask.REWRITE_FORMAL.minWords,
                                     ) { toneMenuOpen = true }
                                     AssistMenu(
                                         toneMenuOpen,
@@ -878,8 +900,19 @@ fun ProcessTextScreen(
                                     }
                                 }
                                 ComposerAction.SHORTEN -> ActionIcon(
-                                    R.drawable.bk_composer_shorten, strings[Keys.COMPOSER_ACTION_SHORTEN], busy,
+                                    R.drawable.bk_composer_shorten, strings[Keys.COMPOSER_ACTION_SHORTEN],
+                                    busy || targetWords < AssistTask.SHORTEN.minWords,
                                 ) { runTask(AssistTask.SHORTEN) }
+                                ComposerAction.SUMMARISE -> ActionIcon(
+                                    R.drawable.bk_composer_summarise, strings[Keys.COMPOSER_ACTION_SUMMARISE],
+                                    busy || targetWords < AssistTask.SUMMARISE.minWords,
+                                ) { runTask(AssistTask.SUMMARISE) }
+                                ComposerAction.KEEP_SELECTION -> if (resolveSpan() != null) {
+                                    ActionIcon(
+                                        R.drawable.bk_composer_crop,
+                                        strings[Keys.COMPOSER_ACTION_KEEP_SELECTION], busy,
+                                    ) { keepSelection() }
+                                }
                                 ComposerAction.PROMPT -> ActionIcon(
                                     R.drawable.bk_composer_prompt, strings[Keys.COMPOSER_ACTION_PROMPT], busy,
                                 ) { promptOpen = !promptOpen }
@@ -1082,14 +1115,6 @@ private val RING_WIDTH = 2.5.dp
 
 /** The drop shadow both the draft box and the working overlay cast under their own frame. */
 private val BOX_ELEVATION = 16.dp
-
-/** The working overlay's own corner radius -- fully rounded, unlike the draft box's
- *  edge-anchored shape, since the overlay floats inside it rather than sitting on a screen edge. */
-private val WORKING_CORNER_RADIUS = 20.dp
-
-/** How far the working overlay's own frame sits in from the draft box's edges, so its shadow
- *  and the draft box's own ring both stay visible rather than overlapping. */
-private val WORKING_INSET = 8.dp
 
 /**
  * A vertical swipe on the draft box shows or hides the keyboard -- the same drag-decides-it
@@ -1482,17 +1507,21 @@ private fun AssistMenuDivider() {
     )
 }
 
+/** Whitespace-separated words in [text] -- the unit the draft box's per-task gate counts in. */
+private fun composerWordCount(text: String): Int =
+    text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
+
 @Composable
-private fun ActionIcon(icon: Int, label: String, busy: Boolean, onClick: () -> Unit) {
+private fun ActionIcon(icon: Int, label: String, disabled: Boolean, onClick: () -> Unit) {
     // What an icon alone left to guessing: "the wand" told you nothing about grammar versus
     // tone versus a saved prompt until you had pressed it once and remembered. The label is the
     // same string the icon used to carry only as a screen reader's contentDescription -- now
     // said once, out loud on the button itself, so the icon's own description is redundant and
     // dropped rather than read twice.
-    val alpha = if (busy) DISABLED_ALPHA else 1f
+    val alpha = if (disabled) DISABLED_ALPHA else 1f
     Column(
         modifier = Modifier
-            .clickable(enabled = !busy, onClick = onClick)
+            .clickable(enabled = !disabled, onClick = onClick)
             .padding(vertical = 4.dp)
             .widthIn(min = 52.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

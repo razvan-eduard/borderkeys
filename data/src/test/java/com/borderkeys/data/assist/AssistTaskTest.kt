@@ -120,6 +120,24 @@ class AssistTaskTest {
     }
 
     @Test
+    fun `the size floors rank the way the tasks do, and only shortening kinds have one`() {
+        // Summarising a handful of words is those words back; a register change or a shorten
+        // needs a phrase. A translation or a correction is worth running on a single word.
+        assertTrue(AssistTask.SUMMARISE.minWords > AssistTask.SHORTEN.minWords)
+        assertTrue(AssistTask.SHORTEN.minWords > AssistTask.REWRITE_FORMAL.minWords)
+        assertEquals(AssistTask.REWRITE_FORMAL.minWords, AssistTask.REWRITE_CASUAL.minWords)
+        assertEquals(AssistTask.REWRITE_FORMAL.minWords, AssistTask.REWRITE_DIRECT.minWords)
+        assertEquals(1, AssistTask.CORRECT.minWords)
+        assertEquals(1, AssistTask.CUSTOM.minWords)
+        for (task in AssistTask.entries) {
+            assertTrue("${task.name}'s floor is below one word", task.minWords >= 1)
+            if (task.name.startsWith("TRANSLATE_")) {
+                assertEquals("${task.name} should run on a single word", 1, task.minWords)
+            }
+        }
+    }
+
+    @Test
     fun `only the translations are their own model category`() {
         val translating = AssistTask.entries.filter { it.category == AssistCategory.TRANSLATE }
         assertEquals(

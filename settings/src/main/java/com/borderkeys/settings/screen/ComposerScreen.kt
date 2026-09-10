@@ -266,6 +266,8 @@ private fun iconFor(action: ComposerAction): Int = when (action) {
     ComposerAction.TRANSLATE -> R.drawable.bk_composer_translate
     ComposerAction.TONE -> R.drawable.bk_composer_tone
     ComposerAction.SHORTEN -> R.drawable.bk_composer_shorten
+    ComposerAction.SUMMARISE -> R.drawable.bk_composer_summarise
+    ComposerAction.KEEP_SELECTION -> R.drawable.bk_composer_crop
     ComposerAction.PROMPT -> R.drawable.bk_composer_prompt
     ComposerAction.SAVED_PROMPTS -> R.drawable.bk_composer_saved
     ComposerAction.SHOW_ORIGINAL -> R.drawable.bk_composer_original
@@ -277,6 +279,8 @@ private fun labelFor(action: ComposerAction): String = when (action) {
     ComposerAction.TRANSLATE -> Keys.COMPOSER_ACTION_TRANSLATE
     ComposerAction.TONE -> Keys.COMPOSER_ACTION_TONE
     ComposerAction.SHORTEN -> Keys.COMPOSER_ACTION_SHORTEN
+    ComposerAction.SUMMARISE -> Keys.COMPOSER_ACTION_SUMMARISE
+    ComposerAction.KEEP_SELECTION -> Keys.COMPOSER_ACTION_KEEP_SELECTION
     ComposerAction.PROMPT -> Keys.COMPOSER_ACTION_PROMPT
     ComposerAction.SAVED_PROMPTS -> Keys.COMPOSER_ACTION_SAVED
     ComposerAction.SHOW_ORIGINAL -> Keys.COMPOSER_ACTION_SHOW_ORIGINAL
