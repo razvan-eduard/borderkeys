@@ -25,6 +25,7 @@ internal object AutoShift {
         autoCapitaliseEnabled: Boolean,
         inputType: Int,
         composingIsEmpty: Boolean,
+        textBeforeCursor: () -> CharSequence? = { null },
         capsMode: () -> Int,
     ): Int {
         if (!autoCapitaliseEnabled) {
@@ -50,8 +51,50 @@ internal object AutoShift {
         if (!composingIsEmpty) {
             return OFF
         }
-        return if (capsMode() != 0) ON else OFF
+        // The platform's own answer is the primary one: it knows the start of a field and the
+        // start of a line, it does not have a 64-character window to see past, and it correctly
+        // holds off on "end." until a space follows the full stop. Only when it says no is the
+        // text checked directly, for the one case it gets wrong -- it stops at the ")" of a ":)"
+        // or the last code point of an emoji and calls that mid-sentence, when a full stop with
+        // only emoji, emoticons and spaces after it is still the end of a sentence.
+        if (capsMode() != 0) {
+            return ON
+        }
+        return if (sentenceEndsBeforeCursor(textBeforeCursor())) ON else OFF
     }
+
+    /**
+     * Whether the text before the cursor ends in a sentence mark followed only by whitespace,
+     * emoji, emoticons and other non-letters -- the case the platform's own check gets wrong.
+     *
+     * By exclusion rather than by a list of what an emoji is: anything that is not sentence
+     * content -- a smiley, an emoji, a bracket, a dash -- is walked past, and only a letter or a
+     * digit stops the walk. A digit in particular, so that "3.14 " is a number rather than a
+     * sentence that ended at the "3". There has to be at least one space after the mark: "end."
+     * with the cursor against the full stop is not a new sentence yet, the same rule the
+     * platform applies.
+     */
+    private fun sentenceEndsBeforeCursor(before: CharSequence?): Boolean {
+        if (before.isNullOrEmpty()) {
+            return false
+        }
+        var sawSpace = false
+        var i = before.length
+        while (i > 0) {
+            val c = before[i - 1]
+            when {
+                c == '\n' -> return true
+                c.isLetterOrDigit() -> return false
+                c in SENTENCE_ENDINGS -> return sawSpace
+                c.isWhitespace() -> sawSpace = true
+            }
+            i--
+        }
+        return false
+    }
+
+    /** The marks that close a sentence: ASCII, the single-character ellipsis, and the CJK set. */
+    private const val SENTENCE_ENDINGS = ".!?…。！？"
 
     private const val OFF = 0
     private const val ON = 1

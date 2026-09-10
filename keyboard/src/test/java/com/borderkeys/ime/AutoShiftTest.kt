@@ -96,4 +96,50 @@ class AutoShiftTest {
             ) { android.text.TextUtils.CAP_MODE_SENTENCES },
         )
     }
+
+    private fun afterText(before: String): Int = AutoShift.stateFor(
+        autoCapitaliseEnabled = true,
+        inputType = sentences,
+        composingIsEmpty = true,
+        textBeforeCursor = { before },
+        capsMode = { 0 },
+    )
+
+    @Test
+    fun `a full stop with only a symbol emoticon after it is still a sentence end`() {
+        assertEquals(1, afterText("asdasd. :) "))
+        assertEquals(1, afterText("Done!! :-) "))
+        assertEquals(1, afterText("what? :')"))
+    }
+
+    @Test
+    fun `a full stop with only an emoji after it is still a sentence end`() {
+        assertEquals(1, afterText("nice. 😀 ")) // grinning face
+        assertEquals(1, afterText("ok. 👍🏽 ")) // thumbs up + skin tone
+        assertEquals(1, afterText("bye. 👋 🙂 ")) // two emoji, space between
+    }
+
+    @Test
+    fun `an emoji or emoticon with no full stop before it is not a sentence end`() {
+        assertEquals(0, afterText("just chatting :) "))
+        assertEquals(0, afterText("a word 😀 "))
+    }
+
+    @Test
+    fun `a digit before the full stop keeps it a number, not a sentence end`() {
+        assertEquals(0, afterText("it is 3.14 "))
+        // The walk stops at the digit before ever reaching the full stop.
+        assertEquals(0, afterText("v2.0 "))
+    }
+
+    @Test
+    fun `a real word after the full stop is left to the platform, which said no`() {
+        assertEquals(0, afterText("one. two "))
+    }
+
+    @Test
+    fun `the cursor jammed against the full stop is not a new sentence yet`() {
+        assertEquals(0, afterText("still typing."))
+        assertEquals(0, afterText("wait.:)"))
+    }
 }

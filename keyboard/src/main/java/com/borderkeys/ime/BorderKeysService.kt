@@ -1828,9 +1828,13 @@ class BorderKeysService :
             autoCapitaliseEnabled = preferences.autoCapitalise,
             inputType = info.inputType,
             composingIsEmpty = composing.isEmpty(),
-        ) {
-            currentInputConnection?.getCursorCapsMode(info.inputType) ?: info.initialCapsMode
-        }
+            capsMode = {
+                currentInputConnection?.getCursorCapsMode(info.inputType) ?: info.initialCapsMode
+            },
+            textBeforeCursor = {
+                currentInputConnection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
+            },
+        )
     }
 
     private fun isWordCharacter(code: Int): Boolean =
