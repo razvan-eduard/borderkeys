@@ -6,10 +6,12 @@
 
 #include <algorithm>
 #include <android/log.h>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <llama.h>
+#include <string>
 #include <vector>
 
 namespace borderkeys {
@@ -43,6 +45,14 @@ constexpr uint32_t kSamplerSeed = 0xB0DE4Eu;
 
 /** See the comment at its one call site, in applyChatTemplate. */
 constexpr const char* kNoThink = "/no_think";
+
+/** Below this many characters of input, cleanResult's "the model failed, hand the text back"
+ *  fallback is not applied: a legitimate rewrite of a few words can be several times their
+ *  length without anything being wrong. */
+constexpr size_t kNarrationFallbackMinInputChars = 40;
+
+/** A length-preserving task answered with more than this many times the input is a failure. */
+constexpr size_t kNarrationFallbackLengthFactor = 4;
 
 /**
  * Tokenised once at load to measure this model's real chars-per-token ratio. Ordinary mixed-case
@@ -178,6 +188,87 @@ std::string stripLeadingLabel(const std::string& text) {
     return rest;
 }
 
+std::string toLower(std::string s) {
+    for (char& c : s) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return s;
+}
+
+/**
+ * Phrases a model only writes when it is describing the task rather than doing it: "The rewritten
+ * sentence is:", "Here is the corrected text:", "The original sentence was:". Lowercased, matched
+ * as substrings. A built-in task's real answer is the transformed text and nothing else, so any
+ * of these appearing in one is the model narrating.
+ */
+const char* const kNarrationMarkers[] = {
+    "the rewritten", "the corrected", "the revised", "the translated",
+    "the shortened", "the summarised", "the summarized", "the original",
+    "here is the", "here's the", "the following is", "the text is rewritten",
+    "rewritten sentence", "rewritten text", "corrected sentence", "corrected text",
+    "the translation is", "the paragraph",
+};
+
+bool looksLikeNarration(const std::string& lower) {
+    for (const char* marker : kNarrationMarkers) {
+        if (lower.find(marker) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * When a model has narrated instead of answering, recovers the answer it buried.
+ *
+ * Two shapes, both seen: the answer as the last thing put in quotes ("...is: \"<answer>\""), and
+ * the answer as everything after the last narration line. Neither is guaranteed -- a model that
+ * narrates is already off the rails -- so this only ever returns something cleaner than it was
+ * handed, never something worse: if it cannot find a plausible answer it returns the text
+ * unchanged and cleanResult's own fallback decides what to do with it.
+ */
+std::string salvageFromNarration(const std::string& text) {
+    const std::string lower = toLower(text);
+    if (!looksLikeNarration(lower)) {
+        return text;
+    }
+    // The last "..." whose closing quote sits at the end, past only trailing spaces and a stop.
+    size_t end = text.size();
+    while (end > 0 && (std::isspace(static_cast<unsigned char>(text[end - 1])) ||
+                       text[end - 1] == '.')) {
+        --end;
+    }
+    if (end >= 2 && text[end - 1] == '"') {
+        const size_t open = text.rfind('"', end - 2);
+        if (open != std::string::npos && open + 1 < end - 1) {
+            const std::string inner = trimmed(text.substr(open + 1, (end - 1) - (open + 1)));
+            if (!inner.empty()) {
+                return inner;
+            }
+        }
+    }
+    // Everything after the last newline that follows a narration marker.
+    size_t afterMarkerLine = std::string::npos;
+    for (const char* marker : kNarrationMarkers) {
+        size_t at = lower.find(marker);
+        while (at != std::string::npos) {
+            const size_t nl = text.find('\n', at);
+            if (nl != std::string::npos &&
+                (afterMarkerLine == std::string::npos || nl > afterMarkerLine)) {
+                afterMarkerLine = nl;
+            }
+            at = lower.find(marker, at + 1);
+        }
+    }
+    if (afterMarkerLine != std::string::npos) {
+        const std::string rest = trimmed(text.substr(afterMarkerLine + 1));
+        if (!rest.empty() && !looksLikeNarration(toLower(rest))) {
+            return rest;
+        }
+    }
+    return text;
+}
+
 /**
  * Turns whatever a small instruction-tuned model actually generated into the answer a task
  * asked for.
@@ -198,7 +289,7 @@ std::string stripLeadingLabel(const std::string& text) {
  * this was added for -- it is the opposite of it -- so the caller passes false for a custom
  * instruction and this leaves that half alone.
  */
-std::string cleanResult(const std::string& raw, bool cleanFormatting) {
+std::string cleanResult(const std::string& raw, const std::string& input, bool cleanFormatting) {
     std::string text = trimmed(raw);
     for (const WrapTag& tag : kReasoningTags) {
         text = stripTag(std::move(text), tag);
@@ -207,6 +298,11 @@ std::string cleanResult(const std::string& raw, bool cleanFormatting) {
     if (!cleanFormatting) {
         return text;
     }
+    // Before the label and fence stripping below: a model that has narrated the task rather than
+    // done it ("The rewritten sentence is: \"...\"") has usually buried the answer inside quotes
+    // or after the narration, and recovering that is what leaves a plain answer for the rest of
+    // this to tidy.
+    text = trimmed(salvageFromNarration(text));
     // Ahead of the fence and quote stripping below: a labelled preamble is often followed by
     // the answer wrapped in one of those too ("Traducere:\n\"...\"", seen verbatim), and the
     // label has to come off first for what is left to be the plain wrapped answer those steps
@@ -231,7 +327,19 @@ std::string cleanResult(const std::string& raw, bool cleanFormatting) {
     // asked for. See unwrapWhole's own doc for the one case this can be wrong about.
     text = unwrapWhole(text, "\"", "\"");
     text = unwrapWhole(text, "'", "'");
-    return trimmed(text);
+    text = trimmed(text);
+
+    // Last resort. If narration survived every attempt above to lift the answer out of it, or
+    // the model answered a length-preserving task with something several times longer than it
+    // was given, the model has failed -- and the text the user selected, handed straight back,
+    // is a better outcome than the model's monologue in place of it. Skipped for a very short
+    // input, where "several times longer" is a handful of words and means nothing.
+    if (input.size() >= kNarrationFallbackMinInputChars &&
+        (looksLikeNarration(toLower(text)) ||
+         text.size() > input.size() * kNarrationFallbackLengthFactor)) {
+        return input;
+    }
+    return text;
 }
 
 /**
@@ -590,7 +698,7 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
         *outTruncated = !endedNaturally;
     }
 
-    *out = cleanResult(*out, cleanFormatting);
+    *out = cleanResult(*out, text, cleanFormatting);
     running_ = false;
     return kOk;
 }
