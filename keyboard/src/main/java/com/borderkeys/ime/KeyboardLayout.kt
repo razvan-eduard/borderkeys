@@ -121,9 +121,9 @@ class KeyboardLayout(
      * The same layout with diacritics merged onto the letter keys' long press.
      *
      * [overlays] maps a lowercase letter to the accented forms of it that an enabled language
-     * pack contributes, already concatenated in enabled order. They go in front of whatever the
-     * base layout put on the key, so the corner hint shows a diacritic rather than a symbol,
-     * and a character already reachable is not added twice.
+     * pack contributes, already concatenated in enabled order. They go *after* whatever the base
+     * layout put on the key, so the corner hint stays the symbol -- the diacritics are behind
+     * it in the long-press strip -- and a character already reachable is not added twice.
      *
      * [signature] distinguishes one merged result from another in the id, because the compiled
      * geometry is cached by id and two accent sets must not answer to the same name.
@@ -144,7 +144,7 @@ class KeyboardLayout(
                     } else {
                         ""
                     }
-                    if (extra.isEmpty()) key else key.withAlternatives(merge(extra, key.alternatives))
+                    if (extra.isEmpty()) key else key.withAlternatives(merge(key.alternatives, extra))
                 },
             )
         }
@@ -195,19 +195,19 @@ class KeyboardLayout(
         if (rows.isEmpty() || id.contains(NUMBER_ROW_SUFFIX)) {
             return this
         }
-        // Digit on the key, and on its long press a bracket or a maths sign -- deliberately not
-        // the "!@#" a physical keyboard shifts to, because every one of those is already on a
-        // letter's long press ("@" on a, "#" on s) and a second copy here is nothing gained.
-        // These ten are the ones the alphabetic layout does not otherwise reach.
-        val digits = DIGIT_ROW.map { (digit, shifted) ->
+        // Just the ten digits, nothing on the long press: a physical keyboard's number row is
+        // digits, and every symbol worth shifting to is already on a letter's long press or a
+        // ?123 page. SECONDARY_ROW sets it apart from the letters visually, the way that row is
+        // set apart on a hardware keyboard.
+        val digits = DIGIT_ROW.map { digit ->
             Key(
                 code = digit.code,
                 label = digit.toString(),
-                alternatives = shifted.toString(),
+                alternatives = "",
                 widthUnits = 1f,
                 // Not a LETTER: a swipe must not pass through a digit, and a digit is never a
                 // substitution target when correcting a typo.
-                flags = KeyFlags.PREVIEW or KeyFlags.HAS_ALTERNATIVES,
+                flags = KeyFlags.PREVIEW or KeyFlags.SECONDARY_ROW,
             )
         }
         return KeyboardLayout(
@@ -237,11 +237,8 @@ class KeyboardLayout(
             return seen.toString()
         }
 
-        /**
-         * The number row: a digit, and on its long press one symbol the alphabetic layout does
-         * not otherwise reach. Not "!@#$%^&*()" -- those are all already a letter's long press.
-         */
-        private val DIGIT_ROW = "1234567890".zip("%[]{}<>|~°")
+        /** The number row: the ten digits, nothing more. */
+        private const val DIGIT_ROW = "1234567890"
         private const val NUMBER_ROW_HEIGHT = 0.8f
 
         /**

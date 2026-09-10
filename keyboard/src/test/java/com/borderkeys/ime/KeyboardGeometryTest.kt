@@ -290,24 +290,16 @@ class KeyboardLayoutTest {
 class NumberRowSymbolsTest {
 
     @Test
-    fun `each digit long-presses to a symbol the letters do not already carry`() {
-        val digits = "1234567890"
+    fun `the number row is digits and nothing else`() {
         val row = KeyboardLayout.fallbackQwerty().withNumberRow().rows[0].keys
-        assertEquals(digits.length, row.size)
-        // The symbols already on a letter's long press, read from the shipped layout.
-        val onTheLetters = Regex("\"alt\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
-            .findAll(java.io.File("src/main/assets/layouts/qwerty.json").readText())
-            .flatMap { it.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\").asSequence() }
-            .toSet()
-        val seen = mutableSetOf<Char>()
-        for ((index, digit) in digits.withIndex()) {
+        assertEquals(10, row.size)
+        for ((index, digit) in "1234567890".withIndex()) {
             assertEquals(digit.toString(), row[index].label)
-            val alt = row[index].alternatives
-            assertEquals("digit $digit should hold exactly one symbol", 1, alt.length)
-            assertTrue("$digit holds a letter or a digit: '$alt'", !alt[0].isLetterOrDigit())
-            assertTrue("$digit duplicates a symbol already on the letters: '$alt'", alt[0] !in onTheLetters)
-            assertTrue("$digit duplicates another digit's symbol: '$alt'", seen.add(alt[0]))
-            assertTrue(KeyFlags.has(row[index].flags, KeyFlags.HAS_ALTERNATIVES))
+            assertEquals("a digit carries no long press", "", row[index].alternatives)
+            assertTrue(!KeyFlags.has(row[index].flags, KeyFlags.HAS_ALTERNATIVES))
+            // Drawn apart from the letters, but still typed as a character rather than a swipe letter.
+            assertTrue(KeyFlags.has(row[index].flags, KeyFlags.SECONDARY_ROW))
+            assertTrue(!KeyFlags.has(row[index].flags, KeyFlags.LETTER))
         }
     }
 
@@ -368,19 +360,28 @@ class NumberRowSymbolsTest {
     }
 
     @Test
-    fun `an accent overlay goes in front of the base symbols and dedupes`() {
-        val base = KeyboardLayout.fallbackQwerty()
-        val a0 = base.rows[1].keys[0]
-        val overlaid = base.withAccents(mapOf('a' to "ăâ"), "ro-RO")
-        val a1 = overlaid.rows[1].keys[0]
-        assertEquals(a0.code, a1.code)
-        assertTrue("the diacritic is not first", a1.alternatives.startsWith("ăâ"))
-        assertTrue(
-            "the base alternate was dropped",
-            a1.alternatives.length >= a0.alternatives.length + 2,
+    fun `an accent overlay sits behind the base symbol and dedupes`() {
+        val base = KeyboardLayout(
+            "t", "t", "und",
+            listOf(
+                KeyboardLayout.Row(
+                    0f, 1f,
+                    listOf(
+                        KeyboardLayout.Key(
+                            'a'.code, "a", "@â", 1f,
+                            KeyFlags.LETTER or KeyFlags.HAS_ALTERNATIVES,
+                        ),
+                        KeyboardLayout.Key('s'.code, "s", "#", 1f, KeyFlags.LETTER),
+                    ),
+                ),
+            ),
         )
+        val overlaid = base.withAccents(mapOf('a' to "ăâ"), "ro-RO")
+        // Symbol first (so the corner hint is the symbol), then the new diacritic, and "â" is
+        // not repeated because it was already reachable.
+        assertEquals("@âă", overlaid.rows[0].keys[0].alternatives)
         // A letter the overlay says nothing about is untouched.
-        assertEquals(base.rows[1].keys[1].alternatives, overlaid.rows[1].keys[1].alternatives)
+        assertEquals("#", overlaid.rows[0].keys[1].alternatives)
         // Idempotent by id suffix: the service recomposes on every setting change.
         assertEquals(overlaid.keyCount, overlaid.withAccents(mapOf('a' to "ă"), "ro-RO").keyCount)
     }

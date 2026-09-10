@@ -66,5 +66,9 @@ object KeyFlags {
     /** Shows a preview bubble on press. Suppressed for modifiers and for space. */
     const val PREVIEW = 1 shl 4
 
+    /** Drawn in the modifier fill without being a modifier: the number row, set apart from the
+     *  letters the way a physical keyboard's function row is. */
+    const val SECONDARY_ROW = 1 shl 5
+
     fun has(flags: Int, flag: Int): Boolean = (flags and flag) != 0
 }

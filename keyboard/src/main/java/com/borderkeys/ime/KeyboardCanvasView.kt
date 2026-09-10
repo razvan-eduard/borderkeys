@@ -612,7 +612,9 @@ class KeyboardCanvasView(
         }
         val radius = paints.keyCornerRadiusPx
         for (index in 0 until geometry.keyCount) {
-            val fill = if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.MODIFIER)) {
+            val fill = if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.MODIFIER) ||
+                KeyFlags.has(geometry.keyFlags[index], KeyFlags.SECONDARY_ROW)
+            ) {
                 paints.modifierKeyFill
             } else {
                 paints.keyFill
@@ -800,6 +802,20 @@ class KeyboardCanvasView(
         }
     }
 
+    /**
+     * An alternative as it should read right now: upper-cased when shift is on and it is a
+     * lowercase letter, so a held "a" offers "Ă" while the board is shifted -- the same rule
+     * [drawLabel] applies to the key face. A symbol has no case and passes straight through.
+     */
+    private fun altCharAt(index: Int, position: Int): Char {
+        val character = geometry.altChars[geometry.altOffset[index] + position]
+        return if (shiftState != ShiftState.OFF && Character.isLowerCase(character)) {
+            Character.toUpperCase(character)
+        } else {
+            character
+        }
+    }
+
     private fun drawAlternatives(canvas: Canvas) {
         val index = alternativesKey
         val count = geometry.altLength[index]
@@ -822,8 +838,9 @@ class KeyboardCanvasView(
                     alternativesTop + alternativesHeight, radius, radius, paints.accent,
                 )
             }
+            shiftedLabel[0] = altCharAt(index, position)
             canvas.drawText(
-                geometry.altChars, geometry.altOffset[index] + position, 1,
+                shiftedLabel, 0, 1,
                 left + alternativesCellWidth / 2f,
                 alternativesTop + alternativesHeight / 2f + paints.labelBaselineOffsetPx,
                 paints.label,
@@ -1140,7 +1157,7 @@ class KeyboardCanvasView(
             updateAlternativesSelection(x)
             val position = alternativesSelection
             if (position >= 0 && position < geometry.altLength[index]) {
-                listener?.onKey(geometry.altChars[geometry.altOffset[index] + position].code, index)
+                listener?.onKey(altCharAt(index, position).code, index)
             }
         }
         dismissAlternatives()
