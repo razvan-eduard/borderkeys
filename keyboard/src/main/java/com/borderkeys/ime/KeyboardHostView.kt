@@ -396,6 +396,13 @@ class KeyboardHostView(
         }
         clipboardPanel.visibility = if (visible) VISIBLE else GONE
         keyboard.visibility = if (visible) GONE else VISIBLE
+        // The history is its own screen with its own back control -- a suggestion strip above it
+        // would be completing text nobody is typing. Restored to the strip on the way out;
+        // an inline-autofill response arriving later puts itself back.
+        suggestionStrip.visibility = if (visible) GONE else VISIBLE
+        if (visible) {
+            inlineSuggestions.visibility = GONE
+        }
         requestLayout()
     }
 

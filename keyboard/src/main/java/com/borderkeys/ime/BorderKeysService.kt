@@ -2342,6 +2342,9 @@ class BorderKeysService :
 
     override fun onClipboardPanelClosed() {
         host?.setClipboardPanelVisible(false)
+        // The strip was hidden while the panel was up; fill it for where the cursor actually is.
+        refreshContextFromEditor()
+        requestSuggestions()
     }
 
     /** Re-reads the history into an open panel, after something in it changed. */

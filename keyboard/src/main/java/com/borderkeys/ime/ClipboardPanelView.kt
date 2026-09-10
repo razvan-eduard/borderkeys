@@ -74,9 +74,16 @@ class ClipboardPanelView(
     private var dragging = false
     private var pressedCard = -1
 
+    /** The finger went down on the pinned header -- an up there without a drag is "close". */
+    private var pressedHeader = false
+
     private var cardHeightPx = 0f
+    private var headerHeightPx = 0f
     private var paddingPx = 0f
     private var contentHeight = 0
+
+    /** "Clipboard", drawn once a frame in the header; a String because [labelFor] draws that way too. */
+    private val title = strings[Keys.SCREEN_CLIPBOARD]
 
     private val cardRect = RectF()
     private val thumbRect = Rect()
@@ -144,42 +151,75 @@ class ClipboardPanelView(
     private fun measureContent() {
         val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else ThemePaints.DEFAULT_ROW_HEIGHT_PX
         cardHeightPx = row * CARD_HEIGHT_ROWS
+        headerHeightPx = row * HEADER_HEIGHT_ROWS
         paddingPx = row * PADDING_ROWS
-        contentHeight = ((cardHeightPx + paddingPx) * entries.size + paddingPx).toInt()
+        contentHeight = (headerHeightPx + (cardHeightPx + paddingPx) * entries.size + paddingPx).toInt()
     }
 
     override fun onDraw(canvas: Canvas) {
         Trace.beginSection("ClipboardPanelView.onDraw")
         try {
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paints.background)
-            // A hairline where the panel begins, and nothing anywhere else.
-            //
-            // The top edge is the only boundary that needs saying: below and to the sides the
-            // panel ends where the screen does, and a frame there would be enclosing nothing.
-            // Drawn whatever the theme says about key borders, because this is not decoration
-            // on an element -- it is the line between two regions that are otherwise the same
-            // colour, and without it the strip and the panel read as one surface.
-            canvas.drawLine(0f, 0f, width.toFloat(), 0f, paints.keyStroke)
+            val viewTop = scrollY.toFloat()
+            canvas.drawRect(0f, viewTop, width.toFloat(), viewTop + height, paints.background)
+
             if (entries.isEmpty()) {
                 canvas.drawText(
                     emptyChars, 0, emptyLength,
-                    width / 2f, height / 2f + paints.secondaryBaselineOffsetPx,
+                    width / 2f, viewTop + (headerHeightPx + height) / 2f + paints.secondaryBaselineOffsetPx,
                     paints.labelSecondary,
                 )
-                return
+            } else {
+                val step = cardHeightPx + paddingPx
+                val cardsTop = headerHeightPx + paddingPx
+                // Only the cards the viewport shows are drawn: a list that scrolls must not get
+                // slower the further down it goes.
+                val first = (((scrollY - cardsTop) / step).toInt()).coerceAtLeast(0)
+                val last = (((scrollY + height - cardsTop) / step).toInt() + 1)
+                    .coerceAtMost(entries.size - 1)
+                for (index in first..last) {
+                    drawCard(canvas, index, cardsTop + step * index)
+                }
+                drawScrollbar(canvas, viewTop)
             }
-            val step = cardHeightPx + paddingPx
-            // Only the cards the viewport actually shows are drawn. With a bounded history this
-            // is a small saving; it is here because a list that scrolls must not get slower the
-            // further down it goes.
-            val first = ((scrollY - paddingPx) / step).toInt().coerceAtLeast(0)
-            val last = (((scrollY + height) / step).toInt() + 1).coerceAtMost(entries.size - 1)
-            for (index in first..last) {
-                drawCard(canvas, index, paddingPx + step * index)
-            }
+
+            // The header last and pinned: drawn at the top of whatever is on screen, not of the
+            // content, so "back" is reachable however far the list is scrolled.
+            drawHeader(canvas, viewTop)
         } finally {
             Trace.endSection()
         }
+    }
+
+    private fun drawHeader(canvas: Canvas, viewTop: Float) {
+        canvas.drawRect(0f, viewTop, width.toFloat(), viewTop + headerHeightPx, paints.modifierKeyFill)
+        canvas.drawLine(0f, viewTop, width.toFloat(), viewTop, paints.keyStroke)
+        canvas.drawLine(
+            0f, viewTop + headerHeightPx, width.toFloat(), viewTop + headerHeightPx, paints.keyStroke,
+        )
+        val midY = viewTop + headerHeightPx / 2f + paints.labelBaselineOffsetPx
+        val previous = paints.label.textAlign
+        paints.label.textAlign = android.graphics.Paint.Align.LEFT
+        canvas.drawText(BACK_GLYPH, paddingPx * 2f, midY, paints.label)
+        canvas.drawText(title, paddingPx * 2f + headerHeightPx * 0.7f, midY, paints.label)
+        paints.label.textAlign = previous
+    }
+
+    private fun drawScrollbar(canvas: Canvas, viewTop: Float) {
+        val viewport = height - headerHeightPx
+        if (contentHeight <= height || viewport <= 0f) {
+            return
+        }
+        val track = viewport - paddingPx * 2f
+        val thumbLength = (track * viewport / contentHeight).coerceAtLeast(paddingPx * 3f)
+        val travel = track - thumbLength
+        val progress = (scrollY.toFloat() / maxScroll()).coerceIn(0f, 1f)
+        val topInView = headerHeightPx + paddingPx + travel * progress
+        val barWidth = paddingPx * 0.6f
+        val left = width - paddingPx - barWidth
+        canvas.drawRoundRect(
+            left, viewTop + topInView, left + barWidth, viewTop + topInView + thumbLength,
+            barWidth / 2f, barWidth / 2f, paints.labelSecondary,
+        )
     }
 
     private fun drawCard(canvas: Canvas, index: Int, top: Float) {
@@ -243,11 +283,11 @@ class ClipboardPanelView(
     }
 
     private fun cardAt(y: Float): Int {
-        if (entries.isEmpty()) {
+        if (entries.isEmpty() || y < headerHeightPx) {
             return -1
         }
         val step = cardHeightPx + paddingPx
-        val index = ((y + scrollY - paddingPx) / step).toInt()
+        val index = ((y + scrollY - headerHeightPx - paddingPx) / step).toInt()
         return if (index in entries.indices) index else -1
     }
 
@@ -260,7 +300,8 @@ class ClipboardPanelView(
                 scroller.forceFinished(true)
                 lastY = event.y
                 dragging = false
-                pressedCard = cardAt(event.y)
+                pressedHeader = event.y < headerHeightPx
+                pressedCard = if (pressedHeader) -1 else cardAt(event.y)
                 invalidate()
                 return true
             }
@@ -269,6 +310,7 @@ class ClipboardPanelView(
                 if (!dragging && kotlin.math.abs(delta) > touchSlop) {
                     dragging = true
                     pressedCard = -1
+                    pressedHeader = false
                     invalidate()
                 }
                 if (dragging) {
@@ -286,6 +328,8 @@ class ClipboardPanelView(
                         0, 0, 0, maxScroll(),
                     )
                     postInvalidateOnAnimation()
+                } else if (pressedHeader && event.y < headerHeightPx) {
+                    listener?.onClipboardPanelClosed()
                 } else {
                     val index = pressedCard
                     if (index >= 0) {
@@ -293,6 +337,7 @@ class ClipboardPanelView(
                     }
                 }
                 pressedCard = -1
+                pressedHeader = false
                 dragging = false
                 velocity?.recycle()
                 velocity = null
@@ -301,6 +346,7 @@ class ClipboardPanelView(
             }
             MotionEvent.ACTION_CANCEL -> {
                 pressedCard = -1
+                pressedHeader = false
                 dragging = false
                 velocity?.recycle()
                 velocity = null
@@ -329,6 +375,12 @@ class ClipboardPanelView(
     }
 
     private companion object {
+        /** The pinned "back" bar, as a fraction of a key row. */
+        const val HEADER_HEIGHT_ROWS = 0.66f
+
+        /** A left-pointing arrow, drawn rather than translated: it is a direction, not a word. */
+        const val BACK_GLYPH = "←"
+
         /** A card is this many key rows tall: enough for two lines of text beside a thumbnail. */
         const val CARD_HEIGHT_ROWS = 0.9f
 
