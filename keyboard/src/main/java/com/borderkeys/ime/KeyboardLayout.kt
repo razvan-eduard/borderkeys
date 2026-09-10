@@ -152,15 +152,14 @@ class KeyboardLayout(
     }
 
     /**
-     * The same layout with a digit on each key of the top letter row's long press.
+     * The same layout with a digit at the front of each key of the top letter row's long press.
      *
-     * For when there is no number row: q holds 1, w holds 2, on to p holds 0, the digit ahead
-     * of any diacritic so it is what the corner shows. With the number row on this is not
-     * applied -- the digits are already a tap away and a second copy on the long press is the
-     * duplication this exists to avoid.
+     * q holds 1, w holds 2, on to p holds 0 -- the digit ahead of any diacritic, so the corner
+     * hint is always the digit and never an accent. Applied whether or not the number row is
+     * shown: the hint stays a plain digit either way, and holding for it costs nothing.
      */
     fun withTopRowDigits(): KeyboardLayout {
-        if (rows.isEmpty() || id.contains(TOP_ROW_DIGITS_SUFFIX) || id.contains(NUMBER_ROW_SUFFIX)) {
+        if (rows.isEmpty() || id.contains(TOP_ROW_DIGITS_SUFFIX)) {
             return this
         }
         val firstLetterRow = rows.indexOfFirst { row -> row.keys.any { KeyFlags.has(it.flags, KeyFlags.LETTER) } }

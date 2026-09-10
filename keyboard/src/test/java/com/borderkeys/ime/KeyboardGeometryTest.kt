@@ -344,19 +344,35 @@ class NumberRowSymbolsTest {
     }
 
     @Test
-    fun `without a number row the top letter row holds the digits`() {
-        val digits = KeyboardLayout.fallbackQwerty().withTopRowDigits()
-        // q..p carry 1..0, the digit first so the corner hint shows it.
-        assertEquals('1', digits.rows[0].keys[0].alternatives.first())
-        assertEquals('0', digits.rows[0].keys[9].alternatives.first())
-        // The second and third rows are untouched.
-        assertEquals(
-            KeyboardLayout.fallbackQwerty().rows[1].keys.map { it.code },
-            digits.rows[1].keys.map { it.code },
+    fun `the top letter row always hints its digit, never an accent`() {
+        // A layout whose top row has a diacritic on a letter, the way the accent overlays leave it.
+        val base = KeyboardLayout(
+            "t", "t", "und",
+            listOf(
+                KeyboardLayout.Row(
+                    0f, 1f,
+                    "qwertyuiop".mapIndexed { i, c ->
+                        KeyboardLayout.Key(
+                            c.code, c.toString(), if (c == 't') "ț" else "", 1f,
+                            KeyFlags.LETTER or KeyFlags.PREVIEW,
+                        )
+                    },
+                ),
+                KeyboardLayout.Row(0f, 1f, listOf(KeyboardLayout.Key('a'.code, "a", "@", 1f, KeyFlags.LETTER))),
+            ),
         )
-        // Mutually exclusive with the number row: applying digits after it is a no-op.
-        val withRow = KeyboardLayout.fallbackQwerty().withNumberRow()
-        assertEquals(withRow.keyCount, withRow.withTopRowDigits().keyCount)
+        val digited = base.withTopRowDigits()
+        // q..p hint 1..0 -- the digit at the front, ahead of any accent.
+        assertEquals('1', digited.rows[0].keys[0].alternatives.first())
+        assertEquals("5ț", digited.rows[0].keys[4].alternatives)
+        assertEquals('0', digited.rows[0].keys[9].alternatives.first())
+        // The row below is untouched.
+        assertEquals("@", digited.rows[1].keys[0].alternatives)
+        // Idempotent, and it still applies once a number row has been prepended in front of it.
+        assertEquals(digited.keyCount, digited.withTopRowDigits().keyCount)
+        val stacked = base.withTopRowDigits().withNumberRow()
+        assertEquals("5ț", stacked.rows[1].keys[4].alternatives)
+        assertEquals("", stacked.rows[0].keys[4].alternatives)
     }
 
     @Test
