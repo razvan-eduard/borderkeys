@@ -195,10 +195,10 @@ class KeyboardLayout(
         if (rows.isEmpty() || id.contains(NUMBER_ROW_SUFFIX)) {
             return this
         }
-        // Digit on the key, the symbol a physical keyboard puts above it on the long press.
-        // That pairing is the one people already know, and it keeps the digits off the letter
-        // row -- where the long press belongs to the diacritics, and where a digit competing
-        // with "t" for "t" would be a collision rather than a convenience.
+        // Digit on the key, and on its long press a bracket or a maths sign -- deliberately not
+        // the "!@#" a physical keyboard shifts to, because every one of those is already on a
+        // letter's long press ("@" on a, "#" on s) and a second copy here is nothing gained.
+        // These ten are the ones the alphabetic layout does not otherwise reach.
         val digits = DIGIT_ROW.map { (digit, shifted) ->
             Key(
                 code = digit.code,
@@ -237,8 +237,11 @@ class KeyboardLayout(
             return seen.toString()
         }
 
-        /** The top row of a physical keyboard, unshifted and shifted. */
-        private val DIGIT_ROW = "1234567890".zip("!@#$%^&*()")
+        /**
+         * The number row: a digit, and on its long press one symbol the alphabetic layout does
+         * not otherwise reach. Not "!@#$%^&*()" -- those are all already a letter's long press.
+         */
+        private val DIGIT_ROW = "1234567890".zip("%[]{}<>|~°")
         private const val NUMBER_ROW_HEIGHT = 0.8f
 
         /**

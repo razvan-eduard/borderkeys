@@ -290,15 +290,24 @@ class KeyboardLayoutTest {
 class NumberRowSymbolsTest {
 
     @Test
-    fun `each digit carries the symbol a physical keyboard puts above it`() {
-        val digits = KeyboardLayout.fallbackQwerty().withNumberRow().rows[0].keys
-        val expected = "1234567890".zip("!@#$%^&*()")
-        assertEquals(expected.size, digits.size)
-        for ((index, pair) in expected.withIndex()) {
-            val (digit, shifted) = pair
-            assertEquals(digit.toString(), digits[index].label)
-            assertEquals(shifted.toString(), digits[index].alternatives)
-            assertTrue(KeyFlags.has(digits[index].flags, KeyFlags.HAS_ALTERNATIVES))
+    fun `each digit long-presses to a symbol the letters do not already carry`() {
+        val digits = "1234567890"
+        val row = KeyboardLayout.fallbackQwerty().withNumberRow().rows[0].keys
+        assertEquals(digits.length, row.size)
+        // The symbols already on a letter's long press, read from the shipped layout.
+        val onTheLetters = Regex("\"alt\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
+            .findAll(java.io.File("src/main/assets/layouts/qwerty.json").readText())
+            .flatMap { it.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\").asSequence() }
+            .toSet()
+        val seen = mutableSetOf<Char>()
+        for ((index, digit) in digits.withIndex()) {
+            assertEquals(digit.toString(), row[index].label)
+            val alt = row[index].alternatives
+            assertEquals("digit $digit should hold exactly one symbol", 1, alt.length)
+            assertTrue("$digit holds a letter or a digit: '$alt'", !alt[0].isLetterOrDigit())
+            assertTrue("$digit duplicates a symbol already on the letters: '$alt'", alt[0] !in onTheLetters)
+            assertTrue("$digit duplicates another digit's symbol: '$alt'", seen.add(alt[0]))
+            assertTrue(KeyFlags.has(row[index].flags, KeyFlags.HAS_ALTERNATIVES))
         }
     }
 
@@ -320,9 +329,14 @@ class NumberRowSymbolsTest {
                 value.all { it.code < 0x80 },
             )
         }
-        // Every bundled dictionary has a matching accent overlay, and every overlay maps a
-        // single plain letter to a string of accented forms -- nothing ASCII on the value side.
-        for (tag in listOf("ro-RO", "en-US", "es-ES", "fr-FR", "de-DE", "it-IT")) {
+        // Each bundled language with diacritics of its own has an accent overlay, and every
+        // overlay maps a single plain letter to accented forms -- nothing ASCII on the value
+        // side, and (English has no accents of its own) no en-US overlay at all.
+        assertTrue(
+            "en-US should carry no accents -- English has none of its own",
+            !java.io.File("src/main/assets/accents/en-US.json").exists(),
+        )
+        for (tag in listOf("ro-RO", "es-ES", "fr-FR", "de-DE", "it-IT")) {
             val overlay = java.io.File("src/main/assets/accents/$tag.json")
             assertTrue("accents/$tag.json is missing", overlay.isFile)
             val pairs = Regex("\"(\\w)\"\\s*:\\s*\"([^\"]+)\"").findAll(overlay.readText())
