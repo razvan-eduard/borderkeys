@@ -1299,10 +1299,15 @@ class BorderKeysService :
         if (preferences.accentedCharacters && accentOverlays.isNotEmpty()) {
             result = result.withAccents(accentOverlays, accentSignature)
         }
-        // Always: the top letter row's corner hint is its digit, never an accent. The accents
-        // sit behind it in the long-press strip. The number row, when shown, is an extra row
-        // on top of that -- not a change to what the letters hint.
-        result = result.withTopRowDigits()
+        // The top letter row's corner hint is a digit or a symbol, never an accent -- the
+        // accents sit behind it in the long-press strip. Digits when there is no number row;
+        // once the number row has taken them, the row shifts to a layer of symbols instead,
+        // the way a hardware number row does.
+        result = if (preferences.numberRow) {
+            result.withTopRowSymbols()
+        } else {
+            result.withTopRowDigits()
+        }
         if (preferences.numberRow) {
             result = result.withNumberRow()
         }

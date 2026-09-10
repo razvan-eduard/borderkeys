@@ -343,36 +343,50 @@ class NumberRowSymbolsTest {
         }
     }
 
-    @Test
-    fun `the top letter row always hints its digit, never an accent`() {
-        // A layout whose top row has a diacritic on a letter, the way the accent overlays leave it.
-        val base = KeyboardLayout(
-            "t", "t", "und",
-            listOf(
-                KeyboardLayout.Row(
-                    0f, 1f,
-                    "qwertyuiop".mapIndexed { i, c ->
-                        KeyboardLayout.Key(
-                            c.code, c.toString(), if (c == 't') "ț" else "", 1f,
-                            KeyFlags.LETTER or KeyFlags.PREVIEW,
-                        )
-                    },
-                ),
-                KeyboardLayout.Row(0f, 1f, listOf(KeyboardLayout.Key('a'.code, "a", "@", 1f, KeyFlags.LETTER))),
+    /** q..p, each with the diacritic an accent overlay would have left on it, and one row below. */
+    private fun topRowWithAccentOnT(): KeyboardLayout = KeyboardLayout(
+        "t", "t", "und",
+        listOf(
+            KeyboardLayout.Row(
+                0f, 1f,
+                "qwertyuiop".map { c ->
+                    KeyboardLayout.Key(
+                        c.code, c.toString(), if (c == 't') "ț" else "", 1f,
+                        KeyFlags.LETTER or KeyFlags.PREVIEW,
+                    )
+                },
             ),
-        )
-        val digited = base.withTopRowDigits()
-        // q..p hint 1..0 -- the digit at the front, ahead of any accent.
+            KeyboardLayout.Row(0f, 1f, listOf(KeyboardLayout.Key('a'.code, "a", "@", 1f, KeyFlags.LETTER))),
+        ),
+    )
+
+    @Test
+    fun `without a number row the top letter row hints its digit, never an accent`() {
+        val digited = topRowWithAccentOnT().withTopRowDigits()
         assertEquals('1', digited.rows[0].keys[0].alternatives.first())
-        assertEquals("5ț", digited.rows[0].keys[4].alternatives)
+        assertEquals("5ț", digited.rows[0].keys[4].alternatives) // digit first, accent behind
         assertEquals('0', digited.rows[0].keys[9].alternatives.first())
-        // The row below is untouched.
-        assertEquals("@", digited.rows[1].keys[0].alternatives)
-        // Idempotent, and it still applies once a number row has been prepended in front of it.
-        assertEquals(digited.keyCount, digited.withTopRowDigits().keyCount)
-        val stacked = base.withTopRowDigits().withNumberRow()
-        assertEquals("5ț", stacked.rows[1].keys[4].alternatives)
-        assertEquals("", stacked.rows[0].keys[4].alternatives)
+        assertEquals("@", digited.rows[1].keys[0].alternatives)   // the row below is untouched
+        assertEquals(digited.keyCount, digited.withTopRowDigits().keyCount) // idempotent
+    }
+
+    @Test
+    fun `with a number row the top letter row hints a symbol, never a digit or an accent`() {
+        val symbolled = topRowWithAccentOnT().withTopRowSymbols()
+        // q..p hint % ^ ~ | [ ] < > { } -- the symbol at the front, ahead of any accent.
+        assertEquals("%^~|[]<>{}", symbolled.rows[0].keys.joinToString("") { it.alternatives.first().toString() })
+        assertEquals("[ț", symbolled.rows[0].keys[4].alternatives)
+        for (key in symbolled.rows[0].keys) {
+            assertTrue("a top-row hint is a digit", !key.alternatives.first().isDigit())
+            assertTrue("a top-row hint is a letter", !key.alternatives.first().isLetter())
+        }
+        assertEquals("@", symbolled.rows[1].keys[0].alternatives)
+        assertEquals(symbolled.keyCount, symbolled.withTopRowSymbols().keyCount)
+        // The digits still come from the prepended number row, which carries no hint of its own.
+        val stacked = symbolled.withNumberRow()
+        assertEquals("1", stacked.rows[0].keys[0].label)
+        assertEquals("", stacked.rows[0].keys[0].alternatives)
+        assertEquals("[ț", stacked.rows[1].keys[4].alternatives)
     }
 
     @Test

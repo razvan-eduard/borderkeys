@@ -154,19 +154,33 @@ class KeyboardLayout(
     /**
      * The same layout with a digit at the front of each key of the top letter row's long press.
      *
-     * q holds 1, w holds 2, on to p holds 0 -- the digit ahead of any diacritic, so the corner
-     * hint is always the digit and never an accent. Applied whether or not the number row is
-     * shown: the hint stays a plain digit either way, and holding for it costs nothing.
+     * For when there is no number row: q holds 1, w holds 2, on to p holds 0 -- the digit
+     * ahead of any diacritic, so the corner hint is the digit and never an accent. With the
+     * number row shown the digits are a tap away and [withTopRowSymbols] takes this slot.
      */
-    fun withTopRowDigits(): KeyboardLayout {
-        if (rows.isEmpty() || id.contains(TOP_ROW_DIGITS_SUFFIX)) {
+    fun withTopRowDigits(): KeyboardLayout =
+        withTopRow(TOP_ROW_DIGITS, TOP_ROW_DIGITS_SUFFIX)
+
+    /**
+     * The same layout with a symbol at the front of each key of the top letter row's long press.
+     *
+     * For when the number row is shown, and it has taken the digits: q holds %, w holds ^, on
+     * to p holds }. Ten symbols the rest of the alphabetic layout does not reach, ahead of any
+     * diacritic so the corner hint is the symbol. Matches the row a hardware keyboard's number
+     * keys shift to.
+     */
+    fun withTopRowSymbols(): KeyboardLayout =
+        withTopRow(TOP_ROW_SYMBOLS, TOP_ROW_SYMBOLS_SUFFIX)
+
+    private fun withTopRow(hints: String, suffix: String): KeyboardLayout {
+        if (rows.isEmpty() || id.contains(suffix)) {
             return this
         }
         val firstLetterRow = rows.indexOfFirst { row -> row.keys.any { KeyFlags.has(it.flags, KeyFlags.LETTER) } }
         if (firstLetterRow < 0) {
             return this
         }
-        var digit = 0
+        var next = 0
         val rewritten = rows.mapIndexed { index, row ->
             if (index != firstLetterRow) {
                 return@mapIndexed row
@@ -174,17 +188,17 @@ class KeyboardLayout(
             Row(
                 row.indent, row.heightScale,
                 row.keys.map { key ->
-                    if (!KeyFlags.has(key.flags, KeyFlags.LETTER)) {
+                    if (!KeyFlags.has(key.flags, KeyFlags.LETTER) || next >= hints.length) {
                         key
                     } else {
-                        val character = ('0' + (digit + 1) % 10)
-                        digit++
-                        key.withAlternatives(merge(character.toString(), key.alternatives))
+                        val hint = hints[next]
+                        next++
+                        key.withAlternatives(merge(hint.toString(), key.alternatives))
                     }
                 },
             )
         }
-        return KeyboardLayout("$id$TOP_ROW_DIGITS_SUFFIX", label, languageTag, rewritten)
+        return KeyboardLayout("$id$suffix", label, languageTag, rewritten)
     }
 
     private fun Key.withAlternatives(alternatives: String): Key =
@@ -221,6 +235,13 @@ class KeyboardLayout(
         private const val NUMBER_ROW_SUFFIX = "+num"
         private const val ACCENTS_SUFFIX = "+acc"
         private const val TOP_ROW_DIGITS_SUFFIX = "+dig"
+        private const val TOP_ROW_SYMBOLS_SUFFIX = "+sym"
+
+        /** q..p when there is no number row. */
+        private const val TOP_ROW_DIGITS = "1234567890"
+
+        /** q..p when the number row has the digits: ten symbols the layout does not otherwise reach. */
+        private const val TOP_ROW_SYMBOLS = "%^~|[]<>{}"
 
         private const val NO_EMOJI_SUFFIX = "-noemoji"
         private const val NO_LANGUAGE_SUFFIX = "-noglobe"
