@@ -52,6 +52,9 @@ fun PlacementPreview(
     appearance: KeyboardAppearance,
     modifier: Modifier = Modifier,
     layoutId: String = "qwerty",
+    /** Which of [KeyboardPreferences.placementFor]'s two answers to preview -- the tab picked
+     *  on screen, not necessarily which way the phone is actually held right now. */
+    isLandscape: Boolean = false,
 ) {
     val context = LocalContext.current
     val strings = LocalStrings.current
@@ -88,6 +91,7 @@ fun PlacementPreview(
             },
             update = { frame ->
                 val view = frame.getChildAt(0) as KeyboardHostView
+                val placement = preferences.placementFor(isLandscape)
                 val resolvedTheme = ThemeMode.resolve(theme, lightTheme, preferences, context)
                 val effectiveTheme = if (preferences.followSystemColors) {
                     DynamicColors.apply(resolvedTheme, context)
@@ -95,7 +99,7 @@ fun PlacementPreview(
                     resolvedTheme
                 }
                 paints.update(
-                    effectiveTheme, context.resources.displayMetrics, preferences.heightScale,
+                    effectiveTheme, context.resources.displayMetrics, placement.heightScale,
                     context,
                 )
                 // The same three settings the input method composes, in the same order, so a
@@ -116,10 +120,10 @@ fun PlacementPreview(
 
                 val density = context.resources.displayMetrics.density
                 view.setPlacement(
-                    preferences.positionMode,
-                    preferences.widthScale,
-                    (preferences.bottomOffsetDp * density).toInt(),
-                    (preferences.horizontalOffsetDp * density).toInt(),
+                    placement.positionMode,
+                    placement.widthScale,
+                    (placement.bottomOffsetDp * density).toInt(),
+                    (placement.horizontalOffsetDp * density).toInt(),
                 )
                 view.onThemeChanged()
                 view.requestLayout()

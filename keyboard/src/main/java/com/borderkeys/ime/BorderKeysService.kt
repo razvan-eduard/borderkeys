@@ -120,6 +120,16 @@ class BorderKeysService :
         return if (preferences.followSystemColors) DynamicColors.apply(chosen, this) else chosen
     }
 
+    /** Whether the phone is rotated into landscape right now -- the one read every placement
+     *  and sizing call goes through, so "which orientation's values apply" is answered once. */
+    private fun isLandscape(): Boolean =
+        resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    /** [preferences]' height, width, position and offsets for the orientation the phone is in
+     *  right now. See [KeyboardPreferences.placementFor]. */
+    private fun activePlacement(): com.borderkeys.data.theme.KeyboardPlacement =
+        preferences.placementFor(isLandscape())
+
     private var alphabeticLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var symbolsLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var symbolsNumpadLeftLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
@@ -462,7 +472,8 @@ class BorderKeysService :
                     resolvedTheme
                 }
                 val changed = paints.update(
-                    effectiveTheme, resources.displayMetrics, newPreferences.heightScale,
+                    effectiveTheme, resources.displayMetrics,
+                    newPreferences.placementFor(isLandscape()).heightScale,
                     this@BorderKeysService,
                 )
                 host?.let { view ->
@@ -567,7 +578,7 @@ class BorderKeysService :
     override fun onCreateInputView(): View {
         // Built in code. LayoutInflater would parse XML and reflect to construct three views,
         // every time the keyboard is shown in a new editor.
-        paints.update(effectiveTheme(), resources.displayMetrics, preferences.heightScale, this)
+        paints.update(effectiveTheme(), resources.displayMetrics, activePlacement().heightScale, this)
         val view = KeyboardHostView(this, paints, strings)
         applyPlacement(view, preferences)
         view.keyboard.listener = this
@@ -692,7 +703,8 @@ class BorderKeysService :
      *  changed -- see [wallpaperChangedReceiver]'s own doc for the one case that needs this. */
     private fun refreshTheme() {
         val view = host ?: return
-        val changed = paints.update(effectiveTheme(), resources.displayMetrics, preferences.heightScale, this)
+        val changed =
+            paints.update(effectiveTheme(), resources.displayMetrics, activePlacement().heightScale, this)
         view.fullWidthBackground = effectiveTheme().fullWidthBackground
         if (changed) {
             view.keyboard.onThemeChanged()
@@ -700,6 +712,23 @@ class BorderKeysService :
             view.onThemeChanged()
             view.relayoutForNewMetrics()
         }
+    }
+
+    /**
+     * Picks up the other orientation's size and position when the phone rotates.
+     *
+     * A `Service` -- which an input method is one of, under the framework's own IME window --
+     * is not torn down on a configuration change the way an `Activity` can be, so nothing else
+     * would ever notice the phone turned: [onCreateInputView] reads [activePlacement] fresh,
+     * but only runs for a view that did not already exist. Re-applies placement and the row
+     * height everything else already reacts to, the same pair [refreshTheme] uses for a theme
+     * that changed with nothing in the store changing.
+     */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val view = host ?: return
+        applyPlacement(view, preferences)
+        refreshTheme()
     }
 
     override fun onDestroy() {
@@ -730,16 +759,19 @@ class BorderKeysService :
      * keyboard on the other side right now, with the hand that cannot reach the settings key.
      */
     private fun moveKeyboardToOtherSide() {
+        val landscape = isLandscape()
         updatePreferences { current ->
-            when (current.positionMode) {
-                KeyboardPreferences.MODE_ONE_HANDED_LEFT ->
-                    current.copy(positionMode = KeyboardPreferences.MODE_ONE_HANDED_RIGHT)
-                KeyboardPreferences.MODE_ONE_HANDED_RIGHT ->
-                    current.copy(positionMode = KeyboardPreferences.MODE_ONE_HANDED_LEFT)
-                KeyboardPreferences.MODE_FLOATING ->
-                    // Floating has no side, so the arrow mirrors the offset instead.
-                    current.copy(horizontalOffsetDp = -current.horizontalOffsetDp)
-                else -> current
+            current.withPlacement(landscape) { placement ->
+                when (placement.positionMode) {
+                    KeyboardPreferences.MODE_ONE_HANDED_LEFT ->
+                        placement.copy(positionMode = KeyboardPreferences.MODE_ONE_HANDED_RIGHT)
+                    KeyboardPreferences.MODE_ONE_HANDED_RIGHT ->
+                        placement.copy(positionMode = KeyboardPreferences.MODE_ONE_HANDED_LEFT)
+                    KeyboardPreferences.MODE_FLOATING ->
+                        // Floating has no side, so the arrow mirrors the offset instead.
+                        placement.copy(horizontalOffsetDp = -placement.horizontalOffsetDp)
+                    else -> placement
+                }
             }
         }
     }
@@ -771,13 +803,14 @@ class BorderKeysService :
 
     private fun applyPlacement(view: KeyboardHostView, settings: KeyboardPreferences) {
         val density = resources.displayMetrics.density
+        val placement = settings.placementFor(isLandscape())
         view.edgeArrows = settings.edgeArrows
         applyBlur(settings)
         view.setPlacement(
-            settings.positionMode,
-            settings.widthScale,
-            (settings.bottomOffsetDp * density).toInt(),
-            (settings.horizontalOffsetDp * density).toInt(),
+            placement.positionMode,
+            placement.widthScale,
+            (placement.bottomOffsetDp * density).toInt(),
+            (placement.horizontalOffsetDp * density).toInt(),
         )
     }
 
@@ -1462,8 +1495,8 @@ class BorderKeysService :
     override fun onStartResize() {
         val view = host ?: return
         view.showQuickSettings(false)
-        draggedHeight = preferences.heightScale
-        draggedWidth = preferences.widthScale
+        draggedHeight = activePlacement().heightScale
+        draggedWidth = activePlacement().widthScale
         view.heightScaleForDrag = draggedHeight
         view.resizing = true
     }
@@ -1484,7 +1517,8 @@ class BorderKeysService :
         }
         // withPositionMode rather than copy: leaving the dock for the first time also narrows the
         // keyboard, or the mode changes nothing visible and reads as broken.
-        updatePreferences { it.withPositionMode(mode) }
+        val landscape = isLandscape()
+        updatePreferences { it.withPositionMode(mode, landscape) }
     }
 
     override fun onNumberRowChanged(enabled: Boolean) =
@@ -2157,22 +2191,27 @@ class BorderKeysService :
         draggedWidth = width.coerceIn(KeyboardPreferences.MIN_WIDTH_SCALE, 1f)
         view.heightScaleForDrag = draggedHeight
         paints.update(effectiveTheme(), resources.displayMetrics, draggedHeight, this)
+        val placement = activePlacement()
         view.setPlacement(
-            preferences.positionMode,
+            placement.positionMode,
             draggedWidth,
-            (preferences.bottomOffsetDp * resources.displayMetrics.density).toInt(),
-            (preferences.horizontalOffsetDp * resources.displayMetrics.density).toInt(),
+            (placement.bottomOffsetDp * resources.displayMetrics.density).toInt(),
+            (placement.horizontalOffsetDp * resources.displayMetrics.density).toInt(),
         )
         view.relayoutForNewMetrics()
     }
 
-    /** Writes the size the finger stopped at, once. */
+    /** Writes the size the finger stopped at, once, to whichever orientation was on screen
+     *  while it was dragged. */
     private fun commitResize() {
         val height = draggedHeight
         val width = draggedWidth
+        val landscape = isLandscape()
         scope.launch {
             DataGraph.themes.updatePreferences {
-                it.copy(heightScale = height, widthScale = width)
+                it.withPlacement(landscape) { placement ->
+                    placement.copy(heightScale = height, widthScale = width)
+                }
             }
         }
     }

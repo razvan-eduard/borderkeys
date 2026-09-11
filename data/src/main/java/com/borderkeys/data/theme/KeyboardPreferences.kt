@@ -164,6 +164,15 @@ data class KeyboardPreferences(
     val bottomOffsetDp: Float = 0f,
     /** Horizontal offset from centre, in dp. Floating mode only. */
     val horizontalOffsetDp: Float = 0f,
+    /** The gap between the two clusters at [MODE_SPLIT], in dp. Unused otherwise. */
+    val splitGapDp: Float = 80f,
+
+    /**
+     * Landscape's own height, width, position, offsets and split gap -- everything above this
+     * field, kept for portrait. See [KeyboardPlacement]'s own doc for why portrait stayed flat
+     * instead of moving in here alongside it.
+     */
+    val landscape: KeyboardPlacement = KeyboardPlacement(),
 
     /**
      * Whether the empty strip beside a narrowed keyboard offers an arrow to move it across.
@@ -513,7 +522,7 @@ data class KeyboardPreferences(
         // settings through.
         heightScale = heightScale.coerceIn(MIN_HEIGHT_SCALE, MAX_HEIGHT_SCALE),
         widthScale = widthScale.coerceIn(MIN_WIDTH_SCALE, 1f),
-        positionMode = if (positionMode in MODE_DOCKED..MODE_FLOATING) positionMode else MODE_DOCKED,
+        positionMode = if (positionMode in MODE_DOCKED..MODE_SPLIT) positionMode else MODE_DOCKED,
         symbolsNumberPosition = if (symbolsNumberPosition in SYMBOLS_NUMBER_TOP..SYMBOLS_NUMBER_RIGHT) {
             symbolsNumberPosition
         } else {
@@ -528,6 +537,8 @@ data class KeyboardPreferences(
         },
         bottomOffsetDp = bottomOffsetDp.coerceIn(0f, MAX_BOTTOM_OFFSET_DP),
         horizontalOffsetDp = horizontalOffsetDp.coerceIn(-160f, 160f),
+        splitGapDp = splitGapDp.coerceIn(MIN_SPLIT_GAP_DP, MAX_SPLIT_GAP_DP),
+        landscape = landscape.sanitised(),
         // A language code, not free text. Bounded so a corrupt file cannot carry an arbitrarily
         // long string into every lookup; an unknown code resolves to English anyway.
         uiLanguage = uiLanguage.take(MAX_LANGUAGE_TAG),
@@ -576,7 +587,41 @@ data class KeyboardPreferences(
         get() = positionMode == MODE_ONE_HANDED_LEFT || positionMode == MODE_ONE_HANDED_RIGHT
 
     /**
-     * Moves to [mode], narrowing the keyboard the first time it leaves the dock.
+     * The size/position values [isLandscape] selects -- portrait's own flat fields, packed into
+     * the same shape [landscape] already is, or [landscape] itself. One place that answers
+     * "which orientation reads which fields", read by the service placing the real keyboard and
+     * by the settings screen previewing either tab.
+     */
+    fun placementFor(isLandscape: Boolean): KeyboardPlacement = if (isLandscape) {
+        landscape
+    } else {
+        KeyboardPlacement(heightScale, widthScale, positionMode, bottomOffsetDp, horizontalOffsetDp, splitGapDp)
+    }
+
+    /** [transform] applied to whichever orientation's placement [isLandscape] selects, written
+     *  back to portrait's flat fields or to [landscape] -- the other half of [placementFor]. */
+    fun withPlacement(
+        isLandscape: Boolean,
+        transform: (KeyboardPlacement) -> KeyboardPlacement,
+    ): KeyboardPreferences {
+        val updated = transform(placementFor(isLandscape))
+        return if (isLandscape) {
+            copy(landscape = updated)
+        } else {
+            copy(
+                heightScale = updated.heightScale,
+                widthScale = updated.widthScale,
+                positionMode = updated.positionMode,
+                bottomOffsetDp = updated.bottomOffsetDp,
+                horizontalOffsetDp = updated.horizontalOffsetDp,
+                splitGapDp = updated.splitGapDp,
+            )
+        }
+    }
+
+    /**
+     * Moves [isLandscape]'s placement to [mode], narrowing the keyboard the first time it
+     * leaves the dock.
      *
      * Without the narrowing, choosing "one-handed" while the width is still 100% changes nothing
      * at all: the mode is set, the keyboard is pushed to a side it already fills, and the
@@ -584,20 +629,21 @@ data class KeyboardPreferences(
      * thumb can cross, and every later change is left alone -- a user who has already set 70% or
      * deliberately gone back to 100% keeps what they chose.
      */
-    fun withPositionMode(mode: Int): KeyboardPreferences {
-        // "Effectively full width" rather than exactly 1, because the resize handles leave
-        // whatever the finger stopped at -- 0.99 after a drag to the edge is a keyboard the
-        // user thinks is full width, and it should still narrow when they go one-handed.
-        val narrowing = positionMode == MODE_DOCKED && mode != MODE_DOCKED &&
-            widthScale >= NEARLY_FULL_WIDTH
-        // The width survives the move. It is one value across every mode now that the resize
-        // handles honour it in the dock as well, so docking is a change of position and
-        // nothing else; a keyboard that is too narrow is widened by dragging its edge.
-        return copy(
-            positionMode = mode,
-            widthScale = if (narrowing) ONE_HANDED_WIDTH_SCALE else widthScale,
-        )
-    }
+    fun withPositionMode(mode: Int, isLandscape: Boolean = false): KeyboardPreferences =
+        withPlacement(isLandscape) { placement ->
+            // "Effectively full width" rather than exactly 1, because the resize handles leave
+            // whatever the finger stopped at -- 0.99 after a drag to the edge is a keyboard the
+            // user thinks is full width, and it should still narrow when they go one-handed.
+            val narrowing = placement.positionMode == MODE_DOCKED && mode != MODE_DOCKED &&
+                placement.widthScale >= NEARLY_FULL_WIDTH
+            // The width survives the move. It is one value across every mode now that the resize
+            // handles honour it in the dock as well, so docking is a change of position and
+            // nothing else; a keyboard that is too narrow is widened by dragging its edge.
+            placement.copy(
+                positionMode = mode,
+                widthScale = if (narrowing) ONE_HANDED_WIDTH_SCALE else placement.widthScale,
+            )
+        }
 
     companion object {
         /** Full width, flush with the bottom edge. What a keyboard normally is. */
@@ -614,6 +660,9 @@ data class KeyboardPreferences(
 
         /** Lifted off the bottom edge and movable, for a large screen or a split view. */
         const val MODE_FLOATING = 3
+
+        /** Two key clusters, one at each edge, with a gap between them -- see [splitGapDp]. */
+        const val MODE_SPLIT = 4
 
         /**
          * Several repetitions before a word or phrase leads. For someone who writes about many
@@ -815,6 +864,11 @@ data class KeyboardPreferences(
         const val MIN_HEIGHT_SCALE = 0.65f
         const val MAX_HEIGHT_SCALE = 1.6f
         const val MIN_WIDTH_SCALE = 0.55f
+
+        /** Narrow enough to still read as two clusters, wide enough that the gap always fits
+         *  inside even the narrowest allowed width. */
+        const val MIN_SPLIT_GAP_DP = 24f
+        const val MAX_SPLIT_GAP_DP = 320f
 
         /**
          * The width the keyboard takes the first time it leaves the dock.
