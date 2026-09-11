@@ -186,6 +186,7 @@
   "clipboard_unpin": "Lösen",
   "clipboard_weeks": "%s Wochen",
   "common_about": "Über",
+  "common_number": "%s",
   "common_reset_to_default": "Auf Standard zurücksetzen",
   "common_reset_to_defaults": "Auf Standard zurücksetzen",
   "common_reset_to_defaults_note": "Setzt jede Einstellung auf diesem Bildschirm auf ihren Ausgangswert zurück. Nichts außerhalb dieses Bildschirms ändert sich.",

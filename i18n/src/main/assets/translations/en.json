@@ -186,6 +186,7 @@
   "clipboard_unpin": "Unpin",
   "clipboard_weeks": "%s weeks",
   "common_about": "About",
+  "common_number": "%s",
   "common_reset_to_default": "Reset to default",
   "common_reset_to_defaults": "Reset to defaults",
   "common_reset_to_defaults_note": "Puts every setting on this screen back to what it started as. Nothing outside this screen changes.",

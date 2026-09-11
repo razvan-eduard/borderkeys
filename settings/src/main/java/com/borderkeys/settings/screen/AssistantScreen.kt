@@ -23,7 +23,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,6 +41,7 @@ import com.borderkeys.data.DataGraph
 import androidx.compose.material3.FilterChip
 import com.borderkeys.data.assist.KnownAssistModels
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LinkedText
@@ -221,42 +221,25 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
-            Text(
-                "%.2f".format(preferences.assistTemperature),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-            Slider(
+            DefaultableSlider(
+                label = strings.getString(Keys.COMMON_NUMBER, "%.2f".format(preferences.assistTemperature)),
                 value = preferences.assistTemperature,
-                valueRange = KeyboardPreferences.MIN_ASSIST_TEMPERATURE..
+                range = KeyboardPreferences.MIN_ASSIST_TEMPERATURE..
                     KeyboardPreferences.MAX_ASSIST_TEMPERATURE,
-                onValueChange = { value ->
-                    updatePreferences { it.copy(assistTemperature = value) }
-                },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            )
+                default = KeyboardPreferences.DEFAULT_ASSIST_TEMPERATURE,
+            ) { value -> updatePreferences { it.copy(assistTemperature = value) } }
             Explanation(strings[Keys.ASSISTANT_TEMPERATURE_NOTE])
             Text(
                 strings[Keys.ASSISTANT_TOP_P],
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
-            Text(
-                "%.2f".format(preferences.assistTopP),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-            Slider(
+            DefaultableSlider(
+                label = strings.getString(Keys.COMMON_NUMBER, "%.2f".format(preferences.assistTopP)),
                 value = preferences.assistTopP,
-                valueRange = KeyboardPreferences.MIN_ASSIST_TOP_P..
-                    KeyboardPreferences.MAX_ASSIST_TOP_P,
-                onValueChange = { value ->
-                    updatePreferences { it.copy(assistTopP = value) }
-                },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            )
+                range = KeyboardPreferences.MIN_ASSIST_TOP_P..KeyboardPreferences.MAX_ASSIST_TOP_P,
+                default = KeyboardPreferences.DEFAULT_ASSIST_TOP_P,
+            ) { value -> updatePreferences { it.copy(assistTopP = value) } }
             Explanation(strings[Keys.ASSISTANT_TOP_P_NOTE])
             Button(
                 onClick = {

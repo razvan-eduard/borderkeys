@@ -15,7 +15,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SuggestionStripPreview
@@ -78,22 +78,14 @@ fun TypingScreen(modifier: Modifier = Modifier) {
         }
         SettingsSectionCard(strings[Keys.CORRECTIONS_HOW_MANY_SUGGESTIONS]) {
             SuggestionStripPreview(appearance, Modifier.padding(vertical = 8.dp))
-            Text(
-                strings.getString(Keys.CORRECTIONS_AT_A_TIME, preferences.suggestionCount),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-            Slider(
+            DefaultableSlider(
+                label = strings.getString(Keys.CORRECTIONS_AT_A_TIME, preferences.suggestionCount),
                 value = preferences.suggestionCount.toFloat(),
-                valueRange = KeyboardPreferences.MIN_SUGGESTIONS.toFloat()..
+                range = KeyboardPreferences.MIN_SUGGESTIONS.toFloat()..
                     KeyboardPreferences.MAX_SUGGESTIONS.toFloat(),
+                default = KeyboardPreferences.DEFAULT_SUGGESTIONS.toFloat(),
                 steps = KeyboardPreferences.MAX_SUGGESTIONS - KeyboardPreferences.MIN_SUGGESTIONS - 1,
-                onValueChange = { value ->
-                    update { it.copy(suggestionCount = value.toInt()) }
-                },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            )
+            ) { value -> update { it.copy(suggestionCount = value.toInt()) } }
             Explanation(
                 strings[Keys.CORRECTIONS_THE_STRIP_IS_A_FIXED_WIDTH],
             )
@@ -151,24 +143,16 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
-            Text(
-                strings.getString(
+            DefaultableSlider(
+                label = strings.getString(
                     Keys.CORRECTIONS_TIMES_THE_DEFAULT,
                     "%.1f".format(preferences.correctionStrictness),
                 ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-            Slider(
                 value = preferences.correctionStrictness,
-                valueRange = KeyboardPreferences.MIN_CORRECTION_STRICTNESS..
+                range = KeyboardPreferences.MIN_CORRECTION_STRICTNESS..
                     KeyboardPreferences.MAX_CORRECTION_STRICTNESS,
-                onValueChange = { value ->
-                    update { it.copy(correctionStrictness = value) }
-                },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            )
+                default = KeyboardPreferences.DEFAULT_CORRECTION_STRICTNESS,
+            ) { value -> update { it.copy(correctionStrictness = value) } }
             Explanation(
                 strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS_NOTE],
             )
@@ -185,23 +169,15 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
-            Text(
-                strings.getString(Keys.CORRECTIONS_LETTERS_OR_MORE, preferences.minCorrectionLength),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-            Slider(
+            DefaultableSlider(
+                label = strings.getString(Keys.CORRECTIONS_LETTERS_OR_MORE, preferences.minCorrectionLength),
                 value = preferences.minCorrectionLength.toFloat(),
-                valueRange = KeyboardPreferences.MIN_CORRECTION_LENGTH.toFloat()..
+                range = KeyboardPreferences.MIN_CORRECTION_LENGTH.toFloat()..
                     KeyboardPreferences.MAX_CORRECTION_LENGTH.toFloat(),
+                default = 3f,
                 steps = KeyboardPreferences.MAX_CORRECTION_LENGTH -
                     KeyboardPreferences.MIN_CORRECTION_LENGTH - 1,
-                onValueChange = { value ->
-                    update { it.copy(minCorrectionLength = value.toInt()) }
-                },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            )
+            ) { value -> update { it.copy(minCorrectionLength = value.toInt()) } }
             Explanation(
                 strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH_NOTE],
             )
@@ -223,20 +199,12 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             ) { value -> update { it.copy(swipeEnabled = value) } }
         }
         SettingsSectionCard(strings[Keys.SWIPE_THE_TRAIL]) {
-            Text(
-                strings.getString(Keys.SWIPE_WIDTH_DP, theme.swipeTrailWidthDp.toInt()),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-            Slider(
+            DefaultableSlider(
+                label = strings.getString(Keys.SWIPE_WIDTH_DP, theme.swipeTrailWidthDp.toInt()),
                 value = theme.swipeTrailWidthDp.coerceIn(1f, 24f),
-                valueRange = 1f..24f,
-                onValueChange = { value ->
-                    scope.launch { repository.updateTheme { it.copy(swipeTrailWidthDp = value) } }
-                },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            )
+                range = 1f..24f,
+                default = 4f,
+            ) { value -> scope.launch { repository.updateTheme { it.copy(swipeTrailWidthDp = value) } } }
             Explanation(strings[Keys.SWIPE_THE_COLOUR_IS_ON_THE_THEME])
         }
         SettingsSectionCard(strings[Keys.SWIPE_TRY_IT_HERE]) {

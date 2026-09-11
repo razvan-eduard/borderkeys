@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.SettingsSectionCard
@@ -107,6 +107,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
                 ),
                 steps = KeyboardPreferences.HISTORY_SIZE_STEPS,
                 current = preferences.clipboardMaxEntries,
+                default = 60,
             ) { value ->
                 scope.launch {
                     themes.updatePreferences { it.copy(clipboardMaxEntries = value) }
@@ -120,6 +121,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
                 label = formatRetention(strings, preferences.clipboardRetentionMinutes),
                 steps = KeyboardPreferences.RETENTION_STEPS,
                 current = preferences.clipboardRetentionMinutes,
+                default = 60,
             ) { value ->
                 scope.launch {
                     themes.updatePreferences { it.copy(clipboardRetentionMinutes = value) }
@@ -189,19 +191,14 @@ private fun StepSlider(
     label: String,
     steps: List<Int>,
     current: Int,
+    default: Int,
     onPick: (Int) -> Unit,
 ) {
-    Text(
-        label,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 20.dp),
-    )
-    Slider(
+    DefaultableSlider(
+        label = label,
         value = KeyboardPreferences.nearestStep(steps, current).toFloat(),
-        valueRange = 0f..(steps.size - 1).toFloat(),
+        range = 0f..(steps.size - 1).toFloat(),
+        default = KeyboardPreferences.nearestStep(steps, default).toFloat(),
         steps = (steps.size - 2).coerceAtLeast(0),
-        onValueChange = { value -> onPick(steps[value.toInt().coerceIn(steps.indices)]) },
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-    )
+    ) { value -> onPick(steps[value.toInt().coerceIn(steps.indices)]) }
 }

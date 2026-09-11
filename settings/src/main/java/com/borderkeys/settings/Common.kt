@@ -186,6 +186,9 @@ fun DefaultableSlider(
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     default: Float,
+    /** Discrete stops between the ends, the same meaning Compose's own `Slider.steps` has --
+     *  0 for a continuous drag, passed through by the two callers stepping over a fixed list. */
+    steps: Int = 0,
     onChange: (Float) -> Unit,
 ) {
     val strings = LocalStrings.current
@@ -211,6 +214,7 @@ fun DefaultableSlider(
         Slider(
             value = value.coerceIn(range),
             valueRange = range,
+            steps = steps,
             onValueChange = onChange,
             modifier = Modifier.fillMaxWidth(),
         )

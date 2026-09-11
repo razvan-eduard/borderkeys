@@ -20,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.Screen
 import com.borderkeys.settings.SettingsSectionCard
@@ -142,30 +142,20 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 checked = preferences.numericKeypad,
             ) { value -> update { it.copy(numericKeypad = value) } }
 
-            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
                 Text(
                     strings[Keys.LAYOUT_LONG_PRESS_DURATION],
                     style = MaterialTheme.typography.bodyLarge,
                 )
-                Text(
-                    strings.getString(Keys.LAYOUT_LONG_PRESS_MS, preferences.longPressMillis),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Slider(
-                    value = preferences.longPressMillis.toFloat().coerceIn(
-                        KeyboardPreferences.MIN_LONG_PRESS_MILLIS.toFloat(),
-                        KeyboardPreferences.MAX_LONG_PRESS_MILLIS.toFloat(),
-                    ),
-                    valueRange = KeyboardPreferences.MIN_LONG_PRESS_MILLIS.toFloat()..
-                        KeyboardPreferences.MAX_LONG_PRESS_MILLIS.toFloat(),
-                    steps = 10,
-                    onValueChange = { value ->
-                        update { it.copy(longPressMillis = value.toInt()) }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
             }
+            DefaultableSlider(
+                label = strings.getString(Keys.LAYOUT_LONG_PRESS_MS, preferences.longPressMillis),
+                value = preferences.longPressMillis.toFloat(),
+                range = KeyboardPreferences.MIN_LONG_PRESS_MILLIS.toFloat()..
+                    KeyboardPreferences.MAX_LONG_PRESS_MILLIS.toFloat(),
+                default = KeyboardPreferences.DEFAULT_LONG_PRESS_MILLIS.toFloat(),
+                steps = 10,
+            ) { value -> update { it.copy(longPressMillis = value.toInt()) } }
         }
 
         SettingsSectionCard(strings[Keys.LAYOUT_LAYOUTS_ON_THIS_KEYBOARD]) {

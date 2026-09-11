@@ -19,7 +19,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,6 +40,7 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.predict.LanguagePackInspector
+import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
@@ -334,18 +334,12 @@ private fun PackRow(
                 )
             },
         )
-        Text(
-            strings.getString(Keys.LANGUAGES_WEIGHT, "%.2f".format(pack.weight)),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-        Slider(
+        DefaultableSlider(
+            label = strings.getString(Keys.LANGUAGES_WEIGHT, "%.2f".format(pack.weight)),
             value = pack.weight.coerceIn(0.05f, 4f),
-            valueRange = 0.05f..4f,
-            onValueChange = { scope.launch { repository.setWeight(pack.id, it) } },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-        )
+            range = 0.05f..4f,
+            default = 1f,
+        ) { value -> scope.launch { repository.setWeight(pack.id, value) } }
         TextButton(
             onClick = { scope.launch { repository.remove(pack) } },
             modifier = Modifier.padding(horizontal = 12.dp),

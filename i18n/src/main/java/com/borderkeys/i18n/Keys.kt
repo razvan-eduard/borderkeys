@@ -200,6 +200,7 @@ object Keys {
     const val CLIPBOARD_UNPIN = "clipboard_unpin"
     const val CLIPBOARD_WEEKS = "clipboard_weeks"
     const val COMMON_ABOUT = "common_about"
+    const val COMMON_NUMBER = "common_number"
     const val COMMON_RESET_TO_DEFAULT = "common_reset_to_default"
     const val COMMON_RESET_TO_DEFAULTS = "common_reset_to_defaults"
     const val COMMON_RESET_TO_DEFAULTS_NOTE = "common_reset_to_defaults_note"

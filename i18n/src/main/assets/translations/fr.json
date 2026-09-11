@@ -186,6 +186,7 @@
   "clipboard_unpin": "Désépingler",
   "clipboard_weeks": "%s semaines",
   "common_about": "À propos",
+  "common_number": "%s",
   "common_reset_to_default": "Réinitialiser la valeur par défaut",
   "common_reset_to_defaults": "Rétablir les valeurs par défaut",
   "common_reset_to_defaults_note": "Remet chaque réglage de cet écran à ce qu'il était au départ. Rien en dehors de cet écran ne change.",
