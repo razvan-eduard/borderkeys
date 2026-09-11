@@ -720,30 +720,28 @@ class KeyboardCanvasView(
         if (!holdHintsEnabled) {
             return
         }
-        val right = geometry.keyRight[index]
-        val hintX = right - (right - geometry.keyLeft[index]) * HINT_INSET_FRACTION
-        val hintY = geometry.keyTop[index] + paints.secondaryBaselineOffsetPx * HINT_Y_FACTOR
+        // An invisible box in the key's own top-right corner, its right and top edges exactly
+        // the key's own -- not inset from them by some separate gap value. The box is sized
+        // bigger than the widest character it ever has to hold (see hintCellHalfWidthPx's own
+        // doc), so the box's own size is what keeps a hint off the corner it sits in, the way
+        // padding keeps a view's content off a container's edge.
+        val hintX = geometry.keyRight[index] - paints.hintCellHalfWidthPx
+        val hintY = geometry.keyTop[index] + paints.hintCellTopInsetPx
         if (geometry.altLength[index] > 0) {
-            // A little larger than the rest of labelSecondary's own uses (the suggestion strip,
-            // the clipboard panel) -- this is the one place it has to be read at a glance while
-            // a finger is already coming down near it, not just glanced at while reading.
-            val base = paints.labelSecondary.textSize
-            paints.labelSecondary.textSize = base * HINT_TEXT_SCALE
             canvas.drawText(
                 geometry.altChars, geometry.altOffset[index], 1, hintX, hintY,
-                paints.labelSecondary,
+                paints.hint,
             )
-            paints.labelSecondary.textSize = base
             return
         }
         if (!holdsAMenu(geometry.keyCode[index])) {
             return
         }
-        val radius = paints.labelSecondary.textSize * HINT_DOT_RADIUS_FRACTION
+        val radius = paints.hint.textSize * HINT_DOT_RADIUS_FRACTION
         val gap = radius * 3f
-        val centreY = hintY - paints.secondaryBaselineOffsetPx
+        val centreY = hintY - paints.hint.textSize * HINT_DOT_CENTRE_FRACTION
         for (dot in -1..1) {
-            canvas.drawCircle(hintX + dot * gap, centreY, radius, paints.labelSecondary)
+            canvas.drawCircle(hintX + dot * gap, centreY, radius, paints.hint)
         }
     }
 
@@ -1327,18 +1325,12 @@ class KeyboardCanvasView(
         /** How much [largeKeyText] enlarges the theme's label size. */
         private const val LARGE_KEY_TEXT_SCALE = 1.28f
 
-        /** Where the corner hint sits, as a fraction of the key's width in from its right edge. */
-        // Both nudged in from the bare corner, on the diagonal towards the key's own centre --
-        // a hint sitting exactly in the corner read as clipped by the key's rounded corner
-        // itself on some themes, and was easy to miss reaching for on the first try.
-        private const val HINT_INSET_FRACTION = 0.30f
-        private const val HINT_Y_FACTOR = 2.8f
-
-        /** How much bigger the corner hint's letter is than labelSecondary's own text size. */
-        private const val HINT_TEXT_SCALE = 1.25f
-
-        /** A hint dot's radius, as a fraction of the secondary label size. */
+        /** A hint dot's radius, as a fraction of [ThemePaints.hint]'s own text size. */
         private const val HINT_DOT_RADIUS_FRACTION = 0.09f
+
+        /** How far the three-dot cluster's centre sits above the hint box's baseline, as a
+         *  fraction of [ThemePaints.hint]'s text size -- roughly a glyph's own vertical centre. */
+        private const val HINT_DOT_CENTRE_FRACTION = 0.35f
 
         /** The lock light's radius and inset, as fractions of the shift key's own width/height. */
         private const val LED_RADIUS_FRACTION = 0.08f

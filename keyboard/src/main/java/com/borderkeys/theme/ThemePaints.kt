@@ -68,6 +68,33 @@ class ThemePaints {
     val labelTyped: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val swipeTrail: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
+    /**
+     * A key's corner hint -- the character a long press would type, or the "more here" dots --
+     * drawn at its own size rather than [labelSecondary]'s, which several other views share
+     * unchanged. See [hintCellHalfWidthPx] for how it is kept off the key's own edge.
+     */
+    val hint: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    private var hintCellHalfWidth: Float = 0f
+    private var hintCellTopInset: Float = 0f
+
+    /**
+     * Half the width of the invisible box a corner hint is centred inside of.
+     *
+     * The box's own right edge is the key's right edge -- there is no separate gap constant
+     * added on top. The box is deliberately bigger than the widest glyph it ever has to hold
+     * (every symbol, digit and accent used as a hint, probed in [update]), so its size *is*
+     * the gap: a bigger box pushes every hint further from its corner, a smaller one lets them
+     * sit closer, and there is exactly one number ([HINT_CELL_MARGIN]) that does it everywhere
+     * at once, the way padding on a container does.
+     */
+    val hintCellHalfWidthPx: Float
+        get() = hintCellHalfWidth
+
+    /** Same idea vertically: the box's top edge is the key's own top edge. */
+    val hintCellTopInsetPx: Float
+        get() = hintCellTopInset
+
     var keyCornerRadiusPx: Float = 0f
         private set
     var keyGapPx: Float = 0f
@@ -131,6 +158,8 @@ class ThemePaints {
         label.typeface = Typeface.DEFAULT
         labelSecondary.textAlign = Paint.Align.CENTER
         labelSecondary.typeface = Typeface.DEFAULT
+        hint.textAlign = Paint.Align.CENTER
+        hint.typeface = Typeface.DEFAULT
         accentLabel.textAlign = Paint.Align.CENTER
         accentLabel.typeface = Typeface.DEFAULT
         labelTyped.textAlign = Paint.Align.CENTER
@@ -223,6 +252,12 @@ class ThemePaints {
         // The hint character on a long-press key, at two thirds the size. Fixed ratio rather
         // than a second theme field: it is a typographic relationship, not a preference.
         labelSecondary.textSize = theme.labelTextSizeSp * newScaledDensity * 0.62f
+        hint.color = theme.secondaryTextColor
+        // A quarter larger again than labelSecondary's own hint-sized text -- it is the one
+        // place that size is read at a glance while a finger is already coming down near it,
+        // not just glanced at while reading, the way the suggestion strip or the clipboard
+        // panel are.
+        hint.textSize = labelSecondary.textSize * HINT_TEXT_SCALE
         // Set after label, whose size and colour they borrow.
         accentLabel.textSize = label.textSize
         labelTyped.color = theme.textColor
@@ -242,6 +277,18 @@ class ThemePaints {
         labelBaselineOffset = -(fontMetrics.ascent + fontMetrics.descent) / 2f
         labelSecondary.getFontMetrics(fontMetrics)
         secondaryBaselineOffset = -(fontMetrics.ascent + fontMetrics.descent) / 2f
+
+        // The widest single character this ever draws as a hint, measured rather than guessed:
+        // a digit, the widest of the number-row symbols, and the widest accented letter any
+        // bundled language's overlay can put on a key. HINT_CELL_MARGIN is what turns that
+        // into the box -- see hintCellHalfWidthPx's own doc.
+        var widestHintGlyph = 0f
+        for (probe in HINT_WIDTH_PROBE) {
+            widestHintGlyph = maxOf(widestHintGlyph, hint.measureText(probe, 0, 1))
+        }
+        hintCellHalfWidth = maxOf(widestHintGlyph, hint.textSize) / 2f * HINT_CELL_MARGIN
+        hint.getFontMetrics(fontMetrics)
+        hintCellTopInset = -fontMetrics.ascent * HINT_CELL_MARGIN
 
         return true
     }
@@ -276,5 +323,24 @@ class ThemePaints {
          */
         private const val SUGGESTION_ROW_DEFAULT_PX = 150f
         private const val SUGGESTION_ROW_HEIGHT_FRACTION = 0.78f
+
+        /** How much bigger [hint] reads than [labelSecondary]'s own text size. */
+        private const val HINT_TEXT_SCALE = 1.25f
+
+        /**
+         * How much bigger the hint's invisible box is than the widest glyph it has to hold.
+         * 1.0 would be the tightest fit that never clips; this is the one number that sets how
+         * far every hint sits from its key's corner -- see [hintCellHalfWidthPx]'s own doc.
+         */
+        private const val HINT_CELL_MARGIN = 1.3f
+
+        /**
+         * Single characters wide enough to matter: a digit, the widest of the number-row
+         * symbols, and the widest accented letter any bundled language's overlay puts on a
+         * key. Not every hint character -- just the ones likely to set the maximum.
+         */
+        private val HINT_WIDTH_PROBE = listOf(
+            "0", "%", "@", "}", "œ", "æ", "ß", "ñ", "î",
+        )
     }
 }
