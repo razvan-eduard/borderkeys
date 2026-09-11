@@ -608,11 +608,30 @@ class KeyboardHostView(
         }
         if (fullWidthBackground) {
             paints.backgroundPainter.draw(canvas, 0f, 0f, width.toFloat(), bottom)
+            drawOutline(canvas, 0f, width.toFloat(), bottom)
             return
         }
         val contentWidth = (width * widthScale).toInt().coerceAtLeast(1)
         val left = contentLeft(width, contentWidth).toFloat()
         paints.backgroundPainter.draw(canvas, left, 0f, left + contentWidth, bottom)
+        drawOutline(canvas, left, left + contentWidth, bottom)
+    }
+
+    /**
+     * The "outline the keys" setting's other half: a hairline framing the whole keyboard --
+     * suggestions and all -- rather than each key's own edge, which [KeyboardCanvasView]
+     * already draws for itself. Top always; bottom only once the keyboard is lifted clear of
+     * the screen's own bottom edge, where there is an edge for it to mark apart from.
+     */
+    private fun drawOutline(canvas: android.graphics.Canvas, left: Float, right: Float, bottom: Float) {
+        if (!paints.showKeyBorders) {
+            return
+        }
+        val half = paints.keyStroke.strokeWidth / 2f
+        canvas.drawLine(left, half, right, half, paints.keyStroke)
+        if (bottomOffsetPx > 0) {
+            canvas.drawLine(left, bottom - half, right, bottom - half, paints.keyStroke)
+        }
     }
 
     /**

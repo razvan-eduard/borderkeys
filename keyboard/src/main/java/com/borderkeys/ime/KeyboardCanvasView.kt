@@ -144,17 +144,6 @@ class KeyboardCanvasView(
             }
         }
 
-    /** Whether the outline's bottom line is drawn -- see [BorderKeysService.applyPlacement]'s
-     *  own doc for why it is off whenever the keyboard is flush against the screen's edge. */
-    var bottomBorderEnabled: Boolean = true
-        set(value) {
-            if (field != value) {
-                field = value
-                backgroundValid = false
-                invalidate()
-            }
-        }
-
     private fun longPressDelayFor(index: Int): Long =
         if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.REPEATABLE)) {
             minOf(longPressDelayMillis, LONG_PRESS_MILLIS)
@@ -620,15 +609,6 @@ class KeyboardCanvasView(
     private fun drawStatic(canvas: Canvas, viewWidth: Float, viewHeight: Float) {
         if (drawsBackground) {
             paints.backgroundPainter.draw(canvas, viewWidth, viewHeight)
-        }
-        if (paints.showKeyBorders) {
-            // The same outline the keys draw, said once more for the surface they sit on: a
-            // hairline where the key area begins and, when there is an edge to mark, ends.
-            val half = paints.keyStroke.strokeWidth / 2f
-            canvas.drawLine(0f, half, viewWidth, half, paints.keyStroke)
-            if (bottomBorderEnabled) {
-                canvas.drawLine(0f, viewHeight - half, viewWidth, viewHeight - half, paints.keyStroke)
-            }
         }
         val radius = paints.keyCornerRadiusPx
         for (index in 0 until geometry.keyCount) {

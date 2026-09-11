@@ -779,10 +779,6 @@ class BorderKeysService :
             (settings.bottomOffsetDp * density).toInt(),
             (settings.horizontalOffsetDp * density).toInt(),
         )
-        // Snapped to the bottom edge, the outline's bottom line would sit on a boundary that
-        // is off screen -- there is nothing below it to mark the keyboard apart from. It only
-        // means something once the keyboard is lifted clear of the edge.
-        view.keyboard.bottomBorderEnabled = settings.bottomOffsetDp > 0f
     }
 
     private fun pushKeyGeometry() {
