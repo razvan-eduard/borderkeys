@@ -169,16 +169,5 @@ class LanguagePackRepository internal constructor(
             }
             return digest.digest().toHexString()
         }
-
-        private fun ByteArray.toHexString(): String {
-            val hex = CharArray(size * 2)
-            val digits = "0123456789abcdef"
-            for (index in indices) {
-                val value = this[index].toInt() and 0xFF
-                hex[index * 2] = digits[value ushr 4]
-                hex[index * 2 + 1] = digits[value and 0x0F]
-            }
-            return String(hex)
-        }
     }
 }

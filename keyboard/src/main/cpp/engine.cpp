@@ -953,6 +953,24 @@ void Engine::offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, c
     heap.offer(candidate);
 }
 
+void Engine::offerScoredWord(TopK<Candidate>& heap, const PackedTrie& trie, int packIndex,
+                             uint32_t wordIndex, float score) const {
+    // The user boost costs a fold and a walk of the personal trie, so it is only paid when it
+    // could change the outcome: if even the maximum boost cannot reach the heap's current
+    // floor, the answer is already known -- and the wordText lookup below is skipped right
+    // alongside it, not just the boost itself.
+    if (score + kMaxUserBoost <= heap.worstScore()) {
+        return;
+    }
+    uint32_t textLength = 0;
+    const char* const text = trie.wordText(wordIndex, &textLength);
+    if (text != nullptr && textLength != 0) {
+        score += userBoostFor(text, textLength);
+        offerCandidate(heap, Candidate{packIndex, static_cast<int32_t>(wordIndex), score}, text,
+                       textLength);
+    }
+}
+
 int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, int foldedLength,
                              float maxCost, Endpoint* out, int maxOut) {
     struct Frame {
@@ -1132,22 +1150,10 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
         const int32_t wordIndex = trie.terminalWordIndex(frame.node);
         if (wordIndex >= 0) {
             const float lengthPenalty = kCompletionPenalty * static_cast<float>(frame.depth);
-            float score = weightLog + contextLogProb(packIndex,
-                                                     static_cast<uint32_t>(wordIndex)) +
-                          editComponent - lengthPenalty;
-            // The user boost costs a fold and a walk of the personal trie, so it is only paid
-            // when it could change the outcome: if even the maximum boost cannot reach the
-            // heap's current floor, the answer is already known.
-            if (score + kMaxUserBoost > heap.worstScore()) {
-                uint32_t textLength = 0;
-                const char* const text = trie.wordText(static_cast<uint32_t>(wordIndex),
-                                                       &textLength);
-                if (text != nullptr && textLength != 0) {
-                    score += userBoostFor(text, textLength);
-                    offerCandidate(heap, Candidate{packIndex, wordIndex, score}, text,
-                                   textLength);
-                }
-            }
+            const float score = weightLog + contextLogProb(packIndex,
+                                                            static_cast<uint32_t>(wordIndex)) +
+                                editComponent - lengthPenalty;
+            offerScoredWord(heap, trie, packIndex, static_cast<uint32_t>(wordIndex), score);
         }
 
         // Enumerating children in a double array means probing every alphabet symbol. Forty-odd
@@ -1234,15 +1240,8 @@ void Engine::searchNextWord(int packIndex, TopK<Candidate>& heap) {
             // takes the slot a real prediction would have had.
             continue;
         }
-        float score = weightLog + contextLogProb(packIndex, wordIndex);
-        if (score + kMaxUserBoost > heap.worstScore()) {
-            uint32_t textLength = 0;
-            const char* const text = pack.trie().wordText(wordIndex, &textLength);
-            if (text != nullptr && textLength != 0) {
-                score += userBoostFor(text, textLength);
-                offerCandidate(heap, Candidate{packIndex, frequent[i], score}, text, textLength);
-            }
-        }
+        const float score = weightLog + contextLogProb(packIndex, wordIndex);
+        offerScoredWord(heap, pack.trie(), packIndex, wordIndex, score);
     }
 }
 

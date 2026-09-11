@@ -7,7 +7,6 @@ import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.Serializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -504,7 +503,13 @@ data class KeyboardPreferences(
      */
     val themeMode: Int = THEME_MODE_MANUAL,
 ) {
-    fun sanitised(): KeyboardPreferences = copy(
+    fun sanitised(): KeyboardPreferences {
+        // Portrait's own six fields are [KeyboardPlacement]'s -- clamped by asking that class,
+        // the same way [landscape] two lines below already does for its own copy, rather than
+        // by a second set of coerceIn calls next to it that could drift from what that class
+        // considers sane.
+        val portrait = placementFor(isLandscape = false).sanitised()
+        return copy(
         minCorrectionLength = minCorrectionLength.coerceIn(MIN_CORRECTION_LENGTH, MAX_CORRECTION_LENGTH),
         correctionStrictness = if (correctionStrictness > 0f) {
             correctionStrictness.coerceIn(MIN_CORRECTION_STRICTNESS, MAX_CORRECTION_STRICTNESS)
@@ -526,12 +531,12 @@ data class KeyboardPreferences(
         themeMode = if (themeMode == THEME_MODE_AUTO_SYSTEM) THEME_MODE_AUTO_SYSTEM else THEME_MODE_MANUAL,
         clipboardRetentionMinutes = clipboardRetentionMinutes.coerceIn(1, 60 * 24 * 30),
         clipboardMaxEntries = clipboardMaxEntries.coerceIn(1, 1000),
-        // Clamped for the same reason the theme's dimensions are: a file that parses is not a
-        // file that makes sense, and a keyboard scaled to zero is one the user cannot reach the
-        // settings through.
-        heightScale = heightScale.coerceIn(MIN_HEIGHT_SCALE, MAX_HEIGHT_SCALE),
-        widthScale = widthScale.coerceIn(MIN_WIDTH_SCALE, 1f),
-        positionMode = if (positionMode in MODE_DOCKED..MODE_SPLIT) positionMode else MODE_DOCKED,
+        // heightScale, widthScale, positionMode, bottomOffsetDp, horizontalOffsetDp and
+        // splitGapDp all come from `portrait` above instead of their own coerceIn here -- see
+        // that val's comment.
+        heightScale = portrait.heightScale,
+        widthScale = portrait.widthScale,
+        positionMode = portrait.positionMode,
         symbolsNumberPosition = if (symbolsNumberPosition in SYMBOLS_NUMBER_TOP..SYMBOLS_NUMBER_RIGHT) {
             symbolsNumberPosition
         } else {
@@ -544,9 +549,9 @@ data class KeyboardPreferences(
         } else {
             LEARNING_BALANCED
         },
-        bottomOffsetDp = bottomOffsetDp.coerceIn(0f, MAX_BOTTOM_OFFSET_DP),
-        horizontalOffsetDp = horizontalOffsetDp.coerceIn(-160f, 160f),
-        splitGapDp = splitGapDp.coerceIn(MIN_SPLIT_GAP_DP, MAX_SPLIT_GAP_DP),
+        bottomOffsetDp = portrait.bottomOffsetDp,
+        horizontalOffsetDp = portrait.horizontalOffsetDp,
+        splitGapDp = portrait.splitGapDp,
         landscape = landscape.sanitised(),
         // A language code, not free text. Bounded so a corrupt file cannot carry an arbitrarily
         // long string into every lookup; an unknown code resolves to English anyway.
@@ -596,7 +601,8 @@ data class KeyboardPreferences(
             } else {
                 QUICK_ACTIONS_SIZE_DEFAULT
             },
-    )
+        )
+    }
 
     val isOneHanded: Boolean
         get() = positionMode == MODE_ONE_HANDED_LEFT || positionMode == MODE_ONE_HANDED_RIGHT
@@ -906,16 +912,16 @@ data class KeyboardPreferences(
         /** Close enough to the full width that the user means the full width. */
         const val NEARLY_FULL_WIDTH = 0.98f
         const val MAX_BOTTOM_OFFSET_DP = 220f
+
+        /** A floating keyboard's own reach either side of centre, in dp. */
+        const val MIN_HORIZONTAL_OFFSET_DP = -160f
+        const val MAX_HORIZONTAL_OFFSET_DP = 160f
     }
 }
 
 object KeyboardPreferencesSerializer : Serializer<KeyboardPreferences> {
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-        prettyPrint = false
-    }
+    private val json = PERSISTED_JSON
 
     override val defaultValue: KeyboardPreferences = KeyboardPreferences()
 

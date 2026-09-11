@@ -89,9 +89,10 @@ enum class QuickAction(val id: Int) {
             COPY_PREVIOUS_WORD, COPY_ALL, PASTE, CLIPBOARD_HISTORY, SELECT_ALL,
         )
 
-        fun fromId(id: Int): QuickAction? = entries.firstOrNull { it.id == id }
+        fun fromId(id: Int): QuickAction? = idMatching(entries.toTypedArray(), id) { it.id }
 
         /** Drops ids this build does not know, so an older bar opens rather than failing. */
-        fun fromIds(ids: List<Int>): List<QuickAction> = ids.mapNotNull(::fromId).distinct()
+        fun fromIds(ids: List<Int>): List<QuickAction> =
+            idsMatching(entries.toTypedArray(), ids) { it.id }
     }
 }

@@ -74,8 +74,9 @@ enum class ComposerAction(val id: Int) {
             GRAMMAR, TRANSLATE, TONE, SHORTEN, SUMMARISE, KEEP_SELECTION, PROMPT, SHOW_ORIGINAL, INSERT,
         )
 
-        fun fromId(id: Int): ComposerAction? = entries.firstOrNull { it.id == id }
+        fun fromId(id: Int): ComposerAction? = idMatching(entries.toTypedArray(), id) { it.id }
 
-        fun fromIds(ids: List<Int>): List<ComposerAction> = ids.mapNotNull(::fromId).distinct()
+        fun fromIds(ids: List<Int>): List<ComposerAction> =
+            idsMatching(entries.toTypedArray(), ids) { it.id }
     }
 }

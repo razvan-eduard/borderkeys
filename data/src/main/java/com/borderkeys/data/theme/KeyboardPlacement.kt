@@ -47,7 +47,9 @@ data class KeyboardPlacement(
             KeyboardPreferences.MODE_DOCKED
         },
         bottomOffsetDp = bottomOffsetDp.coerceIn(0f, KeyboardPreferences.MAX_BOTTOM_OFFSET_DP),
-        horizontalOffsetDp = horizontalOffsetDp.coerceIn(-160f, 160f),
+        horizontalOffsetDp = horizontalOffsetDp.coerceIn(
+            KeyboardPreferences.MIN_HORIZONTAL_OFFSET_DP, KeyboardPreferences.MAX_HORIZONTAL_OFFSET_DP,
+        ),
         splitGapDp = splitGapDp.coerceIn(
             KeyboardPreferences.MIN_SPLIT_GAP_DP, KeyboardPreferences.MAX_SPLIT_GAP_DP,
         ),

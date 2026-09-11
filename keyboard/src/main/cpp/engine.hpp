@@ -297,6 +297,15 @@ private:
     // Offers a candidate, replacing an entry for the same word instead of adding a second one.
     void offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, const char* text,
                         uint32_t textLength) const;
+    // collectWords and searchNextWord's shared shape: look a word up and offer it only if the
+    // maximum the personal-model boost could add would still beat the heap's current floor --
+    // the trie's own wordText and userBoostFor's walk of the personal trie are each too
+    // expensive to pay for a candidate that cannot possibly make the shortlist. Not shared with
+    // searchFrequentWithPrefix, whose text is already resolved by the time it would call this,
+    // from its own prefix match -- routing it through here would pay a second, redundant lookup
+    // for a word it already has the text of.
+    void offerScoredWord(TopK<Candidate>& heap, const PackedTrie& trie, int packIndex,
+                         uint32_t wordIndex, float score) const;
     // Which language is being written, decided from the words already committed. dominantPack_
     // is -1 until the evidence is one-sided enough to be worth acting on.
     void observeContextLanguage(const uint32_t* folded, int length);

@@ -65,7 +65,12 @@ Engine* engineFrom(jlong handle) {
 // pointer that has to be released on every path out of the function, including the error ones,
 // which is exactly the shape of leak that only shows up under a failing input. This copies into
 // memory we already own and cannot forget to free.
-jsize copyString(JNIEnv* env, jstring value, char* buffer, jsize bufferBytes) {
+//
+// maxUnits defaults to kMaxStringUnits -- every caller with a word-sized buffer -- but is a
+// parameter rather than the constant used directly, for the one caller whose buffer holds a
+// filesystem path instead of a word and needs a larger cap to match.
+jsize copyString(JNIEnv* env, jstring value, char* buffer, jsize bufferBytes,
+                 jsize maxUnits = kMaxStringUnits) {
     if (value == nullptr) {
         return -1;
     }
@@ -74,7 +79,7 @@ jsize copyString(JNIEnv* env, jstring value, char* buffer, jsize bufferBytes) {
     // it does not terminate. GetStringUTFLength is the only source for the byte count; deriving
     // it with strlen afterwards would read past whatever was written.
     const jsize bytes = env->GetStringUTFLength(value);
-    if (units <= 0 || units > kMaxStringUnits || bytes <= 0 || bytes + 1 > bufferBytes) {
+    if (units <= 0 || units > maxUnits || bytes <= 0 || bytes + 1 > bufferBytes) {
         return -1;
     }
     env->GetStringUTFRegion(value, 0, units, buffer);
@@ -383,12 +388,74 @@ bool copyStringArray(JNIEnv* env, jobjectArray array, jsize count, char** storag
     return true;
 }
 
-void freeStringArray(char** storage, jsize count) {
-    for (jsize i = 0; i < count; ++i) {
-        delete[] storage[i];
+/**
+ * One Java string array's worth of copied C strings, freed on destruction.
+ *
+ * The three bulk loaders below each own two or three of these plus one `Int32Column`, and used
+ * to free every one of them by hand at every early return -- an allocation failure, a JNI
+ * exception reading the counts array, or falling off the end successfully. RAII does not need
+ * exceptions to run a destructor on a `return`; it only needs one to exist, which is the actual
+ * difference this makes over the hand-written version: the cleanup for a given `new` can no
+ * longer be missed at one return path while present at another, because there is only one place
+ * it is written at all.
+ */
+class StringColumn {
+public:
+    explicit StringColumn(jsize count)
+        : count_(count),
+          store_(count > 0 ? new (std::nothrow) char*[count] : nullptr),
+          lengths_(count > 0 ? new (std::nothrow) size_t[count] : nullptr) {
+        if (store_ != nullptr) {
+            for (jsize i = 0; i < count_; ++i) {
+                store_[i] = nullptr;
+                lengths_[i] = 0;
+            }
+        }
     }
-    delete[] storage;
-}
+
+    ~StringColumn() {
+        if (store_ != nullptr) {
+            for (jsize i = 0; i < count_; ++i) {
+                delete[] store_[i];
+            }
+        }
+        delete[] store_;
+        delete[] lengths_;
+    }
+
+    StringColumn(const StringColumn&) = delete;
+    StringColumn& operator=(const StringColumn&) = delete;
+
+    bool valid() const { return store_ != nullptr && lengths_ != nullptr; }
+    void copyFrom(JNIEnv* env, jobjectArray array) {
+        copyStringArray(env, array, count_, store_, lengths_);
+    }
+    char** data() const { return store_; }
+    size_t* lengths() const { return lengths_; }
+
+private:
+    jsize count_;
+    char** store_;
+    size_t* lengths_;
+};
+
+/** The `int32_t` counts array every bulk loader also reads via `GetIntArrayRegion`, freed the
+ *  same way and for the same reason as `StringColumn`. */
+class Int32Column {
+public:
+    explicit Int32Column(jsize count)
+        : data_(count > 0 ? new (std::nothrow) int32_t[count] : nullptr) {}
+    ~Int32Column() { delete[] data_; }
+
+    Int32Column(const Int32Column&) = delete;
+    Int32Column& operator=(const Int32Column&) = delete;
+
+    bool valid() const { return data_ != nullptr; }
+    int32_t* data() const { return data_; }
+
+private:
+    int32_t* data_;
+};
 
 /**
  * Loads the remembered word pairs. Runs once, at service start, right after the words.
@@ -412,42 +479,27 @@ void nativeLoadUserTrigrams(JNIEnv* env, jobject /*thiz*/, jlong handle,
         return;
     }
 
-    char** const store2 = new (std::nothrow) char*[tripleCount];
-    size_t* const lengths2 = new (std::nothrow) size_t[tripleCount];
-    char** const store1 = new (std::nothrow) char*[tripleCount];
-    size_t* const lengths1 = new (std::nothrow) size_t[tripleCount];
-    char** const storeNext = new (std::nothrow) char*[tripleCount];
-    size_t* const lengthsNext = new (std::nothrow) size_t[tripleCount];
-    int32_t* const countValues = new (std::nothrow) int32_t[tripleCount];
-    if (store2 == nullptr || lengths2 == nullptr || store1 == nullptr || lengths1 == nullptr ||
-        storeNext == nullptr || lengthsNext == nullptr || countValues == nullptr) {
-        delete[] store2; delete[] lengths2; delete[] store1; delete[] lengths1;
-        delete[] storeNext; delete[] lengthsNext; delete[] countValues;
+    StringColumn col2(tripleCount);
+    StringColumn col1(tripleCount);
+    StringColumn colNext(tripleCount);
+    Int32Column countValues(tripleCount);
+    if (!col2.valid() || !col1.valid() || !colNext.valid() || !countValues.valid()) {
         return;
     }
 
-    env->GetIntArrayRegion(counts, 0, tripleCount, reinterpret_cast<jint*>(countValues));
+    env->GetIntArrayRegion(counts, 0, tripleCount, reinterpret_cast<jint*>(countValues.data()));
     if (env->ExceptionCheck() == JNI_TRUE) {
         env->ExceptionClear();
-        delete[] store2; delete[] lengths2; delete[] store1; delete[] lengths1;
-        delete[] storeNext; delete[] lengthsNext; delete[] countValues;
         return;
     }
 
-    copyStringArray(env, previous2, tripleCount, store2, lengths2);
-    copyStringArray(env, previous1, tripleCount, store1, lengths1);
-    copyStringArray(env, next, tripleCount, storeNext, lengthsNext);
+    col2.copyFrom(env, previous2);
+    col1.copyFrom(env, previous1);
+    colNext.copyFrom(env, next);
 
-    engine->loadUserTrigrams(store2, lengths2, store1, lengths1, storeNext, lengthsNext,
-                             countValues, static_cast<int>(tripleCount));
-
-    freeStringArray(store2, tripleCount);
-    delete[] lengths2;
-    freeStringArray(store1, tripleCount);
-    delete[] lengths1;
-    freeStringArray(storeNext, tripleCount);
-    delete[] lengthsNext;
-    delete[] countValues;
+    engine->loadUserTrigrams(col2.data(), col2.lengths(), col1.data(), col1.lengths(),
+                             colNext.data(), colNext.lengths(), countValues.data(),
+                             static_cast<int>(tripleCount));
 }
 
 jstring nativeKnownSpelling(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word) {
@@ -517,43 +569,25 @@ void nativeLoadUserBigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectA
         return;
     }
 
-    char** const previousStorage = new (std::nothrow) char*[pairCount];
-    size_t* const previousLengths = new (std::nothrow) size_t[pairCount];
-    char** const nextStorage = new (std::nothrow) char*[pairCount];
-    size_t* const nextLengths = new (std::nothrow) size_t[pairCount];
-    int32_t* const countValues = new (std::nothrow) int32_t[pairCount];
-    if (previousStorage == nullptr || previousLengths == nullptr || nextStorage == nullptr ||
-        nextLengths == nullptr || countValues == nullptr) {
-        delete[] previousStorage;
-        delete[] previousLengths;
-        delete[] nextStorage;
-        delete[] nextLengths;
-        delete[] countValues;
+    StringColumn previousColumn(pairCount);
+    StringColumn nextColumn(pairCount);
+    Int32Column countValues(pairCount);
+    if (!previousColumn.valid() || !nextColumn.valid() || !countValues.valid()) {
         return;
     }
 
-    env->GetIntArrayRegion(counts, 0, pairCount, reinterpret_cast<jint*>(countValues));
+    env->GetIntArrayRegion(counts, 0, pairCount, reinterpret_cast<jint*>(countValues.data()));
     if (env->ExceptionCheck() == JNI_TRUE) {
         env->ExceptionClear();
-        delete[] previousStorage;
-        delete[] previousLengths;
-        delete[] nextStorage;
-        delete[] nextLengths;
-        delete[] countValues;
         return;
     }
 
-    copyStringArray(env, previous, pairCount, previousStorage, previousLengths);
-    copyStringArray(env, next, pairCount, nextStorage, nextLengths);
+    previousColumn.copyFrom(env, previous);
+    nextColumn.copyFrom(env, next);
 
-    engine->loadUserBigrams(previousStorage, previousLengths, nextStorage, nextLengths,
-                            countValues, static_cast<int>(pairCount));
-
-    freeStringArray(previousStorage, pairCount);
-    delete[] previousLengths;
-    freeStringArray(nextStorage, pairCount);
-    delete[] nextLengths;
-    delete[] countValues;
+    engine->loadUserBigrams(previousColumn.data(), previousColumn.lengths(), nextColumn.data(),
+                            nextColumn.lengths(), countValues.data(),
+                            static_cast<int>(pairCount));
 }
 
 void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray words,
@@ -571,29 +605,25 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
     // This runs once, at service start, off the UI thread, over the whole personal dictionary,
     // so it is the one place in this file that is allowed to allocate proportionally to its
     // input rather than into a fixed buffer.
-    char** const storage = new (std::nothrow) char*[wordCount];
-    size_t* const lengths = new (std::nothrow) size_t[wordCount];
-    int32_t* const countValues = new (std::nothrow) int32_t[wordCount];
-    if (storage == nullptr || lengths == nullptr || countValues == nullptr) {
-        delete[] storage;
-        delete[] lengths;
-        delete[] countValues;
+    StringColumn column(wordCount);
+    Int32Column countValues(wordCount);
+    if (!column.valid() || !countValues.valid()) {
         return;
     }
-    for (jsize i = 0; i < wordCount; ++i) {
-        storage[i] = nullptr;
-        lengths[i] = 0;
-    }
 
-    env->GetIntArrayRegion(counts, 0, wordCount, reinterpret_cast<jint*>(countValues));
+    env->GetIntArrayRegion(counts, 0, wordCount, reinterpret_cast<jint*>(countValues.data()));
     if (env->ExceptionCheck() == JNI_TRUE) {
         env->ExceptionClear();
-        delete[] storage;
-        delete[] lengths;
-        delete[] countValues;
         return;
     }
 
+    // Compacted rather than left with gaps at their original index the way the bigram and
+    // trigram loaders' shared copyStringArray does: a dropped word here has no paired count of
+    // its own to drop alongside it the way a dropped bigram/trigram column entry does, so the
+    // count at the same index has to move down with whichever word survived, not stay behind.
+    char** const storage = column.data();
+    size_t* const lengths = column.lengths();
+    int32_t* const counts32 = countValues.data();
     jsize kept = 0;
     for (jsize i = 0; i < wordCount; ++i) {
         jstring value = static_cast<jstring>(env->GetObjectArrayElement(words, i));
@@ -614,18 +644,11 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
         std::memcpy(copy, buffer, static_cast<size_t>(length));
         storage[kept] = copy;
         lengths[kept] = static_cast<size_t>(length);
-        countValues[kept] = countValues[i];
+        counts32[kept] = counts32[i];
         ++kept;
     }
 
-    engine->loadUserWords(storage, lengths, countValues, static_cast<int>(kept));
-
-    for (jsize i = 0; i < kept; ++i) {
-        delete[] storage[i];
-    }
-    delete[] storage;
-    delete[] lengths;
-    delete[] countValues;
+    engine->loadUserWords(storage, lengths, counts32, static_cast<int>(kept));
 }
 
 jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArray xs,
@@ -736,24 +759,12 @@ jint nativeSnapshotUserModel(JNIEnv* env, jobject /*thiz*/, jlong handle, jstrin
         return borderkeys::kBkdErrArgument;
     }
     // A filesystem path can be longer than a word, so it gets its own bound rather than the
-    // word-sized one.
+    // word-sized one copyString defaults to.
     constexpr jsize kMaxPathUnits = 512;
     char buffer[kMaxPathUnits * 3 + 1];
-    if (path == nullptr) {
+    if (copyString(env, path, buffer, sizeof(buffer), kMaxPathUnits) <= 0) {
         return borderkeys::kBkdErrArgument;
     }
-    const jsize units = env->GetStringLength(path);
-    const jsize bytes = env->GetStringUTFLength(path);
-    if (units <= 0 || units > kMaxPathUnits || bytes <= 0 ||
-        bytes + 1 > static_cast<jsize>(sizeof(buffer))) {
-        return borderkeys::kBkdErrArgument;
-    }
-    env->GetStringUTFRegion(path, 0, units, buffer);
-    if (env->ExceptionCheck() == JNI_TRUE) {
-        env->ExceptionClear();
-        return borderkeys::kBkdErrArgument;
-    }
-    buffer[bytes] = '\0';
     return engine->snapshotUserModel(buffer) ? borderkeys::kBkdOk : -1;
 }
 

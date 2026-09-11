@@ -6,7 +6,6 @@ package com.borderkeys.data.theme
 import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.Serializer
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.InputStream
@@ -22,14 +21,7 @@ import java.io.OutputStream
  */
 object KeyboardThemeSerializer : Serializer<KeyboardTheme> {
 
-    private val json = Json {
-        // A future build adding a field must not make the file unreadable by this one.
-        ignoreUnknownKeys = true
-        // Missing keys fall back to the data class defaults, which is what makes a partial file
-        // -- or one written before a field existed -- still usable.
-        encodeDefaults = true
-        prettyPrint = false
-    }
+    private val json = PERSISTED_JSON
 
     override val defaultValue: KeyboardTheme = KeyboardTheme()
 

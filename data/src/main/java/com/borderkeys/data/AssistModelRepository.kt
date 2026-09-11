@@ -166,16 +166,5 @@ class AssistModelRepository internal constructor(
     private companion object {
         /** No published candidate is close to this; it bounds a hostile or mistaken file. */
         const val MAX_MODEL_BYTES = 8L * 1024 * 1024 * 1024
-
-        fun ByteArray.toHexString(): String {
-            val digits = "0123456789abcdef"
-            val hex = CharArray(size * 2)
-            for (index in indices) {
-                val value = this[index].toInt() and 0xFF
-                hex[index * 2] = digits[value ushr 4]
-                hex[index * 2 + 1] = digits[value and 0x0F]
-            }
-            return String(hex)
-        }
     }
 }
