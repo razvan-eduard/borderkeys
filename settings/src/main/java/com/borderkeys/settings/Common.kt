@@ -64,18 +64,25 @@ fun SectionHeader(text: String) {
  * what is stored about the user or trades one thing for another, and a switch with only a name
  * makes the user guess which.
  *
- * `onClick` is deliberately the **last** parameter, after the composable `trailing` slot, which
- * is the opposite of the usual Compose convention. The convention caused a real bug: with
- * `trailing` last, `SettingRow(strings[Keys.COMMON_ABOUT], "…") { open(Screen.About) }` bound the trailing lambda
- * to the *composable* slot, which runs during composition rather than on a click — so every row
- * navigated the moment it was drawn and the application opened on whichever row came last.
- * Putting the click last means the natural call site is the correct one.
+ * `onClick` is deliberately the **last** parameter, after the composable `trailing` and `content`
+ * slots, which is the opposite of the usual Compose convention. The convention caused a real
+ * bug: with `trailing` last, `SettingRow(strings[Keys.COMMON_ABOUT], "…") { open(Screen.About) }`
+ * bound the trailing lambda to the *composable* slot, which runs during composition rather than
+ * on a click — so every row navigated the moment it was drawn and the application opened on
+ * whichever row came last. Putting the click last means the natural call site is the correct one
+ * -- which is also why `content` takes a named argument at its own call sites rather than the
+ * trailing-lambda spot: the same bug, one parameter over.
+ *
+ * `content`, when given, replaces `subtitle`'s plain `Text` with whatever it draws instead --
+ * the one thing a `String` cannot carry, used by the two rows in Settings that want their
+ * subtitle as a tappable link rather than as text.
  */
 @Composable
 fun SettingRow(
     title: String,
     subtitle: String? = null,
     trailing: @Composable (() -> Unit)? = null,
+    content: @Composable (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
     Row(
@@ -88,7 +95,9 @@ fun SettingRow(
     ) {
         Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
-            if (subtitle != null) {
+            if (content != null) {
+                content()
+            } else if (subtitle != null) {
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,

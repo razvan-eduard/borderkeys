@@ -124,7 +124,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 )
             }
             for (model in models) {
-                ModelRow(
+                SettingRow(
                     title = model.displayName + if (model.active) strings[Keys.ASSISTANT_ACTIVE] else "",
                     trailing = {
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -141,24 +141,25 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                             }
                         }
                     },
-                ) {
-                    Text(
-                        strings.getString(
-                            Keys.ASSISTANT_SIZE_AND_LICENSE,
-                            model.sizeBytes / 1024 / 1024, model.license,
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    LinkedText(model.source, model.source)
-                    if (model.integrityFailedAt != null) {
+                    content = {
                         Text(
-                            strings[Keys.ASSISTANT_SWITCHED_OFF_THE_FILE_NO_LONGER],
+                            strings.getString(
+                                Keys.ASSISTANT_SIZE_AND_LICENSE,
+                                model.sizeBytes / 1024 / 1024, model.license,
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    }
-                }
+                        LinkedText(model.source, model.source)
+                        if (model.integrityFailedAt != null) {
+                            Text(
+                                strings[Keys.ASSISTANT_SWITCHED_OFF_THE_FILE_NO_LONGER],
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                )
             }
         }
         // Only worth showing with a choice to make. One model runs everything.
@@ -205,17 +206,20 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 strings[Keys.ASSISTANT_A_GGUF_FILE_IS_NOT_A],
             )
             for (entry in KnownAssistModels.entries) {
-                ModelRow(title = entry.displayName) {
-                    LinkedText(
-                        strings.getString(
-                            Keys.ASSISTANT_MB_NEEDS_ABOUT_MB_OF_RAM,
-                            entry.sizeBytes / 1024 / 1024, entry.license, entry.approximateRamMb,
-                            entry.source, entry.sha256.take(24),
-                        ),
-                        entry.source,
-                    )
-                    Explanation(strings[modelNoteFor(entry)])
-                }
+                SettingRow(
+                    title = entry.displayName,
+                    content = {
+                        LinkedText(
+                            strings.getString(
+                                Keys.ASSISTANT_MB_NEEDS_ABOUT_MB_OF_RAM,
+                                entry.sizeBytes / 1024 / 1024, entry.license,
+                                entry.approximateRamMb, entry.source, entry.sha256.take(24),
+                            ),
+                            entry.source,
+                        )
+                        Explanation(strings[modelNoteFor(entry)])
+                    },
+                )
             }
         }
         SettingsSectionCard(strings[Keys.ASSISTANT_HOW_IT_CHOOSES_WORDS]) {
@@ -330,31 +334,6 @@ private fun ModelForCategoryRow(
                 )
             }
         }
-    }
-}
-
-/**
- * [SettingRow]'s layout with the subtitle replaced by a composable slot.
- *
- * Needed here and only here: a model's row wants its source rendered as a tappable link, which a
- * plain `String` subtitle cannot carry.
- */
-@Composable
-private fun ModelRow(
-    title: String,
-    trailing: @Composable (() -> Unit)? = null,
-    content: @Composable () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            content()
-        }
-        trailing?.invoke()
     }
 }
 
