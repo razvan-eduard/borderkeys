@@ -20,6 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.borderkeys.data.theme.KeyboardAppearance
+import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.ime.KeyboardHostView
 import com.borderkeys.ime.LayoutLoader
 import com.borderkeys.theme.DynamicColors
@@ -116,6 +118,23 @@ fun PlacementPreview(
                     composed = composed.withNumberRow()
                 }
                 view.keyboard.setLayout(composed)
+
+                // A fourth setting the input method composes -- BorderKeysService.applyQuickActions
+                // does the same three steps, gated the same way. Missing here, the bar was left at
+                // View's own default visibility, showing a collapsed "more" button that opens onto
+                // nothing beside a strip this screen otherwise renders correctly.
+                if (preferences.quickActionsEnabled) {
+                    val chosen = QuickAction.fromIds(preferences.quickActions)
+                        .filter { it != QuickAction.COMPOSE || preferences.composerEnabled }
+                    view.quickActions.visibility =
+                        if (chosen.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
+                    view.quickActions.actions = chosen
+                    view.quickActions.collapsible =
+                        preferences.quickActionsMode == KeyboardPreferences.QUICK_ACTIONS_COLLAPSED
+                    view.quickActionsPlacement = preferences.quickActionsPlacement
+                } else {
+                    view.quickActions.visibility = android.view.View.GONE
+                }
                 view.fullWidthBackground = effectiveTheme.fullWidthBackground
 
                 val density = context.resources.displayMetrics.density

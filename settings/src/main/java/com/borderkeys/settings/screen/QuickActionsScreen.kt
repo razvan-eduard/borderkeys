@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -116,6 +117,18 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     onRemove = { update { current -> current.copy(quickActions =
                         current.quickActions.filterNot { it == action.id }) } },
                 )
+            }
+            // Only once the list has actually moved away from it -- a button that is always
+            // there invites a tap that undoes a selection nobody meant to touch.
+            if (preferences.quickActions != QuickAction.DEFAULT.map { it.id }) {
+                TextButton(
+                    onClick = {
+                        update { current ->
+                            current.copy(quickActions = QuickAction.DEFAULT.map { it.id })
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULT]) }
             }
             Explanation(strings[Keys.QUICK_BUTTONS_NOTE])
             if (chosen.size < KeyboardPreferences.MAX_QUICK_ACTIONS) {

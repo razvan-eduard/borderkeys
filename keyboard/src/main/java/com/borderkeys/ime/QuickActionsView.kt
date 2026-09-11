@@ -59,6 +59,13 @@ class QuickActionsView(
             if (field != value) {
                 field = value
                 expanded = false
+                // requestLayout() alone does not do this: the bar's own width and height do not
+                // change when the button count behind them does, so the framework never calls
+                // onSizeChanged again and layoutButtons() -- the only other place button centres
+                // are computed -- would otherwise not run again until a button was pressed. Set
+                // from applyQuickActions on every keyboard show, after [actions] on the same
+                // call, so this was also the one write the bar's very first frame depended on.
+                layoutButtons()
                 requestLayout()
                 invalidate()
             }
@@ -286,6 +293,7 @@ class QuickActionsView(
     fun collapse() {
         if (collapsible && expanded) {
             expanded = false
+            layoutButtons()
             requestLayout()
             invalidate()
         }

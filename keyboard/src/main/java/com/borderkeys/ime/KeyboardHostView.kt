@@ -112,24 +112,48 @@ class KeyboardHostView(
      * and [systemNavigationBarHeightPx] is asked directly instead of waiting on a dispatch that
      * is not guaranteed to come.
      *
-     * That fallback only fires when the side insets are zero too. A three-button bar that stays
-     * on the display's long edge in landscape -- some phones keep it there rather than moving it
-     * to the newly-short bottom edge -- reports itself as a left or right inset instead of a
-     * bottom one, and that is a real, current zero, not an unmeasured one:
-     * [systemNavigationBarHeightPx] only ever answers with a *bottom* bar's height, so asking it
-     * here would put a gap under a keyboard that already clears the bar exactly by sitting flush
-     * with the true bottom edge.
+     * A three-button bar that can move to a side -- [navigationBarCanMove], the same flag
+     * SystemUI itself reads for this -- does exactly that in landscape on some devices, and the
+     * dispatched insets are not to be trusted about it: measured live against a marked-up
+     * screenshot on one such phone, the IME window's own insets kept reporting a full-height
+     * *bottom* inset with the bar's buttons actually drawn along the right edge and nothing at
+     * the true bottom at all -- neither this nor the fallback below is a case that value can
+     * survive. Gesture navigation is excluded from that override: its pill stays at the bottom
+     * in landscape too, on every device this has been checked against, and that reported inset
+     * is real.
      */
     private var navigationBarInset = 0
 
+    /** The same `config_navBarCanMove` boolean SystemUI's own `NavigationBarView` reads to
+     *  decide whether a three-button bar is allowed to relocate to a side edge in landscape --
+     *  a property of the device, not of anything that changes mid-session. */
+    private val navigationBarCanMove: Boolean by lazy {
+        val id = resources.getIdentifier("config_navBarCanMove", "bool", "android")
+        id > 0 && resources.getBoolean(id)
+    }
+
+    /** `Settings.Secure.NAVIGATION_MODE` isn't a public constant, so the key is spelled out --
+     *  0 is three-button, 2 is gesture navigation; anything else is treated as not-gesture, the
+     *  side [navigationBarCanMove] considers safe to override. */
+    private fun isGestureNavigation(): Boolean =
+        android.provider.Settings.Secure.getInt(context.contentResolver, "navigation_mode", 0) == 2
+
+    private fun isLandscape(): Boolean =
+        resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
     private fun applyNavigationInset(insets: WindowInsets) {
-        val type = WindowInsets.Type.navigationBars() or WindowInsets.Type.displayCutout()
-        val navigationBars = insets.getInsets(WindowInsets.Type.navigationBars())
-        var bottom = insets.getInsets(type).bottom
-        if (bottom == 0 && navigationBars.left == 0 && navigationBars.right == 0 &&
-            insets.isVisible(WindowInsets.Type.navigationBars())
-        ) {
-            bottom = systemNavigationBarHeightPx()
+        val bottom = if (navigationBarCanMove && isLandscape() && !isGestureNavigation()) {
+            0
+        } else {
+            val type = WindowInsets.Type.navigationBars() or WindowInsets.Type.displayCutout()
+            val navigationBars = insets.getInsets(WindowInsets.Type.navigationBars())
+            var resolved = insets.getInsets(type).bottom
+            if (resolved == 0 && navigationBars.left == 0 && navigationBars.right == 0 &&
+                insets.isVisible(WindowInsets.Type.navigationBars())
+            ) {
+                resolved = systemNavigationBarHeightPx()
+            }
+            resolved
         }
         if (bottom != navigationBarInset) {
             navigationBarInset = bottom
@@ -682,6 +706,30 @@ class KeyboardHostView(
         }
         if (right < width) {
             canvas.drawLine(right - half, 0f, right - half, bottom, paints.keyStroke)
+        }
+        // The quick-action bar reads as a fourth row rather than its own control without a line
+        // marking where it stops and the rest of the keyboard starts -- the same setting, one
+        // edge earlier. Unlike the four above, this one sits entirely inside the view on both
+        // sides, so it is drawn on the boundary itself rather than inset by half a stroke.
+        if (quickActions.visibility != GONE) {
+            when (quickActionsPlacement) {
+                PLACEMENT_ABOVE_STRIP -> {
+                    val y = quickActions.bottom.toFloat()
+                    canvas.drawLine(left, y, right, y, paints.keyStroke)
+                }
+                PLACEMENT_BELOW_KEYS -> {
+                    val y = quickActions.top.toFloat()
+                    canvas.drawLine(left, y, right, y, paints.keyStroke)
+                }
+                PLACEMENT_LEFT -> {
+                    val x = quickActions.right.toFloat()
+                    canvas.drawLine(x, 0f, x, bottom, paints.keyStroke)
+                }
+                PLACEMENT_RIGHT -> {
+                    val x = quickActions.left.toFloat()
+                    canvas.drawLine(x, 0f, x, bottom, paints.keyStroke)
+                }
+            }
         }
     }
 
