@@ -110,6 +110,7 @@ object DataGraph {
 
     val dictionary: DictionaryRepository by lazy {
         DictionaryRepository(
+            database,
             database.userWordDao(),
             database.blockedWordDao(),
             database.userBigramDao(),

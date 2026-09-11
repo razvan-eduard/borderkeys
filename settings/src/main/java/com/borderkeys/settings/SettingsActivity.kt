@@ -231,7 +231,13 @@ private fun SettingsApp() {
                 // the one place that distinction applies.
                 title = {
                     val title = strings[current.titleKey]
-                    Text(if (current == Screen.Home && hasAssistant) "$title +" else title)
+                    Text(
+                        if (current == Screen.Home && hasAssistant) {
+                            strings.getString(Keys.HOME_TITLE_PLUS, title)
+                        } else {
+                            title
+                        },
+                    )
                 },
                 navigationIcon = {
                     if (stack.size > 1) {

@@ -52,7 +52,10 @@ fun AboutScreen(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SettingsSectionCard(strings[Keys.ABOUT_THIS_BUILD]) {
             SettingRow(strings[Keys.ABOUT_VERSION], version)
-            SettingRow(strings[Keys.ABOUT_FLAVOUR], if (hasAssistant) "plus" else "core")
+            SettingRow(
+                strings[Keys.ABOUT_FLAVOUR],
+                strings[if (hasAssistant) Keys.ABOUT_FLAVOUR_PLUS else Keys.ABOUT_FLAVOUR_CORE],
+            )
             SettingRow(strings[Keys.ABOUT_COMMIT], BuildConfig.GIT_COMMIT)
             SettingRow(strings[Keys.ABOUT_SOURCE], BuildConfig.SOURCE_URL)
             Button(

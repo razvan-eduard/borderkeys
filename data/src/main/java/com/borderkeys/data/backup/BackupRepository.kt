@@ -3,6 +3,7 @@
 
 package com.borderkeys.data.backup
 
+import androidx.room.withTransaction
 import com.borderkeys.data.BorderKeysDatabase
 import com.borderkeys.data.ClipboardRepository
 import com.borderkeys.data.theme.ThemeRepository
@@ -164,39 +165,44 @@ class BackupRepository(
 
         if (parts.dictionary) {
             val stamp = now()
-            database.userWordDao().incrementAll(
-                payload.words.map {
-                    LearnedWord(
-                        word = it.word,
-                        locale = it.locale,
-                        delta = it.count,
-                        lastUsedAt = stamp,
-                    )
-                },
-            )
-            database.userBigramDao().incrementAll(
-                payload.bigrams.map {
-                    LearnedBigram(
-                        previousWord = it.previous,
-                        word = it.word,
-                        delta = it.count,
-                        lastUsedAt = stamp,
-                    )
-                },
-            )
-            database.userTrigramDao().incrementAll(
-                payload.trigrams.map {
-                    LearnedTrigram(
-                        previousWord2 = it.previous2,
-                        previousWord1 = it.previous1,
-                        word = it.word,
-                        delta = it.count,
-                        lastUsedAt = stamp,
-                    )
-                },
-            )
-            for (word in payload.blocked) {
-                database.blockedWordDao().insert(BlockedWord(word))
+            // One transaction across all four tables: a process death midway through used to be
+            // able to leave a word's count restored but its bigrams not, the same failure mode
+            // DictionaryRepository.forget/block close on the way out rather than in.
+            database.withTransaction {
+                database.userWordDao().incrementAll(
+                    payload.words.map {
+                        LearnedWord(
+                            word = it.word,
+                            locale = it.locale,
+                            delta = it.count,
+                            lastUsedAt = stamp,
+                        )
+                    },
+                )
+                database.userBigramDao().incrementAll(
+                    payload.bigrams.map {
+                        LearnedBigram(
+                            previousWord = it.previous,
+                            word = it.word,
+                            delta = it.count,
+                            lastUsedAt = stamp,
+                        )
+                    },
+                )
+                database.userTrigramDao().incrementAll(
+                    payload.trigrams.map {
+                        LearnedTrigram(
+                            previousWord2 = it.previous2,
+                            previousWord1 = it.previous1,
+                            word = it.word,
+                            delta = it.count,
+                            lastUsedAt = stamp,
+                        )
+                    },
+                )
+                for (word in payload.blocked) {
+                    database.blockedWordDao().insert(BlockedWord(word))
+                }
             }
             applied = applied.copy(
                 words = payload.words.size,

@@ -143,7 +143,10 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                     },
                 ) {
                     Text(
-                        "${model.sizeBytes / 1024 / 1024} MB · ${model.license}",
+                        strings.getString(
+                            Keys.ASSISTANT_SIZE_AND_LICENSE,
+                            model.sizeBytes / 1024 / 1024, model.license,
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

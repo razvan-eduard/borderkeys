@@ -258,7 +258,10 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ColourRow(strings[Keys.THEME_PATTERN_COLOUR], theme.patternColor, preserveAlpha = true) {
                     update { t -> t.copy(patternColor = it) }
                 }
-                ThemeSlider(strings[Keys.THEME_PATTERN_SIZE], theme.patternScaleDp, 8f..64f, "dp", default = 24f) {
+                ThemeSlider(
+                    strings[Keys.THEME_PATTERN_SIZE], theme.patternScaleDp, 8f..64f,
+                    strings[Keys.THEME_DP], default = 24f,
+                ) {
                     update { t -> t.copy(patternScaleDp = it) }
                 }
                 // Shown as the background's own colour when there is no second one, so the row
@@ -287,8 +290,8 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
             }
             if (theme.backgroundImage.isNotEmpty()) {
                 ThemeSlider(
-                    strings[Keys.THEME_PICTURE_DIM], theme.backgroundImageDim * 100f, 0f..100f, "%",
-                    default = 55f,
+                    strings[Keys.THEME_PICTURE_DIM], theme.backgroundImageDim * 100f, 0f..100f,
+                    strings[Keys.THEME_PERCENT], default = 55f,
                 ) { update { t -> t.copy(backgroundImageDim = it / 100f) } }
                 Explanation(strings[Keys.THEME_PICTURE_DIM_NOTE])
             }
@@ -309,24 +312,40 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ) {
                     update { t -> t.copy(keyCornerRadiusDp = it) }
                 }
-                ThemeSlider(strings[Keys.THEME_GAP_BETWEEN_KEYS], theme.keyGapDp, 0f..16f, "dp", default = 4f) {
+                ThemeSlider(
+                    strings[Keys.THEME_GAP_BETWEEN_KEYS], theme.keyGapDp, 0f..16f,
+                    strings[Keys.THEME_DP], default = 4f,
+                ) {
                     update { t -> t.copy(keyGapDp = it) }
                 }
-                ThemeSlider(strings[Keys.THEME_ROW_HEIGHT], theme.rowHeightDp, 28f..96f, "dp", default = 52f) {
+                ThemeSlider(
+                    strings[Keys.THEME_ROW_HEIGHT], theme.rowHeightDp, 28f..96f,
+                    strings[Keys.THEME_DP], default = 52f,
+                ) {
                     update { t -> t.copy(rowHeightDp = it) }
                 }
-                ThemeSlider(strings[Keys.THEME_LABEL_SIZE], theme.labelTextSizeSp, 8f..40f, "sp", default = 20f) {
+                ThemeSlider(
+                    strings[Keys.THEME_LABEL_SIZE], theme.labelTextSizeSp, 8f..40f,
+                    strings[Keys.THEME_SP], default = 20f,
+                ) {
                     update { t -> t.copy(labelTextSizeSp = it) }
                 }
                 ThemeSlider(
-                    strings[Keys.THEME_ACCENT_SIZE], theme.accentTextSizeSp, 6f..32f, "sp", default = 15.5f,
+                    strings[Keys.THEME_ACCENT_SIZE], theme.accentTextSizeSp, 6f..32f,
+                    strings[Keys.THEME_SP], default = 15.5f,
                 ) {
                     update { t -> t.copy(accentTextSizeSp = it) }
                 }
-                ThemeSlider(strings[Keys.THEME_PRESS_DEPTH], theme.pressedElevation, 0f..16f, "dp", default = 2f) {
+                ThemeSlider(
+                    strings[Keys.THEME_PRESS_DEPTH], theme.pressedElevation, 0f..16f,
+                    strings[Keys.THEME_DP], default = 2f,
+                ) {
                     update { t -> t.copy(pressedElevation = it) }
                 }
-                ThemeSlider(strings[Keys.THEME_TRAIL_WIDTH], theme.swipeTrailWidthDp, 1f..24f, "dp", default = 4f) {
+                ThemeSlider(
+                    strings[Keys.THEME_TRAIL_WIDTH], theme.swipeTrailWidthDp, 1f..24f,
+                    strings[Keys.THEME_DP], default = 4f,
+                ) {
                     update { t -> t.copy(swipeTrailWidthDp = it) }
                 }
                 Button(

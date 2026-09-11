@@ -3,6 +3,7 @@
 
 package com.borderkeys.data
 
+import androidx.room.withTransaction
 import com.borderkeys.data.dao.BlockedWordDao
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
  * The personal dictionary: what the keyboard has learned, and what it has been told to forget.
  */
 class DictionaryRepository internal constructor(
+    private val database: BorderKeysDatabase,
     private val userWords: UserWordDao,
     private val blockedWords: BlockedWordDao,
     private val userBigrams: UserBigramDao,
@@ -90,9 +92,11 @@ class DictionaryRepository internal constructor(
      */
     suspend fun decayStaleEntries(now: Long = System.currentTimeMillis()) {
         val cutoff = now - PersonalWordDecay.HALF_LIFE_MILLIS
-        userWords.decayStale(cutoff, now)
-        userBigrams.decayStale(cutoff, now)
-        userTrigrams.decayStale(cutoff, now)
+        database.withTransaction {
+            userWords.decayStale(cutoff, now)
+            userBigrams.decayStale(cutoff, now)
+            userTrigrams.decayStale(cutoff, now)
+        }
     }
 
     /**
@@ -102,13 +106,13 @@ class DictionaryRepository internal constructor(
      * after the user deleted it from their dictionary, which is the setting appearing not to
      * work in the most alarming possible way.
      */
-    suspend fun forget(word: String) {
+    suspend fun forget(word: String) = database.withTransaction {
         userWords.delete(word)
         userBigrams.deleteInvolving(word)
         userTrigrams.deleteInvolving(word)
     }
 
-    suspend fun forgetEverything() {
+    suspend fun forgetEverything() = database.withTransaction {
         userWords.deleteAll()
         userBigrams.deleteAll()
         userTrigrams.deleteAll()
@@ -121,7 +125,7 @@ class DictionaryRepository internal constructor(
      * deleting without blocking means the word comes back from the language pack the next time
      * it is typed, which reads as the setting not having worked.
      */
-    suspend fun block(word: String) {
+    suspend fun block(word: String) = database.withTransaction {
         blockedWords.insert(BlockedWord(word))
         userWords.delete(word)
         userBigrams.deleteInvolving(word)
