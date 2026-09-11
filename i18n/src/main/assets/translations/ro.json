@@ -623,6 +623,7 @@
   "swipe_your_gesture_is_smoothed_reduced_to": "Gestul tău este netezit, redus la șaizeci și patru de puncte egal distanțate și comparat cu traseul ideal prin tastele fiecărui cuvânt candidat — o dată pentru forma lui, cu poziția și dimensiunea normalizate, și o dată pentru locul în care s-a petrecut efectiv pe tastatură. Forma singură nu poate despărți două cuvinte care trasează aproape aceeași figură în locuri diferite.",
   "theme_a_hairline_border_helps_when_the": "Un contur de un fir de păr. Ajută atunci când culorile tastei și ale fundalului sunt apropiate.",
   "theme_accent": "Accent",
+  "theme_accent_size": "Mărime accent",
   "theme_applied_highlight": "Evidențierea corecției",
   "theme_applied_highlight_colour": "Culoarea evidențierii",
   "theme_auto_follow_system": "Automat: urmează sistemul",

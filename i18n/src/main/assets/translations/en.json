@@ -623,6 +623,7 @@
   "swipe_your_gesture_is_smoothed_reduced_to": "Your gesture is smoothed, reduced to sixty-four evenly spaced points, and compared against the ideal path through each candidate word's keys — once for its shape with position and size normalised away, and once for where it actually happened on the keyboard. Shape alone cannot separate two words that trace almost the same figure in different places.",
   "theme_a_hairline_border_helps_when_the": "A hairline border. Helps when the key and background colours are close.",
   "theme_accent": "Accent",
+  "theme_accent_size": "Accent size",
   "theme_applied_highlight": "Correction highlight",
   "theme_applied_highlight_colour": "Highlight colour",
   "theme_auto_follow_system": "Auto: follow system dark/light",

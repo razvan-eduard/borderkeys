@@ -623,6 +623,7 @@
   "swipe_your_gesture_is_smoothed_reduced_to": "Tu gesto se suaviza, se reduce a sesenta y cuatro puntos equidistantes y se compara con el trayecto ideal por las teclas de cada palabra candidata: una vez por su forma, con la posición y el tamaño normalizados, y otra por dónde ocurrió realmente en el teclado. La forma por sí sola no separa dos palabras que trazan casi la misma figura en sitios distintos.",
   "theme_a_hairline_border_helps_when_the": "Un borde finísimo. Ayuda cuando los colores de la tecla y del fondo son parecidos.",
   "theme_accent": "Acento",
+  "theme_accent_size": "Tamaño del acento",
   "theme_applied_highlight": "Resalte de corrección",
   "theme_applied_highlight_colour": "Color del resalte",
   "theme_auto_follow_system": "Automático: seguir el sistema",

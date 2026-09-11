@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -317,12 +318,34 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ThemeSlider(strings[Keys.THEME_LABEL_SIZE], theme.labelTextSizeSp, 8f..40f, "sp", default = 20f) {
                     update { t -> t.copy(labelTextSizeSp = it) }
                 }
+                ThemeSlider(
+                    strings[Keys.THEME_ACCENT_SIZE], theme.accentTextSizeSp, 6f..32f, "sp", default = 15.5f,
+                ) {
+                    update { t -> t.copy(accentTextSizeSp = it) }
+                }
                 ThemeSlider(strings[Keys.THEME_PRESS_DEPTH], theme.pressedElevation, 0f..16f, "dp", default = 2f) {
                     update { t -> t.copy(pressedElevation = it) }
                 }
                 ThemeSlider(strings[Keys.THEME_TRAIL_WIDTH], theme.swipeTrailWidthDp, 1f..24f, "dp", default = 4f) {
                     update { t -> t.copy(swipeTrailWidthDp = it) }
                 }
+                Button(
+                    onClick = {
+                        update {
+                            it.copy(
+                                keyCornerRadiusDp = 8f,
+                                keyGapDp = 4f,
+                                rowHeightDp = 52f,
+                                labelTextSizeSp = 20f,
+                                accentTextSizeSp = 15.5f,
+                                pressedElevation = 2f,
+                                swipeTrailWidthDp = 4f,
+                            )
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULTS]) }
+                Explanation(strings[Keys.COMMON_RESET_TO_DEFAULTS_NOTE])
                 SwitchRow(
                     title = strings[Keys.THEME_OUTLINE_THE_KEYS],
                     subtitle = strings[Keys.THEME_A_HAIRLINE_BORDER_HELPS_WHEN_THE],

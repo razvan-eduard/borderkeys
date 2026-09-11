@@ -253,11 +253,11 @@ class ThemePaints {
         // than a second theme field: it is a typographic relationship, not a preference.
         labelSecondary.textSize = theme.labelTextSizeSp * newScaledDensity * 0.62f
         hint.color = theme.secondaryTextColor
-        // A quarter larger again than labelSecondary's own hint-sized text -- it is the one
-        // place that size is read at a glance while a finger is already coming down near it,
-        // not just glanced at while reading, the way the suggestion strip or the clipboard
-        // panel are.
-        hint.textSize = labelSecondary.textSize * HINT_TEXT_SCALE
+        // Its own theme field, not a ratio of labelSecondary's: it is the one place a size is
+        // read at a glance while a finger is already coming down near it, not just glanced at
+        // while reading the way the suggestion strip or the clipboard panel are, and it has to
+        // be able to move independently of the main label size for the same reason.
+        hint.textSize = theme.accentTextSizeSp * newScaledDensity
         // Set after label, whose size and colour they borrow.
         accentLabel.textSize = label.textSize
         labelTyped.color = theme.textColor
@@ -323,9 +323,6 @@ class ThemePaints {
          */
         private const val SUGGESTION_ROW_DEFAULT_PX = 150f
         private const val SUGGESTION_ROW_HEIGHT_FRACTION = 0.78f
-
-        /** How much bigger [hint] reads than [labelSecondary]'s own text size. */
-        private const val HINT_TEXT_SCALE = 1.25f
 
         /**
          * How much bigger the hint's invisible box is than the widest glyph it has to hold.

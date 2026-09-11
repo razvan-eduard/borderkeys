@@ -623,6 +623,7 @@
   "swipe_your_gesture_is_smoothed_reduced_to": "Votre geste est lissé, réduit à soixante-quatre points régulièrement espacés, et comparé au chemin idéal passant par les touches de chaque mot candidat — une fois pour sa forme, position et taille normalisées, et une fois pour l'endroit où il a réellement eu lieu sur le clavier. La forme seule ne sépare pas deux mots qui tracent presque la même figure à des endroits différents.",
   "theme_a_hairline_border_helps_when_the": "Une bordure d'un cheveu. Utile quand les couleurs de la touche et du fond sont proches.",
   "theme_accent": "Accent",
+  "theme_accent_size": "Taille de l'accent",
   "theme_applied_highlight": "Mise en valeur de la correction",
   "theme_applied_highlight_colour": "Couleur de mise en valeur",
   "theme_auto_follow_system": "Auto : suivre le système",

@@ -34,6 +34,15 @@ data class KeyboardTheme(
     val keyGapDp: Float = 4f,
     val rowHeightDp: Float = 52f,
     val labelTextSizeSp: Float = 20f,
+
+    /**
+     * The corner hint's own size -- what holding a key would type, or an accent. Independent of
+     * [labelTextSizeSp] on purpose: the two used to be one slider, a fixed ratio of the other,
+     * and there was no way to make the main letters bigger without the corner hints growing
+     * with them. The default is what that ratio used to produce, so nothing changes size for
+     * an existing install; from here the two move separately.
+     */
+    val accentTextSizeSp: Float = 15.5f,
     val showKeyBorders: Boolean = false,
     val pressedElevation: Float = 2f,
     val swipeTrailColor: Int = 0xCC6EA8FE.toInt(),
@@ -133,6 +142,7 @@ data class KeyboardTheme(
         keyGapDp = keyGapDp.coerceIn(0f, 16f),
         rowHeightDp = rowHeightDp.coerceIn(28f, 96f),
         labelTextSizeSp = labelTextSizeSp.coerceIn(8f, 40f),
+        accentTextSizeSp = accentTextSizeSp.coerceIn(6f, 32f),
         pressedElevation = pressedElevation.coerceIn(0f, 16f),
         swipeTrailWidthDp = swipeTrailWidthDp.coerceIn(1f, 24f),
         // Read through the known list and de-duplicated: a stored file is not a trusted file,

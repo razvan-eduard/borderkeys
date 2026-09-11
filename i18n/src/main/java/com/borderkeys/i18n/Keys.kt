@@ -637,6 +637,7 @@ object Keys {
     const val SWIPE_YOUR_GESTURE_IS_SMOOTHED_REDUCED_TO = "swipe_your_gesture_is_smoothed_reduced_to"
     const val THEME_A_HAIRLINE_BORDER_HELPS_WHEN_THE = "theme_a_hairline_border_helps_when_the"
     const val THEME_ACCENT = "theme_accent"
+    const val THEME_ACCENT_SIZE = "theme_accent_size"
     const val THEME_APPLIED_HIGHLIGHT = "theme_applied_highlight"
     const val THEME_APPLIED_HIGHLIGHT_COLOUR = "theme_applied_highlight_colour"
     const val THEME_AUTO_FOLLOW_SYSTEM = "theme_auto_follow_system"

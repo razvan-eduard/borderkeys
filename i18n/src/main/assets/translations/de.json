@@ -623,6 +623,7 @@
   "swipe_your_gesture_is_smoothed_reduced_to": "Deine Geste wird geglättet, auf vierundsechzig gleichmäßig verteilte Punkte reduziert und mit dem idealen Weg durch die Tasten jedes Wortkandidaten verglichen — einmal für ihre Form, mit herausgerechneter Position und Größe, und einmal dafür, wo sie tatsächlich auf der Tastatur stattfand. Die Form allein kann zwei Wörter nicht trennen, die an verschiedenen Stellen fast dieselbe Figur zeichnen.",
   "theme_a_hairline_border_helps_when_the": "Ein haarfeiner Rand. Hilft, wenn Tasten- und Hintergrundfarbe nah beieinander liegen.",
   "theme_accent": "Akzent",
+  "theme_accent_size": "Akzentgröße",
   "theme_applied_highlight": "Korrektur-Hervorhebung",
   "theme_applied_highlight_colour": "Farbe der Hervorhebung",
   "theme_auto_follow_system": "Automatisch: dem System folgen",
