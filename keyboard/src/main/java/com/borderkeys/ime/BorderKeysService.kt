@@ -3,10 +3,12 @@
 
 package com.borderkeys.ime
 
+import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.inputmethodservice.InputMethodService
 import android.os.Bundle
 import android.util.Size
@@ -276,6 +278,13 @@ class BorderKeysService :
         engine.start()
 
         clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        // ContextCompat, not the raw call: API 33 refuses registerReceiver for a protected
+        // system broadcast without an explicit exported/not-exported flag, and this is a
+        // system-only broadcast nothing outside the platform should be able to spoof anyway.
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, wallpaperChangedReceiver, IntentFilter(Intent.ACTION_WALLPAPER_CHANGED),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
 
         scope.launch(Dispatchers.IO) {
             alphabeticLayout = LayoutLoader.load(assets, DEFAULT_ALPHABETIC_LAYOUT)
@@ -661,7 +670,40 @@ class BorderKeysService :
         }
     }
 
+    /**
+     * Redraws with "follow the wallpaper" colours when the wallpaper itself changes.
+     *
+     * [observeSettings] refreshes on every emission from [DataGraph.themes] -- but a wallpaper
+     * change is not one: the stored theme and preferences are unchanged, only what
+     * [DynamicColors] reads off the system is, and nothing there is a Flow this service can
+     * collect from. Without this, dynamic colour only caught up the next time something else
+     * happened to recreate the view (a fresh editor after the keyboard had been gone a while),
+     * which read as "wallpaper colours are broken" rather than "stale until the next rebuild".
+     */
+    private val wallpaperChangedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (preferences.followSystemColors) {
+                refreshTheme()
+            }
+        }
+    }
+
+    /** Re-applies [effectiveTheme] to what is on screen without anything in the DataStore having
+     *  changed -- see [wallpaperChangedReceiver]'s own doc for the one case that needs this. */
+    private fun refreshTheme() {
+        val view = host ?: return
+        val changed = paints.update(effectiveTheme(), resources.displayMetrics, preferences.heightScale, this)
+        view.fullWidthBackground = effectiveTheme().fullWidthBackground
+        if (changed) {
+            view.keyboard.onThemeChanged()
+            view.quickSettings.onThemeChanged()
+            view.onThemeChanged()
+            view.relayoutForNewMetrics()
+        }
+    }
+
     override fun onDestroy() {
+        runCatching { unregisterReceiver(wallpaperChangedReceiver) }
         unregisterClipboardListener()
         flushLearning()
         // Zeroes the handle under a lock before freeing, so a request already in flight
@@ -737,6 +779,10 @@ class BorderKeysService :
             (settings.bottomOffsetDp * density).toInt(),
             (settings.horizontalOffsetDp * density).toInt(),
         )
+        // Snapped to the bottom edge, the outline's bottom line would sit on a boundary that
+        // is off screen -- there is nothing below it to mark the keyboard apart from. It only
+        // means something once the keyboard is lifted clear of the edge.
+        view.keyboard.bottomBorderEnabled = settings.bottomOffsetDp > 0f
     }
 
     private fun pushKeyGeometry() {

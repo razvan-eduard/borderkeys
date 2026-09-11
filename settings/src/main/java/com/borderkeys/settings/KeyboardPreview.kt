@@ -37,7 +37,7 @@ import com.borderkeys.theme.ThemePaints
 fun KeyboardPreview(
     appearance: KeyboardAppearance,
     modifier: Modifier = Modifier,
-    layoutId: String = "qwerty_ro",
+    layoutId: String = "qwerty",
 ) {
     val context = LocalContext.current
     val strings = LocalStrings.current

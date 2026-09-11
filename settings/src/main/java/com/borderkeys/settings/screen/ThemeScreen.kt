@@ -326,7 +326,15 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                     title = strings[Keys.THEME_OUTLINE_THE_KEYS],
                     subtitle = strings[Keys.THEME_A_HAIRLINE_BORDER_HELPS_WHEN_THE],
                     checked = theme.showKeyBorders,
-                ) { value -> update { it.copy(showKeyBorders = value) } }
+                ) { value ->
+                    // Written to both stores, not just the one "theme" edits: it is a shape
+                    // choice, not a colour, the same reasoning the preset picker above already
+                    // carries it through unchanged for. Without this, switching it on while
+                    // auto mode is showing the *light* theme changed a value nothing on screen
+                    // was reading, and the toggle looked broken.
+                    update { it.copy(showKeyBorders = value) }
+                    scope.launch { repository.updateLightTheme { it.copy(showKeyBorders = value) } }
+                }
                 Explanation(
                     strings[Keys.THEME_VALUES_ARE_CLAMPED_WHEN_THEY_ARE],
                 )

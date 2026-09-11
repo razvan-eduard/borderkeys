@@ -144,6 +144,17 @@ class KeyboardCanvasView(
             }
         }
 
+    /** Whether the outline's bottom line is drawn -- see [BorderKeysService.applyPlacement]'s
+     *  own doc for why it is off whenever the keyboard is flush against the screen's edge. */
+    var bottomBorderEnabled: Boolean = true
+        set(value) {
+            if (field != value) {
+                field = value
+                backgroundValid = false
+                invalidate()
+            }
+        }
+
     private fun longPressDelayFor(index: Int): Long =
         if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.REPEATABLE)) {
             minOf(longPressDelayMillis, LONG_PRESS_MILLIS)
@@ -610,6 +621,15 @@ class KeyboardCanvasView(
         if (drawsBackground) {
             paints.backgroundPainter.draw(canvas, viewWidth, viewHeight)
         }
+        if (paints.showKeyBorders) {
+            // The same outline the keys draw, said once more for the surface they sit on: a
+            // hairline where the key area begins and, when there is an edge to mark, ends.
+            val half = paints.keyStroke.strokeWidth / 2f
+            canvas.drawLine(0f, half, viewWidth, half, paints.keyStroke)
+            if (bottomBorderEnabled) {
+                canvas.drawLine(0f, viewHeight - half, viewWidth, viewHeight - half, paints.keyStroke)
+            }
+        }
         val radius = paints.keyCornerRadiusPx
         for (index in 0 until geometry.keyCount) {
             val fill = if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.MODIFIER) ||
@@ -722,12 +742,18 @@ class KeyboardCanvasView(
         }
         val right = geometry.keyRight[index]
         val hintX = right - (right - geometry.keyLeft[index]) * HINT_INSET_FRACTION
-        val hintY = geometry.keyTop[index] + paints.secondaryBaselineOffsetPx * 2.2f
+        val hintY = geometry.keyTop[index] + paints.secondaryBaselineOffsetPx * HINT_Y_FACTOR
         if (geometry.altLength[index] > 0) {
+            // A little larger than the rest of labelSecondary's own uses (the suggestion strip,
+            // the clipboard panel) -- this is the one place it has to be read at a glance while
+            // a finger is already coming down near it, not just glanced at while reading.
+            val base = paints.labelSecondary.textSize
+            paints.labelSecondary.textSize = base * HINT_TEXT_SCALE
             canvas.drawText(
                 geometry.altChars, geometry.altOffset[index], 1, hintX, hintY,
                 paints.labelSecondary,
             )
+            paints.labelSecondary.textSize = base
             return
         }
         if (!holdsAMenu(geometry.keyCode[index])) {
@@ -1322,7 +1348,14 @@ class KeyboardCanvasView(
         private const val LARGE_KEY_TEXT_SCALE = 1.28f
 
         /** Where the corner hint sits, as a fraction of the key's width in from its right edge. */
-        private const val HINT_INSET_FRACTION = 0.22f
+        // Both nudged in from the bare corner, on the diagonal towards the key's own centre --
+        // a hint sitting exactly in the corner read as clipped by the key's rounded corner
+        // itself on some themes, and was easy to miss reaching for on the first try.
+        private const val HINT_INSET_FRACTION = 0.30f
+        private const val HINT_Y_FACTOR = 2.8f
+
+        /** How much bigger the corner hint's letter is than labelSecondary's own text size. */
+        private const val HINT_TEXT_SCALE = 1.25f
 
         /** A hint dot's radius, as a fraction of the secondary label size. */
         private const val HINT_DOT_RADIUS_FRACTION = 0.09f
