@@ -131,6 +131,7 @@ fun PlacementPreview(
                     view.quickActions.actions = chosen
                     view.quickActions.collapsible =
                         preferences.quickActionsMode == KeyboardPreferences.QUICK_ACTIONS_COLLAPSED
+                    view.quickActions.sizeLevel = preferences.quickActionsSize
                     view.quickActionsPlacement = preferences.quickActionsPlacement
                 } else {
                     view.quickActions.visibility = android.view.View.GONE

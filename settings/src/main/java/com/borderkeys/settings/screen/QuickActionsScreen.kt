@@ -86,6 +86,20 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
             Explanation(strings[Keys.QUICK_MODE_NOTE])
         }
 
+        SettingsSectionCard(strings[Keys.QUICK_SIZE]) {
+            ChipRow {
+                SizeChip(strings[Keys.QUICK_SIZE_DEFAULT],
+                    KeyboardPreferences.QUICK_ACTIONS_SIZE_DEFAULT, preferences, update)
+                SizeChip(strings[Keys.QUICK_SIZE_SMALL],
+                    KeyboardPreferences.QUICK_ACTIONS_SIZE_SMALL, preferences, update)
+                SizeChip(strings[Keys.QUICK_SIZE_MEDIUM],
+                    KeyboardPreferences.QUICK_ACTIONS_SIZE_MEDIUM, preferences, update)
+                SizeChip(strings[Keys.QUICK_SIZE_HUGE],
+                    KeyboardPreferences.QUICK_ACTIONS_SIZE_HUGE, preferences, update)
+            }
+            Explanation(strings[Keys.QUICK_SIZE_NOTE])
+        }
+
         SettingsSectionCard(strings[Keys.QUICK_PLACEMENT]) {
             ChipRow {
                 PlacementChip(strings[Keys.QUICK_PLACEMENT_ABOVE],
@@ -250,6 +264,20 @@ private fun PlacementChip(
     FilterChip(
         selected = preferences.quickActionsPlacement == value,
         onClick = { update { it.copy(quickActionsPlacement = value) } },
+        label = { Text(label) },
+    )
+}
+
+@Composable
+private fun SizeChip(
+    label: String,
+    value: Int,
+    preferences: KeyboardPreferences,
+    update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit,
+) {
+    FilterChip(
+        selected = preferences.quickActionsSize == value,
+        onClick = { update { it.copy(quickActionsSize = value) } },
         label = { Text(label) },
     )
 }

@@ -74,6 +74,30 @@ class QuickActionsView(
     /** True while a collapsible bar is open. Always true when the bar is not collapsible. */
     private var expanded = false
 
+    /**
+     * How much room each button gets, as one of [SIZE_THICKNESS_FRACTION]'s indices.
+     *
+     * Thickness grows a little at each step and the icon shrinks a little as a share of it, so
+     * the room that opens up shows as gap on every side of a button -- above and below it in
+     * the bar's own thickness, and between it and its neighbours along the bar's length, since
+     * [layoutButtons] sizes the icon from thickness rather than from the room a neighbour count
+     * would otherwise divide it into.
+     */
+    var sizeLevel: Int = 0
+        set(value) {
+            val clamped = value.coerceIn(0, SIZE_THICKNESS_FRACTION.lastIndex)
+            if (field != clamped) {
+                field = clamped
+                // Same reasoning as collapsible's setter: thickness does change here, so
+                // requestLayout() would eventually reach onSizeChanged on its own -- but not
+                // before a frame draws with the old positions at the new thickness, which is
+                // its own visible glitch for the one frame it lasts.
+                layoutButtons()
+                requestLayout()
+                invalidate()
+            }
+        }
+
     /** Whether the buttons run left to right or top to bottom. */
     var vertical: Boolean = false
         set(value) {
@@ -154,7 +178,7 @@ class QuickActionsView(
 
     private fun barThicknessPx(): Int {
         val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_THICKNESS_PX
-        return (row * BAR_HEIGHT_FRACTION).toInt().coerceAtLeast(1)
+        return (row * BAR_HEIGHT_FRACTION * SIZE_THICKNESS_FRACTION[sizeLevel]).toInt().coerceAtLeast(1)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -174,7 +198,7 @@ class QuickActionsView(
             return
         }
         val thickness = if (vertical) width else height
-        buttonSizePx = (thickness * ICON_FRACTION).toInt().coerceAtLeast(1)
+        buttonSizePx = (thickness * SIZE_ICON_FRACTION[sizeLevel]).toInt().coerceAtLeast(1)
         val along = if (vertical) height else width
         val step = along.toFloat() / shown
         for (index in 0 until shown) {
@@ -306,8 +330,19 @@ class QuickActionsView(
         /** The bar is a little shorter than a key row: it is a tool strip, not another row. */
         const val BAR_HEIGHT_FRACTION = 0.82f
 
-        /** How much of the bar's thickness an icon takes, leaving a touch margin around it. */
-        const val ICON_FRACTION = 0.52f
+        /**
+         * [barThicknessPx]'s multiplier at each [sizeLevel], indexed by
+         * [KeyboardPreferences.QUICK_ACTIONS_SIZE_DEFAULT] and up. 1 is [BAR_HEIGHT_FRACTION]
+         * untouched -- today's bar, unchanged by a setting nobody has picked yet.
+         */
+        val SIZE_THICKNESS_FRACTION = floatArrayOf(1.00f, 1.10f, 1.20f, 1.35f)
+
+        /**
+         * [layoutButtons]'s icon size, as a share of thickness, at the same indices as
+         * [SIZE_THICKNESS_FRACTION]. Falls as thickness rises: the room that opens up on both
+         * counts shows as gap, not as a bigger icon on an already generous touch target.
+         */
+        val SIZE_ICON_FRACTION = floatArrayOf(0.52f, 0.42f, 0.34f, 0.26f)
 
         const val DEFAULT_THICKNESS_PX = 132f
     }

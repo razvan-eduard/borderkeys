@@ -330,6 +330,15 @@ data class KeyboardPreferences(
     val quickActionsPlacement: Int = QUICK_ACTIONS_ABOVE_STRIP,
 
     /**
+     * How much room the bar gives each button, on whichever axis its thickness is --
+     * [QUICK_ACTIONS_SIZE_DEFAULT] is today's bar unchanged; each step past it is a little
+     * taller (or wider, down a side) with a little more space around a button that is, in
+     * turn, a little smaller -- the room comes from somewhere, and it is not the bar's own
+     * length, which the keyboard's width already spoken for.
+     */
+    val quickActionsSize: Int = QUICK_ACTIONS_SIZE_DEFAULT,
+
+    /**
      * A permanent row of digits above the letters.
      *
      * Off by default. It costs about a fifth of the keyboard's height, and on a touch surface
@@ -581,6 +590,12 @@ data class KeyboardPreferences(
             } else {
                 QUICK_ACTIONS_ABOVE_STRIP
             },
+        quickActionsSize =
+            if (quickActionsSize in QUICK_ACTIONS_SIZE_DEFAULT..QUICK_ACTIONS_SIZE_HUGE) {
+                quickActionsSize
+            } else {
+                QUICK_ACTIONS_SIZE_DEFAULT
+            },
     )
 
     val isOneHanded: Boolean
@@ -739,6 +754,15 @@ data class KeyboardPreferences(
 
         /** How many actions the bar will hold before it starts dropping them. */
         const val MAX_QUICK_ACTIONS = 10
+
+        /** Today's bar, unchanged. */
+        const val QUICK_ACTIONS_SIZE_DEFAULT = 0
+
+        const val QUICK_ACTIONS_SIZE_SMALL = 1
+
+        const val QUICK_ACTIONS_SIZE_MEDIUM = 2
+
+        const val QUICK_ACTIONS_SIZE_HUGE = 3
 
         /** A model file name longer than any real one; a stored value past it is truncated. */
         const val MAX_MODEL_FILE_NAME_CHARS = 255
