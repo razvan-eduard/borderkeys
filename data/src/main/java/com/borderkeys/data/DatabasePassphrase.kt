@@ -7,6 +7,8 @@ import android.content.Context
 import android.util.Base64
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import java.io.File
+import java.io.RandomAccessFile
 import java.security.SecureRandom
 
 /**
@@ -28,12 +30,33 @@ internal object DatabasePassphrase {
     private const val PREFERENCES_FILE = "borderkeys_keys"
     private const val PASSPHRASE_KEY = "db_passphrase_v1"
     private const val PASSPHRASE_BYTES = 32
+    private const val LOCK_FILE_NAME = "db_passphrase.lock"
 
     /**
      * Returns a freshly allocated copy of the passphrase. The caller owns it and should zero it
      * once SQLCipher has taken it; SQLCipher keeps its own copy.
+     *
+     * `:app` and `:assist` each open this database independently, in their own process, so the
+     * read-check-generate-write below runs behind a [FileLock] on a marker file both processes
+     * share -- an OS-level advisory lock (flock/fcntl), genuinely cross-process on one device,
+     * unlike a Kotlin `lazy` or a plain `synchronized`, which only serialize within the process
+     * that took them. Without it, two processes racing on first run can both see no passphrase
+     * stored yet, each generate a different one, and both `commit()` -- whichever loses can never
+     * open the database the winner's passphrase already encrypted it with.
      */
     fun obtain(context: Context): ByteArray {
+        val lockFile = File(context.applicationContext.filesDir, LOCK_FILE_NAME)
+        RandomAccessFile(lockFile, "rw").use { raf ->
+            // Released explicitly by this `use`, before the RandomAccessFile's own `use` closes
+            // the channel underneath it -- a lock held on an already-closed channel is undefined,
+            // not just pointless.
+            raf.channel.lock().use {
+                return obtainLocked(context)
+            }
+        }
+    }
+
+    private fun obtainLocked(context: Context): ByteArray {
         val masterKey = MasterKey.Builder(context.applicationContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()

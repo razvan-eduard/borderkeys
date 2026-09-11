@@ -117,11 +117,20 @@ class TextAssistService : Service() {
 
     private fun releaseAndStop() {
         val current = handle
+        // Posted through workerHandler, after nativeUnload, rather than written here directly:
+        // handleRun reads loadedModelName from that same thread once its own work is done, and
+        // Handler's FIFO ordering is what keeps this from landing on the main thread in the
+        // middle of a request that is still running when the idle timer happens to fire.
         if (current != 0L) {
-            workerHandler.post { AssistNative.nativeUnload(current) }
+            workerHandler.post {
+                AssistNative.nativeUnload(current)
+                loadedModelName = null
+                loadedModelFile = null
+            }
+        } else {
+            loadedModelName = null
+            loadedModelFile = null
         }
-        loadedModelName = null
-        loadedModelFile = null
         stopSelf()
     }
 
@@ -130,26 +139,36 @@ class TextAssistService : Service() {
     private fun handleStatusQuery(message: Message) {
         val reply = message.replyTo ?: return
         workerHandler.post {
-            val model = runBlocking { DataGraph.assistModels.activeVerifiedModel() }
-            val data = android.os.Bundle().apply {
-                putInt(
-                    AssistProtocol.KEY_ERROR,
-                    if (model == null) AssistProtocol.ERROR_NO_MODEL else AssistProtocol.ERROR_NONE,
-                )
-                putString(AssistProtocol.KEY_MODEL_NAME, model?.displayName)
-                // Only meaningful once something is actually loaded to have measured it against
-                // -- a status query is exactly the availability check made before the first
-                // request of a session, when nothing has loaded yet, so this is routinely absent
-                // and that is the expected case, not a failure.
-                val current = handle
-                if (current != 0L && AssistNative.nativeIsLoaded(current)) {
-                    val ratio = AssistNative.nativeCharsPerToken(current)
-                    if (ratio > 0f) {
-                        putFloat(AssistProtocol.KEY_CHARS_PER_TOKEN, ratio)
+            // Same reasoning as handleRun's try/catch: nothing else on this thread would catch
+            // an exception thrown here, and letting one escape kills the process instead of just
+            // this one status reply.
+            try {
+                val model = runBlocking { DataGraph.assistModels.activeVerifiedModel() }
+                val data = android.os.Bundle().apply {
+                    putInt(
+                        AssistProtocol.KEY_ERROR,
+                        if (model == null) AssistProtocol.ERROR_NO_MODEL else AssistProtocol.ERROR_NONE,
+                    )
+                    putString(AssistProtocol.KEY_MODEL_NAME, model?.displayName)
+                    // Only meaningful once something is actually loaded to have measured it
+                    // against -- a status query is exactly the availability check made before
+                    // the first request of a session, when nothing has loaded yet, so this is
+                    // routinely absent and that is the expected case, not a failure.
+                    val current = handle
+                    if (current != 0L && AssistNative.nativeIsLoaded(current)) {
+                        val ratio = AssistNative.nativeCharsPerToken(current)
+                        if (ratio > 0f) {
+                            putFloat(AssistProtocol.KEY_CHARS_PER_TOKEN, ratio)
+                        }
                     }
                 }
+                send(reply, AssistProtocol.MSG_STATUS, data)
+            } catch (error: Throwable) {
+                send(
+                    reply, AssistProtocol.MSG_STATUS,
+                    android.os.Bundle().apply { putInt(AssistProtocol.KEY_ERROR, AssistProtocol.ERROR_FAILED) },
+                )
             }
-            send(reply, AssistProtocol.MSG_STATUS, data)
         }
     }
 
@@ -183,96 +202,118 @@ class TextAssistService : Service() {
         }
 
         workerHandler.post {
-            val current = handle
-            if (current == 0L) {
+            // The whole request behind one try/catch: an exception thrown here -- native or
+            // otherwise -- reaches nothing that would otherwise catch it. This is a worker
+            // thread's own message loop, not a coroutine with a dispatcher's failure handler
+            // behind it and not the main thread with an Android crash reporter watching it;
+            // letting it escape kills the whole :assist process before this reply is ever sent,
+            // which leaves the caller's ChunkedAssistRunner job waiting forever rather than
+            // learning that anything went wrong at all.
+            try {
+                handleRunLocked(reply, requestId, task, text, written, continueJob)
+            } catch (error: Throwable) {
                 replyWithError(reply, requestId, AssistProtocol.ERROR_FAILED)
-                return@post
             }
-
-            // Read fresh on every request rather than only at load time: this process outlives
-            // one settings change, and a slider dragged in Settings should be felt on the next
-            // action, not only after the ninety-second idle timeout has thrown the model out and
-            // something reloads it.
-            val preferences = DataGraph.themes.currentPreferences()
-
-            // Which model this task's category is pointed at, falling back to the active one --
-            // see AssistCategory. A file it names but no longer has, or one whose bytes no
-            // longer match, is ignored the same way.
-            val preferredFile = when (task.category) {
-                AssistCategory.TRANSLATE -> preferences.assistTranslateModel
-                AssistCategory.WRITE -> preferences.assistWriteModel
-            }
-            val model = runBlocking {
-                DataGraph.assistModels.verifiedModelByFileName(preferredFile)
-                    ?: DataGraph.assistModels.activeVerifiedModel()
-            }
-            if (model == null) {
-                // Either nothing was imported, or the file no longer hashes to what it did. The
-                // distinction is in the database, and Settings shows it.
-                replyWithError(reply, requestId, AssistProtocol.ERROR_NO_MODEL)
-                return@post
-            }
-            // A load only when the model in memory is not the one this task wants -- a category
-            // switch pays a cold load, staying on one model does not.
-            if (!AssistNative.nativeIsLoaded(current) || loadedModelFile != model.fileName) {
-                if (AssistNative.nativeIsLoaded(current)) {
-                    AssistNative.nativeUnload(current)
-                }
-                val path = DataGraph.assistModels.fileFor(model).absolutePath
-                val status = AssistNative.nativeLoad(
-                    current, path, model.contextTokens, inferenceThreads(),
-                )
-                if (status != 0) {
-                    loadedModelFile = null
-                    loadedModelName = null
-                    replyWithError(reply, requestId, AssistProtocol.ERROR_LOAD_FAILED)
-                    return@post
-                }
-                loadedModelFile = model.fileName
-                loadedModelName = model.displayName
-            }
-
-            // Cheap regardless -- it only rebuilds the sampler chain, the same few hundred bytes
-            // every time, never the model.
-            AssistNative.nativeSetSamplingParams(
-                current, preferences.assistTemperature, preferences.assistTopP,
-            )
-
-            val status = IntArray(1)
-            val truncatedOut = BooleanArray(1)
-            // Every task but one carries its whole instruction. The exception is assembled here
-            // rather than sent whole, so what wraps the user's words is this build's constant
-            // and not something the request could have replaced.
-            val instruction = if (task == AssistTask.CUSTOM) {
-                AssistTask.customInstruction(written)
-            } else {
-                task.instruction
-            }
-            // Off for a custom instruction: "wrap the answer in quotes" is a reasonable thing to
-            // type there, and the native cleanup exists to remove formatting nobody asked for --
-            // not formatting the request asked for by name. See AssistNative.nativeRun's own doc.
-            val cleanFormatting = task != AssistTask.CUSTOM
-            val answer = AssistNative.nativeRun(
-                current, instruction, text, task.outputRatio, task.minOutputTokens,
-                AssistTask.MAX_OUTPUT_TOKENS, task.usesRemainingContext, continueJob,
-                cleanFormatting, status, truncatedOut,
-            )
-            if (answer == null) {
-                replyWithError(reply, requestId, mapNativeStatus(status[0]))
-                return@post
-            }
-            val payload = android.os.Bundle().apply {
-                putInt(AssistProtocol.KEY_REQUEST_ID, requestId)
-                putInt(AssistProtocol.KEY_ERROR, AssistProtocol.ERROR_NONE)
-                // Already cleaned and trimmed on the native side (TextAssist::run's cleanResult)
-                // -- the one place that turns a small model's raw generation into an answer, not
-                // a second trim here repeating part of that job.
-                putString(AssistProtocol.KEY_RESULT, answer)
-                putString(AssistProtocol.KEY_MODEL_NAME, loadedModelName)
-                putBoolean(AssistProtocol.KEY_TRUNCATED, truncatedOut[0])
-            }
-            send(reply, AssistProtocol.MSG_RESULT, payload)
         }
+    }
+
+    private fun handleRunLocked(
+        reply: Messenger,
+        requestId: Int,
+        task: AssistTask,
+        text: String,
+        written: String,
+        continueJob: Boolean,
+    ) {
+        val current = handle
+        if (current == 0L) {
+            replyWithError(reply, requestId, AssistProtocol.ERROR_FAILED)
+            return
+        }
+
+        // Read fresh on every request rather than only at load time: this process outlives
+        // one settings change, and a slider dragged in Settings should be felt on the next
+        // action, not only after the ninety-second idle timeout has thrown the model out and
+        // something reloads it.
+        val preferences = DataGraph.themes.currentPreferences()
+
+        // Which model this task's category is pointed at, falling back to the active one --
+        // see AssistCategory. A file it names but no longer has, or one whose bytes no
+        // longer match, is ignored the same way.
+        val preferredFile = when (task.category) {
+            AssistCategory.TRANSLATE -> preferences.assistTranslateModel
+            AssistCategory.WRITE -> preferences.assistWriteModel
+        }
+        val model = runBlocking {
+            DataGraph.assistModels.verifiedModelByFileName(preferredFile)
+                ?: DataGraph.assistModels.activeVerifiedModel()
+        }
+        if (model == null) {
+            // Either nothing was imported, or the file no longer hashes to what it did. The
+            // distinction is in the database, and Settings shows it.
+            replyWithError(reply, requestId, AssistProtocol.ERROR_NO_MODEL)
+            return
+        }
+        // A load only when the model in memory is not the one this task wants -- a category
+        // switch pays a cold load, staying on one model does not.
+        if (!AssistNative.nativeIsLoaded(current) || loadedModelFile != model.fileName) {
+            if (AssistNative.nativeIsLoaded(current)) {
+                AssistNative.nativeUnload(current)
+            }
+            val path = DataGraph.assistModels.fileFor(model).absolutePath
+            val status = AssistNative.nativeLoad(
+                current, path, model.contextTokens, inferenceThreads(),
+            )
+            if (status != 0) {
+                loadedModelFile = null
+                loadedModelName = null
+                replyWithError(reply, requestId, AssistProtocol.ERROR_LOAD_FAILED)
+                return
+            }
+            loadedModelFile = model.fileName
+            loadedModelName = model.displayName
+        }
+
+        // Cheap regardless -- it only rebuilds the sampler chain, the same few hundred bytes
+        // every time, never the model.
+        AssistNative.nativeSetSamplingParams(
+            current, preferences.assistTemperature, preferences.assistTopP,
+        )
+
+        val status = IntArray(1)
+        val truncatedOut = BooleanArray(1)
+        // Every task but one carries its whole instruction. The exception is assembled here
+        // rather than sent whole, so what wraps the user's words is this build's constant
+        // and not something the request could have replaced.
+        val instruction = if (task == AssistTask.CUSTOM) {
+            AssistTask.customInstruction(written)
+        } else {
+            task.instruction
+        }
+        // Off for a custom instruction: "wrap the answer in quotes" is a reasonable thing to
+        // type there, and the native cleanup exists to remove formatting nobody asked for --
+        // not formatting the request asked for by name. See AssistNative.nativeRun's own doc.
+        val cleanFormatting = task != AssistTask.CUSTOM
+        val answer = AssistNative.nativeRun(
+            current, instruction, text, task.outputRatio, task.minOutputTokens,
+            AssistTask.MAX_OUTPUT_TOKENS, task.usesRemainingContext, continueJob,
+            cleanFormatting, status, truncatedOut,
+        )
+        if (answer == null) {
+            replyWithError(reply, requestId, mapNativeStatus(status[0]))
+            return
+        }
+        val payload = android.os.Bundle().apply {
+            putInt(AssistProtocol.KEY_REQUEST_ID, requestId)
+            putInt(AssistProtocol.KEY_ERROR, AssistProtocol.ERROR_NONE)
+            // Already cleaned and trimmed on the native side (TextAssist::run's cleanResult)
+            // -- the one place that turns a small model's raw generation into an answer, not
+            // a second trim here repeating part of that job.
+            putString(AssistProtocol.KEY_RESULT, answer)
+            putString(AssistProtocol.KEY_MODEL_NAME, loadedModelName)
+            putBoolean(AssistProtocol.KEY_TRUNCATED, truncatedOut[0])
+        }
+        send(reply, AssistProtocol.MSG_RESULT, payload)
     }
 
     private fun replyWithError(reply: Messenger, requestId: Int, error: Int) {
@@ -312,9 +353,13 @@ class TextAssistService : Service() {
     private companion object {
         const val IDLE_TIMEOUT_MILLIS = 90_000L
 
-        // Mirrors TextAssist::Status in text_assist.hpp.
+        // Mirrors TextAssist::Status in text_assist.hpp. NATIVE_ERR_EXCEPTION falls through
+        // mapNativeStatus's own `else` to the same AssistProtocol.ERROR_FAILED every other
+        // unlisted status already does -- named here only so a reader matching this file against
+        // that enum finds every value accounted for, not because the mapping needs its own line.
         const val NATIVE_ERR_NO_MODEL = -1
         const val NATIVE_ERR_TOO_LONG = -4
         const val NATIVE_ERR_BUSY = -7
+        const val NATIVE_ERR_EXCEPTION = -9
     }
 }

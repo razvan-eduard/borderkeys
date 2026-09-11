@@ -51,21 +51,12 @@ class ClipboardRepository internal constructor(
         if (!settings.clipboardEnabled || !settings.clipboardImages) {
             return false
         }
-        val hash = contentHash(uri)
-        val existing = dao.findByHash(hash)
-        val timestamp = now()
-        if (existing != null) {
-            dao.touch(existing.id, timestamp)
-            return false
-        }
-        dao.insert(
-            ClipEntry(
-                content = uri,
-                createdAt = timestamp,
-                contentHash = hash,
-                uri = uri,
-                mimeType = mimeType,
-            ),
+        dao.upsert(
+            content = uri,
+            createdAt = now(),
+            contentHash = contentHash(uri),
+            uri = uri,
+            mimeType = mimeType,
         )
         dao.trimUnpinnedTo(settings.clipboardMaxEntries)
         return true
@@ -76,16 +67,13 @@ class ClipboardRepository internal constructor(
         if (!settings.clipboardEnabled || content.isEmpty()) {
             return false
         }
-        val timestamp = now()
-        val hash = contentHash(content)
-        val existing = dao.findByHash(hash)
-        if (existing != null) {
-            dao.touch(existing.id, timestamp)
-        } else {
-            dao.insert(
-                ClipEntry(content = content, createdAt = timestamp, contentHash = hash),
-            )
-        }
+        dao.upsert(
+            content = content,
+            createdAt = now(),
+            contentHash = contentHash(content),
+            uri = null,
+            mimeType = null,
+        )
         dao.trimUnpinnedTo(settings.clipboardMaxEntries)
         return true
     }

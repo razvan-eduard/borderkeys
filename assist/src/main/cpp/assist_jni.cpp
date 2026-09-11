@@ -50,7 +50,19 @@ jint nativeLoad(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring path, jint 
     if (utf == nullptr) {
         return TextAssist::kErrArgument;
     }
-    const jint status = assist->load(utf, contextTokens, threads);
+    // A C++ exception crossing back into the JVM's JNI call frame is undefined behaviour, not a
+    // Kotlin catch block's problem to handle -- caught here instead, which is also where a fault
+    // loading a corrupt or truncated model file is most likely to originate, from llama.cpp's own
+    // allocation and file-parsing code.
+    const jint status = [&]() -> jint {
+        try {
+            return assist->load(utf, contextTokens, threads);
+        } catch (const std::exception&) {
+            return TextAssist::kErrException;
+        } catch (...) {
+            return TextAssist::kErrException;
+        }
+    }();
     env->ReleaseStringUTFChars(path, utf);
     return status;
 }
@@ -133,10 +145,20 @@ jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instructi
     }
 
     std::string answer;
-    status = assist->run(instructionUtf, textUtf, static_cast<float>(outputRatio), minOutputTokens,
-                         maxOutputTokensCeiling, useRemainingContext == JNI_TRUE,
-                         reuseSharedPrefix == JNI_TRUE, cleanFormatting == JNI_TRUE, &answer,
-                         &truncated);
+    // Same reasoning as nativeLoad's try/catch: generation is the other call that allocates and
+    // runs llama.cpp's own code over data this process did not produce.
+    status = [&]() -> jint {
+        try {
+            return assist->run(instructionUtf, textUtf, static_cast<float>(outputRatio),
+                                minOutputTokens, maxOutputTokensCeiling,
+                                useRemainingContext == JNI_TRUE, reuseSharedPrefix == JNI_TRUE,
+                                cleanFormatting == JNI_TRUE, &answer, &truncated);
+        } catch (const std::exception&) {
+            return TextAssist::kErrException;
+        } catch (...) {
+            return TextAssist::kErrException;
+        }
+    }();
 
     env->ReleaseStringUTFChars(text, textUtf);
     env->ReleaseStringUTFChars(instruction, instructionUtf);

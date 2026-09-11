@@ -4,6 +4,7 @@
 #ifndef BORDERKEYS_TEXT_ASSIST_HPP
 #define BORDERKEYS_TEXT_ASSIST_HPP
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -42,6 +43,10 @@ public:
         kErrDecode = -6,
         kErrBusy = -7,
         kErrArgument = -8,
+        /** A C++ exception was caught at the JNI boundary instead of being let cross it -- see
+         *  assist_jni.cpp's try/catch around load and run. Distinct from every error above so it
+         *  shows up as itself in logs rather than masquerading as one of them. */
+        kErrException = -9,
     };
 
     ~TextAssist();
@@ -121,7 +126,12 @@ public:
                 bool reuseSharedPrefix, bool cleanFormatting, std::string* out,
                 bool* outTruncated);
 
-    /** Asks the current run to stop at the next token boundary. Safe from another thread. */
+    /**
+     * Asks the current run to stop at the next token boundary. Safe from another thread -- and
+     * only actually safe because [cancelRequested_] is `std::atomic`: this is the one field on
+     * this otherwise single-threaded class written from a thread other than the worker thread
+     * that owns everything else here, so it is the one field that has to be.
+     */
     void requestCancel() { cancelRequested_ = true; }
 
 private:
@@ -135,7 +145,7 @@ private:
     llama_sampler* sampler_ = nullptr;
     int contextTokens_ = 0;
     float charsPerToken_ = 0.0f;
-    bool cancelRequested_ = false;
+    std::atomic<bool> cancelRequested_{false};
     bool running_ = false;
     // The exact tokens the context's memory currently holds as a prompt, in the positions
     // decoding them originally put them at -- empty whenever that is not true of anything in the

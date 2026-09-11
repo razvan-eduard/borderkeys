@@ -4,12 +4,12 @@
 package com.borderkeys.data.backup
 
 import com.borderkeys.data.BorderKeysDatabase
+import com.borderkeys.data.ClipboardRepository
 import com.borderkeys.data.theme.ThemeRepository
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.data.entity.BlockedWord
-import com.borderkeys.data.entity.ClipEntry
 import kotlinx.coroutines.flow.first
 
 /**
@@ -223,17 +223,19 @@ class BackupRepository(
         if (parts.clipboard) {
             var added = 0
             for (clip in payload.clips) {
-                val hash = clip.content.hashCode().toLong()
+                // The same hash ClipboardRepository.remember/rememberImage write, not a second,
+                // weaker derivation of the same idea: two different hashes over identical content
+                // would mean a backup restore and a live copy of the same text never recognise
+                // each other, defeating the whole point of the unique index they both rely on.
+                val hash = ClipboardRepository.contentHash(clip.content)
                 if (database.clipboardDao().findByHash(hash) != null) {
                     continue
                 }
-                database.clipboardDao().insert(
-                    ClipEntry(
-                        content = clip.content,
-                        createdAt = clip.createdAt,
-                        pinnedAt = if (clip.pinned) clip.createdAt else null,
-                        contentHash = hash,
-                    ),
+                database.clipboardDao().insertIfAbsent(
+                    content = clip.content,
+                    createdAt = clip.createdAt,
+                    pinnedAt = if (clip.pinned) clip.createdAt else null,
+                    contentHash = hash,
                 )
                 added += 1
             }

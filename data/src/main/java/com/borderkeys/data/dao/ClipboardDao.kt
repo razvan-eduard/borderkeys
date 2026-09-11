@@ -4,8 +4,6 @@
 package com.borderkeys.data.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.borderkeys.data.entity.ClipEntry
 import kotlinx.coroutines.flow.Flow
@@ -34,11 +32,51 @@ interface ClipboardDao {
     @Query("SELECT * FROM clip_entries WHERE contentHash = :contentHash LIMIT 1")
     suspend fun findByHash(contentHash: Long): ClipEntry?
 
-    @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insert(entry: ClipEntry): Long
+    /**
+     * Inserts, or -- if something with this [contentHash] is already there -- just touches it.
+     *
+     * One atomic statement rather than [findByHash] followed by a separate insert-or-update: two
+     * callers remembering the same content within the same moment (a clipboard listener and a
+     * quick action's own copy, in close succession) can both pass a lookup's null check before
+     * either has written anything, and a second unconditional insert would then hit the unique
+     * index on [contentHash] and throw. This can't observe that gap -- SQLite resolves the
+     * conflict inside the same statement that would have caused it, not after.
+     *
+     * Only `createdAt` is written on conflict. `pinnedAt` is left alone, because remembering
+     * something again is not a reason to unpin it, and the row's `id` never changes underneath a
+     * caller holding one.
+     */
+    @Query(
+        """
+        INSERT INTO clip_entries (content, createdAt, contentHash, uri, mimeType)
+        VALUES (:content, :createdAt, :contentHash, :uri, :mimeType)
+        ON CONFLICT(contentHash) DO UPDATE SET createdAt = :createdAt
+        """,
+    )
+    suspend fun upsert(
+        content: String,
+        createdAt: Long,
+        contentHash: Long,
+        uri: String?,
+        mimeType: String?,
+    )
 
-    @Query("UPDATE clip_entries SET createdAt = :createdAt WHERE id = :id")
-    suspend fun touch(id: Long, createdAt: Long)
+    /**
+     * Inserts, or does nothing at all if something with this [contentHash] is already there.
+     *
+     * For backup restore, which wants the opposite of [upsert]'s touch-on-conflict: an entry
+     * already present should be left exactly as it is, not have its timestamp moved to whatever
+     * the backup happened to store. `INSERT OR IGNORE` makes that atomic the same way `upsert`
+     * is -- the caller's own existence check is only for its own restored-count bookkeeping, not
+     * what makes this safe to call from two restores racing each other.
+     */
+    @Query(
+        """
+        INSERT OR IGNORE INTO clip_entries (content, createdAt, pinnedAt, contentHash)
+        VALUES (:content, :createdAt, :pinnedAt, :contentHash)
+        """,
+    )
+    suspend fun insertIfAbsent(content: String, createdAt: Long, pinnedAt: Long?, contentHash: Long)
 
     @Query("UPDATE clip_entries SET pinnedAt = :pinnedAt WHERE id = :id")
     suspend fun setPinned(id: Long, pinnedAt: Long?)
