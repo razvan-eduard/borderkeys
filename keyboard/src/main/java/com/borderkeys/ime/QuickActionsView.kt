@@ -77,11 +77,10 @@ class QuickActionsView(
     /**
      * How much room each button gets, as one of [SIZE_THICKNESS_FRACTION]'s indices.
      *
-     * Thickness grows a little at each step and the icon shrinks a little as a share of it, so
-     * the room that opens up shows as gap on every side of a button -- above and below it in
-     * the bar's own thickness, and between it and its neighbours along the bar's length, since
-     * [layoutButtons] sizes the icon from thickness rather than from the room a neighbour count
-     * would otherwise divide it into.
+     * Thickness grows at each step and the icon's *share* of it stays the same -- [ICON_FRACTION]
+     * does not vary by level -- so the icon grows right along with the bar, not against it: an
+     * icon and the gap around it both come from the same multiple of the same thickness, which is
+     * what keeps them direct proportional to each other rather than trading one for the other.
      */
     var sizeLevel: Int = 0
         set(value) {
@@ -198,7 +197,7 @@ class QuickActionsView(
             return
         }
         val thickness = if (vertical) width else height
-        buttonSizePx = (thickness * SIZE_ICON_FRACTION[sizeLevel]).toInt().coerceAtLeast(1)
+        buttonSizePx = (thickness * ICON_FRACTION).toInt().coerceAtLeast(1)
         val along = if (vertical) height else width
         val step = along.toFloat() / shown
         for (index in 0 until shown) {
@@ -341,15 +340,17 @@ class QuickActionsView(
          * [barThicknessPx]'s multiplier at each [sizeLevel], indexed by
          * [KeyboardPreferences.QUICK_ACTIONS_SIZE_DEFAULT] and up. 1 is [BAR_HEIGHT_FRACTION]
          * untouched -- today's bar, unchanged by a setting nobody has picked yet.
+         *
+         * [ICON_FRACTION] does not have a matching per-level table: it stays one constant share
+         * of thickness at every level, which is what makes the icon and the gap around it both
+         * grow by exactly this same multiple -- direct proportional to each other, and to the
+         * level chosen, rather than one growing at the other's expense on a thickness that held
+         * still.
          */
-        val SIZE_THICKNESS_FRACTION = floatArrayOf(1.00f, 1.10f, 1.20f, 1.35f)
+        val SIZE_THICKNESS_FRACTION = floatArrayOf(1.00f, 1.25f, 1.55f, 1.90f)
 
-        /**
-         * [layoutButtons]'s icon size, as a share of thickness, at the same indices as
-         * [SIZE_THICKNESS_FRACTION]. Falls as thickness rises: the room that opens up on both
-         * counts shows as gap, not as a bigger icon on an already generous touch target.
-         */
-        val SIZE_ICON_FRACTION = floatArrayOf(0.52f, 0.42f, 0.34f, 0.26f)
+        /** How much of the bar's thickness an icon takes, leaving a touch margin around it. */
+        const val ICON_FRACTION = 0.52f
 
         const val DEFAULT_THICKNESS_PX = 132f
     }

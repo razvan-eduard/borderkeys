@@ -7,9 +7,7 @@ import android.view.Gravity
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -38,10 +36,15 @@ import com.borderkeys.theme.ThemePaints
  *
  * [KeyboardHostView] does its own placement arithmetic in [KeyboardHostView.setPlacement] --
  * width, which edge, how far off the bottom -- the same class and the same call the input method
- * makes from `BorderKeysService.applyPlacement`. Handing it the real preferences and drawing it
- * inside a fixed-height area standing in for the bottom of a screen is what lets one-handed,
- * floating and a resized dock actually look like what they are, rather than being described in
- * words above a keyboard that ignores all of them.
+ * makes from `BorderKeysService.applyPlacement`. Handing it the real preferences is what lets
+ * one-handed, floating and a resized dock actually look like what they are, rather than being
+ * described in words above a keyboard that ignores all of them.
+ *
+ * Sized to exactly what [KeyboardHostView] measures itself at, not a guess: nothing here sets a
+ * height, so the surrounding [Box] wraps to whatever height the real view -- number row, quick
+ * action bar and all -- actually comes out to for the preferences it was just handed, the same
+ * way it would in the keyboard itself. A tall enough configuration makes for a tall preview; that
+ * is what the setting being changed does, and describing it any other way is the guess.
  *
  * Takes one [KeyboardAppearance] rather than a theme and a set of preferences as two loose
  * parameters -- see [KeyboardAppearance] for why: this preview once composed the keyboard's
@@ -67,7 +70,6 @@ fun PlacementPreview(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(PREVIEW_HEIGHT_DP.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
@@ -149,15 +151,10 @@ fun PlacementPreview(
                 view.onThemeChanged()
                 view.requestLayout()
             },
-            modifier = Modifier.fillMaxSize(),
+            // Width only -- no height() or fillMaxHeight() anywhere in this Box, so the AndroidView
+            // measures KeyboardHostView with its own real height and both it and the Box wrap to
+            // exactly that, rather than a guess at how tall a keyboard configuration might get.
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
-
-/**
- * Tall enough for a keyboard resized up to about its own maximum height plus a generous floating
- * offset, without turning the settings screen itself into mostly a picture of a keyboard. A
- * configuration past this simply has its top edge cropped -- the bottom, which is the edge every
- * setting on this screen actually moves, always stays in view.
- */
-private const val PREVIEW_HEIGHT_DP = 340
