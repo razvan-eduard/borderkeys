@@ -103,6 +103,11 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                     KeyboardPreferences.SYMBOLS_NUMBER_RIGHT, preferences.symbolsNumberPosition, update,
                 )
             }
+            SwitchRow(
+                title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
+                subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
+                checked = preferences.numericKeypad,
+            ) { value -> update { it.copy(numericKeypad = value) } }
         }
 
         SettingsSectionCard(strings[Keys.LAYOUT_KEYS]) {
@@ -136,11 +141,6 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 subtitle = strings[Keys.SIZE_SPACE_CURSOR_NOTE],
                 checked = preferences.spaceCursorControl,
             ) { value -> update { it.copy(spaceCursorControl = value) } }
-            SwitchRow(
-                title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
-                subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
-                checked = preferences.numericKeypad,
-            ) { value -> update { it.copy(numericKeypad = value) } }
 
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
                 Text(
