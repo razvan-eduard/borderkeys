@@ -114,6 +114,15 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# Per-language accent overlays -- which stacked/alternate letters a long press reaches for each
+# enabled language. Plain data, authored here, the same as the layouts above; JSON has no
+# comment syntax to carry a header of its own.
+[[annotations]]
+path = "keyboard/src/main/assets/accents/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 BorderKeys contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # Recorded swipe gestures used by tools/gesture_replay.py and the native tests (step 6.6).
 [[annotations]]
 path = "native-tests/data/**"
