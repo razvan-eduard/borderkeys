@@ -35,8 +35,10 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
+import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.PlacementPreview
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.launch
@@ -53,126 +55,136 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val themes = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
-    val preferences by themes.preferences
-        .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
+    // The same appearance flow Size & Position previews from -- one preview core, not a second
+    // one that could drift from it. Only preferences are read below; theme and lightTheme ride
+    // along because KeyboardAppearance is what PlacementPreview takes.
+    val appearance by themes.appearance
+        .collectAsStateWithLifecycle(initialValue = remember { themes.currentAppearance() })
+    val preferences = appearance.preferences
     val update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit = { transform ->
         scope.launch { themes.updatePreferences(transform) }
     }
     var picking by remember { mutableStateOf(false) }
     val chosen = QuickAction.fromIds(preferences.quickActions)
 
-    Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SettingsSectionCard(strings[Keys.QUICK_TITLE]) {
-            SwitchRow(
-                title = strings[Keys.QUICK_SHOW],
-                subtitle = strings[Keys.QUICK_SHOW_NOTE],
-                checked = preferences.quickActionsEnabled,
-            ) { value -> update { it.copy(quickActionsEnabled = value) } }
-        }
+    // The preview is outside the scrolling column, so it stays on screen while the controls
+    // under it are scrolled -- the same reason Size & Position pins its own copy of it.
+    Column(modifier = modifier.fillMaxSize()) {
+        PlacementPreview(appearance, Modifier.padding(vertical = 12.dp))
+        Divider()
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            SettingsSectionCard(strings[Keys.QUICK_TITLE]) {
+                SwitchRow(
+                    title = strings[Keys.QUICK_SHOW],
+                    subtitle = strings[Keys.QUICK_SHOW_NOTE],
+                    checked = preferences.quickActionsEnabled,
+                ) { value -> update { it.copy(quickActionsEnabled = value) } }
+            }
 
-        SettingsSectionCard(strings[Keys.QUICK_MODE]) {
-            ChipRow {
-                ModeChip(strings[Keys.QUICK_MODE_FULL],
-                    KeyboardPreferences.QUICK_ACTIONS_FULL, preferences.quickActionsMode) {
-                    update { it.copy(quickActionsMode = it.quickActionsMode.let { _ ->
-                        KeyboardPreferences.QUICK_ACTIONS_FULL }) }
+            SettingsSectionCard(strings[Keys.QUICK_MODE]) {
+                ChipRow {
+                    ModeChip(strings[Keys.QUICK_MODE_FULL],
+                        KeyboardPreferences.QUICK_ACTIONS_FULL, preferences.quickActionsMode) {
+                        update { it.copy(quickActionsMode = it.quickActionsMode.let { _ ->
+                            KeyboardPreferences.QUICK_ACTIONS_FULL }) }
+                    }
+                    ModeChip(strings[Keys.QUICK_MODE_COLLAPSED],
+                        KeyboardPreferences.QUICK_ACTIONS_COLLAPSED, preferences.quickActionsMode) {
+                        update { it.copy(
+                            quickActionsMode = KeyboardPreferences.QUICK_ACTIONS_COLLAPSED) }
+                    }
                 }
-                ModeChip(strings[Keys.QUICK_MODE_COLLAPSED],
-                    KeyboardPreferences.QUICK_ACTIONS_COLLAPSED, preferences.quickActionsMode) {
-                    update { it.copy(
-                        quickActionsMode = KeyboardPreferences.QUICK_ACTIONS_COLLAPSED) }
+                Explanation(strings[Keys.QUICK_MODE_NOTE])
+            }
+
+            SettingsSectionCard(strings[Keys.QUICK_SIZE]) {
+                ChipRow {
+                    SizeChip(strings[Keys.QUICK_SIZE_DEFAULT],
+                        KeyboardPreferences.QUICK_ACTIONS_SIZE_DEFAULT, preferences, update)
+                    SizeChip(strings[Keys.QUICK_SIZE_SMALL],
+                        KeyboardPreferences.QUICK_ACTIONS_SIZE_SMALL, preferences, update)
+                    SizeChip(strings[Keys.QUICK_SIZE_MEDIUM],
+                        KeyboardPreferences.QUICK_ACTIONS_SIZE_MEDIUM, preferences, update)
+                    SizeChip(strings[Keys.QUICK_SIZE_HUGE],
+                        KeyboardPreferences.QUICK_ACTIONS_SIZE_HUGE, preferences, update)
                 }
+                Explanation(strings[Keys.QUICK_SIZE_NOTE])
             }
-            Explanation(strings[Keys.QUICK_MODE_NOTE])
-        }
 
-        SettingsSectionCard(strings[Keys.QUICK_SIZE]) {
-            ChipRow {
-                SizeChip(strings[Keys.QUICK_SIZE_DEFAULT],
-                    KeyboardPreferences.QUICK_ACTIONS_SIZE_DEFAULT, preferences, update)
-                SizeChip(strings[Keys.QUICK_SIZE_SMALL],
-                    KeyboardPreferences.QUICK_ACTIONS_SIZE_SMALL, preferences, update)
-                SizeChip(strings[Keys.QUICK_SIZE_MEDIUM],
-                    KeyboardPreferences.QUICK_ACTIONS_SIZE_MEDIUM, preferences, update)
-                SizeChip(strings[Keys.QUICK_SIZE_HUGE],
-                    KeyboardPreferences.QUICK_ACTIONS_SIZE_HUGE, preferences, update)
+            SettingsSectionCard(strings[Keys.QUICK_PLACEMENT]) {
+                ChipRow {
+                    PlacementChip(strings[Keys.QUICK_PLACEMENT_ABOVE],
+                        KeyboardPreferences.QUICK_ACTIONS_ABOVE_STRIP, preferences, update)
+                    PlacementChip(strings[Keys.QUICK_PLACEMENT_BELOW],
+                        KeyboardPreferences.QUICK_ACTIONS_BELOW_KEYS, preferences, update)
+                }
+                ChipRow {
+                    PlacementChip(strings[Keys.QUICK_PLACEMENT_LEFT],
+                        KeyboardPreferences.QUICK_ACTIONS_LEFT, preferences, update)
+                    PlacementChip(strings[Keys.QUICK_PLACEMENT_RIGHT],
+                        KeyboardPreferences.QUICK_ACTIONS_RIGHT, preferences, update)
+                }
+                Explanation(strings[Keys.QUICK_PLACEMENT_NOTE])
             }
-            Explanation(strings[Keys.QUICK_SIZE_NOTE])
-        }
 
-        SettingsSectionCard(strings[Keys.QUICK_PLACEMENT]) {
-            ChipRow {
-                PlacementChip(strings[Keys.QUICK_PLACEMENT_ABOVE],
-                    KeyboardPreferences.QUICK_ACTIONS_ABOVE_STRIP, preferences, update)
-                PlacementChip(strings[Keys.QUICK_PLACEMENT_BELOW],
-                    KeyboardPreferences.QUICK_ACTIONS_BELOW_KEYS, preferences, update)
-            }
-            ChipRow {
-                PlacementChip(strings[Keys.QUICK_PLACEMENT_LEFT],
-                    KeyboardPreferences.QUICK_ACTIONS_LEFT, preferences, update)
-                PlacementChip(strings[Keys.QUICK_PLACEMENT_RIGHT],
-                    KeyboardPreferences.QUICK_ACTIONS_RIGHT, preferences, update)
-            }
-            Explanation(strings[Keys.QUICK_PLACEMENT_NOTE])
-        }
-
-        SettingsSectionCard(strings[Keys.QUICK_BUTTONS]) {
-            if (chosen.isEmpty()) {
-                Explanation(strings[Keys.QUICK_NONE])
-            }
-            chosen.forEachIndexed { index, action ->
-                ButtonRow(
-                    action = action,
-                    index = index,
-                    onMoveTop = { update { current -> current.copy(quickActions = move(
-                        current.quickActions, index, 0)) } },
-                    onMoveUp = { update { current -> current.copy(quickActions = move(
-                        current.quickActions, index, index - 1)) } },
-                    onRemove = { update { current -> current.copy(quickActions =
-                        current.quickActions.filterNot { it == action.id }) } },
-                )
-            }
-            // Only once the list has actually moved away from it -- a button that is always
-            // there invites a tap that undoes a selection nobody meant to touch.
-            if (preferences.quickActions != QuickAction.DEFAULT.map { it.id }) {
-                TextButton(
-                    onClick = {
-                        update { current ->
-                            current.copy(quickActions = QuickAction.DEFAULT.map { it.id })
-                        }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULT]) }
-            }
-            Explanation(strings[Keys.QUICK_BUTTONS_NOTE])
-            if (chosen.size < KeyboardPreferences.MAX_QUICK_ACTIONS) {
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .clickable { picking = !picking }
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                ) {
-                    Text(
-                        strings[Keys.QUICK_ADD],
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.primary,
+            SettingsSectionCard(strings[Keys.QUICK_BUTTONS]) {
+                if (chosen.isEmpty()) {
+                    Explanation(strings[Keys.QUICK_NONE])
+                }
+                chosen.forEachIndexed { index, action ->
+                    ButtonRow(
+                        action = action,
+                        index = index,
+                        onMoveTop = { update { current -> current.copy(quickActions = move(
+                            current.quickActions, index, 0)) } },
+                        onMoveUp = { update { current -> current.copy(quickActions = move(
+                            current.quickActions, index, index - 1)) } },
+                        onRemove = { update { current -> current.copy(quickActions =
+                            current.quickActions.filterNot { it == action.id }) } },
                     )
                 }
-                if (picking) {
-                    for (action in QuickAction.entries) {
-                        if (action in chosen) continue
-                        // Not offered while the draft box is switched off, or the bar would
-                        // gain a button for something that cannot open.
-                        if (action == QuickAction.COMPOSE && !preferences.composerEnabled) continue
-                        ButtonRow(
-                            action = action,
-                            index = -1,
-                            onAdd = {
-                                update { current ->
-                                    current.copy(quickActions = current.quickActions + action.id)
-                                }
-                                picking = false
-                            },
+                // Only once the list has actually moved away from it -- a button that is always
+                // there invites a tap that undoes a selection nobody meant to touch.
+                if (preferences.quickActions != QuickAction.DEFAULT.map { it.id }) {
+                    TextButton(
+                        onClick = {
+                            update { current ->
+                                current.copy(quickActions = QuickAction.DEFAULT.map { it.id })
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULT]) }
+                }
+                Explanation(strings[Keys.QUICK_BUTTONS_NOTE])
+                if (chosen.size < KeyboardPreferences.MAX_QUICK_ACTIONS) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable { picking = !picking }
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                    ) {
+                        Text(
+                            strings[Keys.QUICK_ADD],
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.primary,
                         )
+                    }
+                    if (picking) {
+                        for (action in QuickAction.entries) {
+                            if (action in chosen) continue
+                            // Not offered while the draft box is switched off, or the bar would
+                            // gain a button for something that cannot open.
+                            if (action == QuickAction.COMPOSE && !preferences.composerEnabled) continue
+                            ButtonRow(
+                                action = action,
+                                index = -1,
+                                onAdd = {
+                                    update { current ->
+                                        current.copy(quickActions = current.quickActions + action.id)
+                                    }
+                                    picking = false
+                                },
+                            )
+                        }
                     }
                 }
             }

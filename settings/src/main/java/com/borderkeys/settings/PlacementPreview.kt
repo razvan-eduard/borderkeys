@@ -82,6 +82,7 @@ fun PlacementPreview(
                             isEnabled = false
                             keyboard.isEnabled = false
                             keyboard.swipeEnabled = false
+                            quickActions.isEnabled = false
                         },
                         FrameLayout.LayoutParams(
                             FrameLayout.LayoutParams.MATCH_PARENT,

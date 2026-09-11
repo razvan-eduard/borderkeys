@@ -262,6 +262,13 @@ class QuickActionsView(
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        // Overriding onTouchEvent skips the base View's own isEnabled check, so nothing else
+        // was stopping a tap here from flipping expanded and showing a press -- harmless on its
+        // own, since a settings preview wires no listener, but not what "read-only" means for a
+        // control sitting beside a keyboard a preview otherwise sets isEnabled = false on too.
+        if (!isEnabled) {
+            return false
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 pressedIndex = buttonAt(event.x, event.y)
