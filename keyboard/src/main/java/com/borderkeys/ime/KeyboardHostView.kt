@@ -620,8 +620,11 @@ class KeyboardHostView(
     /**
      * The "outline the keys" setting's other half: a hairline framing the whole keyboard --
      * suggestions and all -- rather than each key's own edge, which [KeyboardCanvasView]
-     * already draws for itself. Top always; bottom only once the keyboard is lifted clear of
-     * the screen's own bottom edge, where there is an edge for it to mark apart from.
+     * already draws for itself. Each side only where there is actually an edge there to mark:
+     * top always; bottom once the keyboard is lifted clear of the screen's own bottom edge;
+     * left/right once it is narrower than the screen and its background does not already reach
+     * to the sides -- [left] and [right] are already the screen's own edges whenever it does,
+     * so the two checks below are the same test the top/bottom ones are, not a separate one.
      */
     private fun drawOutline(canvas: android.graphics.Canvas, left: Float, right: Float, bottom: Float) {
         if (!paints.showKeyBorders) {
@@ -631,6 +634,12 @@ class KeyboardHostView(
         canvas.drawLine(left, half, right, half, paints.keyStroke)
         if (bottomOffsetPx > 0) {
             canvas.drawLine(left, bottom - half, right, bottom - half, paints.keyStroke)
+        }
+        if (left > 0f) {
+            canvas.drawLine(left + half, 0f, left + half, bottom, paints.keyStroke)
+        }
+        if (right < width) {
+            canvas.drawLine(right - half, 0f, right - half, bottom, paints.keyStroke)
         }
     }
 
