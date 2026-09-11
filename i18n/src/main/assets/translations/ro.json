@@ -186,6 +186,7 @@
   "clipboard_unpin": "Anulează fixarea",
   "clipboard_weeks": "%s săptămâni",
   "common_about": "Despre",
+  "common_reset_to_default": "Revino la valoarea implicită",
   "common_reset_to_defaults": "Revino la valorile implicite",
   "common_reset_to_defaults_note": "Pune fiecare setare de pe acest ecran înapoi la ce era la început. Nimic din afara acestui ecran nu se schimbă.",
   "composer_action_grammar": "Gramatică",

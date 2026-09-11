@@ -26,7 +26,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,6 +48,7 @@ import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.settings.ColourRow
+import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.KeyboardPreview
@@ -257,7 +257,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ColourRow(strings[Keys.THEME_PATTERN_COLOUR], theme.patternColor, preserveAlpha = true) {
                     update { t -> t.copy(patternColor = it) }
                 }
-                ThemeSlider(strings[Keys.THEME_PATTERN_SIZE], theme.patternScaleDp, 8f..64f, "dp") {
+                ThemeSlider(strings[Keys.THEME_PATTERN_SIZE], theme.patternScaleDp, 8f..64f, "dp", default = 24f) {
                     update { t -> t.copy(patternScaleDp = it) }
                 }
                 // Shown as the background's own colour when there is no second one, so the row
@@ -287,6 +287,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
             if (theme.backgroundImage.isNotEmpty()) {
                 ThemeSlider(
                     strings[Keys.THEME_PICTURE_DIM], theme.backgroundImageDim * 100f, 0f..100f, "%",
+                    default = 55f,
                 ) { update { t -> t.copy(backgroundImageDim = it / 100f) } }
                 Explanation(strings[Keys.THEME_PICTURE_DIM_NOTE])
             }
@@ -303,23 +304,23 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
             SettingsSectionCard(strings[Keys.THEME_SHAPE]) {
                 ThemeSlider(
                     strings[Keys.THEME_CORNER_RADIUS], theme.keyCornerRadiusDp, 0f..32f,
-                    strings[Keys.THEME_DP],
+                    strings[Keys.THEME_DP], default = 8f,
                 ) {
                     update { t -> t.copy(keyCornerRadiusDp = it) }
                 }
-                ThemeSlider(strings[Keys.THEME_GAP_BETWEEN_KEYS], theme.keyGapDp, 0f..16f, "dp") {
+                ThemeSlider(strings[Keys.THEME_GAP_BETWEEN_KEYS], theme.keyGapDp, 0f..16f, "dp", default = 4f) {
                     update { t -> t.copy(keyGapDp = it) }
                 }
-                ThemeSlider(strings[Keys.THEME_ROW_HEIGHT], theme.rowHeightDp, 28f..96f, "dp") {
+                ThemeSlider(strings[Keys.THEME_ROW_HEIGHT], theme.rowHeightDp, 28f..96f, "dp", default = 52f) {
                     update { t -> t.copy(rowHeightDp = it) }
                 }
-                ThemeSlider(strings[Keys.THEME_LABEL_SIZE], theme.labelTextSizeSp, 8f..40f, "sp") {
+                ThemeSlider(strings[Keys.THEME_LABEL_SIZE], theme.labelTextSizeSp, 8f..40f, "sp", default = 20f) {
                     update { t -> t.copy(labelTextSizeSp = it) }
                 }
-                ThemeSlider(strings[Keys.THEME_PRESS_DEPTH], theme.pressedElevation, 0f..16f, "dp") {
+                ThemeSlider(strings[Keys.THEME_PRESS_DEPTH], theme.pressedElevation, 0f..16f, "dp", default = 2f) {
                     update { t -> t.copy(pressedElevation = it) }
                 }
-                ThemeSlider(strings[Keys.THEME_TRAIL_WIDTH], theme.swipeTrailWidthDp, 1f..24f, "dp") {
+                ThemeSlider(strings[Keys.THEME_TRAIL_WIDTH], theme.swipeTrailWidthDp, 1f..24f, "dp", default = 4f) {
                     update { t -> t.copy(swipeTrailWidthDp = it) }
                 }
                 SwitchRow(
@@ -446,22 +447,17 @@ private fun ThemeSlider(
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     unit: String,
+    default: Float,
     onChange: (Float) -> Unit,
 ) {
     val strings = LocalStrings.current
-    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-        Text(
-            strings.getString(Keys.THEME_TEXT, label, value.toInt(), unit),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Slider(
-            value = value.coerceIn(range),
-            valueRange = range,
-            onValueChange = onChange,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
+    DefaultableSlider(
+        label = strings.getString(Keys.THEME_TEXT, label, value.toInt(), unit),
+        value = value,
+        range = range,
+        default = default,
+        onChange = onChange,
+    )
 }
 
 

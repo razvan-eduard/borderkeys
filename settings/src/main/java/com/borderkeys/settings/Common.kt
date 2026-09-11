@@ -11,13 +11,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -162,4 +167,52 @@ fun Explanation(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
     )
+}
+
+/**
+ * A slider that knows its own default, and offers to go back to it.
+ *
+ * The reset control -- a small "x" beside the value -- only appears once [value] has actually
+ * moved away from [default]. Always showing it would mean a control that usually does nothing,
+ * which on a row already this narrow reads as "is this broken" before it reads as "reset".
+ *
+ * The one slider every screen with a numeric setting reads from, rather than each screen
+ * building its own copy: Size and Theme both used to, with no way to answer "how far is this
+ * from stock" except tapping through every one by hand.
+ */
+@Composable
+fun DefaultableSlider(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    default: Float,
+    onChange: (Float) -> Unit,
+) {
+    val strings = LocalStrings.current
+    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            if (value != default) {
+                IconButton(onClick = { onChange(default) }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        painter = painterResource(android.R.drawable.ic_menu_close_clear_cancel),
+                        contentDescription = strings[Keys.COMMON_RESET_TO_DEFAULT],
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        Slider(
+            value = value.coerceIn(range),
+            valueRange = range,
+            onValueChange = onChange,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }

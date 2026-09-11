@@ -186,6 +186,7 @@
   "clipboard_unpin": "Dejar de fijar",
   "clipboard_weeks": "%s semanas",
   "common_about": "Acerca de",
+  "common_reset_to_default": "Restablecer al valor predeterminado",
   "common_reset_to_defaults": "Restablecer valores por defecto",
   "common_reset_to_defaults_note": "Devuelve cada ajuste de esta pantalla a como empezó. Nada fuera de esta pantalla cambia.",
   "composer_action_grammar": "Gramática",

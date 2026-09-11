@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PlacementPreview
@@ -67,10 +67,11 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                     strings[Keys.SIZE_BIGGER_KEYS_ARE_EASIER_TO_HIT],
                 )
                 Explanation(strings[Keys.SIZE_RESIZE_BY_HAND])
-                LabelledSlider(
+                DefaultableSlider(
                     value = preferences.heightScale,
                     range = KeyboardPreferences.MIN_HEIGHT_SCALE..KeyboardPreferences.MAX_HEIGHT_SCALE,
                     label = strings.getString(Keys.SIZE_TEXT_2, (preferences.heightScale * 100).toInt()),
+                    default = 1f,
                 ) { value -> update { it.copy(heightScale = value) } }
             }
             SettingsSectionCard(strings[Keys.SIZE_POSITION]) {
@@ -94,30 +95,33 @@ fun SizeScreen(modifier: Modifier = Modifier) {
             // Not gated on the position mode any more: the dock honours the width too, so that a
             // side resize handle does something in the mode most people are in.
             SettingsSectionCard(strings[Keys.SIZE_WIDTH]) {
-                LabelledSlider(
+                DefaultableSlider(
                     value = preferences.widthScale,
                     range = KeyboardPreferences.MIN_WIDTH_SCALE..1f,
                     label = strings.getString(Keys.SIZE_TEXT, (preferences.widthScale * 100).toInt()),
+                    default = 1f,
                 ) { value -> update { it.copy(widthScale = value) } }
             }
             SettingsSectionCard(strings[Keys.SIZE_DISTANCE_FROM_THE_BOTTOM_EDGE]) {
                 Explanation(
                     strings[Keys.SIZE_LIFTS_THE_KEYBOARD_OFF_THE_BOTTOM],
                 )
-                LabelledSlider(
+                DefaultableSlider(
                     value = preferences.bottomOffsetDp,
                     range = 0f..KeyboardPreferences.MAX_BOTTOM_OFFSET_DP,
                     label = strings.getString(Keys.SIZE_DP_2, preferences.bottomOffsetDp.toInt()),
+                    default = 0f,
                 ) { value -> update { it.copy(bottomOffsetDp = value) } }
             }
             // Only the floating keyboard can be moved sideways; in every other mode the position is
             // the mode, so a slider here would be a control with nothing to control.
             if (preferences.positionMode == KeyboardPreferences.MODE_FLOATING) {
                 SettingsSectionCard(strings[Keys.SIZE_HORIZONTAL_POSITION]) {
-                    LabelledSlider(
+                    DefaultableSlider(
                         value = preferences.horizontalOffsetDp,
                         range = -160f..160f,
                         label = strings.getString(Keys.SIZE_DP, preferences.horizontalOffsetDp.toInt()),
+                        default = 0f,
                     ) { value -> update { it.copy(horizontalOffsetDp = value) } }
                 }
             }
@@ -168,23 +172,4 @@ private fun ModeChip(
         onClick = { update { it.withPositionMode(mode) } },
         label = { Text(label) },
     )
-}
-
-@Composable
-private fun LabelledSlider(
-    value: Float,
-    range: ClosedFloatingPointRange<Float>,
-    label: String,
-    onChange: (Float) -> Unit,
-) {
-    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-        Text(label, style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Slider(
-            value = value.coerceIn(range),
-            valueRange = range,
-            onValueChange = onChange,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
 }
