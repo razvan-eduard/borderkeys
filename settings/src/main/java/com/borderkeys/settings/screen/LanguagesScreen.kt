@@ -105,12 +105,14 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
             for (pack in packs) {
                 PackRow(pack, repository, scope)
             }
-            val installable = BundledDictionaries.ALL.filter { candidate ->
-                packs.none { it.tag.equals(candidate.tag, ignoreCase = true) }
-            }
-            if (installable.isNotEmpty()) {
         }
-        SettingsSectionCard(strings[Keys.LANGUAGES_INCLUDED_WITH_THE_APP]) {
+        val installable = BundledDictionaries.ALL.filter { candidate ->
+            packs.none { it.tag.equals(candidate.tag, ignoreCase = true) }
+        }
+        // Nothing to say once every bundled language is already installed: a card offering to
+        // add languages that are all already added is a card with nothing in it.
+        if (installable.isNotEmpty()) {
+            SettingsSectionCard(strings[Keys.LANGUAGES_INCLUDED_WITH_THE_APP]) {
                 Explanation(
                     strings[Keys.LANGUAGES_THESE_ARE_IN_THE_APPLICATION_ITSELF],
                 )
