@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -35,9 +34,11 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
+import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -99,12 +100,9 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     }
 
     val themes = remember { DataGraph.themes }
+    val update = rememberPreferencesUpdater()
     val preferences by themes.preferences
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
-
-    fun update(transform: (KeyboardPreferences) -> KeyboardPreferences) {
-        scope.launch { themes.updatePreferences(transform) }
-    }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SettingsSectionCard(strings[Keys.DICTIONARY_HOW_QUICKLY_IT_LEARNS]) {
@@ -115,9 +113,18 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SpeedChip(strings[Keys.DICTIONARY_CAUTIOUS], KeyboardPreferences.LEARNING_CAUTIOUS, preferences, ::update)
-                SpeedChip(strings[Keys.DICTIONARY_BALANCED], KeyboardPreferences.LEARNING_BALANCED, preferences, ::update)
-                SpeedChip(strings[Keys.DICTIONARY_IMMEDIATE], KeyboardPreferences.LEARNING_IMMEDIATE, preferences, ::update)
+                PickerChip(
+                    strings[Keys.DICTIONARY_CAUTIOUS],
+                    preferences.learningSpeed == KeyboardPreferences.LEARNING_CAUTIOUS,
+                ) { update { it.copy(learningSpeed = KeyboardPreferences.LEARNING_CAUTIOUS) } }
+                PickerChip(
+                    strings[Keys.DICTIONARY_BALANCED],
+                    preferences.learningSpeed == KeyboardPreferences.LEARNING_BALANCED,
+                ) { update { it.copy(learningSpeed = KeyboardPreferences.LEARNING_BALANCED) } }
+                PickerChip(
+                    strings[Keys.DICTIONARY_IMMEDIATE],
+                    preferences.learningSpeed == KeyboardPreferences.LEARNING_IMMEDIATE,
+                ) { update { it.copy(learningSpeed = KeyboardPreferences.LEARNING_IMMEDIATE) } }
             }
             Explanation(
                 when (preferences.learningSpeed) {
@@ -215,18 +222,4 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
             )
         }
     }
-}
-
-@Composable
-private fun SpeedChip(
-    label: String,
-    speed: Int,
-    preferences: KeyboardPreferences,
-    update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit,
-) {
-    FilterChip(
-        selected = preferences.learningSpeed == speed,
-        onClick = { update { it.copy(learningSpeed = speed) } },
-        label = { Text(label) },
-    )
 }

@@ -23,6 +23,7 @@ import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.isBorderKeysDefault
 import com.borderkeys.settings.isBorderKeysEnabled
+import com.borderkeys.settings.siblingPackage
 
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
@@ -173,15 +174,3 @@ private fun PinShortcutRow() {
 
 /** The same class name method.xml uses, and the only reference to it from this screen. */
 private const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
-
-/**
- * The package name of the other build, or null when this one has no sibling.
- *
- * The same derivation the setup screen uses, and for the same reason: the assistant build is
- * this one's name with a suffix, so one is the other with the suffix removed rather than a
- * second constant that could drift.
- */
-private fun siblingPackage(context: android.content.Context): String? {
-    val self = context.packageName
-    return if (self.endsWith(".plus")) self.removeSuffix(".plus") else null
-}

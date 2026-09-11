@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -23,7 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -34,10 +32,11 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.PlacementPreview
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
-import kotlinx.coroutines.launch
+import com.borderkeys.settings.rememberPreferencesUpdater
 
 /**
  * Where the keyboard is and how big -- once per orientation.
@@ -58,7 +57,7 @@ import kotlinx.coroutines.launch
 fun SizeScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val repository = remember { DataGraph.themes }
-    val scope = rememberCoroutineScope()
+    val update = rememberPreferencesUpdater()
     val appearance by repository.appearance
         .collectAsStateWithLifecycle(initialValue = remember { repository.currentAppearance() })
     val (theme, _, preferences) = appearance
@@ -68,10 +67,6 @@ fun SizeScreen(modifier: Modifier = Modifier) {
     // tab is selected rather than the live orientation.
     var landscapeTab by remember { mutableStateOf(false) }
     val placement = preferences.placementFor(landscapeTab)
-
-    fun update(transform: (KeyboardPreferences) -> KeyboardPreferences) {
-        scope.launch { repository.updatePreferences(transform) }
-    }
 
     fun updatePlacement(transform: (KeyboardPlacement) -> KeyboardPlacement) {
         update { it.withPlacement(landscapeTab, transform) }
@@ -111,14 +106,30 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    ModeChip(strings[Keys.SIZE_DOCKED], KeyboardPreferences.MODE_DOCKED,
-                        placement.positionMode, landscapeTab, ::update)
-                    ModeChip(strings[Keys.SIZE_LEFT], KeyboardPreferences.MODE_ONE_HANDED_LEFT,
-                        placement.positionMode, landscapeTab, ::update)
-                    ModeChip(strings[Keys.SIZE_RIGHT], KeyboardPreferences.MODE_ONE_HANDED_RIGHT,
-                        placement.positionMode, landscapeTab, ::update)
-                    ModeChip(strings[Keys.SIZE_FLOATING], KeyboardPreferences.MODE_FLOATING,
-                        placement.positionMode, landscapeTab, ::update)
+                    PickerChip(
+                        strings[Keys.SIZE_DOCKED],
+                        placement.positionMode == KeyboardPreferences.MODE_DOCKED,
+                    ) { update { it.withPositionMode(KeyboardPreferences.MODE_DOCKED, landscapeTab) } }
+                    PickerChip(
+                        strings[Keys.SIZE_LEFT],
+                        placement.positionMode == KeyboardPreferences.MODE_ONE_HANDED_LEFT,
+                    ) {
+                        update {
+                            it.withPositionMode(KeyboardPreferences.MODE_ONE_HANDED_LEFT, landscapeTab)
+                        }
+                    }
+                    PickerChip(
+                        strings[Keys.SIZE_RIGHT],
+                        placement.positionMode == KeyboardPreferences.MODE_ONE_HANDED_RIGHT,
+                    ) {
+                        update {
+                            it.withPositionMode(KeyboardPreferences.MODE_ONE_HANDED_RIGHT, landscapeTab)
+                        }
+                    }
+                    PickerChip(
+                        strings[Keys.SIZE_FLOATING],
+                        placement.positionMode == KeyboardPreferences.MODE_FLOATING,
+                    ) { update { it.withPositionMode(KeyboardPreferences.MODE_FLOATING, landscapeTab) } }
                 }
 
                 // Not gated on the position mode: the dock honours the width too, so that a side
@@ -188,17 +199,3 @@ fun SizeScreen(modifier: Modifier = Modifier) {
 private fun defaultPlacement(isLandscape: Boolean): KeyboardPlacement =
     if (isLandscape) KeyboardPlacement() else KeyboardPlacement(heightScale = 1f)
 
-@Composable
-private fun ModeChip(
-    label: String,
-    mode: Int,
-    current: Int,
-    isLandscape: Boolean,
-    update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit,
-) {
-    FilterChip(
-        selected = current == mode,
-        onClick = { update { it.withPositionMode(mode, isLandscape) } },
-        label = { Text(label) },
-    )
-}

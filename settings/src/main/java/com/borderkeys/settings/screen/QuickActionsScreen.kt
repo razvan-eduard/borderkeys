@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -23,7 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,10 +36,12 @@ import com.borderkeys.keyboard.R
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.PlacementPreview
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
-import kotlinx.coroutines.launch
+import com.borderkeys.settings.move
+import com.borderkeys.settings.rememberPreferencesUpdater
 
 /**
  * The quick-action bar: whether it is shown, what shape it takes, where it sits, and which
@@ -54,16 +54,13 @@ import kotlinx.coroutines.launch
 fun QuickActionsScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val themes = remember { DataGraph.themes }
-    val scope = rememberCoroutineScope()
+    val update = rememberPreferencesUpdater()
     // The same appearance flow Size & Position previews from -- one preview core, not a second
     // one that could drift from it. Only preferences are read below; theme and lightTheme ride
     // along because KeyboardAppearance is what PlacementPreview takes.
     val appearance by themes.appearance
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentAppearance() })
     val preferences = appearance.preferences
-    val update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit = { transform ->
-        scope.launch { themes.updatePreferences(transform) }
-    }
     var picking by remember { mutableStateOf(false) }
     val chosen = QuickAction.fromIds(preferences.quickActions)
 
@@ -83,15 +80,15 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
 
             SettingsSectionCard(strings[Keys.QUICK_MODE]) {
                 ChipRow {
-                    ModeChip(strings[Keys.QUICK_MODE_FULL],
-                        KeyboardPreferences.QUICK_ACTIONS_FULL, preferences.quickActionsMode) {
-                        update { it.copy(quickActionsMode = it.quickActionsMode.let { _ ->
-                            KeyboardPreferences.QUICK_ACTIONS_FULL }) }
-                    }
-                    ModeChip(strings[Keys.QUICK_MODE_COLLAPSED],
-                        KeyboardPreferences.QUICK_ACTIONS_COLLAPSED, preferences.quickActionsMode) {
-                        update { it.copy(
-                            quickActionsMode = KeyboardPreferences.QUICK_ACTIONS_COLLAPSED) }
+                    PickerChip(
+                        strings[Keys.QUICK_MODE_FULL],
+                        preferences.quickActionsMode == KeyboardPreferences.QUICK_ACTIONS_FULL,
+                    ) { update { it.copy(quickActionsMode = KeyboardPreferences.QUICK_ACTIONS_FULL) } }
+                    PickerChip(
+                        strings[Keys.QUICK_MODE_COLLAPSED],
+                        preferences.quickActionsMode == KeyboardPreferences.QUICK_ACTIONS_COLLAPSED,
+                    ) {
+                        update { it.copy(quickActionsMode = KeyboardPreferences.QUICK_ACTIONS_COLLAPSED) }
                     }
                 }
                 Explanation(strings[Keys.QUICK_MODE_NOTE])
@@ -99,30 +96,46 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
 
             SettingsSectionCard(strings[Keys.QUICK_SIZE]) {
                 ChipRow {
-                    SizeChip(strings[Keys.QUICK_SIZE_DEFAULT],
-                        KeyboardPreferences.QUICK_ACTIONS_SIZE_DEFAULT, preferences, update)
-                    SizeChip(strings[Keys.QUICK_SIZE_SMALL],
-                        KeyboardPreferences.QUICK_ACTIONS_SIZE_SMALL, preferences, update)
-                    SizeChip(strings[Keys.QUICK_SIZE_MEDIUM],
-                        KeyboardPreferences.QUICK_ACTIONS_SIZE_MEDIUM, preferences, update)
-                    SizeChip(strings[Keys.QUICK_SIZE_HUGE],
-                        KeyboardPreferences.QUICK_ACTIONS_SIZE_HUGE, preferences, update)
+                    PickerChip(
+                        strings[Keys.QUICK_SIZE_DEFAULT],
+                        preferences.quickActionsSize == KeyboardPreferences.QUICK_ACTIONS_SIZE_DEFAULT,
+                    ) { update { it.copy(quickActionsSize = KeyboardPreferences.QUICK_ACTIONS_SIZE_DEFAULT) } }
+                    PickerChip(
+                        strings[Keys.QUICK_SIZE_SMALL],
+                        preferences.quickActionsSize == KeyboardPreferences.QUICK_ACTIONS_SIZE_SMALL,
+                    ) { update { it.copy(quickActionsSize = KeyboardPreferences.QUICK_ACTIONS_SIZE_SMALL) } }
+                    PickerChip(
+                        strings[Keys.QUICK_SIZE_MEDIUM],
+                        preferences.quickActionsSize == KeyboardPreferences.QUICK_ACTIONS_SIZE_MEDIUM,
+                    ) { update { it.copy(quickActionsSize = KeyboardPreferences.QUICK_ACTIONS_SIZE_MEDIUM) } }
+                    PickerChip(
+                        strings[Keys.QUICK_SIZE_HUGE],
+                        preferences.quickActionsSize == KeyboardPreferences.QUICK_ACTIONS_SIZE_HUGE,
+                    ) { update { it.copy(quickActionsSize = KeyboardPreferences.QUICK_ACTIONS_SIZE_HUGE) } }
                 }
                 Explanation(strings[Keys.QUICK_SIZE_NOTE])
             }
 
             SettingsSectionCard(strings[Keys.QUICK_PLACEMENT]) {
                 ChipRow {
-                    PlacementChip(strings[Keys.QUICK_PLACEMENT_ABOVE],
-                        KeyboardPreferences.QUICK_ACTIONS_ABOVE_STRIP, preferences, update)
-                    PlacementChip(strings[Keys.QUICK_PLACEMENT_BELOW],
-                        KeyboardPreferences.QUICK_ACTIONS_BELOW_KEYS, preferences, update)
+                    PickerChip(
+                        strings[Keys.QUICK_PLACEMENT_ABOVE],
+                        preferences.quickActionsPlacement == KeyboardPreferences.QUICK_ACTIONS_ABOVE_STRIP,
+                    ) { update { it.copy(quickActionsPlacement = KeyboardPreferences.QUICK_ACTIONS_ABOVE_STRIP) } }
+                    PickerChip(
+                        strings[Keys.QUICK_PLACEMENT_BELOW],
+                        preferences.quickActionsPlacement == KeyboardPreferences.QUICK_ACTIONS_BELOW_KEYS,
+                    ) { update { it.copy(quickActionsPlacement = KeyboardPreferences.QUICK_ACTIONS_BELOW_KEYS) } }
                 }
                 ChipRow {
-                    PlacementChip(strings[Keys.QUICK_PLACEMENT_LEFT],
-                        KeyboardPreferences.QUICK_ACTIONS_LEFT, preferences, update)
-                    PlacementChip(strings[Keys.QUICK_PLACEMENT_RIGHT],
-                        KeyboardPreferences.QUICK_ACTIONS_RIGHT, preferences, update)
+                    PickerChip(
+                        strings[Keys.QUICK_PLACEMENT_LEFT],
+                        preferences.quickActionsPlacement == KeyboardPreferences.QUICK_ACTIONS_LEFT,
+                    ) { update { it.copy(quickActionsPlacement = KeyboardPreferences.QUICK_ACTIONS_LEFT) } }
+                    PickerChip(
+                        strings[Keys.QUICK_PLACEMENT_RIGHT],
+                        preferences.quickActionsPlacement == KeyboardPreferences.QUICK_ACTIONS_RIGHT,
+                    ) { update { it.copy(quickActionsPlacement = KeyboardPreferences.QUICK_ACTIONS_RIGHT) } }
                 }
                 Explanation(strings[Keys.QUICK_PLACEMENT_NOTE])
             }
@@ -259,50 +272,6 @@ private fun ChipRow(content: @Composable () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) { content() }
-}
-
-@Composable
-private fun ModeChip(label: String, value: Int, current: Int, onPick: () -> Unit) {
-    FilterChip(selected = current == value, onClick = onPick, label = { Text(label) })
-}
-
-@Composable
-private fun PlacementChip(
-    label: String,
-    value: Int,
-    preferences: KeyboardPreferences,
-    update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit,
-) {
-    FilterChip(
-        selected = preferences.quickActionsPlacement == value,
-        onClick = { update { it.copy(quickActionsPlacement = value) } },
-        label = { Text(label) },
-    )
-}
-
-@Composable
-private fun SizeChip(
-    label: String,
-    value: Int,
-    preferences: KeyboardPreferences,
-    update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit,
-) {
-    FilterChip(
-        selected = preferences.quickActionsSize == value,
-        onClick = { update { it.copy(quickActionsSize = value) } },
-        label = { Text(label) },
-    )
-}
-
-/** Moves [from] to [to], clamped, and returns the new order. */
-private fun move(ids: List<Int>, from: Int, to: Int): List<Int> {
-    if (from !in ids.indices) {
-        return ids
-    }
-    val target = to.coerceIn(0, ids.size - 1)
-    val mutable = ids.toMutableList()
-    mutable.add(target, mutable.removeAt(from))
-    return mutable
 }
 
 private fun iconFor(action: QuickAction): Int = when (action) {

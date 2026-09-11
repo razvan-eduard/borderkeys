@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -23,7 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,9 +35,11 @@ import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
-import kotlinx.coroutines.launch
+import com.borderkeys.settings.move
+import com.borderkeys.settings.rememberPreferencesUpdater
 
 /**
  * The draft box: whether it can be opened, what is on its bar, and which instructions were kept.
@@ -52,12 +52,9 @@ import kotlinx.coroutines.launch
 fun ComposerScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val themes = remember { DataGraph.themes }
-    val scope = rememberCoroutineScope()
+    val update = rememberPreferencesUpdater()
     val preferences by themes.preferences
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
-    val update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit = { transform ->
-        scope.launch { themes.updatePreferences(transform) }
-    }
     var picking by remember { mutableStateOf(false) }
     val chosen = ComposerAction.fromIds(preferences.composerBar)
 
@@ -81,18 +78,18 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                TextSizeChip(strings[Keys.COMPOSER_TEXT_SIZE_SMALL],
-                    KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL, preferences.composerTextSize) {
-                    update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL) }
-                }
-                TextSizeChip(strings[Keys.COMPOSER_TEXT_SIZE_MEDIUM],
-                    KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM, preferences.composerTextSize) {
-                    update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM) }
-                }
-                TextSizeChip(strings[Keys.COMPOSER_TEXT_SIZE_LARGE],
-                    KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE, preferences.composerTextSize) {
-                    update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE) }
-                }
+                PickerChip(
+                    strings[Keys.COMPOSER_TEXT_SIZE_SMALL],
+                    preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL,
+                ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL) } }
+                PickerChip(
+                    strings[Keys.COMPOSER_TEXT_SIZE_MEDIUM],
+                    preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM,
+                ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM) } }
+                PickerChip(
+                    strings[Keys.COMPOSER_TEXT_SIZE_LARGE],
+                    preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE,
+                ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE) } }
             }
         }
 
@@ -114,12 +111,12 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
                     index = index,
                     onMoveTop = {
                         update { current ->
-                            current.copy(composerBar = moveTo(current.composerBar, index, 0))
+                            current.copy(composerBar = move(current.composerBar, index, 0))
                         }
                     },
                     onMoveUp = {
                         update { current ->
-                            current.copy(composerBar = moveTo(current.composerBar, index, index - 1))
+                            current.copy(composerBar = move(current.composerBar, index, index - 1))
                         }
                     },
                     onRemove = {
@@ -244,21 +241,6 @@ private fun BarRow(
             }
         }
     }
-}
-
-@Composable
-private fun TextSizeChip(label: String, value: Int, current: Int, onPick: () -> Unit) {
-    FilterChip(selected = current == value, onClick = onPick, label = { Text(label) })
-}
-
-private fun moveTo(ids: List<Int>, from: Int, to: Int): List<Int> {
-    if (from !in ids.indices) {
-        return ids
-    }
-    val target = to.coerceIn(0, ids.size - 1)
-    val mutable = ids.toMutableList()
-    mutable.add(target, mutable.removeAt(from))
-    return mutable
 }
 
 private fun iconFor(action: ComposerAction): Int = when (action) {

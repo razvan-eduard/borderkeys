@@ -18,13 +18,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -33,11 +31,12 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.Screen
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
-import kotlinx.coroutines.launch
+import com.borderkeys.settings.rememberPreferencesUpdater
 
 /**
  * The keys: how many rows, what the long press reaches, how big the letters are, how long a hold
@@ -53,12 +52,9 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
     val strings = LocalStrings.current
     val context = LocalContext.current
     val themes = remember { DataGraph.themes }
-    val scope = rememberCoroutineScope()
+    val update = rememberPreferencesUpdater()
     val preferences by themes.preferences
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
-    val update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit = { transform ->
-        scope.launch { themes.updatePreferences(transform) }
-    }
 
     val subtypes = remember {
         val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
@@ -90,18 +86,18 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                DigitPositionChip(
+                PickerChip(
                     strings[Keys.LAYOUT_DIGITS_TOP],
-                    KeyboardPreferences.SYMBOLS_NUMBER_TOP, preferences.symbolsNumberPosition, update,
-                )
-                DigitPositionChip(
+                    preferences.symbolsNumberPosition == KeyboardPreferences.SYMBOLS_NUMBER_TOP,
+                ) { update { it.copy(symbolsNumberPosition = KeyboardPreferences.SYMBOLS_NUMBER_TOP) } }
+                PickerChip(
                     strings[Keys.LAYOUT_DIGITS_LEFT],
-                    KeyboardPreferences.SYMBOLS_NUMBER_LEFT, preferences.symbolsNumberPosition, update,
-                )
-                DigitPositionChip(
+                    preferences.symbolsNumberPosition == KeyboardPreferences.SYMBOLS_NUMBER_LEFT,
+                ) { update { it.copy(symbolsNumberPosition = KeyboardPreferences.SYMBOLS_NUMBER_LEFT) } }
+                PickerChip(
                     strings[Keys.LAYOUT_DIGITS_RIGHT],
-                    KeyboardPreferences.SYMBOLS_NUMBER_RIGHT, preferences.symbolsNumberPosition, update,
-                )
+                    preferences.symbolsNumberPosition == KeyboardPreferences.SYMBOLS_NUMBER_RIGHT,
+                ) { update { it.copy(symbolsNumberPosition = KeyboardPreferences.SYMBOLS_NUMBER_RIGHT) } }
             }
             SwitchRow(
                 title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
@@ -191,18 +187,4 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
             Explanation(strings[Keys.LAYOUT_THE_GLOBE_KEY_CYCLES_BETWEEN_THE])
         }
     }
-}
-
-@Composable
-private fun DigitPositionChip(
-    label: String,
-    position: Int,
-    current: Int,
-    update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit,
-) {
-    FilterChip(
-        selected = current == position,
-        onClick = { update { it.copy(symbolsNumberPosition = position) } },
-        label = { Text(label) },
-    )
 }

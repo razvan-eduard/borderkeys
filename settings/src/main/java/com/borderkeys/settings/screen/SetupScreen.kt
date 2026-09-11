@@ -47,6 +47,7 @@ import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.isBorderKeysDefault
 import com.borderkeys.settings.isBorderKeysEnabled
 import com.borderkeys.settings.openKeyboardPicker
+import com.borderkeys.settings.siblingPackage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -305,17 +306,6 @@ private fun doneColour(): Color =
     if (isSystemInDarkTheme()) Color(0xFF81C784) else Color(0xFF2E7D32)
 
 /**
- * The package name of the other build, or null when this one has no sibling.
- *
- * Derived from this application's own name rather than written down twice: the assistant build
- * is the core one with a suffix, so one of them is the other with the suffix removed.
- */
-private fun siblingPackage(context: Context): String? {
-    val self = context.packageName
-    return if (self.endsWith(PLUS_SUFFIX)) self.removeSuffix(PLUS_SUFFIX) else null
-}
-
-/**
  * Whether a package is on this device.
  *
  * Needs a <queries> entry in the manifest since API 30, which is a declaration of what this
@@ -324,5 +314,3 @@ private fun siblingPackage(context: Context): String? {
 private fun isInstalled(context: Context, packageName: String): Boolean = runCatching {
     context.packageManager.getPackageInfo(packageName, 0)
 }.isSuccess
-
-private const val PLUS_SUFFIX = ".plus"

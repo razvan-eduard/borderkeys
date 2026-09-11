@@ -13,14 +13,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
-import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
-import kotlinx.coroutines.launch
+import com.borderkeys.settings.rememberPreferencesUpdater
 
 /**
  * The two ways a key press can be felt without being seen: a sound and a vibration.
@@ -32,13 +30,9 @@ import kotlinx.coroutines.launch
 fun SoundScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val repository = remember { DataGraph.themes }
-    val scope = rememberCoroutineScope()
+    val update = rememberPreferencesUpdater()
     val preferences by repository.preferences
         .collectAsStateWithLifecycle(initialValue = remember { repository.currentPreferences() })
-
-    fun update(transform: (KeyboardPreferences) -> KeyboardPreferences) {
-        scope.launch { repository.updatePreferences(transform) }
-    }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SettingsSectionCard(strings[Keys.SCREEN_SOUND_AND_VIBRATION]) {

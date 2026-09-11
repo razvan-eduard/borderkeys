@@ -55,6 +55,8 @@ import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.KeyboardPreview
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
+import com.borderkeys.settings.rememberPreferencesUpdater
+import com.borderkeys.settings.rememberThemeUpdater
 import com.borderkeys.theme.DynamicColors
 import kotlinx.coroutines.launch
 
@@ -75,13 +77,8 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
     val (theme, lightTheme, preferences) = appearance
     val auto = preferences.themeMode == KeyboardPreferences.THEME_MODE_AUTO_SYSTEM
 
-    fun update(transform: (KeyboardTheme) -> KeyboardTheme) {
-        scope.launch { repository.updateTheme(transform) }
-    }
-
-    fun updatePreferences(transform: (KeyboardPreferences) -> KeyboardPreferences) {
-        scope.launch { repository.updatePreferences(transform) }
-    }
+    val update = rememberThemeUpdater()
+    val updatePreferences = rememberPreferencesUpdater()
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val picture = androidx.activity.compose.rememberLauncherForActivityResult(

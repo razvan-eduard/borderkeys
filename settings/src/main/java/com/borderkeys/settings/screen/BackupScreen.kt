@@ -29,10 +29,10 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.backup.BackupFile
 import com.borderkeys.data.backup.BackupRepository
 import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.BackupPartSwitches
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.SettingsSectionCard
-import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -117,26 +117,7 @@ fun BackupScreen(modifier: Modifier = Modifier) {
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SettingsSectionCard(strings[Keys.BACKUP_WHAT]) {
-            SwitchRow(
-                title = strings[Keys.BACKUP_PART_SETTINGS],
-                subtitle = strings[Keys.BACKUP_PART_SETTINGS_NOTE],
-                checked = parts.settings,
-            ) { value -> parts = parts.copy(settings = value) }
-            SwitchRow(
-                title = strings[Keys.BACKUP_PART_DICTIONARY],
-                subtitle = strings[Keys.BACKUP_PART_DICTIONARY_NOTE],
-                checked = parts.dictionary,
-            ) { value -> parts = parts.copy(dictionary = value) }
-            SwitchRow(
-                title = strings[Keys.BACKUP_PART_LANGUAGES],
-                subtitle = strings[Keys.BACKUP_PART_LANGUAGES_NOTE],
-                checked = parts.languages,
-            ) { value -> parts = parts.copy(languages = value) }
-            SwitchRow(
-                title = strings[Keys.BACKUP_PART_CLIPBOARD],
-                subtitle = strings[Keys.BACKUP_PART_CLIPBOARD_NOTE],
-                checked = parts.clipboard,
-            ) { value -> parts = parts.copy(clipboard = value) }
+            BackupPartSwitches(parts) { parts = it }
         }
 
         SettingsSectionCard(strings[Keys.BACKUP_PASSPHRASE]) {

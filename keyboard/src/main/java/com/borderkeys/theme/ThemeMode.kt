@@ -29,4 +29,20 @@ object ThemeMode {
         }
         return if (SystemDarkMode.isDark(context)) theme else lightTheme
     }
+
+    /**
+     * [resolve], with [DynamicColors.apply]'s wallpaper tint composed on top when the preference
+     * for it is on -- the two steps every settings preview that draws a real keyboard needs,
+     * always in this order and always together, so it was three call sites re-deriving the same
+     * pair rather than one of them differing on purpose.
+     */
+    fun effective(
+        theme: KeyboardTheme,
+        lightTheme: KeyboardTheme,
+        preferences: KeyboardPreferences,
+        context: Context,
+    ): KeyboardTheme {
+        val resolved = resolve(theme, lightTheme, preferences, context)
+        return if (preferences.followSystemColors) DynamicColors.apply(resolved, context) else resolved
+    }
 }

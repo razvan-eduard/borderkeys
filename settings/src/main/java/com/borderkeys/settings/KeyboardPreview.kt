@@ -15,7 +15,6 @@ import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.ime.KeyboardCanvasView
 import com.borderkeys.ime.KeyboardLayout
 import com.borderkeys.ime.LayoutLoader
-import com.borderkeys.theme.DynamicColors
 import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
 
@@ -65,12 +64,7 @@ fun KeyboardPreview(
             },
             update = { frame ->
                 val view = frame.getChildAt(0) as KeyboardCanvasView
-                val resolvedTheme = ThemeMode.resolve(theme, lightTheme, preferences, context)
-                val effectiveTheme = if (preferences.followSystemColors) {
-                    DynamicColors.apply(resolvedTheme, context)
-                } else {
-                    resolvedTheme
-                }
+                val effectiveTheme = ThemeMode.effective(theme, lightTheme, preferences, context)
                 paints.update(effectiveTheme, context.resources.displayMetrics, preferences.heightScale, context)
 
                 val width = frame.width

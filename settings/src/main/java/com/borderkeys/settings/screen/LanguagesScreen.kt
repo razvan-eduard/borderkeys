@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -44,6 +43,7 @@ import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
@@ -424,21 +424,31 @@ private fun LanguageLock(preferences: KeyboardPreferences, update: (Int) -> Unit
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        LockChip(strings[Keys.LANGUAGES_LOCK_OFF], KeyboardPreferences.LANGUAGE_LOCK_OFF,
-            preferences, update)
-        LockChip(strings[Keys.LANGUAGES_LOCK_PATIENT], KeyboardPreferences.LANGUAGE_LOCK_PATIENT,
-            preferences, update)
-        LockChip(strings[Keys.LANGUAGES_LOCK_BALANCED], KeyboardPreferences.LANGUAGE_LOCK_BALANCED,
-            preferences, update)
+        PickerChip(
+            strings[Keys.LANGUAGES_LOCK_OFF],
+            preferences.languageLock == KeyboardPreferences.LANGUAGE_LOCK_OFF,
+        ) { update(KeyboardPreferences.LANGUAGE_LOCK_OFF) }
+        PickerChip(
+            strings[Keys.LANGUAGES_LOCK_PATIENT],
+            preferences.languageLock == KeyboardPreferences.LANGUAGE_LOCK_PATIENT,
+        ) { update(KeyboardPreferences.LANGUAGE_LOCK_PATIENT) }
+        PickerChip(
+            strings[Keys.LANGUAGES_LOCK_BALANCED],
+            preferences.languageLock == KeyboardPreferences.LANGUAGE_LOCK_BALANCED,
+        ) { update(KeyboardPreferences.LANGUAGE_LOCK_BALANCED) }
     }
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        LockChip(strings[Keys.LANGUAGES_LOCK_QUICK], KeyboardPreferences.LANGUAGE_LOCK_QUICK,
-            preferences, update)
-        LockChip(strings[Keys.LANGUAGES_LOCK_STRICT], KeyboardPreferences.LANGUAGE_LOCK_STRICT,
-            preferences, update)
+        PickerChip(
+            strings[Keys.LANGUAGES_LOCK_QUICK],
+            preferences.languageLock == KeyboardPreferences.LANGUAGE_LOCK_QUICK,
+        ) { update(KeyboardPreferences.LANGUAGE_LOCK_QUICK) }
+        PickerChip(
+            strings[Keys.LANGUAGES_LOCK_STRICT],
+            preferences.languageLock == KeyboardPreferences.LANGUAGE_LOCK_STRICT,
+        ) { update(KeyboardPreferences.LANGUAGE_LOCK_STRICT) }
     }
     Explanation(strings[Keys.LANGUAGES_LOCK_EXPLANATION])
     Explanation(
@@ -447,19 +457,5 @@ private fun LanguageLock(preferences: KeyboardPreferences, update: (Int) -> Unit
             KeyboardPreferences.LANGUAGE_LOCK_STRICT -> strings[Keys.LANGUAGES_LOCK_STRICT_NOTE]
             else -> strings[Keys.LANGUAGES_LOCK_EVIDENCE_NOTE]
         },
-    )
-}
-
-@Composable
-private fun LockChip(
-    label: String,
-    lock: Int,
-    preferences: KeyboardPreferences,
-    update: (Int) -> Unit,
-) {
-    FilterChip(
-        selected = preferences.languageLock == lock,
-        onClick = { update(lock) },
-        label = { Text(label) },
     )
 }

@@ -5,6 +5,7 @@ package com.borderkeys.settings
 
 import com.borderkeys.i18n.Keys
 
+import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -20,6 +22,8 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -30,6 +34,11 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
+import com.borderkeys.data.DataGraph
+import com.borderkeys.data.backup.BackupRepository
+import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.data.theme.KeyboardTheme
+import kotlinx.coroutines.launch
 
 /**
  * The three shapes every settings screen is built from.
@@ -104,6 +113,104 @@ fun SwitchRow(
         onClick = { onCheckedChange(!checked) },
         trailing = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
     )
+}
+
+/**
+ * One choice among a small fixed set, shown as a chip that fills in when it is the current one.
+ *
+ * Every mode/placement/size picker in this app -- position, quick-action size, digit position,
+ * text size and the rest -- turned out to be exactly this and nothing more once each screen's own
+ * copy was compared against the others: a label, whether it is the one currently chosen, and what
+ * picking it does. The differences between the screens were in what `onClick` writes, never in
+ * what the chip itself is.
+ */
+@Composable
+fun PickerChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
+}
+
+/**
+ * Writes a change to [KeyboardPreferences] without a screen naming `DataGraph.themes`, a
+ * `rememberCoroutineScope` and its own local `update` function to do it -- every screen this
+ * app has was typing the same three lines to get here.
+ */
+@Composable
+fun rememberPreferencesUpdater(): ((KeyboardPreferences) -> KeyboardPreferences) -> Unit {
+    val themes = remember { DataGraph.themes }
+    val scope = rememberCoroutineScope()
+    return { transform -> scope.launch { themes.updatePreferences(transform) } }
+}
+
+/** The same, for [KeyboardTheme] -- [ThemeScreen][com.borderkeys.settings.screen.ThemeScreen]'s
+ *  own equivalent of [rememberPreferencesUpdater]. */
+@Composable
+fun rememberThemeUpdater(): ((KeyboardTheme) -> KeyboardTheme) -> Unit {
+    val themes = remember { DataGraph.themes }
+    val scope = rememberCoroutineScope()
+    return { transform -> scope.launch { themes.updateTheme(transform) } }
+}
+
+/**
+ * Moves [from] to [to], clamped, and returns the new order.
+ *
+ * Shared by every bar with buttons a person reorders -- quick actions, the draft box's own bar --
+ * rather than typed out again per screen: the logic is the same list regardless of what the ids
+ * in it happen to mean.
+ */
+fun move(ids: List<Int>, from: Int, to: Int): List<Int> {
+    if (from !in ids.indices) {
+        return ids
+    }
+    val target = to.coerceIn(0, ids.size - 1)
+    val mutable = ids.toMutableList()
+    mutable.add(target, mutable.removeAt(from))
+    return mutable
+}
+
+/**
+ * The package name of the other build, or null when this one has no sibling.
+ *
+ * Derived from this application's own name rather than written down twice: the assistant build
+ * is the core one with a suffix, so one of them is the other with the suffix removed. Shared
+ * rather than kept as two copies, which had already drifted -- one behind a named constant, one
+ * with the suffix typed inline.
+ */
+fun siblingPackage(context: Context): String? {
+    val self = context.packageName
+    return if (self.endsWith(PLUS_SUFFIX)) self.removeSuffix(PLUS_SUFFIX) else null
+}
+
+private const val PLUS_SUFFIX = ".plus"
+
+/**
+ * The four switches for what a backup file carries -- settings, dictionary, languages,
+ * clipboard -- shared by the screen that writes a file and the one that sends everything to a
+ * nearby device directly, since both are choosing the same four parts of the same
+ * [BackupRepository.Parts].
+ */
+@Composable
+fun BackupPartSwitches(parts: BackupRepository.Parts, onChange: (BackupRepository.Parts) -> Unit) {
+    val strings = LocalStrings.current
+    SwitchRow(
+        title = strings[Keys.BACKUP_PART_SETTINGS],
+        subtitle = strings[Keys.BACKUP_PART_SETTINGS_NOTE],
+        checked = parts.settings,
+    ) { value -> onChange(parts.copy(settings = value)) }
+    SwitchRow(
+        title = strings[Keys.BACKUP_PART_DICTIONARY],
+        subtitle = strings[Keys.BACKUP_PART_DICTIONARY_NOTE],
+        checked = parts.dictionary,
+    ) { value -> onChange(parts.copy(dictionary = value)) }
+    SwitchRow(
+        title = strings[Keys.BACKUP_PART_LANGUAGES],
+        subtitle = strings[Keys.BACKUP_PART_LANGUAGES_NOTE],
+        checked = parts.languages,
+    ) { value -> onChange(parts.copy(languages = value)) }
+    SwitchRow(
+        title = strings[Keys.BACKUP_PART_CLIPBOARD],
+        subtitle = strings[Keys.BACKUP_PART_CLIPBOARD_NOTE],
+        checked = parts.clipboard,
+    ) { value -> onChange(parts.copy(clipboard = value)) }
 }
 
 @Composable

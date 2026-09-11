@@ -33,6 +33,7 @@ import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
+import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlinx.coroutines.launch
 
 /**
@@ -48,6 +49,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
     val repository = remember { DataGraph.clipboard }
     val themes = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
+    val update = rememberPreferencesUpdater()
     val entries by repository.entries.collectAsStateWithLifecycle(initialValue = emptyList())
     val preferences by themes.preferences
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
@@ -57,9 +59,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
             title = strings[Keys.CLIPBOARD_REMEMBER_WHAT_YOU_COPY],
             subtitle = strings[Keys.CLIPBOARD_ONLY_WHILE_BORDERKEYS_IS_THE_KEYBOARD],
             checked = preferences.clipboardEnabled,
-        ) { value ->
-            scope.launch { themes.updatePreferences { it.copy(clipboardEnabled = value) } }
-        }
+        ) { value -> update { it.copy(clipboardEnabled = value) } }
 
         SwitchRow(
             title = strings[Keys.CLIPBOARD_REMEMBER_IMAGES],
@@ -80,25 +80,19 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
             title = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE],
             subtitle = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE_NOTE],
             checked = preferences.clearClipboardOnClose,
-        ) { value ->
-            scope.launch { themes.updatePreferences { it.copy(clearClipboardOnClose = value) } }
-        }
+        ) { value -> update { it.copy(clearClipboardOnClose = value) } }
 
         SwitchRow(
             title = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT],
             subtitle = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT_NOTE],
             checked = preferences.clearClipboardAfterInsert,
-        ) { value ->
-            scope.launch { themes.updatePreferences { it.copy(clearClipboardAfterInsert = value) } }
-        }
+        ) { value -> update { it.copy(clearClipboardAfterInsert = value) } }
 
         SwitchRow(
             title = strings[Keys.CLIPBOARD_DELETE_AFTER_USE],
             subtitle = strings[Keys.CLIPBOARD_DELETE_AFTER_USE_NOTE],
             checked = preferences.clipboardDeleteAfterUse,
-        ) { value ->
-            scope.launch { themes.updatePreferences { it.copy(clipboardDeleteAfterUse = value) } }
-        }
+        ) { value -> update { it.copy(clipboardDeleteAfterUse = value) } }
 
         SettingsSectionCard(strings[Keys.CLIPBOARD_HOW_MANY_ITEMS]) {
             StepSlider(
@@ -108,11 +102,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
                 steps = KeyboardPreferences.HISTORY_SIZE_STEPS,
                 current = preferences.clipboardMaxEntries,
                 default = 60,
-            ) { value ->
-                scope.launch {
-                    themes.updatePreferences { it.copy(clipboardMaxEntries = value) }
-                }
-            }
+            ) { value -> update { it.copy(clipboardMaxEntries = value) } }
             Explanation(strings[Keys.CLIPBOARD_SIZE_NOTE])
         }
 
@@ -122,11 +112,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
                 steps = KeyboardPreferences.RETENTION_STEPS,
                 current = preferences.clipboardRetentionMinutes,
                 default = 60,
-            ) { value ->
-                scope.launch {
-                    themes.updatePreferences { it.copy(clipboardRetentionMinutes = value) }
-                }
-            }
+            ) { value -> update { it.copy(clipboardRetentionMinutes = value) } }
             Explanation(strings[Keys.CLIPBOARD_RETENTION_NOTE])
             Explanation(strings[Keys.CLIPBOARD_EXPIRED_ITEMS_ARE_DELETED_NOT_MERELY])
         }

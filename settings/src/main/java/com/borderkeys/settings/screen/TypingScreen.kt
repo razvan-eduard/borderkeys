@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -33,7 +32,8 @@ import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SuggestionStripPreview
 import com.borderkeys.settings.SwitchRow
-import kotlinx.coroutines.launch
+import com.borderkeys.settings.rememberPreferencesUpdater
+import com.borderkeys.settings.rememberThemeUpdater
 
 /**
  * How typing itself behaves: what the strip offers, what corrects itself, and how a gesture is
@@ -47,15 +47,12 @@ import kotlinx.coroutines.launch
 fun TypingScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val repository = remember { DataGraph.themes }
-    val scope = rememberCoroutineScope()
+    val update = rememberPreferencesUpdater()
+    val updateTheme = rememberThemeUpdater()
     val appearance by repository.appearance
         .collectAsStateWithLifecycle(initialValue = remember { repository.currentAppearance() })
     val (theme, _, preferences) = appearance
     var probe by remember { mutableStateOf("") }
-
-    fun update(transform: (KeyboardPreferences) -> KeyboardPreferences) {
-        scope.launch { repository.updatePreferences(transform) }
-    }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SettingsSectionCard(strings[Keys.CORRECTIONS_SUGGESTIONS]) {
@@ -204,7 +201,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 value = theme.swipeTrailWidthDp.coerceIn(1f, 24f),
                 range = 1f..24f,
                 default = 4f,
-            ) { value -> scope.launch { repository.updateTheme { it.copy(swipeTrailWidthDp = value) } } }
+            ) { value -> updateTheme { it.copy(swipeTrailWidthDp = value) } }
             Explanation(strings[Keys.SWIPE_THE_COLOUR_IS_ON_THE_THEME])
         }
         SettingsSectionCard(strings[Keys.SWIPE_TRY_IT_HERE]) {

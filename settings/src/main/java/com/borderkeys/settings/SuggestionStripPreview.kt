@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.ime.SuggestionStripView
-import com.borderkeys.theme.DynamicColors
 import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
 
@@ -52,12 +51,7 @@ fun SuggestionStripPreview(
                 SuggestionStripView(viewContext, paints, strings).apply { isEnabled = false }
             },
             update = { view ->
-                val resolvedTheme = ThemeMode.resolve(theme, lightTheme, preferences, context)
-                val effectiveTheme = if (preferences.followSystemColors) {
-                    DynamicColors.apply(resolvedTheme, context)
-                } else {
-                    resolvedTheme
-                }
+                val effectiveTheme = ThemeMode.effective(theme, lightTheme, preferences, context)
                 paints.update(effectiveTheme, context.resources.displayMetrics, preferences.heightScale, context)
                 view.visibleLimit = preferences.suggestionCount
                 view.setSuggestions(sample, sample.size)
