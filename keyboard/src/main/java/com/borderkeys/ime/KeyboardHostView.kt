@@ -101,8 +101,45 @@ class KeyboardHostView(
      * switcher and hide-keyboard controls over whatever we put there unless we move out of the
      * way. Without this the bottom row -- symbols, comma, space, full stop, enter -- sits
      * underneath them, and the keys are both unreadable and untappable.
+     *
+     * Set from [applyNavigationInset], which is called both from [onAttachedToWindow] and from
+     * the dispatched-insets listener below -- not the listener alone. On some devices the first
+     * insets this window is handed report the navigation bar as visible but its height as zero,
+     * as though the system had not finished measuring it yet, and no later dispatch ever
+     * arrives to correct it -- the keyboard settles under the bar rather than above it, and
+     * which happens seems to depend on whether the bar or this window finishes drawing first.
+     * A zero paired with "visible" is treated as exactly that -- not as a phone with no bar --
+     * and [systemNavigationBarHeightPx] is asked directly instead of waiting on a dispatch that
+     * is not guaranteed to come.
      */
     private var navigationBarInset = 0
+
+    private fun applyNavigationInset(insets: WindowInsets) {
+        val type = WindowInsets.Type.navigationBars() or WindowInsets.Type.displayCutout()
+        var bottom = insets.getInsets(type).bottom
+        if (bottom == 0 && insets.isVisible(WindowInsets.Type.navigationBars())) {
+            bottom = systemNavigationBarHeightPx()
+        }
+        if (bottom != navigationBarInset) {
+            navigationBarInset = bottom
+            requestLayout()
+        }
+    }
+
+    /** What Android's own theme says the navigation bar reserves -- a fixed resource, not a
+     *  per-window measurement, so it carries none of [applyNavigationInset]'s timing race. */
+    private fun systemNavigationBarHeightPx(): Int {
+        val id = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        return if (id > 0) resources.getDimensionPixelSize(id) else 0
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // Asked for directly rather than waited for: attachment is the earliest point a real
+        // answer can exist, and the first frame drawn from a stale zero is the one someone
+        // notices.
+        rootWindowInsets?.let { applyNavigationInset(it) }
+    }
 
     // ---- size and position -------------------------------------------------------------------
     //
@@ -322,13 +359,7 @@ class KeyboardHostView(
         quickSettings.visibility = GONE
 
         setOnApplyWindowInsetsListener { _, insets ->
-            val bottom = insets.getInsets(
-                WindowInsets.Type.navigationBars() or WindowInsets.Type.displayCutout(),
-            ).bottom
-            if (bottom != navigationBarInset) {
-                navigationBarInset = bottom
-                requestLayout()
-            }
+            applyNavigationInset(insets)
             // Consumed rather than passed on: the children are ours, they fill what is left, and
             // none of them has any use for an inset.
             WindowInsets.CONSUMED
