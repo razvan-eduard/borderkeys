@@ -332,7 +332,7 @@ class ThemePaints {
          * 1.0 would be the tightest fit that never clips; this is the one number that sets how
          * far every hint sits from its key's corner -- see [hintCellHalfWidthPx]'s own doc.
          */
-        private const val HINT_CELL_MARGIN = 1.3f
+        private const val HINT_CELL_MARGIN = 1.1f
 
         /**
          * Single characters wide enough to matter: a digit, the widest of the number-row
