@@ -111,13 +111,24 @@ class KeyboardHostView(
      * A zero paired with "visible" is treated as exactly that -- not as a phone with no bar --
      * and [systemNavigationBarHeightPx] is asked directly instead of waiting on a dispatch that
      * is not guaranteed to come.
+     *
+     * That fallback only fires when the side insets are zero too. A three-button bar that stays
+     * on the display's long edge in landscape -- some phones keep it there rather than moving it
+     * to the newly-short bottom edge -- reports itself as a left or right inset instead of a
+     * bottom one, and that is a real, current zero, not an unmeasured one:
+     * [systemNavigationBarHeightPx] only ever answers with a *bottom* bar's height, so asking it
+     * here would put a gap under a keyboard that already clears the bar exactly by sitting flush
+     * with the true bottom edge.
      */
     private var navigationBarInset = 0
 
     private fun applyNavigationInset(insets: WindowInsets) {
         val type = WindowInsets.Type.navigationBars() or WindowInsets.Type.displayCutout()
+        val navigationBars = insets.getInsets(WindowInsets.Type.navigationBars())
         var bottom = insets.getInsets(type).bottom
-        if (bottom == 0 && insets.isVisible(WindowInsets.Type.navigationBars())) {
+        if (bottom == 0 && navigationBars.left == 0 && navigationBars.right == 0 &&
+            insets.isVisible(WindowInsets.Type.navigationBars())
+        ) {
             bottom = systemNavigationBarHeightPx()
         }
         if (bottom != navigationBarInset) {
