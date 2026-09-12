@@ -68,6 +68,124 @@ class AutoShiftTest {
     }
 
     @Test
+    fun `the force override is off by default, so a field asking for nothing stays off`() {
+        assertEquals(
+            0,
+            AutoShift.stateFor(
+                autoCapitaliseEnabled = true, inputType = plainText, composingIsEmpty = true,
+                textBeforeCursor = { "" },
+            ) { error("the platform is never asked about a field that requested no capitalisation") },
+        )
+    }
+
+    @Test
+    fun `the force override capitalises the very start of a field the field itself never asked for`() {
+        assertEquals(
+            1,
+            AutoShift.stateFor(
+                autoCapitaliseEnabled = true, inputType = plainText, composingIsEmpty = true,
+                forceCapitaliseSentences = true, textBeforeCursor = { "" },
+            ) { error("the platform's capsMode is meaningless for a field that asked for nothing") },
+        )
+    }
+
+    @Test
+    fun `the force override also capitalises a later sentence start in the same field`() {
+        assertEquals(
+            1,
+            AutoShift.stateFor(
+                autoCapitaliseEnabled = true, inputType = plainText, composingIsEmpty = true,
+                forceCapitaliseSentences = true, textBeforeCursor = { "one. " },
+            ) { error("judged from the text, not from the platform") },
+        )
+    }
+
+    @Test
+    fun `the force override does not capitalise mid-sentence`() {
+        assertEquals(
+            0,
+            AutoShift.stateFor(
+                autoCapitaliseEnabled = true, inputType = plainText, composingIsEmpty = true,
+                forceCapitaliseSentences = true, textBeforeCursor = { "one two" },
+            ) { error("judged from the text, not from the platform") },
+        )
+    }
+
+    @Test
+    fun `the force override still respects a word still being typed`() {
+        assertEquals(
+            0,
+            AutoShift.stateFor(
+                autoCapitaliseEnabled = true, inputType = plainText, composingIsEmpty = false,
+                forceCapitaliseSentences = true, textBeforeCursor = { "" },
+            ) { error("must not be asked while something is still composing") },
+        )
+    }
+
+    @Test
+    fun `the force override still defers to the setting being off entirely`() {
+        assertEquals(
+            0,
+            AutoShift.stateFor(
+                autoCapitaliseEnabled = false, inputType = plainText, composingIsEmpty = true,
+                forceCapitaliseSentences = true,
+            ) { error("must not be asked when the setting itself is off") },
+        )
+    }
+
+    @Test
+    fun `the force override still leaves a non-text field alone`() {
+        val numberField = InputType.TYPE_CLASS_NUMBER
+        assertEquals(
+            0,
+            AutoShift.stateFor(
+                autoCapitaliseEnabled = true, inputType = numberField, composingIsEmpty = true,
+                forceCapitaliseSentences = true,
+            ) { error("must not be asked about a field that is not text") },
+        )
+    }
+
+    @Test
+    fun `the force override never touches a password field`() {
+        val password = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        assertEquals(
+            0,
+            AutoShift.stateFor(
+                autoCapitaliseEnabled = true, inputType = password, composingIsEmpty = true,
+                forceCapitaliseSentences = true, textBeforeCursor = { "" },
+            ) { error("a password field is left alone even with the force override on") },
+        )
+    }
+
+    @Test
+    fun `the force override never touches a visible or web password field either`() {
+        val visible = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        val web = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+        for (variation in listOf(visible, web)) {
+            assertEquals(
+                0,
+                AutoShift.stateFor(
+                    autoCapitaliseEnabled = true, inputType = variation, composingIsEmpty = true,
+                    forceCapitaliseSentences = true, textBeforeCursor = { "" },
+                ) { error("a password variation is left alone even with the force override on") },
+            )
+        }
+    }
+
+    @Test
+    fun `a field that already asks for capitals is unaffected by the force override`() {
+        // The force override only changes what happens when a field asks for NOTHING; a field
+        // that already sets CAP_SENTENCES keeps using the platform's own capsMode, unchanged.
+        assertEquals(
+            1,
+            AutoShift.stateFor(
+                autoCapitaliseEnabled = true, inputType = sentences, composingIsEmpty = true,
+                forceCapitaliseSentences = true,
+            ) { android.text.TextUtils.CAP_MODE_SENTENCES },
+        )
+    }
+
+    @Test
     fun `a word still being typed is never capitalised out from under the user`() {
         assertEquals(
             0,
@@ -141,5 +259,16 @@ class AutoShiftTest {
     fun `the cursor jammed against the full stop is not a new sentence yet`() {
         assertEquals(0, afterText("still typing."))
         assertEquals(0, afterText("wait.:)"))
+    }
+
+    @Test
+    fun `a line just started is a sentence start, with nothing after the newline yet`() {
+        // The platform's own capsMode is not asked to carry this one: Android's getCapsMode
+        // only treats a blank line (a paragraph break) as equivalent to a full stop, not a
+        // single Return -- which is exactly what sentenceEndsBeforeCursor's own '\n' branch
+        // exists to cover, unconditionally and without waiting for a space to follow it the
+        // way a written full stop has to.
+        assertEquals(1, afterText("one\n"))
+        assertEquals(1, afterText("one.\n"))
     }
 }
