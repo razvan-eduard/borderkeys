@@ -5,6 +5,7 @@ package com.borderkeys.settings.screen
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.ComposerAction
+import com.borderkeys.data.theme.ComposerBar
+import com.borderkeys.data.theme.ComposerBarItem
+import com.borderkeys.data.theme.CustomIcon
+import com.borderkeys.data.theme.CustomAction
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
@@ -56,7 +62,13 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
     val preferences by themes.preferences
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
     var picking by remember { mutableStateOf(false) }
-    val chosen = ComposerAction.fromIds(preferences.composerBar)
+    var creatingCustomAction by remember { mutableStateOf(false) }
+    var editingCustomAction by remember { mutableStateOf<CustomAction?>(null) }
+    var deletingCustomAction by remember { mutableStateOf<CustomAction?>(null) }
+    val chosen = ComposerBar.resolve(preferences.composerBar, preferences.customActions)
+    val pinnableCustomActions = preferences.customActions.filter { action ->
+        chosen.none { it is ComposerBarItem.Custom && it.action.id == action.id }
+    }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SettingsSectionCard(strings[Keys.COMPOSER_SETTINGS_ENABLE]) {
@@ -105,9 +117,10 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
             if (chosen.isEmpty()) {
                 Explanation(strings[Keys.COMPOSER_SETTINGS_NONE])
             }
-            chosen.forEachIndexed { index, action ->
+            chosen.forEachIndexed { index, item ->
+                val itemId = barItemId(item)
                 BarRow(
-                    action = action,
+                    item = item,
                     index = index,
                     onMoveTop = {
                         update { current ->
@@ -121,13 +134,16 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
                     },
                     onRemove = {
                         update { current ->
-                            current.copy(composerBar = current.composerBar.filterNot { it == action.id })
+                            current.copy(composerBar = current.composerBar.filterNot { it == itemId })
                         }
                     },
                 )
             }
             Explanation(strings[Keys.COMPOSER_SETTINGS_BAR_NOTE])
-            if (chosen.size < ComposerAction.entries.size) {
+            val addableBuiltins = ComposerAction.entries.filterNot { builtin ->
+                chosen.any { it is ComposerBarItem.Builtin && it.action == builtin }
+            }
+            if (addableBuiltins.isNotEmpty() || pinnableCustomActions.isNotEmpty()) {
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .clickable { picking = !picking }
@@ -140,14 +156,25 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
                     )
                 }
                 if (picking) {
-                    for (action in ComposerAction.entries) {
-                        if (action in chosen) continue
+                    for (builtin in addableBuiltins) {
                         BarRow(
-                            action = action,
+                            item = ComposerBarItem.Builtin(builtin),
                             index = -1,
                             onAdd = {
                                 update { current ->
-                                    current.copy(composerBar = current.composerBar + action.id)
+                                    current.copy(composerBar = current.composerBar + builtin.id)
+                                }
+                                picking = false
+                            },
+                        )
+                    }
+                    for (custom in pinnableCustomActions) {
+                        BarRow(
+                            item = ComposerBarItem.Custom(custom),
+                            index = -1,
+                            onAdd = {
+                                update { current ->
+                                    current.copy(composerBar = current.composerBar + custom.id)
                                 }
                                 picking = false
                             },
@@ -158,40 +185,155 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
         }
 
         SettingsSectionCard(strings[Keys.COMPOSER_SETTINGS_SAVED]) {
-            if (preferences.savedPrompts.isEmpty()) {
+            if (preferences.customActions.isEmpty()) {
                 Explanation(strings[Keys.COMPOSER_SETTINGS_NO_SAVED])
             }
-            for (prompt in preferences.savedPrompts) {
+            for (action in preferences.customActions) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(prompt.name, style = MaterialTheme.typography.bodyLarge)
+                    var pickingIcon by remember(action.id) { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { pickingIcon = true }) {
+                            Icon(
+                                painter = painterResource(iconFor(CustomIcon.fromId(action.icon))),
+                                contentDescription = strings[Keys.COMPOSER_ICON_PICK],
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (pickingIcon) {
+                            IconPickerDialog(
+                                selected = CustomIcon.fromId(action.icon),
+                                onPick = { icon ->
+                                    pickingIcon = false
+                                    update { current ->
+                                        current.copy(
+                                            customActions = current.customActions.map {
+                                                if (it.id == action.id) it.copy(icon = icon.id) else it
+                                            },
+                                        )
+                                    }
+                                },
+                                onDismiss = { pickingIcon = false },
+                            )
+                        }
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f).padding(start = 4.dp)
+                            .clickable { editingCustomAction = action },
+                    ) {
+                        Text(action.name, style = MaterialTheme.typography.bodyLarge)
                         // The whole instruction, not a preview of it: a button whose contents
                         // are a mystery is a button nobody presses twice.
                         Text(
-                            prompt.text,
+                            action.instruction,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    TextButton(onClick = {
-                        update { current ->
-                            current.copy(savedPrompts = current.savedPrompts - prompt)
-                        }
-                    }) { Text(strings[Keys.COMPOSER_SETTINGS_FORGET]) }
+                    TextButton(onClick = { deletingCustomAction = action }) {
+                        Text(strings[Keys.COMPOSER_SETTINGS_FORGET])
+                    }
                 }
             }
             Explanation(strings[Keys.COMPOSER_SETTINGS_SAVED_NOTE])
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .clickable { creatingCustomAction = true }
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+            ) {
+                Text(
+                    strings[Keys.COMPOSER_SETTINGS_CREATE_CUSTOM],
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            if (creatingCustomAction) {
+                CreateCustomActionDialog(
+                    onSave = { name, instruction, icon, pinToBar ->
+                        creatingCustomAction = false
+                        val action = CustomAction(
+                            id = CustomAction.nextId(preferences.customActions),
+                            name = name,
+                            instruction = instruction,
+                            icon = icon.id,
+                        )
+                        update { current ->
+                            current.copy(
+                                customActions = current.customActions + action,
+                                composerBar = if (pinToBar) current.composerBar + action.id
+                                             else current.composerBar,
+                            )
+                        }
+                    },
+                    onDismiss = { creatingCustomAction = false },
+                )
+            }
+            editingCustomAction?.let { action ->
+                CreateCustomActionDialog(
+                    editing = action,
+                    pinnedInitially = action.id in preferences.composerBar,
+                    onSave = { name, instruction, icon, pinToBar ->
+                        editingCustomAction = null
+                        update { current ->
+                            current.copy(
+                                customActions = current.customActions.map {
+                                    if (it.id == action.id) {
+                                        it.copy(name = name, instruction = instruction, icon = icon.id)
+                                    } else {
+                                        it
+                                    }
+                                },
+                                composerBar = when {
+                                    pinToBar && action.id !in current.composerBar ->
+                                        current.composerBar + action.id
+                                    !pinToBar -> current.composerBar.filterNot { it == action.id }
+                                    else -> current.composerBar
+                                },
+                            )
+                        }
+                    },
+                    onDismiss = { editingCustomAction = null },
+                )
+            }
+            deletingCustomAction?.let { action ->
+                AlertDialog(
+                    onDismissRequest = { deletingCustomAction = null },
+                    title = { Text(strings[Keys.CUSTOM_ACTION_DELETE_TITLE]) },
+                    text = { Text(strings.getString(Keys.THEME_DELETE_THEME_MESSAGE, action.name)) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            deletingCustomAction = null
+                            update { current ->
+                                current.copy(
+                                    customActions = current.customActions.filterNot { it.id == action.id },
+                                    composerBar = current.composerBar.filterNot { it == action.id },
+                                )
+                            }
+                        }) { Text(strings[Keys.THEME_DELETE], color = MaterialTheme.colorScheme.error) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { deletingCustomAction = null }) {
+                            Text(strings[Keys.THEME_CANCEL])
+                        }
+                    },
+                )
+            }
         }
     }
+}
+
+/** The id a [ComposerBarItem] would appear as inside [KeyboardPreferences.composerBar]. */
+private fun barItemId(item: ComposerBarItem): Int = when (item) {
+    is ComposerBarItem.Builtin -> item.action.id
+    is ComposerBarItem.Custom -> item.action.id
 }
 
 /** One button on the bar, with the controls that move it. */
 @Composable
 private fun BarRow(
-    action: ComposerAction,
+    item: ComposerBarItem,
     index: Int,
     onMoveTop: () -> Unit = {},
     onMoveUp: () -> Unit = {},
@@ -199,6 +341,14 @@ private fun BarRow(
     onAdd: (() -> Unit)? = null,
 ) {
     val strings = LocalStrings.current
+    val icon = when (item) {
+        is ComposerBarItem.Builtin -> iconFor(item.action)
+        is ComposerBarItem.Custom -> iconFor(CustomIcon.fromId(item.action.icon))
+    }
+    val label = when (item) {
+        is ComposerBarItem.Builtin -> strings[labelFor(item.action)]
+        is ComposerBarItem.Custom -> item.action.name
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -207,13 +357,13 @@ private fun BarRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            painter = painterResource(iconFor(action)),
+            painter = painterResource(icon),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(24.dp),
         )
         Text(
-            strings[labelFor(action)],
+            label,
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f).padding(start = 16.dp),
         )
@@ -244,7 +394,7 @@ private fun BarRow(
 }
 
 private fun iconFor(action: ComposerAction): Int = when (action) {
-    ComposerAction.GRAMMAR -> R.drawable.bk_composer_grammar
+    ComposerAction.CORRECT -> R.drawable.bk_composer_correct
     ComposerAction.TRANSLATE -> R.drawable.bk_composer_translate
     ComposerAction.TONE -> R.drawable.bk_composer_tone
     ComposerAction.SHORTEN -> R.drawable.bk_composer_shorten
@@ -257,7 +407,7 @@ private fun iconFor(action: ComposerAction): Int = when (action) {
 }
 
 private fun labelFor(action: ComposerAction): String = when (action) {
-    ComposerAction.GRAMMAR -> Keys.COMPOSER_ACTION_GRAMMAR
+    ComposerAction.CORRECT -> Keys.COMPOSER_ACTION_CORRECT
     ComposerAction.TRANSLATE -> Keys.COMPOSER_ACTION_TRANSLATE
     ComposerAction.TONE -> Keys.COMPOSER_ACTION_TONE
     ComposerAction.SHORTEN -> Keys.COMPOSER_ACTION_SHORTEN

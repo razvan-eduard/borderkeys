@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?android:attr/colorForeground">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M3,10 L3,14 L6,14 L6,10 Z
+                          M6,8 L15,4 L15,20 L6,16 Z
+                          M15,10 L18,10 L18,14 L15,14 Z" />
+</vector>

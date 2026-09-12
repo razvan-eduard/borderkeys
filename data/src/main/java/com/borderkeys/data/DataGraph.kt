@@ -7,6 +7,8 @@ import android.content.Context
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.dataStoreFile
+import com.borderkeys.data.theme.CustomThemeLibrary
+import com.borderkeys.data.theme.CustomThemeLibrarySerializer
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardPreferencesSerializer
 import com.borderkeys.data.theme.KeyboardTheme
@@ -102,7 +104,18 @@ object DataGraph {
         )
     }
 
-    val themes: ThemeRepository by lazy { ThemeRepository(themeStore, lightThemeStore, preferencesStore) }
+    private val customThemeLibraryStore by lazy {
+        DataStoreFactory.create(
+            serializer = CustomThemeLibrarySerializer,
+            corruptionHandler = ReplaceFileCorruptionHandler { CustomThemeLibrary() },
+            scope = storeScope,
+            produceFile = { requireContext.dataStoreFile("keyboard_custom_themes.json") },
+        )
+    }
+
+    val themes: ThemeRepository by lazy {
+        ThemeRepository(themeStore, lightThemeStore, preferencesStore, customThemeLibraryStore)
+    }
 
     val clipboard: ClipboardRepository by lazy {
         ClipboardRepository(database.clipboardDao(), themes.preferences)

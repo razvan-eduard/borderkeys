@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.assist.AssistProtocol
+import com.borderkeys.data.assist.AssistTask
 import com.borderkeys.data.draft.DraftProtocol
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
@@ -84,6 +85,28 @@ class SettingsActivity : ComponentActivity() {
         // screen itself deals in a plain String like everything else in this application does.
         val selection = intent.takeIf { it.action == Intent.ACTION_PROCESS_TEXT }
             ?.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
+        // Which of the five PROCESS_TEXT aliases actually launched this, if any -- see the
+        // manifest's own comment on why `intent.component`, not the target activity name,
+        // carries this: the platform preserves the ALIAS's component identity on the intent it
+        // hands to the code behind it. `null` for a plain launch, for the un-suffixed
+        // `.ProcessTextAlias`, and for anything not reached through PROCESS_TEXT at all.
+        //
+        // Hardcoded as this module's own namespace ("com.borderkeys.settings", from
+        // settings/build.gradle.kts -- the same fixed string android:targetActivity above
+        // already uses) rather than built from `packageName`: `packageName` is the RUNTIME
+        // application id (com.borderkeys, or com.borderkeys.plus with the plus flavor's
+        // applicationIdSuffix), a different string from the namespace an alias's relative
+        // android:name resolves against, which does not vary by flavor at all.
+        val processTextAlias = intent.takeIf { it.action == Intent.ACTION_PROCESS_TEXT }
+            ?.component?.className
+        val autoRunTask = when (processTextAlias) {
+            "com.borderkeys.settings.ProcessTextCorrectAlias" -> AssistTask.CORRECT
+            "com.borderkeys.settings.ProcessTextShortenAlias" -> AssistTask.SHORTEN
+            "com.borderkeys.settings.ProcessTextSummariseAlias" -> AssistTask.SUMMARISE
+            else -> null
+        }
+        val offerCustomActionPicker =
+            processTextAlias == "com.borderkeys.settings.ProcessTextCustomAlias"
         // The keyboard's own "Compose" quick action, tapped mid-typing rather than reached
         // through a selection menu. There is no calling activity on this path, so the draft box
         // opens exactly as it would for a selection that was never editable -- the same
@@ -112,6 +135,8 @@ class SettingsActivity : ComponentActivity() {
                             // selection was just made to read or act on, not necessarily to
                             // type into, and the swipe hint teaches the way in for when it is.
                             autoFocus = false,
+                            autoRunTask = autoRunTask,
+                            offerCustomActionPicker = offerCustomActionPicker,
                         )
                     } else if (quickDraft != null) {
                         ProcessTextScreen(

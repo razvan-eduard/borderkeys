@@ -29,6 +29,14 @@ class BackupFileTest {
     private val settingsOnly = BackupPayload(
         preferences = KeyboardPreferences(numberRow = true),
         theme = KeyboardTheme(backgroundColor = 0xFF102030.toInt()),
+        customThemes = listOf(
+            BackupCustomTheme(
+                id = "abc",
+                name = "Sunset Two",
+                theme = KeyboardTheme(accentColor = 0xFF112233.toInt()),
+                createdAt = 1700000000000L,
+            ),
+        ),
         models = listOf(BackupModel(fileName = "model.gguf", sha256 = "abc123", active = true)),
     )
 
@@ -42,6 +50,17 @@ class BackupFileTest {
         assertNotNull(payload)
         assertEquals(true, payload?.preferences?.numberRow)
         assertEquals(0xFF102030.toInt(), payload?.theme?.backgroundColor)
+        assertEquals(
+            listOf(
+                BackupCustomTheme(
+                    "abc",
+                    "Sunset Two",
+                    KeyboardTheme(accentColor = 0xFF112233.toInt()),
+                    1700000000000L,
+                ),
+            ),
+            payload?.customThemes,
+        )
         // Which model was active, not the model itself -- a hash and a name are not a body of
         // learned or copied text, so this travels with settings rather than needing its own
         // sensitivity check.
@@ -122,5 +141,15 @@ class BackupFileTest {
     fun `the clipboard counts as private too`() {
         val clips = BackupPayload(clips = listOf(BackupClip("a card number", 1L, false)))
         assertTrue(clips.isSensitive)
+    }
+
+    @Test
+    fun `a saved custom theme is not sensitive, same as the active theme`() {
+        val customThemes = BackupPayload(
+            customThemes = listOf(
+                BackupCustomTheme("id", "Name", KeyboardTheme(), 0L),
+            ),
+        )
+        assertFalse(customThemes.isSensitive)
     }
 }

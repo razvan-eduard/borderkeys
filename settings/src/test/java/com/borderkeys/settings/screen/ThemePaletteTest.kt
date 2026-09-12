@@ -58,10 +58,21 @@ class ThemePaletteTest {
         assertEquals("two presets share a name", names.size, names.toSet().size)
     }
 
-    /** Ten, as offered. A row that quietly loses one is a row nobody notices has lost one. */
+    /** Fifteen, as offered. A row that quietly loses one is a row nobody notices has lost one. */
     @Test
-    fun `the row offers ten presets`() {
-        assertEquals(10, PRESETS.size)
+    fun `the row offers fifteen presets`() {
+        assertEquals(15, PRESETS.size)
+    }
+
+    /** Every preset belongs to a category the row actually groups by, and every category shows. */
+    @Test
+    fun `every category has at least one preset`() {
+        for (category in ThemeCategory.entries) {
+            assertTrue(
+                "${category.name} has no presets",
+                PRESETS.any { it.category == category },
+            )
+        }
     }
 
     /** A duplicate swatch would draw two rings for one colour. */

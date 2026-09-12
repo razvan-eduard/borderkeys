@@ -44,6 +44,13 @@ class BackupRepository(
     suspend fun gather(parts: Parts): BackupPayload {
         val preferences = if (parts.settings) themes.preferences.first() else null
         val theme = if (parts.settings) themes.theme.first() else null
+        val customThemes = if (parts.settings) {
+            themes.customThemes.first().map {
+                BackupCustomTheme(id = it.id, name = it.name, theme = it.theme, createdAt = it.createdAt)
+            }
+        } else {
+            emptyList()
+        }
         // Which model is active, not the model itself -- see BackupModel's own doc. Rides with
         // settings rather than its own toggle: this is a choice of which assistant to use, the
         // same kind of thing a theme or a layout is, not a body of learned or copied text.
@@ -114,6 +121,7 @@ class BackupRepository(
         return BackupPayload(
             preferences = preferences,
             theme = theme,
+            customThemes = customThemes,
             packs = packs,
             words = words,
             bigrams = bigrams,
@@ -134,6 +142,7 @@ class BackupRepository(
         val languages: Int = 0,
         val clips: Int = 0,
         val assistModels: Int = 0,
+        val customThemes: Int = 0,
     )
 
     suspend fun apply(payload: BackupPayload, parts: Parts): Applied {
@@ -146,6 +155,26 @@ class BackupRepository(
             }
             payload.theme?.let { incoming -> themes.updateTheme { incoming.sanitised() } }
             applied = applied.copy(settings = payload.preferences != null || payload.theme != null)
+
+            // Added rather than replaced, like the dictionary below -- a saved theme is one of a
+            // collection, not the one coherent setting `theme`/`preferences` are. Restoring under
+            // the SAME id is what makes importing the same backup twice not duplicate every
+            // theme in it; a name edited locally since the backup was taken is overwritten back
+            // to what the backup says, the same trade the theme and preferences replace already
+            // make.
+            var restoredThemes = 0
+            for (customTheme in payload.customThemes) {
+                val saved = themes.saveCustomTheme(
+                    customTheme.name,
+                    customTheme.theme,
+                    id = customTheme.id,
+                    createdAt = customTheme.createdAt,
+                )
+                if (saved != null) {
+                    restoredThemes += 1
+                }
+            }
+            applied = applied.copy(customThemes = restoredThemes)
 
             // Only a model this device already has the file for -- by hash, since the same file
             // re-imported gets a new row and a new id every time. A model the payload names but
@@ -254,7 +283,7 @@ class BackupRepository(
     /** What a file turned out to contain, for the screen that offers to import it. */
     fun contentsOf(payload: BackupPayload): Parts = Parts(
         settings = payload.preferences != null || payload.theme != null ||
-            payload.models.isNotEmpty(),
+            payload.customThemes.isNotEmpty() || payload.models.isNotEmpty(),
         dictionary = payload.words.isNotEmpty() || payload.bigrams.isNotEmpty() ||
             payload.trigrams.isNotEmpty() || payload.blocked.isNotEmpty(),
         languages = payload.packs.isNotEmpty(),

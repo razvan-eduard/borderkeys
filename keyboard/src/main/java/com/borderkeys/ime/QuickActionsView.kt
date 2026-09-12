@@ -11,7 +11,9 @@ import android.os.Trace
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.content.ContextCompat
+import com.borderkeys.data.theme.CustomIcon
 import com.borderkeys.data.theme.QuickAction
+import com.borderkeys.data.theme.QuickActionBarItem
 import com.borderkeys.keyboard.R
 import com.borderkeys.theme.ThemePaints
 
@@ -34,13 +36,13 @@ class QuickActionsView(
 ) : View(context) {
 
     fun interface Listener {
-        fun onQuickAction(action: QuickAction)
+        fun onQuickAction(item: QuickActionBarItem)
     }
 
     var listener: Listener? = null
 
     /** What the bar offers, in order. Replacing it re-resolves the icons and re-lays them out. */
-    var actions: List<QuickAction> = emptyList()
+    var items: List<QuickActionBarItem> = emptyList()
         set(value) {
             field = value.take(MAX_BUTTONS)
             resolveIcons()
@@ -63,7 +65,7 @@ class QuickActionsView(
                 // change when the button count behind them does, so the framework never calls
                 // onSizeChanged again and layoutButtons() -- the only other place button centres
                 // are computed -- would otherwise not run again until a button was pressed. Set
-                // from applyQuickActions on every keyboard show, after [actions] on the same
+                // from applyQuickActions on every keyboard show, after [items] on the same
                 // call, so this was also the one write the bar's very first frame depended on.
                 layoutButtons()
                 requestLayout()
@@ -125,16 +127,40 @@ class QuickActionsView(
 
     /** How many buttons are drawn right now: all of them, or the single opener. */
     private fun shownCount(): Int =
-        if (collapsible && !expanded) 1 else actions.size
+        if (collapsible && !expanded) 1 else items.size
 
     private fun resolveIcons() {
         for (index in icons.indices) {
-            icons[index] = if (index < actions.size) {
-                ContextCompat.getDrawable(context, iconFor(actions[index]))
+            icons[index] = if (index < items.size) {
+                ContextCompat.getDrawable(context, iconFor(items[index]))
             } else {
                 null
             }
         }
+    }
+
+    private fun iconFor(item: QuickActionBarItem): Int = when (item) {
+        is QuickActionBarItem.Builtin -> iconFor(item.action)
+        is QuickActionBarItem.Custom -> iconFor(CustomIcon.fromId(item.action.icon))
+    }
+
+    private fun iconFor(icon: CustomIcon): Int = when (icon) {
+        CustomIcon.WAND -> R.drawable.bk_icon_wand
+        CustomIcon.CHAT -> R.drawable.bk_icon_chat
+        CustomIcon.STAR -> R.drawable.bk_icon_star
+        CustomIcon.TAG -> R.drawable.bk_icon_tag
+        CustomIcon.QUOTE -> R.drawable.bk_icon_quote
+        CustomIcon.PENCIL -> R.drawable.bk_icon_pencil
+        CustomIcon.BOOK -> R.drawable.bk_icon_book
+        CustomIcon.GLOBE -> R.drawable.bk_icon_globe
+        CustomIcon.LIGHTBULB -> R.drawable.bk_icon_lightbulb
+        CustomIcon.FLAG -> R.drawable.bk_icon_flag
+        CustomIcon.REFRESH -> R.drawable.bk_icon_refresh
+        CustomIcon.CHECK -> R.drawable.bk_icon_check
+        CustomIcon.MEGAPHONE -> R.drawable.bk_icon_megaphone
+        CustomIcon.HEART -> R.drawable.bk_icon_heart
+        CustomIcon.COMPASS -> R.drawable.bk_icon_compass
+        CustomIcon.BOOKMARK -> R.drawable.bk_icon_bookmark
     }
 
     private fun iconFor(action: QuickAction): Int = when (action) {
@@ -231,13 +257,25 @@ class QuickActionsView(
                         paints.keyPressedFill,
                     )
                 }
-                val icon = if (collapsible && !expanded) moreIcon else icons[index]
+                val collapsedOpener = collapsible && !expanded
+                val icon = if (collapsedOpener) moreIcon else icons[index]
                 if (icon != null) {
                     icon.setBounds(cx - half, cy - half, cx + half, cy + half)
                     // Tinted to the label colour so the bar belongs to the theme rather than to
                     // whatever colour the drawable was authored in.
                     icon.setTint(paints.label.color)
                     icon.draw(canvas)
+                }
+                // A dot rather than a second icon: the bar has no room to also spell out "this
+                // one is yours", and a mark in the corner answers the only question a glance
+                // needs to -- the same reasoning ClipboardPanelView's own pin dot is drawn on.
+                // Never on the collapsed opener button, which draws [moreIcon] regardless of
+                // what items[index] itself is.
+                if (!collapsedOpener && items.getOrNull(index) is QuickActionBarItem.Custom) {
+                    canvas.drawCircle(
+                        (cx + half).toFloat(), (cy - half).toFloat(),
+                        CUSTOM_DOT_RADIUS_FRACTION * buttonSizePx, paints.accent,
+                    )
                 }
             }
         } finally {
@@ -298,15 +336,15 @@ class QuickActionsView(
                     invalidate()
                     return true
                 }
-                val action = actions.getOrNull(index)
+                val item = items.getOrNull(index)
                 if (collapsible) {
                     // Closes as soon as one is chosen, which is what "collapsed" was asked for.
                     expanded = false
                     requestLayout()
                 }
                 invalidate()
-                if (action != null) {
-                    listener?.onQuickAction(action)
+                if (item != null) {
+                    listener?.onQuickAction(item)
                 }
                 return true
             }
@@ -351,6 +389,10 @@ class QuickActionsView(
 
         /** How much of the bar's thickness an icon takes, leaving a touch margin around it. */
         const val ICON_FRACTION = 0.52f
+
+        /** The custom-action dot's radius, as a fraction of the icon's own size -- see
+         *  ClipboardPanelView's PIN_RADIUS_FRACTION, the same idea at the same rough scale. */
+        const val CUSTOM_DOT_RADIUS_FRACTION = 0.14f
 
         const val DEFAULT_THICKNESS_PX = 132f
     }

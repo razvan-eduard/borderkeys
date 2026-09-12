@@ -46,6 +46,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -109,8 +110,11 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
 import com.borderkeys.data.theme.ComposerAction
+import com.borderkeys.data.theme.ComposerBar
+import com.borderkeys.data.theme.ComposerBarItem
+import com.borderkeys.data.theme.CustomIcon
+import com.borderkeys.data.theme.CustomAction
 import com.borderkeys.data.theme.KeyboardPreferences
-import com.borderkeys.data.theme.SavedPrompt
 import com.borderkeys.i18n.Keys
 import com.borderkeys.ime.Composer
 import com.borderkeys.keyboard.R
@@ -154,6 +158,15 @@ fun ProcessTextScreen(
     // opens closed by default, with the swipe hint below teaching the one way to open it, rather
     // than a keyboard appearing over a paragraph the user may only have meant to read.
     autoFocus: Boolean = true,
+    // Set only by SettingsActivity's dispatch on one of the four dedicated PROCESS_TEXT aliases
+    // (see its own comment on how it tells them apart) -- run once, automatically, on the
+    // incoming selection, landing on the result the same way tapping this task's button
+    // manually would, instead of waiting for a tap that already happened at the OS menu.
+    autoRunTask: AssistTask? = null,
+    // Set only by the fifth alias, `.ProcessTextCustomAlias`: opens the same custom-action
+    // picker `SAVED_PROMPTS` already shows on the bar, immediately, rather than requiring that
+    // button to be found and tapped first.
+    offerCustomActionPicker: Boolean = false,
 ) {
     val strings = LocalStrings.current
     val context = LocalContext.current
@@ -213,9 +226,16 @@ fun ProcessTextScreen(
     // back into exactly this range, leaving everything outside it untouched.
     var pendingSpan by remember { mutableStateOf<TextRange?>(null) }
     var offeringSaveName by remember { mutableStateOf<String?>(null) }
+    var offeringSaveIcon by remember { mutableStateOf(CustomIcon.DEFAULT) }
+    var offeringPinToBar by remember { mutableStateOf(false) }
     var translateMenuOpen by remember { mutableStateOf(false) }
     var toneMenuOpen by remember { mutableStateOf(false) }
     var savedMenuOpen by remember { mutableStateOf(false) }
+    // A second way to open the same menu `savedMenuOpen` opens from the bar's own
+    // SAVED_PROMPTS button, triggered instead by `offerCustomActionPicker` -- kept separate so
+    // this screen does not have to assume that button is even on the user's bar to still honour
+    // "open with the custom-action picker showing" from the manifest's fifth alias.
+    var externalCustomPickerOpen by remember { mutableStateOf(false) }
 
     val busy = requestId >= 0
 
@@ -305,10 +325,12 @@ fun ProcessTextScreen(
                 }
                 notice = if (truncated) strings[Keys.ASSIST_ANSWER_MAY_BE_INCOMPLETE] else ""
                 if (pendingInstruction.isNotEmpty() &&
-                    preferences.savedPrompts.none { it.text == pendingInstruction } &&
-                    preferences.savedPrompts.size < SavedPrompt.MAX_SAVED
+                    preferences.customActions.none { it.instruction == pendingInstruction } &&
+                    preferences.customActions.size < CustomAction.MAX_CUSTOM_ACTIONS
                 ) {
                     offeringSaveName = Composer.suggestedName(pendingInstruction)
+                    offeringSaveIcon = CustomIcon.DEFAULT
+                    offeringPinToBar = false
                 }
             }
 
@@ -404,6 +426,20 @@ fun ProcessTextScreen(
         pendingSpan = span
         pendingInstruction = if (task == AssistTask.CUSTOM) instruction else ""
         notice = workingLabel(strings, task)
+    }
+
+    // Runs once, on the very first composition -- see autoRunTask/offerCustomActionPicker's own
+    // parameter docs for which of the five PROCESS_TEXT aliases sets either. A no-op for every
+    // other way this screen is reached (both stay at their defaults then). Placed after runTask
+    // is declared above, which it calls; Kotlin resolves a local function only from the point in
+    // the enclosing block where it is defined, unlike the autoFocus effect further up, which
+    // needs nothing declared this far down.
+    LaunchedEffect(Unit) {
+        if (autoRunTask != null) {
+            runTask(autoRunTask)
+        } else if (offerCustomActionPicker && preferences.customActions.isNotEmpty()) {
+            externalCustomPickerOpen = true
+        }
     }
 
     // Which way the version transition below slides in from -- derived here, the one place
@@ -774,18 +810,35 @@ fun ProcessTextScreen(
                     SavePromptRow(
                         name = offeringSaveName.orEmpty(),
                         onNameChange = { offeringSaveName = it },
+                        icon = offeringSaveIcon,
+                        onIconChange = { offeringSaveIcon = it },
+                        pinToBar = offeringPinToBar,
+                        onPinToBarChange = { offeringPinToBar = it },
                         onSave = {
                             val name = offeringSaveName.orEmpty().trim()
                             val instruction = pendingInstruction
+                            val icon = offeringSaveIcon
+                            val pinToBar = offeringPinToBar
                             offeringSaveName = null
                             if (name.isEmpty() || instruction.isEmpty()) {
                                 return@SavePromptRow
                             }
                             scope.launch {
                                 themes.updatePreferences { prefs ->
+                                    // Directly creating a first-class action from a prompt: the
+                                    // id is assigned here, once, so pinning it to the bar in the
+                                    // SAME update (rather than a second save) is what makes the
+                                    // toggle below actually one step, not two.
+                                    val action = CustomAction(
+                                        id = CustomAction.nextId(prefs.customActions),
+                                        name = name,
+                                        instruction = instruction,
+                                        icon = icon.id,
+                                    )
                                     prefs.copy(
-                                        savedPrompts = prefs.savedPrompts +
-                                            SavedPrompt(name = name, text = instruction),
+                                        customActions = prefs.customActions + action,
+                                        composerBar = if (pinToBar) prefs.composerBar + action.id
+                                                     else prefs.composerBar,
                                     )
                                 }
                             }
@@ -831,6 +884,11 @@ fun ProcessTextScreen(
             // here too, as the last icon before the forward arrow, exactly where it sits in the
             // keyboard's version: the one affirmative action on the bar, not a separate call to
             // action bolted underneath it.
+            //
+            // Wrapped in a Box only so externalCustomPickerOpen has somewhere to anchor an
+            // AssistMenu regardless of whether SAVED_PROMPTS (which anchors its own copy of the
+            // same menu) happens to be on this user's bar at all -- see that state's own doc.
+            Box {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -857,10 +915,18 @@ fun ProcessTextScreen(
                         // to whole words, or the whole field. Below a task's own floor its
                         // button greys out: summarising three words is the three words back.
                         val targetWords = composerWordCount(targetText())
-                        for (action in ComposerAction.fromIds(preferences.composerBar)) {
+                        for (item in ComposerBar.resolve(preferences.composerBar, preferences.customActions)) {
+                            if (item is ComposerBarItem.Custom) {
+                                ActionIcon(
+                                    iconFor(CustomIcon.fromId(item.action.icon)), item.action.name, busy,
+                                    custom = true,
+                                ) { runTask(AssistTask.CUSTOM, item.action.instruction) }
+                                continue
+                            }
+                            val action = (item as ComposerBarItem.Builtin).action
                             when (action) {
-                                ComposerAction.GRAMMAR -> ActionIcon(
-                                    R.drawable.bk_composer_grammar, strings[Keys.COMPOSER_ACTION_GRAMMAR], busy,
+                                ComposerAction.CORRECT -> ActionIcon(
+                                    R.drawable.bk_composer_correct, strings[Keys.COMPOSER_ACTION_CORRECT], busy,
                                 ) { runTask(AssistTask.CORRECT) }
                                 ComposerAction.TRANSLATE -> Box {
                                     ActionIcon(
@@ -916,7 +982,7 @@ fun ProcessTextScreen(
                                 ComposerAction.PROMPT -> ActionIcon(
                                     R.drawable.bk_composer_prompt, strings[Keys.COMPOSER_ACTION_PROMPT], busy,
                                 ) { promptOpen = !promptOpen }
-                                ComposerAction.SAVED_PROMPTS -> if (preferences.savedPrompts.isNotEmpty()) {
+                                ComposerAction.SAVED_PROMPTS -> if (preferences.customActions.isNotEmpty()) {
                                     Box {
                                         ActionIcon(
                                             R.drawable.bk_composer_saved, strings[Keys.COMPOSER_ACTION_SAVED], busy,
@@ -926,13 +992,13 @@ fun ProcessTextScreen(
                                             onDismissRequest = { savedMenuOpen = false },
                                             ringShift = ringShift,
                                         ) {
-                                            preferences.savedPrompts.forEachIndexed { index, prompt ->
+                                            preferences.customActions.forEachIndexed { index, custom ->
                                                 if (index > 0) AssistMenuDivider()
                                                 DropdownMenuItem(
-                                                    text = { Text(prompt.name) },
+                                                    text = { Text(custom.name) },
                                                     onClick = {
                                                         savedMenuOpen = false
-                                                        runTask(AssistTask.CUSTOM, prompt.text)
+                                                        runTask(AssistTask.CUSTOM, custom.instruction)
                                                     },
                                                 )
                                             }
@@ -1007,6 +1073,23 @@ fun ProcessTextScreen(
                         contentDescription = strings[Keys.COMPOSER_FORWARD],
                     )
                 }
+            }
+            AssistMenu(
+                externalCustomPickerOpen,
+                onDismissRequest = { externalCustomPickerOpen = false },
+                ringShift = ringShift,
+            ) {
+                preferences.customActions.forEachIndexed { index, custom ->
+                    if (index > 0) AssistMenuDivider()
+                    DropdownMenuItem(
+                        text = { Text(custom.name) },
+                        onClick = {
+                            externalCustomPickerOpen = false
+                            runTask(AssistTask.CUSTOM, custom.instruction)
+                        },
+                    )
+                }
+            }
             }
             }
         }
@@ -1512,7 +1595,7 @@ private fun composerWordCount(text: String): Int =
     text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
 
 @Composable
-private fun ActionIcon(icon: Int, label: String, disabled: Boolean, onClick: () -> Unit) {
+private fun ActionIcon(icon: Int, label: String, disabled: Boolean, custom: Boolean = false, onClick: () -> Unit) {
     // What an icon alone left to guessing: "the wand" told you nothing about grammar versus
     // tone versus a saved prompt until you had pressed it once and remembered. The label is the
     // same string the icon used to carry only as a screen reader's contentDescription -- now
@@ -1526,12 +1609,25 @@ private fun ActionIcon(icon: Int, label: String, disabled: Boolean, onClick: () 
             .widthIn(min = 52.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = null,
-            tint = LocalContentColor.current.copy(alpha = alpha),
-            modifier = Modifier.size(22.dp),
-        )
+        Box {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = LocalContentColor.current.copy(alpha = alpha),
+                modifier = Modifier.size(22.dp),
+            )
+            // A dot rather than a second icon, the same mark QuickActionsView draws on its own
+            // bar for the same reason: the label already says this is a custom action, but a
+            // reader who has not looked yet should not have to.
+            if (custom) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(6.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape),
+                )
+            }
+        }
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
@@ -1578,24 +1674,54 @@ private fun VersionRail(rail: Rail, onSelect: (Int) -> Unit, modifier: Modifier 
 private fun SavePromptRow(
     name: String,
     onNameChange: (String) -> Unit,
+    icon: CustomIcon,
+    onIconChange: (CustomIcon) -> Unit,
+    pinToBar: Boolean,
+    onPinToBarChange: (Boolean) -> Unit,
     onSave: () -> Unit,
     onSkip: () -> Unit,
 ) {
     val strings = LocalStrings.current
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        OutlinedTextField(
-            value = name,
-            onValueChange = onNameChange,
-            placeholder = { Text(strings[Keys.COMPOSER_SAVE_PROMPT_NAME]) },
-            singleLine = true,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(onClick = onSave) { Text(strings[Keys.COMPOSER_SAVE_PROMPT]) }
-        Spacer(Modifier.width(4.dp))
-        TextButton(onClick = onSkip) { Text(strings[Keys.COMPOSER_PROMPT_DISMISS]) }
+    var pickingIcon by remember { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box {
+                IconButton(onClick = { pickingIcon = true }) {
+                    Icon(
+                        painter = painterResource(iconFor(icon)),
+                        contentDescription = strings[Keys.COMPOSER_ICON_PICK],
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (pickingIcon) {
+                    IconPickerDialog(
+                        selected = icon,
+                        onPick = { pickingIcon = false; onIconChange(it) },
+                        onDismiss = { pickingIcon = false },
+                    )
+                }
+            }
+            OutlinedTextField(
+                value = name,
+                onValueChange = onNameChange,
+                placeholder = { Text(strings[Keys.COMPOSER_SAVE_PROMPT_NAME]) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onSave) { Text(strings[Keys.COMPOSER_SAVE_PROMPT]) }
+            Spacer(Modifier.width(4.dp))
+            TextButton(onClick = onSkip) { Text(strings[Keys.COMPOSER_PROMPT_DISMISS]) }
+        }
+        // Directly creating a first-class action from a prompt in one step, rather than saving
+        // it to the re-run list and pinning it to the bar as a second, separate trip through
+        // Settings afterwards.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { onPinToBarChange(!pinToBar) },
+        ) {
+            Checkbox(checked = pinToBar, onCheckedChange = onPinToBarChange)
+            Text(strings[Keys.COMPOSER_CUSTOM_ACTION_PIN_TO_BAR], style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 

@@ -21,7 +21,7 @@ package com.borderkeys.data.theme
 enum class ComposerAction(val id: Int) {
 
     /** Spelling, grammar and punctuation, without rephrasing. */
-    GRAMMAR(1),
+    CORRECT(1),
 
     /** Opens the language chooser, then translates. */
     TRANSLATE(2),
@@ -71,7 +71,7 @@ enum class ComposerAction(val id: Int) {
          * button that opens an empty list. It appears the first time one is saved.
          */
         val DEFAULT: List<ComposerAction> = listOf(
-            GRAMMAR, TRANSLATE, TONE, SHORTEN, SUMMARISE, KEEP_SELECTION, PROMPT, SHOW_ORIGINAL, INSERT,
+            CORRECT, TRANSLATE, TONE, SHORTEN, SUMMARISE, KEEP_SELECTION, PROMPT, SHOW_ORIGINAL, INSERT,
         )
 
         fun fromId(id: Int): ComposerAction? = idMatching(entries.toTypedArray(), id) { it.id }

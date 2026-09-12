@@ -31,6 +31,10 @@ import kotlinx.serialization.json.Json
 data class BackupPayload(
     val preferences: KeyboardPreferences? = null,
     val theme: KeyboardTheme? = null,
+    /** Named themes the user saved themselves -- see [CustomThemeEntry][com.borderkeys.data.theme.CustomThemeEntry].
+     *  A list, not a single value like [theme]: importing adds to what is already saved rather
+     *  than replacing it, the same as [words] does for the dictionary. */
+    val customThemes: List<BackupCustomTheme> = emptyList(),
     /** Which languages are on and how heavily they count. Not the packs; those are in the APK. */
     val packs: List<BackupPack> = emptyList(),
     val words: List<BackupWord> = emptyList(),
@@ -55,6 +59,9 @@ data class BackupPayload(
         get() = words.isNotEmpty() || bigrams.isNotEmpty() || trigrams.isNotEmpty() ||
             clips.isNotEmpty()
 }
+
+@Serializable
+data class BackupCustomTheme(val id: String, val name: String, val theme: KeyboardTheme, val createdAt: Long)
 
 @Serializable
 data class BackupPack(val tag: String, val enabled: Boolean, val weight: Float)

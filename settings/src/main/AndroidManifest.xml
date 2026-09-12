@@ -66,6 +66,78 @@
         </activity-alias>
 
         <!--
+            Four more entries in the same menu, same target activity, same everything above,
+            except each of these runs its action immediately on the selection instead of opening
+            an idle box, and lands on the result the same way tapping that button manually would.
+
+            android:name is how SettingsActivity.kt tells the five apart: the platform preserves
+            the ALIAS's own component name on the intent it hands to the target activity's code
+            (intent.component), not the target's, which is the standard way multiple aliases
+            sharing one Activity distinguish which one was actually picked: no extra permission
+            or plumbing needed, just a name each alias carries and the activity reads back.
+
+            Three fixed built-in actions (Correct, Shorten, Summarise) rather than all of them:
+            Translate and Tone each need a follow-up choice (which language, which register)
+            inside the app regardless, so a direct alias would not skip a step for those the way
+            it does for these three. The fourth, Custom, covers the open-ended, user-created set
+            a static manifest entry cannot each get its own dynamically-labelled shortcut for:
+            it opens a picker of them instead, one tap short of instant rather than instant, which
+            is what a fixed set of manifest entries can and cannot do for a list nothing here
+            controls the size of.
+        -->
+        <activity-alias
+            android:name=".ProcessTextCorrectAlias"
+            android:targetActivity="com.borderkeys.settings.SettingsActivity"
+            android:exported="true"
+            android:label="@string/process_text_label_correct"
+            android:icon="@drawable/bk_composer_correct">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".ProcessTextShortenAlias"
+            android:targetActivity="com.borderkeys.settings.SettingsActivity"
+            android:exported="true"
+            android:label="@string/process_text_label_shorten"
+            android:icon="@drawable/bk_composer_shorten">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".ProcessTextSummariseAlias"
+            android:targetActivity="com.borderkeys.settings.SettingsActivity"
+            android:exported="true"
+            android:label="@string/process_text_label_summarise"
+            android:icon="@drawable/bk_composer_summarise">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".ProcessTextCustomAlias"
+            android:targetActivity="com.borderkeys.settings.SettingsActivity"
+            android:exported="true"
+            android:label="@string/process_text_label_custom"
+            android:icon="@drawable/bk_composer_saved">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
+        <!--
             Serves the one file a transfer writes, and nothing else.
 
             Not exported, which is the whole point: an unexported provider cannot be queried by

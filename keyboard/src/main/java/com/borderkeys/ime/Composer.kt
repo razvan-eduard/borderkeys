@@ -235,7 +235,7 @@ class Composer {
             return kept.joinToString(" ").take(MAX_NAME_CHARS).trim()
         }
 
-        /** Mirrors SavedPrompt.MAX_NAME_CHARS; duplicated so this stays free of :data. */
+        /** Mirrors CustomAction.MAX_NAME_CHARS; duplicated so this stays free of :data. */
         const val MAX_NAME_CHARS = 24
 
         private const val NAME_WORDS = 3

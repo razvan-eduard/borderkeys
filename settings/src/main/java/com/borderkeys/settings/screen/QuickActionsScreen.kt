@@ -5,6 +5,7 @@ package com.borderkeys.settings.screen
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,8 +31,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.theme.CustomIcon
+import com.borderkeys.data.theme.CustomQuickAction
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.QuickAction
+import com.borderkeys.data.theme.QuickActionBar
+import com.borderkeys.data.theme.QuickActionBarItem
 import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
 import com.borderkeys.settings.Divider
@@ -62,7 +68,13 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentAppearance() })
     val preferences = appearance.preferences
     var picking by remember { mutableStateOf(false) }
-    val chosen = QuickAction.fromIds(preferences.quickActions)
+    var creatingCustomAction by remember { mutableStateOf(false) }
+    var editingCustomAction by remember { mutableStateOf<CustomQuickAction?>(null) }
+    var deletingCustomAction by remember { mutableStateOf<CustomQuickAction?>(null) }
+    val chosen = QuickActionBar.resolve(preferences.quickActions, preferences.customQuickActions)
+    val pinnableCustomActions = preferences.customQuickActions.filter { action ->
+        chosen.none { it is QuickActionBarItem.Custom && it.action.id == action.id }
+    }
 
     // The preview is outside the scrolling column, so it stays on screen while the controls
     // under it are scrolled -- the same reason Size & Position pins its own copy of it.
@@ -144,16 +156,17 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                 if (chosen.isEmpty()) {
                     Explanation(strings[Keys.QUICK_NONE])
                 }
-                chosen.forEachIndexed { index, action ->
+                chosen.forEachIndexed { index, item ->
+                    val itemId = barItemId(item)
                     ButtonRow(
-                        action = action,
+                        item = item,
                         index = index,
                         onMoveTop = { update { current -> current.copy(quickActions = move(
                             current.quickActions, index, 0)) } },
                         onMoveUp = { update { current -> current.copy(quickActions = move(
                             current.quickActions, index, index - 1)) } },
                         onRemove = { update { current -> current.copy(quickActions =
-                            current.quickActions.filterNot { it == action.id }) } },
+                            current.quickActions.filterNot { it == itemId }) } },
                     )
                 }
                 // Only once the list has actually moved away from it -- a button that is always
@@ -169,7 +182,15 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULT]) }
                 }
                 Explanation(strings[Keys.QUICK_BUTTONS_NOTE])
-                if (chosen.size < KeyboardPreferences.MAX_QUICK_ACTIONS) {
+                val addableBuiltins = QuickAction.entries.filterNot { builtin ->
+                    chosen.any { it is QuickActionBarItem.Builtin && it.action == builtin } ||
+                        // Not offered while the draft box is switched off, or the bar would gain
+                        // a button for something that cannot open.
+                        (builtin == QuickAction.COMPOSE && !preferences.composerEnabled)
+                }
+                if (chosen.size < KeyboardPreferences.MAX_QUICK_ACTIONS &&
+                    (addableBuiltins.isNotEmpty() || pinnableCustomActions.isNotEmpty())
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .clickable { picking = !picking }
@@ -182,17 +203,25 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                         )
                     }
                     if (picking) {
-                        for (action in QuickAction.entries) {
-                            if (action in chosen) continue
-                            // Not offered while the draft box is switched off, or the bar would
-                            // gain a button for something that cannot open.
-                            if (action == QuickAction.COMPOSE && !preferences.composerEnabled) continue
+                        for (builtin in addableBuiltins) {
                             ButtonRow(
-                                action = action,
+                                item = QuickActionBarItem.Builtin(builtin),
                                 index = -1,
                                 onAdd = {
                                     update { current ->
-                                        current.copy(quickActions = current.quickActions + action.id)
+                                        current.copy(quickActions = current.quickActions + builtin.id)
+                                    }
+                                    picking = false
+                                },
+                            )
+                        }
+                        for (custom in pinnableCustomActions) {
+                            ButtonRow(
+                                item = QuickActionBarItem.Custom(custom),
+                                index = -1,
+                                onAdd = {
+                                    update { current ->
+                                        current.copy(quickActions = current.quickActions + custom.id)
                                     }
                                     picking = false
                                 },
@@ -201,8 +230,159 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     }
                 }
             }
+
+            SettingsSectionCard(strings[Keys.QUICK_CUSTOM_TITLE]) {
+                if (preferences.customQuickActions.isEmpty()) {
+                    Explanation(strings[Keys.COMPOSER_SETTINGS_NO_SAVED])
+                }
+                for (action in preferences.customQuickActions) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        var pickingIcon by remember(action.id) { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { pickingIcon = true }) {
+                                Icon(
+                                    painter = painterResource(iconFor(CustomIcon.fromId(action.icon))),
+                                    contentDescription = strings[Keys.COMPOSER_ICON_PICK],
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (pickingIcon) {
+                                IconPickerDialog(
+                                    selected = CustomIcon.fromId(action.icon),
+                                    onPick = { icon ->
+                                        pickingIcon = false
+                                        update { current ->
+                                            current.copy(
+                                                customQuickActions = current.customQuickActions.map {
+                                                    if (it.id == action.id) it.copy(icon = icon.id) else it
+                                                },
+                                            )
+                                        }
+                                    },
+                                    onDismiss = { pickingIcon = false },
+                                )
+                            }
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f).padding(start = 4.dp)
+                                .clickable { editingCustomAction = action },
+                        ) {
+                            Text(action.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                action.steps.joinToString(" → ") { stepId ->
+                                    QuickAction.fromId(stepId)?.let { strings[labelFor(it)] }
+                                        ?: preferences.customQuickActions
+                                            .find { it.id == stepId }?.name.orEmpty()
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        TextButton(onClick = { deletingCustomAction = action }) {
+                            Text(strings[Keys.COMPOSER_SETTINGS_FORGET])
+                        }
+                    }
+                }
+                Explanation(strings[Keys.QUICK_CUSTOM_NOTE])
+                if (preferences.customQuickActions.size < CustomQuickAction.MAX_CUSTOM_QUICK_ACTIONS) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable { creatingCustomAction = true }
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                    ) {
+                        Text(
+                            strings[Keys.QUICK_CUSTOM_ADD],
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                if (creatingCustomAction) {
+                    CreateCustomQuickActionDialog(
+                        existing = preferences.customQuickActions,
+                        onSave = { name, steps, icon, pinToBar ->
+                            creatingCustomAction = false
+                            val action = CustomQuickAction(
+                                id = CustomQuickAction.nextId(preferences.customQuickActions),
+                                name = name,
+                                steps = steps,
+                                icon = icon.id,
+                            )
+                            update { current ->
+                                current.copy(
+                                    customQuickActions = current.customQuickActions + action,
+                                    quickActions = if (pinToBar) current.quickActions + action.id
+                                                  else current.quickActions,
+                                )
+                            }
+                        },
+                        onDismiss = { creatingCustomAction = false },
+                    )
+                }
+                editingCustomAction?.let { action ->
+                    CreateCustomQuickActionDialog(
+                        existing = preferences.customQuickActions,
+                        editing = action,
+                        pinnedInitially = action.id in preferences.quickActions,
+                        onSave = { name, steps, icon, pinToBar ->
+                            editingCustomAction = null
+                            update { current ->
+                                current.copy(
+                                    customQuickActions = current.customQuickActions.map {
+                                        if (it.id == action.id) {
+                                            it.copy(name = name, steps = steps, icon = icon.id)
+                                        } else {
+                                            it
+                                        }
+                                    },
+                                    quickActions = when {
+                                        pinToBar && action.id !in current.quickActions ->
+                                            current.quickActions + action.id
+                                        !pinToBar -> current.quickActions.filterNot { it == action.id }
+                                        else -> current.quickActions
+                                    },
+                                )
+                            }
+                        },
+                        onDismiss = { editingCustomAction = null },
+                    )
+                }
+                deletingCustomAction?.let { action ->
+                    AlertDialog(
+                        onDismissRequest = { deletingCustomAction = null },
+                        title = { Text(strings[Keys.CUSTOM_ACTION_DELETE_TITLE]) },
+                        text = { Text(strings.getString(Keys.THEME_DELETE_THEME_MESSAGE, action.name)) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                deletingCustomAction = null
+                                update { current ->
+                                    current.copy(
+                                        customQuickActions =
+                                            current.customQuickActions.filterNot { it.id == action.id },
+                                        quickActions = current.quickActions.filterNot { it == action.id },
+                                    )
+                                }
+                            }) { Text(strings[Keys.THEME_DELETE], color = MaterialTheme.colorScheme.error) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { deletingCustomAction = null }) {
+                                Text(strings[Keys.THEME_CANCEL])
+                            }
+                        },
+                    )
+                }
+            }
         }
     }
+}
+
+/** The id a [QuickActionBarItem] would appear as inside [KeyboardPreferences.quickActions]. */
+private fun barItemId(item: QuickActionBarItem): Int = when (item) {
+    is QuickActionBarItem.Builtin -> item.action.id
+    is QuickActionBarItem.Custom -> item.action.id
 }
 
 /**
@@ -214,7 +394,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
  */
 @Composable
 private fun ButtonRow(
-    action: QuickAction,
+    item: QuickActionBarItem,
     index: Int,
     onMoveTop: () -> Unit = {},
     onMoveUp: () -> Unit = {},
@@ -222,6 +402,14 @@ private fun ButtonRow(
     onAdd: (() -> Unit)? = null,
 ) {
     val strings = LocalStrings.current
+    val icon = when (item) {
+        is QuickActionBarItem.Builtin -> iconFor(item.action)
+        is QuickActionBarItem.Custom -> iconFor(CustomIcon.fromId(item.action.icon))
+    }
+    val label = when (item) {
+        is QuickActionBarItem.Builtin -> strings[labelFor(item.action)]
+        is QuickActionBarItem.Custom -> item.action.name
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -230,13 +418,13 @@ private fun ButtonRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            painter = painterResource(iconFor(action)),
+            painter = painterResource(icon),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(24.dp),
         )
         Text(
-            strings[labelFor(action)],
+            label,
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f).padding(start = 16.dp),
         )
@@ -274,7 +462,10 @@ private fun ChipRow(content: @Composable () -> Unit) {
     ) { content() }
 }
 
-private fun iconFor(action: QuickAction): Int = when (action) {
+/** Not private: [IconPicker.kt]'s `CreateCustomQuickActionDialog` needs the same mapping for the
+ *  step picker's list of built-in actions, and one file-scoped copy shared within this module
+ *  beats a second one duplicating it. */
+internal fun iconFor(action: QuickAction): Int = when (action) {
     QuickAction.COPY_PREVIOUS_WORD -> R.drawable.bk_action_copy_previous_word
     QuickAction.COPY_LINE -> R.drawable.bk_action_copy_line
     QuickAction.COPY_ALL -> R.drawable.bk_action_copy_all
@@ -294,7 +485,7 @@ private fun iconFor(action: QuickAction): Int = when (action) {
     QuickAction.REDO -> R.drawable.bk_action_redo
 }
 
-private fun labelFor(action: QuickAction): String = when (action) {
+internal fun labelFor(action: QuickAction): String = when (action) {
     QuickAction.COPY_PREVIOUS_WORD -> Keys.ACTION_COPY_PREVIOUS_WORD
     QuickAction.COPY_LINE -> Keys.ACTION_COPY_LINE
     QuickAction.COPY_ALL -> Keys.ACTION_COPY_ALL

@@ -20,6 +20,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.QuickAction
+import com.borderkeys.data.theme.QuickActionBar
+import com.borderkeys.data.theme.QuickActionBarItem
 import com.borderkeys.ime.KeyboardHostView
 import com.borderkeys.ime.LayoutLoader
 import com.borderkeys.theme.ThemeMode
@@ -121,11 +123,14 @@ fun PlacementPreview(
                 // View's own default visibility, showing a collapsed "more" button that opens onto
                 // nothing beside a strip this screen otherwise renders correctly.
                 if (preferences.quickActionsEnabled) {
-                    val chosen = QuickAction.fromIds(preferences.quickActions)
-                        .filter { it != QuickAction.COMPOSE || preferences.composerEnabled }
+                    val chosen = QuickActionBar.resolve(preferences.quickActions, preferences.customQuickActions)
+                        .filterNot {
+                            it is QuickActionBarItem.Builtin && it.action == QuickAction.COMPOSE &&
+                                !preferences.composerEnabled
+                        }
                     view.quickActions.visibility =
                         if (chosen.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
-                    view.quickActions.actions = chosen
+                    view.quickActions.items = chosen
                     view.quickActions.collapsible =
                         preferences.quickActionsMode == KeyboardPreferences.QUICK_ACTIONS_COLLAPSED
                     view.quickActions.sizeLevel = preferences.quickActionsSize

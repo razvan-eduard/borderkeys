@@ -83,6 +83,20 @@ enum class QuickAction(val id: Int) {
     REDO(17),
     ;
 
+    /**
+     * Whether this can be one step of a [CustomQuickAction] macro.
+     *
+     * A macro runs its steps back to back with nothing shown in between, so a step has to be a
+     * plain edit on the field and nothing else: [CLIPBOARD_HISTORY] opens a panel and only acts
+     * once something is picked from it later, which a macro cannot wait for; [SWITCH_LAYOUT],
+     * [SETTINGS] and [COMPOSE] all leave the field for something else entirely (another IME
+     * subtype, another Activity) rather than editing it. Every other action reads or writes
+     * through [android.view.inputmethod.InputConnection] alone and finishes within the tap that
+     * started it, which is what makes it safe to chain.
+     */
+    val macroEligible: Boolean
+        get() = this !in setOf(CLIPBOARD_HISTORY, SWITCH_LAYOUT, SETTINGS, COMPOSE)
+
     companion object {
         /** What a new install starts with: the five that answer "I want that text somewhere". */
         val DEFAULT: List<QuickAction> = listOf(

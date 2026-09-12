@@ -23,10 +23,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,6 +51,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.BackgroundImages
+import com.borderkeys.data.theme.CustomThemeEntry
+import com.borderkeys.data.theme.CustomThemeFile
 import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
@@ -58,7 +66,9 @@ import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
 import com.borderkeys.settings.rememberThemeUpdater
 import com.borderkeys.theme.DynamicColors
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The theme editor, with the real keyboard above it.
@@ -98,6 +108,55 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
         }
     }
 
+    val customThemes by repository.customThemes.collectAsStateWithLifecycle(initialValue = emptyList())
+    var savingCurrentTheme by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf<CustomThemeEntry?>(null) }
+    var deleting by remember { mutableStateOf<CustomThemeEntry?>(null) }
+    var exporting by remember { mutableStateOf<CustomThemeEntry?>(null) }
+    var customThemeNotice by remember { mutableStateOf("") }
+
+    val exportTheme = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(CustomThemeFile.MIME_TYPE),
+    ) { uri: Uri? ->
+        val entry = exporting
+        exporting = null
+        if (uri == null || entry == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val text = CustomThemeFile.write(entry.name, entry.theme)
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+                }.isSuccess
+            }
+            customThemeNotice = strings[if (ok) Keys.THEME_EXPORTED else Keys.THEME_EXPORT_FAILED]
+        }
+    }
+
+    val importTheme = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val text = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use {
+                        it.readBytes().toString(Charsets.UTF_8)
+                    }
+                }.getOrNull()
+            }
+            val parsed = text?.let { CustomThemeFile.read(it) }
+            if (parsed == null) {
+                customThemeNotice = strings[Keys.THEME_IMPORT_FAILED]
+                return@launch
+            }
+            val (name, importedTheme) = parsed
+            val saved = repository.saveCustomTheme(name, importedTheme)
+            customThemeNotice = strings[
+                if (saved != null) Keys.THEME_IMPORTED else Keys.THEME_CUSTOM_THEME_LIMIT_REACHED,
+            ]
+        }
+    }
+
     // The preview is outside the scrolling column, so it stays on screen while the controls
     // under it are scrolled. A preview that scrolls away is a preview you cannot see while you
     // are changing the thing it previews, which is the only moment it is for.
@@ -113,31 +172,40 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 // and light are decided for you, so a preset row that still looked pickable
                 // would be a control that lied about doing something.
                 Disableable(disabled = auto) {
-                    // A scrolling row of cards rather than a row of words: at ten of them the
-                    // names stop being the useful part, and three dots of the actual colours say
-                    // what a preset is faster than reading "Midnight" does.
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        for (preset in PRESETS) {
-                            // showKeyBorders is excluded from what a preset overwrites: it is a
-                            // shape choice a preset happens to carry a value for, not a colour
-                            // the preset is actually about, and only two of the ten presets ever
-                            // bothered to set it -- so picking any of the other eight used to
-                            // turn borders off as a side effect of colours nobody asked to
-                            // change. Comparing and applying with it carried over from what is
-                            // already showing is what keeps that one switch a switch, not a coin
-                            // flip of which preset was tapped last.
-                            val presetTheme = preset.theme.copy(showKeyBorders = theme.showKeyBorders)
-                            PresetCard(
-                                name = strings[preset.nameKey],
-                                preset = preset.theme,
-                                selected = theme == presetTheme,
-                            ) { update { presetTheme } }
+                    // Grouped by category rather than one long row: fifteen presets in a single
+                    // scroll is a row nobody scrolls to the end of, and a category label says
+                    // what family of look is coming before the colours do.
+                    for (category in ThemeCategory.entries) {
+                        val presetsInCategory = PRESETS.filter { it.category == category }
+                        if (presetsInCategory.isEmpty()) continue
+                        Text(
+                            strings[category.labelKey],
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 2.dp),
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            for (preset in presetsInCategory) {
+                                // showKeyBorders is excluded from what a preset overwrites: it is
+                                // a shape choice a preset happens to carry a value for, not a
+                                // colour the preset is actually about, and only a few of the
+                                // presets ever bothered to set it -- so picking any of the others
+                                // used to turn borders off as a side effect of colours nobody
+                                // asked to change. Comparing and applying with it carried over
+                                // from what is already showing is what keeps that one switch a
+                                // switch, not a coin flip of which preset was tapped last.
+                                val presetTheme = preset.theme.copy(showKeyBorders = theme.showKeyBorders)
+                                PresetCard(
+                                    name = strings[preset.nameKey],
+                                    preset = preset.theme,
+                                    selected = theme == presetTheme,
+                                ) { update { presetTheme } }
+                            }
                         }
                     }
                     Explanation(strings[Keys.THEME_PRESETS_NOTE])
@@ -172,6 +240,68 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                         checked = preferences.followSystemColors,
                     ) { value -> updatePreferences { it.copy(followSystemColors = value) } }
                 }
+            }
+            SettingsSectionCard(strings[Keys.THEME_MY_THEMES]) {
+                if (customThemes.isEmpty()) {
+                    Explanation(strings[Keys.THEME_NO_CUSTOM_THEMES])
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        for (entry in customThemes) {
+                            // Same carry-over as a preset: showKeyBorders is a shape choice, not
+                            // part of what makes this the theme the user saved.
+                            val entryTheme = entry.theme.copy(showKeyBorders = theme.showKeyBorders)
+                            PresetCard(
+                                name = entry.name,
+                                preset = entry.theme,
+                                selected = theme == entryTheme,
+                            ) { update { entryTheme } }
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextButton(onClick = { savingCurrentTheme = true }) {
+                        Text(strings[Keys.THEME_SAVE_CURRENT_THEME])
+                    }
+                    TextButton(onClick = { importTheme.launch(arrayOf("*/*")) }) {
+                        Text(strings[Keys.THEME_IMPORT_THEME])
+                    }
+                }
+                // Acts on whichever saved theme is the one actually showing right now -- the
+                // same equality a preset card's own ring already uses, so the buttons below track
+                // the ring rather than a second, separate idea of "which one is selected".
+                val active = customThemes.firstOrNull {
+                    it.theme.copy(showKeyBorders = theme.showKeyBorders) == theme
+                }
+                if (active != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        TextButton(onClick = { renaming = active }) {
+                            Text(strings[Keys.THEME_RENAME])
+                        }
+                        TextButton(onClick = {
+                            exporting = active
+                            exportTheme.launch("${active.name}.json")
+                        }) { Text(strings[Keys.THEME_EXPORT]) }
+                        TextButton(onClick = { deleting = active }) {
+                            Text(strings[Keys.THEME_DELETE], color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+                if (customThemeNotice.isNotEmpty()) {
+                    Explanation(customThemeNotice)
+                }
+                Explanation(strings[Keys.THEME_MY_THEMES_NOTE])
             }
             SettingsSectionCard(strings[Keys.THEME_COLOURS]) {
               Disableable(disabled = auto) {
@@ -381,6 +511,87 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
             }
         }
     }
+
+    if (savingCurrentTheme) {
+        ThemeNameDialog(
+            title = strings[Keys.THEME_NAME_THIS_THEME],
+            confirmLabel = strings[Keys.THEME_SAVE],
+            onDismiss = { savingCurrentTheme = false },
+            onConfirm = { name ->
+                savingCurrentTheme = false
+                scope.launch {
+                    val saved = repository.saveCustomTheme(name, theme)
+                    if (saved == null) {
+                        customThemeNotice = strings[Keys.THEME_CUSTOM_THEME_LIMIT_REACHED]
+                    }
+                }
+            },
+        )
+    }
+
+    renaming?.let { entry ->
+        ThemeNameDialog(
+            title = strings[Keys.THEME_RENAME_THEME],
+            confirmLabel = strings[Keys.THEME_SAVE],
+            initial = entry.name,
+            onDismiss = { renaming = null },
+            onConfirm = { name ->
+                renaming = null
+                scope.launch { repository.renameCustomTheme(entry.id, name) }
+            },
+        )
+    }
+
+    deleting?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text(strings[Keys.THEME_DELETE_THEME_TITLE]) },
+            text = { Text(strings.getString(Keys.THEME_DELETE_THEME_MESSAGE, entry.name)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleting = null
+                    scope.launch { repository.deleteCustomTheme(entry.id) }
+                }) { Text(strings[Keys.THEME_DELETE], color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleting = null }) { Text(strings[Keys.THEME_CANCEL]) }
+            },
+        )
+    }
+}
+
+/** A short name, asked for and handed back -- "save this as" and "rename this" are the same
+ *  dialog with a different title, confirm label and starting text. */
+@Composable
+private fun ThemeNameDialog(
+    title: String,
+    confirmLabel: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+    initial: String = "",
+) {
+    val strings = LocalStrings.current
+    var name by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it.take(CustomThemeEntry.MAX_NAME_LENGTH) },
+                singleLine = true,
+                label = { Text(strings[Keys.THEME_THEME_NAME_HINT]) },
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name.trim().ifEmpty { strings[Keys.THEME_CUSTOM] }) },
+            ) { Text(confirmLabel) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(strings[Keys.THEME_CANCEL]) }
+        },
+    )
 }
 
 /**
@@ -448,8 +659,24 @@ private fun PresetCard(
     }
 }
 
-/** A preset and the catalogue key for its name. */
-internal class Preset(val nameKey: String, val theme: KeyboardTheme)
+/** A preset, the catalogue key for its name, and the family of look it belongs to. */
+internal class Preset(val nameKey: String, val theme: KeyboardTheme, val category: ThemeCategory)
+
+/**
+ * The families the preset row groups by, in the order the row shows them.
+ *
+ * A pure presentation grouping -- nothing else reads [category], and a theme itself has no
+ * notion of which family it is in, so this stays in `:settings` rather than beside
+ * [KeyboardTheme] in `:data`.
+ */
+internal enum class ThemeCategory(val labelKey: String) {
+    CLASSIC(Keys.THEME_CATEGORY_CLASSIC),
+    COOL(Keys.THEME_CATEGORY_COOL),
+    NATURE(Keys.THEME_CATEGORY_NATURE),
+    WARM(Keys.THEME_CATEGORY_WARM),
+    MONOCHROME(Keys.THEME_CATEGORY_MONOCHROME),
+    NEON(Keys.THEME_CATEGORY_NEON),
+}
 
 /**
  * Dims [content] and swallows every touch inside it, for a control that is turned off rather
@@ -634,21 +861,97 @@ internal val NEON = KeyboardTheme(
     patternScaleDp = 22f,
 )
 
+internal val GLACIER = KeyboardTheme(
+    // The one light entry among the cool presets: Midnight and Ocean are both night water,
+    // and a category of nothing but dark blues is a category where the third card looks like
+    // a mistake rather than a choice.
+    backgroundColor = 0xFFE3F1F6.toInt(),
+    keyColor = 0xFFFFFFFF.toInt(),
+    keyPressedColor = 0xFFB9DCE8.toInt(),
+    modifierKeyColor = 0xFFD9EBF2.toInt(),
+    textColor = 0xFF0F2733.toInt(),
+    secondaryTextColor = 0xFF3E6B7A.toInt(),
+    accentColor = 0xFF0E6E8C.toInt(),
+    swipeTrailColor = 0xCC0E6E8C.toInt(),
+)
+
+internal val MOSS = KeyboardTheme(
+    backgroundColor = 0xFF131C10.toInt(),
+    keyColor = 0xFF1E2E1A.toInt(),
+    keyPressedColor = 0xFF304826.toInt(),
+    modifierKeyColor = 0xFF141F12.toInt(),
+    textColor = 0xFFE8F3E0.toInt(),
+    secondaryTextColor = 0xFF9BB88A.toInt(),
+    accentColor = 0xFF8FCB6B.toInt(),
+    swipeTrailColor = 0xCC8FCB6B.toInt(),
+    backgroundPatterns = listOf(KeyboardTheme.PATTERN_DIAGONAL),
+    patternColor = 0x12FFFFFF,
+    patternScaleDp = 22f,
+)
+
+internal val CLAY = KeyboardTheme(
+    backgroundColor = 0xFF24140D.toInt(),
+    keyColor = 0xFF3A2016.toInt(),
+    keyPressedColor = 0xFF50301F.toInt(),
+    modifierKeyColor = 0xFF2A1710.toInt(),
+    textColor = 0xFFF7E9DE.toInt(),
+    secondaryTextColor = 0xFFC79A82.toInt(),
+    accentColor = 0xFFE07A3F.toInt(),
+    swipeTrailColor = 0xCCE07A3F.toInt(),
+    keyCornerRadiusDp = 6f,
+)
+
+internal val SLATE = KeyboardTheme(
+    // Mono is the keys vanishing into the background with the outline left to separate them;
+    // this is the opposite move -- keys that read as their own surface, one step lighter than
+    // the background rather than the same colour as it.
+    backgroundColor = 0xFF1C1E23.toInt(),
+    keyColor = 0xFF2B2E36.toInt(),
+    keyPressedColor = 0xFF3E424C.toInt(),
+    modifierKeyColor = 0xFF202329.toInt(),
+    textColor = 0xFFEDEFF2.toInt(),
+    secondaryTextColor = 0xFF9AA1AD.toInt(),
+    accentColor = 0xFFB8C4D6.toInt(),
+    swipeTrailColor = 0xCCB8C4D6.toInt(),
+    keyCornerRadiusDp = 4f,
+)
+
+internal val AURORA = KeyboardTheme(
+    backgroundColor = 0xFF060E0D.toInt(),
+    keyColor = 0xFF0C1F1C.toInt(),
+    keyPressedColor = 0xFF163530.toInt(),
+    modifierKeyColor = 0xFF081513.toInt(),
+    textColor = 0xFFE6FFF6.toInt(),
+    secondaryTextColor = 0xFF6FE0C4.toInt(),
+    accentColor = 0xFF2EE6B8.toInt(),
+    swipeTrailColor = 0xCC2EE6B8.toInt(),
+    keyCornerRadiusDp = 14f,
+    backgroundPatterns = listOf(KeyboardTheme.PATTERN_DOTS),
+    patternColor = 0x1A2EE6B8,
+    patternScaleDp = 22f,
+)
+
 /**
- * Ten of them, in the order the row shows.
+ * Fifteen of them, grouped by [ThemeCategory] in the order the row shows the groups, and within
+ * each group in the order the row shows the cards.
  *
  * The first three are where the application started and stay first, because someone who has
  * been using one of them should not have to hunt for it after an update.
  */
 internal val PRESETS = listOf(
-    Preset(Keys.THEME_DARK, KeyboardTheme()),
-    Preset(Keys.THEME_LIGHT, LIGHT_THEME),
-    Preset(Keys.THEME_HIGH_CONTRAST, HIGH_CONTRAST),
-    Preset(Keys.THEME_MIDNIGHT, MIDNIGHT),
-    Preset(Keys.THEME_OCEAN, OCEAN),
-    Preset(Keys.THEME_FOREST, FOREST),
-    Preset(Keys.THEME_SUNSET, SUNSET),
-    Preset(Keys.THEME_PAPER, PAPER),
-    Preset(Keys.THEME_MONO, MONO),
-    Preset(Keys.THEME_NEON, NEON),
+    Preset(Keys.THEME_DARK, KeyboardTheme(), ThemeCategory.CLASSIC),
+    Preset(Keys.THEME_LIGHT, LIGHT_THEME, ThemeCategory.CLASSIC),
+    Preset(Keys.THEME_HIGH_CONTRAST, HIGH_CONTRAST, ThemeCategory.CLASSIC),
+    Preset(Keys.THEME_MIDNIGHT, MIDNIGHT, ThemeCategory.COOL),
+    Preset(Keys.THEME_OCEAN, OCEAN, ThemeCategory.COOL),
+    Preset(Keys.THEME_GLACIER, GLACIER, ThemeCategory.COOL),
+    Preset(Keys.THEME_FOREST, FOREST, ThemeCategory.NATURE),
+    Preset(Keys.THEME_MOSS, MOSS, ThemeCategory.NATURE),
+    Preset(Keys.THEME_SUNSET, SUNSET, ThemeCategory.WARM),
+    Preset(Keys.THEME_PAPER, PAPER, ThemeCategory.WARM),
+    Preset(Keys.THEME_CLAY, CLAY, ThemeCategory.WARM),
+    Preset(Keys.THEME_MONO, MONO, ThemeCategory.MONOCHROME),
+    Preset(Keys.THEME_SLATE, SLATE, ThemeCategory.MONOCHROME),
+    Preset(Keys.THEME_NEON, NEON, ThemeCategory.NEON),
+    Preset(Keys.THEME_AURORA, AURORA, ThemeCategory.NEON),
 )

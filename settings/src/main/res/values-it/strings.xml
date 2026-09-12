@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Italian translations of the OS-facing strings in values/strings.xml: see that file's own
+    comment for why these are plain Android resources rather than the :i18n catalogue.
+-->
+<resources>
+
+    <string name="process_text_label">Componi con BorderKeys</string>
+    <string name="process_text_label_correct">Correggi con BorderKeys</string>
+    <string name="process_text_label_shorten">Accorcia con BorderKeys</string>
+    <string name="process_text_label_summarise">Riassumi con BorderKeys</string>
+    <string name="process_text_label_custom">Azione personalizzata con BorderKeys</string>
+
+</resources>
