@@ -31,3 +31,11 @@ keystore_password.txt
 # Python bytecode from the tools in tools/.
 __pycache__/
 *.pyc
+
+# tools/swipe_model/: training tooling, not tracked output. The venv is a local install (see
+# requirements.txt); the corpus and checkpoints are large, regenerable, and specific to one
+# training run -- none of the three belong in version control.
+/tools/swipe_model/.venv/
+/tools/swipe_model/data/
+/tools/swipe_model/*.pt
+/tools/swipe_model/*.bkw

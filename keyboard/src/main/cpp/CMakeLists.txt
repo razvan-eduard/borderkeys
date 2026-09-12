@@ -8,10 +8,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Set by the `plus` product flavor only. The neural swipe decoder is compiled out of the `core`
-# variant, not eliminated from it: the preprocessor never sees the code, so no amount of reading
-# the shipped .so can find a trace of it.
 option(BORDERKEYS_ASAN "Build with AddressSanitizer" OFF)
+
+# Off by default -- set ON only by the `plus` flavor's own externalNativeBuild.cmake.arguments
+# (keyboard/build.gradle.kts). This is what makes tier B a real per-flavor difference rather than
+# a runtime branch on an identical binary: `core` never lists tcn_*.cpp as a source at all, so no
+# amount of reading app-core-release.apk's .so can find a trace of it. See docs/licensing.md
+# section 2.5 and tools/swipe_model/ for where the weights this tier loads come from.
+option(BORDERKEYS_NEURAL_SWIPE "Build the trained (tier B) swipe decoder, plus flavor only" OFF)
 
 # Sources are listed, not globbed. file(GLOB) resolves at configure time, so a new file appears
 # in the build only after something else forces a reconfigure -- which means it compiles on the
@@ -28,7 +32,21 @@ set(BORDERKEYS_SOURCES
     gesture/shark2_decoder.cpp
 )
 
+if(BORDERKEYS_NEURAL_SWIPE)
+    list(APPEND BORDERKEYS_SOURCES
+        gesture/tcn_features.cpp
+        gesture/tcn_weights.cpp
+        gesture/tcn_encoder.cpp
+        gesture/tcn_ctc_decoder.cpp
+        gesture/tcn_decoder.cpp
+    )
+endif()
+
 add_library(borderkeys SHARED ${BORDERKEYS_SOURCES})
+
+if(BORDERKEYS_NEURAL_SWIPE)
+    target_compile_definitions(borderkeys PRIVATE BORDERKEYS_NEURAL_SWIPE=1)
+endif()
 
 target_include_directories(borderkeys PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

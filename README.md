@@ -36,7 +36,6 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 | Deterministic n-gram engine, geometric swipe decoding | ✓ | ✓ |
 | Multiple languages active at once, no manual switching | ✓ | ✓ |
 | Zero permissions, no `INTERNET` in the merged manifest | ✓ | ✓ |
-| Neural swipe decoder | | ✓ |
 | On-device text assistant (draft box) | | ✓ |
 
 Both stay free software end to end — `plus` only *adds* to `core`, it never trades privacy
@@ -89,11 +88,13 @@ the build if that ever changes.
 | flavor | contains                                                                 |
 |--------|--------------------------------------------------------------------------|
 | `core` | Deterministic n-gram engine, geometric (SHARK²) swipe decoding. No model files, no neural code, no non-free assets. |
-| `plus` | Adds the neural swipe decoder and the local text assistant.               |
+| `plus` | Adds the local text assistant.               |
 
 `core` is the default and is the one that stays entirely free software. The separation is at
-compile time, not behind a runtime flag: unpack `app-core-release.apk` and the neural code is
-not in it.
+compile time, not behind a runtime flag: unpack `app-core-release.apk` and the assistant's code
+is not in it. The swipe and prediction engine itself is byte-identical between the two builds --
+a neural swipe tier is a documented, legally-cleared future option (see
+[`docs/licensing.md`](docs/licensing.md) §2.2.1/§2.5), not something either flavor ships today.
 
 ## Building
 

@@ -22,6 +22,11 @@ set(TOOLS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tools)
 
 # Exceptions and RTTI off, exactly as the shipped library is built. A test binary compiled with
 # a different language dialect than the code it tests is testing something else.
+#
+# Tier B's sources are listed here UNCONDITIONALLY, unlike keyboard/src/main/cpp/CMakeLists.txt's
+# own BORDERKEYS_NEURAL_SWIPE-gated list: the device build's `core` flavor genuinely must not
+# carry this code, but a host test binary has no such constraint, and every line here should be
+# covered by `borderkeys_tests` regardless of what any Android flavor ships.
 set(ENGINE_SOURCES
     ${ENGINE_DIR}/engine.cpp
     ${ENGINE_DIR}/packed_trie.cpp
@@ -31,11 +36,17 @@ set(ENGINE_SOURCES
     ${ENGINE_DIR}/gesture/resample.cpp
     ${ENGINE_DIR}/gesture/template_cache.cpp
     ${ENGINE_DIR}/gesture/shark2_decoder.cpp
+    ${ENGINE_DIR}/gesture/tcn_features.cpp
+    ${ENGINE_DIR}/gesture/tcn_weights.cpp
+    ${ENGINE_DIR}/gesture/tcn_encoder.cpp
+    ${ENGINE_DIR}/gesture/tcn_ctc_decoder.cpp
+    ${ENGINE_DIR}/gesture/tcn_decoder.cpp
 )
 
 add_library(borderkeys_engine STATIC ${ENGINE_SOURCES})
 target_include_directories(borderkeys_engine PUBLIC ${ENGINE_DIR})
 target_compile_options(borderkeys_engine PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
+target_compile_definitions(borderkeys_engine PUBLIC BORDERKEYS_NEURAL_SWIPE=1)
 
 # The test pack is produced by the real writer rather than by a fixture built in C++.
 #
@@ -58,6 +69,7 @@ add_executable(borderkeys_tests
     test_format.cpp
     test_engine.cpp
     test_gesture.cpp
+    test_tcn.cpp
 )
 add_dependencies(borderkeys_tests test_pack)
 target_link_libraries(borderkeys_tests borderkeys_engine)
@@ -72,6 +84,14 @@ target_compile_definitions(borderkeys_tests PRIVATE
 add_executable(gesture_replay gesture_replay.cpp)
 target_link_libraries(gesture_replay borderkeys_engine)
 target_compile_options(gesture_replay PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
+
+# tools/tcn_replay.py's sibling: same corpus/layout formats and the same word<TAB>rank contract
+# as gesture_replay, but drives a TcnDecoder built directly rather than through Engine::create()
+# (which only ever builds Shark2Decoder -- see tcn_replay.cpp's own comment on why that routing
+# decision is untouched here). Built unconditionally, like the rest of Tier B's sources above.
+add_executable(tcn_replay tcn_replay.cpp)
+target_link_libraries(tcn_replay borderkeys_engine)
+target_compile_options(tcn_replay PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
 
 enable_testing()
 add_test(NAME engine COMMAND borderkeys_tests)
