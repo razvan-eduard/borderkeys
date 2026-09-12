@@ -6,7 +6,9 @@ package com.borderkeys.settings.screen
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,8 +29,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.settings.CautionNote
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SuggestionStripPreview
 import com.borderkeys.settings.SwitchRow
@@ -108,6 +112,12 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             ) { value -> update { it.copy(autoCapitalise = value) } }
 
             SwitchRow(
+                title = strings[Keys.CORRECTIONS_FORCE_CAPITALISE],
+                subtitle = strings[Keys.CORRECTIONS_FORCE_CAPITALISE_NOTE],
+                checked = preferences.forceCapitaliseSentences,
+            ) { value -> update { it.copy(forceCapitaliseSentences = value) } }
+
+            SwitchRow(
                 title = strings[Keys.CORRECTIONS_DOUBLE_SPACE],
                 subtitle = strings[Keys.CORRECTIONS_DOUBLE_SPACE_NOTE],
                 checked = preferences.doubleSpacePeriod,
@@ -185,6 +195,37 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             Explanation(strings[Keys.COMMON_RESET_TO_DEFAULTS_NOTE])
         }
 
+        // Its own card rather than folded into the one above: this is not another correction-as-
+        // you-type knob, it is a decision about text already committed, several words back --
+        // which is exactly what the warning below it exists to say plainly rather than bury in a
+        // subtitle.
+        SettingsSectionCard(strings[Keys.LANGUAGES_SWITCH_TITLE]) {
+            CautionNote(strings[Keys.LANGUAGES_SWITCH_WARNING])
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PickerChip(
+                    strings[Keys.LANGUAGES_SWITCH_OFF],
+                    preferences.languageSwitchCorrectionMode == KeyboardPreferences.LANGUAGE_SWITCH_OFF,
+                ) { update { it.copy(languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_OFF) } }
+                PickerChip(
+                    strings[Keys.LANGUAGES_SWITCH_ASK],
+                    preferences.languageSwitchCorrectionMode == KeyboardPreferences.LANGUAGE_SWITCH_ASK,
+                ) { update { it.copy(languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_ASK) } }
+                PickerChip(
+                    strings[Keys.LANGUAGES_SWITCH_AUTO],
+                    preferences.languageSwitchCorrectionMode ==
+                        KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY,
+                ) {
+                    update {
+                        it.copy(languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY)
+                    }
+                }
+            }
+            Explanation(strings[Keys.LANGUAGES_SWITCH_EXPLANATION])
+        }
+
         // Swipe typing, folded in from what used to be its own screen. One row, so the card
         // header doubles as the row's own title the same way "Suggestions" does for a card with
         // several rows in it -- unambiguous here because it is the only row this card has.
@@ -243,6 +284,7 @@ private fun resetCorrectionDefaults(preferences: KeyboardPreferences): KeyboardP
         suggestionCount = defaults.suggestionCount,
         phraseSuggestions = defaults.phraseSuggestions,
         autoCapitalise = defaults.autoCapitalise,
+        forceCapitaliseSentences = defaults.forceCapitaliseSentences,
         doubleSpacePeriod = defaults.doubleSpacePeriod,
         spaceAfterPunctuation = defaults.spaceAfterPunctuation,
         removeSpaceBeforePunctuation = defaults.removeSpaceBeforePunctuation,

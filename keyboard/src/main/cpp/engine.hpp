@@ -164,6 +164,23 @@ public:
      */
     int knownSpelling(const char* word, size_t length, char* out, int outBytes) const;
 
+    /**
+     * What [packIndex] alone would spell [word] as, ignoring whichever pack the engine currently
+     * considers dominant -- the one place a caller gets to name a pack explicitly instead of
+     * accepting [dominantPack]'s own verdict. Exists for exactly one question: "does the language
+     * that just became dominant disagree with a correction already applied under a different
+     * one" -- never used for live suggestion scoring, which is why there is no sentence context
+     * here, only this pack's own best single-word answer.
+     *
+     * Returns 0 when [packIndex] is not open/active, or has nothing to offer past [word] itself.
+     */
+    int candidateForPack(int packIndex, const char* word, size_t wordLength, char* out,
+                         int outBytes);
+
+    /** The pack the conversation is currently considered written in, or -1 when undecided. See
+     *  observeContextLanguage's own comment for how this is reached. */
+    int32_t dominantPack() const { return dominantPack_; }
+
     // Fills `out` with at most `maxOut` candidates, best first, and returns how many were
     // written. `composing` may be empty, in which case this answers "what word comes next".
     int suggest(const char* composing, size_t composingLength, const char* previous1,
@@ -234,6 +251,12 @@ public:
     // Resolves a candidate to its display text. The pointer is owned by the mapping or by the
     // user model and stays valid until the pack is closed or the model is rewritten.
     const char* candidateText(const Candidate& candidate, uint32_t* lengthOut) const;
+
+    // Whether the candidate is a name -- always capitalise it, the same override
+    // PackedTrie::isProperNoun documents. False for a phrase or a user-model entry: neither
+    // carries the flag, since phrases are built from already-cased pack words and a user-model
+    // entry is something this person typed, not a name this build shipped.
+    bool candidateIsProperNoun(const Candidate& candidate) const;
 
     const KeyGeometry& geometry() const { return geometry_; }
 
@@ -332,6 +355,20 @@ private:
 
     void resolveContext(const char* previous1, size_t previous1Length, const char* previous2,
                         size_t previous2Length);
+
+    /**
+     * Rescales `candidates[0..count)`'s scores in place to a fixed-temperature softmax over
+     * [0, 1000].
+     *
+     * The gesture decoder's raw score is a log-probability sum with no fixed scale -- it runs
+     * however far the language model and the geometry channels happen to push it, decode to
+     * decode, and two different decodes are not comparable on it. This is what a caller would
+     * need to show a confidence, compare it to a threshold, or blend it with a score from
+     * elsewhere; a raw log-score cannot do any of those. Only [decodeGesture] calls this --
+     * tap-typing's own candidates, scored and ranked the same way internally, are never
+     * rescaled, so nothing about `nativeSuggest` changes.
+     */
+    static void normaliseGestureScores(Candidate* candidates, int count);
 
     LanguagePack packs_[kMaxPacks];
     KeyGeometry geometry_;

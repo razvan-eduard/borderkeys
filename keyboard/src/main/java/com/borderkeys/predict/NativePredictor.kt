@@ -98,11 +98,16 @@ internal object NativePredictor {
     )
 
     /**
-     * Fills [outWords] and [outScores] with the best candidates and returns how many were
-     * written, best first.
+     * Fills [outWords], [outScores] and [outProperNoun] with the best candidates and returns
+     * how many were written, best first.
      *
-     * Both arrays are allocated once by the caller and reused for every request. An empty
+     * All three arrays are allocated once by the caller and reused for every request. An empty
      * [composing] is legitimate and asks for a next-word prediction from the context alone.
+     *
+     * [outProperNoun] is true for a candidate that should always render capitalised -- a name
+     * from the dictionary, not a sentence-start or a shift-state accident (see
+     * PackedTrie::isProperNoun in packed_trie.hpp for where this bit actually lives). The caller
+     * applies it instead of, not in addition to, the usual typed-case/shift-state rule.
      */
     external fun nativeSuggest(
         handle: Long,
@@ -111,6 +116,7 @@ internal object NativePredictor {
         prev2: String?,
         outWords: Array<String?>,
         outScores: FloatArray,
+        outProperNoun: BooleanArray,
     ): Int
 
     /**
@@ -205,4 +211,16 @@ internal object NativePredictor {
      * when, the native side only executes.
      */
     external fun nativeSnapshotUserModel(handle: Long, path: String): Int
+
+    /**
+     * What [packIndex] alone would spell [word] as, ignoring whichever pack the engine currently
+     * treats as dominant, or null when that pack has nothing better than [word] itself. No
+     * sentence context -- see `Engine::candidateForPack`'s own doc for why. Never called on the
+     * per-keystroke suggestion path: this is the on-demand check for a language switch found
+     * after the fact, in `LanguageSwitchCorrector`.
+     */
+    external fun nativeCandidateForPack(handle: Long, packIndex: Int, word: String): String?
+
+    /** The pack the conversation is currently considered written in, or -1 when undecided. */
+    external fun nativeDominantPack(handle: Long): Int
 }

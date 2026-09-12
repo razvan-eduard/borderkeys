@@ -6,6 +6,7 @@ package com.borderkeys.settings
 import com.borderkeys.i18n.Keys
 
 import android.content.Context
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -38,6 +40,7 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.backup.BackupRepository
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
+import com.borderkeys.keyboard.R
 import kotlinx.coroutines.launch
 
 /**
@@ -283,6 +286,41 @@ fun Explanation(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
     )
+}
+
+/**
+ * What [Explanation] cannot say: this setting can do something to your text, your data or your
+ * device that a caption in the same colour as everything else would not prepare you for.
+ *
+ * A filled container rather than coloured text -- this codebase already reserves
+ * [MaterialTheme.colorScheme.error] for destructive button labels, and reusing that alone here
+ * would make a warning read the same as a "Delete" button standing still. This is the next step
+ * up from that, short of a dialog that blocks until dismissed, which is more friction than a
+ * setting someone has not even turned on yet has earned.
+ */
+@Composable
+fun CautionNote(text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.bk_icon_warning),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onErrorContainer,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+        )
+    }
 }
 
 /**

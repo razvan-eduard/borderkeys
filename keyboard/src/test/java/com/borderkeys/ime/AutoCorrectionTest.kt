@@ -155,6 +155,53 @@ class AutoCorrectionTest {
     }
 
     @Test
+    fun `a name typed lower case mid-sentence is still capitalised`() {
+        // The whole point of the proper-noun flag: "ana" is not the start of a sentence and
+        // shiftState says nothing special about this position, yet a name is still "Ana" -- the
+        // one override that is not about what was typed at all.
+        assertEquals("Ana", AutoCorrection.matchCase("ana", "ana", isProperNoun = true))
+    }
+
+    @Test
+    fun `a name typed in full caps still shouts`() {
+        // Caps lock is a stronger, more deliberate signal than "capitalise this one name" -- see
+        // matchCase's own doc for why this check has to come before the proper-noun one, not
+        // after it.
+        assertEquals("ANA", AutoCorrection.matchCase("ANA", "ana", isProperNoun = true))
+    }
+
+    @Test
+    fun `correctionFor also applies the proper-noun override`() {
+        // knownWord equals typed here on purpose: a name the dictionary knows is exactly the
+        // realistic case, not an edge case -- the dictionary is not offering a different word,
+        // only a capitalised spelling of the same one, and the "a word the dictionary knows is
+        // left alone" rule below must not read that as "nothing to do" the way it correctly
+        // does for an ordinary word (see "a word the dictionaries know is left alone" above).
+        assertEquals(
+            "Ana",
+            AutoCorrection.correctionFor(
+                typed = "ana", suggestion = "ana",
+                suggestionQuery = "ana", knownWord = "ana", minimumLength = minimum,
+                isProperNoun = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `an ordinary word the dictionary knows is still left alone even so`() {
+        // The regression this feature must not cause: adding the isProperNoun escape hatch to
+        // the knownWord gate must not loosen it for every OTHER word that happens to equal
+        // knownWord -- only for a name.
+        assertNull(
+            AutoCorrection.correctionFor(
+                typed = "cana", suggestion = "canapea",
+                suggestionQuery = "cana", knownWord = "cana", minimumLength = minimum,
+                isProperNoun = false,
+            ),
+        )
+    }
+
+    @Test
     fun `a suggestion identical to what was typed is not a correction`() {
         // Every other test here supplies a genuinely different suggestion or one differing by
         // case, which is the separate branch matchCase exists for -- none of them exercises the

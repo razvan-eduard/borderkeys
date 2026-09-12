@@ -757,7 +757,28 @@ int Engine::decodeGesture(const float* xs, const float* ys, const int64_t* ts, i
     for (int i = 0; i < written; ++i) {
         out[i] = drainBuffer_[i];
     }
+    normaliseGestureScores(out, written);
     return written;
+}
+
+void Engine::normaliseGestureScores(Candidate* candidates, int count) {
+    if (count <= 0) {
+        return;
+    }
+    float maxScore = candidates[0].score;
+    for (int i = 1; i < count; ++i) {
+        maxScore = std::fmax(maxScore, candidates[i].score);
+    }
+    float expScores[kMaxCandidates];
+    float sumExp = 0.f;
+    for (int i = 0; i < count; ++i) {
+        expScores[i] = std::exp(candidates[i].score - maxScore);
+        sumExp += expScores[i];
+    }
+    // The best candidate's own term is exp(0) = 1, so sumExp is always at least 1 here.
+    for (int i = 0; i < count; ++i) {
+        candidates[i].score = (expScores[i] / sumExp) * 1000.f;
+    }
 }
 
 const char* Engine::gestureDecoderName() const {
@@ -1549,6 +1570,41 @@ int Engine::knownSpelling(const char* word, size_t length, char* out, int outByt
     return 0;
 }
 
+int Engine::candidateForPack(int packIndex, const char* word, size_t wordLength, char* out,
+                             int outBytes) {
+    if (!created_ || word == nullptr || wordLength == 0 || out == nullptr || outBytes <= 0) {
+        return 0;
+    }
+    if (packIndex < 0 || packIndex >= kMaxPacks || !packs_[packIndex].isOpen() ||
+        !packs_[packIndex].active) {
+        return 0;
+    }
+    arena_.reset();
+    phraseCount_ = 0;
+    uint32_t folded[kMaxComposing];
+    const int foldedLength = foldUtf8(word, wordLength, folded, kMaxComposing);
+    if (foldedLength <= 0) {
+        return 0;
+    }
+    TopK<Candidate> heap;
+    heap.reset(heapStorage_, kMaxCandidates);
+    // No resolveContext call here on purpose: this is an isolated, on-demand lookup that must
+    // not perturb dominantPack_/languageEvidence_, which live suggestion requests do update.
+    editCostCeiling_ = maxEditCostFor(foldedLength);
+    searchPacks(folded, foldedLength, packIndex, heap);
+    const int drained = heap.drainSorted(drainBuffer_, kMaxCandidates);
+    if (drained <= 0) {
+        return 0;
+    }
+    uint32_t textLength = 0;
+    const char* const text = candidateText(drainBuffer_[0], &textLength);
+    if (text == nullptr || textLength == 0 || textLength > static_cast<uint32_t>(outBytes)) {
+        return 0;
+    }
+    std::memcpy(out, text, textLength);
+    return static_cast<int>(textLength);
+}
+
 int Engine::suggest(const char* composing, size_t composingLength, const char* previous1,
                     size_t previous1Length, const char* previous2, size_t previous2Length,
                     Candidate* out, int maxOut) {
@@ -1725,6 +1781,17 @@ const char* Engine::candidateText(const Candidate& candidate, uint32_t* lengthOu
         return nullptr;
     }
     return pack.trie().wordText(static_cast<uint32_t>(candidate.wordIndex), lengthOut);
+}
+
+bool Engine::candidateIsProperNoun(const Candidate& candidate) const {
+    if (candidate.packIndex < 0 || candidate.packIndex >= kMaxPacks) {
+        return false;
+    }
+    const LanguagePack& pack = packs_[candidate.packIndex];
+    if (!pack.isOpen() || candidate.wordIndex < 0) {
+        return false;
+    }
+    return pack.trie().isProperNoun(static_cast<uint32_t>(candidate.wordIndex));
 }
 
 }  // namespace borderkeys

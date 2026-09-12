@@ -60,8 +60,19 @@ class PredictionEngine(
          *
          * It travels with the answer because the engine has one thread, and a delimiter is not
          * a moment to be blocking on it.
+         *
+         * [properNoun] is parallel to [words]: true at an index means that candidate is a name
+         * from the dictionary and should always render capitalised, overriding the usual
+         * typed-case/shift-state rule rather than being combined with it -- see
+         * NativePredictor.nativeSuggest's own doc for where the bit comes from.
          */
-        fun onSuggestions(words: Array<String?>, count: Int, knownWord: String, query: String)
+        fun onSuggestions(
+            words: Array<String?>,
+            count: Int,
+            knownWord: String,
+            query: String,
+            properNoun: BooleanArray,
+        )
 
         /**
          * A decoded swipe. Separate from [onSuggestions] because the service treats it
@@ -93,9 +104,11 @@ class PredictionEngine(
     private val resultLock = Any()
     private val nativeWords = arrayOfNulls<String>(MAX_RESULTS)
     private val nativeScores = FloatArray(MAX_RESULTS)
+    private val nativeProperNoun = BooleanArray(MAX_RESULTS)
     private var nativeCount = 0
 
     private val displayWords = arrayOfNulls<String>(MAX_RESULTS)
+    private val displayProperNoun = BooleanArray(MAX_RESULTS)
     private var displayCount = 0
 
     private val blocked = HashSet<String>()
@@ -292,6 +305,40 @@ class PredictionEngine(
         }
     }
 
+    /**
+     * The pack the conversation is currently considered written in, delivered on the UI thread
+     * like every other answer from this class -- never read directly, since that would be a
+     * blocking JNI call from the thread that must never make one. Posted once per completed
+     * word by [LanguageSwitchCorrector]'s caller, not on the per-keystroke suggestion path.
+     */
+    fun dominantPack(onResult: (Int) -> Unit) {
+        worker.post {
+            val pack = withHandle(-1) { current -> NativePredictor.nativeDominantPack(current) }
+            mainHandler.post { onResult(pack) }
+        }
+    }
+
+    /**
+     * What [dominantPack] alone would spell each of [words] as, in the same order, null where it
+     * had nothing different to say -- one round trip to the prediction thread for the whole list
+     * rather than one per word, since this only ever runs on the rare event of a detected
+     * language switch, not per keystroke.
+     */
+    fun candidatesForPack(dominantPack: Int, words: List<String>, onResult: (List<String?>) -> Unit) {
+        if (words.isEmpty()) {
+            onResult(emptyList())
+            return
+        }
+        worker.post {
+            val results = words.map { word ->
+                withHandle<String?>(null) { current ->
+                    NativePredictor.nativeCandidateForPack(current, dominantPack, word)
+                }
+            }
+            mainHandler.post { onResult(results) }
+        }
+    }
+
     /** Posted after [loadUserBigrams], so the words a triple names are already held. */
     fun loadUserTrigrams(triples: List<UserTrigram>) {
         if (triples.isEmpty()) {
@@ -429,6 +476,7 @@ class PredictionEngine(
                             queue.currentPrevious2,
                             nativeWords,
                             nativeScores,
+                            nativeProperNoun,
                         )
                     }
                 }
@@ -483,7 +531,7 @@ class PredictionEngine(
             known = nativeKnownWord
             query = nativeQuery
         }
-        listener?.onSuggestions(displayWords, copyAndFilterResults(), known, query)
+        listener?.onSuggestions(displayWords, copyAndFilterResults(), known, query, displayProperNoun)
     }
 
     /**
@@ -500,6 +548,7 @@ class PredictionEngine(
             count = nativeCount
             for (index in 0 until count) {
                 displayWords[index] = nativeWords[index]
+                displayProperNoun[index] = nativeProperNoun[index]
             }
         }
         var written = 0
@@ -508,6 +557,7 @@ class PredictionEngine(
                 val word = displayWords[index] ?: continue
                 if (blocked.isEmpty() || word !in blocked) {
                     displayWords[written] = word
+                    displayProperNoun[written] = displayProperNoun[index]
                     written++
                 }
             }

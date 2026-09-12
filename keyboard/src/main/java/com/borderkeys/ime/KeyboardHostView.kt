@@ -49,6 +49,10 @@ class KeyboardHostView(
     val clipboardPanel = ClipboardPanelView(context, paints, strings)
     val emojiPanel = EmojiPanelView(context, paints)
 
+    /** The suggestion strip's own slot, borrowed -- see the view's own doc for why it is not a
+     *  sibling of [clipboardPanel]/[emojiPanel] instead. */
+    val languageRevertPanel = LanguageRevertPanelView(context, paints)
+
     /**
      * Which edge the quick-action bar sits against. Mirrors KeyboardPreferences; kept as an Int
      * so this module does not depend on :data for four constants.
@@ -379,6 +383,8 @@ class KeyboardHostView(
         quickActions.drawsBackground = false
         addView(suggestionStrip)
         addView(inlineSuggestions)
+        addView(languageRevertPanel)
+        languageRevertPanel.visibility = GONE
         addView(keyboard)
         addView(quickSettings)
         // Last, so it draws over the others where a side bar overlaps a rounded corner. It is
@@ -472,6 +478,27 @@ class KeyboardHostView(
         requestLayout()
     }
 
+    val languageRevertPanelVisible: Boolean get() = languageRevertPanel.visibility == VISIBLE
+
+    /**
+     * Shows or hides the language-switch revert offer, in the suggestion strip's own slot.
+     *
+     * Unlike [setClipboardPanelVisible]/[setEmojiPanelVisible], the keys stay up: this is an
+     * offer beside live keys, not a screen that replaces them. See [LanguageRevertPanelView]'s
+     * own doc for why.
+     */
+    fun setLanguageRevertPanelVisible(visible: Boolean) {
+        if (languageRevertPanelVisible == visible) {
+            return
+        }
+        languageRevertPanel.visibility = if (visible) VISIBLE else GONE
+        suggestionStrip.visibility = if (visible) GONE else VISIBLE
+        if (visible) {
+            inlineSuggestions.visibility = GONE
+        }
+        requestLayout()
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val contentWidth = (width * widthScale).toInt().coerceAtLeast(1)
@@ -506,6 +533,10 @@ class KeyboardHostView(
         if (inlineSuggestions.visibility != GONE) {
             inlineSuggestions.measure(exactBody, unbounded)
             height += inlineSuggestions.measuredHeight
+        }
+        if (languageRevertPanel.visibility != GONE) {
+            languageRevertPanel.measure(exactBody, unbounded)
+            height += languageRevertPanel.measuredHeight
         }
         if (keyboard.visibility != GONE) {
             keyboard.measure(exactBody, unbounded)
@@ -585,6 +616,10 @@ class KeyboardHostView(
         if (inlineSuggestions.visibility != GONE) {
             inlineSuggestions.layout(bodyLeft, y, bodyRight, y + inlineSuggestions.measuredHeight)
             y += inlineSuggestions.measuredHeight
+        }
+        if (languageRevertPanel.visibility != GONE) {
+            languageRevertPanel.layout(bodyLeft, y, bodyRight, y + languageRevertPanel.measuredHeight)
+            y += languageRevertPanel.measuredHeight
         }
         if (keyboard.visibility != GONE) {
             keyboard.layout(bodyLeft, y, bodyRight, y + keyboard.measuredHeight)

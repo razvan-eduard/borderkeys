@@ -344,6 +344,30 @@ void runEngineTests() {
         }
         check(keyboardCount == 1,
               "the same word reached from two active packs still appears once");
+
+        // Both packs hold the same test vocabulary, so this cannot show two packs disagreeing --
+        // what it pins down is that candidateForPack answers for the pack index it was given,
+        // not for whichever pack suggest()'s own dominantPack_/strictLanguage_ would have picked,
+        // which is the one thing this function exists to do differently from suggest().
+        char spelling[64];
+        int written = loaded.engine.candidateForPack(0, "keyboarf", 8, spelling, sizeof(spelling));
+        check(written == 8 && std::memcmp(spelling, "keyboard", 8) == 0,
+              "candidateForPack corrects a typo through pack 0 explicitly");
+        written = loaded.engine.candidateForPack(1, "keyboarf", 8, spelling, sizeof(spelling));
+        check(written == 8 && std::memcmp(spelling, "keyboard", 8) == 0,
+              "and through pack 1 explicitly, independent of which pack suggest() would pick");
+        check(loaded.engine.candidateForPack(2, "keyboarf", 8, spelling, sizeof(spelling)) == 0,
+              "a pack index with nothing loaded in it answers nothing");
+        check(loaded.engine.candidateForPack(0, "keyboarf", 8, spelling, 2) == 0,
+              "an output buffer too small to hold the answer is refused rather than truncated");
+    }
+
+    section("dominantPack starts undecided");
+    {
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads");
+        check(loaded.engine.dominantPack() == -1,
+              "before any word has been observed, no pack is dominant");
     }
 
     section("personal dictionary");

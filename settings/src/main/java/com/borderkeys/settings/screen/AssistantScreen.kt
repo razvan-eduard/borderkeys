@@ -41,6 +41,7 @@ import com.borderkeys.data.DataGraph
 import androidx.compose.material3.FilterChip
 import com.borderkeys.data.assist.KnownAssistModels
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.settings.CautionNote
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
@@ -202,9 +203,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
             }
         }
         SettingsSectionCard(strings[Keys.ASSISTANT_MODELS_THIS_BUILD_WILL_LOAD]) {
-            Explanation(
-                strings[Keys.ASSISTANT_A_GGUF_FILE_IS_NOT_A],
-            )
+            CautionNote(strings[Keys.ASSISTANT_A_GGUF_FILE_IS_NOT_A])
             for (entry in KnownAssistModels.entries) {
                 SettingRow(
                     title = entry.displayName,

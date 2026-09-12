@@ -34,6 +34,8 @@ import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.draft.DraftProtocol
 import com.borderkeys.data.theme.QuickAction
+import com.borderkeys.data.theme.QuickActionBar
+import com.borderkeys.data.theme.QuickActionBarItem
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.predict.LearningBuffer
@@ -70,6 +72,7 @@ class BorderKeysService :
     QuickSettingsView.Listener,
     QuickActionsView.Listener,
     ClipboardPanelView.Listener,
+    LanguageRevertPanelView.Listener,
     PredictionEngine.ResultListener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -226,6 +229,10 @@ class BorderKeysService :
     /** The leading suggestion, kept so the delimiter path can apply it. */
     private var topSuggestion: String? = null
 
+    /** Whether [topSuggestion] is a name -- see AutoCorrection.matchCase's own doc for what
+     *  that changes about how it gets capitalised. */
+    private var topSuggestionIsProperNoun: Boolean = false
+
     /**
      * The word [topSuggestion] is actually an answer about.
      *
@@ -267,6 +274,20 @@ class BorderKeysService :
      */
     private val fieldHistory = Composer()
 
+    /** Which words look wrong once the conversation's language has moved on -- see its own doc.
+     *  Scoped to the session the same way [fieldHistory] is, and reset alongside it. */
+    private val languageSwitchCorrector = LanguageSwitchCorrector()
+
+    /**
+     * Bumped every time [resetFieldHistory] runs -- a new field, a new generation.
+     *
+     * [languageSwitchCorrector]'s checks cross two async round trips to the prediction thread and
+     * back (see [checkLanguageSwitch]); a field switch in between must not let an answer meant
+     * for the field the user just left edit the one they are in now. Captured at the start of a
+     * check, compared before the edit lands.
+     */
+    private var fieldGeneration = 0
+
     /** The word the strip is currently asking about, between the hold and the answer. */
     private var pendingForget: String? = null
 
@@ -297,7 +318,11 @@ class BorderKeysService :
         )
 
         scope.launch(Dispatchers.IO) {
-            alphabeticLayout = LayoutLoader.load(assets, DEFAULT_ALPHABETIC_LAYOUT)
+            val manager = getSystemService(Context.INPUT_METHOD_SERVICE)
+                as? android.view.inputmethod.InputMethodManager
+            alphabeticLayout = LayoutLoader.load(
+                assets, layoutIdFromSubtype(manager?.currentInputMethodSubtype),
+            )
             symbolsLayout = LayoutLoader.load(assets, SYMBOLS_LAYOUT)
             symbolsNumpadLeftLayout = LayoutLoader.load(assets, SYMBOLS_NUMPAD_LEFT_LAYOUT)
             symbolsNumpadRightLayout = LayoutLoader.load(assets, SYMBOLS_NUMPAD_RIGHT_LAYOUT)
@@ -595,6 +620,7 @@ class BorderKeysService :
         view.quickSettings.listener = this
         view.quickActions.listener = this
         view.clipboardPanel.listener = this
+        view.languageRevertPanel.listener = this
         view.emojiPanel.listener = EmojiPanelView.Listener { emoji -> onEmojiPicked(emoji) }
         view.emojiPanel.recents = preferences.emojiRecents
         applyQuickActions(view)
@@ -1098,6 +1124,9 @@ class BorderKeysService :
             pendingCorrection = PendingCorrection(
                 typed, correction, delimiter, contextWord, grandContextWord,
             )
+            if (preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
+                recordLanguageSwitchFlag(connection, typed, correction, delimiter)
+            }
         } else {
             if (typed.isNotEmpty()) {
                 recordLearned(typed, contextWord, grandContextWord)
@@ -1107,6 +1136,146 @@ class BorderKeysService :
         checkpointField()
         shiftAfterDelimiter(shifted)
         requestSuggestions()
+        if (preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
+            checkLanguageSwitch()
+        }
+    }
+
+    /**
+     * Records where [correction] just landed, so [checkLanguageSwitch] can find it again if the
+     * conversation's language turns out to have been misjudged when it was applied.
+     *
+     * Read from the cursor rather than assumed to be at the end of the field: a correction made
+     * while editing back inside earlier text is exactly as eligible as one made at the very end.
+     */
+    private fun recordLanguageSwitchFlag(
+        connection: InputConnection,
+        typed: String,
+        correction: String,
+        delimiter: String,
+    ) {
+        val cursor = connection.getExtractedText(
+            ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
+            0,
+        )?.selectionEnd ?: return
+        val end = cursor - delimiter.length
+        val start = end - correction.length
+        if (start < 0) {
+            return
+        }
+        languageSwitchCorrector.recordCorrection(
+            LanguageSwitchCorrector.Flag(typed, correction, start, end),
+        )
+    }
+
+    /**
+     * Asks whether the conversation's language just changed and, if so, whether that leaves any
+     * recently-applied correction looking wrong -- see [LanguageSwitchCorrector]'s own doc for
+     * why the decision lives there and only the InputConnection/native-call plumbing lives here.
+     *
+     * Two async round trips to the prediction thread, both stamped with [fieldGeneration]: a
+     * field switch in the meantime must drop the answer rather than apply it to the wrong field.
+     */
+    private fun checkLanguageSwitch() {
+        val generation = fieldGeneration
+        engine.dominantPack { dominantPack ->
+            if (generation != fieldGeneration || !languageSwitchCorrector.observeDominantPack(dominantPack)) {
+                return@dominantPack
+            }
+            val connection = currentInputConnection ?: return@dominantPack
+            val verified = languageSwitchCorrector.snapshot().filter { flag ->
+                textAt(connection, flag.startOffset, flag.endOffset) == flag.appliedText
+            }
+            if (verified.isEmpty()) {
+                return@dominantPack
+            }
+            engine.candidatesForPack(dominantPack, verified.map { it.typedText }) { suggestions ->
+                if (generation != fieldGeneration) {
+                    return@candidatesForPack
+                }
+                val replacements = languageSwitchCorrector.resolve(verified, suggestions)
+                if (replacements.isNotEmpty()) {
+                    onLanguageSwitchReplacements(replacements)
+                }
+            }
+        }
+    }
+
+    /** The field's text between two offsets, or null if either is out of range right now -- the
+     *  drift guard [checkLanguageSwitch] and [applyLanguageSwitchReplacements] both need, since
+     *  the text may have moved on since it was recorded. */
+    private fun textAt(connection: InputConnection, start: Int, endExclusive: Int): String? {
+        if (start < 0 || endExclusive < start) {
+            return null
+        }
+        val text = connection.getExtractedText(
+            ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
+            0,
+        )?.text ?: return null
+        if (endExclusive > text.length) {
+            return null
+        }
+        return text.subSequence(start, endExclusive).toString()
+    }
+
+    /** `Ask` shows the revert panel; `Auto-apply` edits the field itself, right away. */
+    private fun onLanguageSwitchReplacements(replacements: List<LanguageSwitchCorrector.Replacement>) {
+        if (preferences.languageSwitchCorrectionMode == KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY) {
+            applyLanguageSwitchReplacements(replacements)
+        } else {
+            host?.let { view ->
+                view.languageRevertPanel.offer(replacements)
+                view.setLanguageRevertPanelVisible(true)
+            }
+        }
+    }
+
+    override fun onLanguageRevertPicked(replacement: LanguageSwitchCorrector.Replacement) {
+        applyLanguageSwitchReplacements(listOf(replacement))
+        val remaining = host?.languageRevertPanel?.remove(replacement) ?: 0
+        if (remaining == 0) {
+            host?.setLanguageRevertPanelVisible(false)
+        }
+    }
+
+    override fun onLanguageRevertDismissed() {
+        host?.setLanguageRevertPanelVisible(false)
+    }
+
+    /**
+     * Edits the field for each replacement, right-to-left as [LanguageSwitchCorrector.resolve]
+     * already ordered them, then one [checkpointField] for the whole batch -- one Undo reverts
+     * all of it together, not word by word. Each replacement is re-verified against live text
+     * immediately before its own edit: more time has passed since [checkLanguageSwitch] read it
+     * than between two statements in the same function, and a stale offset must be skipped, not
+     * trusted.
+     */
+    private fun applyLanguageSwitchReplacements(replacements: List<LanguageSwitchCorrector.Replacement>) {
+        val connection = currentInputConnection ?: return
+        var changed = false
+        connection.beginBatchEdit()
+        // Flushed first, and only once: whatever the user is presently in the middle of typing
+        // is not one of [replacements] (those are all already-committed words), but it does sit
+        // in the one composing region InputConnection allows, which setComposingRegion below is
+        // about to claim for an older word instead.
+        finishComposing(connection)
+        for (replacement in replacements) {
+            if (textAt(connection, replacement.startOffset, replacement.endOffset) !=
+                replacement.previousText
+            ) {
+                continue
+            }
+            connection.setComposingRegion(replacement.startOffset, replacement.endOffset)
+            connection.setComposingText(replacement.text, 1)
+            connection.finishComposingText()
+            changed = true
+        }
+        connection.endBatchEdit()
+        if (changed) {
+            checkpointField()
+            refreshContextFromEditor()
+            requestSuggestions()
+        }
     }
 
     /**
@@ -1134,6 +1303,7 @@ class BorderKeysService :
         }
         return AutoCorrection.correctionFor(
             typed, topSuggestion, suggestionQuery, knownQuery, preferences.minCorrectionLength,
+            topSuggestionIsProperNoun,
         )
     }
 
@@ -1214,6 +1384,8 @@ class BorderKeysService :
      */
     private fun resetFieldHistory() {
         fieldHistory.clear()
+        languageSwitchCorrector.reset()
+        fieldGeneration++
         checkpointField()
     }
 
@@ -1322,15 +1494,34 @@ class BorderKeysService :
         val grandContextWord = previousWord2
         connection.beginBatchEdit()
         val finished = finishComposing(connection)
-        val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
-            ?: EditorInfo.IME_ACTION_NONE
-        if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
+        val imeOptions = currentInputEditorInfo?.imeOptions ?: 0
+        val action = imeOptions and EditorInfo.IME_MASK_ACTION
+        val hasAction = action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED
+        // A field can declare a real action (Send, Done, Go...) and still want Enter to be a
+        // plain newline -- a chat-style compose box with its own send button is the usual
+        // reason, and IME_FLAG_NO_ENTER_ACTION is how it says so. ENTER_KEY_AUTO, the default,
+        // respects that; ENTER_KEY_FORCE_ACTION overrides it (there is still nothing to force
+        // where hasAction is false); ENTER_KEY_FORCE_NEWLINE never performs an action at all.
+        val noEnterAction = (imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
+        val performAction = when (preferences.enterKeyBehavior) {
+            KeyboardPreferences.ENTER_KEY_FORCE_ACTION -> hasAction
+            KeyboardPreferences.ENTER_KEY_FORCE_NEWLINE -> false
+            else -> hasAction && !noEnterAction
+        }
+        if (performAction) {
             connection.endBatchEdit()
             connection.performEditorAction(action)
         } else {
             connection.commitText("\n", 1)
             connection.endBatchEdit()
             checkpointField()
+            // Every other path that commits text re-derives shift from what is now before the
+            // cursor (shiftAfterDelimiter, the auto-space-period fixups below) -- this one committed
+            // a newline, sentenceEndsBeforeCursor's own first check, and skipped it, which is why a
+            // line just started stayed lower-case: shift was left at whatever it was before Enter,
+            // usually OFF right after finishing a word.
+            refreshContextFromEditor()
+            applyAutoShift()
         }
         if (finished != null) {
             recordLearned(finished, contextWord, grandContextWord)
@@ -1441,6 +1632,44 @@ class BorderKeysService :
             as? android.view.inputmethod.InputMethodManager
         val tag = manager?.currentInputMethodSubtype?.languageTag
         return if (tag.isNullOrBlank()) "und" else tag
+    }
+
+    /**
+     * The `layouts/<id>.json` asset [subtype]'s `layout=` extra value names, or
+     * [DEFAULT_ALPHABETIC_LAYOUT] when it carries none.
+     *
+     * The two subtypes shipped before alternate layouts existed wrote `layout=ro_qwerty` /
+     * `layout=en_qwerty` -- a language-prefixed name for the one physical layout that existed
+     * then, from back when nothing read this value at all (method.xml's own comment explains
+     * why it was written anyway). Treated as a synonym for "qwerty" here rather than a distinct
+     * id some non-existent `ro_qwerty.json` would have to exist for, so a phone with one of
+     * those two subtypes already enabled keeps typing QWERTY exactly as before -- this method
+     * being read for the first time must not silently change what an existing install does.
+     */
+    private fun layoutIdFromSubtype(subtype: android.view.inputmethod.InputMethodSubtype?): String {
+        val pair = subtype?.extraValue?.split(",")?.firstOrNull { it.startsWith("layout=") }
+            ?: return DEFAULT_ALPHABETIC_LAYOUT
+        val id = pair.removePrefix("layout=")
+        return if (id.isEmpty() || id.endsWith("_qwerty")) DEFAULT_ALPHABETIC_LAYOUT else id
+    }
+
+    /**
+     * The globe key, or the system's own language/input switcher, chose a different subtype --
+     * reload the letter layout it names and redraw whichever page is currently showing.
+     *
+     * [showPage] already does exactly this work for every other reason the alphabetic layout
+     * changes (a symbols/numpad toggle), so it is reused rather than duplicated here; it is a
+     * no-op for [alphabeticLayout] specifically unless [page] is already [PAGE_ALPHABETIC].
+     */
+    override fun onCurrentInputMethodSubtypeChanged(subtype: android.view.inputmethod.InputMethodSubtype?) {
+        super.onCurrentInputMethodSubtypeChanged(subtype)
+        scope.launch(Dispatchers.IO) {
+            val layout = LayoutLoader.load(assets, layoutIdFromSubtype(subtype))
+            withContext(Dispatchers.Main) {
+                alphabeticLayout = layout
+                host?.let { showPage(page) }
+            }
+        }
     }
 
     private fun switchLanguage() {
@@ -1637,7 +1866,13 @@ class BorderKeysService :
         }
     }
 
-    override fun onSuggestions(words: Array<String?>, count: Int, knownWord: String, query: String) {
+    override fun onSuggestions(
+        words: Array<String?>,
+        count: Int,
+        knownWord: String,
+        query: String,
+        properNoun: BooleanArray,
+    ) {
         // This answer was asked for on an earlier keystroke and lost the race against a later
         // one: the engine has one thread and posts its answer back rather than blocking, so an
         // answer computed for "Ac" can still arrive after the strip -- and lastQuery -- have
@@ -1664,6 +1899,7 @@ class BorderKeysService :
         // AutoCorrection.correctionFor already applies matchCase to this on its own, and doing
         // it here first would just be the same rule read twice for one decision.
         topSuggestion = if (count > 0) words[0] else null
+        topSuggestionIsProperNoun = count > 0 && properNoun[0]
         suggestionQuery = query
         // The rest of the row is not a decision the way the one correction above is -- it is
         // what the strip shows, and showing "welcome" one slot over from a correction that
@@ -1681,11 +1917,19 @@ class BorderKeysService :
         for (index in 0 until count) {
             words[index] = words[index]?.let { word ->
                 if (lastQuery.isNotEmpty()) {
-                    AutoCorrection.matchCase(lastQuery, word)
+                    AutoCorrection.matchCase(lastQuery, word, properNoun[index])
                 } else {
-                    when (shiftState) {
-                        ShiftState.LOCKED -> word.uppercase()
-                        ShiftState.ON -> word.replaceFirstChar { it.uppercaseChar() }
+                    // LOCKED wins over the proper-noun override for the same reason
+                    // matchCase's own all-caps-typed check wins over it below: caps lock is a
+                    // deliberate, stronger instruction than "capitalise this one name" and a
+                    // name typed under it should read "ANA", not "Ana". Absent that, a name is
+                    // still capitalised regardless of shiftState -- "ana" offered with nothing
+                    // typed yet is "Ana", not whatever the next keystroke's shift state alone
+                    // would have produced.
+                    when {
+                        shiftState == ShiftState.LOCKED -> word.uppercase()
+                        properNoun[index] -> word.replaceFirstChar { it.uppercaseChar() }
+                        shiftState == ShiftState.ON -> word.replaceFirstChar { it.uppercaseChar() }
                         else -> word
                     }
                 }
@@ -1776,6 +2020,7 @@ class BorderKeysService :
         // coincidence, the same shape a real bug had earlier. Reset explicitly so that stays
         // true on purpose rather than by accident.
         topSuggestion = null
+        topSuggestionIsProperNoun = false
         suggestionQuery = ""
         knownQuery = ""
         composing.setLength(0)
@@ -1959,6 +2204,7 @@ class BorderKeysService :
             autoCapitaliseEnabled = preferences.autoCapitalise,
             inputType = info.inputType,
             composingIsEmpty = composing.isEmpty(),
+            forceCapitaliseSentences = preferences.forceCapitaliseSentences,
             capsMode = {
                 currentInputConnection?.getCursorCapsMode(info.inputType) ?: info.initialCapsMode
             },
@@ -2224,15 +2470,16 @@ class BorderKeysService :
         }
         // Compose's own button goes with Compose. Switching the feature off has to take away
         // every way to reach it, not just the screen that explains it -- a button that does
-        // nothing is the worst of both.
-        val chosen = QuickAction.fromIds(preferences.quickActions)
-            .filter { it != QuickAction.COMPOSE || preferences.composerEnabled }
+        // nothing is the worst of both. A custom macro can never contain COMPOSE in the first
+        // place (it is not QuickAction.macroEligible), so no matching check is needed for it.
+        val chosen = QuickActionBar.resolve(preferences.quickActions, preferences.customQuickActions)
+            .filterNot { it is QuickActionBarItem.Builtin && it.action == QuickAction.COMPOSE && !preferences.composerEnabled }
         if (chosen.isEmpty()) {
             bar.visibility = View.GONE
             return
         }
         bar.visibility = View.VISIBLE
-        bar.actions = chosen
+        bar.items = chosen
         bar.collapsible =
             preferences.quickActionsMode == KeyboardPreferences.QUICK_ACTIONS_COLLAPSED
         bar.sizeLevel = preferences.quickActionsSize
@@ -2241,14 +2488,44 @@ class BorderKeysService :
 
 
     /**
-     * Runs one of the bar's buttons.
+     * Runs one of the bar's buttons: a single [QuickAction], or -- for a
+     * [QuickActionBarItem.Custom] -- every step of its macro in order, through the same
+     * per-action code a single tap already uses.
+     *
+     * Suggestions are refreshed once after the whole tap, not once per step: a macro's steps are
+     * not independent taps a user watched happen one at a time, and refreshing between them would
+     * ask the engine about a half-finished edit for no one to see.
+     */
+    override fun onQuickAction(item: QuickActionBarItem) {
+        val connection = currentInputConnection ?: return
+        val steps = when (item) {
+            is QuickActionBarItem.Builtin -> listOf(item.action)
+            is QuickActionBarItem.Custom ->
+                QuickActionBar.flatten(item.action, preferences.customQuickActions)
+        }
+        for (action in steps) {
+            runQuickAction(connection, action)
+        }
+        // Neither of these changes the field: CLIPBOARD_HISTORY only opens a panel and defers
+        // the actual edit to a later callback, and COMPOSE leaves the field for another Activity
+        // entirely (or does nothing at all, when it bails out before that) -- refreshing
+        // suggestions for either would be asking the engine about an edit that never happened.
+        // A macro can never contain either (neither is QuickAction.macroEligible), so this only
+        // ever matters for a lone builtin tap, which is what singleOrNull() checks for.
+        if (steps.singleOrNull() !in NO_REFRESH_QUICK_ACTIONS) {
+            refreshContextFromEditor()
+            requestSuggestions()
+        }
+    }
+
+    /**
+     * One button's worth of work against [connection].
      *
      * Everything here goes through InputConnection rather than through key events: an editor
      * that handles selection its own way -- a code editor, a rich text field -- gets the
      * platform's own idea of "select all" rather than our idea of which keys mean that.
      */
-    override fun onQuickAction(action: QuickAction) {
-        val connection = currentInputConnection ?: return
+    private fun runQuickAction(connection: InputConnection, action: QuickAction) {
         when (action) {
             QuickAction.COPY_PREVIOUS_WORD -> copyToClipboard(wordBeforeCursor(connection))
             QuickAction.COPY_LINE -> copyToClipboard(lineAroundCursor(connection))
@@ -2758,6 +3035,10 @@ class BorderKeysService :
         const val PAGE_NUMPAD = 3
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
         const val USER_MODEL_SNAPSHOT = "user_model.bku"
+
+        /** Neither changes the field, so neither is worth a suggestions refresh afterward --
+         *  see onQuickAction's own comment. */
+        val NO_REFRESH_QUICK_ACTIONS = setOf(QuickAction.CLIPBOARD_HISTORY, QuickAction.COMPOSE)
 
         /** Where [maybeDecayPersonalDictionary] remembers when it last ran. Its own small file
          *  rather than a field on [KeyboardPreferences]: it is not a setting, nobody reads it,

@@ -236,9 +236,11 @@ void nativeSetKeyGeometry(JNIEnv* env, jobject /*thiz*/, jlong handle, jintArray
 }
 
 jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing, jstring prev1,
-                   jstring prev2, jobjectArray outWords, jfloatArray outScores) {
+                   jstring prev2, jobjectArray outWords, jfloatArray outScores,
+                   jbooleanArray outProperNoun) {
     Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || outWords == nullptr || outScores == nullptr) {
+    if (engine == nullptr || outWords == nullptr || outScores == nullptr ||
+        outProperNoun == nullptr) {
         return 0;
     }
 
@@ -265,7 +267,11 @@ jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composin
 
     const jsize wordSlots = env->GetArrayLength(outWords);
     const jsize scoreSlots = env->GetArrayLength(outScores);
+    const jsize properNounSlots = env->GetArrayLength(outProperNoun);
     jsize slots = (wordSlots < scoreSlots) ? wordSlots : scoreSlots;
+    if (properNounSlots < slots) {
+        slots = properNounSlots;
+    }
     if (slots <= 0) {
         return 0;
     }
@@ -283,6 +289,7 @@ jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composin
     }
 
     float scores[Engine::kMaxCandidates];
+    jboolean properNoun[Engine::kMaxCandidates];
     int written = 0;
     char text[kStringBufferBytes];
     for (int i = 0; i < found; ++i) {
@@ -309,11 +316,17 @@ jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composin
             break;
         }
         scores[written] = candidates[i].score;
+        properNoun[written] = engine->candidateIsProperNoun(candidates[i]) ? JNI_TRUE : JNI_FALSE;
         ++written;
     }
 
     if (written > 0) {
         env->SetFloatArrayRegion(outScores, 0, written, scores);
+        if (env->ExceptionCheck() == JNI_TRUE) {
+            env->ExceptionClear();
+            return 0;
+        }
+        env->SetBooleanArrayRegion(outProperNoun, 0, written, properNoun);
         if (env->ExceptionCheck() == JNI_TRUE) {
             env->ExceptionClear();
             return 0;
@@ -520,6 +533,33 @@ jstring nativeKnownSpelling(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring
     }
     spelling[written] = '\0';
     return env->NewStringUTF(spelling);
+}
+
+jstring nativeCandidateForPack(JNIEnv* env, jobject /*thiz*/, jlong handle, jint packIndex,
+                               jstring word) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || word == nullptr) {
+        return nullptr;
+    }
+    char buffer[kStringBufferBytes];
+    const jsize length = copyString(env, word, buffer, sizeof(buffer));
+    if (length <= 0) {
+        return nullptr;
+    }
+    char spelling[kStringBufferBytes];
+    const int written = engine->candidateForPack(static_cast<int>(packIndex), buffer,
+                                                 static_cast<size_t>(length), spelling,
+                                                 sizeof(spelling) - 1);
+    if (written <= 0) {
+        return nullptr;
+    }
+    spelling[written] = '\0';
+    return env->NewStringUTF(spelling);
+}
+
+jint nativeDominantPack(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+    Engine* const engine = engineFrom(handle);
+    return engine == nullptr ? -1 : static_cast<jint>(engine->dominantPack());
 }
 
 void nativeSetPhraseSuggestions(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
@@ -740,6 +780,8 @@ jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArra
             env->ExceptionClear();
             break;
         }
+        // Already bounded to [0, 1000] by Engine::decodeGesture -- see its own comment for why
+        // that is where this happens rather than here.
         scores[written] = candidates[i].score;
         ++written;
     }
@@ -779,7 +821,7 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeSetActiveLanguages)},
     {"nativeSetKeyGeometry", "(J[I[F[FFF)V", reinterpret_cast<void*>(nativeSetKeyGeometry)},
     {"nativeSuggest",
-     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F)I",
+     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F[Z)I",
      reinterpret_cast<void*>(nativeSuggest)},
     {"nativeLearn", "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V",
      reinterpret_cast<void*>(nativeLearn)},
@@ -805,6 +847,9 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeDecodeGesture)},
     {"nativeSnapshotUserModel", "(JLjava/lang/String;)I",
      reinterpret_cast<void*>(nativeSnapshotUserModel)},
+    {"nativeCandidateForPack", "(JILjava/lang/String;)Ljava/lang/String;",
+     reinterpret_cast<void*>(nativeCandidateForPack)},
+    {"nativeDominantPack", "(J)I", reinterpret_cast<void*>(nativeDominantPack)},
 };
 
 }  // namespace

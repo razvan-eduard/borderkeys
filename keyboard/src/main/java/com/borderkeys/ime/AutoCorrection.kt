@@ -47,20 +47,34 @@ internal object AutoCorrection {
         suggestionQuery: String,
         knownWord: String,
         minimumLength: Int,
+        isProperNoun: Boolean = false,
     ): String? {
-        if (suggestion.isNullOrEmpty() || suggestion == typed || typed != suggestionQuery) {
+        if (suggestion.isNullOrEmpty() || typed != suggestionQuery) {
             return null
         }
-        if (suggestion.equals(typed, ignoreCase = true)) {
+        // Cased once, up front, rather than compared raw and separately case-insensitively:
+        // "would this actually change anything once matchCase has had its say" is the one
+        // question both of the old separate checks (exact match, and match but for case) were
+        // really asking, and asking it this way is also what lets a name exactly matching what
+        // was typed -- "ana" against the dictionary's own "ana" -- still become a correction
+        // when isProperNoun says the only thing wrong with it is the case, instead of being
+        // waved through as "identical" before matchCase ever got to capitalise it.
+        val cased = matchCase(typed, suggestion, isProperNoun)
+        if (cased == typed) {
             return null
         }
         if (typed.length < minimumLength && !isDiacriticOnlyDifference(typed, suggestion)) {
             return null
         }
-        if (typed == knownWord) {
+        // Not for a name: "the dictionaries know this exact word" is the whole reason to leave
+        // an ordinary word alone, but for a name it is the opposite -- it is *why* knownWord
+        // equals typed at all (the dictionary is not offering a different word, only a
+        // different case for the same one), and that must not be read as "nothing to do" the
+        // way it is for every word that is not a name.
+        if (typed == knownWord && !isProperNoun) {
             return null
         }
-        return matchCase(typed, suggestion)
+        return cased
     }
 
     /**
@@ -86,8 +100,16 @@ internal object AutoCorrection {
      * The dictionaries store lower-case spellings, so a correction arrives lower case whatever
      * was typed. Committing it as it comes turns the first word of a sentence into a lower-case
      * one, which is a second thing to fix for every one thing that was fixed.
+     *
+     * [isProperNoun] means the dictionary flagged [correction] a name (see
+     * PackedTrie::isProperNoun) -- capitalised regardless of what [typed] looked like, the one
+     * override this function makes that is not about [typed] at all, because a name is not a
+     * guess about which key the user meant to reach the way the rest of this function is.
+     * Checked after the all-caps branch, not before: caps lock is a deliberate, stronger
+     * instruction than "capitalise this one word", so "ANA" typed in full caps still shouts,
+     * exactly as any other word would.
      */
-    fun matchCase(typed: String, correction: String): String {
+    fun matchCase(typed: String, correction: String, isProperNoun: Boolean = false): String {
         if (typed.isEmpty() || correction.isEmpty()) {
             return correction
         }
@@ -95,6 +117,9 @@ internal object AutoCorrection {
         // sentence. A single "I" stays "I" rather than becoming a shout.
         if (typed.length > 1 && typed.any { it.isLetter() } && typed.none { it.isLowerCase() }) {
             return correction.uppercase()
+        }
+        if (isProperNoun) {
+            return correction.replaceFirstChar { it.uppercaseChar() }
         }
         if (!typed[0].isUpperCase() || correction[0].isUpperCase()) {
             return correction
