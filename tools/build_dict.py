@@ -44,10 +44,11 @@ from pathlib import Path
 # --------------------------------------------------------------------------------------
 
 MAGIC = 0x31444B42  # 'B' 'K' 'D' '1' little endian
-VERSION = 2
-# 320 rather than 256: version 2 added the two part-of-speech sections, and their descriptors
-# did not fit in the reserved words that were left.
-HEADER_BYTES = 320
+VERSION = 3
+# 336 rather than 320: version 3 added the word-flags section (kSectionWordFlags), one more
+# 16-byte descriptor in the section table, for the same reason 320 was 256 plus the two
+# part-of-speech descriptors before it.
+HEADER_BYTES = 336
 # Where the section descriptors begin: the fixed fields are 76 bytes and 52 are reserved.
 SECTION_TABLE_OFFSET = 128
 MAX_PACK_BYTES = 64 * 1024 * 1024
@@ -67,7 +68,13 @@ SENTENCE_START_INDEX = 0xFFFFFFFE
 FLAG_CASE_FOLDED = 1 << 0
 FLAG_CONTENT_CRC = 1 << 1
 
-SECTION_COUNT = 12
+# Bits in a word's own S_WORD_FLAGS byte -- a different flag space from FLAG_* above, which are
+# BkdHeader::flags, one per pack rather than one per word. Mirrors kWordFlagProperNoun in
+# bkd_format.hpp exactly; the other seven bits are free for a future flag without another
+# version bump.
+WORD_FLAG_PROPER_NOUN = 1 << 0
+
+SECTION_COUNT = 13
 (
     S_ALPHABET,
     S_TRIE_BASE,
@@ -81,6 +88,7 @@ SECTION_COUNT = 12
     S_TRIGRAM_VALUES,
     S_WORD_TAGS,
     S_POS_TRANSITIONS,
+    S_WORD_FLAGS,
 ) = range(SECTION_COUNT)
 
 # Quantisation scale for log-probabilities: q = round(-logProb * SCALE), saturating at 255,
@@ -374,7 +382,8 @@ class Grammar:
 
 
 def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
-               grammar: "Grammar | None" = None) -> bytes:
+               grammar: "Grammar | None" = None,
+               proper_nouns: frozenset[str] = frozenset()) -> bytes:
     if not words:
         raise SystemExit("the word list is empty")
     if len(words) > MAX_WORDS:
@@ -384,8 +393,10 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
 
     # Sorting by folded key makes the output a deterministic function of its input, which is
     # what lets the same sources rebuild byte-identically -- the same property the APK needs.
-    prepared = sorted(((fold_word(word), word, frequency) for word, frequency in words),
-                      key=lambda item: (item[0], item[1]))
+    prepared = sorted(
+        ((fold_word(word), word, frequency, word in proper_nouns) for word, frequency in words),
+        key=lambda item: (item[0], item[1]),
+    )
 
     # A folded key that two different spellings share keeps the more frequent spelling as its
     # display form -- the other would be unreachable anyway, since the trie is keyed on the fold
@@ -401,21 +412,27 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
     # calibration argument depends on being a fair signal -- could be roughly a third to half of
     # its true combined usage. Summing is what "the same word, spelled three ways in the source
     # text" should have meant from the start: one word, one true frequency, one trie entry.
+    # The proper-noun bit is OR'd across every colliding spelling, same reasoning as summing
+    # their frequencies below: "Ana"/"ana" fold to one trie key, and whichever spelling wins as
+    # the display form must still carry the flag if *either* input row was flagged as a name --
+    # otherwise the bit silently depends on which spelling happened to have the higher frequency.
     deduped: dict[tuple[int, ...], list] = {}
-    for folded, word, frequency in prepared:
+    for folded, word, frequency, is_proper_noun in prepared:
         existing = deduped.get(folded)
         if existing is None:
-            deduped[folded] = [word, frequency, frequency]
+            deduped[folded] = [word, frequency, frequency, is_proper_noun]
         else:
             if frequency > existing[1]:
                 existing[0] = word
                 existing[1] = frequency
             existing[2] += frequency
+            existing[3] = existing[3] or is_proper_noun
     keys = sorted(deduped.keys())
 
     words_folded = keys
     display = [deduped[key][0] for key in keys]
     frequencies = [deduped[key][2] for key in keys]
+    proper_noun_flags = [deduped[key][3] for key in keys]
     word_index_of = {word: index for index, word in enumerate(display)}
 
     alphabet = sorted({code_point for folded in words_folded for code_point in folded})
@@ -431,6 +448,9 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
 
     total_frequency = float(sum(frequencies)) or 1.0
     word_freq = bytes(quantise_log_prob(frequency / total_frequency) for frequency in frequencies)
+    word_flags = bytes(
+        WORD_FLAG_PROPER_NOUN if flagged else 0 for flagged in proper_noun_flags
+    )
 
     text_blob = bytearray()
     word_offsets = [0]
@@ -507,6 +527,7 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
         S_TRIGRAM_VALUES: (trigram_values, 1),
         S_WORD_TAGS: (word_tags, 1),
         S_POS_TRANSITIONS: (pos_transitions, 1),
+        S_WORD_FLAGS: (word_flags, 1),
     }
 
     body = bytearray()
@@ -611,7 +632,12 @@ class PackReader:
         self.word_offsets = list(struct.unpack_from(f"<{self.word_count + 1}I", blob, offset))
         offset, _ = self.sections[S_WORD_FREQ]
         self.word_freq = blob[offset:offset + self.word_count]
+        offset, _ = self.sections[S_WORD_FLAGS]
+        self.word_flags = blob[offset:offset + self.word_count]
         self.text_offset, self.text_length = self.sections[S_WORD_TEXT]
+
+    def is_proper_noun(self, word_index: int) -> bool:
+        return (self.word_flags[word_index] & WORD_FLAG_PROPER_NOUN) != 0
 
     def walk(self, node: int, symbol: int) -> int:
         if node < 0 or node >= self.node_count:
@@ -668,12 +694,26 @@ class PackReader:
 # --------------------------------------------------------------------------------------
 
 
-def round_trip(words: list[tuple[str, int]], ngrams: dict, tag: str, samples: int = 100) -> None:
-    blob = build_pack(tag, words, ngrams)
+def round_trip(words: list[tuple[str, int]], ngrams: dict, tag: str, samples: int = 100,
+              proper_nouns: frozenset[str] = frozenset()) -> None:
+    blob = build_pack(tag, words, ngrams, proper_nouns=proper_nouns)
     reader = PackReader(blob)
 
     if reader.tag != tag:
         raise SystemExit(f"tag round-trip failed: wrote {tag!r}, read {reader.tag!r}")
+
+    for name in proper_nouns:
+        index = reader.lookup(name)
+        if index < 0:
+            raise SystemExit(f"proper noun {name!r} was written but cannot be looked up")
+        if not reader.is_proper_noun(index):
+            raise SystemExit(f"{name!r} was flagged a proper noun but the bit did not round-trip")
+    for word, _ in words:
+        if word in proper_nouns:
+            continue
+        index = reader.lookup(word)
+        if index >= 0 and reader.is_proper_noun(index):
+            raise SystemExit(f"{word!r} was not flagged a proper noun but the bit came back set")
 
     rng = random.Random(20260831)
     vocabulary = [word for word, _ in words]
@@ -761,16 +801,24 @@ SAMPLE_NGRAMS = {
 }
 
 
-def load_words(path: Path) -> list[tuple[str, int]]:
+def load_words(path: Path) -> tuple[list[tuple[str, int]], frozenset[str]]:
+    """Reads 'word<TAB>frequency', with an optional third column: 'word<TAB>frequency<TAB>name'
+    marks the row a proper noun (see WORD_FLAG_PROPER_NOUN) -- the literal string "name" is the
+    only value that means anything there, so a stray third column of anything else is a file
+    error rather than a silently-ignored flag."""
     words: list[tuple[str, int]] = []
+    proper_nouns: set[str] = set()
     with path.open(encoding="utf-8") as handle:
         for number, line in enumerate(handle, start=1):
             line = line.rstrip("\n")
             if not line or line.startswith("#"):
                 continue
             parts = line.split("\t")
-            if len(parts) != 2:
-                raise SystemExit(f"{path}:{number}: expected 'word<TAB>frequency'")
+            if len(parts) not in (2, 3):
+                raise SystemExit(f"{path}:{number}: expected 'word<TAB>frequency' "
+                                 f"or 'word<TAB>frequency<TAB>name'")
+            if len(parts) == 3 and parts[2] != "name":
+                raise SystemExit(f"{path}:{number}: third column must be 'name', got {parts[2]!r}")
             try:
                 frequency = int(parts[1])
             except ValueError:
@@ -778,7 +826,9 @@ def load_words(path: Path) -> list[tuple[str, int]]:
             if frequency <= 0 or not parts[0]:
                 continue
             words.append((parts[0], frequency))
-    return words
+            if len(parts) == 3:
+                proper_nouns.add(parts[0])
+    return words, frozenset(proper_nouns)
 
 
 def load_ngrams(path: Path) -> dict:
@@ -825,9 +875,14 @@ def main(argv: list[str]) -> int:
         return 0
 
     if arguments.selftest:
-        round_trip(SAMPLE_WORDS, SAMPLE_NGRAMS, "ro-RO")
+        # "border" is already in SAMPLE_WORDS; flagging it here rather than adding a dedicated
+        # entry is enough to prove the bit round-trips, since this test is about the mechanism,
+        # not about exercising a real name.
+        sample_proper_nouns = frozenset({"border"})
+        round_trip(SAMPLE_WORDS, SAMPLE_NGRAMS, "ro-RO", proper_nouns=sample_proper_nouns)
         if arguments.out:
-            blob = build_pack(arguments.tag, SAMPLE_WORDS, SAMPLE_NGRAMS)
+            blob = build_pack(arguments.tag, SAMPLE_WORDS, SAMPLE_NGRAMS,
+                              proper_nouns=sample_proper_nouns)
             arguments.out.parent.mkdir(parents=True, exist_ok=True)
             arguments.out.write_bytes(blob)
             print(f"wrote {arguments.out} ({len(blob)} bytes)")
@@ -836,10 +891,10 @@ def main(argv: list[str]) -> int:
     if not arguments.words or not arguments.out:
         parser.error("--words and --out are required unless --selftest is given")
 
-    words = load_words(arguments.words)
+    words, proper_nouns = load_words(arguments.words)
     ngrams = load_ngrams(arguments.ngrams) if arguments.ngrams else {}
     grammar = Grammar.load(arguments.grammar) if arguments.grammar else None
-    blob = build_pack(arguments.tag, words, ngrams, grammar)
+    blob = build_pack(arguments.tag, words, ngrams, grammar, proper_nouns=proper_nouns)
 
     # Written to a temporary file in the destination directory and renamed, so that an
     # interrupted build never leaves a half-written pack where the app would map it.

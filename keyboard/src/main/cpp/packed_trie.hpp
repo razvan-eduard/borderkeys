@@ -113,6 +113,15 @@ public:
         return -static_cast<float>(wordFreqQuantised(wordIndex)) / logProbScale_;
     }
 
+    // Whether this word should always render capitalised -- a name, not a sentence-start or a
+    // shift-state accident. False (rather than out-of-bounds being an error) for the same reason
+    // wordFreqQuantised degrades gracefully: a caller asking about an index it should not have
+    // gets the safe default, not a crash.
+    bool isProperNoun(uint32_t wordIndex) const {
+        return wordIndex < wordCount_ && wordFlags_ != nullptr &&
+               (wordFlags_[wordIndex] & kWordFlagProperNoun) != 0u;
+    }
+
     // Exact lookup of an already folded word. Returns the word index or -1.
     int32_t lookupFolded(const uint32_t* folded, int count) const;
 
@@ -126,6 +135,7 @@ private:
 
     const uint32_t* wordOffsets_ = nullptr;
     const uint8_t* wordFreq_ = nullptr;
+    const uint8_t* wordFlags_ = nullptr;
     const char* wordText_ = nullptr;
     uint32_t wordTextBytes_ = 0;
     uint32_t wordCount_ = 0;

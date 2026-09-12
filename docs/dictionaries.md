@@ -94,6 +94,42 @@ n-grams is a few megabytes -- what the six bundled dictionaries actually are, on
 megabytes each. Larger than that, built from a bigger or less aggressively cut corpus, belongs on
 the device as an imported pack rather than bundled into every install of the application.
 
+## Names
+
+A word list built the way above never contains a proper name unless its lower-case spelling
+happens to coincide with an ordinary word (`make_pack.py`'s tokeniser lower-cases everything on
+the way in) -- and even then, nothing marks it as a name, so the keyboard has no way to offer it
+capitalised outside of sentence-start or shift-state, which is not how a name should behave
+mid-sentence.
+
+`tools/make_names.py` builds a separate, per-language name list from Wikidata (CC0 -- see
+`docs/licensing.md` section 2 for why this one source gets its own entry rather than folding into
+the corpus table above: it is a *classification* source, not a *frequency* one, and its entries
+carry a flat synthetic frequency rather than a real corpus count):
+
+```
+python3 tools/make_names.py --language ro --out names_ro.tsv
+python3 tools/make_pack.py --corpus ro_sentences.txt --names names_ro.tsv \
+    --tag ro-RO --out ro_RO.bkd
+```
+
+`--names` merges the list in *after* `--max-words`/`--min-count` have already cut the corpus down
+-- a name is not competing for one of the corpus's own ranked slots, and its absence from a
+frequency-based cut is not evidence it is rare, only that it is a name. Every merged entry is
+written into the compiled `.tsv` with a third column, `name`, which `build_dict.py` reads as
+`WORD_FLAG_PROPER_NOUN` and the running keyboard reads back as "always capitalise this,
+regardless of typed case or shift state" (`AutoCorrection.matchCase` in
+`keyboard/src/main/java/com/borderkeys/ime/AutoCorrection.kt`).
+
+Coverage is genuinely uneven across languages -- Wikidata's own editor base skews toward
+English/German/French/Spanish, and Romanian will come back with fewer names than those do. That
+is `make_names.py` reporting the real state of a free source, not a bug to chase; its own printed
+count is the number to look at before deciding a language's list is worth shipping.
+
+Regenerating the six bundled dictionaries with names merged in, and committing the result to
+`dictionaries/*.tsv`, is a deliberate step for whoever maintains them to take -- this document
+describes how, not that it has been done.
+
 ## Shipping one with the application
 
 Drop the word list in `dictionaries/` as `<tag>.tsv` — with `_` where the tag has `-` — and the

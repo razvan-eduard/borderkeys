@@ -35,7 +35,12 @@ inline constexpr uint32_t kBkdMagic = 0x31444B42u;
 // 2 added the part-of-speech sections and grew the header from 256 to 320 bytes to hold their
 // descriptors. A version 1 pack is refused rather than read with the new fields zeroed: the
 // header grew, so every section offset in an old file means something different now.
-inline constexpr uint32_t kBkdVersion = 2u;
+// 3 added kSectionWordFlags (one byte per word, kWordFlagProperNoun so far), the same way 2
+// added its own two sections: BkdHeader::sections grew by one entry, growing the header itself
+// from 320 to 336 bytes, for the same reason 1 -> 2 grew it from 256 to 320 -- every section
+// offset in an older file was computed against a shorter header, so nothing downstream of it can
+// be trusted either.
+inline constexpr uint32_t kBkdVersion = 3u;
 
 // Caps, checked before a single byte is mapped.
 //
@@ -67,8 +72,15 @@ enum BkdSectionIndex : uint32_t {
     kSectionTrigramValues,    // uint8_t[trigramCapacity]
     kSectionWordTags,         // uint8_t[wordCount], part-of-speech tag index per word
     kSectionPosTransitions,   // uint8_t[posTagCount * posTagCount], quantised -log P(t|prev)
+    kSectionWordFlags,        // uint8_t[wordCount], kWordFlag* bits per word
     kSectionCount
 };
+
+// Bits in a kSectionWordFlags byte. One bit defined so far; the other seven are free for a
+// future flag without another format version bump, the same headroom kBkdFlagCaseFolded and
+// kBkdFlagContentCrc already leave in BkdHeader::flags below.
+inline constexpr uint8_t kWordFlagProperNoun = 1u << 0;  // always capitalise, regardless of
+                                                          // typed case or shift state
 
 struct BkdSection {
     uint64_t offset;
@@ -110,7 +122,7 @@ struct BkdHeader {
     BkdSection sections[kSectionCount];
 };
 
-static_assert(sizeof(BkdHeader) == 320, "the .bkd header is a fixed 320 bytes");
+static_assert(sizeof(BkdHeader) == 336, "the .bkd header is a fixed 336 bytes");
 static_assert(sizeof(BkdSection) == 16, "section descriptors are two 64-bit fields");
 static_assert(alignof(BkdHeader) == 8, "header alignment is part of the layout");
 
@@ -284,6 +296,7 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
         {kSectionWordOffsets, sizeof(uint32_t), alignof(uint32_t),
          header.wordCount == 0 ? 0u : static_cast<uint64_t>(header.wordCount) + 1u},
         {kSectionWordFreq, sizeof(uint8_t), alignof(uint8_t), header.wordCount},
+        {kSectionWordFlags, sizeof(uint8_t), alignof(uint8_t), header.wordCount},
         {kSectionBigramKeys, sizeof(uint64_t), alignof(uint64_t), bigramCap},
         {kSectionBigramValues, sizeof(uint8_t), alignof(uint8_t), bigramCap},
         {kSectionTrigramKeys, sizeof(uint32_t), alignof(uint32_t),

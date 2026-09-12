@@ -32,6 +32,13 @@ Input, in order of how good the result is
                         because coverage with no ranking still beats no dictionary, and refused
                         silently would be worse than warned about loudly.
 
+  --names FILE          a make_names.py output: proper names, flagged in the compiled pack so
+                        the keyboard always capitalises them (see build_dict.py's
+                        WORD_FLAG_PROPER_NOUN) regardless of typed case or sentence position.
+                        Merged in after the frequency-based cutoffs below, not subject to them --
+                        a name absent from a corpus is not evidence it is rare, only that it is a
+                        name, which is exactly the case this file exists to cover.
+
 Why the scales have to match
 ----------------------------
 The engine backs off with the usual rule: if a bigram is known it uses P(w2|w1), otherwise
@@ -122,8 +129,14 @@ def read_frequencies(path: Path) -> Counter:
             if len(parts) < 2:
                 continue
             word = parts[0].lower()
+            # A row ending in the literal "name" is this project's own proper-noun tag (see
+            # build_dict.py's load_words), not an external frequency list's own trailing column --
+            # its frequency sits second-to-last, not last. Reading it as parts[-1] silently threw
+            # away every name-flagged row (int("name") raises, caught below, row dropped) the
+            # first time a dictionary already containing one was fed back in as --frequencies.
+            frequency_index = -2 if len(parts) >= 3 and parts[-1] == "name" else -1
             try:
-                counts[word] += int(parts[-1])
+                counts[word] += int(parts[frequency_index])
             except ValueError:
                 continue
     return counts
@@ -171,6 +184,8 @@ def main() -> int:
     parser.add_argument("--frequencies", type=Path)
     parser.add_argument("--ngram-counts", type=Path)
     parser.add_argument("--wordlist", type=Path)
+    parser.add_argument("--names", type=Path,
+                        help="a make_names.py output, merged in and flagged as proper nouns")
     parser.add_argument("--tag", required=True, help="BCP-47, e.g. ro-RO")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--max-words", type=int, default=120_000,
@@ -215,6 +230,27 @@ def main() -> int:
     ranked = sorted(kept.items(), key=lambda item: (-item[1], item[0]))[:arguments.max_words]
     vocabulary = {w for w, _ in ranked}
 
+    # Merged in after max_words rather than before: a name is not competing for one of the
+    # corpus's own ranked slots, since names.tsv's flat frequency (see make_names.py) is not on
+    # the same scale as a real corpus count and would either always lose that ranking (if the
+    # flat value is low) or crowd out real words (if it is not) -- neither is the point. A word
+    # that is ALREADY in the corpus (a name that also happens to be a common word, e.g. "Will")
+    # keeps its own real frequency and just gains the flag, rather than being duplicated.
+    proper_nouns: set[str] = set()
+    if arguments.names:
+        for line in arguments.names.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) < 2:
+                continue
+            name, frequency = parts[0], int(parts[1])
+            proper_nouns.add(name)
+            if name not in vocabulary:
+                ranked.append((name, frequency))
+                vocabulary.add(name)
+
     # An n-gram naming a word that did not survive the cutoff cannot be looked up, and the writer
     # would drop it anyway. Filtering here keeps the intermediate files honest.
     def survives(key: tuple) -> bool:
@@ -236,7 +272,8 @@ def main() -> int:
     words_path = arguments.out.with_suffix(".tsv")
     ngrams_path = arguments.out.with_suffix(".ngrams")
     words_path.write_text(
-        "".join(f"{w}\t{c}\n" for w, c in ranked), encoding="utf-8")
+        "".join(f"{w}\t{c}\tname\n" if w in proper_nouns else f"{w}\t{c}\n" for w, c in ranked),
+        encoding="utf-8")
     ngrams_path.write_text(
         "".join("\t".join(key) + f"\t{count}\n" for count, key in ngram_rows), encoding="utf-8")
 

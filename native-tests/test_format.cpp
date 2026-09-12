@@ -74,6 +74,35 @@ void runFormatTests() {
         check(pack.trie().wordCount() > 0, "and a non-empty dictionary");
     }
 
+    section("proper noun flag");
+
+    {
+        // The sample word list build_dict.py's own --selftest builds the test pack from flags
+        // exactly one word, "border" (see build_dict.py's sample_proper_nouns) -- so this is a
+        // real round-trip through the actual compiler, not a hand-built fixture.
+        LanguagePack pack;
+        check(openFromBytes(good, &pack) == kBkdOk, "the test pack opens for the proper-noun check");
+
+        auto lookupAscii = [&pack](const char* word) -> int32_t {
+            uint32_t folded[32];
+            size_t length = 0;
+            for (; word[length] != '\0' && length < 32; ++length) {
+                folded[length] = static_cast<uint32_t>(word[length]);
+            }
+            return pack.trie().lookupFolded(folded, static_cast<int>(length));
+        };
+
+        const int32_t properIndex = lookupAscii("border");
+        check(properIndex >= 0, "\"border\", the sample pack's flagged proper noun, is found");
+        check(properIndex >= 0 && pack.trie().isProperNoun(static_cast<uint32_t>(properIndex)),
+              "and its proper-noun bit is set");
+
+        const int32_t plainIndex = lookupAscii("mare");
+        check(plainIndex >= 0, "an ordinary sample word is found");
+        check(plainIndex >= 0 && !pack.trie().isProperNoun(static_cast<uint32_t>(plainIndex)),
+              "and its proper-noun bit is not set");
+    }
+
     section("grammar sections");
 
     {
