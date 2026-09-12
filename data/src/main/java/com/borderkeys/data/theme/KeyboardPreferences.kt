@@ -5,6 +5,7 @@ package com.borderkeys.data.theme
 
 import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.Serializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import java.io.InputStream
@@ -83,6 +84,20 @@ data class KeyboardPreferences(
      * asks for none of them -- a password, a URL -- gets none.
      */
     val autoCapitalise: Boolean = true,
+
+    /**
+     * Whether the first letter of a sentence is capitalised even in a field that never asked
+     * for it.
+     *
+     * Off. [autoCapitalise] already honours a field's own request faithfully -- this is for the
+     * fields that never make one: a chat box or a search bar built without
+     * `TYPE_TEXT_FLAG_CAP_SENTENCES` set, which is common enough that it is worth a switch of
+     * its own rather than folding it into the setting above and taking away the choice to keep
+     * the faithful behaviour. Has no effect where [autoCapitalise] itself is off, and still
+     * leaves a password field alone -- overriding what a field asks for is one thing, silently
+     * changing what gets typed into one is another.
+     */
+    val forceCapitaliseSentences: Boolean = false,
 
     /**
      * Whether two spaces become a full stop and a space.
@@ -224,6 +239,18 @@ data class KeyboardPreferences(
     val languageLock: Int = LANGUAGE_LOCK_BALANCED,
 
     /**
+     * What happens to a correction already applied once [languageLock]'s own evidence decides
+     * the conversation was actually in a different language all along.
+     *
+     * Off by default: rewriting text after the cursor has already moved past it is a stronger
+     * version of the one failure a keyboard that corrects as you type is built to avoid, so this
+     * stays opt-in rather than inherited from [languageLock] being on. `Ask` offers the affected
+     * word back without touching the field; `Auto-apply` edits it immediately, same as any other
+     * correction, and either way the edit lands on the field's own undo history.
+     */
+    val languageSwitchCorrectionMode: Int = LANGUAGE_SWITCH_OFF,
+
+    /**
      * Whether the first slot of the suggestion strip offers what is on the clipboard.
      *
      * Off by default, and not out of caution about the feature: the strip is glanced at while
@@ -288,10 +315,15 @@ data class KeyboardPreferences(
     val composerEnabled: Boolean = true,
 
     /**
-     * The buttons on the draft box's control bar, in order, as [ComposerAction] ids.
+     * The buttons on the draft box's control bar, in order, as [ComposerAction] ids -- or, since
+     * a custom action can be pinned here too, one of [customActions]' own ids. The two id spaces
+     * never overlap ([CustomAction.nextId] draws from a range clear of [ComposerAction]'s 1-10),
+     * so this stays one flat `List<Int>` rather than needing its own persisted shape change;
+     * [ComposerBar.resolve] is what turns an id back into whichever kind it names.
      *
-     * Ids rather than ordinals, and read back through the enum, for the same reason the quick
-     * actions are: a bar written by a later build must open rather than fail.
+     * Ids rather than ordinals, and read back through the enum (or the custom-action list), for
+     * the same reason the quick actions are: a bar written by a later build must open rather
+     * than fail.
      */
     val composerBar: List<Int> = ComposerAction.DEFAULT.map { it.id },
 
@@ -307,20 +339,38 @@ data class KeyboardPreferences(
      */
     val composerSnapSelectionToWords: Boolean = true,
 
-    /** Instructions the user wrote and kept, in the order they were saved. */
-    val savedPrompts: List<SavedPrompt> = emptyList(),
+    /**
+     * Instructions the user wrote and kept, in the order they were saved -- each addressable by
+     * its own stable id, so one can also be pinned onto [composerBar] as a real button. Field
+     * name kept as `savedPrompts` on the wire ([SerialName]) so an existing install's file still
+     * decodes; see [CustomAction]'s own doc for the rest of that story.
+     */
+    @SerialName("savedPrompts") val customActions: List<CustomAction> = emptyList(),
 
     /** Whether the row of quick actions is shown at all. */
     val quickActionsEnabled: Boolean = false,
 
     /**
-     * The actions on the bar, in order, as [QuickAction] ids.
+     * The actions on the bar, in order, as [QuickAction] ids -- or, since a custom macro can be
+     * pinned here too, one of [customQuickActions]' own ids. The two id spaces never overlap
+     * ([CustomQuickAction.nextId] draws from a range clear of [QuickAction]'s 1-17), so this
+     * stays one flat `List<Int>` rather than needing its own persisted shape change, the same
+     * trick [composerBar] already plays; [QuickActionBar.resolve] is what turns an id back into
+     * whichever kind it names.
      *
      * Ids rather than ordinals so that removing an action from the enum later does not turn
      * someone's saved bar into a different bar; an id this build does not know is dropped when
      * the list is read.
      */
     val quickActions: List<Int> = QuickAction.DEFAULT.map { it.id },
+
+    /**
+     * Macros the user built for the quick-action bar -- each an ordered list of [QuickAction]
+     * (or other custom action) ids, addressable by its own stable id so one can be pinned onto
+     * [quickActions] as a real button. See [CustomQuickAction] for the shape and
+     * [QuickActionBar.flatten] for how a macro turns into the steps that actually run.
+     */
+    val customQuickActions: List<CustomQuickAction> = emptyList(),
 
     /** Whether the bar starts open or as a single button that opens it. */
     val quickActionsMode: Int = QUICK_ACTIONS_COLLAPSED,
@@ -374,6 +424,18 @@ data class KeyboardPreferences(
      * [MIN_LONG_PRESS_MILLIS]..[MAX_LONG_PRESS_MILLIS] on read.
      */
     val longPressMillis: Int = DEFAULT_LONG_PRESS_MILLIS,
+
+    /**
+     * What Enter does. [ENTER_KEY_AUTO] follows the field: its declared action (Send, Done, Go...)
+     * runs, unless the field also set `IME_FLAG_NO_ENTER_ACTION` to say Enter should still be a
+     * plain newline even though it declared one -- the usual reason being a chat-style compose
+     * box with its own separate send button. [ENTER_KEY_FORCE_ACTION] always runs the field's
+     * action where one exists, that flag included, falling back to a newline only where there
+     * genuinely is no action to run. [ENTER_KEY_FORCE_NEWLINE] never runs one at all. The two
+     * force modes exist for someone who has decided a field is wrong about what Enter should do
+     * more often than the field itself would ever admit to.
+     */
+    val enterKeyBehavior: Int = ENTER_KEY_AUTO,
 
     /** Switch to a numeric keypad automatically in numeric and phone fields. */
     val numericKeypad: Boolean = true,
@@ -509,6 +571,33 @@ data class KeyboardPreferences(
         // by a second set of coerceIn calls next to it that could drift from what that class
         // considers sane.
         val portrait = placementFor(isLandscape = false).sanitised()
+        // Backfilled/bounded before composerBar below is sanitised against it -- a copy(...)'s
+        // named arguments each read this instance's ORIGINAL properties, not each other's new
+        // values, so composerBar cannot validate against a customActions this same call is also
+        // rewriting unless that rewrite happens here, first, as its own local.
+        val sanitisedCustomActions = CustomAction.backfillLegacyIds(customActions)
+            .filter { it.name.isNotBlank() && it.instruction.isNotBlank() }
+            .map {
+                it.copy(
+                    name = it.name.take(CustomAction.MAX_NAME_CHARS),
+                    instruction = it.instruction.take(CustomAction.MAX_INSTRUCTION_CHARS),
+                )
+            }
+            .take(CustomAction.MAX_CUSTOM_ACTIONS)
+        // Same reasoning as sanitisedCustomActions above, and for the same reason: quickActions
+        // below validates its ids against this, so the steps inside each macro have to be
+        // resolved first, against each other, as their own local.
+        val sanitisedCustomQuickActions = customQuickActions
+            .filter { it.name.isNotBlank() }
+            .map { it.copy(name = it.name.take(CustomQuickAction.MAX_NAME_CHARS)) }
+            .take(CustomQuickAction.MAX_CUSTOM_QUICK_ACTIONS)
+            .let { candidates ->
+                candidates.map { candidate ->
+                    candidate.copy(
+                        steps = QuickActionBar.sanitisedSteps(candidate.id, candidate.steps, candidates),
+                    )
+                }
+            }
         return copy(
         minCorrectionLength = minCorrectionLength.coerceIn(MIN_CORRECTION_LENGTH, MAX_CORRECTION_LENGTH),
         correctionStrictness = if (correctionStrictness > 0f) {
@@ -543,6 +632,11 @@ data class KeyboardPreferences(
             SYMBOLS_NUMBER_TOP
         },
         longPressMillis = longPressMillis.coerceIn(MIN_LONG_PRESS_MILLIS, MAX_LONG_PRESS_MILLIS),
+        enterKeyBehavior = if (enterKeyBehavior in ENTER_KEY_AUTO..ENTER_KEY_FORCE_NEWLINE) {
+            enterKeyBehavior
+        } else {
+            ENTER_KEY_AUTO
+        },
         suggestionCount = suggestionCount.coerceIn(MIN_SUGGESTIONS, MAX_SUGGESTIONS),
         learningSpeed = if (learningSpeed in LEARNING_CAUTIOUS..LEARNING_IMMEDIATE) {
             learningSpeed
@@ -561,10 +655,20 @@ data class KeyboardPreferences(
         } else {
             LANGUAGE_LOCK_BALANCED
         },
-        // Read through the enum, which drops ids no build knows, then bounded: a stored file is
-        // not a trusted file, and a bar of four hundred buttons is a bar with no buttons on it.
-        quickActions = QuickAction.fromIds(quickActions).take(MAX_QUICK_ACTIONS).map { it.id },
-        composerBar = ComposerAction.fromIds(composerBar).map { it.id },
+        languageSwitchCorrectionMode =
+            if (languageSwitchCorrectionMode in LANGUAGE_SWITCH_OFF..LANGUAGE_SWITCH_AUTO_APPLY) {
+                languageSwitchCorrectionMode
+            } else {
+                LANGUAGE_SWITCH_OFF
+            },
+        // Read through both id spaces, which drops ids neither recognises, then bounded: a
+        // stored file is not a trusted file, and a bar of four hundred buttons is a bar with no
+        // buttons on it. Computed above, before this copy(...), so quickActions can be sanitised
+        // against the same, final list -- see sanitisedCustomActions's own comment for why.
+        quickActions =
+            QuickActionBar.sanitisedIds(quickActions, sanitisedCustomQuickActions).take(MAX_QUICK_ACTIONS),
+        customQuickActions = sanitisedCustomQuickActions,
+        composerBar = ComposerBar.sanitisedIds(composerBar, sanitisedCustomActions),
         composerTextSize =
             if (composerTextSize in COMPOSER_TEXT_SIZE_SMALL..COMPOSER_TEXT_SIZE_LARGE) {
                 composerTextSize
@@ -573,16 +677,9 @@ data class KeyboardPreferences(
             },
         // Bounded on the way in as well as on the way out. These are written by the user, so
         // the file is as trustworthy as the rest of it -- which is to say bounded and read back
-        // rather than trusted.
-        savedPrompts = savedPrompts
-            .filter { it.name.isNotBlank() && it.text.isNotBlank() }
-            .map {
-                it.copy(
-                    name = it.name.take(SavedPrompt.MAX_NAME_CHARS),
-                    text = it.text.take(SavedPrompt.MAX_TEXT_CHARS),
-                )
-            }
-            .take(SavedPrompt.MAX_SAVED),
+        // rather than trusted. Computed above, before this copy(...), so composerBar can be
+        // sanitised against the same, final list.
+        customActions = sanitisedCustomActions,
         emojiRecents = emojiRecents.filter { it.isNotEmpty() }.take(MAX_EMOJI_RECENTS),
         quickActionsMode = if (quickActionsMode in QUICK_ACTIONS_FULL..QUICK_ACTIONS_COLLAPSED) {
             quickActionsMode
@@ -726,6 +823,16 @@ data class KeyboardPreferences(
          */
         const val LANGUAGE_LOCK_STRICT = 4
 
+        /** Corrections already applied are never revisited, whatever [languageLock] later
+         *  decides about the sentence they were part of. */
+        const val LANGUAGE_SWITCH_OFF = 0
+
+        /** Offers an affected word back, without touching the field until it is tapped. */
+        const val LANGUAGE_SWITCH_ASK = 1
+
+        /** Edits an affected word immediately -- still one step on the field's own undo history. */
+        const val LANGUAGE_SWITCH_AUTO_APPLY = 2
+
         /**
          * How much one-sided evidence the engine wants before it stops consulting the other
          * dictionaries, or a value at or below zero to never stop.
@@ -787,6 +894,15 @@ data class KeyboardPreferences(
         const val SYMBOLS_NUMBER_RIGHT = 2
 
         const val DEFAULT_LONG_PRESS_MILLIS = 380
+
+        /** Follow the field: its action, unless it flagged Enter to stay a newline regardless. */
+        const val ENTER_KEY_AUTO = 0
+
+        /** The field's action, every time one exists -- ignoring a no-enter-action flag. */
+        const val ENTER_KEY_FORCE_ACTION = 1
+
+        /** A newline, every time, whatever the field asked for. */
+        const val ENTER_KEY_FORCE_NEWLINE = 2
 
         /** Fast enough that a deliberate tap never trips it. */
         const val MIN_LONG_PRESS_MILLIS = 150

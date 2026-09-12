@@ -14,5 +14,19 @@
     -->
     <string name="subtype_language_label" translatable="false">%s</string>
 
+    <!--
+        Named alternate-layout subtypes: the label the system's language/input picker shows
+        cannot be "%s" for these the way subtype_language_label is above, because several of them
+        would then all read identically as whatever English locale they carry (see method.xml's
+        own comment on why): there is no keyboard-specific text to substitute into, only the
+        locale name, so the layout's own name has to BE the label. Proper nouns, none translated,
+        for the same reason "QWERTY" itself never appears in the i18n catalogue.
+    -->
+    <string name="subtype_label_azerty" translatable="false">AZERTY</string>
+    <string name="subtype_label_dvorak" translatable="false">Dvorak</string>
+    <string name="subtype_label_qwertz" translatable="false">QWERTZ</string>
+    <string name="subtype_label_clearflow" translatable="false">ClearFlow</string>
+    <string name="subtype_label_kasroz" translatable="false">KASROZ</string>
+    <string name="subtype_label_toki_pona" translatable="false">Toki Pona</string>
 
 </resources>

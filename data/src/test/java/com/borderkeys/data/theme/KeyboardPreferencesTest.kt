@@ -391,7 +391,7 @@ class KeyboardPreferencesTest {
         val kept = fromLater.sanitised().composerBar
         assertEquals(
             "an unknown id should be dropped and a repeat should not be drawn twice",
-            listOf(ComposerAction.INSERT.id, ComposerAction.GRAMMAR.id),
+            listOf(ComposerAction.INSERT.id, ComposerAction.CORRECT.id),
             kept,
         )
     }
@@ -436,6 +436,18 @@ class KeyboardPreferencesTest {
             KeyboardPreferences.MAX_LONG_PRESS_MILLIS,
             KeyboardPreferences(longPressMillis = 100_000).sanitised().longPressMillis,
         )
+
+        assertEquals(KeyboardPreferences.ENTER_KEY_AUTO, fresh.enterKeyBehavior)
+        assertEquals(
+            "an out-of-range mode is not a fourth behaviour",
+            KeyboardPreferences.ENTER_KEY_AUTO,
+            KeyboardPreferences(enterKeyBehavior = 9).sanitised().enterKeyBehavior,
+        )
+        assertEquals(
+            KeyboardPreferences.ENTER_KEY_FORCE_NEWLINE,
+            KeyboardPreferences(enterKeyBehavior = KeyboardPreferences.ENTER_KEY_FORCE_NEWLINE)
+                .sanitised().enterKeyBehavior,
+        )
     }
 
     @Test
@@ -466,22 +478,94 @@ class KeyboardPreferencesTest {
     }
 
     @Test
-    fun `saved prompts are bounded and drop the blank ones`() {
-        val many = List(100) { SavedPrompt(name = "n$it", text = "t$it") } +
-            SavedPrompt(name = " ", text = "something") +
-            SavedPrompt(name = "something", text = "")
-        val kept = KeyboardPreferences(savedPrompts = many).sanitised().savedPrompts
-        assertEquals(SavedPrompt.MAX_SAVED, kept.size)
-        assertTrue("a prompt with no name or no text is not a prompt", kept.all {
-            it.name.isNotBlank() && it.text.isNotBlank()
+    fun `custom actions are bounded and drop the blank ones`() {
+        val many = List(100) { CustomAction(name = "n$it", instruction = "t$it") } +
+            CustomAction(name = " ", instruction = "something") +
+            CustomAction(name = "something", instruction = "")
+        val kept = KeyboardPreferences(customActions = many).sanitised().customActions
+        assertEquals(CustomAction.MAX_CUSTOM_ACTIONS, kept.size)
+        assertTrue("a custom action with no name or no instruction is not one", kept.all {
+            it.name.isNotBlank() && it.instruction.isNotBlank()
         })
     }
 
     @Test
-    fun `a saved prompt cannot carry an unbounded string out of a corrupt file`() {
-        val huge = SavedPrompt(name = "n".repeat(9000), text = "t".repeat(9000))
-        val kept = KeyboardPreferences(savedPrompts = listOf(huge)).sanitised().savedPrompts
-        assertEquals(SavedPrompt.MAX_NAME_CHARS, kept[0].name.length)
-        assertEquals(SavedPrompt.MAX_TEXT_CHARS, kept[0].text.length)
+    fun `a custom action cannot carry an unbounded string out of a corrupt file`() {
+        val huge = CustomAction(name = "n".repeat(9000), instruction = "t".repeat(9000))
+        val kept = KeyboardPreferences(customActions = listOf(huge)).sanitised().customActions
+        assertEquals(CustomAction.MAX_NAME_CHARS, kept[0].name.length)
+        assertEquals(CustomAction.MAX_INSTRUCTION_CHARS, kept[0].instruction.length)
+    }
+
+    @Test
+    fun `a custom action decoded with no id is backfilled with a stable one, not dropped`() {
+        val legacy = CustomAction(name = "shorten it", instruction = "make this shorter")
+        val first = KeyboardPreferences(customActions = listOf(legacy)).sanitised().customActions
+        assertEquals(1, first.size)
+        assertTrue("a backfilled id must not be the 0 sentinel", first[0].id != 0)
+
+        // sanitised() must be idempotent: the SAME list, sanitised twice, gets the SAME id both
+        // times -- a fresh random id on every call would silently unpin anything already on the
+        // bar the moment preferences are re-saved.
+        val second = KeyboardPreferences(customActions = first).sanitised().customActions
+        assertEquals(first[0].id, second[0].id)
+    }
+
+    @Test
+    fun `composerBar keeps a pinned custom action's id and drops an unknown one`() {
+        val action = CustomAction(id = 5000, name = "pirate", instruction = "talk like a pirate")
+        val preferences = KeyboardPreferences(
+            customActions = listOf(action),
+            composerBar = listOf(ComposerAction.CORRECT.id, action.id, 999_999),
+        ).sanitised()
+        assertEquals(listOf(ComposerAction.CORRECT.id, action.id), preferences.composerBar)
+    }
+
+    @Test
+    fun `custom quick actions are bounded and drop the blank ones`() {
+        val many = List(100) { CustomQuickAction(name = "n$it", steps = listOf(QuickAction.CUT.id)) } +
+            CustomQuickAction(name = " ", steps = listOf(QuickAction.CUT.id))
+        val kept = KeyboardPreferences(customQuickActions = many).sanitised().customQuickActions
+        assertEquals(CustomQuickAction.MAX_CUSTOM_QUICK_ACTIONS, kept.size)
+        assertTrue("a custom quick action with no name is not one", kept.all { it.name.isNotBlank() })
+    }
+
+    @Test
+    fun `a custom quick action cannot carry an unbounded name out of a corrupt file`() {
+        val huge = CustomQuickAction(id = 1000, name = "n".repeat(9000), steps = listOf(QuickAction.CUT.id))
+        val kept = KeyboardPreferences(customQuickActions = listOf(huge)).sanitised().customQuickActions
+        assertEquals(CustomQuickAction.MAX_NAME_CHARS, kept[0].name.length)
+    }
+
+    @Test
+    fun `quickActions keeps a pinned custom action's id and drops an unknown one`() {
+        val action = CustomQuickAction(id = 5000, name = "select and cut", steps = listOf(QuickAction.CUT.id))
+        val preferences = KeyboardPreferences(
+            customQuickActions = listOf(action),
+            quickActions = listOf(QuickAction.SELECT_ALL.id, action.id, 999_999),
+        ).sanitised()
+        assertEquals(listOf(QuickAction.SELECT_ALL.id, action.id), preferences.quickActions)
+    }
+
+    @Test
+    fun `a macro step naming an action that is not macro-eligible is dropped on read`() {
+        val macro = CustomQuickAction(
+            id = 1000,
+            name = "cut then settings",
+            steps = listOf(QuickAction.CUT.id, QuickAction.SETTINGS.id),
+        )
+        val kept = KeyboardPreferences(customQuickActions = listOf(macro)).sanitised().customQuickActions
+        assertEquals(listOf(QuickAction.CUT.id), kept[0].steps)
+    }
+
+    @Test
+    fun `a direct reference cycle between two custom quick actions is not left in the file`() {
+        val a = CustomQuickAction(id = 1000, name = "a", steps = listOf(1001, QuickAction.CUT.id))
+        val b = CustomQuickAction(id = 1001, name = "b", steps = listOf(1000, QuickAction.SELECT_ALL.id))
+        val kept = KeyboardPreferences(customQuickActions = listOf(a, b)).sanitised().customQuickActions
+        assertTrue(
+            "a cyclic macro's own steps must be cleared rather than left to recurse forever",
+            kept.all { it.steps.none { step -> step == 1000 || step == 1001 } },
+        )
     }
 }

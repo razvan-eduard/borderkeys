@@ -9,10 +9,25 @@
     <string name="settings_activity_label" translatable="false">BorderKeys</string>
 
     <!--
-        The entry in every application's text-selection menu. Read by the OS before this
-        application's own :i18n catalogue is loaded, the same as the two labels above; see
-        app/src/plus/res/values/strings.xml for why those are handled this way too.
+        The entries in every application's text-selection menu. Read by the OS before this
+        application's own :i18n catalogue is loaded: see app/src/plus/res/values/strings.xml
+        for why the two labels above are English-only for that same reason, which does NOT
+        apply here: Android's own resource system localises a plain @string just as well
+        pre-boot as post-boot (values-de/, values-fr/, etc., alongside this file), so these five
+        get real translations instead of settling for English everywhere. `translatable="false"`
+        stays off deliberately: this is the one place the OS-facing/app-facing split is about
+        WHICH string system can be used, not whether translation itself makes sense to attempt.
+
+        Four of the five run their action immediately on the selected text and land straight on
+        the result, the same as tapping that button manually in an already-open draft box would:
+        see SettingsActivity.kt's own alias-name dispatch for exactly which four. The plain
+        "Draft with BorderKeys" entry (no alias suffix below) still just opens the box, same as
+        it always has.
     -->
-    <string name="process_text_label" translatable="false">Draft with BorderKeys</string>
+    <string name="process_text_label">Draft with BorderKeys</string>
+    <string name="process_text_label_correct">Correct with BorderKeys</string>
+    <string name="process_text_label_shorten">Shorten with BorderKeys</string>
+    <string name="process_text_label_summarise">Summarise with BorderKeys</string>
+    <string name="process_text_label_custom">Custom action with BorderKeys</string>
 
 </resources>
