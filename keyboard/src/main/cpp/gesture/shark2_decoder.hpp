@@ -70,8 +70,11 @@ private:
     void walk(int packIndex, const PackedTrie& trie, int32_t node, int position, int depth,
               uint32_t* letters, TopK<Candidate>& heap);
     bool passesLengthBand(float templateLength) const;
-    float shapeDistance(const TemplateCache::Entry& candidate) const;
-    float locationDistance(const TemplateCache::Entry& candidate) const;
+    float shapeDistance(const float* candidateShapeX, const float* candidateShapeY) const;
+    float locationDistance(const float* candidateLocationX, const float* candidateLocationY) const;
+    /** The better of the plain channels and, when the candidate has one, the loop variant --
+     *  `-infinity` when neither passes the length band, so it should not be scored at all. */
+    float bestGeometryLogProb(const TemplateCache::Entry& candidate) const;
     void searchPack(int packIndex, TopK<Candidate>& heap);
 
     GestureScorer& scorer_;

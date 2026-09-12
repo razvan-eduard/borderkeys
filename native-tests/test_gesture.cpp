@@ -12,6 +12,8 @@
 
 #include "engine.hpp"
 #include "gesture/resample.hpp"
+#include "gesture/template_cache.hpp"
+#include "proximity.hpp"
 #include "test_support.hpp"
 
 using namespace borderkeys;
@@ -109,6 +111,35 @@ void runGestureTests() {
               "a degenerate extent does not divide by zero");
     }
 
+    section("a loop variant exists only for a word with an adjacent repeated letter");
+    {
+        TestLayout layout;
+        KeyGeometry geometry;
+        check(geometry.set(layout.codes, layout.xs, layout.ys, layout.count, layout.keyWidth,
+                           layout.keyHeight),
+              "the geometry is set");
+
+        TemplateCache cache;
+        cache.setGeometry(&geometry);
+
+        // "press": p r e s s -- the trailing "ss" is the doubled pair the loop is for.
+        const uint32_t pressLetters[] = {'p', 'r', 'e', 's', 's'};
+        const TemplateCache::Entry* press = cache.templateFor(1, pressLetters, 5);
+        check(press != nullptr, "\"press\" has a template");
+        check(press != nullptr && press->hasLoop,
+              "a word with an adjacent repeated letter also gets a loop variant");
+        check(press != nullptr && press->hasLoop && press->loopLength > press->length,
+              "the loop variant traces a longer path than the plain one -- an actual detour, "
+              "not a copy of it");
+
+        // "water": five distinct letters, no adjacent repeat.
+        const uint32_t waterLetters[] = {'w', 'a', 't', 'e', 'r'};
+        const TemplateCache::Entry* water = cache.templateFor(2, waterLetters, 5);
+        check(water != nullptr, "\"water\" has a template");
+        check(water != nullptr && !water->hasLoop,
+              "a word with no adjacent repeat has no loop variant");
+    }
+
     section("decoding");
     {
         Engine engine;
@@ -169,6 +200,38 @@ void runGestureTests() {
             check(attempted > 0 && top1 * 100 >= attempted * 80, label);
         }
 
+        {
+            // The raw log-score a decode produces is not comparable across two different
+            // decodes -- Engine::decodeGesture bounds it into a fixed-temperature softmax over
+            // [0, 1000] before returning, precisely so a caller CAN compare, threshold or blend
+            // it later. Ranking must survive that unchanged: softmax is monotonic, so whichever
+            // candidate the raw scores put first still comes first afterwards.
+            Random random(99u);
+            std::vector<float> xs;
+            std::vector<float> ys;
+            std::vector<int64_t> times;
+            synthesiseGesture(layout, "the", 28.f, random, xs, ys, times);
+            check(xs.size() >= 2, "the gesture for the score-bounding check has points");
+
+            Candidate out[Engine::kMaxCandidates];
+            const int found = engine.decodeGesture(xs.data(), ys.data(), times.data(),
+                                                   static_cast<int>(xs.size()), nullptr, 0,
+                                                   nullptr, 0, out, Engine::kMaxCandidates);
+            check(found > 0, "at least one candidate is found to check scores on");
+            bool bounded = true;
+            bool descending = true;
+            for (int i = 0; i < found; ++i) {
+                if (!(out[i].score >= 0.f && out[i].score <= 1000.f)) {
+                    bounded = false;
+                }
+                if (i > 0 && out[i].score > out[i - 1].score) {
+                    descending = false;
+                }
+            }
+            check(bounded, "every returned gesture score is in [0, 1000]");
+            check(descending, "scores are still sorted best-first after normalisation");
+        }
+
         // A gesture with too few points is a tap that wandered, and must not decode into a word.
         const float twoX[] = {100.f, 101.f};
         const float twoY[] = {100.f, 101.f};
@@ -182,5 +245,62 @@ void runGestureTests() {
         noGeometry.create();
         check(noGeometry.decodeGesture(twoX, twoY, twoT, 2, nullptr, 0, nullptr, 0, out, 8) == 0,
               "decoding before the keyboard has been measured returns nothing");
+
+        section("a deliberate loop at a doubled letter");
+        {
+            // "press" traced with an actual pause on its doubled "s" -- a small diamond around
+            // the key -- rather than the single pass synthesiseGesture always produces. This is
+            // the gesture the loop-variant template exists for: without it, the detour is pure
+            // noise against a straight-through template and can push the real word out of
+            // contention for a candidate that traces the plain shape more closely.
+            float px = 0.f, py = 0.f, rx = 0.f, ry = 0.f, ex = 0.f, ey = 0.f, sx = 0.f, sy = 0.f;
+            check(layout.centreOf('p', &px, &py) && layout.centreOf('r', &rx, &ry) &&
+                      layout.centreOf('e', &ex, &ey) && layout.centreOf('s', &sx, &sy),
+                  "the letters of \"press\" are all on the layout");
+
+            std::vector<float> xs;
+            std::vector<float> ys;
+            std::vector<int64_t> times;
+            int64_t time = 0;
+            auto addPoint = [&](float x, float y) {
+                xs.push_back(x);
+                ys.push_back(y);
+                times.push_back(time);
+                time += 10;
+            };
+            auto addSegment = [&](float fromX, float fromY, float toX, float toY, int steps) {
+                for (int k = 1; k <= steps; ++k) {
+                    const float u = static_cast<float>(k) / static_cast<float>(steps);
+                    addPoint(fromX + (toX - fromX) * u, fromY + (toY - fromY) * u);
+                }
+            };
+
+            addPoint(px, py);
+            addSegment(px, py, rx, ry, 8);
+            addSegment(rx, ry, ex, ey, 8);
+            addSegment(ex, ey, sx, sy, 8);
+            const float radius = 0.3f * layout.keyWidth;
+            addSegment(sx, sy, sx - radius, sy, 4);
+            addSegment(sx - radius, sy, sx, sy - radius, 4);
+            addSegment(sx, sy - radius, sx + radius, sy, 4);
+            addSegment(sx + radius, sy, sx, sy + radius, 4);
+            addSegment(sx, sy + radius, sx, sy, 4);
+
+            const int found = engine.decodeGesture(xs.data(), ys.data(), times.data(),
+                                                   static_cast<int>(xs.size()), nullptr, 0,
+                                                   nullptr, 0, out, 8);
+            bool foundPress = false;
+            for (int i = 0; i < found && i < 3; ++i) {
+                uint32_t length = 0;
+                const char* const text = engine.candidateText(out[i], &length);
+                if (text != nullptr && length == 5 && std::memcmp(text, "press", 5) == 0) {
+                    foundPress = true;
+                    break;
+                }
+            }
+            check(foundPress,
+                  "\"press\", swiped with a deliberate loop on its doubled letter, is still in "
+                  "the top 3");
+        }
     }
 }

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 
 namespace borderkeys {
 namespace {
@@ -74,28 +75,47 @@ bool Shark2Decoder::passesLengthBand(float templateLength) const {
     return ratio >= kMinLengthRatio && ratio <= kMaxLengthRatio;
 }
 
-float Shark2Decoder::shapeDistance(const TemplateCache::Entry& candidate) const {
+float Shark2Decoder::shapeDistance(const float* candidateShapeX, const float* candidateShapeY) const {
     float total = 0.f;
     for (int i = 0; i < kResampleCount; ++i) {
-        const float dx = shapeX_[i] - candidate.shapeX[i];
-        const float dy = shapeY_[i] - candidate.shapeY[i];
+        const float dx = shapeX_[i] - candidateShapeX[i];
+        const float dy = shapeY_[i] - candidateShapeY[i];
         total += std::sqrt(dx * dx + dy * dy);
     }
     return total / static_cast<float>(kResampleCount);
 }
 
-float Shark2Decoder::locationDistance(const TemplateCache::Entry& candidate) const {
+float Shark2Decoder::locationDistance(const float* candidateLocationX,
+                                      const float* candidateLocationY) const {
     const float keyWidth = geometry_->keyWidth();
     if (!(keyWidth > 0.f)) {
         return 0.f;
     }
     float total = 0.f;
     for (int i = 0; i < kResampleCount; ++i) {
-        const float dx = pathX_[i] - candidate.locationX[i];
-        const float dy = pathY_[i] - candidate.locationY[i];
+        const float dx = pathX_[i] - candidateLocationX[i];
+        const float dy = pathY_[i] - candidateLocationY[i];
         total += std::sqrt(dx * dx + dy * dy);
     }
     return total / (static_cast<float>(kResampleCount) * keyWidth);
+}
+
+float Shark2Decoder::bestGeometryLogProb(const TemplateCache::Entry& candidate) const {
+    float best = -std::numeric_limits<float>::infinity();
+    if (passesLengthBand(candidate.length)) {
+        const float shape = shapeDistance(candidate.shapeX, candidate.shapeY);
+        const float location = locationDistance(candidate.locationX, candidate.locationY);
+        best = -kShapeWeight * shape - kLocationWeight * location;
+    }
+    if (candidate.hasLoop && passesLengthBand(candidate.loopLength)) {
+        const float shape = shapeDistance(candidate.loopShapeX, candidate.loopShapeY);
+        const float location = locationDistance(candidate.loopLocationX, candidate.loopLocationY);
+        const float loop = -kShapeWeight * shape - kLocationWeight * location;
+        if (loop > best) {
+            best = loop;
+        }
+    }
+    return best;
 }
 
 void Shark2Decoder::walk(int packIndex, const PackedTrie& trie, int32_t node, int position,
@@ -122,14 +142,15 @@ void Shark2Decoder::walk(int packIndex, const PackedTrie& trie, int32_t node, in
                     (static_cast<uint32_t>(packIndex) << 30) | static_cast<uint32_t>(wordIndex);
                 const TemplateCache::Entry* candidate =
                     templates_.templateFor(cacheKey, letters, depth);
-                if (candidate != nullptr && passesLengthBand(candidate->length)) {
+                const float geometryLogProb =
+                    (candidate != nullptr) ? bestGeometryLogProb(*candidate)
+                                           : -std::numeric_limits<float>::infinity();
+                if (std::isfinite(geometryLogProb)) {
                     ++lastScoredWords_;
-                    const float shape = shapeDistance(*candidate);
-                    const float location = locationDistance(*candidate);
                     float score = scorer_.packWeightLog(packIndex) +
                                   scorer_.contextLogProb(packIndex,
-                                                         static_cast<uint32_t>(wordIndex)) -
-                                  kShapeWeight * shape - kLocationWeight * location;
+                                                         static_cast<uint32_t>(wordIndex)) +
+                                  geometryLogProb;
                     uint32_t textLength = 0;
                     const char* const text =
                         trie.wordText(static_cast<uint32_t>(wordIndex), &textLength);

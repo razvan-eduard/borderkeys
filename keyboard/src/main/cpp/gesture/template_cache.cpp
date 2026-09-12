@@ -44,6 +44,7 @@ bool TemplateCache::build(Entry& entry, const uint32_t* letters, int letterCount
     float pointsX[kMaxLetters];
     float pointsY[kMaxLetters];
     int written = 0;
+    bool hasDoubledLetter = false;
 
     for (int i = 0; i < letterCount; ++i) {
         const uint32_t* neighbourCodes = nullptr;
@@ -58,9 +59,14 @@ bool TemplateCache::build(Entry& entry, const uint32_t* letters, int letterCount
         if (!geometry_->centreOf(letters[i], &x, &y)) {
             return false;
         }
-        // Consecutive identical letters land on the same point. Keeping both is correct: the
-        // ideal path for "ll" really does pause there, and dropping one would shorten the
-        // template relative to a gesture that did pause.
+        // Consecutive identical letters land on the same point, and arc-length resampling
+        // spends no length on a zero-distance step -- so this plain path reads as the same
+        // shape as the word with the double collapsed to one letter, which is exactly right for
+        // a gesture that just passes over the key once. `buildLoopVariant` below is the other
+        // half: the same letters, for a gesture that pauses there on purpose.
+        if (written > 0 && pointsX[written - 1] == x && pointsY[written - 1] == y) {
+            hasDoubledLetter = true;
+        }
         pointsX[written] = x;
         pointsY[written] = y;
         ++written;
@@ -76,6 +82,7 @@ bool TemplateCache::build(Entry& entry, const uint32_t* letters, int letterCount
             entry.shapeY[i] = 0.f;
         }
         entry.length = 0.f;
+        entry.hasLoop = false;
         return true;
     }
 
@@ -85,6 +92,66 @@ bool TemplateCache::build(Entry& entry, const uint32_t* letters, int letterCount
     }
     entry.length = pathLength(pointsX, pointsY, written);
     normaliseShape(entry.locationX, entry.locationY, kResampleCount, entry.shapeX, entry.shapeY);
+
+    entry.hasLoop = hasDoubledLetter && buildLoopVariant(entry, pointsX, pointsY, written);
+    return true;
+}
+
+bool TemplateCache::buildLoopVariant(Entry& entry, const float* pointsX, const float* pointsY,
+                                     int written) const {
+    // In key widths: big enough to be a real detour the shape channel can see, small enough that
+    // it stays "at" the letter rather than wandering toward its neighbours.
+    constexpr float kLoopRadiusFactor = 0.28f;
+    const float keyWidth = geometry_->keyWidth();
+    if (!(keyWidth > 0.f)) {
+        return false;
+    }
+    const float radius = kLoopRadiusFactor * keyWidth;
+
+    float loopX[kMaxLoopPoints];
+    float loopY[kMaxLoopPoints];
+    int loopWritten = 0;
+
+    for (int i = 0; i < written; ++i) {
+        const bool isDoubled =
+            i > 0 && pointsX[i] == pointsX[i - 1] && pointsY[i] == pointsY[i - 1];
+        if (isDoubled && loopWritten + 5 <= kMaxLoopPoints) {
+            // A small diamond around the key centre, traced before landing back on it -- a
+            // detour with real length, so arc-length resampling actually spends points on it
+            // instead of skipping straight through like it does for the coincident point alone.
+            const float cx = pointsX[i];
+            const float cy = pointsY[i];
+            loopX[loopWritten] = cx - radius;
+            loopY[loopWritten] = cy;
+            ++loopWritten;
+            loopX[loopWritten] = cx;
+            loopY[loopWritten] = cy - radius;
+            ++loopWritten;
+            loopX[loopWritten] = cx + radius;
+            loopY[loopWritten] = cy;
+            ++loopWritten;
+            loopX[loopWritten] = cx;
+            loopY[loopWritten] = cy + radius;
+            ++loopWritten;
+        }
+        if (loopWritten >= kMaxLoopPoints) {
+            break;
+        }
+        loopX[loopWritten] = pointsX[i];
+        loopY[loopWritten] = pointsY[i];
+        ++loopWritten;
+    }
+
+    if (loopWritten < 2) {
+        return false;
+    }
+    if (!resamplePath(loopX, loopY, loopWritten, entry.loopLocationX, entry.loopLocationY,
+                      kResampleCount)) {
+        return false;
+    }
+    entry.loopLength = pathLength(loopX, loopY, loopWritten);
+    normaliseShape(entry.loopLocationX, entry.loopLocationY, kResampleCount, entry.loopShapeX,
+                   entry.loopShapeY);
     return true;
 }
 

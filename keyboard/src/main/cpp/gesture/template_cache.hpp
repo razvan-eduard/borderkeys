@@ -34,6 +34,21 @@ public:
         float shapeY[kResampleCount];
         /** Path length in pixels, for the length-band prune. */
         float length;
+
+        /**
+         * A second candidate trajectory for a word with an adjacent repeated letter: the same
+         * path, but tracing a small loop at each doubled letter instead of just passing over it
+         * once. Some people swipe a double letter that way on purpose, to disambiguate it from
+         * the single-letter word the same path would otherwise trace -- this is what lets that
+         * gesture still match. Scored alongside the plain channels above and the better of the
+         * two wins; [hasLoop] is false, and the loop arrays unused, for every other word.
+         */
+        bool hasLoop;
+        float loopLocationX[kResampleCount];
+        float loopLocationY[kResampleCount];
+        float loopShapeX[kResampleCount];
+        float loopShapeY[kResampleCount];
+        float loopLength;
     };
 
     /** Invalidates everything: a template is only meaningful for one key arrangement. */
@@ -55,8 +70,15 @@ public:
 private:
     static constexpr int kCapacity = 256;
     static constexpr int kMaxLetters = 32;
+    /** Room for a small loop (4 extra points) at every letter, the worst case of every letter in
+     *  a [kMaxLetters]-long word doubling the one before it. */
+    static constexpr int kMaxLoopPoints = kMaxLetters * 5;
 
     bool build(Entry& entry, const uint32_t* letters, int letterCount) const;
+    /** Builds the loop variant into `entry`. `points{X,Y}` are the same letter centres `build`
+     *  already resolved, including the coincident duplicate at each doubled letter. */
+    bool buildLoopVariant(Entry& entry, const float* pointsX, const float* pointsY,
+                          int written) const;
 
     const KeyGeometry* geometry_ = nullptr;
     Entry entries_[kCapacity] = {};
