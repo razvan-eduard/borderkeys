@@ -53,4 +53,67 @@
         android:isAsciiCapable="true"
         android:imeSubtypeExtraValue="layout=en_qwerty" />
 
+    <!--
+        Alternate physical layouts: the LETTERS move, the language does not change with them (see
+        the note above: these are still every bit as language-independent as the two QWERTY
+        subtypes). Their key positions come from swipe.futo.org's own published layout files
+        (MIT-licensed; see docs/licensing.md section 2.5 and tools/swipe_model/futo_to_layout.py,
+        which generated keyboard/src/main/assets/layouts/*.json from them), chosen because their
+        alphabets are exactly the 26 a-z letters this project's dictionaries already know: no
+        new accented characters, no new script.
+
+        android:label cannot be "%s" here: unlike the two subtypes above, a "%s" label would
+        substitute the SAME locale display name for several of these (most naturally carry an
+        English-typing locale) and the picker would show multiple identical entries with no way
+        to tell them apart. Each gets its own literal name instead: see the
+        subtype_label_* strings' own comment in res/values/strings.xml.
+    -->
+    <subtype
+        android:subtypeId="0x0B0DE003"
+        android:label="@string/subtype_label_azerty"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="fr-FR"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=azerty" />
+
+    <subtype
+        android:subtypeId="0x0B0DE004"
+        android:label="@string/subtype_label_dvorak"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="en-US"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=dvorak" />
+
+    <subtype
+        android:subtypeId="0x0B0DE005"
+        android:label="@string/subtype_label_qwertz"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="de-DE"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=qwertz" />
+
+    <subtype
+        android:subtypeId="0x0B0DE006"
+        android:label="@string/subtype_label_clearflow"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="en-US"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=clearflow" />
+
+    <subtype
+        android:subtypeId="0x0B0DE007"
+        android:label="@string/subtype_label_kasroz"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="en-US"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=kasroz" />
+
+    <subtype
+        android:subtypeId="0x0B0DE008"
+        android:label="@string/subtype_label_toki_pona"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="en-US"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=toki_pona" />
+
 </input-method>

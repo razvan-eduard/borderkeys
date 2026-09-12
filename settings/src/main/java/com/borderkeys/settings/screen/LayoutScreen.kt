@@ -154,6 +154,27 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
             ) { value -> update { it.copy(longPressMillis = value.toInt()) } }
         }
 
+        SettingsSectionCard(strings[Keys.LAYOUT_ENTER_KEY]) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PickerChip(
+                    strings[Keys.LAYOUT_ENTER_KEY_AUTO],
+                    preferences.enterKeyBehavior == KeyboardPreferences.ENTER_KEY_AUTO,
+                ) { update { it.copy(enterKeyBehavior = KeyboardPreferences.ENTER_KEY_AUTO) } }
+                PickerChip(
+                    strings[Keys.LAYOUT_ENTER_KEY_FORCE_ACTION],
+                    preferences.enterKeyBehavior == KeyboardPreferences.ENTER_KEY_FORCE_ACTION,
+                ) { update { it.copy(enterKeyBehavior = KeyboardPreferences.ENTER_KEY_FORCE_ACTION) } }
+                PickerChip(
+                    strings[Keys.LAYOUT_ENTER_KEY_FORCE_NEWLINE],
+                    preferences.enterKeyBehavior == KeyboardPreferences.ENTER_KEY_FORCE_NEWLINE,
+                ) { update { it.copy(enterKeyBehavior = KeyboardPreferences.ENTER_KEY_FORCE_NEWLINE) } }
+            }
+            Explanation(strings[Keys.LAYOUT_ENTER_KEY_NOTE])
+        }
+
         SettingsSectionCard(strings[Keys.LAYOUT_LAYOUTS_ON_THIS_KEYBOARD]) {
             if (subtypes.isEmpty()) {
                 SettingRow(
