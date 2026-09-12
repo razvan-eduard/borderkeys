@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
 set -e
 
 # Generates the F-Droid metadata tree `fdroid update` expects for both BorderKeys flavors:

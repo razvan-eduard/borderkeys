@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 BorderKeys contributors
+-->
+
 # Swipe-gesture TCN training pipeline
 
 Offline PyTorch training for the swipe-typing model. This is the *training* side only — the
