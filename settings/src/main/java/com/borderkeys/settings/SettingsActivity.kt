@@ -8,10 +8,18 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -20,11 +28,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
@@ -245,7 +256,57 @@ private fun SettingsApp() {
 
     androidx.activity.compose.BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.size - 1) }
 
+    // Global rather than Typing's own: whatever screen a setting was just changed on -- a theme
+    // colour, a key size, the swipe trail width -- this is the one place to feel the result
+    // immediately, without navigating back to Typing first. One field, shared across the whole
+    // stack, so switching screens does not lose whatever was mid-swipe in it either.
+    var probe by remember { mutableStateOf("") }
+
     Scaffold(
+        bottomBar = {
+            // Deliberately not a full SettingsSectionCard: this rides along on every screen, so
+            // it needs to cost little enough height to be worth always having on screen. One
+            // line, the card's own label doubling as its explanation, same border/shape language
+            // as every other card so it still reads as one rather than a stray text field.
+            //
+            // navigationBarsPadding(), not safeDrawingPadding(): Scaffold hands bottomBar the
+            // full window bounds and expects the slot to clear whatever system bars it overlaps
+            // itself -- confirmed the hard way, this card sat half behind a three-button nav bar
+            // with no bottom padding of its own at all. safeDrawingPadding() over-corrected the
+            // other way, adding the status bar and display-cutout insets on top of a bottom-
+            // docked card that overlaps neither. The keyboard's own KeyboardHostView solves the
+            // equivalent problem by hand, reading WindowInsets.Type.navigationBars() itself,
+            // because an IME window's insets have their own timing quirks on first attach that a
+            // normal Activity window like this one does not -- navigationBarsPadding() is the
+            // same read (live nav-bar inset, applied as padding), through Compose's own insets
+            // system, without porting a workaround for a race this window never has.
+            //
+            // imePadding() on top of that: without it this card stayed pinned to the physical
+            // bottom of the window, which is exactly where BorderKeys itself draws once focusing
+            // this field opens it -- confirmed the same way, the probe sat hidden behind the
+            // keyboard it exists to test. imePadding() tracks the keyboard's own live height, so
+            // the card rides up to sit on its top edge the moment it opens and settles back down
+            // when it closes, the same as any chat app's input bar does.
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .navigationBarsPadding()
+                    .imePadding(),
+                shape = MaterialTheme.shapes.medium,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                colors = CardDefaults.elevatedCardColors(),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+            ) {
+                OutlinedTextField(
+                    value = probe,
+                    onValueChange = { probe = it },
+                    label = { Text(strings[Keys.SWIPE_TRY_IT_HERE]) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+            }
+        },
         topBar = {
             TopAppBar(
                 // Home's title is the app's own name, and the plus flavor says so the same way

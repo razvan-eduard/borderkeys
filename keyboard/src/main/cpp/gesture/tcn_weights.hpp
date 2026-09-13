@@ -36,6 +36,7 @@ public:
     static constexpr int kAdapterKernel = 2;
     static constexpr int kInputFeatures = 8;       // == kTcnFeatureDim
     static constexpr int kSpectralDim = 64;        // == TcnEncoder::kSpectralDim
+    static constexpr int kKeyEmbedHidden = 96;     // == model.py's KEY_EMBED_HIDDEN
 
     /** One dilated ConvNeXt-style block's weights -- see TcnEncoder's own doc for the pipeline
      *  each of these feeds into, in this same order. */
@@ -68,9 +69,26 @@ public:
     float spectralWeight[kAdapterChannels * kSpectralDim];
     float spectralBias[kSpectralDim];
 
+    /**
+     * The learned key-embedding MLP: `(u, v, 64 fixed cosine features)` -> `Linear(66,96)` ->
+     * GELU -> `Linear(96,64)` -> the spatial-scoring vector `TcnCtcDecoder::keyLogProbsFor` uses
+     * in place of the raw cosine basis. Exists because that raw basis, alone, has rank 23 of 26
+     * at the canonical QWERTY key centres -- confirmed by SVD, and independently found and fixed
+     * the same way by CleverKeys' own from-scratch CTC recipe (their audit fix #2) -- so three
+     * emission directions were structurally unreachable no matter how this was trained. See
+     * `TcnCtcDecoder::setLayout`'s own comment for the inference code this feeds.
+     */
+    float keyEmbedHiddenWeight[(2 + kSpectralDim) * kKeyEmbedHidden];
+    float keyEmbedHiddenBias[kKeyEmbedHidden];
+    float keyEmbedOutputWeight[kKeyEmbedHidden * kSpectralDim];
+    float keyEmbedOutputBias[kSpectralDim];
+
     static constexpr uint32_t kMagic = 0x3157424Bu;  // 'B' 'K' 'W' '1', little-endian -- same
                                                       // convention as bkd_format.hpp's kBkdMagic
-    static constexpr uint32_t kVersion = 1u;
+    // Bumped from 1: the key-embedding MLP above is a new, mandatory section, and a v1 file has
+    // neither the bytes for it nor a model.py that could produce them -- rejecting it outright is
+    // the same "wrong-shaped weight" case loadFromBytes's own comment already treats as fatal.
+    static constexpr uint32_t kVersion = 2u;
     static constexpr size_t kHeaderBytes = sizeof(uint32_t) * 2;
 
     /**

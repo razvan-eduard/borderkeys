@@ -27,18 +27,20 @@ import torch
 from eval_ctc import greedy_decode
 from futo_layout import load_futo_layout
 from features_np import build_features, resample_uniform_time
-from model import TcnEncoder, dct_basis
+from model import KeyEmbedding, TcnEncoder
 
 # Every layout whose alphabet is a-z-only or a subset of it, per a live check of each layout's
 # own "letters" field in swipe-5/layouts/*.json.
 COMPATIBLE_LAYOUTS = ("qwerty", "azerty", "dvorak", "qwertz", "clearflow", "kasroz", "toki_pona")
 
 
-def evaluate_layout(model: TcnEncoder, layout_name: str, records, limit: int | None) -> tuple[int, int]:
+def evaluate_layout(model: TcnEncoder, key_embedding: KeyEmbedding, layout_name: str, records,
+                    limit: int | None) -> tuple[int, int]:
     centers = load_futo_layout(layout_name)
     letters = tuple(sorted(centers.keys()))
     key_centers = torch.tensor([centers[c] for c in letters], dtype=torch.float32)
-    basis = dct_basis(key_centers)
+    with torch.no_grad():
+        basis = key_embedding(key_centers)
 
     correct = 0
     total = 0
@@ -83,13 +85,16 @@ def main() -> int:
     dataset = load_dataset("futo-org/swipe.futo.org", "swipe-5", split="train")
 
     model = TcnEncoder()
+    key_embedding = KeyEmbedding()
     state = torch.load(arguments.checkpoint, map_location="cpu")
     model.load_state_dict(state["model"] if "model" in state else state)
+    key_embedding.load_state_dict(state["key_embedding"])
     model.eval()
+    key_embedding.eval()
 
     for layout_name in arguments.layouts:
         filtered = dataset.filter(lambda r, name=layout_name: r["layout"] == name and r["dual_finger"] == 0)
-        correct, total = evaluate_layout(model, layout_name, filtered, arguments.limit)
+        correct, total = evaluate_layout(model, key_embedding, layout_name, filtered, arguments.limit)
         accuracy = correct / total if total else 0.0
         zero_shot = "" if layout_name == "qwerty" else " (zero-shot -- never trained on)"
         print(f"{layout_name}{zero_shot}: {correct}/{total} ({accuracy:.2%})")

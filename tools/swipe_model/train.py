@@ -24,7 +24,7 @@ from torch.utils.data import DataLoader, Dataset
 from augment import augment_trajectory_and_layout
 from features_np import TIMESTEPS, build_features, resample_uniform_time
 from futo_layout import letters_in_order, load_futo_layout
-from model import TcnEncoder, dct_basis, key_log_probs
+from model import TIMESTEPS_OUT, KeyEmbedding, TcnEncoder, key_log_probs
 
 # Training uses only "qwerty", matching the paper's own choice (see futo_layout.py's module doc)
 # -- QWERTY_LETTERS' order is the fixed index->letter mapping the CTC target alphabet and the
@@ -78,6 +78,19 @@ class SwipeDataset(Dataset):
         # guessed" rule the geometric engine already follows for the same reason.
         target = [self.letter_index[c] + 1 for c in word if c in self.letter_index]  # +1: 0 = blank
 
+        # CTC needs a blank between two adjacent occurrences of the same symbol to tell them
+        # apart from one extended emission of it, so a target with R adjacent-repeated letters
+        # needs len(target)+R timesteps at minimum -- CleverKeys' own from-scratch CTC audit
+        # flags exactly this (their fix #11): torch.nn.functional.ctc_loss's zero_infinity=True
+        # silently zeroes the loss/gradient for any example that doesn't fit, so every such
+        # example was training on nothing, unnoticed, rather than erroring. Filtered here, up
+        # front, rather than discovered downstream as a zeroed loss -- this dataset is also what
+        # eval_ctc.py evaluates against, so evaluation excludes the same structurally-infeasible
+        # examples training never actually learned from.
+        adjacent_repeats = sum(1 for a, b in zip(target, target[1:]) if a == b)
+        if len(target) + adjacent_repeats > TIMESTEPS_OUT:
+            return None
+
         resampled = resample_uniform_time(xs, ys, ts)
         if resampled is None or len(target) == 0:
             return None
@@ -98,17 +111,19 @@ def collate(batch):
     return features, targets_flat, target_lengths, key_centers
 
 
-def ctc_and_emission_loss(model: TcnEncoder, features: torch.Tensor, targets: torch.Tensor,
-                          target_lengths: torch.Tensor, key_centers: torch.Tensor) -> torch.Tensor:
+def ctc_and_emission_loss(model: TcnEncoder, key_embedding: KeyEmbedding, features: torch.Tensor,
+                          targets: torch.Tensor, target_lengths: torch.Tensor,
+                          key_centers: torch.Tensor) -> torch.Tensor:
     intention, spectral = model(features)  # (B,T), (B,T,64)
     batch_size = features.shape[0]
 
     # One basis matrix per sample, since augmentation perturbs each sample's key centres
     # independently -- unlike inference, where one basis serves every gesture on one layout.
-    # Batched, not a Python loop over the batch: dct_basis and key_log_probs both broadcast over
-    # leading dimensions precisely so this scales to a thousand-sample batch without a thousand
-    # separate small matmuls -- the difference between an epoch and an afternoon at this size.
-    basis = dct_basis(key_centers)  # (B, K, 64)
+    # Batched, not a Python loop over the batch: key_embedding and key_log_probs both broadcast
+    # over leading dimensions precisely so this scales to a thousand-sample batch without a
+    # thousand separate small matmuls -- the difference between an epoch and an afternoon at this
+    # size.
+    basis = key_embedding(key_centers)  # (B, K, 64)
     blank_lp, char_lp = key_log_probs(spectral, intention, basis)  # (B,T), (B,T,K)
     # blank at index 0 to match PackedTrie's own kTerminalSymbol=0 convention (a coincidence of
     # index, not of meaning -- see tcn_ctc_decoder.hpp's own note on this).
@@ -162,10 +177,14 @@ def main() -> int:
                               collate_fn=collate, drop_last=True)
 
     model = TcnEncoder().to(device)
-    print(f"TcnEncoder: {model.parameter_count():,} parameters")
+    key_embedding = KeyEmbedding().to(device)
+    print(f"TcnEncoder: {model.parameter_count():,} parameters, "
+          f"KeyEmbedding: {key_embedding.parameter_count():,} parameters")
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=arguments.lr,
-                                  weight_decay=arguments.weight_decay, betas=(0.9, 0.999))
+    optimizer = torch.optim.AdamW(
+        list(model.parameters()) + list(key_embedding.parameters()), lr=arguments.lr,
+        weight_decay=arguments.weight_decay, betas=(0.9, 0.999),
+    )
     total_steps = arguments.epochs * max(1, len(train_loader))
     warmup_steps = max(1, int(total_steps * arguments.warmup_fraction))
 
@@ -181,6 +200,7 @@ def main() -> int:
     if arguments.resume:
         state = torch.load(arguments.checkpoint, map_location=device)
         model.load_state_dict(state["model"])
+        key_embedding.load_state_dict(state["key_embedding"])
         optimizer.load_state_dict(state["optimizer"])
         start_epoch = state["epoch"] + 1
         step = state["step"]
@@ -188,6 +208,7 @@ def main() -> int:
 
     for epoch in range(start_epoch, arguments.epochs):
         model.train()
+        key_embedding.train()
         epoch_loss = 0.0
         batches = 0
         for features, targets, target_lengths, key_centers in train_loader:
@@ -200,9 +221,13 @@ def main() -> int:
             target_lengths = target_lengths.to(device)
 
             optimizer.zero_grad()
-            loss = ctc_and_emission_loss(model, features, targets, target_lengths, key_centers)
+            loss = ctc_and_emission_loss(
+                model, key_embedding, features, targets, target_lengths, key_centers,
+            )
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), arguments.grad_clip)
+            torch.nn.utils.clip_grad_norm_(
+                list(model.parameters()) + list(key_embedding.parameters()), arguments.grad_clip,
+            )
             optimizer.step()
 
             epoch_loss += loss.item()
@@ -212,6 +237,7 @@ def main() -> int:
         print(f"epoch {epoch + 1}/{arguments.epochs}: loss {epoch_loss / max(1, batches):.4f}")
         torch.save({
             "model": model.state_dict(),
+            "key_embedding": key_embedding.state_dict(),
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
             "step": step,

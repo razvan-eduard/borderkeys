@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
+#include <memory>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
@@ -106,32 +107,35 @@ void runTcnTests() {
     section("TCN weight file format");
     {
         const std::vector<uint8_t> good = zeroWeightsFile();
-        TcnWeights weights;
-        check(weights.loadFromBytes(good.data(), good.size()), "a well-formed .bkw file loads");
+        // Heap, not a local: TcnWeights is ~2.5 MB, and this function already declares several of
+        // these across its sections -- summed as one stack frame, at -O0, that overflows even an
+        // 8 MB thread stack. Same reasoning as tcn_decoder.cpp's loadWeights().
+        auto weights = std::make_unique<TcnWeights>();
+        check(weights->loadFromBytes(good.data(), good.size()), "a well-formed .bkw file loads");
 
         std::vector<uint8_t> badMagic = good;
         badMagic[0] ^= 0xFF;
-        check(!weights.loadFromBytes(badMagic.data(), badMagic.size()),
+        check(!weights->loadFromBytes(badMagic.data(), badMagic.size()),
               "a wrong magic is refused");
 
         std::vector<uint8_t> badVersion = good;
         badVersion[4] ^= 0xFF;
-        check(!weights.loadFromBytes(badVersion.data(), badVersion.size()),
+        check(!weights->loadFromBytes(badVersion.data(), badVersion.size()),
               "a wrong version is refused");
 
         std::vector<uint8_t> truncated(good.begin(), good.end() - 4);
-        check(!weights.loadFromBytes(truncated.data(), truncated.size()),
+        check(!weights->loadFromBytes(truncated.data(), truncated.size()),
               "a truncated file is refused rather than read short");
     }
 
     section("TCN encoder forward pass");
     {
         const std::vector<uint8_t> zeroed = zeroWeightsFile();
-        TcnWeights weights;
-        check(weights.loadFromBytes(zeroed.data(), zeroed.size()), "zeroed weights load");
+        auto weights = std::make_unique<TcnWeights>();
+        check(weights->loadFromBytes(zeroed.data(), zeroed.size()), "zeroed weights load");
 
         TcnEncoder encoder;
-        encoder.setWeights(&weights);
+        encoder.setWeights(weights.get());
         float features[kTcnTimesteps * kTcnFeatureDim] = {};
         float intention[TcnEncoder::kOutputTimesteps];
         float spectral[TcnEncoder::kOutputTimesteps * TcnEncoder::kSpectralDim];
@@ -164,7 +168,10 @@ void runTcnTests() {
                            layout.keyHeight),
               "the geometry is set");
         TcnCtcDecoder decoder;
-        decoder.setLayout(geometry);
+        // Heap, not a local -- see the comment above the first TcnWeights in this file.
+        auto weights = std::make_unique<TcnWeights>();  // zero-initialised: only the area extent
+                                                         // is checked in this section
+        decoder.setLayout(geometry, *weights);
         check(decoder.areaWidth() > 0.f && decoder.areaHeight() > 0.f,
               "the key-area extent is derived from the geometry, not left at zero");
     }
@@ -186,10 +193,13 @@ void runTcnTests() {
         engine.setKeyGeometry(layout.codes, layout.xs, layout.ys, layout.count, layout.keyWidth,
                               layout.keyHeight);
 
-        TcnDecoder tcn(engine);
-        tcn.setLayout(engine.geometry());
+        // Heap, not a local: TcnDecoder embeds a TcnWeights by value (~2.5 MB), and this section
+        // needs two of them alive at once (see foundBeforeWeights below) -- the same stack-frame
+        // overflow the comment on tcn_decoder.cpp's loadWeights() already documents.
+        auto tcn = std::make_unique<TcnDecoder>(engine);
+        tcn->setLayout(engine.geometry());
         const std::vector<uint8_t> zeroed = zeroWeightsFile();
-        check(tcn.loadWeights(zeroed.data(), zeroed.size()), "inert weights load into the decoder");
+        check(tcn->loadWeights(zeroed.data(), zeroed.size()), "inert weights load into the decoder");
 
         Random random(2026u);
         std::vector<float> xs;
@@ -199,17 +209,18 @@ void runTcnTests() {
         check(xs.size() >= 2, "a real gesture was synthesised");
 
         Candidate out[8];
-        const int found = tcn.decode(xs.data(), ys.data(), times.data(),
-                                     static_cast<int>(xs.size()), out, 8);
+        const int found = tcn->decode(xs.data(), ys.data(), times.data(),
+                                      static_cast<int>(xs.size()), out, 8);
         check(found >= 0, "decoding with inert weights does not crash");
         for (int i = 0; i < found; ++i) {
             check(std::isfinite(out[i].score), "every returned score is finite");
         }
 
+        auto tcnBeforeWeights = std::make_unique<TcnDecoder>(engine);
         Candidate out2[8];
         const int foundBeforeWeights =
-            TcnDecoder(engine).decode(xs.data(), ys.data(), times.data(),
-                                      static_cast<int>(xs.size()), out2, 8);
+            tcnBeforeWeights->decode(xs.data(), ys.data(), times.data(),
+                                     static_cast<int>(xs.size()), out2, 8);
         check(foundBeforeWeights == 0, "decoding before any weights are loaded returns nothing");
     }
 }

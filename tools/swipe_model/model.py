@@ -35,6 +35,7 @@ ADAPTER_CHANNELS = 256    # TcnEncoder::kAdapterChannels
 ADAPTER_KERNEL = 2
 SPECTRAL_DIM = 64         # TcnEncoder::kSpectralDim, 8x8 2D DCT coefficients
 DCT_RESOLUTION = 8
+KEY_EMBED_HIDDEN = 96     # TcnWeights::kKeyEmbedHidden
 
 GRN_EPSILON = 1e-6
 BATCHNORM_EPSILON = 1e-5  # PyTorch's own default; export_weights.py folds it in at this value
@@ -162,6 +163,40 @@ def dct_basis(key_centers_uv: torch.Tensor) -> torch.Tensor:
     # Outer product per key, flattened to match Phi[k, du*8+dv] in tcn_ctc_decoder.cpp.
     basis = cos_u.unsqueeze(-1) * cos_v.unsqueeze(-2)  # (..., K, 8, 8)
     return basis.reshape(*basis.shape[:-2], SPECTRAL_DIM)
+
+
+class KeyEmbedding(nn.Module):
+    """Maps a key's own (u,v) position plus its fixed 8x8 cosine features into a learned
+    SPECTRAL_DIM-wide embedding through a small shared MLP.
+
+    Fixes a real, measured defect the raw cosine basis has on its own: at the 26 canonical
+    QWERTY key centres, `dct_basis`'s 8x8 matrix has **rank 23, not 26** (confirmed 2026-09-13 by
+    SVD on this project's own layout) -- three emission directions are structurally unreachable
+    regardless of training data, width, depth or epoch count, because a fixed *linear* basis can
+    never exceed the rank of its own input. CleverKeys' independent from-scratch CTC recipe found
+    and named the identical defect on their own basis (their audit fix #2, "the rank defect") and
+    fixed it exactly this way: keep the cosine features as an input, not the final answer, and
+    let a nonlinearity between two learned layers re-spread them into a full-rank output. Adding
+    more DCT frequencies would only push the same ceiling to a different key count.
+
+    See `TcnCtcDecoder::setLayout`'s own comment for the matching inference code -- this and that
+    must produce the same numbers, checked by `export_weights.py --selftest`.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.hidden = nn.Linear(2 + SPECTRAL_DIM, KEY_EMBED_HIDDEN)
+        self.output = nn.Linear(KEY_EMBED_HIDDEN, SPECTRAL_DIM)
+
+    def forward(self, key_centers_uv: torch.Tensor) -> torch.Tensor:
+        """`key_centers_uv`: (..., K, 2) in [0,1]^2. Returns (..., K, SPECTRAL_DIM)."""
+        cosine = dct_basis(key_centers_uv)  # (..., K, 64)
+        combined = torch.cat([key_centers_uv, cosine], dim=-1)  # (..., K, 66)
+        hidden = torch.nn.functional.gelu(self.hidden(combined))
+        return self.output(hidden)
+
+    def parameter_count(self) -> int:
+        return sum(p.numel() for p in self.parameters())
 
 
 def key_log_probs(spectral: torch.Tensor, intention: torch.Tensor,

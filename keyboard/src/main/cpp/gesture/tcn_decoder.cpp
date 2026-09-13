@@ -31,7 +31,8 @@ constexpr float kShimCanvasHeight = 170.36904907226562f;
 }  // namespace
 
 void TcnDecoder::setLayout(const KeyGeometry& geometry) {
-    ctcDecoder_.setLayout(geometry);
+    lastGeometry_ = &geometry;
+    ctcDecoder_.setLayout(geometry, weights_);
 }
 
 bool TcnDecoder::loadWeights(const uint8_t* data, size_t length) {
@@ -48,6 +49,14 @@ bool TcnDecoder::loadWeights(const uint8_t* data, size_t length) {
     }
     weights_ = *candidate;
     encoder_.setWeights(&weights_);
+    // setLayout's key-embedding pass needs real weights to be worth anything, and setLayout
+    // ordinarily runs first -- layout is known at keyboard-measure time, long before this
+    // asynchronous read off disk finishes. Redoing it now, against the geometry already on file,
+    // is what corrects a basis this decoder may already have built from stale (uninitialised)
+    // weights, rather than leaving it wrong until the next unrelated layout change.
+    if (lastGeometry_ != nullptr) {
+        ctcDecoder_.setLayout(*lastGeometry_, weights_);
+    }
     return true;
 }
 

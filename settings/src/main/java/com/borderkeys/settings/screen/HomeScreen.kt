@@ -7,15 +7,27 @@ import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import com.borderkeys.data.assist.AssistProtocol
+import com.borderkeys.keyboard.R
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.Screen
@@ -118,12 +130,16 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
             // Listed because a gesture nobody is told about is a gesture nobody uses. Holding
             // enter to reach this screen was added in the same change as this card, and would
             // otherwise be discoverable only by accident.
-            SettingRow(strings[Keys.SHORTCUTS_ENTER])
-            SettingRow(strings[Keys.SHORTCUTS_GLOBE])
-            SettingRow(strings[Keys.SHORTCUTS_SPACE_HOLD])
-            SettingRow(strings[Keys.SHORTCUTS_SPACE])
-            SettingRow(strings[Keys.SHORTCUTS_SUGGESTION])
-            PinShortcutRow()
+            //
+            // Each row leads with the actual key it is about instead of naming it in text --
+            // "the globe key" and "the settings key" are the same physical key wearing whichever
+            // icon the layout gives it, and a drawing of it is unambiguous where the two names
+            // are not.
+            ShortcutRow(R.drawable.bk_action_newline, strings[Keys.SHORTCUTS_ENTER])
+            ShortcutRow(R.drawable.bk_icon_globe, strings[Keys.SHORTCUTS_GLOBE])
+            ShortcutRow(R.drawable.bk_icon_space_bar, strings[Keys.SHORTCUTS_SPACE_HOLD])
+            ShortcutRow(R.drawable.bk_icon_space_bar, strings[Keys.SHORTCUTS_SPACE])
+            ShortcutRow(null, strings[Keys.SHORTCUTS_SUGGESTION])
         }
 
         SettingsSectionCard(strings[Keys.HOME_ABOUT]) {
@@ -137,40 +153,20 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
 }
 
 /**
- * Offers to put these settings on the home screen.
- *
- * A keyboard's settings are awkward to reach: the launcher icon is one of the few ways in, and
- * on a phone with a full app drawer it is not a fast one. The launcher does the placing --
- * requestPinShortcut asks, and the user accepts in whatever dialog their launcher shows -- so
- * this needs no permission and cannot place anything on its own.
+ * One gesture in the [Keys.SHORTCUTS_TITLE] card: the key it is about, drawn, and what holding
+ * or sliding on it does, in text. [icon] is null only for [Keys.SHORTCUTS_SUGGESTION], which is
+ * not about a key at all.
  */
 @Composable
-private fun PinShortcutRow() {
-    val strings = LocalStrings.current
-    val context = LocalContext.current
-    val manager = remember(context) {
-        context.getSystemService(android.content.pm.ShortcutManager::class.java)
-    }
-    val supported = manager?.isRequestPinShortcutSupported == true
-    SettingRow(
-        title = strings[Keys.SHORTCUTS_ADD],
-        subtitle = if (supported) null else strings[Keys.SHORTCUTS_UNSUPPORTED],
+private fun ShortcutRow(icon: Int?, text: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (!supported) {
-            return@SettingRow
+        if (icon != null) {
+            Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(16.dp))
         }
-        val intent = android.content.Intent(android.content.Intent.ACTION_MAIN)
-            .setClassName(context.packageName, SETTINGS_ACTIVITY)
-        val shortcut = android.content.pm.ShortcutInfo.Builder(context, "settings")
-            .setShortLabel(strings[Keys.SCREEN_BORDERKEYS])
-            .setIcon(android.graphics.drawable.Icon.createWithResource(
-                context, com.borderkeys.keyboard.R.drawable.bk_action_settings,
-            ))
-            .setIntent(intent)
-            .build()
-        runCatching { manager?.requestPinShortcut(shortcut, null) }
+        Text(text, style = MaterialTheme.typography.bodyLarge)
     }
 }
-
-/** The same class name method.xml uses, and the only reference to it from this screen. */
-private const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"

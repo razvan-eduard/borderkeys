@@ -16,13 +16,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,6 +44,10 @@ import com.borderkeys.settings.rememberThemeUpdater
  * The default is that nothing is corrected silently: a delimiter commits your letters and a
  * suggestion is applied only when you tap it. That is the behaviour this keyboard argues for,
  * and it is why the switch in "Correcting as you type" starts off rather than on.
+ *
+ * The swipe probe field itself lives in [com.borderkeys.settings.SettingsActivity]'s own
+ * `bottomBar`, not here -- it rides along on every screen, not just this one, since a setting
+ * worth trying immediately (a theme colour, a key size) is rarely on the Typing screen itself.
  */
 @Composable
 fun TypingScreen(modifier: Modifier = Modifier) {
@@ -57,28 +58,18 @@ fun TypingScreen(modifier: Modifier = Modifier) {
     val appearance by repository.appearance
         .collectAsStateWithLifecycle(initialValue = remember { repository.currentAppearance() })
     val (theme, _, preferences) = appearance
-    var probe by remember { mutableStateOf("") }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        // Everything about what the strip offers and how much of it: on/off, how many slots,
+        // the clipboard as an extra source, and two-word phrases -- one card rather than three,
+        // since all four are the same question ("what shows up in that row") from different
+        // angles, not four separate decisions.
         SettingsSectionCard(strings[Keys.CORRECTIONS_SUGGESTIONS]) {
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_SHOW_THE_SUGGESTION_STRIP],
                 subtitle = strings[Keys.CORRECTIONS_THE_ROW_ABOVE_THE_KEYS_IT],
                 checked = preferences.showSuggestionStrip,
             ) { value -> update { it.copy(showSuggestionStrip = value) } }
-            SwitchRow(
-                title = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD],
-                subtitle = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD_NOTE],
-                checked = preferences.clipboardSuggestion,
-            ) { value -> update { it.copy(clipboardSuggestion = value) } }
-
-            SwitchRow(
-                title = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE],
-                subtitle = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE_NOTE],
-                checked = preferences.clipboardSuggestionOnce,
-            ) { value -> update { it.copy(clipboardSuggestionOnce = value) } }
-        }
-        SettingsSectionCard(strings[Keys.CORRECTIONS_HOW_MANY_SUGGESTIONS]) {
             SuggestionStripPreview(appearance, Modifier.padding(vertical = 8.dp))
             DefaultableSlider(
                 label = strings.getString(Keys.CORRECTIONS_AT_A_TIME, preferences.suggestionCount),
@@ -91,8 +82,16 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.CORRECTIONS_THE_STRIP_IS_A_FIXED_WIDTH],
             )
-        }
-        SettingsSectionCard(strings[Keys.CORRECTIONS_TWO_WORDS_AT_ONCE]) {
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD],
+                subtitle = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD_NOTE],
+                checked = preferences.clipboardSuggestion,
+            ) { value -> update { it.copy(clipboardSuggestion = value) } }
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE],
+                subtitle = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE_NOTE],
+                checked = preferences.clipboardSuggestionOnce,
+            ) { value -> update { it.copy(clipboardSuggestionOnce = value) } }
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_SUGGEST_WHOLE_PHRASES],
                 subtitle = strings[Keys.CORRECTIONS_OFFERS_VREAU_S_WHERE_IT_WOULD],
@@ -102,42 +101,49 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 strings[Keys.CORRECTIONS_ONLY_FROM_WHAT_YOU_HAVE_WRITTEN],
             )
         }
-        // The card holds capitalisation and the punctuation-spacing rows that follow it, so it
-        // gets its own header distinct from the first row's -- the two used to share one key,
-        // which read as the card being about nothing but capital letters.
-        SettingsSectionCard(strings[Keys.CORRECTIONS_PUNCTUATION_AND_CAPITALS]) {
+
+        // Punctuation/capitals and autocorrect-as-you-type folded into one card: both are edits
+        // the keyboard makes to what was just typed, and the mechanical ones (spacing, capitals)
+        // read fine ahead of the judgement-call ones (correction strictness) under one heading,
+        // with the inline sub-heading below marking where the second half starts -- the same
+        // pattern the strictness/length sliders already use for themselves.
+        SettingsSectionCard(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE]) {
+            Text(
+                strings[Keys.CORRECTIONS_PUNCTUATION_AND_CAPITALS],
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_CAPITALISE],
                 subtitle = strings[Keys.CORRECTIONS_CAPITALISE_NOTE],
                 checked = preferences.autoCapitalise,
             ) { value -> update { it.copy(autoCapitalise = value) } }
-
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_FORCE_CAPITALISE],
                 subtitle = strings[Keys.CORRECTIONS_FORCE_CAPITALISE_NOTE],
                 checked = preferences.forceCapitaliseSentences,
             ) { value -> update { it.copy(forceCapitaliseSentences = value) } }
-
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_DOUBLE_SPACE],
                 subtitle = strings[Keys.CORRECTIONS_DOUBLE_SPACE_NOTE],
                 checked = preferences.doubleSpacePeriod,
             ) { value -> update { it.copy(doubleSpacePeriod = value) } }
-
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_SPACE_AFTER],
                 subtitle = strings[Keys.CORRECTIONS_SPACE_AFTER_NOTE],
                 checked = preferences.spaceAfterPunctuation,
             ) { value -> update { it.copy(spaceAfterPunctuation = value) } }
-
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_SPACE_BEFORE],
                 subtitle = strings[Keys.CORRECTIONS_SPACE_BEFORE_NOTE],
                 checked = preferences.removeSpaceBeforePunctuation,
             ) { value -> update { it.copy(removeSpaceBeforePunctuation = value) } }
-        }
 
-        SettingsSectionCard(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE]) {
+            Text(
+                strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE],
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_APPLY_THE_FIRST_SUGGESTION_WHEN_YOU],
                 subtitle = strings[Keys.CORRECTIONS_OFF_BY_DEFAULT_WITH_IT_OFF],
@@ -227,17 +233,24 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             Explanation(strings[Keys.LANGUAGES_SWITCH_EXPLANATION])
         }
 
-        // Swipe typing, folded in from what used to be its own screen. One row, so the card
-        // header doubles as the row's own title the same way "Suggestions" does for a card with
-        // several rows in it -- unambiguous here because it is the only row this card has.
+        // Swipe typing, folded in from what used to be its own screen, and its trail width, the
+        // decoding explanation, and the experimental model toggle folded into the same card
+        // rather than four: every one of them is a fact about the one feature (swipe), not a
+        // separate decision, and each keeps its own inline sub-heading so the card still reads
+        // as sections rather than one long unbroken list. The live probe field is not among
+        // them any more -- see this file's own top-level doc for where it moved.
         SettingsSectionCard(strings[Keys.SWIPE_SWIPE_TYPING]) {
             SwitchRow(
                 title = strings[Keys.SWIPE_SWIPE_TYPING],
                 subtitle = strings[Keys.SWIPE_DRAG_ACROSS_THE_LETTERS_INSTEAD_OF],
                 checked = preferences.swipeEnabled,
             ) { value -> update { it.copy(swipeEnabled = value) } }
-        }
-        SettingsSectionCard(strings[Keys.SWIPE_THE_TRAIL]) {
+
+            Text(
+                strings[Keys.SWIPE_THE_TRAIL],
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
             DefaultableSlider(
                 label = strings.getString(Keys.SWIPE_WIDTH_DP, theme.swipeTrailWidthDp.toInt()),
                 value = theme.swipeTrailWidthDp.coerceIn(1f, 24f),
@@ -245,17 +258,12 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 default = 4f,
             ) { value -> updateTheme { it.copy(swipeTrailWidthDp = value) } }
             Explanation(strings[Keys.SWIPE_THE_COLOUR_IS_ON_THE_THEME])
-        }
-        SettingsSectionCard(strings[Keys.SWIPE_TRY_IT_HERE]) {
-            OutlinedTextField(
-                value = probe,
-                onValueChange = { probe = it },
-                label = { Text(strings[Keys.SWIPE_SWIPE_A_WORD]) },
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
+
+            Text(
+                strings[Keys.SWIPE_HOW_IT_DECODES],
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
-            Explanation(strings[Keys.SWIPE_A_REAL_FIELD_NOTHING_TYPED_INTO])
-        }
-        SettingsSectionCard(strings[Keys.SWIPE_HOW_IT_DECODES]) {
             Explanation(
                 strings[Keys.SWIPE_YOUR_GESTURE_IS_SMOOTHED_REDUCED_TO],
             )
@@ -265,13 +273,16 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             if (!preferences.swipeEnabled) {
                 Explanation(strings[Keys.SWIPE_SWIPE_TYPING_IS_CURRENTLY_OFF_SO])
             }
-        }
 
-        // `plus`-only: a `core` build compiles no tier B at all, so the card does not exist
-        // there rather than existing and doing nothing. See SwipeModelAvailability's own doc for
-        // why this is a compile-time check, not a runtime one.
-        if (SwipeModelAvailability.neuralSwipeModelSupported) {
-            SettingsSectionCard(strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL]) {
+            // `plus`-only: a `core` build compiles no tier B at all, so this section does not
+            // exist there rather than existing and doing nothing. See SwipeModelAvailability's
+            // own doc for why this is a compile-time check, not a runtime one.
+            if (SwipeModelAvailability.neuralSwipeModelSupported) {
+                Text(
+                    strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
                 CautionNote(strings[Keys.SWIPE_A_PREVIEW_OF_WORK_STILL_IN_PROGRESS])
                 SwitchRow(
                     title = strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
@@ -286,9 +297,9 @@ fun TypingScreen(modifier: Modifier = Modifier) {
 /**
  * [preferences] with every field this screen's suggestion and correction cards control put back
  * to [KeyboardPreferences]'s own default -- theme, swipe, language and everything outside those
- * cards untouched. Swipe has no reset of its own here: its two controls are a trail width that
- * is really a theme choice and a live probe field, neither the kind of setting someone tunes
- * past usefulness and needs a way back from the way the correction knobs above it are.
+ * cards untouched. Swipe has no reset of its own here: its one tunable control is a trail width
+ * that is really a theme choice, not the kind of setting someone tunes past usefulness and needs
+ * a way back from the way the correction knobs above it are.
  */
 private fun resetCorrectionDefaults(preferences: KeyboardPreferences): KeyboardPreferences {
     val defaults = KeyboardPreferences()

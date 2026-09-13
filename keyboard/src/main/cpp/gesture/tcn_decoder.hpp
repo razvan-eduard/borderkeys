@@ -48,6 +48,14 @@ private:
     TcnEncoder encoder_;
     TcnCtcDecoder ctcDecoder_;
 
+    // Remembered so loadWeights() can rebuild ctcDecoder_'s basis once real weights exist, even
+    // when setLayout ran first (the common case: layout is known at keyboard-measure time,
+    // long before the async weights read off disk finishes). Without this, a setLayout that
+    // arrives before loadWeights would bake in whatever weights_ happened to hold at that
+    // moment -- uninitialised, since TcnWeights has no default member initialisers -- and no
+    // later setLayout call would ever correct it.
+    const KeyGeometry* lastGeometry_ = nullptr;
+
     float resampledX_[kTcnTimesteps] = {};
     float resampledY_[kTcnTimesteps] = {};
     float features_[kTcnTimesteps * kTcnFeatureDim] = {};

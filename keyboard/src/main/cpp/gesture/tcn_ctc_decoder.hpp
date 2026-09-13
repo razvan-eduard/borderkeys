@@ -24,17 +24,27 @@ namespace borderkeys {
  * [setLayout] and cached; the encoder's weights never see a key position at all, only the 64-D
  * spectral pattern `c_t` that `Φ` gets evaluated against per key, per timestep
  * (`z_t = c_t · Φ^T`). Switching layouts changes `Φ`; it never touches the encoder.
+ *
+ * `Φ` itself is not the raw cosine basis any more: that basis has rank 23 of 26 at the canonical
+ * QWERTY key centres (confirmed by SVD, and independently found by CleverKeys' own from-scratch
+ * CTC recipe as their audit fix #2, "the rank defect"), so three emission directions were
+ * structurally unreachable regardless of training. [setLayout] now runs each key's `(u,v)` plus
+ * its 64 cosine features through a small trained MLP (`TcnWeights::keyEmbed*`) to re-spread them
+ * into a full-rank 64-D row before caching it -- see `tools/swipe_model/model.py`'s
+ * `KeyEmbedding` for the training-side twin this must match exactly.
  */
 class TcnCtcDecoder {
 public:
-    static constexpr int kDctResolution = 8;  // Phi is an 8x8 = 64-term 2D cosine basis
+    static constexpr int kDctResolution = 8;  // the MLP's own input basis is an 8x8 2D cosine
     static constexpr int kMaxBeamWidth = 24;
     static constexpr int kMaxWordLetters = 24;  // == Shark2Decoder::kMaxWordLetters
 
     /** Rebuilds the per-layout basis matrix and the key-area extents [areaWidth]/[areaHeight]
      *  the caller normalises the raw gesture against -- both derived from the same key centres,
-     *  so the trajectory and the basis stay in the same [0,1]^2 space. */
-    void setLayout(const KeyGeometry& geometry);
+     *  so the trajectory and the basis stay in the same [0,1]^2 space. [weights] supplies the
+     *  key-embedding MLP; calling this again once weights finish loading (which `TcnDecoder`
+     *  does automatically) is what corrects a basis built from an earlier, not-yet-loaded set. */
+    void setLayout(const KeyGeometry& geometry, const TcnWeights& weights);
 
     float areaWidth() const { return areaWidth_; }
     float areaHeight() const { return areaHeight_; }

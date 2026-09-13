@@ -20,7 +20,7 @@ from pathlib import Path
 
 import torch
 
-from model import TcnEncoder, dct_basis
+from model import KeyEmbedding, TcnEncoder
 from train import QWERTY_LETTERS, SwipeDataset, collate
 
 
@@ -53,12 +53,16 @@ def main() -> int:
     arguments = parser.parse_args()
 
     model = TcnEncoder()
+    key_embedding = KeyEmbedding()
     state = torch.load(arguments.checkpoint, map_location="cpu")
     model.load_state_dict(state["model"] if "model" in state else state)
+    key_embedding.load_state_dict(state["key_embedding"])
     model.eval()
+    key_embedding.eval()
 
     dataset = SwipeDataset(arguments.data / f"{arguments.split}.jsonl", augment=False)
-    basis = dct_basis(torch.from_numpy(dataset.key_centers))
+    with torch.no_grad():
+        basis = key_embedding(torch.from_numpy(dataset.key_centers))
 
     correct = 0
     total = 0

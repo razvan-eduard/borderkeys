@@ -28,9 +28,15 @@ float logSigmoid(float x) {
     return x < 0.f ? x - std::log1p(std::exp(x)) : -std::log1p(std::exp(-x));
 }
 
+/** The exact (erf-based) GELU, matching PyTorch's `F.gelu` default (`approximate="none"`) --
+ *  `model.py`'s `KeyEmbedding` never asks for the tanh approximation, so neither does this. */
+float gelu(float x) {
+    return 0.5f * x * (1.f + std::erf(x * 0.70710678118654752440f));  // 1/sqrt(2)
+}
+
 }  // namespace
 
-void TcnCtcDecoder::setLayout(const KeyGeometry& geometry) {
+void TcnCtcDecoder::setLayout(const KeyGeometry& geometry, const TcnWeights& weights) {
     geometry_ = &geometry;
     keyCount_ = geometry.keyCount();
     if (keyCount_ > KeyGeometry::kMaxKeys) {
@@ -59,9 +65,11 @@ void TcnCtcDecoder::setLayout(const KeyGeometry& geometry) {
     areaWidth_ = (maxX > 0.f) ? maxX : 1.f;
     areaHeight_ = (maxY > 0.f) ? maxY : 1.f;
 
-    // Phi[slot][(u,v)] = cos(pi*u*u_k) * cos(pi*v*v_k) -- the 2D separable cosine basis the
-    // encoder's spectral output is evaluated against. Rebuilt here and only here: the encoder
-    // never sees a key position, this matrix is the entire layout-agnosticism mechanism.
+    // Phi[slot] = keyEmbed(u, v, cos(pi*du*u)*cos(pi*dv*v) for every du,dv) -- the raw 2D cosine
+    // features feed a small trained MLP (TcnWeights::keyEmbed*) rather than being the final
+    // basis themselves; see this class's own doc for why a bare cosine basis is not enough.
+    // Rebuilt here and only here: the encoder never sees a key position, this matrix is the
+    // entire layout-agnosticism mechanism.
     for (int slot = 0; slot < keyCount_; ++slot) {
         const uint32_t codePoint = geometry.codeAt(slot);
         float cx = 0.f;
@@ -73,12 +81,36 @@ void TcnCtcDecoder::setLayout(const KeyGeometry& geometry) {
         }
         const float u = cx / areaWidth_;
         const float v = cy / areaHeight_;
-        float* const row = basis_ + slot * TcnEncoder::kSpectralDim;
+
+        // combined = [u, v, cos(pi*du*u)*cos(pi*dv*v) for du,dv in 0..8) -- matches
+        // KeyEmbedding.forward's torch.cat([key_centers_uv, cosine], dim=-1) exactly.
+        float combined[2 + TcnEncoder::kSpectralDim];
+        combined[0] = u;
+        combined[1] = v;
         for (int du = 0; du < kDctResolution; ++du) {
             const float cosU = std::cos(kPi * static_cast<float>(du) * u);
             for (int dv = 0; dv < kDctResolution; ++dv) {
-                row[du * kDctResolution + dv] = cosU * std::cos(kPi * static_cast<float>(dv) * v);
+                combined[2 + du * kDctResolution + dv] =
+                    cosU * std::cos(kPi * static_cast<float>(dv) * v);
             }
+        }
+
+        float hidden[TcnWeights::kKeyEmbedHidden];
+        for (int h = 0; h < TcnWeights::kKeyEmbedHidden; ++h) {
+            float acc = weights.keyEmbedHiddenBias[h];
+            for (int i = 0; i < 2 + TcnEncoder::kSpectralDim; ++i) {
+                acc += combined[i] * weights.keyEmbedHiddenWeight[i * TcnWeights::kKeyEmbedHidden + h];
+            }
+            hidden[h] = gelu(acc);
+        }
+
+        float* const row = basis_ + slot * TcnEncoder::kSpectralDim;
+        for (int o = 0; o < TcnEncoder::kSpectralDim; ++o) {
+            float acc = weights.keyEmbedOutputBias[o];
+            for (int h = 0; h < TcnWeights::kKeyEmbedHidden; ++h) {
+                acc += hidden[h] * weights.keyEmbedOutputWeight[h * TcnEncoder::kSpectralDim + o];
+            }
+            row[o] = acc;
         }
     }
 }

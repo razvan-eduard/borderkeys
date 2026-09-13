@@ -22,12 +22,12 @@ import torch
 
 from model import (
     ADAPTER_CHANNELS, ADAPTER_KERNEL, BATCHNORM_EPSILON, BLOCK_CHANNELS, EXPANDED_CHANNELS,
-    INPUT_FEATURES, KERNEL_SIZE, NUM_BLOCKS, SE_REDUCED_CHANNELS, SPECTRAL_DIM, TRUNK_CHANNELS,
-    TcnEncoder,
+    INPUT_FEATURES, KERNEL_SIZE, KEY_EMBED_HIDDEN, NUM_BLOCKS, SE_REDUCED_CHANNELS, SPECTRAL_DIM,
+    TRUNK_CHANNELS, KeyEmbedding, TcnEncoder,
 )
 
 MAGIC = 0x3157424B  # 'B' 'K' 'W' '1', little-endian -- must equal TcnWeights::kMagic
-VERSION = 1          # must equal TcnWeights::kVersion
+VERSION = 2          # must equal TcnWeights::kVersion -- bumped for KeyEmbedding (see model.py)
 
 # Computed the same way tcn_weights.hpp computes kTcnWeightsFloatCount (sizeof/sizeof(float)),
 # just added up by hand here since this script has no C++ struct to take sizeof of. If this
@@ -50,6 +50,8 @@ EXPECTED_FLOAT_COUNT = (
     + ADAPTER_CHANNELS + ADAPTER_CHANNELS  # folded adapter batchnorm
     + ADAPTER_CHANNELS + 1  # intention head weight + bias
     + ADAPTER_CHANNELS * SPECTRAL_DIM + SPECTRAL_DIM  # spectral head
+    + (2 + SPECTRAL_DIM) * KEY_EMBED_HIDDEN + KEY_EMBED_HIDDEN  # key-embedding hidden layer
+    + KEY_EMBED_HIDDEN * SPECTRAL_DIM + SPECTRAL_DIM  # key-embedding output layer
 )
 
 
@@ -61,7 +63,7 @@ def fold_batch_norm(bn: torch.nn.BatchNorm1d) -> tuple[torch.Tensor, torch.Tenso
     return scale, bias
 
 
-def export_tensors(model: TcnEncoder) -> list[torch.Tensor]:
+def export_tensors(model: TcnEncoder, key_embedding: KeyEmbedding) -> list[torch.Tensor]:
     """Every weight, in the exact order tcn_weights.hpp's TcnWeights declares them, each already
     reshaped/transposed/flattened into the row-major (input-major) layout the C++ side reads."""
     tensors: list[torch.Tensor] = []
@@ -100,12 +102,18 @@ def export_tensors(model: TcnEncoder) -> list[torch.Tensor]:
     tensors.append(model.spectral_head.weight.t().reshape(-1))  # [64,256] -> [256,64]
     tensors.append(model.spectral_head.bias)
 
+    tensors.append(key_embedding.hidden.weight.t().reshape(-1))  # [96,66] -> [66,96]
+    tensors.append(key_embedding.hidden.bias)
+    tensors.append(key_embedding.output.weight.t().reshape(-1))  # [64,96] -> [96,64]
+    tensors.append(key_embedding.output.bias)
+
     return tensors
 
 
-def write_bkw(model: TcnEncoder, out_path: Path) -> None:
+def write_bkw(model: TcnEncoder, key_embedding: KeyEmbedding, out_path: Path) -> None:
     model.eval()
-    tensors = export_tensors(model)
+    key_embedding.eval()
+    tensors = export_tensors(model, key_embedding)
     total = sum(t.numel() for t in tensors)
     if total != EXPECTED_FLOAT_COUNT:
         raise ValueError(
@@ -142,7 +150,8 @@ def main() -> int:
 
     if arguments.selftest:
         model = TcnEncoder()
-        write_bkw(model, arguments.out)
+        key_embedding = KeyEmbedding()
+        write_bkw(model, key_embedding, arguments.out)
         magic, version, float_count = read_bkw(arguments.out)
         assert magic == MAGIC, f"magic mismatch: {magic:#x} != {MAGIC:#x}"
         assert version == VERSION, f"version mismatch: {version} != {VERSION}"
@@ -156,9 +165,11 @@ def main() -> int:
     if arguments.checkpoint is None:
         parser.error("--checkpoint is required unless --selftest is given")
     model = TcnEncoder()
+    key_embedding = KeyEmbedding()
     state = torch.load(arguments.checkpoint, map_location="cpu")
     model.load_state_dict(state["model"] if "model" in state else state)
-    write_bkw(model, arguments.out)
+    key_embedding.load_state_dict(state["key_embedding"])
+    write_bkw(model, key_embedding, arguments.out)
     print(f"wrote {arguments.out} ({arguments.out.stat().st_size:,} bytes)")
     return 0
 
