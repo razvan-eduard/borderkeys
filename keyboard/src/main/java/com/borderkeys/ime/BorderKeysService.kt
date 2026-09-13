@@ -303,24 +303,42 @@ class BorderKeysService :
     /**
      * Resolves the ring directly, unconditionally -- a real lift is the only thing that ever
      * gets to consider [KeyboardPreferences.radialLiftKeepsOpen] (see [resolveRadialRing]'s own
-     * doc); the timeout never does, on purpose. A timeout always applies or cancels, it never
-     * merely waits again -- which [radialLiftKeepsOpen] being on already guarantees this cannot
-     * even fire while [RadialSuggestionMenuView.acceptsOwnTouches] is true, since nothing arms it
-     * in that state (see [resolveRadialRing]); this stays unconditional regardless, rather than
-     * leaning on that guarantee holding forever.
-     *
-     * Armed only in [onGesturePreviewCandidates], for [KeyboardPreferences.radialPickTimeoutMillis]
-     * after the ring opens, and only with [KeyboardPreferences.radialLiftKeepsOpen] off. Cancelled
-     * by real steering movement ([onGestureSteered]), an actual resolution, or
-     * [dismissRadialMenu]. One instance, like every other scheduled callback in this class -- see
-     * [gestureDecodingRunnable]'s own doc.
+     * doc); nothing else does, on purpose. Applies or cancels, never merely waits again --
+     * shared by the pick-timeout firing and by a tap landing in the editor itself (see
+     * [onUpdateSelection]), the two other ways the ring can end up resolved without an actual
+     * lift on it to read.
      */
-    private val radialTimeoutRunnable = Runnable {
+    private fun forceResolveRadialRing() {
         val selection = host?.radialSuggestionMenu?.currentSelection()
             ?: RadialSuggestionMenuView.Selection.None
         closeRadialRing()
         resolveRadialSelection(selection)
     }
+
+    /**
+     * A tap in the editor itself is a resolution the ring never got to see directly -- see
+     * [onUpdateSelection]'s own comment for how this is detected from a caret that moved on its
+     * own. Guarded the same way [dismissRadialMenu] is, since most caret moves happen with no
+     * ring open at all and [forceResolveRadialRing] must not run against a stale
+     * [radialTopWord] left over from a gesture that already finished normally.
+     */
+    private fun resolveRadialRingFromEditorTap() {
+        if (swipeRadialController.state != SwipeRadialController.State.OPEN) {
+            return
+        }
+        forceResolveRadialRing()
+    }
+
+    /**
+     * How long the real menu waits, after the ring opens, before applying the top candidate (or
+     * cancelling) on its own -- see [forceResolveRadialRing]'s own doc for why it always
+     * resolves rather than merely waiting again. Armed only in [onGesturePreviewCandidates], for
+     * [KeyboardPreferences.radialPickTimeoutMillis] after the ring opens, and only with
+     * [KeyboardPreferences.radialLiftKeepsOpen] off. Cancelled by real steering movement
+     * ([onGestureSteered]), an actual resolution, or [dismissRadialMenu]. One instance, like
+     * every other scheduled callback in this class -- see [gestureDecodingRunnable]'s own doc.
+     */
+    private val radialTimeoutRunnable = Runnable { forceResolveRadialRing() }
 
     /**
      * Bumped every time [resetFieldHistory] runs -- a new field, a new generation.
@@ -640,14 +658,29 @@ class BorderKeysService :
             // moved it -- a tap into the middle of a sentence, an arrow key, a backspace out of
             // one word and into another -- then the word under the caret has changed and the
             // strip is describing a word the user has left. Re-deriving is what keeps it live.
+            //
+            // That same "something else moved it" is also a tap the ring never saw: while it is
+            // open (steered live, or kept open and waiting for a fresh tap), a touch that lands
+            // in the editor itself -- a different window this class has no view in at all --
+            // reaches here only as a caret that jumped somewhere our own composing text does not
+            // account for. Resolved rather than discarded: a swipe already composing a word
+            // that the user then taps away from should commit that word (or cancel, whichever
+            // KeyboardPreferences.radialTimeoutDefault says), the same as tapping outside the
+            // ring on the keyboard itself already does -- not lose it, the way dismissRadialMenu
+            // deliberately does for the very different case of a fresh key press mid-gesture.
             if (composingMatchesCaret(newSelEnd)) {
                 requestSuggestions()
             } else {
+                resolveRadialRingFromEditorTap()
                 adoptWordAtCaret()
             }
             // Shift is derived from the text before the caret, so moving the caret is exactly
             // when it has to be looked at again.
             applyAutoShift()
+        } else {
+            // A real selection is even less ambiguous than a moved caret -- nothing this class
+            // does on its own ever leaves a range selected, so this is always something else.
+            resolveRadialRingFromEditorTap()
         }
         // A selection used to turn the strip into three assistant buttons here. It no longer
         // does anything: the strip is corrections and predictions, never anything else -- the
