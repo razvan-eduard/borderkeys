@@ -75,6 +75,19 @@ class KeyboardCanvasView(
         fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int)
 
         /**
+         * The finger paused mid-swipe long enough to be worth a quick preview -- the gesture is
+         * not over, this is a read of the buffer as it stands right now. Same reuse-or-copy
+         * contract on the arrays as [onGesture]'s own doc states, for the same reason.
+         */
+        fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int)
+
+        /**
+         * Real movement resumed after a pause that had already fired [onGesturePaused]. Never
+         * called for ordinary movement that was never paused -- see [SwipeRadialController].
+         */
+        fun onGestureResumed()
+
+        /**
          * A key held down that has no alternatives to show.
          *
          * Returning true means the press was consumed: the finger lifting afterwards must not
@@ -96,6 +109,18 @@ class KeyboardCanvasView(
     var listener: Listener? = null
     var hapticEnabled: Boolean = true
     var swipeEnabled: Boolean = true
+
+    /**
+     * Whether the pause-preview machinery arms at all.
+     *
+     * Off costs exactly one boolean read per captured sample and nothing else -- see
+     * [captureGestureSamples] -- the same "the feature being off costs nothing" rule
+     * [holdHintsEnabled] and the rest of this view's optional machinery already follow.
+     */
+    var radialMenuEnabled: Boolean = false
+
+    /** How long a real pause must hold before [Listener.onGesturePaused] fires. */
+    var radialPauseDwellMillis: Long = DEFAULT_RADIAL_PAUSE_DWELL_MILLIS
 
     /**
      * Whether a press makes a sound.
@@ -201,7 +226,56 @@ class KeyboardCanvasView(
         gesture.capture(eventSamples)
         eventSamples.release()
         invalidateTrail()
+        if (radialMenuEnabled) {
+            updatePauseDetection()
+        }
     }
+
+    /**
+     * A pause is "no real movement for [radialPauseDwellMillis]", not "no `ACTION_MOVE` arrived"
+     * -- a touch driver can keep delivering samples at a fixed rate even while the finger is
+     * dead still, which would mean this timer is perpetually reset and a real pause never fires.
+     * [GestureCapture.distanceFromPrevious] is what tells the two apart: real movement reschedules
+     * the timer, a driver repeating the same coordinate leaves whatever was already scheduled
+     * alone. The timer firing is the pause signal itself, in [firePause] below.
+     */
+    private fun updatePauseDetection() {
+        if (gesture.distanceFromPrevious() <= PAUSE_MOVEMENT_EPSILON_PX) {
+            return
+        }
+        if (pausePreviewShown) {
+            pausePreviewShown = false
+            listener?.onGestureResumed()
+        }
+        removeCallbacks(pauseRunnable)
+        // Guards against a slow-starting swipe reading as an instant pause: the first real
+        // movement of a fresh gesture is, by definition, still close to where the finger went
+        // down, and arming the timer before there is anything worth previewing would fire on
+        // every swipe's own first frame.
+        val pathLengthPx = kotlin.math.hypot(
+            (gesture.maxX - gesture.minX).toDouble(), (gesture.maxY - gesture.minY).toDouble(),
+        ).toFloat()
+        if (SwipeRadialController.isEligibleForPreview(
+                gesture.count, pathLengthPx, MIN_GESTURE_POINTS, MIN_RADIAL_PREVIEW_PATH_PX,
+            )
+        ) {
+            postDelayed(pauseRunnable, radialPauseDwellMillis)
+        }
+    }
+
+    private fun firePause() {
+        if (!gestureActive) {
+            return
+        }
+        pausePreviewShown = true
+        listener?.onGesturePaused(gesture.xs, gesture.ys, gesture.times, gesture.count)
+    }
+
+    /** Whether a pause has already fired for the swipe in progress, so the next real movement
+     *  knows to call [Listener.onGestureResumed] rather than stay silent. */
+    private var pausePreviewShown = false
+
+    private val pauseRunnable = Runnable { firePause() }
 
     /**
      * Reads the samples of the event being handled, without allocating one per event.
@@ -255,6 +329,8 @@ class KeyboardCanvasView(
     }
 
     private fun finishGesture() {
+        removeCallbacks(pauseRunnable)
+        pausePreviewShown = false
         val count = gesture.count
         gestureActive = false
         gesturePointer = -1
@@ -267,6 +343,8 @@ class KeyboardCanvasView(
     }
 
     private fun abandonGesture() {
+        removeCallbacks(pauseRunnable)
+        pausePreviewShown = false
         gestureActive = false
         gesturePointer = -1
         gesture.reset()
@@ -1285,6 +1363,7 @@ class KeyboardCanvasView(
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         cancelPendingCallbacks()
+        removeCallbacks(pauseRunnable)
         if (animating) {
             Choreographer.getInstance().removeFrameCallback(frameCallback)
             animating = false
@@ -1316,6 +1395,20 @@ class KeyboardCanvasView(
          */
         private const val MIN_GESTURE_POINTS = 6
         private const val TRAIL_SEGMENTS = 4
+
+        /** Matches [com.borderkeys.data.theme.KeyboardPreferences.DEFAULT_RADIAL_PAUSE_DWELL_MILLIS]
+         *  -- the value this field actually runs with once a real preference stream is attached;
+         *  kept here too only as this property's own out-of-the-box default. */
+        private const val DEFAULT_RADIAL_PAUSE_DWELL_MILLIS = 150L
+
+        /** Below this, two samples are the same point as far as pause detection is concerned --
+         *  noise-floor, not a tunable, so it lives beside [MIN_GESTURE_POINTS] rather than in
+         *  KeyboardPreferences with the numbers someone is actually meant to adjust. */
+        private const val PAUSE_MOVEMENT_EPSILON_PX = 3f
+
+        /** How far a swipe has to have travelled, in its own bounding-box diagonal, before the
+         *  pause timer is ever armed -- see [updatePauseDetection]'s own doc for why. */
+        private const val MIN_RADIAL_PREVIEW_PATH_PX = 96f
 
         /** Not private: [SuggestionStripView] holds a long press to the same threshold, so the
          *  two gestures feel like one -- referencing this is what keeps that true instead of

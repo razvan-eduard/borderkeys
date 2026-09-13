@@ -232,6 +232,52 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `the radial suggestion menu defaults off`() {
+        assertFalse(KeyboardPreferences().radialMenuEnabled)
+    }
+
+    /** A lower ceiling than the strip's own -- see [KeyboardPreferences.radialSuggestionCount]'s
+     *  own doc for why a wedge tolerates fewer of them than a row does. */
+    @Test
+    fun `the radial suggestion count is clamped tighter than the strip`() {
+        assertEquals(3, KeyboardPreferences.MIN_RADIAL_SUGGESTIONS)
+        assertEquals(6, KeyboardPreferences.MAX_RADIAL_SUGGESTIONS)
+        assertEquals(
+            KeyboardPreferences.MAX_RADIAL_SUGGESTIONS,
+            KeyboardPreferences(radialSuggestionCount = 99).sanitised().radialSuggestionCount,
+        )
+        assertEquals(
+            KeyboardPreferences.MIN_RADIAL_SUGGESTIONS,
+            KeyboardPreferences(radialSuggestionCount = 0).sanitised().radialSuggestionCount,
+        )
+        assertEquals(
+            KeyboardPreferences.DEFAULT_RADIAL_SUGGESTIONS,
+            KeyboardPreferences().radialSuggestionCount,
+        )
+    }
+
+    @Test
+    fun `the pause dwell and pick timeout are each clamped to their own range`() {
+        assertEquals(
+            KeyboardPreferences.MAX_RADIAL_PAUSE_DWELL_MILLIS,
+            KeyboardPreferences(radialPauseDwellMillis = 99999).sanitised().radialPauseDwellMillis,
+        )
+        assertEquals(
+            KeyboardPreferences.MIN_RADIAL_PAUSE_DWELL_MILLIS,
+            KeyboardPreferences(radialPauseDwellMillis = 0).sanitised().radialPauseDwellMillis,
+        )
+        assertEquals(
+            KeyboardPreferences.MAX_RADIAL_PICK_TIMEOUT_MILLIS,
+            KeyboardPreferences(radialPickTimeoutMillis = 99999).sanitised()
+                .radialPickTimeoutMillis,
+        )
+        assertEquals(
+            KeyboardPreferences.MIN_RADIAL_PICK_TIMEOUT_MILLIS,
+            KeyboardPreferences(radialPickTimeoutMillis = 0).sanitised().radialPickTimeoutMillis,
+        )
+    }
+
+    @Test
     fun `language lock is on and balanced by default`() {
         assertEquals(
             KeyboardPreferences.LANGUAGE_LOCK_BALANCED,

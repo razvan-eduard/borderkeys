@@ -79,6 +79,13 @@ class PredictionEngine(
          * differently: the first candidate is committed immediately rather than offered.
          */
         fun onGestureCandidates(words: Array<String?>, count: Int)
+
+        /**
+         * A decode of a swipe still in progress, from [decodeGesturePreview] -- see that method's
+         * own doc for why it is a fully separate path from [onGestureCandidates] rather than a
+         * reuse of it.
+         */
+        fun onGesturePreviewCandidates(words: Array<String?>, count: Int)
     }
 
     var listener: ResultListener? = null
@@ -132,6 +139,35 @@ class PredictionEngine(
     private val publishGesture = Runnable { publishGestureResult() }
     private var gestureResultCount = 0
 
+    // ---- swipe-preview path (radial menu) --------------------------------------------------
+    //
+    // Fully parallel to the gesture fields above, deliberately never sharing a buffer with them:
+    // a preview decode can still be in flight when the real gesture resumes or lifts, and mixing
+    // its state with decodeGesture's own would mean a stale preview answer could show up over,
+    // or be clobbered by, the answer that actually matters. See decision 2 of the radial-menu
+    // plan for the fuller reasoning.
+    private val previewGestureX = FloatArray(MAX_GESTURE_POINTS)
+    private val previewGestureY = FloatArray(MAX_GESTURE_POINTS)
+    private val previewGestureTime = LongArray(MAX_GESTURE_POINTS)
+    private var previewGestureCount = 0
+    private val previewGestureLock = Any()
+
+    private val previewResultLock = Any()
+    private val previewNativeWords = arrayOfNulls<String>(MAX_RESULTS)
+    private val previewNativeScores = FloatArray(MAX_RESULTS)
+    private var previewNativeCount = 0
+    private val previewDisplayWords = arrayOfNulls<String>(MAX_RESULTS)
+
+    /**
+     * Touched only from the UI thread -- every call site ([decodeGesturePreview],
+     * [cancelPendingPreview], and the posted publish below) is a [KeyboardCanvasView.Listener]
+     * callback or something driven directly by one, never the prediction thread. A preview
+     * whose generation has moved on by the time its answer comes back is dropped rather than
+     * shown, the same "only the newest matters" rule [PredictionRequestQueue] states, sized for
+     * what is, at most, one in-flight preview request at a time.
+     */
+    private var previewGeneration = 0
+
     fun start(): Boolean {
         thread.start()
         worker = Handler(thread.looper)
@@ -174,6 +210,12 @@ class PredictionEngine(
         }
         mainHandler.removeCallbacks(publishResults)
         mainHandler.removeCallbacks(publishGesture)
+        // Not a removeCallbacks: the preview publish is a fresh lambda per call, not a shared
+        // Runnable field, precisely so a stale generation check inside it -- not object identity
+        // -- is what decides whether it still matters. Bumping the generation here covers the
+        // one case worker.removeCallbacksAndMessages(null) above cannot: a preview decode that
+        // was already running on the worker thread at the moment of this call.
+        previewGeneration++
     }
 
     private inline fun <T> withHandle(fallback: T, block: (Long) -> T): T {
@@ -482,6 +524,73 @@ class PredictionEngine(
         val written = copyAndFilterResults()
         gestureResultCount = written
         listener?.onGestureCandidates(displayWords, written)
+    }
+
+    /**
+     * Decodes a swipe still in progress -- the buffer exactly as it stands right now, not a
+     * finished gesture. Same shape as [decodeGesture] and the same native entry point, but its
+     * own buffers, its own lock and its own generation counter throughout: see this class's
+     * "swipe-preview path" fields for why a preview must never share state with the final decode.
+     */
+    fun decodeGesturePreview(
+        xs: FloatArray,
+        ys: FloatArray,
+        timestamps: LongArray,
+        count: Int,
+        previous1: String?,
+        previous2: String?,
+    ) {
+        val points = count.coerceAtMost(MAX_GESTURE_POINTS)
+        if (points < 2) {
+            return
+        }
+        synchronized(previewGestureLock) {
+            System.arraycopy(xs, 0, previewGestureX, 0, points)
+            System.arraycopy(ys, 0, previewGestureY, 0, points)
+            System.arraycopy(timestamps, 0, previewGestureTime, 0, points)
+            previewGestureCount = points
+        }
+        val generation = ++previewGeneration
+        worker.post {
+            val found = withHandle(0) { current ->
+                synchronized(previewResultLock) {
+                    val samples = synchronized(previewGestureLock) { previewGestureCount }
+                    NativePredictor.nativeDecodeGesture(
+                        current, previewGestureX, previewGestureY, previewGestureTime, samples,
+                        previous1, previous2, previewNativeWords, previewNativeScores,
+                    )
+                }
+            }
+            synchronized(previewResultLock) { previewNativeCount = found }
+            mainHandler.post {
+                // A newer preview was requested, or the gesture resumed/lifted, while this one
+                // was decoding: whatever it found is already stale, and showing it would be a
+                // preview flashing up a beat after the finger has already moved on.
+                if (generation == previewGeneration) {
+                    publishGesturePreviewResult()
+                }
+            }
+        }
+    }
+
+    /**
+     * Drops a preview decode that has not answered yet, so it cannot land after the gesture has
+     * already resumed or lifted. Bumping the generation is the whole mechanism: the posted
+     * publish in [decodeGesturePreview] already checks it before calling the listener.
+     */
+    fun cancelPendingPreview() {
+        previewGeneration++
+    }
+
+    private fun publishGesturePreviewResult() {
+        val count: Int
+        synchronized(previewResultLock) {
+            count = previewNativeCount
+            for (index in 0 until count) {
+                previewDisplayWords[index] = previewNativeWords[index]
+            }
+        }
+        listener?.onGesturePreviewCandidates(previewDisplayWords, count)
     }
 
     private fun serveRequests() {

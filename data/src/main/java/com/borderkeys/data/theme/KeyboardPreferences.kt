@@ -265,6 +265,35 @@ data class KeyboardPreferences(
     val experimentalSwipeModelEnabled: Boolean = false,
 
     /**
+     * An alternative/addition to the suggestion strip for a swipe: pausing mid-gesture shows a
+     * quick preview near the finger, and lifting turns it into a real menu -- a tap picks a
+     * candidate, or the top one applies itself after [radialPickTimeoutMillis] if nothing is
+     * tapped. Off by default: the strip already does this job, and a menu appearing over the
+     * keys uninvited is not a change to make without asking first.
+     */
+    val radialMenuEnabled: Boolean = false,
+
+    /**
+     * How many words the ring offers at once. Clamped to [MIN_RADIAL_SUGGESTIONS]..
+     * [MAX_RADIAL_SUGGESTIONS] on read -- a lower ceiling than [suggestionCount]'s own, on
+     * purpose: a wedge around a circle gets unreadable and mis-tappable far sooner than a narrow
+     * rectangle in a row does.
+     */
+    val radialSuggestionCount: Int = DEFAULT_RADIAL_SUGGESTIONS,
+
+    /**
+     * How long the finger has to hold still mid-swipe before the preview shows, in milliseconds.
+     * Clamped to [MIN_RADIAL_PAUSE_DWELL_MILLIS]..[MAX_RADIAL_PAUSE_DWELL_MILLIS] on read.
+     */
+    val radialPauseDwellMillis: Int = DEFAULT_RADIAL_PAUSE_DWELL_MILLIS,
+
+    /**
+     * How long the real menu waits, after a lift, before applying the top candidate on its own.
+     * Clamped to [MIN_RADIAL_PICK_TIMEOUT_MILLIS]..[MAX_RADIAL_PICK_TIMEOUT_MILLIS] on read.
+     */
+    val radialPickTimeoutMillis: Int = DEFAULT_RADIAL_PICK_TIMEOUT_MILLIS,
+
+    /**
      * Whether the first slot of the suggestion strip offers what is on the clipboard.
      *
      * Off by default, and not out of caution about the feature: the strip is glanced at while
@@ -652,6 +681,15 @@ data class KeyboardPreferences(
             ENTER_KEY_AUTO
         },
         suggestionCount = suggestionCount.coerceIn(MIN_SUGGESTIONS, MAX_SUGGESTIONS),
+        radialSuggestionCount = radialSuggestionCount.coerceIn(
+            MIN_RADIAL_SUGGESTIONS, MAX_RADIAL_SUGGESTIONS,
+        ),
+        radialPauseDwellMillis = radialPauseDwellMillis.coerceIn(
+            MIN_RADIAL_PAUSE_DWELL_MILLIS, MAX_RADIAL_PAUSE_DWELL_MILLIS,
+        ),
+        radialPickTimeoutMillis = radialPickTimeoutMillis.coerceIn(
+            MIN_RADIAL_PICK_TIMEOUT_MILLIS, MAX_RADIAL_PICK_TIMEOUT_MILLIS,
+        ),
         learningSpeed = if (learningSpeed in LEARNING_CAUTIOUS..LEARNING_IMMEDIATE) {
             learningSpeed
         } else {
@@ -997,6 +1035,23 @@ data class KeyboardPreferences(
         const val MIN_SUGGESTIONS = 3
         const val MAX_SUGGESTIONS = 8
         const val DEFAULT_SUGGESTIONS = 3
+
+        /** A lower ceiling than [MAX_SUGGESTIONS] -- see [radialSuggestionCount]'s own doc. */
+        const val MIN_RADIAL_SUGGESTIONS = 3
+        const val MAX_RADIAL_SUGGESTIONS = 6
+        const val DEFAULT_RADIAL_SUGGESTIONS = 5
+
+        /** How long a real pause has to hold before the preview shows. Tunable, the same reason
+         *  [MIN_LONG_PRESS_MILLIS]/[MAX_LONG_PRESS_MILLIS] are: thumb speed and typing style vary
+         *  as much for this as they do for a long press. */
+        const val MIN_RADIAL_PAUSE_DWELL_MILLIS = 80
+        const val MAX_RADIAL_PAUSE_DWELL_MILLIS = 400
+        const val DEFAULT_RADIAL_PAUSE_DWELL_MILLIS = 150
+
+        /** How long the real menu waits before applying the top candidate on its own. */
+        const val MIN_RADIAL_PICK_TIMEOUT_MILLIS = 500
+        const val MAX_RADIAL_PICK_TIMEOUT_MILLIS = 3000
+        const val DEFAULT_RADIAL_PICK_TIMEOUT_MILLIS = 1200
 
         /** The range [minCorrectionLength] is clamped to. */
         const val MIN_CORRECTION_LENGTH = 1

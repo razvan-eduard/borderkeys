@@ -153,6 +153,24 @@ class GestureCaptureTest {
     }
 
     @Test
+    fun distanceFromPreviousIsZeroBeforeASecondPoint() {
+        val capture = GestureCapture()
+        assertEquals(0f, capture.distanceFromPrevious(), 0f)
+        capture.begin(10f, 10f, 0L)
+        assertEquals(0f, capture.distanceFromPrevious(), 0f)
+    }
+
+    @Test
+    fun distanceFromPreviousIsTheLastStep() {
+        val capture = GestureCapture()
+        capture.begin(0f, 0f, 0L)
+        capture.append(3f, 4f, 8L)
+        assertEquals(5f, capture.distanceFromPrevious(), 0.001f)
+        capture.append(3f, 4f, 16L)
+        assertEquals(0f, capture.distanceFromPrevious(), 0.001f)
+    }
+
+    @Test
     fun resetKeepsTheStorageAndDropsThePoints() {
         val capture = GestureCapture()
         val xs = capture.xs

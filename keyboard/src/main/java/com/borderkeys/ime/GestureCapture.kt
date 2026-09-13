@@ -106,6 +106,23 @@ class GestureCapture(val capacity: Int = DEFAULT_CAPACITY) {
         }
     }
 
+    /**
+     * Distance from the point before the one most recently appended, in the same units [xs]/[ys]
+     * already are. Zero before a second point exists.
+     *
+     * What tells a real pause from a touch driver that keeps delivering samples at a fixed rate
+     * even while the finger is dead still -- comparing the newest two points is the only way to
+     * see that nothing actually moved, since the timestamps alone would say otherwise.
+     */
+    fun distanceFromPrevious(): Float {
+        if (count < 2) {
+            return 0f
+        }
+        val dx = xs[count - 1] - xs[count - 2]
+        val dy = ys[count - 1] - ys[count - 2]
+        return kotlin.math.sqrt(dx * dx + dy * dy)
+    }
+
     /** Appends one point, halving the buffer first if it is full. */
     fun append(x: Float, y: Float, time: Long) {
         if (count >= capacity) {

@@ -53,6 +53,12 @@ class KeyboardHostView(
      *  sibling of [clipboardPanel]/[emojiPanel] instead. */
     val languageRevertPanel = LanguageRevertPanelView(context, paints)
 
+    /** A paused or just-lifted swipe's ring of words, overlaid on [keyboard]'s own rect -- see
+     *  its own doc for why it is not a sibling row like [languageRevertPanel]. Added and
+     *  measured/laid out below, deliberately last among this group's children so it draws over
+     *  the keys rather than under them. */
+    val radialSuggestionMenu = RadialSuggestionMenuView(context, paints)
+
     /**
      * Which edge the quick-action bar sits against. Mirrors KeyboardPreferences; kept as an Int
      * so this module does not depend on :data for four constants.
@@ -396,6 +402,10 @@ class KeyboardHostView(
         addView(emojiPanel)
         emojiPanel.visibility = GONE
         addView(quickActions)
+        // Last of all: dispatchDraw walks children in the order they were added, so this is what
+        // ends up on top of the keys it overlays -- see the view's own doc for why it needs to.
+        addView(radialSuggestionMenu)
+        radialSuggestionMenu.visibility = GONE
         inlineSuggestions.visibility = GONE
         quickSettings.visibility = GONE
 
@@ -499,6 +509,24 @@ class KeyboardHostView(
         requestLayout()
     }
 
+    val radialMenuVisible: Boolean get() = radialSuggestionMenu.visibility == VISIBLE
+
+    /**
+     * Shows or hides the radial menu, overlaid exactly on [keyboard]'s own rect.
+     *
+     * Unlike [setClipboardPanelVisible]/[setEmojiPanelVisible], the keys stay up and stay
+     * visible underneath -- this sits over them, in the same slot, rather than replacing them --
+     * and unlike [setLanguageRevertPanelVisible], nothing else's visibility changes alongside it:
+     * the suggestion strip above the keys is untouched either way.
+     */
+    fun setRadialMenuVisible(visible: Boolean) {
+        if (radialMenuVisible == visible) {
+            return
+        }
+        radialSuggestionMenu.visibility = if (visible) VISIBLE else GONE
+        requestLayout()
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val contentWidth = (width * widthScale).toInt().coerceAtLeast(1)
@@ -541,6 +569,14 @@ class KeyboardHostView(
         if (keyboard.visibility != GONE) {
             keyboard.measure(exactBody, unbounded)
             height += keyboard.measuredHeight
+        }
+        if (radialSuggestionMenu.visibility != GONE) {
+            // Exactly keyboard's own size, not its own row: this overlays the keys rather than
+            // sitting beside them, so it must not add to the running height above.
+            radialSuggestionMenu.measure(
+                MeasureSpec.makeMeasureSpec(keyboard.measuredWidth, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(keyboard.measuredHeight, MeasureSpec.EXACTLY),
+            )
         }
         if (quickSettings.visibility != GONE) {
             // The panel takes exactly the height the keys would have had, so opening it does not
@@ -624,6 +660,11 @@ class KeyboardHostView(
         if (keyboard.visibility != GONE) {
             keyboard.layout(bodyLeft, y, bodyRight, y + keyboard.measuredHeight)
             y += keyboard.measuredHeight
+        }
+        if (radialSuggestionMenu.visibility != GONE) {
+            // keyboard's own bounds, already set by the layout call just above -- exactly the
+            // rect this view overlays.
+            radialSuggestionMenu.layout(keyboard.left, keyboard.top, keyboard.right, keyboard.bottom)
         }
         if (quickSettings.visibility != GONE) {
             quickSettings.layout(bodyLeft, y, bodyRight, y + quickSettings.measuredHeight)

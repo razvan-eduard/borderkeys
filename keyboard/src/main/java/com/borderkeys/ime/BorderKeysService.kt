@@ -73,6 +73,7 @@ class BorderKeysService :
     QuickActionsView.Listener,
     ClipboardPanelView.Listener,
     LanguageRevertPanelView.Listener,
+    RadialSuggestionMenuView.Listener,
     PredictionEngine.ResultListener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -277,6 +278,38 @@ class BorderKeysService :
     /** Which words look wrong once the conversation's language has moved on -- see its own doc.
      *  Scoped to the session the same way [fieldHistory] is, and reset alongside it. */
     private val languageSwitchCorrector = LanguageSwitchCorrector()
+
+    /** What a paused, then lifted, swipe should be showing right now -- see its own doc. Not
+     *  reset per field the way [languageSwitchCorrector] is: it has no state that could survive
+     *  a field switch anyway, since a gesture never spans two fields. */
+    private val swipeRadialController = SwipeRadialController()
+
+    /**
+     * Where a swipe last was, in [KeyboardCanvasView]'s own local pixel space -- which is
+     * exactly [KeyboardHostView.radialSuggestionMenu]'s own local space too, since that view is
+     * laid out to [KeyboardCanvasView]'s identical rect (see `KeyboardHostView.onLayout`). Set
+     * from both [onGesturePaused] and [onGesture]: the decode answering for either one arrives
+     * later, asynchronously, as a plain word list with no coordinates of its own to anchor with.
+     */
+    private var lastGestureX = 0f
+    private var lastGestureY = 0f
+
+    /** What [radialTimeoutRunnable] commits if it fires -- set alongside arming it in
+     *  [onGestureCandidates], read once and never relied on afterwards. */
+    private var radialTopWord: String? = null
+
+    /** Applies [radialTopWord] the same way tapping it would, once [KeyboardPreferences.
+     *  radialPickTimeoutMillis] has passed with nothing tapped on the real menu. Armed in
+     *  [onGestureCandidates], cancelled by [dismissRadialMenu]. One instance, like every other
+     *  scheduled callback in this class -- see [gestureDecodingRunnable]'s own doc for why. */
+    private val radialTimeoutRunnable = Runnable {
+        val word = radialTopWord
+        swipeRadialController.onTimedOut()
+        host?.setRadialMenuVisible(false)
+        if (word != null) {
+            onSuggestionPicked(0, word)
+        }
+    }
 
     /**
      * Bumped every time [resetFieldHistory] runs -- a new field, a new generation.
@@ -531,6 +564,9 @@ class BorderKeysService :
                     view.keyboard.holdHintsEnabled = newPreferences.longPressHints
                     view.keyboard.largeKeyText = newPreferences.largeKeyText
                     view.keyboard.longPressDelayMillis = newPreferences.longPressMillis.toLong()
+                    view.keyboard.radialMenuEnabled = newPreferences.radialMenuEnabled
+                    view.keyboard.radialPauseDwellMillis =
+                        newPreferences.radialPauseDwellMillis.toLong()
                     view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
                     applyQuickActions(view)
                     refreshClipboardChip()
@@ -631,6 +667,8 @@ class BorderKeysService :
         view.keyboard.holdHintsEnabled = preferences.longPressHints
         view.keyboard.largeKeyText = preferences.largeKeyText
         view.keyboard.longPressDelayMillis = preferences.longPressMillis.toLong()
+        view.keyboard.radialMenuEnabled = preferences.radialMenuEnabled
+        view.keyboard.radialPauseDwellMillis = preferences.radialPauseDwellMillis.toLong()
         view.keyboard.setLayout(composedLayout(alphabeticLayout))
         view.suggestionStrip.listener = this
         view.suggestionStrip.visibleLimit = preferences.suggestionCount
@@ -638,6 +676,7 @@ class BorderKeysService :
         view.quickActions.listener = this
         view.clipboardPanel.listener = this
         view.languageRevertPanel.listener = this
+        view.radialSuggestionMenu.listener = this
         view.emojiPanel.listener = EmojiPanelView.Listener { emoji -> onEmojiPicked(emoji) }
         view.emojiPanel.recents = preferences.emojiRecents
         applyQuickActions(view)
@@ -909,6 +948,9 @@ class BorderKeysService :
         if (!preferences.swipeEnabled) {
             return
         }
+        // A fresh swipe starting is one of the "something else is happening now" moments a stray
+        // radial from a dropped or superseded lift should not survive.
+        dismissRadialMenu()
         val connection = currentInputConnection
         if (connection != null && composing.isNotEmpty()) {
             val contextWord = previousWord1
@@ -920,8 +962,50 @@ class BorderKeysService :
                 recordLearned(finished, contextWord, grandContextWord)
             }
         }
+        if (count > 0) {
+            lastGestureX = xs[count - 1]
+            lastGestureY = ys[count - 1]
+        }
         host?.postDelayed(gestureDecodingRunnable, GESTURE_DECODING_NOTICE_MILLIS)
         engine.decodeGesture(xs, ys, timestamps, count, previousWord1, previousWord2)
+    }
+
+    /**
+     * The finger paused mid-swipe. No effect unless [KeyboardPreferences.radialMenuEnabled] --
+     * checked here, not in [KeyboardCanvasView], because arming the pause-dwell timer at all is
+     * already gated by the view's own `radialMenuEnabled` mirror of the same preference; this is
+     * the belt to that braces, and where the actual preview decode is requested from.
+     */
+    override fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
+        if (!preferences.radialMenuEnabled) {
+            return
+        }
+        if (count > 0) {
+            lastGestureX = xs[count - 1]
+            lastGestureY = ys[count - 1]
+        }
+        engine.decodeGesturePreview(xs, ys, timestamps, count, previousWord1, previousWord2)
+    }
+
+    /** Real movement resumed after a pause that had already shown a preview -- it comes down
+     *  immediately, and any preview decode still in flight is dropped rather than shown late. */
+    override fun onGestureResumed() {
+        engine.cancelPendingPreview()
+        swipeRadialController.onResumed()
+        host?.setRadialMenuVisible(false)
+    }
+
+    /** The preview decode's answer, for [SwipeRadialController.onPauseDetected] to decide
+     *  whether there is anything worth showing. */
+    override fun onGesturePreviewCandidates(words: Array<String?>, count: Int) {
+        val view = host ?: return
+        val candidates = words.take(count.coerceAtMost(preferences.radialSuggestionCount))
+            .filterNotNull()
+        if (!swipeRadialController.onPauseDetected(candidates)) {
+            return
+        }
+        view.radialSuggestionMenu.show(lastGestureX, lastGestureY, candidates, interactive = false)
+        view.setRadialMenuVisible(true)
     }
 
     /**
@@ -951,6 +1035,21 @@ class BorderKeysService :
         connection.endBatchEdit()
 
         view?.suggestionStrip?.setSuggestions(words, count)
+
+        // The lift always shows the real menu when the setting is on, whether or not a preview
+        // was showing right up to this moment -- see SwipeRadialController.onGestureLifted's own
+        // doc. The top candidate is already composing above; this is a correction/confirmation
+        // overlay on top of it, not a second decode.
+        if (preferences.radialMenuEnabled && view != null) {
+            swipeRadialController.onGestureLifted()
+            val shown = words.take(count.coerceAtMost(preferences.radialSuggestionCount))
+                .filterNotNull()
+            radialTopWord = best
+            view.radialSuggestionMenu.show(lastGestureX, lastGestureY, shown, interactive = true)
+            view.setRadialMenuVisible(true)
+            view.removeCallbacks(radialTimeoutRunnable)
+            view.postDelayed(radialTimeoutRunnable, preferences.radialPickTimeoutMillis.toLong())
+        }
     }
 
     override fun onKeyRepeat(code: Int) {
@@ -960,6 +1059,7 @@ class BorderKeysService :
     }
 
     override fun onText(text: CharSequence) {
+        dismissRadialMenu()
         val connection = currentInputConnection ?: return
         connection.beginBatchEdit()
         finishComposing(connection)
@@ -972,9 +1072,12 @@ class BorderKeysService :
         // Backspace is the one key that gets to look at the pending correction; every other key
         // settles it. Doing this here rather than in each handler is what keeps a correction
         // from surviving three words and then being undone by a backspace that meant something
-        // else entirely.
+        // else entirely. The radial menu follows the same rule, one line below: backspace gets
+        // its own call in handleDelete() itself, because it also has to run before the deletion
+        // it dismisses for -- rather than beside it.
         if (code != KeyCodes.DELETE) {
             confirmPendingCorrection()
+            dismissRadialMenu()
         }
         when (code) {
             KeyCodes.SHIFT -> handleShift()
@@ -1260,6 +1363,39 @@ class BorderKeysService :
         host?.setLanguageRevertPanelVisible(false)
     }
 
+    /** A wedge was tapped: the same commit path a strip tap already uses, since the radial menu
+     *  is a correction/confirmation overlay on the same composing word, not a second decision. */
+    override fun onRadialPicked(index: Int, word: String) {
+        host?.removeCallbacks(radialTimeoutRunnable)
+        host?.setRadialMenuVisible(false)
+        swipeRadialController.onPicked()
+        onSuggestionPicked(index, word)
+    }
+
+    /** The menu was tapped somewhere that was not a wedge -- leaves the composing word exactly
+     *  as it already was, still the top candidate, still editable, no text change. */
+    override fun onRadialDismissed() {
+        dismissRadialMenu()
+    }
+
+    /**
+     * Cancels the pick-timeout, hides the menu, and tells the controller -- decision 5's fourth
+     * "something else is happening now" case, called unconditionally from every one of them:
+     * backspace, any other key, a fresh gesture starting, committed text arriving some other
+     * way, or the field resetting outright. Cancelling a callback that was never armed and
+     * hiding an already-hidden view both cost nothing, so every call site can call this without
+     * first checking whether the menu was actually up.
+     *
+     * [onDismiss] defaults to the generic "something else happened" transition; backspace passes
+     * its own so [SwipeRadialController]'s own state-transition tests can tell the two apart,
+     * even though both do the same thing to the state machine today.
+     */
+    private fun dismissRadialMenu(onDismiss: () -> Unit = { swipeRadialController.onOtherKeyOrAction() }) {
+        host?.removeCallbacks(radialTimeoutRunnable)
+        host?.setRadialMenuVisible(false)
+        onDismiss()
+    }
+
     /**
      * Edits the field for each replacement, right-to-left as [LanguageSwitchCorrector.resolve]
      * already ordered them, then one [checkpointField] for the whole batch -- one Undo reverts
@@ -1450,6 +1586,12 @@ class BorderKeysService :
     }
 
     private fun handleDelete() {
+        // Unconditional, before anything else: the gesture's top candidate is still sitting in
+        // composing() at this point (decision 4), so the rest of this function's own
+        // composing.isNotEmpty() branch below is already exactly "delete one code point from the
+        // swiped word and re-request suggestions" -- precisely "standard strip suggestions take
+        // back over," with no further special-casing needed for what backspace does to the text.
+        dismissRadialMenu { swipeRadialController.onBackspace() }
         val connection = currentInputConnection ?: return
         val hasSelection = selectionEnd > selectionStart
         // A selection is what backspace deletes, all of it, before anything else is considered.
@@ -2031,6 +2173,7 @@ class BorderKeysService :
     }
 
     private fun resetComposing() {
+        dismissRadialMenu()
         pendingCorrection = null
         pendingForget = null
         // A new field starts with typed == "" and no in-flight request could ever answer for

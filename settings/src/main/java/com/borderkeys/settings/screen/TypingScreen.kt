@@ -291,6 +291,48 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 ) { value -> update { it.copy(experimentalSwipeModelEnabled = value) } }
             }
         }
+
+        // A separate card from Swipe typing above rather than folded into it: this is an
+        // alternative to the strip, not another fact about how a swipe is decoded, and the three
+        // sliders only matter once the switch itself is on -- the same "nothing to tune while
+        // it's off" shape the Correcting-as-you-type card already uses for its own toggles.
+        SettingsSectionCard(strings[Keys.RADIAL_TITLE]) {
+            SwitchRow(
+                title = strings[Keys.RADIAL_TITLE],
+                subtitle = strings[Keys.RADIAL_ENABLE_NOTE],
+                checked = preferences.radialMenuEnabled,
+            ) { value -> update { it.copy(radialMenuEnabled = value) } }
+            if (preferences.radialMenuEnabled) {
+                DefaultableSlider(
+                    label = strings.getString(Keys.RADIAL_COUNT, preferences.radialSuggestionCount),
+                    value = preferences.radialSuggestionCount.toFloat(),
+                    range = KeyboardPreferences.MIN_RADIAL_SUGGESTIONS.toFloat()..
+                        KeyboardPreferences.MAX_RADIAL_SUGGESTIONS.toFloat(),
+                    default = KeyboardPreferences.DEFAULT_RADIAL_SUGGESTIONS.toFloat(),
+                    steps = KeyboardPreferences.MAX_RADIAL_SUGGESTIONS -
+                        KeyboardPreferences.MIN_RADIAL_SUGGESTIONS - 1,
+                ) { value -> update { it.copy(radialSuggestionCount = value.toInt()) } }
+                DefaultableSlider(
+                    label = strings.getString(
+                        Keys.RADIAL_PAUSE_DWELL_MS, preferences.radialPauseDwellMillis,
+                    ),
+                    value = preferences.radialPauseDwellMillis.toFloat(),
+                    range = KeyboardPreferences.MIN_RADIAL_PAUSE_DWELL_MILLIS.toFloat()..
+                        KeyboardPreferences.MAX_RADIAL_PAUSE_DWELL_MILLIS.toFloat(),
+                    default = KeyboardPreferences.DEFAULT_RADIAL_PAUSE_DWELL_MILLIS.toFloat(),
+                ) { value -> update { it.copy(radialPauseDwellMillis = value.toInt()) } }
+                DefaultableSlider(
+                    label = strings.getString(
+                        Keys.RADIAL_PICK_TIMEOUT_MS, preferences.radialPickTimeoutMillis,
+                    ),
+                    value = preferences.radialPickTimeoutMillis.toFloat(),
+                    range = KeyboardPreferences.MIN_RADIAL_PICK_TIMEOUT_MILLIS.toFloat()..
+                        KeyboardPreferences.MAX_RADIAL_PICK_TIMEOUT_MILLIS.toFloat(),
+                    default = KeyboardPreferences.DEFAULT_RADIAL_PICK_TIMEOUT_MILLIS.toFloat(),
+                ) { value -> update { it.copy(radialPickTimeoutMillis = value.toInt()) } }
+                Explanation(strings[Keys.RADIAL_EXPLANATION])
+            }
+        }
     }
 }
 
