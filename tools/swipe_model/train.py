@@ -51,13 +51,18 @@ class SwipeDataset(Dataset):
 
     def __getitem__(self, index: int):
         record = self.records[index]
+        # futo-org/swipe.futo.org already stores x/y as a canvas fraction, not pixels --
+        # confirmed 2026-09-13 by sampling raw points against their own canvas_width/height,
+        # which stayed near-constant across wildly different canvas sizes. Dividing by
+        # canvas_width/height again here, as an earlier version of this method did, squashed
+        # every gesture into a ~0.0025-wide sliver near the origin -- a scale this dataset's
+        # own resample_uniform_time docstring ("already normalised to [0,1]^2") and the C++
+        # implementation both correctly assume was never actually used, and every checkpoint
+        # trained under that bug learned a feature space no [0,1]-scaled input, real or
+        # synthetic, would ever land in.
         xs = np.array(record["xs"], dtype=np.float32)
         ys = np.array(record["ys"], dtype=np.float32)
         ts = np.array(record["ts"], dtype=np.float64)
-        width = float(record.get("canvas_width") or xs.max() or 1.0)
-        height = float(record.get("canvas_height") or ys.max() or 1.0)
-        xs = xs / width
-        ys = ys / height
         key_centers = self.key_centers
 
         word = record["word"].lower()

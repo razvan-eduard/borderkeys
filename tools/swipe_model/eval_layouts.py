@@ -52,10 +52,10 @@ def evaluate_layout(model: TcnEncoder, layout_name: str, records, limit: int | N
             word = record["word"].lower()
             if any(c not in letters for c in word):
                 continue
-            width = float(record.get("canvas_width") or 1.0)
-            height = float(record.get("canvas_height") or 1.0)
-            xs = torch.tensor([p["x"] for p in points], dtype=torch.float32) / width
-            ys = torch.tensor([p["y"] for p in points], dtype=torch.float32) / height
+            # Already a canvas fraction, not pixels -- see train.py's SwipeDataset for why
+            # dividing by canvas_width/height again here would be a second, compounding bug.
+            xs = torch.tensor([p["x"] for p in points], dtype=torch.float32)
+            ys = torch.tensor([p["y"] for p in points], dtype=torch.float32)
             ts = torch.tensor([p["t"] for p in points], dtype=torch.float64)
             resampled = resample_uniform_time(xs.numpy(), ys.numpy(), ts.numpy())
             if resampled is None:
