@@ -44,7 +44,24 @@ Description: |-
       inflation in the keyboard process.
     * Several languages active at once, with no manual switching. Mixing two languages in one
       sentence is the normal case, not an exception.
-    * Swipe typing decoded geometrically on-device.
+    * Notices when a correction was made under the wrong language and offers the word back, or
+      fixes it automatically — your choice — landing on the field's own undo history like any
+      other edit.
+    * Swipe typing decoded geometrically on-device, with an optional radial menu: pause
+      mid-swipe for a preview of the leading words, lift to pick one from a ring around your
+      finger, or leave it and the top guess applies itself. Off by default.
+    * A names dictionary built from Wikidata (CC0), so a name capitalises correctly
+      mid-sentence instead of only at the start of one.
+    * Alternate physical layouts — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona —
+      alongside QWERTY, for every bundled language.
+    * A personal dictionary you can see and edit: every learned word has a Forget and a Block
+      right beside it, not a black box.
+    * A row of quick actions for copy, paste, select-all and more, extendable with your own
+      macros.
+    * Built-in themes, full manual colour control, and a library to save, import and share
+      your own.
+    * Backup and restore everything this keyboard has learned and configured to a single file
+      you control. Nothing syncs anywhere on its own.
     * Private mode is automatic in password fields and whenever an app sets
       IME_FLAG_NO_PERSONALIZED_LEARNING: no learning, no clipboard history, no personal
       dictionary.

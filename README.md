@@ -46,6 +46,10 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   data, no accuracy number that depends on what you happened to type it on. A from-scratch neural
   decoder (a small TCN, hand-written in C++, no ML runtime) exists in `plus`'s own source and test
   suite, but is not the active one yet: see [Flavors](#flavors) below.
+- **An optional radial menu for swipe typing.** Pause mid-swipe for a quick preview of the
+  leading candidates near your finger; lift to pick one from a ring, or leave it and the top
+  guess applies itself after a short delay. Off by default — the ordinary suggestion strip is
+  unchanged either way.
 - **A names dictionary** built from Wikidata (CC0), so a name capitalises correctly mid-sentence
   instead of only at the start of one or after a shift.
 - **Alternate physical layouts** — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona — for
