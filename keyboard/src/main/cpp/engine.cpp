@@ -1835,14 +1835,41 @@ const char* Engine::candidateText(const Candidate& candidate, uint32_t* lengthOu
 }
 
 bool Engine::candidateIsProperNoun(const Candidate& candidate) const {
-    if (candidate.packIndex < 0 || candidate.packIndex >= kMaxPacks) {
+    if (candidate.packIndex >= 0 && candidate.packIndex < kMaxPacks) {
+        const LanguagePack& pack = packs_[candidate.packIndex];
+        if (pack.isOpen() && candidate.wordIndex >= 0) {
+            return pack.trie().isProperNoun(static_cast<uint32_t>(candidate.wordIndex));
+        }
         return false;
     }
-    const LanguagePack& pack = packs_[candidate.packIndex];
-    if (!pack.isOpen() || candidate.wordIndex < 0) {
+    // A personal-dictionary or phrase candidate carries no proper-noun flag of its own -- the
+    // user model learns spelling and frequency, not classification, and a phrase is never a
+    // name. But a name typed once, corrected, and learned is still a name the second time: cross-
+    // checked by text (folded, so case and diacritics both wash out, matching how the trie itself
+    // is keyed) against every active pack's own dictionary, rather than just answering false and
+    // leaving AutoCorrection.matchCase with nothing but typed's own case to go on -- which is
+    // exactly backwards for a name someone typed in the middle of a sentence, lower case, on
+    // purpose, because that is where the word was.
+    uint32_t length = 0;
+    const char* text = candidateText(candidate, &length);
+    if (text == nullptr || length == 0) {
         return false;
     }
-    return pack.trie().isProperNoun(static_cast<uint32_t>(candidate.wordIndex));
+    uint32_t folded[kMaxComposing];
+    const int foldedLength = foldUtf8(text, length, folded, kMaxComposing);
+    if (foldedLength <= 0) {
+        return false;
+    }
+    for (int i = 0; i < kMaxPacks; ++i) {
+        if (!packs_[i].isOpen() || !packs_[i].active) {
+            continue;
+        }
+        const int32_t wordIndex = packs_[i].trie().lookupFolded(folded, foldedLength);
+        if (wordIndex >= 0 && packs_[i].trie().isProperNoun(static_cast<uint32_t>(wordIndex))) {
+            return true;
+        }
+    }
+    return false;
 }
 
 }  // namespace borderkeys

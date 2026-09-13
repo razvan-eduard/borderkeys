@@ -270,9 +270,12 @@ public:
     const char* candidateText(const Candidate& candidate, uint32_t* lengthOut) const;
 
     // Whether the candidate is a name -- always capitalise it, the same override
-    // PackedTrie::isProperNoun documents. False for a phrase or a user-model entry: neither
-    // carries the flag, since phrases are built from already-cased pack words and a user-model
-    // entry is something this person typed, not a name this build shipped.
+    // PackedTrie::isProperNoun documents. A pack candidate answers this directly, from its own
+    // flag. A phrase or a user-model entry carries no flag of its own -- neither this build's
+    // packs nor a person's own typing classify anything -- so this falls back to looking its text
+    // up (folded, case- and diacritic-insensitive) in every active pack instead: a name learned
+    // from what someone typed is still the same name a pack would have flagged, the second time
+    // it comes up.
     bool candidateIsProperNoun(const Candidate& candidate) const;
 
     const KeyGeometry& geometry() const { return geometry_; }

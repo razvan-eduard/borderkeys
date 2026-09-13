@@ -97,14 +97,22 @@ internal object AutoCorrection {
     /**
      * Gives a correction the capitalisation of the word it replaces.
      *
-     * The dictionaries store lower-case spellings, so a correction arrives lower case whatever
-     * was typed. Committing it as it comes turns the first word of a sentence into a lower-case
-     * one, which is a second thing to fix for every one thing that was fixed.
+     * The built-in dictionaries store lower-case spellings, so a correction from one of those
+     * arrives lower case whatever was typed. The personal dictionary is not so tidy: it keeps the
+     * literal spelling last committed (see `UserModel::learn`), which is capitalised whenever
+     * that commit happened to be -- a genuine sentence start, a host app misreporting its caps
+     * state, or a stray shift press -- and that capital survives in storage regardless of where
+     * the word is typed next. Left unchecked that reads as a personal word "randomly" showing up
+     * capitalised mid-sentence, so both branches below fully decide the correction's case rather
+     * than only ever adding a capital never seen -- restoring one just as readily as removing one
+     * a dictionary should not have offered.
      *
      * [isProperNoun] means the dictionary flagged [correction] a name (see
      * PackedTrie::isProperNoun) -- capitalised regardless of what [typed] looked like, the one
      * override this function makes that is not about [typed] at all, because a name is not a
-     * guess about which key the user meant to reach the way the rest of this function is.
+     * guess about which key the user meant to reach the way the rest of this function is. The
+     * personal dictionary never sets this (there is no name classifier for a freshly learned
+     * word), so a learned name only reads capitalised here when [typed] itself was.
      * Checked after the all-caps branch, not before: caps lock is a deliberate, stronger
      * instruction than "capitalise this one word", so "ANA" typed in full caps still shouts,
      * exactly as any other word would.
@@ -121,9 +129,10 @@ internal object AutoCorrection {
         if (isProperNoun) {
             return correction.replaceFirstChar { it.uppercaseChar() }
         }
-        if (!typed[0].isUpperCase() || correction[0].isUpperCase()) {
-            return correction
+        return if (typed[0].isUpperCase()) {
+            correction.replaceFirstChar { it.uppercaseChar() }
+        } else {
+            correction.replaceFirstChar { it.lowercaseChar() }
         }
-        return correction.replaceFirstChar { it.uppercaseChar() }
     }
 }

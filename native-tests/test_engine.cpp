@@ -501,6 +501,33 @@ void runEngineTests() {
         check(guarded.rankOf("test", "testing") >= 0, "and so does a negative one");
     }
 
+    section("a personal-dictionary word can still be a proper noun");
+    {
+        // "border" is flagged a proper noun in the test pack itself (build_dict.py's --selftest
+        // fixture). Learned here under a different case -- the way a personal dictionary
+        // actually ends up holding a name, from whatever a person typed or corrected once, not
+        // from a classifier -- it must not lose that flag just because this candidate comes from
+        // the user model rather than the pack. See Engine::candidateIsProperNoun's own doc for
+        // why a match is looked up by folded text across every active pack for exactly this case.
+        LoadedEngine loaded;
+        loaded.open();
+        loaded.engine.learn("Border", 6, nullptr, 0, nullptr, 0);
+
+        Candidate out[Engine::kMaxCandidates];
+        const int found = loaded.engine.suggest("bord", 4, nullptr, 0, nullptr, 0, out,
+                                                 Engine::kMaxCandidates);
+        int userPackSlot = -1;
+        for (int i = 0; i < found; ++i) {
+            if (out[i].packIndex == Candidate::kUserPack) {
+                userPackSlot = i;
+                break;
+            }
+        }
+        check(userPackSlot >= 0, "the learned word is offered from the user model");
+        check(userPackSlot >= 0 && loaded.engine.candidateIsProperNoun(out[userPackSlot]),
+              "and is still recognised as the proper noun the pack itself flags it as");
+    }
+
     section("correction strictness is a bounded multiplier, not an override");
     {
         // kEditPenalty (40) so dominates any realistic frequency gap that even the most lenient

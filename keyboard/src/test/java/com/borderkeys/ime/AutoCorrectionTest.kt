@@ -80,8 +80,22 @@ class AutoCorrectionTest {
     }
 
     @Test
-    fun `a correction that is already capitalised is left as it is`() {
-        assertEquals("Bucureşti", AutoCorrection.matchCase("bucuresti", "Bucureşti"))
+    fun `a correction that is already capitalised keeps it when flagged a proper noun`() {
+        assertEquals(
+            "Bucureşti",
+            AutoCorrection.matchCase("bucuresti", "Bucureşti", isProperNoun = true),
+        )
+    }
+
+    @Test
+    fun `a correction capitalised for no reason the typed word gives is brought back down`() {
+        // The personal dictionary keeps the literal case a word was last committed in (see
+        // UserModel::learn), which can be capitalised from an unrelated earlier sentence start
+        // and has nothing to do with isProperNoun -- the trie never sets that flag for a learned
+        // word. Left alone, that stale capital would resurface here mid-sentence forever; this is
+        // the bug matchCase's own doc now describes as the reason both branches fully decide the
+        // case rather than only ever adding a capital.
+        assertEquals("radial", AutoCorrection.matchCase("radial", "Radial"))
     }
 
     @Test
