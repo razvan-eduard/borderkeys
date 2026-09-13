@@ -180,6 +180,19 @@ internal object NativePredictor {
     external fun nativeSetPhraseSuggestions(handle: Long, enabled: Boolean)
 
     /**
+     * Loads tier B's trained weights (a `.bkw` file's full bytes, ~2.5 MB) and returns whether
+     * they were valid. Always false in a `core` build -- see Engine::loadSwipeWeights.
+     */
+    external fun nativeLoadSwipeWeights(handle: Long, weights: ByteArray): Boolean
+
+    /**
+     * The "experimental swipe model" preference. Off by default; a no-op in a `core` build. Safe
+     * to call before [nativeLoadSwipeWeights] finishes -- tier B is only used once both this is
+     * true and weights have loaded successfully.
+     */
+    external fun nativeSetSwipeModelEnabled(handle: Long, enabled: Boolean)
+
+    /**
      * How the dictionaries spell this word, or null when none of them has it.
      *
      * The lookup folds case and diacritics, because that is how the trie is keyed, but what

@@ -4,6 +4,9 @@
 #include "engine.hpp"
 
 #include "gesture/shark2_decoder.hpp"
+#ifdef BORDERKEYS_NEURAL_SWIPE
+#include "gesture/tcn_decoder.hpp"
+#endif
 
 
 #include <algorithm>
@@ -494,24 +497,28 @@ bool Engine::create() {
     geometry_.clear();
     userModel_.clear();
 
-    // The decoder, chosen here and never again -- there is one, and it is geometric.
+    // Tier A, always built: geometric, and every flavor's decoder until tier B is both compiled
+    // in (BORDERKEYS_NEURAL_SWIPE, `plus` only) and switched on by the user.
     //
-    // The plan allowed a second, neural tier in the paid flavor. It is not built, in either
-    // flavor, and this is where a preprocessor branch used to pretend otherwise while both of
-    // its arms constructed the same object. The reason it was not built is recorded in
-    // docs/licensing.md section 2.3: the published implementation turned out to depend on
-    // ExecuTorch and on CMake 3.29, so adopting it means putting PyTorch's runtime inside the
-    // module with the tightest latency budget in the application, and raising the CMake floor
-    // for every native target. That is a decision to take deliberately, not one to smuggle in
-    // behind a flag.
-    //
-    // What makes the option cheap later is the GestureScorer/GestureDecoder split, not a
-    // compile-time switch: a second decoder is a second implementation of one interface.
+    // An earlier neural attempt was rejected outright -- recorded in docs/licensing.md section
+    // 2.3 -- because the published implementation depended on ExecuTorch and CMake 3.29, putting
+    // PyTorch's runtime inside the module with the tightest latency budget in the application.
+    // The GestureScorer/GestureDecoder split is what made a second, dependency-free attempt
+    // (tools/swipe_model/, gesture/tcn_*.{cpp,hpp}) possible without touching this one: a second
+    // decoder is a second implementation of one interface, not a rewrite of the first.
     gestureDecoder_.reset(new (std::nothrow) Shark2Decoder(*this));
     if (!gestureDecoder_) {
         arena_.release();
         return false;
     }
+
+#ifdef BORDERKEYS_NEURAL_SWIPE
+    // Constructed unconditionally in this build -- it does nothing until loadSwipeWeights()
+    // succeeds and setSwipeModelEnabled(true) is called, both driven by the "experimental swipe
+    // model" preference, off by default. A construction failure here is not fatal to the engine
+    // the way tier A's would be: tier A already exists and tier B is optional by design.
+    neuralDecoder_.reset(new (std::nothrow) TcnDecoder(*this));
+#endif
 
     created_ = true;
     return true;
@@ -519,12 +526,34 @@ bool Engine::create() {
 
 void Engine::destroy() {
     gestureDecoder_.reset();
+#ifdef BORDERKEYS_NEURAL_SWIPE
+    neuralDecoder_.reset();
+    neuralEnabled_ = false;
+#endif
     for (LanguagePack& pack : packs_) {
         pack.close();
     }
     userModel_.clear();
     arena_.release();
     created_ = false;
+}
+
+bool Engine::loadSwipeWeights(const uint8_t* data, size_t length) {
+#ifdef BORDERKEYS_NEURAL_SWIPE
+    return neuralDecoder_ && neuralDecoder_->loadWeights(data, length);
+#else
+    (void)data;
+    (void)length;
+    return false;
+#endif
+}
+
+void Engine::setSwipeModelEnabled(bool enabled) {
+#ifdef BORDERKEYS_NEURAL_SWIPE
+    neuralEnabled_ = enabled;
+#else
+    (void)enabled;
+#endif
 }
 
 int Engine::packIndexForTag(const char* tag) const {
@@ -600,6 +629,11 @@ bool Engine::setKeyGeometry(const int32_t* codes, const float* centersX, const f
     if (gestureDecoder_) {
         gestureDecoder_->setLayout(geometry_);
     }
+#ifdef BORDERKEYS_NEURAL_SWIPE
+    if (neuralDecoder_) {
+        neuralDecoder_->setLayout(geometry_);
+    }
+#endif
     return true;
 }
 
@@ -734,8 +768,20 @@ int Engine::decodeGesture(const float* xs, const float* ys, const int64_t* ts, i
     refreshWeights();
     resolveContext(previous1, previous1Length, previous2, previous2Length);
 
+    GestureDecoder* decoder = gestureDecoder_.get();
+#ifdef BORDERKEYS_NEURAL_SWIPE
+    // Switches the whole request between tiers rather than blending them: the two decoders are
+    // scored on different scales (see normaliseGestureScores) and were never designed to have
+    // their raw candidates merged. Falls back to tier A whenever tier B has no weights loaded
+    // yet, not just when the preference is off, so a request arriving in the window between
+    // engine creation and the async weights load still gets an answer.
+    if (neuralEnabled_ && neuralDecoder_ && neuralDecoder_->hasWeights()) {
+        decoder = neuralDecoder_.get();
+    }
+#endif
+
     Candidate raw[kMaxCandidates];
-    const int produced = gestureDecoder_->decode(xs, ys, ts, count, raw, kMaxCandidates);
+    const int produced = decoder->decode(xs, ys, ts, count, raw, kMaxCandidates);
     if (produced <= 0) {
         return 0;
     }
@@ -782,6 +828,11 @@ void Engine::normaliseGestureScores(Candidate* candidates, int count) {
 }
 
 const char* Engine::gestureDecoderName() const {
+#ifdef BORDERKEYS_NEURAL_SWIPE
+    if (neuralEnabled_ && neuralDecoder_ && neuralDecoder_->hasWeights()) {
+        return neuralDecoder_->name();
+    }
+#endif
     return gestureDecoder_ ? gestureDecoder_->name() : "none";
 }
 

@@ -251,6 +251,20 @@ data class KeyboardPreferences(
     val languageSwitchCorrectionMode: Int = LANGUAGE_SWITCH_OFF,
 
     /**
+     * Whether swipe typing is decoded by the trained neural model (tier B) instead of the
+     * geometric one (tier A) that always ships. `plus`-only in effect -- a `core` build has no
+     * tier B compiled in at all, so this setting does nothing there.
+     *
+     * Off by default, and "experimental" is not a formality: the shipped checkpoint carries a
+     * known, tracked training-time scale bug that a runtime shim compensates for (see
+     * `keyboard/src/main/cpp/gesture/tcn_decoder.cpp` and HANDOFF.md's Thread 4) rather than a
+     * cleanly retrained model. It measures well on real gesture data through the actual decode
+     * path, but this is genuinely a preview of work still in progress, not a finished feature
+     * quietly defaulting on.
+     */
+    val experimentalSwipeModelEnabled: Boolean = false,
+
+    /**
      * Whether the first slot of the suggestion strip offers what is on the clipboard.
      *
      * Off by default, and not out of caution about the feature: the strip is glanced at while

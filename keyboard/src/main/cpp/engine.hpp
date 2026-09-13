@@ -18,6 +18,10 @@
 #include "topk.hpp"
 #include "user_model.hpp"
 
+#ifdef BORDERKEYS_NEURAL_SWIPE
+#include "gesture/tcn_decoder.hpp"
+#endif
+
 namespace borderkeys {
 
 /**
@@ -201,6 +205,19 @@ public:
 
     const char* gestureDecoderName() const;
 
+    /**
+     * Loads tier B's trained weights. `plus`-only: a no-op that always returns false when this
+     * library was built without `BORDERKEYS_NEURAL_SWIPE`, so the JNI bridge and its method
+     * table can stay identical across flavors rather than forking on this one feature.
+     */
+    bool loadSwipeWeights(const uint8_t* data, size_t length);
+
+    /**
+     * Switches [decodeGesture] between tier A (always) and tier B (once weights are loaded and
+     * this is true). A no-op in a `core` build, for the same reason as [loadSwipeWeights].
+     */
+    void setSwipeModelEnabled(bool enabled);
+
     // --- GestureScorer -------------------------------------------------------------------
     int packCount() const override { return kMaxPacks; }
     const PackedTrie* activeTrie(int packIndex) const override;
@@ -373,11 +390,23 @@ private:
     LanguagePack packs_[kMaxPacks];
     KeyGeometry geometry_;
     /**
-     * Chosen once, at create(), from a compile-time flag. There is no `if (neural)` anywhere
-     * near a finger, and in the free build the neural tier is not compiled at all -- so the
-     * shipped library contains no trace of it rather than dead code the linker removed.
+     * Tier A: geometric, ships in every build, and always what [decodeGesture] falls back to.
+     * `core` never compiles anything else, so there is no `if (neural)` anywhere near a finger
+     * in that flavor -- [neuralDecoder_] and [neuralEnabled_] do not exist in its binary at all.
      */
     std::unique_ptr<GestureDecoder> gestureDecoder_;
+
+#ifdef BORDERKEYS_NEURAL_SWIPE
+    /**
+     * Tier B: `plus`-only, and only used once [loadSwipeWeights] has succeeded and
+     * [setSwipeModelEnabled] has turned it on -- an "experimental swipe model" preference the
+     * user opts into, off by default. See `keyboard/src/main/cpp/gesture/tcn_decoder.cpp`'s own
+     * comment on the scale-compensation shim this checkpoint currently needs, and HANDOFF.md's
+     * Thread 4 for why it is there and when to remove it.
+     */
+    std::unique_ptr<TcnDecoder> neuralDecoder_;
+    bool neuralEnabled_ = false;
+#endif
     UserModel userModel_;
     Arena arena_;
 

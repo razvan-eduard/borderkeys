@@ -33,9 +33,12 @@ public:
 
 // The contract that makes the two decoding tiers interchangeable.
 //
-// Tier A is geometric and ships in every build. Tier B is neural, optional, and exists only in
-// the `plus` flavor. Which one is constructed is decided once, at engine creation, from a
-// compile-time flag -- so there is no `if (neural)` anywhere near a finger.
+// Tier A is geometric and ships in every build. Tier B is neural and exists only in the `plus`
+// flavor's binary at all -- a compile-time flag (BORDERKEYS_NEURAL_SWIPE), not a runtime one, so
+// `core` has no trace of it regardless of any setting. Within a `plus` build, which one answers
+// a given request is a runtime choice (Engine::setSwipeModelEnabled, an "experimental swipe
+// model" preference, off by default) -- so there is an `if (neural)`, but it is one branch per
+// gesture, not one per finger movement, and it does not exist at all in `core`.
 //
 // `decode` takes raw touch samples and fills `out` with candidates, best first, returning how
 // many were written. It allocates nothing: every buffer it needs was claimed when the decoder

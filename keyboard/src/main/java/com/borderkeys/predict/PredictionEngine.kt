@@ -363,6 +363,28 @@ class PredictionEngine(
         }
     }
 
+    /**
+     * Loads tier B's trained weights once, at start. [bytes] is a `.bkw` file's full content --
+     * see NativePredictor.nativeLoadSwipeWeights for why this is a byte array, not a descriptor.
+     * A `core` build calling this is harmless: the native side is a no-op there.
+     */
+    fun loadSwipeWeights(bytes: ByteArray) {
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeLoadSwipeWeights(current, bytes)
+            }
+        }
+    }
+
+    /** Applied whenever the "experimental swipe model" preference changes. See KeyboardPreferences. */
+    fun setSwipeModelEnabled(enabled: Boolean) {
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeSetSwipeModelEnabled(current, enabled)
+            }
+        }
+    }
+
     fun setBlockedWords(words: Set<String>) {
         synchronized(blocked) {
             blocked.clear()

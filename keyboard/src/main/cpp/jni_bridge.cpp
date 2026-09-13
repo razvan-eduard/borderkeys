@@ -571,6 +571,41 @@ void nativeSetPhraseSuggestions(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
     engine->setPhraseSuggestions(enabled == JNI_TRUE);
 }
 
+/**
+ * Loads tier B's trained weights from a plain byte array, not an fd/offset/length window like a
+ * language pack -- at ~2.5 MB this is small enough to read fully into memory once at startup, and
+ * `TcnWeights::loadFromBytes` already takes a `(data, length)` pair, so there is nothing an mmap
+ * would save. A no-op returning false in a `core` build (see Engine::loadSwipeWeights).
+ */
+jboolean nativeLoadSwipeWeights(JNIEnv* env, jobject /*thiz*/, jlong handle, jbyteArray weights) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || weights == nullptr) {
+        return JNI_FALSE;
+    }
+    const jsize length = env->GetArrayLength(weights);
+    if (length <= 0) {
+        return JNI_FALSE;
+    }
+    jbyte* const bytes = env->GetByteArrayElements(weights, nullptr);
+    if (bytes == nullptr) {
+        return JNI_FALSE;
+    }
+    const bool loaded =
+        engine->loadSwipeWeights(reinterpret_cast<const uint8_t*>(bytes), static_cast<size_t>(length));
+    env->ReleaseByteArrayElements(weights, bytes, JNI_ABORT);
+    return loaded ? JNI_TRUE : JNI_FALSE;
+}
+
+/** The "experimental swipe model" preference, off by default. A no-op in a `core` build. */
+void nativeSetSwipeModelEnabled(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
+                                jboolean enabled) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return;
+    }
+    engine->setSwipeModelEnabled(enabled == JNI_TRUE);
+}
+
 void nativeSetLearningSpeed(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jfloat speed) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr) {
@@ -837,6 +872,9 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeSetLanguageLock)},
     {"nativeSetPhraseSuggestions", "(JZ)V",
      reinterpret_cast<void*>(nativeSetPhraseSuggestions)},
+    {"nativeLoadSwipeWeights", "(J[B)Z", reinterpret_cast<void*>(nativeLoadSwipeWeights)},
+    {"nativeSetSwipeModelEnabled", "(JZ)V",
+     reinterpret_cast<void*>(nativeSetSwipeModelEnabled)},
     {"nativeKnownSpelling", "(JLjava/lang/String;)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeKnownSpelling)},
     {"nativeLoadUserTrigrams",

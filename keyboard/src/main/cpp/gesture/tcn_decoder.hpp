@@ -39,6 +39,9 @@ public:
      *  [setLayout]. */
     bool loadWeights(const uint8_t* data, size_t length);
 
+    /** Whether [loadWeights] has succeeded at least once. */
+    bool hasWeights() const { return encoder_.hasWeights(); }
+
 private:
     GestureScorer& scorer_;
     TcnWeights weights_;

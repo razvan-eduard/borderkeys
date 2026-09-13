@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.predict.SwipeModelAvailability
 import com.borderkeys.settings.CautionNote
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
@@ -263,6 +264,20 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             )
             if (!preferences.swipeEnabled) {
                 Explanation(strings[Keys.SWIPE_SWIPE_TYPING_IS_CURRENTLY_OFF_SO])
+            }
+        }
+
+        // `plus`-only: a `core` build compiles no tier B at all, so the card does not exist
+        // there rather than existing and doing nothing. See SwipeModelAvailability's own doc for
+        // why this is a compile-time check, not a runtime one.
+        if (SwipeModelAvailability.neuralSwipeModelSupported) {
+            SettingsSectionCard(strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL]) {
+                CautionNote(strings[Keys.SWIPE_A_PREVIEW_OF_WORK_STILL_IN_PROGRESS])
+                SwitchRow(
+                    title = strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
+                    subtitle = strings[Keys.SWIPE_DECODES_GESTURES_WITH_A_TRAINED_NEURAL],
+                    checked = preferences.experimentalSwipeModelEnabled,
+                ) { value -> update { it.copy(experimentalSwipeModelEnabled = value) } }
             }
         }
     }

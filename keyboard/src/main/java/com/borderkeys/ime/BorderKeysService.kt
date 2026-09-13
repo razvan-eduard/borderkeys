@@ -336,9 +336,26 @@ class BorderKeysService :
             // to open the database, and the whole input method died on start with it.
             runCatching { loadDictionaries() }
                 .onFailure { error -> degradeWithoutDictionaries(error) }
+            loadSwipeModel()
         }
         observeSettings()
         observeLanguagePacks()
+    }
+
+    /**
+     * Reads tier B's trained weights out of assets and hands them to the engine, once, at start.
+     *
+     * `runCatching` rather than a flavor check: a `core` build simply has no `model.bkw` asset --
+     * `keyboard/src/plus/assets/` is not part of its source set at all -- so [AssetManager.open]
+     * throwing here is the expected, silent outcome there, not a failure worth logging. Loading
+     * succeeding does not turn tier B on by itself; [engine].setSwipeModelEnabled follows the
+     * "experimental swipe model" preference exactly like every other engine setting.
+     */
+    private fun loadSwipeModel() {
+        runCatching {
+            val bytes = assets.open(SWIPE_MODEL_ASSET).use { it.readBytes() }
+            engine.loadSwipeWeights(bytes)
+        }
     }
 
     /**
@@ -651,6 +668,7 @@ class BorderKeysService :
             KeyboardPreferences.languageLockStrict(preferences.languageLock),
         )
         engine.setPhraseSuggestions(preferences.phraseSuggestions)
+        engine.setSwipeModelEnabled(preferences.experimentalSwipeModelEnabled)
         if (privateMode) {
             learning.discard()
         }
@@ -3028,6 +3046,8 @@ class BorderKeysService :
         const val SYMBOLS_NUMPAD_RIGHT_LAYOUT = "symbols_numpad_right"
         const val SYMBOLS_SHIFT_LAYOUT = "symbols_shift"
         const val NUMPAD_LAYOUT = "numpad"
+        /** `plus`-only asset (keyboard/src/plus/assets/); absent, harmlessly, in `core`. */
+        const val SWIPE_MODEL_ASSET = "model.bkw"
 
         const val PAGE_ALPHABETIC = 0
         const val PAGE_SYMBOLS = 1

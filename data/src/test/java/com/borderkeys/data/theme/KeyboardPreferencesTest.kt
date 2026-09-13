@@ -227,6 +227,11 @@ class KeyboardPreferencesTest {
         assertEquals(defaults, defaults.sanitised())
     }
     @Test
+    fun `the experimental swipe model defaults off`() {
+        assertFalse(KeyboardPreferences().experimentalSwipeModelEnabled)
+    }
+
+    @Test
     fun `language lock is on and balanced by default`() {
         assertEquals(
             KeyboardPreferences.LANGUAGE_LOCK_BALANCED,

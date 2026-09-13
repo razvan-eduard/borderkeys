@@ -53,17 +53,17 @@ android {
             dimension = "engine"
             isDefault = true
         }
-        // `plus` differs from `core` by the :assist module the application links, and now by
-        // this one flag: BORDERKEYS_NEURAL_SWIPE compiles the tier-B swipe decoder's sources
-        // into this flavor's native library (see gesture/CMakeLists.txt option of the same
-        // name). `core` never sets it, so its .so carries no trace of tier B, the same
-        // "unpack the APK, the code is not in it" guarantee the assistant already has.
+        // `plus` differs from `core` by the :assist module the application links, and by this
+        // one flag: BORDERKEYS_NEURAL_SWIPE compiles the tier-B swipe decoder's sources into
+        // this flavor's native library (see gesture/CMakeLists.txt option of the same name).
+        // `core` never sets it, so its .so carries no trace of tier B, the same "unpack the APK,
+        // the code is not in it" guarantee the assistant already has.
         //
-        // The decoder is not yet the ACTIVE one Engine::create() constructs -- see
-        // docs/licensing.md section 2.5 and tools/swipe_model/ for why: it has no trained
-        // weights yet, and wiring it in before that exists would silently replace `plus`'s
-        // working swipe typing with an untrained model's garbage. This flag only makes the
-        // code exist, buildable and testable, in the flavor it will eventually ship in.
+        // Wired into Engine::create() (2026-09-13), gated behind an "experimental swipe model"
+        // preference, off by default -- see docs/licensing.md section 2.5, tools/swipe_model/,
+        // and HANDOFF.md's Thread 4 for the checkpoint's current known caveat (a training-time
+        // scale bug, compensated in gesture/tcn_decoder.cpp, tracked for removal once a
+        // checkpoint trained under the fix lands).
         create("plus") {
             dimension = "engine"
             externalNativeBuild {
