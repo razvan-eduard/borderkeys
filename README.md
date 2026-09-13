@@ -124,6 +124,12 @@ learned dictionary of the other build.
 |---|---|---|---|
 | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/2_home.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/3_theme.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/4_languages.jpg) |
 
+### The radial menu, in both builds
+
+| A ring of alternatives, mid-swipe | Position, size, defaults and the blur behind it |
+|---|---|
+| ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/5_radial_menu.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/6_radial_settings.jpg) |
+
 ### The assistant, `plus` only
 
 | Draft box, opened on a selection | Working, on-device | A version kept for every step | The models this build will run |
