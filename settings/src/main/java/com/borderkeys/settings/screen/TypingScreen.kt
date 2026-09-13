@@ -36,6 +36,7 @@ import com.borderkeys.settings.SuggestionStripPreview
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
 import com.borderkeys.settings.rememberThemeUpdater
+import kotlin.math.roundToInt
 
 /**
  * How typing itself behaves: what the strip offers, what corrects itself, and how a gesture is
@@ -312,24 +313,95 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     steps = KeyboardPreferences.MAX_RADIAL_SUGGESTIONS -
                         KeyboardPreferences.MIN_RADIAL_SUGGESTIONS - 1,
                 ) { value -> update { it.copy(radialSuggestionCount = value.toInt()) } }
+                // Shown and stepped in tenths of a second, not milliseconds -- a hundred-odd
+                // possible millisecond values is a false precision nobody can actually feel or
+                // aim for on a slider; the underlying KeyboardPreferences fields stay
+                // millisecond Ints regardless, since that's what Handler.postDelayed wants.
                 DefaultableSlider(
                     label = strings.getString(
-                        Keys.RADIAL_PAUSE_DWELL_MS, preferences.radialPauseDwellMillis,
+                        Keys.RADIAL_PAUSE_DWELL_S,
+                        "%.1f".format(preferences.radialPauseDwellMillis / 1000f),
                     ),
-                    value = preferences.radialPauseDwellMillis.toFloat(),
-                    range = KeyboardPreferences.MIN_RADIAL_PAUSE_DWELL_MILLIS.toFloat()..
-                        KeyboardPreferences.MAX_RADIAL_PAUSE_DWELL_MILLIS.toFloat(),
-                    default = KeyboardPreferences.DEFAULT_RADIAL_PAUSE_DWELL_MILLIS.toFloat(),
-                ) { value -> update { it.copy(radialPauseDwellMillis = value.toInt()) } }
+                    value = preferences.radialPauseDwellMillis / 1000f,
+                    range = (KeyboardPreferences.MIN_RADIAL_PAUSE_DWELL_MILLIS / 1000f)..
+                        (KeyboardPreferences.MAX_RADIAL_PAUSE_DWELL_MILLIS / 1000f),
+                    default = KeyboardPreferences.DEFAULT_RADIAL_PAUSE_DWELL_MILLIS / 1000f,
+                    steps = (KeyboardPreferences.MAX_RADIAL_PAUSE_DWELL_MILLIS -
+                        KeyboardPreferences.MIN_RADIAL_PAUSE_DWELL_MILLIS) / 100 - 1,
+                ) { value ->
+                    update { it.copy(radialPauseDwellMillis = (value * 1000f).roundToInt()) }
+                }
                 DefaultableSlider(
                     label = strings.getString(
-                        Keys.RADIAL_PICK_TIMEOUT_MS, preferences.radialPickTimeoutMillis,
+                        Keys.RADIAL_PICK_TIMEOUT_S,
+                        "%.1f".format(preferences.radialPickTimeoutMillis / 1000f),
                     ),
-                    value = preferences.radialPickTimeoutMillis.toFloat(),
-                    range = KeyboardPreferences.MIN_RADIAL_PICK_TIMEOUT_MILLIS.toFloat()..
-                        KeyboardPreferences.MAX_RADIAL_PICK_TIMEOUT_MILLIS.toFloat(),
-                    default = KeyboardPreferences.DEFAULT_RADIAL_PICK_TIMEOUT_MILLIS.toFloat(),
-                ) { value -> update { it.copy(radialPickTimeoutMillis = value.toInt()) } }
+                    value = preferences.radialPickTimeoutMillis / 1000f,
+                    range = (KeyboardPreferences.MIN_RADIAL_PICK_TIMEOUT_MILLIS / 1000f)..
+                        (KeyboardPreferences.MAX_RADIAL_PICK_TIMEOUT_MILLIS / 1000f),
+                    default = KeyboardPreferences.DEFAULT_RADIAL_PICK_TIMEOUT_MILLIS / 1000f,
+                    steps = (KeyboardPreferences.MAX_RADIAL_PICK_TIMEOUT_MILLIS -
+                        KeyboardPreferences.MIN_RADIAL_PICK_TIMEOUT_MILLIS) / 100 - 1,
+                ) { value ->
+                    update { it.copy(radialPickTimeoutMillis = (value * 1000f).roundToInt()) }
+                }
+                Text(
+                    strings[Keys.RADIAL_POSITION],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PickerChip(
+                        strings[Keys.RADIAL_POSITION_FINGER],
+                        preferences.radialMenuAnchor == KeyboardPreferences.RADIAL_ANCHOR_FINGER,
+                    ) { update { it.copy(radialMenuAnchor = KeyboardPreferences.RADIAL_ANCHOR_FINGER) } }
+                    PickerChip(
+                        strings[Keys.RADIAL_POSITION_CENTER],
+                        preferences.radialMenuAnchor == KeyboardPreferences.RADIAL_ANCHOR_CENTER,
+                    ) { update { it.copy(radialMenuAnchor = KeyboardPreferences.RADIAL_ANCHOR_CENTER) } }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PickerChip(
+                        strings[Keys.RADIAL_POSITION_TANGENT_LEFT],
+                        preferences.radialMenuAnchor == KeyboardPreferences.RADIAL_ANCHOR_TANGENT_LEFT,
+                    ) {
+                        update { it.copy(radialMenuAnchor = KeyboardPreferences.RADIAL_ANCHOR_TANGENT_LEFT) }
+                    }
+                    PickerChip(
+                        strings[Keys.RADIAL_POSITION_TANGENT_RIGHT],
+                        preferences.radialMenuAnchor == KeyboardPreferences.RADIAL_ANCHOR_TANGENT_RIGHT,
+                    ) {
+                        update { it.copy(radialMenuAnchor = KeyboardPreferences.RADIAL_ANCHOR_TANGENT_RIGHT) }
+                    }
+                }
+                Text(
+                    strings[Keys.RADIAL_SIZE],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PickerChip(
+                        strings[Keys.RADIAL_SIZE_SMALL],
+                        preferences.radialMenuSize == KeyboardPreferences.RADIAL_SIZE_SMALL,
+                    ) { update { it.copy(radialMenuSize = KeyboardPreferences.RADIAL_SIZE_SMALL) } }
+                    PickerChip(
+                        strings[Keys.RADIAL_SIZE_MEDIUM],
+                        preferences.radialMenuSize == KeyboardPreferences.RADIAL_SIZE_MEDIUM,
+                    ) { update { it.copy(radialMenuSize = KeyboardPreferences.RADIAL_SIZE_MEDIUM) } }
+                    PickerChip(
+                        strings[Keys.RADIAL_SIZE_LARGE],
+                        preferences.radialMenuSize == KeyboardPreferences.RADIAL_SIZE_LARGE,
+                    ) { update { it.copy(radialMenuSize = KeyboardPreferences.RADIAL_SIZE_LARGE) } }
+                }
                 Explanation(strings[Keys.RADIAL_EXPLANATION])
             }
         }

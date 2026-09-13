@@ -515,15 +515,27 @@ class KeyboardHostView(
      * Shows or hides the radial menu, overlaid exactly on [keyboard]'s own rect.
      *
      * Unlike [setClipboardPanelVisible]/[setEmojiPanelVisible], the keys stay up and stay
-     * visible underneath -- this sits over them, in the same slot, rather than replacing them --
-     * and unlike [setLanguageRevertPanelVisible], nothing else's visibility changes alongside it:
-     * the suggestion strip above the keys is untouched either way.
+     * visible underneath -- this sits over them, in the same slot, rather than replacing them.
+     * The suggestion strip, though, is mutually exclusive with it -- both offer word candidates,
+     * and showing both at once is two answers to the same question on screen together -- the
+     * same trade [setLanguageRevertPanelVisible] already makes for its own overlay, and applied
+     * here the identical way: hidden while the ring (preview or real, either one) is up, restored
+     * the moment it is not.
      */
     fun setRadialMenuVisible(visible: Boolean) {
         if (radialMenuVisible == visible) {
             return
         }
+        if (visible) {
+            // Forced to the top of the z-order explicitly, every time, rather than trusting
+            // that it stays the last-added child forever -- addView order in init{} is the
+            // right default, but a menu that must always draw over everything else should not
+            // depend on nobody ever adding a tenth child after it.
+            radialSuggestionMenu.bringToFront()
+            inlineSuggestions.visibility = GONE
+        }
         radialSuggestionMenu.visibility = if (visible) VISIBLE else GONE
+        suggestionStrip.visibility = if (visible) GONE else VISIBLE
         requestLayout()
     }
 

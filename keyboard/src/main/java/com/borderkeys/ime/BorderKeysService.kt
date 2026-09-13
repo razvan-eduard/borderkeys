@@ -567,6 +567,8 @@ class BorderKeysService :
                     view.keyboard.radialMenuEnabled = newPreferences.radialMenuEnabled
                     view.keyboard.radialPauseDwellMillis =
                         newPreferences.radialPauseDwellMillis.toLong()
+                    view.radialSuggestionMenu.sizeScale =
+                        KeyboardPreferences.radialSizeScale(newPreferences.radialMenuSize)
                     view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
                     applyQuickActions(view)
                     refreshClipboardChip()
@@ -669,6 +671,8 @@ class BorderKeysService :
         view.keyboard.longPressDelayMillis = preferences.longPressMillis.toLong()
         view.keyboard.radialMenuEnabled = preferences.radialMenuEnabled
         view.keyboard.radialPauseDwellMillis = preferences.radialPauseDwellMillis.toLong()
+        view.radialSuggestionMenu.sizeScale =
+            KeyboardPreferences.radialSizeScale(preferences.radialMenuSize)
         view.keyboard.setLayout(composedLayout(alphabeticLayout))
         view.suggestionStrip.listener = this
         view.suggestionStrip.visibleLimit = preferences.suggestionCount
@@ -1004,8 +1008,28 @@ class BorderKeysService :
         if (!swipeRadialController.onPauseDetected(candidates)) {
             return
         }
-        view.radialSuggestionMenu.show(lastGestureX, lastGestureY, candidates, interactive = false)
+        val (anchorX, anchorY) = radialAnchor(view)
+        view.radialSuggestionMenu.show(anchorX, anchorY, candidates, interactive = false)
         view.setRadialMenuVisible(true)
+    }
+
+    /**
+     * Where the ring should be centred, per [KeyboardPreferences.radialMenuAnchor].
+     *
+     * The tangent modes hand back the keyboard's own edge (`0f` or its full width) rather than
+     * anything inset from it -- [RadialSuggestionMenuView.show]'s own clamp already pulls
+     * whatever it is given back inside the view by exactly [RadialSuggestionMenuView]'s outer
+     * radius, so handing it the true edge is what makes the ring land tangent to that edge
+     * rather than merely near it. That same clamp is also the answer to "what if the swipe ends
+     * right at the edge": [FINGER] mode is clamped by it too, so the ring can never be pushed
+     * off keyboard bounds regardless of where the gesture actually happened.
+     */
+    private fun radialAnchor(view: KeyboardHostView): Pair<Float, Float> = when (preferences.radialMenuAnchor) {
+        KeyboardPreferences.RADIAL_ANCHOR_CENTER ->
+            view.keyboard.width / 2f to view.keyboard.height / 2f
+        KeyboardPreferences.RADIAL_ANCHOR_TANGENT_LEFT -> 0f to lastGestureY
+        KeyboardPreferences.RADIAL_ANCHOR_TANGENT_RIGHT -> view.keyboard.width.toFloat() to lastGestureY
+        else -> lastGestureX to lastGestureY
     }
 
     /**
@@ -1045,7 +1069,8 @@ class BorderKeysService :
             val shown = words.take(count.coerceAtMost(preferences.radialSuggestionCount))
                 .filterNotNull()
             radialTopWord = best
-            view.radialSuggestionMenu.show(lastGestureX, lastGestureY, shown, interactive = true)
+            val (anchorX, anchorY) = radialAnchor(view)
+            view.radialSuggestionMenu.show(anchorX, anchorY, shown, interactive = true)
             view.setRadialMenuVisible(true)
             view.removeCallbacks(radialTimeoutRunnable)
             view.postDelayed(radialTimeoutRunnable, preferences.radialPickTimeoutMillis.toLong())

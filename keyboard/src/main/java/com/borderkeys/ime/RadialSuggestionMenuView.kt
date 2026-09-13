@@ -68,6 +68,10 @@ class RadialSuggestionMenuView(
     private var pressedWedge = -1
     private val wedgeBounds = RectF()
 
+    /** Multiplies [OUTER_RADIUS_ROWS] -- set from [com.borderkeys.data.theme.KeyboardPreferences
+     *  .radialMenuSize] via [com.borderkeys.data.theme.KeyboardPreferences.radialSizeScale]. */
+    var sizeScale: Float = 1f
+
     init {
         setWillNotDraw(false)
         isHapticFeedbackEnabled = true
@@ -77,11 +81,25 @@ class RadialSuggestionMenuView(
      *  [words] beyond [MAX_WEDGES] are dropped; the setting that bounds
      *  `radialSuggestionCount` already keeps this from happening in practice. */
     fun show(anchorX: Float, anchorY: Float, words: List<String>, interactive: Boolean) {
-        this.anchorX = anchorX
-        this.anchorY = anchorY
         this.words = words.take(MAX_WEDGES)
         this.interactive = interactive
         pressedWedge = -1
+        // Clamped to this view's own bounds, always -- regardless of which anchor mode chose
+        // anchorX/anchorY, or whether a swipe simply ended a pixel from the edge. The ring is
+        // never allowed to reach past the edge it would otherwise cross, which is also exactly
+        // how "tangent to the left/right edge" is implemented: that mode hands in the edge
+        // itself (0 or the full width) and lets this same clamp pull it in to touch, not cross.
+        val outer = outerRadius()
+        this.anchorX = if (width > 0) {
+            anchorX.coerceIn(outer, (width - outer).coerceAtLeast(outer))
+        } else {
+            anchorX
+        }
+        this.anchorY = if (height > 0) {
+            anchorY.coerceIn(outer, (height - outer).coerceAtLeast(outer))
+        } else {
+            anchorY
+        }
         invalidate()
     }
 
@@ -98,7 +116,8 @@ class RadialSuggestionMenuView(
     }
 
     private fun outerRadius(): Float =
-        (if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_ROW_PX) * OUTER_RADIUS_ROWS
+        (if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_ROW_PX) *
+            OUTER_RADIUS_ROWS * sizeScale
 
     private fun innerRadius(): Float = outerRadius() * INNER_RADIUS_FRACTION
 
@@ -179,7 +198,6 @@ class RadialSuggestionMenuView(
                 val startAngle = -90f + sweep * index
                 val fill = if (index == pressedWedge) paints.accent else paints.keyFill
                 canvas.drawArc(wedgeBounds, startAngle, sweep, true, fill)
-                canvas.drawArc(wedgeBounds, startAngle, sweep, true, paints.keyStroke)
                 val midAngleRad = Math.toRadians((startAngle + sweep / 2f).toDouble())
                 val textX = anchorX + (midRadius * kotlin.math.cos(midAngleRad)).toFloat()
                 val textY = anchorY + (midRadius * kotlin.math.sin(midAngleRad)).toFloat() +
@@ -187,6 +205,19 @@ class RadialSuggestionMenuView(
                 canvas.drawText(words[index], textX, textY, paints.label)
             }
             paints.label.textAlign = previousAlign
+            // The same "outline the keys" setting KeyboardCanvasView's own keys and
+            // KeyboardHostView's own frame already gate their strokes on, applied here as one
+            // clean outer circle plus one straight line per wedge boundary -- not each wedge's
+            // own stroked arc, which would double-draw the outer edge at every seam.
+            if (paints.showKeyBorders) {
+                canvas.drawCircle(anchorX, anchorY, outer, paints.keyStroke)
+                for (index in words.indices) {
+                    val angleRad = Math.toRadians((-90f + sweep * index).toDouble())
+                    val edgeX = anchorX + (outer * kotlin.math.cos(angleRad)).toFloat()
+                    val edgeY = anchorY + (outer * kotlin.math.sin(angleRad)).toFloat()
+                    canvas.drawLine(anchorX, anchorY, edgeX, edgeY, paints.keyStroke)
+                }
+            }
         } finally {
             paints.keyFill.alpha = fillBaseAlpha
             paints.modifierKeyFill.alpha = modifierBaseAlpha

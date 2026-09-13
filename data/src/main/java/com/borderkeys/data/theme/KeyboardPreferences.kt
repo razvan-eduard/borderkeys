@@ -294,6 +294,29 @@ data class KeyboardPreferences(
     val radialPickTimeoutMillis: Int = DEFAULT_RADIAL_PICK_TIMEOUT_MILLIS,
 
     /**
+     * Where the ring is centred. [RADIAL_ANCHOR_FINGER] (default) puts it where the swipe
+     * paused or ended -- the whole point of a radial menu being "around the finger" in the
+     * first place. [RADIAL_ANCHOR_CENTER] fixes it to the middle of the keyboard regardless of
+     * where the gesture happened, and [RADIAL_ANCHOR_TANGENT_LEFT]/[RADIAL_ANCHOR_TANGENT_RIGHT]
+     * fix its horizontal position to one side (vertically it still follows the gesture) --
+     * useful for someone who always swipes one-handed and would rather the ring never lands
+     * under the thumb doing the swiping. Clamped to a valid value on read the same way
+     * [languageSwitchCorrectionMode] is; an unrecognised value falls back to
+     * [RADIAL_ANCHOR_FINGER].
+     */
+    val radialMenuAnchor: Int = RADIAL_ANCHOR_FINGER,
+
+    /**
+     * How big the ring is drawn, as one of [RADIAL_SIZE_SMALL]/[RADIAL_SIZE_MEDIUM]/
+     * [RADIAL_SIZE_LARGE] -- a named size rather than a free slider, the same reasoning
+     * [KeyboardPreferences]'s own text-size settings elsewhere in this file already use: a
+     * handful of tested, legible sizes is a better set of choices than a continuous range
+     * whose in-between values were never actually checked for tap-target size. Clamped to a
+     * valid value on read; an unrecognised value falls back to [RADIAL_SIZE_MEDIUM].
+     */
+    val radialMenuSize: Int = RADIAL_SIZE_MEDIUM,
+
+    /**
      * Whether the first slot of the suggestion strip offers what is on the clipboard.
      *
      * Off by default, and not out of caution about the feature: the strip is glanced at while
@@ -690,6 +713,16 @@ data class KeyboardPreferences(
         radialPickTimeoutMillis = radialPickTimeoutMillis.coerceIn(
             MIN_RADIAL_PICK_TIMEOUT_MILLIS, MAX_RADIAL_PICK_TIMEOUT_MILLIS,
         ),
+        radialMenuAnchor = if (radialMenuAnchor in RADIAL_ANCHOR_FINGER..RADIAL_ANCHOR_TANGENT_RIGHT) {
+            radialMenuAnchor
+        } else {
+            RADIAL_ANCHOR_FINGER
+        },
+        radialMenuSize = if (radialMenuSize in RADIAL_SIZE_SMALL..RADIAL_SIZE_LARGE) {
+            radialMenuSize
+        } else {
+            RADIAL_SIZE_MEDIUM
+        },
         learningSpeed = if (learningSpeed in LEARNING_CAUTIOUS..LEARNING_IMMEDIATE) {
             learningSpeed
         } else {
@@ -1021,6 +1054,13 @@ data class KeyboardPreferences(
             else -> 1f
         }
 
+        /** How much [radialMenuSize] scales the ring's base radius. */
+        fun radialSizeScale(size: Int): Float = when (size) {
+            RADIAL_SIZE_SMALL -> 0.75f
+            RADIAL_SIZE_LARGE -> 1.3f
+            else -> 1f
+        }
+
         /** Longest language code accepted from the stored file: `pt-BR` and friends fit easily. */
         const val MAX_LANGUAGE_TAG = 16
 
@@ -1041,17 +1081,36 @@ data class KeyboardPreferences(
         const val MAX_RADIAL_SUGGESTIONS = 6
         const val DEFAULT_RADIAL_SUGGESTIONS = 5
 
-        /** How long a real pause has to hold before the preview shows. Tunable, the same reason
-         *  [MIN_LONG_PRESS_MILLIS]/[MAX_LONG_PRESS_MILLIS] are: thumb speed and typing style vary
-         *  as much for this as they do for a long press. */
-        const val MIN_RADIAL_PAUSE_DWELL_MILLIS = 80
+        /**
+         * How long a real pause has to hold before the preview shows. Tunable, the same reason
+         * [MIN_LONG_PRESS_MILLIS]/[MAX_LONG_PRESS_MILLIS] are: thumb speed and typing style vary
+         * as much for this as they do for a long press. Stored in milliseconds -- what
+         * [android.os.Handler.postDelayed] actually wants -- but every bound here is a clean
+         * multiple of 100 on purpose: the settings screen shows and steps this in whole tenths
+         * of a second, and a bound that did not land on that grid would make one end of the
+         * slider unreachable.
+         */
+        const val MIN_RADIAL_PAUSE_DWELL_MILLIS = 100
         const val MAX_RADIAL_PAUSE_DWELL_MILLIS = 400
-        const val DEFAULT_RADIAL_PAUSE_DWELL_MILLIS = 150
+        const val DEFAULT_RADIAL_PAUSE_DWELL_MILLIS = 200
 
-        /** How long the real menu waits before applying the top candidate on its own. */
+        /** How long the real menu waits before applying the top candidate on its own. Same
+         *  "stored in milliseconds, shown in tenths of a second" shape as the pause dwell above
+         *  -- these bounds already happened to be clean multiples of 100. */
         const val MIN_RADIAL_PICK_TIMEOUT_MILLIS = 500
         const val MAX_RADIAL_PICK_TIMEOUT_MILLIS = 3000
         const val DEFAULT_RADIAL_PICK_TIMEOUT_MILLIS = 1200
+
+        /** [radialMenuAnchor] values. */
+        const val RADIAL_ANCHOR_FINGER = 0
+        const val RADIAL_ANCHOR_CENTER = 1
+        const val RADIAL_ANCHOR_TANGENT_LEFT = 2
+        const val RADIAL_ANCHOR_TANGENT_RIGHT = 3
+
+        /** [radialMenuSize] values. */
+        const val RADIAL_SIZE_SMALL = 0
+        const val RADIAL_SIZE_MEDIUM = 1
+        const val RADIAL_SIZE_LARGE = 2
 
         /** The range [minCorrectionLength] is clamped to. */
         const val MIN_CORRECTION_LENGTH = 1

@@ -1399,7 +1399,7 @@ class KeyboardCanvasView(
         /** Matches [com.borderkeys.data.theme.KeyboardPreferences.DEFAULT_RADIAL_PAUSE_DWELL_MILLIS]
          *  -- the value this field actually runs with once a real preference stream is attached;
          *  kept here too only as this property's own out-of-the-box default. */
-        private const val DEFAULT_RADIAL_PAUSE_DWELL_MILLIS = 150L
+        private const val DEFAULT_RADIAL_PAUSE_DWELL_MILLIS = 200L
 
         /** Below this, two samples are the same point as far as pause detection is concerned --
          *  noise-floor, not a tunable, so it lives beside [MIN_GESTURE_POINTS] rather than in

@@ -278,6 +278,50 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `the radial anchor defaults to the finger and repairs an unknown value`() {
+        assertEquals(
+            KeyboardPreferences.RADIAL_ANCHOR_FINGER,
+            KeyboardPreferences().radialMenuAnchor,
+        )
+        assertEquals(
+            KeyboardPreferences.RADIAL_ANCHOR_FINGER,
+            KeyboardPreferences(radialMenuAnchor = 99).sanitised().radialMenuAnchor,
+        )
+        assertEquals(
+            KeyboardPreferences.RADIAL_ANCHOR_TANGENT_RIGHT,
+            KeyboardPreferences(radialMenuAnchor = KeyboardPreferences.RADIAL_ANCHOR_TANGENT_RIGHT)
+                .sanitised().radialMenuAnchor,
+        )
+    }
+
+    @Test
+    fun `the radial size defaults to medium and repairs an unknown value`() {
+        assertEquals(KeyboardPreferences.RADIAL_SIZE_MEDIUM, KeyboardPreferences().radialMenuSize)
+        assertEquals(
+            KeyboardPreferences.RADIAL_SIZE_MEDIUM,
+            KeyboardPreferences(radialMenuSize = 99).sanitised().radialMenuSize,
+        )
+        assertEquals(
+            KeyboardPreferences.RADIAL_SIZE_LARGE,
+            KeyboardPreferences(radialMenuSize = KeyboardPreferences.RADIAL_SIZE_LARGE)
+                .sanitised().radialMenuSize,
+        )
+    }
+
+    @Test
+    fun `radialSizeScale maps each named size to a distinct multiplier`() {
+        assertEquals(1f, KeyboardPreferences.radialSizeScale(KeyboardPreferences.RADIAL_SIZE_MEDIUM), 0f)
+        assertTrue(
+            KeyboardPreferences.radialSizeScale(KeyboardPreferences.RADIAL_SIZE_SMALL) <
+                KeyboardPreferences.radialSizeScale(KeyboardPreferences.RADIAL_SIZE_MEDIUM),
+        )
+        assertTrue(
+            KeyboardPreferences.radialSizeScale(KeyboardPreferences.RADIAL_SIZE_LARGE) >
+                KeyboardPreferences.radialSizeScale(KeyboardPreferences.RADIAL_SIZE_MEDIUM),
+        )
+    }
+
+    @Test
     fun `language lock is on and balanced by default`() {
         assertEquals(
             KeyboardPreferences.LANGUAGE_LOCK_BALANCED,
