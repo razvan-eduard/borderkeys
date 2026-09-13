@@ -29,14 +29,13 @@ Summary: BorderKeys with an on-device text assistant
 
 Description: |-
     An Android keyboard that requests zero permissions and contains no code capable of opening
-    a network connection — including its own on-device text assistant, described below, which
-    never leaves this phone either. Word prediction is a deterministic engine — a compact trie
-    plus n-grams — written in C++ and running through JNI, not a language model.
+    a network connection. Word prediction is a deterministic engine — a compact trie plus
+    n-grams — written in C++ and running through JNI, not a language model.
 
-    Nothing downloads at runtime beyond a text-assistant model you choose to import yourself.
-    There is no telemetry, no crash reporting, no account and no sync. Clipboard history and
-    the personal dictionary live in a SQLCipher-encrypted database and are excluded from system
-    backup and from device-to-device transfer.
+    Nothing downloads at runtime. Dictionaries and language packs are either inside the APK or
+    imported by you from a local file. There is no telemetry, no crash reporting, no account
+    and no sync. Clipboard history and the personal dictionary live in a SQLCipher-encrypted
+    database and are excluded from system backup and from device-to-device transfer.
 
     * No permissions at all. Haptic feedback uses the API that needs none.
     * The typing surface is a custom View drawing on a Canvas — no Compose and no XML layout
@@ -68,8 +67,8 @@ Description: |-
       suggestions. The keyboard cannot read their contents — the platform guarantees that —
       and never sees your password.
 
-    On top of all that: a text assistant that runs entirely on this device. It is a draft box
-    above the keys — write in it, or open it with text you selected, and nothing reaches the
+    Also included: a text assistant that runs entirely on this device. It is a draft box above
+    the keys — write in it, or open it with text you selected, and nothing reaches the
     application until you press insert. With a model installed, what is in the box can be
     corrected, translated, re-toned, shortened, or changed by an instruction you write
     yourself, and every version is kept so you can walk back to what you started with.
