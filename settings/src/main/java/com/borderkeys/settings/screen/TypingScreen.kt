@@ -333,7 +333,29 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 }
                 DefaultableSlider(
                     label = strings.getString(
-                        Keys.RADIAL_PICK_TIMEOUT_S,
+                        Keys.RADIAL_MIN_PATH_LETTERS,
+                        "%.1f".format(preferences.radialMinPathLetters),
+                    ),
+                    value = preferences.radialMinPathLetters,
+                    range = KeyboardPreferences.MIN_RADIAL_MIN_PATH_LETTERS..
+                        KeyboardPreferences.MAX_RADIAL_MIN_PATH_LETTERS,
+                    default = KeyboardPreferences.DEFAULT_RADIAL_MIN_PATH_LETTERS,
+                    steps = ((KeyboardPreferences.MAX_RADIAL_MIN_PATH_LETTERS -
+                        KeyboardPreferences.MIN_RADIAL_MIN_PATH_LETTERS) / 0.5f).roundToInt() - 1,
+                ) { value ->
+                    update { it.copy(radialMinPathLetters = (value * 2f).roundToInt() / 2f) }
+                }
+                DefaultableSlider(
+                    label = strings.getString(
+                        // The auto-apply/auto-cancel wording follows what "if nothing is chosen"
+                        // is actually set to -- a slider labelled "auto-apply" while it is
+                        // configured to cancel would be describing the wrong outcome entirely,
+                        // not just using an imprecise word for the right one.
+                        if (preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) {
+                            Keys.RADIAL_PICK_TIMEOUT_CANCEL_S
+                        } else {
+                            Keys.RADIAL_PICK_TIMEOUT_S
+                        },
                         "%.1f".format(preferences.radialPickTimeoutMillis / 1000f),
                     ),
                     value = preferences.radialPickTimeoutMillis / 1000f,
@@ -342,8 +364,25 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     default = KeyboardPreferences.DEFAULT_RADIAL_PICK_TIMEOUT_MILLIS / 1000f,
                     steps = (KeyboardPreferences.MAX_RADIAL_PICK_TIMEOUT_MILLIS -
                         KeyboardPreferences.MIN_RADIAL_PICK_TIMEOUT_MILLIS) / 100 - 1,
+                    // Has nothing left to apply or cancel once radialLiftKeepsOpen is on: the ring
+                    // never resolves on its own then, at any point in its lifetime -- see that
+                    // field's own doc. Shown disabled rather than hidden, so the setting is still
+                    // there, at its last value, for whenever the switch below is turned back off.
+                    enabled = !preferences.radialLiftKeepsOpen,
                 ) { value ->
                     update { it.copy(radialPickTimeoutMillis = (value * 1000f).roundToInt()) }
+                }
+                // The two are sequential, not competing for the same instant (pause dwell runs
+                // before the ring opens; the pick timeout only starts counting once it has), so
+                // this is a usability smell rather than a real conflict -- but a pause set as
+                // long as or longer than the reaction window it is immediately followed by is
+                // one anybody would want to know about before finding out by hand. Moot, along
+                // with the slider above, once radialLiftKeepsOpen turns that reaction window off
+                // entirely.
+                if (!preferences.radialLiftKeepsOpen &&
+                    preferences.radialPauseDwellMillis >= preferences.radialPickTimeoutMillis
+                ) {
+                    CautionNote(strings[Keys.RADIAL_TIMEOUT_OVERLAP_WARNING])
                 }
                 Text(
                     strings[Keys.RADIAL_POSITION],
@@ -402,6 +441,38 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                         preferences.radialMenuSize == KeyboardPreferences.RADIAL_SIZE_LARGE,
                     ) { update { it.copy(radialMenuSize = KeyboardPreferences.RADIAL_SIZE_LARGE) } }
                 }
+                Text(
+                    strings[Keys.RADIAL_TIMEOUT_DEFAULT],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PickerChip(
+                        strings[Keys.RADIAL_TIMEOUT_APPLY_TOP],
+                        preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP,
+                    ) {
+                        update { it.copy(radialTimeoutDefault = KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP) }
+                    }
+                    PickerChip(
+                        strings[Keys.RADIAL_TIMEOUT_CANCEL],
+                        preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL,
+                    ) {
+                        update { it.copy(radialTimeoutDefault = KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) }
+                    }
+                }
+                SwitchRow(
+                    title = strings[Keys.RADIAL_LIFT_KEEPS_OPEN],
+                    subtitle = strings[Keys.RADIAL_LIFT_KEEPS_OPEN_NOTE],
+                    checked = preferences.radialLiftKeepsOpen,
+                ) { value -> update { it.copy(radialLiftKeepsOpen = value) } }
+                SwitchRow(
+                    title = strings[Keys.RADIAL_BLUR_BACKGROUND],
+                    subtitle = strings[Keys.RADIAL_BLUR_BACKGROUND_NOTE],
+                    checked = preferences.radialBlurBackground,
+                ) { value -> update { it.copy(radialBlurBackground = value) } }
                 Explanation(strings[Keys.RADIAL_EXPLANATION])
             }
         }

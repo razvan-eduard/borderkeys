@@ -343,18 +343,27 @@ fun DefaultableSlider(
     /** Discrete stops between the ends, the same meaning Compose's own `Slider.steps` has --
      *  0 for a continuous drag, passed through by the two callers stepping over a fixed list. */
     steps: Int = 0,
+    /** False dims the label and disables both the slider and its reset button, for a setting
+     *  that reads normally but has no effect right now -- a value another switch on the same
+     *  screen is currently bypassing entirely, not one that is merely at its default. */
+    enabled: Boolean = true,
     onChange: (Float) -> Unit,
 ) {
     val strings = LocalStrings.current
+    val labelColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+    }
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 label,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = labelColor,
                 modifier = Modifier.weight(1f),
             )
-            if (value != default) {
+            if (enabled && value != default) {
                 IconButton(onClick = { onChange(default) }, modifier = Modifier.size(28.dp)) {
                     Icon(
                         painter = painterResource(android.R.drawable.ic_menu_close_clear_cancel),
@@ -370,6 +379,7 @@ fun DefaultableSlider(
             valueRange = range,
             steps = steps,
             onValueChange = onChange,
+            enabled = enabled,
             modifier = Modifier.fillMaxWidth(),
         )
     }

@@ -288,6 +288,19 @@ data class KeyboardPreferences(
     val radialPauseDwellMillis: Int = DEFAULT_RADIAL_PAUSE_DWELL_MILLIS,
 
     /**
+     * How far a swipe has to have already travelled -- its own bounding-box diagonal -- before
+     * the pause-dwell timer is ever armed at all, in letters rather than pixels: nobody knows
+     * how many pixels their screen has, but everybody knows roughly how wide a key is. Converted
+     * to a real pixel distance at the keyboard itself, against that layout's own measured
+     * average key width -- see `KeyboardCanvasView`'s own doc for the conversion. Guards against
+     * a slow-starting swipe reading as an instant pause: the very first samples of a real swipe
+     * are, by definition, still close to where the finger went down. Clamped to
+     * [MIN_RADIAL_MIN_PATH_LETTERS]..[MAX_RADIAL_MIN_PATH_LETTERS] on read; `0` removes the
+     * guard entirely (any pause, however early, can open the ring).
+     */
+    val radialMinPathLetters: Float = DEFAULT_RADIAL_MIN_PATH_LETTERS,
+
+    /**
      * How long the real menu waits, after a lift, before applying the top candidate on its own.
      * Clamped to [MIN_RADIAL_PICK_TIMEOUT_MILLIS]..[MAX_RADIAL_PICK_TIMEOUT_MILLIS] on read.
      */
@@ -315,6 +328,46 @@ data class KeyboardPreferences(
      * valid value on read; an unrecognised value falls back to [RADIAL_SIZE_MEDIUM].
      */
     val radialMenuSize: Int = RADIAL_SIZE_MEDIUM,
+
+    /**
+     * What happens if the ring is resolved -- released, or the pick-timeout elapses -- with
+     * neither a wedge nor the centre Cancel button touched. [RADIAL_TIMEOUT_APPLY_TOP] (default)
+     * applies rank #1, the same outcome as if the pause had never happened at all: passivity is
+     * never destructive unless this is changed. [RADIAL_TIMEOUT_CANCEL] makes passivity discard
+     * instead -- getting a word then always requires deliberately steering to a wedge. The centre
+     * Cancel button is the *only* deliberate way to cancel either way; this setting only decides
+     * what *not* choosing does. Clamped to a valid value on read; an unrecognised value falls
+     * back to [RADIAL_TIMEOUT_APPLY_TOP].
+     */
+    val radialTimeoutDefault: Int = RADIAL_TIMEOUT_APPLY_TOP,
+
+    /**
+     * How a completed swipe offers its alternatives when nothing is deliberately chosen at lift.
+     *
+     * Off (default): resolves immediately. A paused gesture lifted in the dead zone applies
+     * [radialTimeoutDefault] right away; a confident, no-pause gesture never shows a ring at all
+     * -- the strip already offers the same alternatives.
+     *
+     * On: the ring is shown -- kept open if a pause had already opened it, or opened fresh and
+     * tap-only after a confident no-pause lift -- and waits indefinitely for a deliberate tap on
+     * a word or the centre Cancel button. Nothing resolves it on its own; no clock, no default
+     * applied for you. This is the same shape the ring had before the single-stroke redesign, for
+     * anyone who would rather look at the alternatives for as long as they want rather than race
+     * a countdown.
+     */
+    val radialLiftKeepsOpen: Boolean = false,
+
+    /**
+     * Whether the keys behind the ring are blurred while it is open, on API 31+.
+     *
+     * On by default -- unlike [blurBehindKeyboard] below, which this shares the same
+     * `RenderEffect` mechanism with: that one runs every frame the keyboard window is visible,
+     * this one only for as long as the ring itself is up, so the same rendering cost that is
+     * opt-in there is worth defaulting on here. The ring's own semi-transparent scrim still dims
+     * things on its own with this off, or below API 31 where `RenderEffect` does not exist at
+     * all -- this only ever removes the extra blur on top of that, never the dimming itself.
+     */
+    val radialBlurBackground: Boolean = true,
 
     /**
      * Whether the first slot of the suggestion strip offers what is on the clipboard.
@@ -710,6 +763,9 @@ data class KeyboardPreferences(
         radialPauseDwellMillis = radialPauseDwellMillis.coerceIn(
             MIN_RADIAL_PAUSE_DWELL_MILLIS, MAX_RADIAL_PAUSE_DWELL_MILLIS,
         ),
+        radialMinPathLetters = radialMinPathLetters.coerceIn(
+            MIN_RADIAL_MIN_PATH_LETTERS, MAX_RADIAL_MIN_PATH_LETTERS,
+        ),
         radialPickTimeoutMillis = radialPickTimeoutMillis.coerceIn(
             MIN_RADIAL_PICK_TIMEOUT_MILLIS, MAX_RADIAL_PICK_TIMEOUT_MILLIS,
         ),
@@ -722,6 +778,13 @@ data class KeyboardPreferences(
             radialMenuSize
         } else {
             RADIAL_SIZE_MEDIUM
+        },
+        radialTimeoutDefault = if (radialTimeoutDefault in
+            RADIAL_TIMEOUT_APPLY_TOP..RADIAL_TIMEOUT_CANCEL
+        ) {
+            radialTimeoutDefault
+        } else {
+            RADIAL_TIMEOUT_APPLY_TOP
         },
         learningSpeed = if (learningSpeed in LEARNING_CAUTIOUS..LEARNING_IMMEDIATE) {
             learningSpeed
@@ -1082,17 +1145,30 @@ data class KeyboardPreferences(
         const val DEFAULT_RADIAL_SUGGESTIONS = 5
 
         /**
-         * How long a real pause has to hold before the preview shows. Tunable, the same reason
+         * How long a real pause has to hold before the ring opens. Tunable, the same reason
          * [MIN_LONG_PRESS_MILLIS]/[MAX_LONG_PRESS_MILLIS] are: thumb speed and typing style vary
          * as much for this as they do for a long press. Stored in milliseconds -- what
          * [android.os.Handler.postDelayed] actually wants -- but every bound here is a clean
          * multiple of 100 on purpose: the settings screen shows and steps this in whole tenths
          * of a second, and a bound that did not land on that grid would make one end of the
          * slider unreachable.
+         *
+         * [MIN_RADIAL_PAUSE_DWELL_MILLIS] is deliberately `0`, not some small positive floor:
+         * `postDelayed(runnable, 0)` still posts rather than running inline, but fires on the
+         * very next looper pass, which in practice means the ring opens the moment
+         * [radialMinPathLetters] is crossed rather than waiting for genuine stillness. That is
+         * the bypass -- no separate on/off switch needed, since a value of zero already says it.
          */
-        const val MIN_RADIAL_PAUSE_DWELL_MILLIS = 100
-        const val MAX_RADIAL_PAUSE_DWELL_MILLIS = 400
+        const val MIN_RADIAL_PAUSE_DWELL_MILLIS = 0
+        const val MAX_RADIAL_PAUSE_DWELL_MILLIS = 2000
         const val DEFAULT_RADIAL_PAUSE_DWELL_MILLIS = 200
+
+        /** The range [radialMinPathLetters] is clamped to -- `0` at the low end is a real,
+         *  supported value (no minimum at all), not just a defensive floor. Half-letter steps:
+         *  finer than that is not a distinction anyone steering a real thumb could feel. */
+        const val MIN_RADIAL_MIN_PATH_LETTERS = 0f
+        const val MAX_RADIAL_MIN_PATH_LETTERS = 3f
+        const val DEFAULT_RADIAL_MIN_PATH_LETTERS = 1f
 
         /** How long the real menu waits before applying the top candidate on its own. Same
          *  "stored in milliseconds, shown in tenths of a second" shape as the pause dwell above
@@ -1111,6 +1187,10 @@ data class KeyboardPreferences(
         const val RADIAL_SIZE_SMALL = 0
         const val RADIAL_SIZE_MEDIUM = 1
         const val RADIAL_SIZE_LARGE = 2
+
+        /** [radialTimeoutDefault] values. */
+        const val RADIAL_TIMEOUT_APPLY_TOP = 0
+        const val RADIAL_TIMEOUT_CANCEL = 1
 
         /** The range [minCorrectionLength] is clamped to. */
         const val MIN_CORRECTION_LENGTH = 1

@@ -7,22 +7,31 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.os.Trace
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import com.borderkeys.theme.ThemePaints
-import kotlin.math.PI
 import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.sin
 
 /**
- * A ring of words around the finger, for a paused or just-lifted swipe.
+ * A ring of alternative words around a paused swipe's finger, plus a separate centre Cancel
+ * button, for the single-stroke pick this whole feature exists for: pause opens it, the same
+ * finger steers to a wedge or the centre without ever lifting, and lifting resolves whatever it
+ * was last over. Sized to overlay the keyboard's own rect exactly (see `KeyboardHostView`), added
+ * as that view's last child so it draws over everything else.
  *
- * One view serves both phases a [SwipeRadialController] moves through, because both need the
- * same wedge geometry around the same anchor point and differ only in touch handling and visual
- * weight -- see [interactive]'s own doc. Sized to overlay the keyboard's own rect exactly (see
- * `KeyboardHostView`), added as that view's last child so it draws over everything else.
+ * This view **never receives its own touch events for the steering finger.** Android locked that
+ * pointer to `KeyboardCanvasView` at its original `ACTION_DOWN`, before this view ever showed, and
+ * it stays locked there for the pointer's whole lifetime -- lifting and re-pressing never happens
+ * in this design. Steering is therefore *pushed in* from outside via [steerTo], and the resolution
+ * a lift or a timeout produces is *read out* via [currentSelection], not discovered through this
+ * view's own `onTouchEvent`.
  *
  * No new drawable assets: wedges are flat-filled arcs in this theme's own paints, the same
  * "canvas draws itself" style [KeyboardCanvasView]/[LanguageRevertPanelView] already use.
@@ -33,14 +42,19 @@ class RadialSuggestionMenuView(
     private val paints: ThemePaints,
 ) : View(context) {
 
-    interface Listener {
-        /** A wedge was tapped: apply that candidate. Only ever called while [interactive]. */
-        fun onRadialPicked(index: Int, word: String)
+    /** What the finger is currently over, read by the caller at resolution time (a lift, or the
+     *  pick-timeout elapsing while still held). */
+    sealed interface Selection {
+        data object None : Selection
+        data object Cancel : Selection
+        data class Word(val index: Int, val word: String) : Selection
+    }
 
-        /** The menu was tapped somewhere that was not a wedge -- empty space inside the ring, or
-         *  the dead zone around the anchor itself. Only ever called while [interactive]; a
-         *  preview never receives touches at all, see [interactive]'s own doc. */
-        fun onRadialDismissed()
+    /** Only used while [acceptsOwnTouches] -- see that property's own doc. */
+    interface Listener {
+        /** A fresh, independent tap resolved to [selection] -- a wedge, the centre button, or
+         *  neither (tapped elsewhere, or the touch stream was cancelled). */
+        fun onRadialTapResolved(selection: Selection)
     }
 
     var listener: Listener? = null
@@ -48,25 +62,31 @@ class RadialSuggestionMenuView(
     private var words: List<String> = emptyList()
     private var anchorX = 0f
     private var anchorY = 0f
+    private var currentSelection: Selection = Selection.None
 
     /**
-     * Which phase is showing.
+     * Whether this view now handles its own touch stream, rather than being steered by
+     * `KeyboardCanvasView` pushing coordinates in.
      *
-     * `false` (preview): drawn at low opacity, no scrim, and [onTouchEvent] always returns
-     * `false` -- not because the swiping finger could otherwise trigger a pick (Android already
-     * locked that pointer to [KeyboardCanvasView] at its original `ACTION_DOWN`, before this view
-     * was ever shown, so those events never reach here regardless of z-order), but so a
-     * hypothetical second pointer -- a shift-hold on the other hand -- falls through to the keys
-     * underneath rather than being swallowed by an inert preview.
+     * `false` for the whole single-stroke phase (pause through the original lift): the steering
+     * finger is locked to `KeyboardCanvasView` from its own `ACTION_DOWN`, before this view ever
+     * showed, so touches never reach here regardless of this flag -- see the class doc.
      *
-     * `true` (real menu, after lift): drawn opaquely over a scrim, and consumes every touch
-     * inside its bounds the way `ClipboardPanelView` does over the key area.
+     * `true` only when [com.borderkeys.data.theme.KeyboardPreferences.radialLiftKeepsOpen] is on
+     * and a lift resolved to nothing (neither a wedge nor Cancel): the original pointer is gone,
+     * so a *new*, independent tap is the only way anything more can happen, and this is what
+     * lets this view actually receive and act on that new touch stream itself.
      */
-    var interactive: Boolean = false
-        private set
+    var acceptsOwnTouches: Boolean = false
 
-    private var pressedWedge = -1
-    private val wedgeBounds = RectF()
+    /** One (start, sweep) pair per word, in [words]' own index order -- computed once per
+     *  [show], not per frame or per touch. See [recomputeWedgeBoundaries]'s own doc for why
+     *  these are not evenly spaced. */
+    private var wedgeStartDeg = FloatArray(0)
+    private var wedgeSweepDeg = FloatArray(0)
+    private val wedgeInnerBounds = RectF()
+    private val wedgeOuterBounds = RectF()
+    private val wedgePath = Path()
 
     /** Multiplies [OUTER_RADIUS_ROWS] -- set from [com.borderkeys.data.theme.KeyboardPreferences
      *  .radialMenuSize] via [com.borderkeys.data.theme.KeyboardPreferences.radialSizeScale]. */
@@ -77,13 +97,14 @@ class RadialSuggestionMenuView(
         isHapticFeedbackEnabled = true
     }
 
-    /** Replaces what is shown -- always the whole list, since one pause or one lift is one menu.
-     *  [words] beyond [MAX_WEDGES] are dropped; the setting that bounds
-     *  `radialSuggestionCount` already keeps this from happening in practice. */
-    fun show(anchorX: Float, anchorY: Float, words: List<String>, interactive: Boolean) {
+    /** Opens the ring, live and steerable immediately -- there is no separate lower-fidelity
+     *  phase any more, see this class's own doc for why. [words] beyond [MAX_WEDGES] are
+     *  dropped; the setting that bounds `radialSuggestionCount` already keeps this from
+     *  happening in practice. */
+    fun show(anchorX: Float, anchorY: Float, words: List<String>) {
         this.words = words.take(MAX_WEDGES)
-        this.interactive = interactive
-        pressedWedge = -1
+        currentSelection = Selection.None
+        recomputeWedgeBoundaries()
         // Clamped to this view's own bounds, always -- regardless of which anchor mode chose
         // anchorX/anchorY, or whether a swipe simply ended a pixel from the edge. The ring is
         // never allowed to reach past the edge it would otherwise cross, which is also exactly
@@ -106,49 +127,107 @@ class RadialSuggestionMenuView(
     /** Clears the menu. Idempotent -- every dismiss path in `BorderKeysService` calls this
      *  unconditionally, whether or not anything was actually showing. */
     fun hide() {
-        if (words.isEmpty() && !interactive) {
+        if (words.isEmpty()) {
             return
         }
         words = emptyList()
-        interactive = false
-        pressedWedge = -1
+        currentSelection = Selection.None
+        acceptsOwnTouches = false
         invalidate()
+    }
+
+    /** Whether crossing into a new wedge or the centre button ticks -- mirrors the keyboard's
+     *  own `hapticEnabled` preference, since this is feedback for a touch this view never
+     *  actually receives itself (see this class's own doc for why). */
+    var hapticEnabled: Boolean = true
+
+    /** Steers the highlight to whatever [x]/[y] -- this view's own local pixels, the same space
+     *  the anchor already is -- currently lands on. Called on every `onGestureSteered` from
+     *  `BorderKeysService`, never from this view's own touch handling (there is none for the
+     *  steering finger -- see this class's own doc). */
+    fun steerTo(x: Float, y: Float) {
+        val hit = hitTest(x, y)
+        if (hit != currentSelection) {
+            currentSelection = hit
+            if (hapticEnabled) {
+                // KEYBOARD_TAP, not CLOCK_TICK or CONTEXT_CLICK: the same click every key press
+                // on the keyboard underneath already gives, so a wedge feels like a key rather
+                // than announcing itself as a different kind of control.
+                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            }
+            invalidate()
+        }
+    }
+
+    /** What the finger is over right now -- read once, at resolution (a lift, or the pick
+     *  timeout), never polled on a timer. */
+    fun currentSelection(): Selection = currentSelection
+
+    /**
+     * Handles a fresh, independent tap while [acceptsOwnTouches] -- the only case this view ever
+     * sees its own touch stream at all, see that property's own doc. Deliberately the same shape
+     * as [steerTo]/[currentSelection] (highlight follows the finger, resolution reads whatever it
+     * last settled on) rather than a separate code path, so the two interactions feel identical
+     * even though one is pushed in and the other is this view's own.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!acceptsOwnTouches) {
+            return false
+        }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                steerTo(event.x, event.y)
+                return true
+            }
+            MotionEvent.ACTION_UP -> {
+                listener?.onRadialTapResolved(currentSelection)
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                listener?.onRadialTapResolved(Selection.None)
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun hitTest(x: Float, y: Float): Selection {
+        val dx = x - anchorX
+        val dy = y - anchorY
+        val distance = hypot(dx, dy)
+        if (distance <= centerRadius()) {
+            return Selection.Cancel
+        }
+        if (words.isEmpty() || distance < ringInnerRadius() || distance > outerRadius()) {
+            return Selection.None
+        }
+        val angleDeg = normalizeDegrees(Math.toDegrees(atan2(dy, dx).toDouble()).toFloat())
+        for (index in words.indices) {
+            val start = normalizeDegrees(wedgeStartDeg[index])
+            val delta = normalizeDegrees(angleDeg - start)
+            if (delta < wedgeSweepDeg[index]) {
+                return Selection.Word(index, words[index])
+            }
+        }
+        return Selection.None
     }
 
     private fun outerRadius(): Float =
         (if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_ROW_PX) *
             OUTER_RADIUS_ROWS * sizeScale
 
-    private fun innerRadius(): Float = outerRadius() * INNER_RADIUS_FRACTION
+    private fun ringInnerRadius(): Float = outerRadius() * RING_INNER_RADIUS_FRACTION
 
-    /**
-     * Which wedge, if any, a point belongs to.
-     *
-     * -1 covers three cases at once: too close to the anchor (the dead zone around the finger
-     * itself, so lifting in place cannot accidentally pick the nearest wedge), past the outer
-     * ring, or there being nothing to pick from. All three read the same to a caller: not a
-     * wedge, so [onRadialDismissed].
-     */
-    private fun wedgeAt(x: Float, y: Float): Int {
-        if (words.isEmpty()) {
-            return -1
-        }
-        val dx = x - anchorX
-        val dy = y - anchorY
-        val distance = hypot(dx, dy)
-        if (distance < innerRadius() || distance > outerRadius()) {
-            return -1
-        }
-        // Rotated so angle 0 is straight up rather than atan2's own "straight right", then
-        // normalised into [0, 2*PI) so dividing by one wedge's own angular width gives an index
-        // directly -- screen y grows downward, which is what already makes this clockwise from
-        // the top without an extra sign flip.
-        var angle = atan2(dy, dx) + PI.toFloat() / 2f
-        if (angle < 0f) {
-            angle += (PI * 2).toFloat()
-        }
-        val wedgeWidth = (PI * 2).toFloat() / words.size
-        return (angle / wedgeWidth).toInt().coerceIn(0, words.size - 1)
+    private fun centerRadius(): Float = outerRadius() * CENTER_RADIUS_FRACTION
+
+    /** Fills [wedgeStartDeg]/[wedgeSweepDeg] from [computeWedgeBoundaries], one call per [show]
+     *  rather than per frame or per touch. */
+    private fun recomputeWedgeBoundaries() {
+        val n = words.size
+        val (start, sweep) = computeWedgeBoundaries(n)
+        wedgeStartDeg = start
+        wedgeSweepDeg = sweep
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -157,10 +236,9 @@ class RadialSuggestionMenuView(
             if (words.isEmpty()) {
                 return
             }
-            if (interactive) {
-                drawScrim(canvas)
-            }
+            drawScrim(canvas)
             drawWedges(canvas)
+            drawCancelButton(canvas)
         } finally {
             Trace.endSection()
         }
@@ -175,99 +253,70 @@ class RadialSuggestionMenuView(
 
     private fun drawWedges(canvas: Canvas) {
         val outer = outerRadius()
-        val inner = innerRadius()
-        wedgeBounds.set(anchorX - outer, anchorY - outer, anchorX + outer, anchorY + outer)
-        val sweep = 360f / words.size
-        val fillBaseAlpha = paints.keyFill.alpha
-        val modifierBaseAlpha = paints.modifierKeyFill.alpha
-        val strokeBaseAlpha = paints.keyStroke.alpha
-        val labelBaseAlpha = paints.label.alpha
-        if (!interactive) {
-            paints.keyFill.alpha = (fillBaseAlpha * PREVIEW_OPACITY).toInt().coerceIn(0, 255)
-            paints.modifierKeyFill.alpha =
-                (modifierBaseAlpha * PREVIEW_OPACITY).toInt().coerceIn(0, 255)
-            paints.keyStroke.alpha = (strokeBaseAlpha * PREVIEW_OPACITY).toInt().coerceIn(0, 255)
-            paints.label.alpha = (labelBaseAlpha * PREVIEW_OPACITY).toInt().coerceIn(0, 255)
+        val inner = ringInnerRadius()
+        wedgeOuterBounds.set(anchorX - outer, anchorY - outer, anchorX + outer, anchorY + outer)
+        wedgeInnerBounds.set(anchorX - inner, anchorY - inner, anchorX + inner, anchorY + inner)
+        val midRadius = (inner + outer) / 2f
+        val previousAlign = paints.label.textAlign
+        paints.label.textAlign = Paint.Align.CENTER
+        for (index in words.indices) {
+            val fill = if (currentSelection == Selection.Word(index, words[index])) {
+                paints.accent
+            } else {
+                paints.keyFill
+            }
+            // A true annular slice (outer arc, radial line in, inner arc back, close) rather
+            // than a full pie slice from the centre -- the centre is the separate Cancel button
+            // now, with a deliberate gap before the ring even starts (see this class's own
+            // doc), and a pie slice reaching all the way in would paint straight over both.
+            val start = wedgeStartDeg[index]
+            val sweep = wedgeSweepDeg[index]
+            wedgePath.reset()
+            wedgePath.arcTo(wedgeOuterBounds, start, sweep, true)
+            wedgePath.arcTo(wedgeInnerBounds, start + sweep, -sweep, false)
+            wedgePath.close()
+            canvas.drawPath(wedgePath, fill)
+            val midAngleRad = Math.toRadians(wedgeCentreDegrees(index, words.size).toDouble())
+            val textX = anchorX + (midRadius * cos(midAngleRad)).toFloat()
+            val textY = anchorY + (midRadius * sin(midAngleRad)).toFloat() +
+                paints.labelBaselineOffsetPx
+            canvas.drawText(words[index], textX, textY, paints.label)
         }
-        try {
-            val midRadius = (inner + outer) / 2f
-            val previousAlign = paints.label.textAlign
-            paints.label.textAlign = Paint.Align.CENTER
+        paints.label.textAlign = previousAlign
+        // The same "outline the keys" setting KeyboardCanvasView's own keys and
+        // KeyboardHostView's own frame already gate their strokes on: the ring's own outer and
+        // inner edges as two clean circles, plus one straight line per wedge boundary -- not
+        // each wedge's own stroked path, which would double-draw both edges at every seam.
+        if (paints.showKeyBorders) {
+            canvas.drawCircle(anchorX, anchorY, outer, paints.keyStroke)
+            canvas.drawCircle(anchorX, anchorY, inner, paints.keyStroke)
             for (index in words.indices) {
-                // -90 to start the first wedge at the top, matching wedgeAt's own rotation.
-                val startAngle = -90f + sweep * index
-                val fill = if (index == pressedWedge) paints.accent else paints.keyFill
-                canvas.drawArc(wedgeBounds, startAngle, sweep, true, fill)
-                val midAngleRad = Math.toRadians((startAngle + sweep / 2f).toDouble())
-                val textX = anchorX + (midRadius * kotlin.math.cos(midAngleRad)).toFloat()
-                val textY = anchorY + (midRadius * kotlin.math.sin(midAngleRad)).toFloat() +
-                    paints.labelBaselineOffsetPx
-                canvas.drawText(words[index], textX, textY, paints.label)
+                val angleRad = Math.toRadians(wedgeStartDeg[index].toDouble())
+                val edgeX = anchorX + (inner * cos(angleRad)).toFloat()
+                val edgeY = anchorY + (inner * sin(angleRad)).toFloat()
+                val outerEdgeX = anchorX + (outer * cos(angleRad)).toFloat()
+                val outerEdgeY = anchorY + (outer * sin(angleRad)).toFloat()
+                canvas.drawLine(edgeX, edgeY, outerEdgeX, outerEdgeY, paints.keyStroke)
             }
-            paints.label.textAlign = previousAlign
-            // The same "outline the keys" setting KeyboardCanvasView's own keys and
-            // KeyboardHostView's own frame already gate their strokes on, applied here as one
-            // clean outer circle plus one straight line per wedge boundary -- not each wedge's
-            // own stroked arc, which would double-draw the outer edge at every seam.
-            if (paints.showKeyBorders) {
-                canvas.drawCircle(anchorX, anchorY, outer, paints.keyStroke)
-                for (index in words.indices) {
-                    val angleRad = Math.toRadians((-90f + sweep * index).toDouble())
-                    val edgeX = anchorX + (outer * kotlin.math.cos(angleRad)).toFloat()
-                    val edgeY = anchorY + (outer * kotlin.math.sin(angleRad)).toFloat()
-                    canvas.drawLine(anchorX, anchorY, edgeX, edgeY, paints.keyStroke)
-                }
-            }
-        } finally {
-            paints.keyFill.alpha = fillBaseAlpha
-            paints.modifierKeyFill.alpha = modifierBaseAlpha
-            paints.keyStroke.alpha = strokeBaseAlpha
-            paints.label.alpha = labelBaseAlpha
         }
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!interactive) {
-            // See this property's own doc: the swiping finger's events never reach here
-            // regardless, this only matters for a hypothetical second pointer.
-            return false
+    /** The centre Cancel button -- a small circle with an X, separated from the ring's own
+     *  inner edge by the gap [RING_INNER_RADIUS_FRACTION]/[CENTER_RADIUS_FRACTION] leave between
+     *  them. Not a wedge: no angular boundary math, just a circle. */
+    private fun drawCancelButton(canvas: Canvas) {
+        val radius = centerRadius()
+        val fill = if (currentSelection == Selection.Cancel) paints.accent else paints.modifierKeyFill
+        canvas.drawCircle(anchorX, anchorY, radius, fill)
+        if (paints.showKeyBorders) {
+            canvas.drawCircle(anchorX, anchorY, radius, paints.keyStroke)
         }
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                pressedWedge = wedgeAt(event.x, event.y)
-                invalidate()
-                return true
-            }
-            MotionEvent.ACTION_MOVE -> {
-                val wedge = wedgeAt(event.x, event.y)
-                if (wedge != pressedWedge) {
-                    pressedWedge = wedge
-                    invalidate()
-                }
-                return true
-            }
-            MotionEvent.ACTION_UP -> {
-                val wedge = pressedWedge
-                pressedWedge = -1
-                invalidate()
-                if (wedge >= 0 && wedge < words.size) {
-                    listener?.onRadialPicked(wedge, words[wedge])
-                } else {
-                    listener?.onRadialDismissed()
-                }
-                return true
-            }
-            MotionEvent.ACTION_CANCEL -> {
-                pressedWedge = -1
-                invalidate()
-                return true
-            }
-        }
-        return false
+        val mark = radius * CANCEL_MARK_FRACTION
+        canvas.drawLine(anchorX - mark, anchorY - mark, anchorX + mark, anchorY + mark, paints.label)
+        canvas.drawLine(anchorX - mark, anchorY + mark, anchorX + mark, anchorY - mark, paints.label)
     }
 
-    private companion object {
+    companion object {
         /** More wedges than this and each one is narrower than a fingertip on any phone this
          *  runs on -- matches [com.borderkeys.data.theme.KeyboardPreferences.MAX_RADIAL_SUGGESTIONS],
          *  kept here too only as this view's own defensive ceiling. */
@@ -275,20 +324,83 @@ class RadialSuggestionMenuView(
 
         const val DEFAULT_ROW_PX = 150f
 
-        /** The ring's outer edge, in row heights -- big enough that six wedges are each wide
-         *  enough to tap, small enough that the ring fits inside a keyboard's own height. */
+        /** The ring's outer edge, in row heights. */
         const val OUTER_RADIUS_ROWS = 1.7f
 
-        /** The dead zone around the anchor, as a fraction of the outer radius -- lifting right
-         *  where the finger already is must not read as picking the nearest wedge by accident. */
-        const val INNER_RADIUS_FRACTION = 0.35f
+        /** Where the wedge ring's own inner edge starts, as a fraction of the outer radius. */
+        const val RING_INNER_RADIUS_FRACTION = 0.4f
 
-        /** How dark the scrim behind the real menu is, out of 255 -- matches the resize
-         *  overlay's own wash in `KeyboardHostView`. */
+        /** The centre Cancel button's radius, as a fraction of the outer radius -- deliberately
+         *  smaller than [RING_INNER_RADIUS_FRACTION] so a visible gap separates the two, per the
+         *  user's own spec ("cerc de x in cerc de radial menu cu un mic gap intre ele"). */
+        const val CENTER_RADIUS_FRACTION = 0.22f
+
+        /** The X mark's half-length, as a fraction of the centre button's own radius. */
+        const val CANCEL_MARK_FRACTION = 0.45f
+
+        /** How dark the scrim is, out of 255 -- matches the resize overlay's own wash in
+         *  `KeyboardHostView`. */
         const val SCRIM_ALPHA = 200
 
-        /** How faint the preview phase draws, as a fraction of full opacity -- a hint, not a
-         *  thing to read carefully while still swiping. */
-        const val PREVIEW_OPACITY = 0.55f
+        /** Up-right, up-left, right, left, down-right, down-left -- best thumb reach first. See
+         *  [wedgeCentreDegrees]'s own doc for the angle convention. */
+        val ERGONOMIC_ORDER_DEGREES = floatArrayOf(-45f, -135f, 0f, 180f, 45f, 135f)
+
+        fun normalizeDegrees(deg: Float): Float {
+            var d = deg % 360f
+            if (d < 0f) d += 360f
+            return d
+        }
+
+        /**
+         * The ergonomic wedge order: best thumb reach first. Up-right and up-left diagonals are
+         * the easiest arcs a thumb already doing the swiping can flick to; straight left/right
+         * cost a little more; the lower diagonals need the least comfortable inward curl, so
+         * they are last -- reserved for whichever alternatives are least likely to be picked.
+         *
+         * Degrees in [android.graphics.Canvas.drawArc]'s own convention: 0 is straight right,
+         * increasing clockwise (screen y already grows downward, which is what makes this
+         * clockwise without an extra sign flip). Pure and public specifically so it is testable
+         * without a `View`/`Context` -- no Robolectric needed, plain JUnit4 like every other
+         * pure function in this package.
+         */
+        fun wedgeCentreDegrees(rankIndex: Int, wedgeCount: Int): Float {
+            if (wedgeCount <= 0) {
+                return 0f
+            }
+            return ERGONOMIC_ORDER_DEGREES[rankIndex % ERGONOMIC_ORDER_DEGREES.size]
+        }
+
+        /**
+         * The (start, sweep) boundary pair for each of [wedgeCount] wedges, indexed by rank --
+         * pure, testable the same way [wedgeCentreDegrees] is.
+         *
+         * The ergonomic centres [wedgeCentreDegrees] returns are not evenly spaced around the
+         * circle (that is the whole point -- some directions are easier to reach than others),
+         * so each wedge's boundary is the angular midpoint to its two neighbours *by angle*, not
+         * by rank -- a small Voronoi partition of the circle rather than a fixed `360 / count`
+         * sweep. Drawing and hit-testing both read the same two arrays this returns, so what is
+         * drawn and what is tappable can never disagree.
+         */
+        fun computeWedgeBoundaries(wedgeCount: Int): Pair<FloatArray, FloatArray> {
+            val start = FloatArray(wedgeCount)
+            val sweep = FloatArray(wedgeCount)
+            if (wedgeCount <= 0) {
+                return start to sweep
+            }
+            val bySortedAngle = (0 until wedgeCount)
+                .map { rank -> rank to normalizeDegrees(wedgeCentreDegrees(rank, wedgeCount)) }
+                .sortedBy { it.second }
+            for (i in bySortedAngle.indices) {
+                val (rank, centre) = bySortedAngle[i]
+                val prevCentre = bySortedAngle[(i - 1 + wedgeCount) % wedgeCount].second
+                val nextCentre = bySortedAngle[(i + 1) % wedgeCount].second
+                val prevGap = if (wedgeCount == 1) 360f else normalizeDegrees(centre - prevCentre)
+                val nextGap = if (wedgeCount == 1) 360f else normalizeDegrees(nextCentre - centre)
+                start[rank] = centre - prevGap / 2f
+                sweep[rank] = prevGap / 2f + nextGap / 2f
+            }
+            return start to sweep
+        }
     }
 }

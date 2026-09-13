@@ -59,6 +59,13 @@ class KeyboardHostView(
      *  the keys rather than under them. */
     val radialSuggestionMenu = RadialSuggestionMenuView(context, paints)
 
+    /** Whether [setRadialMenuVisible] blurs [keyboard] behind the ring, on API 31+. Mirrors
+     *  [com.borderkeys.data.theme.KeyboardPreferences.radialBlurBackground]; on by default,
+     *  unlike [com.borderkeys.data.theme.KeyboardPreferences.blurBehindKeyboard] -- that one
+     *  runs every frame the window is visible, this one only for as long as the ring itself is
+     *  up, which is what makes the same cost worth defaulting on here and not there. */
+    var radialBlurBackground: Boolean = true
+
     /**
      * Which edge the quick-action bar sits against. Mirrors KeyboardPreferences; kept as an Int
      * so this module does not depend on :data for four constants.
@@ -536,6 +543,24 @@ class KeyboardHostView(
         }
         radialSuggestionMenu.visibility = if (visible) VISIBLE else GONE
         suggestionStrip.visibility = if (visible) GONE else VISIBLE
+        // A real blur of the keys behind the ring, not just the scrim the ring draws over
+        // itself -- applied to the source view directly (blur what keyboard actually rendered)
+        // rather than attempting a backdrop-filter of "whatever is behind this overlay," which
+        // has no simple, reliable equivalent in the framework for an arbitrary child view.
+        // RenderEffect is API 31+, and radialBlurBackground is its own opt-out on top of that;
+        // either way, the ring's own semi-transparent scrim still dims things on its own.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            keyboard.setRenderEffect(
+                if (visible && radialBlurBackground) {
+                    android.graphics.RenderEffect.createBlurEffect(
+                        RADIAL_BLUR_RADIUS_PX, RADIAL_BLUR_RADIUS_PX,
+                        android.graphics.Shader.TileMode.CLAMP,
+                    )
+                } else {
+                    null
+                },
+            )
+        }
         requestLayout()
     }
 
@@ -582,14 +607,6 @@ class KeyboardHostView(
             keyboard.measure(exactBody, unbounded)
             height += keyboard.measuredHeight
         }
-        if (radialSuggestionMenu.visibility != GONE) {
-            // Exactly keyboard's own size, not its own row: this overlays the keys rather than
-            // sitting beside them, so it must not add to the running height above.
-            radialSuggestionMenu.measure(
-                MeasureSpec.makeMeasureSpec(keyboard.measuredWidth, MeasureSpec.EXACTLY),
-                MeasureSpec.makeMeasureSpec(keyboard.measuredHeight, MeasureSpec.EXACTLY),
-            )
-        }
         if (quickSettings.visibility != GONE) {
             // The panel takes exactly the height the keys would have had, so opening it does not
             // move the editor's text or resize the window under the user's finger.
@@ -625,9 +642,24 @@ class KeyboardHostView(
             }
         }
 
+        val totalHeight = height + navigationBarInset + bottomOffsetPx
+        // Measured unconditionally, not gated behind its own visibility like every other child
+        // here, and against the host's final total size rather than a row of its own -- this
+        // overlays everything, not just the keys, so it must not add to totalHeight itself. See
+        // the matching layout call's own comment for why measuring it regardless of visibility
+        // matters: RadialSuggestionMenuView.show()'s edge clamp reads this view's width/height,
+        // and the very first ring of a keyboard session calls show() while it is still GONE --
+        // skip measuring it here and that clamp silently no-ops against a view that has never
+        // been through a layout pass at all, 0x0, letting the ring land wherever the raw anchor
+        // said to, off the edge of the screen included.
+        radialSuggestionMenu.measure(
+            MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(totalHeight, MeasureSpec.EXACTLY),
+        )
+
         // The window is always full width; the keys are narrower and offset inside it. That
         // keeps the touchable region and the insets the system computes correct in every mode.
-        setMeasuredDimension(width, height + navigationBarInset + bottomOffsetPx)
+        setMeasuredDimension(width, totalHeight)
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
@@ -673,11 +705,27 @@ class KeyboardHostView(
             keyboard.layout(bodyLeft, y, bodyRight, y + keyboard.measuredHeight)
             y += keyboard.measuredHeight
         }
-        if (radialSuggestionMenu.visibility != GONE) {
-            // keyboard's own bounds, already set by the layout call just above -- exactly the
-            // rect this view overlays.
-            radialSuggestionMenu.layout(keyboard.left, keyboard.top, keyboard.right, keyboard.bottom)
-        }
+        // Laid out unconditionally, not gated behind its own visibility like every other child
+        // here -- the entire host, corner to corner, not keyboard's own rect, and not bodyLeft/
+        // bodyRight either. Above all else on the z axis (bringToFront, below) is only true in
+        // practice if the ring's own canvas actually reaches everywhere a sibling could be
+        // drawing: quick actions above the strip, or beside the keys as a sidebar, one-handed
+        // mode's empty gutter, all of it. A ring anchored near any edge would otherwise be laid
+        // out on a canvas that stops short of that edge, clamped inward and unable to ever draw
+        // over whatever sits past it -- which reads as the ring appearing "under" something, when
+        // what is actually happening is that it can never reach there at all. See
+        // BorderKeysService.radialAnchor's own doc for the matching coordinate offset this
+        // requires on every anchor X/Y it hands to RadialSuggestionMenuView.show.
+        //
+        // Unconditional for a second reason too, past what the comment above already covers:
+        // RadialSuggestionMenuView.show()'s own edge clamp reads this view's width/height, and
+        // the very first ring of a keyboard session calls show() while radialSuggestionMenu is
+        // still GONE (visibility only flips to VISIBLE afterwards, in setRadialMenuVisible). Skip
+        // laying it out here on account of that, and its width/height are still 0 -- whatever it
+        // last was before this view even existed -- so that clamp silently no-ops against a view
+        // that has never actually been positioned at all, letting the ring land wherever the raw
+        // anchor said to, off the edge of the screen included.
+        radialSuggestionMenu.layout(0, 0, width, b - t)
         if (quickSettings.visibility != GONE) {
             quickSettings.layout(bodyLeft, y, bodyRight, y + quickSettings.measuredHeight)
             y += quickSettings.measuredHeight
@@ -1031,6 +1079,11 @@ class KeyboardHostView(
     }
 
     private companion object {
+        /** How strongly the keyboard blurs behind the radial ring, in pixels -- see
+         *  [setRadialMenuVisible]'s own doc for why this blurs the keyboard itself rather than
+         *  attempting a backdrop filter. */
+        const val RADIAL_BLUR_RADIUS_PX = 18f
+
         // Read from KeyboardPreferences rather than retyped: :keyboard already depends on
         // :data for the class itself (BorderKeysService holds a KeyboardPreferences directly),
         // so there was no dependency this was actually avoiding -- only a second copy of four

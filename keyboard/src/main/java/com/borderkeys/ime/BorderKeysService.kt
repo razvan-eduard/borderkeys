@@ -279,36 +279,47 @@ class BorderKeysService :
      *  Scoped to the session the same way [fieldHistory] is, and reset alongside it. */
     private val languageSwitchCorrector = LanguageSwitchCorrector()
 
-    /** What a paused, then lifted, swipe should be showing right now -- see its own doc. Not
-     *  reset per field the way [languageSwitchCorrector] is: it has no state that could survive
-     *  a field switch anyway, since a gesture never spans two fields. */
+    /** Whether the radial ring is open right now -- see its own doc. Not reset per field the
+     *  way [languageSwitchCorrector] is: it has no state that could survive a field switch
+     *  anyway, since a gesture never spans two fields. */
     private val swipeRadialController = SwipeRadialController()
 
     /**
-     * Where a swipe last was, in [KeyboardCanvasView]'s own local pixel space -- which is
-     * exactly [KeyboardHostView.radialSuggestionMenu]'s own local space too, since that view is
-     * laid out to [KeyboardCanvasView]'s identical rect (see `KeyboardHostView.onLayout`). Set
-     * from both [onGesturePaused] and [onGesture]: the decode answering for either one arrives
-     * later, asynchronously, as a plain word list with no coordinates of its own to anchor with.
+     * Where a swipe paused, in [KeyboardCanvasView]'s own local pixel space -- which is exactly
+     * [KeyboardHostView.radialSuggestionMenu]'s own local space too, since that view is laid out
+     * to [KeyboardCanvasView]'s identical rect (see `KeyboardHostView.onLayout`). Set from
+     * [onGesturePaused]: the decode answering it arrives later, asynchronously, as a plain word
+     * list with no coordinates of its own to anchor with.
      */
     private var lastGestureX = 0f
     private var lastGestureY = 0f
 
-    /** What [radialTimeoutRunnable] commits if it fires -- set alongside arming it in
-     *  [onGestureCandidates], read once and never relied on afterwards. */
+    /** The pause-time decode's rank #1 -- what [resolveRadialRing] applies when neither a wedge
+     *  nor the centre Cancel button was touched and [KeyboardPreferences.radialTimeoutDefault]
+     *  says to apply rather than cancel. Set in [onGesturePreviewCandidates], read once at
+     *  resolution and never relied on afterwards. */
     private var radialTopWord: String? = null
 
-    /** Applies [radialTopWord] the same way tapping it would, once [KeyboardPreferences.
-     *  radialPickTimeoutMillis] has passed with nothing tapped on the real menu. Armed in
-     *  [onGestureCandidates], cancelled by [dismissRadialMenu]. One instance, like every other
-     *  scheduled callback in this class -- see [gestureDecodingRunnable]'s own doc for why. */
+    /**
+     * Resolves the ring directly, unconditionally -- a real lift is the only thing that ever
+     * gets to consider [KeyboardPreferences.radialLiftKeepsOpen] (see [resolveRadialRing]'s own
+     * doc); the timeout never does, on purpose. A timeout always applies or cancels, it never
+     * merely waits again -- which [radialLiftKeepsOpen] being on already guarantees this cannot
+     * even fire while [RadialSuggestionMenuView.acceptsOwnTouches] is true, since nothing arms it
+     * in that state (see [resolveRadialRing]); this stays unconditional regardless, rather than
+     * leaning on that guarantee holding forever.
+     *
+     * Armed only in [onGesturePreviewCandidates], for [KeyboardPreferences.radialPickTimeoutMillis]
+     * after the ring opens, and only with [KeyboardPreferences.radialLiftKeepsOpen] off. Cancelled
+     * by real steering movement ([onGestureSteered]), an actual resolution, or
+     * [dismissRadialMenu]. One instance, like every other scheduled callback in this class -- see
+     * [gestureDecodingRunnable]'s own doc.
+     */
     private val radialTimeoutRunnable = Runnable {
-        val word = radialTopWord
-        swipeRadialController.onTimedOut()
-        host?.setRadialMenuVisible(false)
-        if (word != null) {
-            onSuggestionPicked(0, word)
-        }
+        val selection = host?.radialSuggestionMenu?.currentSelection()
+            ?: RadialSuggestionMenuView.Selection.None
+        closeRadialRing()
+        resolveRadialSelection(selection)
     }
 
     /**
@@ -567,8 +578,11 @@ class BorderKeysService :
                     view.keyboard.radialMenuEnabled = newPreferences.radialMenuEnabled
                     view.keyboard.radialPauseDwellMillis =
                         newPreferences.radialPauseDwellMillis.toLong()
+                    view.keyboard.radialMinPathLetters = newPreferences.radialMinPathLetters
                     view.radialSuggestionMenu.sizeScale =
                         KeyboardPreferences.radialSizeScale(newPreferences.radialMenuSize)
+                    view.radialSuggestionMenu.hapticEnabled = newPreferences.hapticFeedback
+                    view.radialBlurBackground = newPreferences.radialBlurBackground
                     view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
                     applyQuickActions(view)
                     refreshClipboardChip()
@@ -671,8 +685,11 @@ class BorderKeysService :
         view.keyboard.longPressDelayMillis = preferences.longPressMillis.toLong()
         view.keyboard.radialMenuEnabled = preferences.radialMenuEnabled
         view.keyboard.radialPauseDwellMillis = preferences.radialPauseDwellMillis.toLong()
+        view.keyboard.radialMinPathLetters = preferences.radialMinPathLetters
         view.radialSuggestionMenu.sizeScale =
             KeyboardPreferences.radialSizeScale(preferences.radialMenuSize)
+        view.radialSuggestionMenu.hapticEnabled = preferences.hapticFeedback
+        view.radialBlurBackground = preferences.radialBlurBackground
         view.keyboard.setLayout(composedLayout(alphabeticLayout))
         view.suggestionStrip.listener = this
         view.suggestionStrip.visibleLimit = preferences.suggestionCount
@@ -953,8 +970,21 @@ class BorderKeysService :
             return
         }
         // A fresh swipe starting is one of the "something else is happening now" moments a stray
-        // radial from a dropped or superseded lift should not survive.
+        // ring should not survive -- and, with KeyboardPreferences.radialLiftKeepsOpen on, no
+        // longer rare: that setting can leave a ring from an earlier gesture waiting indefinitely
+        // for a tap that never comes, and simply swiping again is exactly how someone abandons it
+        // instead. Also invalidates a previous gesture's pause-time decode if it is somehow still
+        // in flight, so a late answer can never compose text or open a ring for a gesture that
+        // already ended.
         dismissRadialMenu()
+        engine.cancelPendingPreview()
+        // Set here as well as in onGesturePaused: a confident, no-pause swipe never calls that,
+        // but onGestureCandidates below still needs an anchor point if radialLiftKeepsOpen opens
+        // a ring for it after all.
+        if (count > 0) {
+            lastGestureX = xs[count - 1]
+            lastGestureY = ys[count - 1]
+        }
         val connection = currentInputConnection
         if (connection != null && composing.isNotEmpty()) {
             val contextWord = previousWord1
@@ -966,19 +996,17 @@ class BorderKeysService :
                 recordLearned(finished, contextWord, grandContextWord)
             }
         }
-        if (count > 0) {
-            lastGestureX = xs[count - 1]
-            lastGestureY = ys[count - 1]
-        }
         host?.postDelayed(gestureDecodingRunnable, GESTURE_DECODING_NOTICE_MILLIS)
         engine.decodeGesture(xs, ys, timestamps, count, previousWord1, previousWord2)
     }
 
     /**
-     * The finger paused mid-swipe. No effect unless [KeyboardPreferences.radialMenuEnabled] --
-     * checked here, not in [KeyboardCanvasView], because arming the pause-dwell timer at all is
-     * already gated by the view's own `radialMenuEnabled` mirror of the same preference; this is
-     * the belt to that braces, and where the actual preview decode is requested from.
+     * The finger paused mid-swipe -- the one pause this gesture gets, and the trigger for the
+     * only decode it gets too (see [RadialSuggestionMenuView]'s own doc for why the trajectory
+     * is already frozen by the time this fires). No effect unless
+     * [KeyboardPreferences.radialMenuEnabled] -- checked here, not in [KeyboardCanvasView],
+     * because arming the pause-dwell timer at all is already gated by the view's own
+     * `radialMenuEnabled` mirror of the same preference; this is the belt to that braces.
      */
     override fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
         if (!preferences.radialMenuEnabled) {
@@ -991,26 +1019,83 @@ class BorderKeysService :
         engine.decodeGesturePreview(xs, ys, timestamps, count, previousWord1, previousWord2)
     }
 
-    /** Real movement resumed after a pause that had already shown a preview -- it comes down
-     *  immediately, and any preview decode still in flight is dropped rather than shown late. */
-    override fun onGestureResumed() {
-        engine.cancelPendingPreview()
-        swipeRadialController.onResumed()
-        host?.setRadialMenuVisible(false)
+    /**
+     * Steering, still on the same touch-down that paused -- forwarded straight to the ring,
+     * which already knows its own anchor and geometry. No decode happens here; the trajectory
+     * was already frozen and decoded at the pause.
+     */
+    override fun onGestureSteered(x: Float, y: Float) {
+        // The pick-timeout is a passivity guard, not a hard deadline: it exists for someone who
+        // pauses and then genuinely does nothing, not for someone actively steering while they
+        // decide. Any real movement cancels it outright and it is never re-armed -- once the
+        // user has shown they are engaged, resolution waits for an actual lift, however long
+        // that takes.
+        host?.removeCallbacks(radialTimeoutRunnable)
+        host?.radialSuggestionMenu?.steerTo(x, y)
     }
 
-    /** The preview decode's answer, for [SwipeRadialController.onPauseDetected] to decide
-     *  whether there is anything worth showing. */
+    /** The finger lifted while the ring was open. Reads whatever [onGestureSteered] last
+     *  settled on and acts on it -- see [resolveRadialRing]. */
+    override fun onGestureRingResolved() {
+        resolveRadialRing()
+    }
+
+    /** The touch stream was interrupted while the ring was open -- always discards, never
+     *  guesses at a resolution an interruption cannot actually tell us. */
+    override fun onGestureRingCancelled() {
+        closeRadialRing()
+        cancelRadialGesture()
+    }
+
+    /** A fresh, independent tap resolved while the ring was kept open after an inconclusive
+     *  lift -- see [KeyboardPreferences.radialLiftKeepsOpen] and [resolveRadialRing]'s own doc
+     *  for how it got into that state. */
+    override fun onRadialTapResolved(selection: RadialSuggestionMenuView.Selection) {
+        closeRadialRing()
+        resolveRadialSelection(selection)
+    }
+
+    /**
+     * The pause-time decode's answer. The top candidate composes immediately -- exactly as a
+     * confident, no-pause swipe already does in [onGestureCandidates] below -- so there is live
+     * feedback in the field while the ring is still open to steer away from it. Everything from
+     * rank #2 on becomes the ring's wedges; rank #1 never gets a wedge of its own because it is
+     * already what composing, or the pick-timeout, or a release in the dead zone all agree on --
+     * see [resolveRadialRing].
+     */
     override fun onGesturePreviewCandidates(words: Array<String?>, count: Int) {
         val view = host ?: return
-        val candidates = words.take(count.coerceAtMost(preferences.radialSuggestionCount))
-            .filterNotNull()
-        if (!swipeRadialController.onPauseDetected(candidates)) {
+        val connection = currentInputConnection ?: return
+        val candidates = words.take(count).filterNotNull()
+        val best = candidates.firstOrNull() ?: return
+        radialTopWord = best
+        connection.beginBatchEdit()
+        composing.setLength(0)
+        composing.append(best)
+        connection.setComposingText(composing, 1)
+        connection.endBatchEdit()
+
+        val wedgeWords = candidates.drop(1).take(preferences.radialSuggestionCount)
+        if (!swipeRadialController.onRingOpened(wedgeWords)) {
+            // Too few alternatives to make a ring worth showing -- the top candidate is already
+            // composing above, which is exactly what a confident swipe would have left behind
+            // too. KeyboardCanvasView's own ringOpen is still true at this point (set before this
+            // decode came back), so the eventual lift still resolves through resolveRadialRing,
+            // finds no wedge/no Cancel touched, and applies radialTopWord -- the same word,
+            // through the same path, just with nothing drawn to steer against in between.
             return
         }
         val (anchorX, anchorY) = radialAnchor(view)
-        view.radialSuggestionMenu.show(anchorX, anchorY, candidates, interactive = false)
+        view.radialSuggestionMenu.show(anchorX, anchorY, wedgeWords)
         view.setRadialMenuVisible(true)
+        view.removeCallbacks(radialTimeoutRunnable)
+        // Not armed at all with radialLiftKeepsOpen on: that setting means the ring never
+        // resolves on its own anywhere in its lifetime, not just after an inconclusive lift --
+        // see its own doc. Someone who has paused and is genuinely holding still, deciding, does
+        // not get timed out either.
+        if (!preferences.radialLiftKeepsOpen) {
+            view.postDelayed(radialTimeoutRunnable, preferences.radialPickTimeoutMillis.toLong())
+        }
     }
 
     /**
@@ -1021,25 +1106,122 @@ class BorderKeysService :
      * whatever it is given back inside the view by exactly [RadialSuggestionMenuView]'s outer
      * radius, so handing it the true edge is what makes the ring land tangent to that edge
      * rather than merely near it. That same clamp is also the answer to "what if the swipe ends
-     * right at the edge": [FINGER] mode is clamped by it too, so the ring can never be pushed
-     * off keyboard bounds regardless of where the gesture actually happened.
+     * right at the edge": [FINGER] mode is clamped by it too, so the ring can never be pushed off
+     * the host's own bounds regardless of where the gesture actually happened.
+     *
+     * Every coordinate here is a `keyboard`-local one -- [lastGestureX]/[lastGestureY] come
+     * straight from touch coordinates on that view, and [KeyboardPreferences.RADIAL_ANCHOR_CENTER]
+     * measures against its own width/height. [RadialSuggestionMenuView] itself, though, is laid
+     * out across the entire host -- above all else on the z axis only means something if its own
+     * canvas actually reaches everywhere a sibling could be drawing, not only the rect `keyboard`
+     * itself occupies (see [KeyboardHostView.onLayout]'s own comment on this). `keyboard.left`/
+     * `keyboard.top` are exactly the gap between the two origins, so every X/Y is offset by them
+     * here, once, rather than asking each caller of this function to know the two views disagree
+     * about where zero is.
      */
-    private fun radialAnchor(view: KeyboardHostView): Pair<Float, Float> = when (preferences.radialMenuAnchor) {
-        KeyboardPreferences.RADIAL_ANCHOR_CENTER ->
-            view.keyboard.width / 2f to view.keyboard.height / 2f
-        KeyboardPreferences.RADIAL_ANCHOR_TANGENT_LEFT -> 0f to lastGestureY
-        KeyboardPreferences.RADIAL_ANCHOR_TANGENT_RIGHT -> view.keyboard.width.toFloat() to lastGestureY
-        else -> lastGestureX to lastGestureY
+    private fun radialAnchor(view: KeyboardHostView): Pair<Float, Float> {
+        val x = view.keyboard.left.toFloat()
+        val y = view.keyboard.top.toFloat()
+        return when (preferences.radialMenuAnchor) {
+            KeyboardPreferences.RADIAL_ANCHOR_CENTER ->
+                x + view.keyboard.width / 2f to y + view.keyboard.height / 2f
+            KeyboardPreferences.RADIAL_ANCHOR_TANGENT_LEFT -> x to y + lastGestureY
+            KeyboardPreferences.RADIAL_ANCHOR_TANGENT_RIGHT ->
+                x + view.keyboard.width.toFloat() to y + lastGestureY
+            else -> x + lastGestureX to y + lastGestureY
+        }
     }
 
     /**
-     * The decoded candidates.
+     * Reads the ring's [RadialSuggestionMenuView.currentSelection] at an actual lift and either
+     * resolves it or, if it is inconclusive and [KeyboardPreferences.radialLiftKeepsOpen] is on,
+     * hands off to a fresh tap instead of resolving at all yet.
      *
-     * The first one is committed immediately, as composing text, and the rest go to the strip.
-     * The user does not wait for a confirmation: the common case is that the top candidate is
-     * right, and leaving it uncommitted would make every swipe a two-step action. Because it is
-     * composing rather than committed, tapping another candidate replaces it in one edit rather
-     * than deleting and retyping.
+     * "Inconclusive" means neither a wedge nor the centre Cancel button was touched -- the dead
+     * zone. With the setting off (default), that resolves immediately via
+     * [resolveRadialSelection], exactly as a wedge or Cancel would. With it on, the original
+     * pointer is gone (it just lifted), so the only way anything more can happen is a genuinely
+     * new touch: the ring stays open, switches to [RadialSuggestionMenuView.acceptsOwnTouches],
+     * and nothing is armed to resolve it later -- [radialLiftKeepsOpen] means no clock, ever, so
+     * it waits for that fresh tap for as long as it takes.
+     */
+    private fun resolveRadialRing() {
+        val view = host ?: return
+        val selection = view.radialSuggestionMenu.currentSelection()
+        if (selection == RadialSuggestionMenuView.Selection.None && preferences.radialLiftKeepsOpen) {
+            view.removeCallbacks(radialTimeoutRunnable)
+            view.radialSuggestionMenu.acceptsOwnTouches = true
+            return
+        }
+        closeRadialRing()
+        resolveRadialSelection(selection)
+    }
+
+    /**
+     * A wedge applies that word. The centre Cancel button discards everything -- the *only*
+     * deliberate way to cancel, by design. Neither (the dead zone, whether released there,
+     * tapped there, or timed out from it) falls through to
+     * [KeyboardPreferences.radialTimeoutDefault]: apply rank #1 (the default -- passivity is
+     * never destructive unless the user chose otherwise) or cancel, matching what a deliberate
+     * Cancel tap would have done. Shared by every way the ring can finish: an actual lift, a
+     * fresh tap after [KeyboardPreferences.radialLiftKeepsOpen] kept it open, and the
+     * pick-timeout elapsing from either state.
+     */
+    private fun resolveRadialSelection(selection: RadialSuggestionMenuView.Selection) {
+        when (selection) {
+            is RadialSuggestionMenuView.Selection.Word ->
+                onSuggestionPicked(selection.index + 1, selection.word)
+            RadialSuggestionMenuView.Selection.Cancel -> cancelRadialGesture()
+            RadialSuggestionMenuView.Selection.None -> {
+                if (preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) {
+                    cancelRadialGesture()
+                } else {
+                    val word = radialTopWord
+                    if (word != null) onSuggestionPicked(0, word) else cancelRadialGesture()
+                }
+            }
+        }
+    }
+
+    /** Cancels the pick-timeout, tells the controller, and hides the ring -- the cleanup every
+     *  path off the ring shares, regardless of what it resolved to or how it got there. */
+    private fun closeRadialRing() {
+        val view = host
+        view?.removeCallbacks(radialTimeoutRunnable)
+        swipeRadialController.onResolved()
+        view?.setRadialMenuVisible(false)
+    }
+
+    /**
+     * Discards whatever the paused swipe tentatively composed -- no commit, no learning, as if
+     * the gesture had never happened. [InputConnection.finishComposingText] alone would not do
+     * this: it turns composing text into permanent committed text, which is the opposite of a
+     * cancel -- the composing region has to be emptied first.
+     */
+    private fun cancelRadialGesture() {
+        val connection = currentInputConnection
+        if (connection != null && composing.isNotEmpty()) {
+            connection.beginBatchEdit()
+            connection.setComposingText("", 1)
+            connection.finishComposingText()
+            connection.endBatchEdit()
+        }
+        composing.setLength(0)
+        host?.suggestionStrip?.clear()
+        requestSuggestions()
+    }
+
+    /**
+     * The decoded candidates for a confident, no-pause swipe. The first one is committed
+     * immediately, as composing text, and the rest go to the strip -- the user does not wait for
+     * a confirmation. No ring shows here by default: a hesitation never happened, so there is
+     * nothing to offer alternatives about beyond what the strip already does for any word.
+     *
+     * With [KeyboardPreferences.radialLiftKeepsOpen] on, though, the ring shows anyway, tap-only,
+     * the same [RadialSuggestionMenuView.acceptsOwnTouches] mode an inconclusive lift on a paused
+     * gesture already uses -- there was never a pause to open it live and steerable before this
+     * lift, but that setting means offering the alternatives without a clock attached whenever
+     * there is any way to, not only after a pause.
      */
     override fun onGestureCandidates(words: Array<String?>, count: Int) {
         host?.removeCallbacks(gestureDecodingRunnable)
@@ -1060,20 +1242,16 @@ class BorderKeysService :
 
         view?.suggestionStrip?.setSuggestions(words, count)
 
-        // The lift always shows the real menu when the setting is on, whether or not a preview
-        // was showing right up to this moment -- see SwipeRadialController.onGestureLifted's own
-        // doc. The top candidate is already composing above; this is a correction/confirmation
-        // overlay on top of it, not a second decode.
-        if (preferences.radialMenuEnabled && view != null) {
-            swipeRadialController.onGestureLifted()
-            val shown = words.take(count.coerceAtMost(preferences.radialSuggestionCount))
-                .filterNotNull()
+        if (view != null && preferences.radialMenuEnabled && preferences.radialLiftKeepsOpen) {
             radialTopWord = best
-            val (anchorX, anchorY) = radialAnchor(view)
-            view.radialSuggestionMenu.show(anchorX, anchorY, shown, interactive = true)
-            view.setRadialMenuVisible(true)
-            view.removeCallbacks(radialTimeoutRunnable)
-            view.postDelayed(radialTimeoutRunnable, preferences.radialPickTimeoutMillis.toLong())
+            val wedgeWords = words.take(count).drop(1).filterNotNull()
+                .take(preferences.radialSuggestionCount)
+            if (swipeRadialController.onRingOpened(wedgeWords)) {
+                val (anchorX, anchorY) = radialAnchor(view)
+                view.radialSuggestionMenu.show(anchorX, anchorY, wedgeWords)
+                view.radialSuggestionMenu.acceptsOwnTouches = true
+                view.setRadialMenuVisible(true)
+            }
         }
     }
 
@@ -1388,37 +1566,20 @@ class BorderKeysService :
         host?.setLanguageRevertPanelVisible(false)
     }
 
-    /** A wedge was tapped: the same commit path a strip tap already uses, since the radial menu
-     *  is a correction/confirmation overlay on the same composing word, not a second decision. */
-    override fun onRadialPicked(index: Int, word: String) {
-        host?.removeCallbacks(radialTimeoutRunnable)
-        host?.setRadialMenuVisible(false)
-        swipeRadialController.onPicked()
-        onSuggestionPicked(index, word)
-    }
-
-    /** The menu was tapped somewhere that was not a wedge -- leaves the composing word exactly
-     *  as it already was, still the top candidate, still editable, no text change. */
-    override fun onRadialDismissed() {
-        dismissRadialMenu()
-    }
-
     /**
-     * Cancels the pick-timeout, hides the menu, and tells the controller -- decision 5's fourth
-     * "something else is happening now" case, called unconditionally from every one of them:
-     * backspace, any other key, a fresh gesture starting, committed text arriving some other
-     * way, or the field resetting outright. Cancelling a callback that was never armed and
-     * hiding an already-hidden view both cost nothing, so every call site can call this without
-     * first checking whether the menu was actually up.
-     *
-     * [onDismiss] defaults to the generic "something else happened" transition; backspace passes
-     * its own so [SwipeRadialController]'s own state-transition tests can tell the two apart,
-     * even though both do the same thing to the state machine today.
+     * A safety net, not a primary path: the ring's whole lifetime is scoped to one touch-down
+     * (opens at the pause, resolves at that same pointer's lift -- see [resolveRadialRing]), so
+     * it cannot normally still be open when a key press or a fresh gesture reaches this class.
+     * The one way it still could is a second pointer -- a shift-hold on the other hand -- pressing
+     * a key while the first is still steering. Forces a cancel rather than guessing, the same
+     * reasoning [onGestureRingCancelled] already uses for an interrupted touch stream.
      */
-    private fun dismissRadialMenu(onDismiss: () -> Unit = { swipeRadialController.onOtherKeyOrAction() }) {
-        host?.removeCallbacks(radialTimeoutRunnable)
-        host?.setRadialMenuVisible(false)
-        onDismiss()
+    private fun dismissRadialMenu() {
+        if (swipeRadialController.state != SwipeRadialController.State.OPEN) {
+            return
+        }
+        closeRadialRing()
+        cancelRadialGesture()
     }
 
     /**
@@ -1611,12 +1772,9 @@ class BorderKeysService :
     }
 
     private fun handleDelete() {
-        // Unconditional, before anything else: the gesture's top candidate is still sitting in
-        // composing() at this point (decision 4), so the rest of this function's own
-        // composing.isNotEmpty() branch below is already exactly "delete one code point from the
-        // swiped word and re-request suggestions" -- precisely "standard strip suggestions take
-        // back over," with no further special-casing needed for what backspace does to the text.
-        dismissRadialMenu { swipeRadialController.onBackspace() }
+        // Unconditional, before anything else -- see dismissRadialMenu's own doc for why this
+        // is a rare safety net rather than a primary path under the single-stroke design.
+        dismissRadialMenu()
         val connection = currentInputConnection ?: return
         val hasSelection = selectionEnd > selectionStart
         // A selection is what backspace deletes, all of it, before anything else is considered.
@@ -2110,12 +2268,16 @@ class BorderKeysService :
                     // name typed under it should read "ANA", not "Ana". Absent that, a name is
                     // still capitalised regardless of shiftState -- "ana" offered with nothing
                     // typed yet is "Ana", not whatever the next keystroke's shift state alone
-                    // would have produced.
+                    // would have produced. The final branch forces lower case rather than
+                    // leaving word untouched, for the same reason AutoCorrection.matchCase's own
+                    // final branch does: a personal-dictionary word keeps whatever case it was
+                    // last committed in, which can be capitalised from an earlier sentence start
+                    // that has nothing to do with where the next word is about to land.
                     when {
                         shiftState == ShiftState.LOCKED -> word.uppercase()
                         properNoun[index] -> word.replaceFirstChar { it.uppercaseChar() }
                         shiftState == ShiftState.ON -> word.replaceFirstChar { it.uppercaseChar() }
-                        else -> word
+                        else -> word.replaceFirstChar { it.lowercaseChar() }
                     }
                 }
             }
@@ -2199,6 +2361,10 @@ class BorderKeysService :
 
     private fun resetComposing() {
         dismissRadialMenu()
+        // A field switch is the one moment a pause-time decode still in flight for the field
+        // being left really could arrive late -- invalidated here so it can never compose text
+        // or open a ring in the new field it lands in instead.
+        engine.cancelPendingPreview()
         pendingCorrection = null
         pendingForget = null
         // A new field starts with typed == "" and no in-flight request could ever answer for

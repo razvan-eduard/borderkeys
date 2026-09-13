@@ -236,6 +236,18 @@ class KeyboardPreferencesTest {
         assertFalse(KeyboardPreferences().radialMenuEnabled)
     }
 
+    @Test
+    fun `keeping the ring open on an inconclusive lift defaults off`() {
+        assertFalse(KeyboardPreferences().radialLiftKeepsOpen)
+    }
+
+    /** On by default, unlike blurBehindKeyboard -- see radialBlurBackground's own doc for why:
+     *  this one only runs while the ring itself is up, not every frame the window is visible. */
+    @Test
+    fun `blurring behind the ring defaults on`() {
+        assertTrue(KeyboardPreferences().radialBlurBackground)
+    }
+
     /** A lower ceiling than the strip's own -- see [KeyboardPreferences.radialSuggestionCount]'s
      *  own doc for why a wedge tolerates fewer of them than a row does. */
     @Test
@@ -264,6 +276,12 @@ class KeyboardPreferencesTest {
         )
         assertEquals(
             KeyboardPreferences.MIN_RADIAL_PAUSE_DWELL_MILLIS,
+            KeyboardPreferences(radialPauseDwellMillis = -1).sanitised().radialPauseDwellMillis,
+        )
+        // 0 is not a below-range value to repair -- it is the deliberate bypass (see the
+        // property's own doc) and must survive sanitising exactly as given.
+        assertEquals(
+            0,
             KeyboardPreferences(radialPauseDwellMillis = 0).sanitised().radialPauseDwellMillis,
         )
         assertEquals(
@@ -274,6 +292,27 @@ class KeyboardPreferencesTest {
         assertEquals(
             KeyboardPreferences.MIN_RADIAL_PICK_TIMEOUT_MILLIS,
             KeyboardPreferences(radialPickTimeoutMillis = 0).sanitised().radialPickTimeoutMillis,
+        )
+    }
+
+    @Test
+    fun `the minimum swipe length before a pause counts is clamped, and zero is a real value`() {
+        assertEquals(
+            KeyboardPreferences.DEFAULT_RADIAL_MIN_PATH_LETTERS,
+            KeyboardPreferences().radialMinPathLetters, 0f,
+        )
+        assertEquals(
+            KeyboardPreferences.MAX_RADIAL_MIN_PATH_LETTERS,
+            KeyboardPreferences(radialMinPathLetters = 99999f).sanitised().radialMinPathLetters, 0f,
+        )
+        assertEquals(
+            KeyboardPreferences.MIN_RADIAL_MIN_PATH_LETTERS,
+            KeyboardPreferences(radialMinPathLetters = -1f).sanitised().radialMinPathLetters, 0f,
+        )
+        // 0 removes the guard entirely (see the property's own doc) -- a real, supported value,
+        // not something sanitising should push back up to some floor.
+        assertEquals(
+            0f, KeyboardPreferences(radialMinPathLetters = 0f).sanitised().radialMinPathLetters, 0f,
         )
     }
 
@@ -305,6 +344,23 @@ class KeyboardPreferencesTest {
             KeyboardPreferences.RADIAL_SIZE_LARGE,
             KeyboardPreferences(radialMenuSize = KeyboardPreferences.RADIAL_SIZE_LARGE)
                 .sanitised().radialMenuSize,
+        )
+    }
+
+    @Test
+    fun `the radial timeout default applies the top suggestion and repairs an unknown value`() {
+        assertEquals(
+            KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP,
+            KeyboardPreferences().radialTimeoutDefault,
+        )
+        assertEquals(
+            KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP,
+            KeyboardPreferences(radialTimeoutDefault = 99).sanitised().radialTimeoutDefault,
+        )
+        assertEquals(
+            KeyboardPreferences.RADIAL_TIMEOUT_CANCEL,
+            KeyboardPreferences(radialTimeoutDefault = KeyboardPreferences.RADIAL_TIMEOUT_CANCEL)
+                .sanitised().radialTimeoutDefault,
         )
     }
 

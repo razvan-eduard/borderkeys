@@ -16,8 +16,8 @@ database and are excluded from system backup and from device-to-device transfer.
   fixes it automatically — your choice — landing on the field's own undo history like any
   other edit.
 * Swipe typing decoded geometrically on-device, with an optional radial menu: pause
-  mid-swipe for a preview of the leading words, lift to pick one from a ring around your
-  finger, or leave it and the top guess applies itself. Off by default.
+  mid-swipe, without lifting, to open a ring of alternatives and slide onto one, or onto
+  Cancel in the centre, all in one continuous stroke. Off by default.
 * A names dictionary built from Wikidata (CC0), so a name capitalises correctly
   mid-sentence instead of only at the start of one.
 * Alternate physical layouts — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona —

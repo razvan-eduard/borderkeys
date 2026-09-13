@@ -9,8 +9,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The pause/lift/pick state machine kept separate from the view and the input connection it
- * drives -- the same reason [LanguageSwitchCorrectorTest] tests its own class this way.
+ * The two-state pause/resolve state machine kept separate from the view and the input
+ * connection it drives -- the same reason [LanguageSwitchCorrectorTest] tests its own class
+ * this way.
  */
 class SwipeRadialControllerTest {
 
@@ -20,122 +21,39 @@ class SwipeRadialControllerTest {
     }
 
     @Test
-    fun `a pause with candidates moves idle to preview and says show it`() {
+    fun `opening with candidates moves idle to open and says so`() {
         val controller = SwipeRadialController()
-        assertTrue(controller.onPauseDetected(listOf("the")))
-        assertEquals(SwipeRadialController.State.PREVIEW, controller.state)
+        assertTrue(controller.onRingOpened(listOf("tidy", "toasty")))
+        assertEquals(SwipeRadialController.State.OPEN, controller.state)
     }
 
     @Test
-    fun `a pause with no candidates does nothing`() {
+    fun `opening with no candidates does nothing`() {
         val controller = SwipeRadialController()
-        assertFalse(controller.onPauseDetected(emptyList()))
+        assertFalse(controller.onRingOpened(emptyList()))
         assertEquals(SwipeRadialController.State.IDLE, controller.state)
     }
 
     @Test
-    fun `a pause while already previewing is not shown again`() {
+    fun `opening twice for one gesture is refused`() {
         val controller = SwipeRadialController()
-        controller.onPauseDetected(listOf("the"))
-        assertFalse(controller.onPauseDetected(listOf("the")))
-        assertEquals(SwipeRadialController.State.PREVIEW, controller.state)
+        controller.onRingOpened(listOf("tidy"))
+        assertFalse(controller.onRingOpened(listOf("toasty")))
+        assertEquals(SwipeRadialController.State.OPEN, controller.state)
     }
 
     @Test
-    fun `a pause while the real menu is up is refused`() {
+    fun `resolving closes an open ring`() {
         val controller = SwipeRadialController()
-        controller.onGestureLifted()
-        assertFalse(controller.onPauseDetected(listOf("the")))
-        assertEquals(SwipeRadialController.State.AWAITING_PICK, controller.state)
-    }
-
-    @Test
-    fun `resuming closes a showing preview`() {
-        val controller = SwipeRadialController()
-        controller.onPauseDetected(listOf("the"))
-        controller.onResumed()
+        controller.onRingOpened(listOf("tidy"))
+        controller.onResolved()
         assertEquals(SwipeRadialController.State.IDLE, controller.state)
     }
 
     @Test
-    fun `resuming from idle is a no-op`() {
+    fun `resolving from idle is a no-op`() {
         val controller = SwipeRadialController()
-        controller.onResumed()
-        assertEquals(SwipeRadialController.State.IDLE, controller.state)
-    }
-
-    @Test
-    fun `lifting shows the real menu from idle`() {
-        val controller = SwipeRadialController()
-        controller.onGestureLifted()
-        assertEquals(SwipeRadialController.State.AWAITING_PICK, controller.state)
-    }
-
-    @Test
-    fun `lifting shows the real menu from a preview in progress`() {
-        val controller = SwipeRadialController()
-        controller.onPauseDetected(listOf("the"))
-        controller.onGestureLifted()
-        assertEquals(SwipeRadialController.State.AWAITING_PICK, controller.state)
-    }
-
-    @Test
-    fun `picking closes the menu`() {
-        val controller = SwipeRadialController()
-        controller.onGestureLifted()
-        controller.onPicked()
-        assertEquals(SwipeRadialController.State.IDLE, controller.state)
-    }
-
-    @Test
-    fun `picking from idle is a no-op`() {
-        val controller = SwipeRadialController()
-        controller.onPicked()
-        assertEquals(SwipeRadialController.State.IDLE, controller.state)
-    }
-
-    @Test
-    fun `timing out closes the menu`() {
-        val controller = SwipeRadialController()
-        controller.onGestureLifted()
-        controller.onTimedOut()
-        assertEquals(SwipeRadialController.State.IDLE, controller.state)
-    }
-
-    @Test
-    fun `timing out from idle is a no-op`() {
-        val controller = SwipeRadialController()
-        controller.onTimedOut()
-        assertEquals(SwipeRadialController.State.IDLE, controller.state)
-    }
-
-    @Test
-    fun `backspace closes the menu`() {
-        val controller = SwipeRadialController()
-        controller.onGestureLifted()
-        controller.onBackspace()
-        assertEquals(SwipeRadialController.State.IDLE, controller.state)
-    }
-
-    @Test
-    fun `backspace from idle is a no-op`() {
-        val controller = SwipeRadialController()
-        controller.onBackspace()
-        assertEquals(SwipeRadialController.State.IDLE, controller.state)
-    }
-
-    @Test
-    fun `any other key or action closes the menu`() {
-        val controller = SwipeRadialController()
-        controller.onGestureLifted()
-        controller.onOtherKeyOrAction()
-        assertEquals(SwipeRadialController.State.IDLE, controller.state)
-    }
-
-    @Test
-    fun `any other key or action from idle is a no-op`() {
-        val controller = SwipeRadialController()
-        controller.onOtherKeyOrAction()
+        controller.onResolved()
         assertEquals(SwipeRadialController.State.IDLE, controller.state)
     }
 

@@ -75,17 +75,38 @@ class KeyboardCanvasView(
         fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int)
 
         /**
-         * The finger paused mid-swipe long enough to be worth a quick preview -- the gesture is
-         * not over, this is a read of the buffer as it stands right now. Same reuse-or-copy
-         * contract on the arrays as [onGesture]'s own doc states, for the same reason.
+         * The finger paused mid-swipe long enough to open the radial ring. Unlike [onGesture],
+         * this is not the end of anything: the trajectory captured up to this exact point is
+         * final (see [captureGestureSamples]'s own doc for why capture stops here), this is the
+         * one and only decode this gesture will ever get, and the finger stays down afterwards
+         * -- see [onGestureSteered]/[onGestureRingResolved] for what happens next, still on the
+         * same touch-down. Same reuse-or-copy contract on the arrays as [onGesture]'s own doc.
          */
         fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int)
 
         /**
-         * Real movement resumed after a pause that had already fired [onGesturePaused]. Never
-         * called for ordinary movement that was never paused -- see [SwipeRadialController].
+         * The finger moved after [onGesturePaused] fired, still without lifting. Not gesture
+         * capture -- the trajectory is already frozen -- purely where to steer the ring's
+         * highlight: a wedge, the centre Cancel button, or neither. [x]/[y] are in this view's
+         * own local pixels, the same space [onGesturePaused]'s arrays and [onGesture]'s already
+         * are.
          */
-        fun onGestureResumed()
+        fun onGestureSteered(x: Float, y: Float)
+
+        /**
+         * The finger lifted while the ring was open. The listener reads whatever
+         * [onGestureSteered] last resolved to (a wedge, the centre button, or neither) and acts
+         * on it -- this callback carries no data of its own because the ring itself is the one
+         * place that state already lives.
+         */
+        fun onGestureRingResolved()
+
+        /**
+         * The touch stream was interrupted (`ACTION_CANCEL`) while the ring was open -- a parent
+         * intercepting the gesture, not a deliberate release. Always discards rather than
+         * guessing at a resolution, since nothing about an interruption says what the user meant.
+         */
+        fun onGestureRingCancelled()
 
         /**
          * A key held down that has no alternatives to show.
@@ -121,6 +142,11 @@ class KeyboardCanvasView(
 
     /** How long a real pause must hold before [Listener.onGesturePaused] fires. */
     var radialPauseDwellMillis: Long = DEFAULT_RADIAL_PAUSE_DWELL_MILLIS
+
+    /** How far a swipe must have already travelled before the pause timer is ever armed, in
+     *  letters -- see [updatePauseDetection]'s own doc for the pixel conversion. `0` removes the
+     *  guard entirely. */
+    var radialMinPathLetters: Float = DEFAULT_RADIAL_MIN_PATH_LETTERS
 
     /**
      * Whether a press makes a sound.
@@ -238,25 +264,36 @@ class KeyboardCanvasView(
      * [GestureCapture.distanceFromPrevious] is what tells the two apart: real movement reschedules
      * the timer, a driver repeating the same coordinate leaves whatever was already scheduled
      * alone. The timer firing is the pause signal itself, in [firePause] below.
+     *
+     * Never called once [ringOpen]: the caller in [onTouchEvent] routes further movement to
+     * [Listener.onGestureSteered] instead of [captureGestureSamples], so there is nothing left
+     * here to detect a pause in -- the one pause this gesture will ever have already fired.
      */
     private fun updatePauseDetection() {
         if (gesture.distanceFromPrevious() <= PAUSE_MOVEMENT_EPSILON_PX) {
             return
         }
-        if (pausePreviewShown) {
-            pausePreviewShown = false
-            listener?.onGestureResumed()
-        }
         removeCallbacks(pauseRunnable)
         // Guards against a slow-starting swipe reading as an instant pause: the first real
         // movement of a fresh gesture is, by definition, still close to where the finger went
         // down, and arming the timer before there is anything worth previewing would fire on
-        // every swipe's own first frame.
+        // every swipe's own first frame. radialMinPathLetters is user-configurable (down to 0,
+        // which removes this guard entirely) -- see its own doc.
         val pathLengthPx = kotlin.math.hypot(
             (gesture.maxX - gesture.minX).toDouble(), (gesture.maxY - gesture.minY).toDouble(),
         ).toFloat()
+        // Letters, not pixels: nobody knows how many pixels their screen has, but everybody
+        // knows roughly how wide a key is. geometry.averageKeyWidth is 0 before the first layout
+        // pass (see its own doc); a real gesture cannot exist yet at that point either, so the
+        // fallback only matters for arithmetic safety, never for an actual swipe.
+        val keyWidthPx = if (geometry.averageKeyWidth > 0f) {
+            geometry.averageKeyWidth
+        } else {
+            FALLBACK_KEY_WIDTH_PX
+        }
+        val minPathPx = radialMinPathLetters * keyWidthPx
         if (SwipeRadialController.isEligibleForPreview(
-                gesture.count, pathLengthPx, MIN_GESTURE_POINTS, MIN_RADIAL_PREVIEW_PATH_PX,
+                gesture.count, pathLengthPx, MIN_GESTURE_POINTS, minPathPx,
             )
         ) {
             postDelayed(pauseRunnable, radialPauseDwellMillis)
@@ -267,13 +304,18 @@ class KeyboardCanvasView(
         if (!gestureActive) {
             return
         }
-        pausePreviewShown = true
+        ringOpen = true
         listener?.onGesturePaused(gesture.xs, gesture.ys, gesture.times, gesture.count)
     }
 
-    /** Whether a pause has already fired for the swipe in progress, so the next real movement
-     *  knows to call [Listener.onGestureResumed] rather than stay silent. */
-    private var pausePreviewShown = false
+    /**
+     * Whether the radial ring is open for the swipe in progress -- the one pause this gesture
+     * gets has already fired. From here until the finger lifts, [onTouchEvent]'s `ACTION_MOVE`
+     * branch stops feeding [captureGestureSamples] entirely and calls [Listener.onGestureSteered]
+     * instead; there is no path back to plain gesture capture once this is true (see
+     * [Listener.onGesturePaused]'s own doc for why the trajectory is already final by then).
+     */
+    private var ringOpen = false
 
     private val pauseRunnable = Runnable { firePause() }
 
@@ -330,12 +372,18 @@ class KeyboardCanvasView(
 
     private fun finishGesture() {
         removeCallbacks(pauseRunnable)
-        pausePreviewShown = false
+        val wasRingOpen = ringOpen
+        ringOpen = false
         val count = gesture.count
         gestureActive = false
         gesturePointer = -1
         invalidateTrailFully()
-        if (count >= MIN_GESTURE_POINTS) {
+        if (wasRingOpen) {
+            // The one decode this gesture gets already happened at the pause -- see
+            // Listener.onGesturePaused's own doc. Resolution reads whatever onGestureSteered
+            // last settled on; this callback carries no data of its own.
+            listener?.onGestureRingResolved()
+        } else if (count >= MIN_GESTURE_POINTS) {
             listener?.onGesture(gesture.xs, gesture.ys, gesture.times, count)
         }
         // Reset by index. The arrays keep their storage for the next swipe.
@@ -344,11 +392,15 @@ class KeyboardCanvasView(
 
     private fun abandonGesture() {
         removeCallbacks(pauseRunnable)
-        pausePreviewShown = false
+        val wasRingOpen = ringOpen
+        ringOpen = false
         gestureActive = false
         gesturePointer = -1
         gesture.reset()
         invalidateTrailFully()
+        if (wasRingOpen) {
+            listener?.onGestureRingCancelled()
+        }
     }
 
     /**
@@ -945,7 +997,13 @@ class KeyboardCanvasView(
                 for (pointerIndex in 0 until event.pointerCount) {
                     val pointerId = event.getPointerId(pointerIndex)
                     if (gestureActive && pointerId == gesturePointer) {
-                        captureGestureSamples(event, pointerIndex)
+                        if (ringOpen) {
+                            listener?.onGestureSteered(
+                                event.getX(pointerIndex), event.getY(pointerIndex),
+                            )
+                        } else {
+                            captureGestureSamples(event, pointerIndex)
+                        }
                     } else {
                         onPointerMove(pointerId, event.getX(pointerIndex),
                             event.getY(pointerIndex), event, pointerIndex)
@@ -1406,9 +1464,14 @@ class KeyboardCanvasView(
          *  KeyboardPreferences with the numbers someone is actually meant to adjust. */
         private const val PAUSE_MOVEMENT_EPSILON_PX = 3f
 
-        /** How far a swipe has to have travelled, in its own bounding-box diagonal, before the
-         *  pause timer is ever armed -- see [updatePauseDetection]'s own doc for why. */
-        private const val MIN_RADIAL_PREVIEW_PATH_PX = 96f
+        /** Matches [com.borderkeys.data.theme.KeyboardPreferences.DEFAULT_RADIAL_MIN_PATH_LETTERS]
+         *  -- kept here too only as [radialMinPathLetters]'s own out-of-the-box default. */
+        private const val DEFAULT_RADIAL_MIN_PATH_LETTERS = 1f
+
+        /** A reasonable key width to convert [radialMinPathLetters] against before real geometry
+         *  exists -- matters only for arithmetic safety, since no real gesture can happen before
+         *  the keyboard has been measured at least once either. */
+        private const val FALLBACK_KEY_WIDTH_PX = 100f
 
         /** Not private: [SuggestionStripView] holds a long press to the same threshold, so the
          *  two gestures feel like one -- referencing this is what keeps that true instead of
