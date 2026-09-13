@@ -29,6 +29,69 @@ F-Droid client to get both builds and their updates. It also carries the other a
 [VoxApps](https://github.com/razvan-eduard/VoxApps), which is who hosts it. Or install a release
 directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/releases/latest).
 
+## Features
+
+### Typing
+
+- **Deterministic n-gram prediction and autocorrect**, in C++, on-device. No cloud lookup, no
+  per-keystroke telemetry to anyone — the engine is a compiled library, not a service.
+- **Several languages active at once.** Every installed dictionary is consulted on every word;
+  the one that actually recognises what you typed wins, without a manual switch.
+- **Retroactive correction when the conversation's language turns out to differ.** A correction
+  applied while typing can be wrong not because the guess was bad, but because the keyboard read
+  the wrong language at the time — the sentence itself proves it a few words later. BorderKeys
+  notices the flip and offers the affected word back (or fixes it automatically, your choice),
+  landing on the field's own undo history like any other edit.
+- **Swipe typing**, geometric (SHARK²) and deterministic in both flavors — no model, no training
+  data, no accuracy number that depends on what you happened to type it on. A from-scratch neural
+  decoder (a small TCN, hand-written in C++, no ML runtime) exists in `plus`'s own source and test
+  suite, but is not the active one yet: see [Flavors](#flavors) below.
+- **A names dictionary** built from Wikidata (CC0), so a name capitalises correctly mid-sentence
+  instead of only at the start of one or after a shift.
+- **Alternate physical layouts** — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona — for
+  the 26-letter alphabets every bundled dictionary already knows.
+- **A personal dictionary you can see and edit.** Every learned word or phrase is listed, with a
+  `Forget` (remove it) and a `Block` (never suggest it again) right beside it — not a black box.
+
+### Quick actions
+
+A row of buttons for what otherwise takes several gestures — copying a word, pasting, selecting
+everything — built in, and extendable: a **custom quick action** is a macro of steps you define
+yourself, pinned onto the bar exactly like a built-in one.
+
+<p align="center">
+  <img src="docs/images/quick_actions.png" alt="The quick-action bar, expanded, with its built-in clipboard actions" width="40%">
+</p>
+
+### Themes
+
+Built-in themes across several colour families, full manual control over every colour and
+corner radius with a live preview, and a **custom theme library**: save what you built, import a
+theme someone shared, export and rename your own — kept separately from whichever single theme
+is active right now.
+
+<p align="center">
+  <img src="docs/images/custom_theme.png" alt="The theme screen: My Themes (save or import), and manual colour controls" width="40%">
+</p>
+
+### The assistant, `plus` only
+
+A **draft box** — write somewhere the app itself cannot see, then ask an on-device model to
+correct, shorten, summarise or translate it, with a version kept for every step so nothing is
+lost to a bad answer. Reachable from a text selection in *any* app through four more entries in
+the system's own text-selection menu (Correct, Shorten, Summarise, and any of your own saved
+instructions), each running immediately instead of opening an idle box first.
+
+### Backup, restore, and control
+
+Everything this keyboard has learned and configured — dictionaries, themes, quick actions,
+saved instructions — writes to and reads from a single file, under your control, on your
+schedule. Nothing syncs anywhere on its own.
+
+<p align="center">
+  <img src="docs/images/language_switch.png" alt="The retroactive language-switch correction offer, in the suggestion strip's own slot" width="40%">
+</p>
+
 ## Two builds, one repository
 
 | | `core` | `plus` |
