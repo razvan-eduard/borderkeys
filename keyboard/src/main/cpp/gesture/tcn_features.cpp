@@ -24,18 +24,28 @@ bool resampleUniformTime(const float* xs, const float* ys, const int64_t* ts, in
 
     // Two-pointer walk: `segment` only ever advances, since both the raw samples and the target
     // times are non-decreasing. Bounded to count-2 so segment+1 is always a valid index.
+    //
+    // `targetTime` stays a double throughout -- rounding it to the nearest millisecond first (an
+    // earlier version of this function did) matches training's own interpolation only at exact
+    // multiples of a millisecond, and training (features_np.py's resample_uniform_time, via
+    // np.interp) interpolates at the exact continuous target time. For a real swipe -- samples
+    // roughly as far apart as the ~64-point resampling grid itself -- that rounding was not a
+    // rounding error close to the sampled points, it was a different point on the path, at every
+    // one of the 64 steps, compounding through five dilated blocks with a wide temporal receptive
+    // field into the accuracy collapse confirmed 2026-09-13 (96.67% top-1 for Shark2 against 0%
+    // for this decoder on the same 30-gesture corpus -- fixed by this change, not by the model).
     int segment = 0;
     for (int i = 0; i < kTcnTimesteps; ++i) {
         const double u = static_cast<double>(i) / static_cast<double>(kTcnTimesteps - 1);
-        const int64_t targetTime =
-            startTime + static_cast<int64_t>(u * static_cast<double>(duration) + 0.5);
-        while (segment < count - 2 && ts[segment + 1] < targetTime) {
+        const double targetTime = static_cast<double>(startTime) + u * static_cast<double>(duration);
+        while (segment < count - 2 && static_cast<double>(ts[segment + 1]) < targetTime) {
             ++segment;
         }
         const int64_t t0 = ts[segment];
         const int64_t t1 = ts[segment + 1];
         const float frac = (t1 > t0)
-            ? static_cast<float>(targetTime - t0) / static_cast<float>(t1 - t0)
+            ? static_cast<float>((targetTime - static_cast<double>(t0)) /
+                                  static_cast<double>(t1 - t0))
             : 0.f;
         outX[i] = (xs[segment] + (xs[segment + 1] - xs[segment]) * frac) / keyAreaWidth;
         outY[i] = (ys[segment] + (ys[segment + 1] - ys[segment]) * frac) / keyAreaHeight;
