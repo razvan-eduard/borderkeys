@@ -703,6 +703,10 @@ class KeyboardHostView(
         }
         if (keyboard.visibility != GONE) {
             keyboard.layout(bodyLeft, y, bodyRight, y + keyboard.measuredHeight)
+            // Told, not discovered: keyboard has no way to ask its own parent how much space
+            // sits above it, and it needs to know for the long-press alternatives popup's own
+            // above-or-below decision -- see that property's own doc.
+            keyboard.hostTopInsetPx = keyboard.top.toFloat()
             y += keyboard.measuredHeight
         }
         // Laid out unconditionally, not gated behind its own visibility like every other child
@@ -906,8 +910,15 @@ class KeyboardHostView(
      * `dispatchDraw` rather than `onDraw`: a ViewGroup paints itself first and its children
      * after, so the frame drawn in `onDraw` would end up underneath the keys it is framing.
      */
+    /** Reused so a held key's alternatives popup allocates nothing on the draw path -- the same
+     *  trick KeyboardCanvasView's own `shiftedLabel` already plays for an ordinary key face. */
+    private val alternativeLabel = CharArray(1)
+
     override fun dispatchDraw(canvas: android.graphics.Canvas) {
         super.dispatchDraw(canvas)
+        if (keyboard.alternativesVisible) {
+            drawAlternativesPopup(canvas)
+        }
         if (!resizing) {
             return
         }
@@ -946,6 +957,52 @@ class KeyboardHostView(
         val hint = strings[Keys.RESIZE_HINT]
         drawPill(canvas, hint, (left + right - pillWidth(hint)) / 2f,
             bottom - radius * 1.4f - pillHeight(), null)
+    }
+
+    /**
+     * A held key's alternatives popup, translated from [keyboard]'s own local coordinates into
+     * this view's by its left/top -- the same offset [BorderKeysService.radialAnchor] already
+     * needs for the ring, and for the same reason: `keyboard` cannot draw past its own edges, so
+     * the top row's popup -- which needs to reach above them, into where the suggestion strip and
+     * quick actions bar sit -- has to be drawn from up here instead. See
+     * [KeyboardCanvasView]'s own "long-press alternatives" section for the rest of the story;
+     * this only reads what it already computed.
+     */
+    private fun drawAlternativesPopup(canvas: android.graphics.Canvas) {
+        val count = keyboard.alternativesCount
+        if (count == 0) {
+            return
+        }
+        val offsetX = keyboard.left.toFloat()
+        val offsetY = keyboard.top.toFloat()
+        val left = keyboard.alternativesLeftPx + offsetX
+        val top = keyboard.alternativesTopPx + offsetY
+        val cellWidth = keyboard.alternativesCellWidthPx
+        val rowHeight = keyboard.alternativesRowHeightPx
+        val radius = paints.keyCornerRadiusPx
+        canvas.drawRoundRect(
+            left, top, left + cellWidth * count, top + rowHeight, radius, radius,
+            paints.modifierKeyFill,
+        )
+        val base = paints.label.textSize
+        paints.label.textSize = keyboard.alternativesTextSizePx
+        val selected = keyboard.alternativesSelectedIndex
+        for (position in 0 until count) {
+            val cellLeft = left + cellWidth * position
+            if (position == selected) {
+                canvas.drawRoundRect(
+                    cellLeft, top, cellLeft + cellWidth, top + rowHeight, radius, radius,
+                    paints.accent,
+                )
+            }
+            alternativeLabel[0] = keyboard.alternativeCharAt(position)
+            canvas.drawText(
+                alternativeLabel, 0, 1,
+                cellLeft + cellWidth / 2f, top + rowHeight / 2f + paints.labelBaselineOffsetPx,
+                paints.label,
+            )
+        }
+        paints.label.textSize = base
     }
 
     private fun pillWidth(text: String): Float =

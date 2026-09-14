@@ -486,6 +486,15 @@ class KeyboardCanvasView(
     private var alternativesHeight = 0f
     private var longPressPointer = -1
 
+    /**
+     * How much space exists above this view's own top edge, inside its host, that the
+     * alternatives popup is free to draw into -- KeyboardHostView draws the popup now, not this
+     * view (see [alternativesVisible]'s own doc), so the room available to it is the host's, not
+     * just this view's own y=0. Set by [KeyboardHostView] on every layout pass, mirroring its own
+     * top; 0 (the old, view-only behaviour) until the first pass sets it.
+     */
+    var hostTopInsetPx: Float = 0f
+
     private var repeatKey = NO_KEY
 
     /**
@@ -927,14 +936,40 @@ class KeyboardCanvasView(
             if (gestureActive) {
                 drawGestureTrail(canvas)
             }
-
-            if (alternativesKey != NO_KEY) {
-                drawAlternatives(canvas)
-            }
         } finally {
             Trace.endSection()
         }
     }
+
+    // ---- long-press alternatives, read by KeyboardHostView -----------------------------------
+    //
+    // Drawn by KeyboardHostView, not this view -- see its own dispatchDraw override's doc. This
+    // view cannot draw outside its own bounds, and the top row's popup has to reach above them,
+    // into where the suggestion strip and quick actions bar sit above it. Everything below is
+    // this view's own local coordinates; KeyboardHostView offsets them by [keyboard]'s own
+    // left/top before drawing, the same translation [BorderKeysService.radialAnchor] already
+    // does for the ring.
+
+    /** Whether the popup is up at all. */
+    val alternativesVisible: Boolean get() = alternativesKey != NO_KEY
+
+    /** How many alternatives the held key has. 0 when [alternativesVisible] is false. */
+    val alternativesCount: Int get() = if (alternativesKey == NO_KEY) 0 else geometry.altLength[alternativesKey]
+
+    /** Which of [alternativesCount] the finger is currently over, or -1. */
+    val alternativesSelectedIndex: Int get() = alternativesSelection
+
+    val alternativesLeftPx: Float get() = alternativesLeft
+    val alternativesTopPx: Float get() = alternativesTop
+    val alternativesCellWidthPx: Float get() = alternativesCellWidth
+    val alternativesRowHeightPx: Float get() = alternativesHeight
+
+    /** The held key's own label size, so the popup's characters read the same size the key
+     *  itself would have. 0 when [alternativesVisible] is false. */
+    val alternativesTextSizePx: Float get() = if (alternativesKey == NO_KEY) 0f else labelTextSize[alternativesKey]
+
+    /** The alternative at [position], already cased for the current shift state. */
+    fun alternativeCharAt(position: Int): Char = altCharAt(alternativesKey, position)
 
     /**
      * An alternative as it should read right now: upper-cased when shift is on and it is a
@@ -948,39 +983,6 @@ class KeyboardCanvasView(
         } else {
             character
         }
-    }
-
-    private fun drawAlternatives(canvas: Canvas) {
-        val index = alternativesKey
-        val count = geometry.altLength[index]
-        if (count == 0) {
-            return
-        }
-        val radius = paints.keyCornerRadiusPx
-        canvas.drawRoundRect(
-            alternativesLeft, alternativesTop,
-            alternativesLeft + alternativesCellWidth * count, alternativesTop + alternativesHeight,
-            radius, radius, paints.modifierKeyFill,
-        )
-        val base = paints.label.textSize
-        paints.label.textSize = labelTextSize[index]
-        for (position in 0 until count) {
-            val left = alternativesLeft + alternativesCellWidth * position
-            if (position == alternativesSelection) {
-                canvas.drawRoundRect(
-                    left, alternativesTop, left + alternativesCellWidth,
-                    alternativesTop + alternativesHeight, radius, radius, paints.accent,
-                )
-            }
-            shiftedLabel[0] = altCharAt(index, position)
-            canvas.drawText(
-                shiftedLabel, 0, 1,
-                left + alternativesCellWidth / 2f,
-                alternativesTop + alternativesHeight / 2f + paints.labelBaselineOffsetPx,
-                paints.label,
-            )
-        }
-        paints.label.textSize = base
     }
 
     // ---- touch ----------------------------------------------------------------------------------
@@ -1266,15 +1268,33 @@ class KeyboardCanvasView(
         alternativesHeight = geometry.keyBottom[index] - geometry.keyTop[index]
         val desiredLeft = geometry.centerX[index] - alternativesCellWidth * count / 2f
         alternativesLeft = desiredLeft.coerceIn(0f, max(0f, width - alternativesCellWidth * count))
-        // Above the key normally; below it for the top row, where above is off screen. Drawn
-        // inside this view rather than in a PopupWindow: a second window costs a surface, a
-        // layout pass and a frame of latency for something that lives for half a second.
-        alternativesTop = if (geometry.keyTop[index] - alternativesHeight >= 0f) {
+        // Above the key normally; below it only where even the host's own space above this view
+        // -- hostTopInsetPx, not just this view's own y=0 -- runs out, which in practice means
+        // the top row with the suggestion strip and quick actions bar both off. Genuinely drawn
+        // above this view's own top edge when it fits there instead of at hostTopInsetPx's floor:
+        // KeyboardHostView is what actually paints the popup now (see its own dispatchDraw
+        // override), specifically so the top row's popup can reach up into space this view does
+        // not have and never draws into itself.
+        alternativesTop = if (geometry.keyTop[index] + hostTopInsetPx - alternativesHeight >= 0f) {
             geometry.keyTop[index] - alternativesHeight
         } else {
             geometry.keyBottom[index]
         }
+        invalidateAlternatives()
+    }
+
+    /**
+     * [invalidate] alone is not enough here: `KeyboardHostView` -- not this view -- is what
+     * actually paints the popup now (see [alternativesVisible]'s own doc), and a plain
+     * `invalidate()` only marks this view's own RenderNode dirty. The hardware renderer can then
+     * recomposite this view's updated content on its own, without ever re-running
+     * `KeyboardHostView.dispatchDraw`'s own Kotlin code -- which is exactly what has to re-run,
+     * since that is where the popup's pixels actually come from. Invalidating the parent as well
+     * is what forces that.
+     */
+    private fun invalidateAlternatives() {
         invalidate()
+        (parent as? View)?.invalidate()
     }
 
     private fun updateAlternativesSelection(x: Float) {
@@ -1287,7 +1307,7 @@ class KeyboardCanvasView(
         val clamped = position.coerceIn(0, count - 1)
         if (clamped != alternativesSelection) {
             alternativesSelection = clamped
-            invalidate()
+            invalidateAlternatives()
         }
     }
 
@@ -1308,7 +1328,7 @@ class KeyboardCanvasView(
         if (alternativesKey != NO_KEY) {
             alternativesKey = NO_KEY
             alternativesSelection = -1
-            invalidate()
+            invalidateAlternatives()
         }
     }
 
