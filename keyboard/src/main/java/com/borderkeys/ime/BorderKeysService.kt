@@ -601,6 +601,7 @@ class BorderKeysService :
                         KeyboardPreferences.radialSizeScale(newPreferences.radialMenuSize)
                     view.radialSuggestionMenu.hapticEnabled = newPreferences.hapticFeedback
                     view.radialBlurBackground = newPreferences.radialBlurBackground
+                    view.suggestionStrip.hapticEnabled = newPreferences.hapticFeedback
                     view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
                     applyQuickActions(view)
                     refreshClipboardChip()
@@ -725,6 +726,7 @@ class BorderKeysService :
         view.radialBlurBackground = preferences.radialBlurBackground
         view.keyboard.setLayout(composedLayout(alphabeticLayout))
         view.suggestionStrip.listener = this
+        view.suggestionStrip.hapticEnabled = preferences.hapticFeedback
         view.suggestionStrip.visibleLimit = preferences.suggestionCount
         view.quickSettings.listener = this
         view.quickActions.listener = this
@@ -769,6 +771,7 @@ class BorderKeysService :
         host?.let { view ->
             view.suggestionStrip.privateMode = privateMode
             view.suggestionStrip.clear()
+            view.suggestionStrip.hapticEnabled = preferences.hapticFeedback
             view.keyboard.hapticEnabled = preferences.hapticFeedback
             view.keyboard.swipeEnabled = preferences.swipeEnabled
         view.keyboard.soundEnabled = preferences.keySound

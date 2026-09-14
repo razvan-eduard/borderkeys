@@ -7,6 +7,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.os.Trace
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import com.borderkeys.data.theme.KeyboardPreferences
@@ -40,6 +41,22 @@ class SuggestionStripView(
      * where they meet. It turns this off. The settings preview has no host, so it stays on.
      */
     var drawsBackground: Boolean = true
+
+    /** Mirrors [com.borderkeys.data.theme.KeyboardPreferences.hapticFeedback] -- the same tap
+     *  every key already gives, for picking, forgetting or pasting a chip instead of a letter. */
+    var hapticEnabled: Boolean = true
+
+    init {
+        isHapticFeedbackEnabled = true
+    }
+
+    /** The same tap every key already gives -- picking a suggestion, forgetting one, or pasting
+     *  the clipboard chip is as much a keystroke as any letter. */
+    private fun tapHaptic() {
+        if (hapticEnabled) {
+            performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        }
+    }
 
     interface Listener {
         fun onSuggestionPicked(index: Int, word: String)
@@ -220,6 +237,7 @@ class SuggestionStripView(
             longPressFired = true
             pressedIndex = -1
             invalidate()
+            tapHaptic()
             listener?.onSuggestionLongPressed(index, word)
         }
     }
@@ -599,14 +617,17 @@ class SuggestionStripView(
                 pressedIndex = -1
                 invalidate()
                 if (slot == 0 && chipOffset == 1) {
+                    tapHaptic()
                     listener?.onClipboardPicked()
                     return true
                 }
                 val index = slot - chipOffset
                 val word = if (index >= 0) words[index] else null
                 if (index >= 0 && actionMode) {
+                    tapHaptic()
                     listener?.onActionPicked(index)
                 } else if (word != null) {
+                    tapHaptic()
                     listener?.onSuggestionPicked(index, word)
                 }
             }
