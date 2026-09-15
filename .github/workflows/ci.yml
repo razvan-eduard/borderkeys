@@ -74,6 +74,11 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
+          # The action's own default package list is "tools platform-tools", and Google has
+          # since pulled the legacy "tools" package from the SDK repository entirely --
+          # sdkmanager now fails outright trying to fetch it. platform-tools is all this step
+          # is actually here for (adb, the rest comes from Gradle's own SDK resolution).
+          packages: platform-tools
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6

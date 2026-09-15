@@ -67,6 +67,9 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
+          # See ci.yml's own comment on this: the action's default "tools" package no longer
+          # exists in the SDK repository, so sdkmanager fails outright unless overridden.
+          packages: platform-tools
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
