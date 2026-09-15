@@ -30,6 +30,7 @@ package com.borderkeys.data.assist
 private const val CUSTOM_PREFIX =
     "Apply the following instruction to the text below. Change only the text. " +
         "Do not answer questions about it, do not comment on it, do not add a preamble. " +
+        "Use Markdown formatting (like bullet points or bold text) if it helps clarity. " +
         "Reply with the resulting text and nothing else."
 
 enum class AssistTask(
@@ -97,10 +98,11 @@ enum class AssistTask(
 ) {
     SUMMARISE(
         id = 1,
-        instruction = "Summarise the following text in at most three sentences. " +
-            "Reply with the summary and nothing else.",
-        outputRatio = 0.5f,
-        minOutputTokens = 48,
+        instruction = "Summarise the following text into a clear, bulleted list of the most " +
+            "important points. Use Markdown bullet points (-). Reply with the summary and " +
+            "nothing else.",
+        outputRatio = 0.6f,
+        minOutputTokens = 64,
         minWords = 15,
     ),
     REWRITE_FORMAL(

@@ -17,6 +17,9 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.MutatePriority
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +32,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -56,7 +60,6 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -72,6 +75,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -79,29 +83,33 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.unit.Density
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.assist.AssistClient
@@ -122,10 +130,15 @@ import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.openKeyboardPicker
 import com.borderkeys.settings.rememberBorderKeysDefaultState
+import com.mohamedrejeb.richeditor.model.RichTextState
+import com.mohamedrejeb.richeditor.ui.BasicRichTextEditor
 import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -192,25 +205,33 @@ fun ProcessTextScreen(
     // -- captured immediately, before a single keystroke can happen, the same as the in-keyboard
     // composer does. text is never empty for a real PROCESS_TEXT selection, but the check keeps
     // this correct even if some caller ever hands over an empty one.
-    val composer = remember { Composer().apply { if (text.isNotEmpty()) captureBeforeRun(text) } }
-    var current by remember { mutableStateOf(text) }
-    // The field's own selection, alongside current rather than instead of it: everything but
-    // the swipe gesture below only ever needs the text itself, and rewriting every one of those
-    // sites to unwrap a TextFieldValue for a plain string would be a second, wider change for a
-    // feature this narrow. Kept in sync with current whenever something other than typing moves
-    // it -- a version switch, an assistant result, the initial selection -- so a stale selection
-    // range is never carried onto text that replaced what it was measured against.
-    var textFieldValue by remember { mutableStateOf(TextFieldValue(text)) }
+    //
+    // Markdown is the one canonical form here: it is what every version the composer holds is
+    // written in, what the model is asked to reply in, and what the editor parses and emits --
+    // so "the original" is the incoming text normalised once through that same parser, and a
+    // later toMarkdown() of an untouched document compares equal to it instead of reading as a
+    // phantom first edit.
+    val initialMarkdown = remember(text) { RichTextState().apply { setMarkdown(text) }.toMarkdown() }
+    // A plain remember, not rememberRichTextState: that helper is rememberSaveable-backed, and
+    // a document restored across an activity recreation while composer below reseeds from the
+    // intent would leave the two telling different stories. This activity recreates on rotation
+    // by design (see the manifest's own comment), and starting the draft over then is the deal
+    // this screen has always offered.
+    val richTextState = remember { RichTextState().apply { setMarkdown(initialMarkdown) } }
+    val composer = remember { Composer().apply { if (initialMarkdown.isNotEmpty()) captureBeforeRun(initialMarkdown) } }
+
     // Whether the field itself currently has focus -- not the same question as whether the
     // keyboard is on screen (the two can drift apart for a moment around an animation), but the
     // one the swipe hint below actually needs: once the field is focused there is nothing left
     // for the hint to teach.
     var isFocused by remember { mutableStateOf(false) }
-    LaunchedEffect(current) {
-        if (textFieldValue.text != current) {
-            textFieldValue = TextFieldValue(current, selection = TextRange(current.length))
-        }
-    }
+
+    // The editor viewport's scroll and the last layout the text produced -- held up here
+    // rather than beside the field because showKeyboard below steers the caret by where the
+    // view currently sits, which is a question of exactly these two.
+    val scrollState = rememberScrollState()
+    var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
+
     var rail by remember {
         mutableStateOf(
             Rail(composer.size, composer.index, composer.canGoBack, composer.canGoForward, composer.atOriginal),
@@ -231,6 +252,10 @@ fun ProcessTextScreen(
     var translateMenuOpen by remember { mutableStateOf(false) }
     var toneMenuOpen by remember { mutableStateOf(false) }
     var savedMenuOpen by remember { mutableStateOf(false) }
+    // Insert and Share each offer the same two ways out -- markdown as written, or the plain
+    // rendering -- so each anchors a small picker of its own instead of committing on the tap.
+    var insertMenuOpen by remember { mutableStateOf(false) }
+    var shareMenuOpen by remember { mutableStateOf(false) }
     // A second way to open the same menu `savedMenuOpen` opens from the bar's own
     // SAVED_PROMPTS button, triggered instead by `offerCustomActionPicker` -- kept separate so
     // this screen does not have to assume that button is even on the user's bar to still honour
@@ -252,12 +277,41 @@ fun ProcessTextScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
 
     // The swipe-up/down gesture on the draft box itself, the same idea as the FastMap rules
-    // window's own swipe handle in VoxApps -- a drag decides it, nothing drawn for it. Cursor
-    // moved to the end rather than left wherever it was: a swipe is "I want to keep writing",
-    // and continuing from the end is what that means for a box with no caret visible to aim at
-    // yet.
-    fun showKeyboardAtEnd() {
-        textFieldValue = textFieldValue.copy(selection = TextRange(textFieldValue.text.length))
+    // window's own swipe handle in VoxApps -- a drag decides it, nothing drawn for it. The
+    // cursor goes to the end of the text -- a swipe is "I want to keep writing" -- unless the
+    // end is scrolled out of sight: focusing a field always brings its caret into view, so a
+    // caret teleported below the viewport would drag the whole text down with it, breaking for
+    // the gesture's last instant the same "the text does not move for this swipe" promise the
+    // swipe itself keeps. With the text scrolled, the caret lands at the end of the topmost
+    // fully visible line instead -- writing continues from the line being read, and nothing on
+    // screen shifts, not even when the rising keyboard then shortens the viewport from below.
+    fun showKeyboard() {
+        val layout = textLayout
+        val caret = if (layout == null || scrollState.maxValue <= 0 || scrollState.maxValue == Int.MAX_VALUE) {
+            richTextState.annotatedString.length
+        } else {
+            val top = scrollState.value.toFloat()
+            var line = layout.getLineForVerticalPosition(top)
+            if (layout.getLineTop(line) < top && line + 1 < layout.lineCount) {
+                line++
+            }
+            layout.getLineEnd(line, visibleEnd = true)
+        }
+        richTextState.selection = TextRange(caret)
+        // The caret above is already on a visible line, so nothing needs revealing -- but the
+        // platform still tries: a freshly focused field is brought into view, and the rising
+        // keyboard's resize can ask again. Each of those is exactly the movement this gesture
+        // promised not to make, so the scroll is held shut for the whole handoff: launched
+        // before requestFocus so this holder owns the mutex first, at a priority every
+        // bring-into-view request loses to, with the position pinned back at release in case
+        // anything moved in the gap before the hold took effect.
+        val anchor = scrollState.value
+        scope.launch {
+            scrollState.scroll(MutatePriority.PreventUserInput) {
+                delay(SHOW_KEYBOARD_SCROLL_HOLD_MILLIS)
+                scrollBy((anchor - scrollState.value).toFloat())
+            }
+        }
         textFieldFocus.requestFocus()
         keyboardController?.show()
     }
@@ -267,9 +321,17 @@ fun ProcessTextScreen(
         keyboardController?.hide()
     }
 
-    fun syncFromComposer() {
-        current = composer.current() ?: current
+    fun refreshRail() {
         rail = Rail(composer.size, composer.index, composer.canGoBack, composer.canGoForward, composer.atOriginal)
+    }
+
+    // Only for arriving at a version that is not the one already on screen -- a model's result
+    // lands in the editor first and then registers with the composer, so that path never comes
+    // through here; this one is for navigation, where the composer is the side that moved.
+    fun loadFromComposer() {
+        composer.current()?.let { richTextState.setMarkdown(it) }
+        richTextState.selection = TextRange(richTextState.annotatedString.length)
+        refreshRail()
     }
 
     val assistClient = remember { AssistClient(context) }
@@ -285,9 +347,10 @@ fun ProcessTextScreen(
     // A default rather than a wait for the first emission: the very first task run this screen
     // ever sees can arrive before this flow has collected anything, and undersizing a chunk
     // costs one extra request, not a wrong answer.
-    val activeModel by DataGraph.assistModels.models
-        .map { models -> models.firstOrNull { it.active } }
-        .collectAsStateWithLifecycle(initialValue = null)
+    val activeModel by remember {
+        DataGraph.assistModels.models
+            .map { models -> models.firstOrNull { it.active } }
+    }.collectAsStateWithLifecycle(initialValue = null)
     val contextTokens = activeModel?.contextTokens ?: DEFAULT_CONTEXT_TOKENS
 
     DisposableEffect(Unit) {
@@ -307,22 +370,24 @@ fun ProcessTextScreen(
                 requestId = -1
                 val span = pendingSpan
                 pendingSpan = null
-                if (span != null && span.max <= current.length) {
-                    // Back into the range it came from, with everything outside it kept exactly.
-                    val whole = current.substring(0, span.min) + resultText +
-                        current.substring(span.max)
-                    composer.addResult(whole)
-                    syncFromComposer()
-                    // Leave the replaced part selected -- it is what changed, and running another
-                    // action now works on it rather than on the whole line again.
-                    textFieldValue = TextFieldValue(
-                        current,
-                        selection = TextRange(span.min, span.min + resultText.length),
-                    )
+                if (span != null && span.max <= richTextState.annotatedString.length) {
+                    // Back into the range it came from, with everything outside it kept
+                    // exactly -- carved out of the live document and replaced in place, which
+                    // is what keeps formatting outside the span untouched. The reply is
+                    // Markdown (the instructions ask for it), parsed as it goes in.
+                    val lengthBefore = richTextState.annotatedString.length
+                    richTextState.removeTextRange(span)
+                    richTextState.insertMarkdown(resultText, span.min)
+                    val inserted =
+                        richTextState.annotatedString.length - lengthBefore + span.max - span.min
+                    // Leave the replaced part selected -- it is what changed, and running
+                    // another action now works on it rather than on the whole line again.
+                    richTextState.selection = TextRange(span.min, span.min + inserted)
                 } else {
-                    composer.addResult(resultText)
-                    syncFromComposer()
+                    richTextState.setMarkdown(resultText)
                 }
+                composer.addResult(richTextState.toMarkdown())
+                refreshRail()
                 notice = if (truncated) strings[Keys.ASSIST_ANSWER_MAY_BE_INCOMPLETE] else ""
                 if (pendingInstruction.isNotEmpty() &&
                     preferences.customActions.none { it.instruction == pendingInstruction } &&
@@ -362,23 +427,26 @@ fun ProcessTextScreen(
     // is not something a model can translate or correct sensibly, so each end that landed
     // mid-word is pushed out to that word's edge.
     fun resolveSpan(): TextRange? {
-        val selection = textFieldValue.selection
+        val selection = richTextState.selection
+        val plainText = richTextState.annotatedString.text
         return selection.takeIf {
-            !it.collapsed && it.min >= 0 && it.max <= current.length
+            !it.collapsed && it.min >= 0 && it.max <= plainText.length
         }?.let { raw ->
             if (!preferences.composerSnapSelectionToWords) {
                 return@let TextRange(raw.min, raw.max)
             }
             var start = raw.min
             var end = raw.max
-            while (start > 0 && !current[start - 1].isWhitespace()) start--
-            while (end < current.length && !current[end].isWhitespace()) end++
+            while (start > 0 && !plainText[start - 1].isWhitespace()) start--
+            while (end < plainText.length && !plainText[end].isWhitespace()) end++
             TextRange(start, end)
         }
     }
 
     /** The text a task/gate looks at: the [resolveSpan] substring, or the whole field. */
-    fun targetText(): String = resolveSpan()?.let { current.substring(it.min, it.max) } ?: current
+    fun targetText(): String = resolveSpan()?.let { 
+        richTextState.annotatedString.text.substring(it.min, it.max) 
+    } ?: richTextState.annotatedString.text
 
     /**
      * Drops everything but the selection, as a new version -- no model. The "carry just this
@@ -389,34 +457,42 @@ fun ProcessTextScreen(
             return
         }
         val span = resolveSpan() ?: return
-        val kept = current.substring(span.min, span.max).trim()
-        if (kept.isEmpty() || kept == current) {
+        val keptPlain = richTextState.toText(span).trim()
+        if (keptPlain.isEmpty() || keptPlain == richTextState.toText().trim()) {
             return
         }
-        composer.captureBeforeRun(current)
-        composer.addResult(kept)
-        syncFromComposer()
-        textFieldValue = textFieldValue.copy(selection = TextRange(current.length))
+        // The selection's own markdown, not its plain text -- "carry just this part forward"
+        // includes however that part was formatted.
+        val keptMarkdown = richTextState.toMarkdown(span)
+        composer.captureBeforeRun(richTextState.toMarkdown())
+        richTextState.setMarkdown(keptMarkdown)
+        composer.addResult(richTextState.toMarkdown())
+        refreshRail()
+        richTextState.selection = TextRange(richTextState.annotatedString.length)
         notice = ""
     }
 
     fun runTask(task: AssistTask, instruction: String = "") {
-        if (busy || current.isEmpty()) {
+        if (busy || richTextState.annotatedString.text.isEmpty()) {
             return
         }
         val span = resolveSpan()
         // The field's own selection is moved to match the grown span, so what will be worked
         // on is what is shown selected.
-        if (span != null && (span.min != textFieldValue.selection.min || span.max != textFieldValue.selection.max)) {
-            textFieldValue = textFieldValue.copy(selection = span)
+        if (span != null && (span.min != richTextState.selection.min || span.max != richTextState.selection.max)) {
+            richTextState.selection = span
         }
-        val sent = if (span != null) current.substring(span.min, span.max) else current
+        // Sent as markdown, the same form the reply is asked for in -- what is already bold or
+        // a list goes to the model that way and comes back that way, instead of arriving
+        // flattened and returning restyled from nothing. The word gate below still counts the
+        // plain text, where a list's own "- " marks are not words.
+        val sent = if (span != null) richTextState.toMarkdown(span) else richTextState.toMarkdown()
         // Below the task's own floor -- the button that started this is greyed out at the same
         // threshold, so this catches only a bypass (a menu item, a saved prompt).
-        if (sent.isBlank() || composerWordCount(sent) < task.minWords) {
+        if (sent.isBlank() || composerWordCount(targetText()) < task.minWords) {
             return
         }
-        composer.captureBeforeRun(current)
+        composer.captureBeforeRun(richTextState.toMarkdown())
         val id = assist.run(task, sent, contextTokens, instruction)
         if (id < 0) {
             notice = strings[Keys.ASSISTANT_THE_ASSISTANT_IS_NOT_INSTALLED]
@@ -449,20 +525,35 @@ fun ProcessTextScreen(
     // the box's very first appearance -- there is nothing to have slid in from yet.
     var versionDirection by remember { mutableIntStateOf(0) }
 
+    // The two ends of the swipe-exclusion measurement: the outer ring Box and the editor's
+    // scroll viewport, as live coordinates rather than a cached rect -- the settle scale is a
+    // layer change that refires no position callback, and only mapping between the two at the
+    // moment a finger lands reads the box's actual on-screen footprint. See the exclusion
+    // lambda on the swipe modifier below.
+    var outerCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var editorCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
     fun goTo(step: () -> String?) {
         if (busy) {
             return
         }
+        // Fold in whatever was edited by hand before moving -- and only then read the index:
+        // an edit made while standing on node 0 inserts a new node after it, which is itself a
+        // move this navigation has to measure from.
         if (!composer.isEmpty()) {
-            composer.updateCurrent(current)
+            composer.updateCurrent(richTextState.toMarkdown())
         }
         val before = composer.index
         step() ?: return
         val moved = composer.index - before
         if (moved != 0) {
             versionDirection = if (moved > 0) 1 else -1
+            loadFromComposer()
+        } else {
+            // Landed on the node already shown -- the editor is already right, and a redundant
+            // setMarkdown would only throw away the caret and scroll position for nothing.
+            refreshRail()
         }
-        syncFromComposer()
     }
 
     // A rectangle sitting above where the keyboard would be, not a page: the whole point of the
@@ -549,17 +640,37 @@ fun ProcessTextScreen(
                 // says "a model may touch this" before anyone reads a word of the bar beneath
                 // it, the same way a coloured LED says a microphone is live.
                 .background(ringBrush(ringShift))
-                .swipeToToggleKeyboard { delta, released ->
+                // Placed right against the gesture below so the two share one coordinate
+                // space by construction -- the exclusion rect is mapped between this node and
+                // the editor viewport's own coordinates at the moment a finger lands.
+                .onGloballyPositioned { outerCoords = it }
+                .swipeToToggleKeyboard(
+                    // The one region where a vertical drag means the text and not the
+                    // keyboard: a gesture that starts on the editor's scrollable viewport
+                    // belongs to its scroll, entirely. A pointer's targets are fixed at its
+                    // DOWN, so declining it here once is the whole separation -- the scroll
+                    // never sees a drag that started outside the viewport, and this never
+                    // claims one that started inside it.
+                    exclusion = {
+                        val outer = outerCoords
+                        val editor = editorCoords
+                        if (outer != null && editor != null && outer.isAttached && editor.isAttached) {
+                            outer.localBoundingBoxOf(editor, clipBounds = false)
+                        } else {
+                            null
+                        }
+                    },
+                ) { delta, released ->
                     if (!released) {
-                        // Live: the box eases towards FOCUS_SETTLE_SCALE as the drag approaches
-                        // swipeThresholdPx, following the finger rather than waiting for it to
-                        // lift.
+                        // Live: the box eases towards FOCUS_SETTLE_SCALE as the drag
+                        // approaches swipeThresholdPx, following the finger rather than
+                        // waiting for it to lift.
                         val t = (kotlin.math.abs(delta) / swipeThresholdPx).coerceIn(0f, 1f)
                         focusSettle.snapTo(1f - t * (1f - FOCUS_SETTLE_SCALE))
                         return@swipeToToggleKeyboard
                     }
                     if (delta <= -swipeThresholdPx) {
-                        showKeyboardAtEnd()
+                        showKeyboard()
                     } else if (delta >= swipeThresholdPx) {
                         hideKeyboardAndUnfocus()
                     } else {
@@ -583,8 +694,17 @@ fun ProcessTextScreen(
             Column {
             // A Box, not a Row -- the hint below belongs truly centred between the title and the
             // close button, not sharing a weight with either of them, which is what a Row of
-            // three weighted children would give instead.
-            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+            // three weighted children would give instead. Its sides share FIELD_SIDE_GAP with
+            // the field underneath, and the close button shares the format bar's own square,
+            // so the title sits flush with the field's left edge and the cross on the same
+            // axis as Copy at its right -- one grid, not two rows that almost line up. No
+            // bottom padding of its own: the little air between this row and the field is the
+            // field's to keep, once, not stacked from both sides.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = FIELD_SIDE_GAP, end = FIELD_SIDE_GAP, top = 4.dp),
+            ) {
                 Text(
                     strings[Keys.COMPOSER_TITLE],
                     style = MaterialTheme.typography.titleMedium,
@@ -603,7 +723,7 @@ fun ProcessTextScreen(
                         activity?.setResult(Activity.RESULT_CANCELED)
                         activity?.finish()
                     },
-                    modifier = Modifier.align(Alignment.CenterEnd),
+                    modifier = Modifier.align(Alignment.CenterEnd).size(FORMAT_BAR_HEIGHT),
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.bk_composer_close),
@@ -613,39 +733,15 @@ fun ProcessTextScreen(
             }
 
             Box(modifier = Modifier.weight(1f, fill = false)) {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    // -1..1, where 0 is at rest. Driven two ways: live, by the horizontal swipe
-                    // below, following the finger as it drags (see that gesture's onChange); and
-                    // by this effect, for a version reached any other way -- the arrows, the
-                    // rail, or a swipe that already released past versionThresholdPx, which is
-                    // handed off to here rather than finished by the gesture itself (see that
-                    // callback for why the two meet without a visible jump). versionDirection
-                    // (set in goTo) is what says which side a non-drag change slides in from, and
-                    // 0 (nothing navigated yet) is what keeps this from playing on the box's own
-                    // first appearance.
-                    val versionSlide = remember { Animatable(0f) }
-                    LaunchedEffect(rail.index) {
-                        if (versionDirection == 0) {
-                            return@LaunchedEffect
-                        }
-                        versionSlide.snapTo(versionDirection.toFloat())
-                        versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
-                    }
-                    // One shape for the field and the copy notch together -- see
-                    // NotchedTopFieldShape's own doc for why this is a single outline rather
-                    // than two shapes placed so they touch.
-                    val fieldShape = remember {
-                        NotchedTopFieldShape(
-                            notchWidth = COPY_TAB_WIDTH,
-                            notchHeight = COPY_TAB_HEIGHT,
-                            fieldCornerRadius = FIELD_CORNER_RADIUS,
-                            notchCornerRadius = COPY_TAB_CORNER_RADIUS,
-                        )
-                    }
+                Column {
                     Box(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(horizontal = FIELD_SIDE_GAP, vertical = 8.dp)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh, fieldShape)
+                            // Tighter above than below: the header row already brings its own
+                            // height, so the field reads as hanging right under the title, and
+                            // the bar beneath keeps just enough air to stay its own strip.
+                            .padding(start = FIELD_SIDE_GAP, end = FIELD_SIDE_GAP, top = 2.dp, bottom = 4.dp)
+                            .weight(1f, fill = false)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.shapes.medium)
                             .border(
                                 FIELD_BORDER_WIDTH,
                                 if (isFocused) {
@@ -653,98 +749,219 @@ fun ProcessTextScreen(
                                 } else {
                                     MaterialTheme.colorScheme.outline
                                 },
-                                fieldShape,
-                            ),
+                                MaterialTheme.shapes.medium,
+                            )
+                            .clip(MaterialTheme.shapes.medium),
                     ) {
-                        OutlinedTextField(
-                            value = textFieldValue,
-                            enabled = !busy,
-                            onValueChange = { value ->
-                                textFieldValue = value
-                                current = value.text
-                                if (!composer.isEmpty()) {
-                                    composer.updateCurrent(value.text)
-                                }
-                            },
-                            placeholder = { Text(strings[Keys.COMPOSER_EMPTY]) },
-                            // Transparent everywhere the field would otherwise paint its own
-                            // border and background: fieldShape above is now the only outline
-                            // and fill this area has, and the field drawing its own on top would
-                            // either double that border or paint over the notch entirely.
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                focusedBorderColor = Color.Transparent,
-                                unfocusedBorderColor = Color.Transparent,
-                                disabledBorderColor = Color.Transparent,
-                            ),
-                            // A multiplier on the ambient size rather than a fixed sp value, so
-                            // Small/Medium/Large still track a system font-size setting the same
-                            // way the field's unscaled default already does.
-                            textStyle = LocalTextStyle.current.copy(
-                                fontSize = LocalTextStyle.current.fontSize *
-                                    composerFontScale(preferences.composerTextSize),
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                                // Clears the notch: the field's own text never reaches under it,
-                                // whatever the field's height ends up being.
-                                .padding(top = COPY_TAB_HEIGHT)
-                                .focusRequester(textFieldFocus)
-                                .onFocusChanged { isFocused = it.isFocused }
-                                // Left/right on the text itself steps through versions, the same
-                                // move as the arrows at the bottom of the box or picking a node on
-                                // the rail -- reaching either of those means looking away from what
-                                // was just written to find them.
-                                .swipeToChangeVersion { delta, released ->
-                                    if (!released) {
-                                        // Live: the text follows the finger, capped at ±1 exactly at
-                                        // versionThresholdPx -- which is also where a commit below
-                                        // hands off to the rail.index effect above, so the two never
-                                        // visibly disagree about where the text already is.
-                                        versionSlide.snapTo((delta / versionThresholdPx).coerceIn(-1f, 1f))
-                                        return@swipeToChangeVersion
+                        val versionSlide = remember { Animatable(0f) }
+                        LaunchedEffect(rail.index) {
+                            if (versionDirection == 0) return@LaunchedEffect
+                            versionSlide.snapTo(versionDirection.toFloat())
+                            versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
+                        }
+
+                        Column {
+                            // The strip the rich text grew across the field's top: what used
+                            // to be a copy notch cut into one corner is a full header now --
+                            // the style toggles on the left, the clipboard actions on the
+                            // right, one band the field's own border wraps together with the
+                            // text below it.
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(FORMAT_BAR_HEIGHT)
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f).padding(start = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    // Letter glyphs, not icons, for the two span styles: B and
+                                    // I drawn in themselves are the convention every editor
+                                    // shares, and each is its own preview of what it does.
+                                    FormatToggle(
+                                        active = richTextState.currentSpanStyle.fontWeight == FontWeight.Bold,
+                                        description = strings[Keys.COMPOSER_FORMAT_BOLD],
+                                        onClick = { richTextState.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold)) },
+                                    ) {
+                                        Text(
+                                            "B",
+                                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                        )
                                     }
-                                    if (delta <= -versionThresholdPx) {
-                                        goTo { composer.forward() }
-                                    } else if (delta >= versionThresholdPx) {
-                                        goTo { composer.back() }
-                                    } else {
-                                        // Released short of the threshold -- nothing navigated, so
-                                        // nothing but this eases the text back to where it started.
-                                        versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
+                                    FormatToggle(
+                                        active = richTextState.currentSpanStyle.fontStyle == FontStyle.Italic,
+                                        description = strings[Keys.COMPOSER_FORMAT_ITALIC],
+                                        onClick = { richTextState.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic)) },
+                                    ) {
+                                        Text(
+                                            "I",
+                                            style = MaterialTheme.typography.labelLarge.copy(fontStyle = FontStyle.Italic),
+                                        )
+                                    }
+                                    FormatToggle(
+                                        active = richTextState.isUnorderedList,
+                                        description = strings[Keys.COMPOSER_FORMAT_BULLETS],
+                                        onClick = { richTextState.toggleUnorderedList() },
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.bk_composer_bullets),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                        )
                                     }
                                 }
-                                .offset(x = VERSION_TRANSITION_DISTANCE * versionSlide.value)
-                                .alpha(1f - kotlin.math.abs(versionSlide.value) * VERSION_TRANSITION_FADE),
-                        )
-                        // Sits in the notch fieldShape already cut for it -- no background, no
-                        // border and no offset of its own to place, since the shape both of
-                        // those belong to is drawn by the Box around this one already.
-                        IconButton(
-                            enabled = current.isNotEmpty() && !busy,
-                            onClick = {
-                                val manager = context.getSystemService(Context.CLIPBOARD_SERVICE)
-                                    as? ClipboardManager
-                                manager?.setPrimaryClip(ClipData.newPlainText(null, current))
-                                notice = strings[Keys.ASSIST_COPY]
-                            },
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .size(width = COPY_TAB_WIDTH, height = COPY_TAB_HEIGHT),
+                                // Copy lives on the field itself, not the bar below: it takes
+                                // the text out as a document, where the bar's buttons ask a
+                                // model for a new version of it. No paste beside it -- putting
+                                // text IN is the keyboard's own job, and its quick actions row
+                                // already carries one.
+                                IconButton(
+                                    enabled = richTextState.annotatedString.text.isNotEmpty() && !busy,
+                                    onClick = {
+                                        val manager = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                            as? ClipboardManager
+                                        // Both faces on one clip: the HTML side is what a rich
+                                        // editor pastes, the markdown side what a plain field
+                                        // gets. The formatting is never the thing Copy drops
+                                        // -- pasting somewhere plain is what flattens it.
+                                        manager?.setPrimaryClip(
+                                            ClipData.newHtmlText(
+                                                null,
+                                                richTextState.toMarkdown(),
+                                                richTextState.toHtml(),
+                                            ),
+                                        )
+                                        notice = strings[Keys.ASSIST_COPY]
+                                    },
+                                    modifier = Modifier.size(FORMAT_BAR_HEIGHT),
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.bk_action_copy_all),
+                                        contentDescription = strings[Keys.ASSIST_COPY],
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                thickness = 0.5.dp,
+                            )
+
+                            // The scroll viewport, and the region the keyboard swipe above
+                            // excludes -- measured before anything else on this chain so the
+                            // rect covers the viewport exactly as laid out, padding included,
+                            // the transient version-slide offset not. weight(fill = false):
+                            // wrap the text while it is short, take what is left of the box's
+                            // cap once it is not, which is exactly where the scroll engages.
+                            Box(
+                                modifier = Modifier
+                                    .onGloballyPositioned { editorCoords = it }
+                                    .weight(1f, fill = false)
+                                    .fillMaxWidth()
+                                    .verticalScroll(scrollState)
+                                    .offset(x = VERSION_TRANSITION_DISTANCE * versionSlide.value)
+                                    .alpha(1f - kotlin.math.abs(versionSlide.value) * VERSION_TRANSITION_FADE)
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                            ) {
+                                BasicRichTextEditor(
+                                    state = richTextState,
+                                    enabled = !busy,
+                                    textStyle = LocalTextStyle.current.copy(
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        // A multiplier on the ambient size rather than a fixed
+                                        // sp value, so Small/Medium/Large still track a system
+                                        // font-size setting the same way the unscaled default
+                                        // already does.
+                                        fontSize = LocalTextStyle.current.fontSize *
+                                            composerFontScale(preferences.composerTextSize),
+                                    ),
+                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                    onTextLayout = { textLayout = it },
+                                    decorationBox = { innerTextField ->
+                                        // The editor's own decoration slot, not a sibling
+                                        // stacked behind it: the hint shares the field's exact
+                                        // metrics and leaves with the first character typed.
+                                        Box {
+                                            if (richTextState.annotatedString.text.isEmpty()) {
+                                                Text(
+                                                    strings[Keys.COMPOSER_EMPTY],
+                                                    style = LocalTextStyle.current.copy(
+                                                        fontSize = LocalTextStyle.current.fontSize *
+                                                            composerFontScale(preferences.composerTextSize),
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                    ),
+                                                )
+                                            }
+                                            innerTextField()
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        // Room to land a finger on even while empty -- the
+                                        // text alone would be one line tall.
+                                        .heightIn(min = EDITOR_MIN_HEIGHT)
+                                        .focusRequester(textFieldFocus)
+                                        .onFocusChanged { isFocused = it.isFocused }
+                                        // Left/right on the text itself steps through
+                                        // versions, the same move as the arrows at the bottom
+                                        // of the box or picking a node on the rail -- reaching
+                                        // either of those means looking away from what was
+                                        // just written to find them.
+                                        .swipeToChangeVersion { delta, released ->
+                                            if (!released) {
+                                                // Live: the text follows the finger, capped at
+                                                // ±1 exactly at versionThresholdPx -- which is
+                                                // also where a commit below hands off to the
+                                                // rail.index effect above, so the two never
+                                                // visibly disagree about where the text is.
+                                                versionSlide.snapTo((delta / versionThresholdPx).coerceIn(-1f, 1f))
+                                                return@swipeToChangeVersion
+                                            }
+                                            if (delta <= -versionThresholdPx) {
+                                                goTo { composer.forward() }
+                                            } else if (delta >= versionThresholdPx) {
+                                                goTo { composer.back() }
+                                            } else {
+                                                // Released short of the threshold -- nothing
+                                                // navigated, so nothing but this eases the
+                                                // text back to where it started.
+                                                versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
+                                            }
+                                        },
+                                )
+                            }
+                        }
+
+                        // Painted over the field, not laid out beside it: matchParentSize
+                        // keeps this Box out of the height negotiation entirely, which is what
+                        // lets the field stay wrap-content while the text is short -- a
+                        // fillMaxHeight child taking part in sizing would prop the field open
+                        // to its cap all by itself.
+                        Box(
+                            Modifier
+                                .matchParentSize()
+                                .padding(top = FORMAT_BAR_HEIGHT + 4.dp, bottom = 4.dp, end = 4.dp),
                         ) {
-                            Icon(
-                                painter = painterResource(R.drawable.bk_action_copy_all),
-                                contentDescription = strings[Keys.ASSIST_COPY],
-                                modifier = Modifier.size(COPY_TAB_ICON_SIZE),
+                            VerticalScrollbar(
+                                scrollState = scrollState,
+                                isFocused = isFocused,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .width(SCROLLBAR_WIDTH)
+                                    .fillMaxHeight(),
                             )
                         }
 
                         // A model may be rewriting what's on screen, so what's on screen has to
                         // stop being editable while it does -- typing into text that is about to
                         // be replaced is a race the user cannot win. Cut to the field's own
-                        // outline, notch and all: the same shape the border draws, so the "a
-                        // model may touch this" signal covers exactly the thing it is touching.
+                        // outline: the same shape the border draws, so the "a model may touch
+                        // this" signal covers exactly the thing it is touching.
                         if (busy) {
                             val pulse = rememberInfiniteTransition()
                             val workingAlpha by pulse.animateFloat(
@@ -758,10 +975,10 @@ fun ProcessTextScreen(
                             Box(
                                 modifier = Modifier
                                     .matchParentSize()
-                                    .clip(fieldShape)
+                                    .clip(MaterialTheme.shapes.medium)
                                     .background(ringBrush(ringShift, alpha = WORKING_SCRIM_ALPHA))
                                     .padding(RING_WIDTH)
-                                    .clip(fieldShape)
+                                    .clip(MaterialTheme.shapes.medium)
                                     .background(
                                         MaterialTheme.colorScheme.surface.copy(alpha = WORKING_SURFACE_ALPHA),
                                     ),
@@ -1025,26 +1242,52 @@ fun ProcessTextScreen(
                 // never offered to accept a replacement) has no affirmative action of its own
                 // any more: Copy is the badge on the field itself now, available either way this
                 // screen was reached, so there is nothing read-only still needs a bar button for.
+                // Both ways out of the box offer the same choice first: the markdown exactly
+                // as written (bold stays **bold**, the list keeps its dashes -- what survives
+                // a round trip back into this box or any markdown-aware target), or the plain
+                // rendering (toText: real line breaks, bullets as their glyph, no markers --
+                // what reads cleanly in a field that will never parse anything). Copy is the
+                // one that never asks: its clip carries both faces at once.
+                val hasText = richTextState.annotatedString.text.isNotEmpty()
                 if (!readOnly) {
-                    IconButton(
-                        enabled = current.isNotEmpty() && !busy,
-                        onClick = {
-                            activity?.setResult(
-                                Activity.RESULT_OK,
-                                Intent().putExtra(Intent.EXTRA_PROCESS_TEXT, current),
+                    Box {
+                        IconButton(
+                            enabled = hasText && !busy,
+                            onClick = { insertMenuOpen = true },
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.bk_composer_insert),
+                                contentDescription = strings[Keys.COMPOSER_INSERT],
+                                // Fixed, not the theme's colour -- see ComposerView.insertGreen. A
+                                // play button reads as "send" by its colour before its shape, and a
+                                // theme with a red or orange accent would otherwise tint the one
+                                // affirmative action on the bar to look like a stop.
+                                tint = if (hasText && !busy) INSERT_GREEN else LocalContentColor.current,
                             )
-                            activity?.finish()
-                        },
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.bk_composer_insert),
-                            contentDescription = strings[Keys.COMPOSER_INSERT],
-                            // Fixed, not the theme's colour -- see ComposerView.insertGreen. A
-                            // play button reads as "send" by its colour before its shape, and a
-                            // theme with a red or orange accent would otherwise tint the one
-                            // affirmative action on the bar to look like a stop.
-                            tint = if (current.isNotEmpty() && !busy) INSERT_GREEN else LocalContentColor.current,
-                        )
+                        }
+                        AssistMenu(
+                            insertMenuOpen,
+                            onDismissRequest = { insertMenuOpen = false },
+                            ringShift = ringShift,
+                        ) {
+                            fun finishWith(result: String) {
+                                insertMenuOpen = false
+                                activity?.setResult(
+                                    Activity.RESULT_OK,
+                                    Intent().putExtra(Intent.EXTRA_PROCESS_TEXT, result),
+                                )
+                                activity?.finish()
+                            }
+                            DropdownMenuItem(
+                                text = { Text(strings[Keys.COMPOSER_WITH_FORMATTING]) },
+                                onClick = { finishWith(richTextState.toMarkdown()) },
+                            )
+                            AssistMenuDivider()
+                            DropdownMenuItem(
+                                text = { Text(strings[Keys.COMPOSER_PLAIN_TEXT]) },
+                                onClick = { finishWith(richTextState.toText()) },
+                            )
+                        }
                     }
                 }
                 // Its own button rather than folded into Copy or Insert: sharing hands the text
@@ -1052,20 +1295,45 @@ fun ProcessTextScreen(
                 // "send this screen's answer back to where the selection came from" Insert is,
                 // and available either way this screen was reached -- read-only or not, there is
                 // always somewhere else on the phone the current text could usefully go.
-                IconButton(
-                    enabled = current.isNotEmpty() && !busy,
-                    onClick = {
-                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, current)
+                Box {
+                    IconButton(
+                        enabled = hasText && !busy,
+                        onClick = { shareMenuOpen = true },
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.bk_composer_share),
+                            contentDescription = strings[Keys.COMPOSER_SHARE],
+                        )
+                    }
+                    AssistMenu(
+                        shareMenuOpen,
+                        onDismissRequest = { shareMenuOpen = false },
+                        ringShift = ringShift,
+                    ) {
+                        fun shareWith(result: String, html: String?) {
+                            shareMenuOpen = false
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, result)
+                                // Alongside the text, not instead of it -- a target that
+                                // understands rich text reads this one, everything else
+                                // falls back to EXTRA_TEXT on its own.
+                                if (html != null) {
+                                    putExtra(Intent.EXTRA_HTML_TEXT, html)
+                                }
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, null))
                         }
-                        context.startActivity(Intent.createChooser(sendIntent, null))
-                    },
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.bk_composer_share),
-                        contentDescription = strings[Keys.COMPOSER_SHARE],
-                    )
+                        DropdownMenuItem(
+                            text = { Text(strings[Keys.COMPOSER_WITH_FORMATTING]) },
+                            onClick = { shareWith(richTextState.toMarkdown(), richTextState.toHtml()) },
+                        )
+                        AssistMenuDivider()
+                        DropdownMenuItem(
+                            text = { Text(strings[Keys.COMPOSER_PLAIN_TEXT]) },
+                            onClick = { shareWith(richTextState.toText(), null) },
+                        )
+                    }
                 }
                 IconButton(onClick = { goTo { composer.forward() } }, enabled = rail.canForward) {
                     Icon(
@@ -1231,16 +1499,26 @@ private val SWIPE_DEAD_ZONE = 12.dp
  * all). Deciding what a given total means -- committed, or short of the threshold -- is the
  * caller's job; see where this is used for that half of it.
  *
- * Read in [PointerEventPass.Initial] -- before the text field beneath gets its own turn at the
- * same events in the Main pass -- so a swipe that passes over the text is seen here first. Only
- * once it is claimed (past the dead zone) is anything actually consumed; everything before that
- * point is left unconsumed and reaches the field or a button exactly as if this modifier were
- * not here at all.
+ * Read in [PointerEventPass.Initial] -- before anything beneath gets its own turn at the same
+ * events in the Main pass -- so a swipe that passes over the header or a button is seen here
+ * first. Only once it is claimed (past the dead zone) is anything actually consumed; everything
+ * before that point is left unconsumed and reaches the button or the field exactly as if this
+ * modifier were not here at all.
+ *
+ * [exclusion] is the one carve-out from "this box top to bottom": a gesture whose *down* lands
+ * inside the returned rect (the editor's own scrollable viewport, in this node's coordinates)
+ * is never watched at all, so its vertical drags belong to the text's scroll and nothing else.
+ * A pointer's targets are fixed the moment it lands, which is what makes declining it here once
+ * a complete separation rather than a tug-of-war -- read per gesture, not captured, so the rect
+ * is always the current one even though the handler itself never restarts.
  */
-private fun Modifier.swipeToToggleKeyboard(onChange: suspend (delta: Float, released: Boolean) -> Unit): Modifier =
+private fun Modifier.swipeToToggleKeyboard(
+    exclusion: () -> Rect? = { null },
+    onChange: suspend (delta: Float, released: Boolean) -> Unit,
+): Modifier =
     pointerInput(Unit) {
         val deadZone = SWIPE_DEAD_ZONE.toPx()
-        awaitAxisSwipe(deadZone, primary = { it.y }, secondary = { it.x }, onChange)
+        awaitAxisSwipe(deadZone, primary = { it.y }, secondary = { it.x }, exclusion = exclusion, onChange = onChange)
     }
 
 /**
@@ -1257,7 +1535,7 @@ private fun Modifier.swipeToToggleKeyboard(onChange: suspend (delta: Float, rele
 private fun Modifier.swipeToChangeVersion(onChange: suspend (delta: Float, released: Boolean) -> Unit): Modifier =
     pointerInput(Unit) {
         val deadZone = SWIPE_DEAD_ZONE.toPx()
-        awaitAxisSwipe(deadZone, primary = { it.x }, secondary = { it.y }, onChange)
+        awaitAxisSwipe(deadZone, primary = { it.x }, secondary = { it.y }, onChange = onChange)
     }
 
 /**
@@ -1273,6 +1551,7 @@ private suspend fun PointerInputScope.awaitAxisSwipe(
     deadZone: Float,
     primary: (Offset) -> Float,
     secondary: (Offset) -> Float,
+    exclusion: () -> Rect? = { null },
     onChange: suspend (delta: Float, released: Boolean) -> Unit,
 ) = coroutineScope {
     // PointerInputScope is not itself a CoroutineScope (only Density), and
@@ -1286,6 +1565,12 @@ private suspend fun PointerInputScope.awaitAxisSwipe(
     // channel over.
     awaitEachGesture {
         val down = awaitFirstDown(pass = PointerEventPass.Initial)
+        // A gesture born inside the excluded region is not this gesture at all -- returning
+        // here consumes nothing, so whatever is under it (the editor's scroll) handles the
+        // whole thing, and awaitEachGesture waits out the remaining pointers before rearming.
+        if (exclusion()?.contains(down.position) == true) {
+            return@awaitEachGesture
+        }
         var totalPrimary = 0f
         var totalSecondary = 0f
         var claimed = false
@@ -1324,6 +1609,91 @@ private suspend fun PointerInputScope.awaitAxisSwipe(
  * recreated along the way (this device does that fairly readily), is not.
  */
 private var swipeHintShown = false
+
+/**
+ * One toggle on the field's format bar -- a small round chip that fills with the primary
+ * colour while its style is active at the cursor, so the bar doubles as a readout of what the
+ * text under the caret already is. What sits on the chip is [content]'s to draw (a styled
+ * letter, an icon); [description] is the same fact for whoever is not looking at it.
+ */
+@Composable
+private fun FormatToggle(
+    active: Boolean,
+    description: String,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = if (active) {
+            MaterialTheme.colorScheme.primary.copy(alpha = FORMAT_TOGGLE_ACTIVE_ALPHA)
+        } else {
+            Color.Transparent
+        },
+        contentColor = if (active) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        modifier = Modifier
+            .size(FORMAT_TOGGLE_SIZE)
+            .semantics { contentDescription = description },
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            content()
+        }
+    }
+}
+
+/**
+ * The thin thumb along the field's edge while the text can scroll at all -- an indicator, not
+ * a handle: on a phone the text itself is the scroll surface, and a strip this narrow that
+ * also claimed touches would only eat taps meant for the words beside it. Rises with any
+ * scroll movement and fades back out once the text has settled, the way the platform's own
+ * scrollbars do.
+ */
+@Composable
+private fun VerticalScrollbar(
+    scrollState: ScrollState,
+    isFocused: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    // Matching the field's border logic: primary when focused, outline otherwise.
+    val color = if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+    val visibility = remember { Animatable(0f) }
+    LaunchedEffect(scrollState) {
+        // drop(1): the position collection starts on is not a movement, and the thumb should
+        // not flash once at open just because collection began. collectLatest, so a scroll
+        // still in motion keeps restarting the linger instead of fading mid-drag.
+        snapshotFlow { scrollState.value }.drop(1).collectLatest {
+            visibility.snapTo(1f)
+            delay(SCROLLBAR_FADE_DELAY_MILLIS)
+            visibility.animateTo(0f, tween(SCROLLBAR_FADE_MILLIS))
+        }
+    }
+    Canvas(modifier = modifier) {
+        // maxValue is Int.MAX_VALUE until the first real measure -- not a scrollable range.
+        if (scrollState.maxValue <= 0 || scrollState.maxValue == Int.MAX_VALUE || visibility.value <= 0f) {
+            return@Canvas
+        }
+        val viewportHeight = size.height
+        val contentHeight = scrollState.maxValue.toFloat() + viewportHeight
+        val thumbHeight = (viewportHeight * viewportHeight / contentHeight)
+            .coerceAtLeast(SCROLLBAR_MIN_THUMB_HEIGHT.toPx())
+        val travel = viewportHeight - thumbHeight
+        if (travel <= 0f) {
+            return@Canvas
+        }
+        val top = travel * (scrollState.value.toFloat() / scrollState.maxValue)
+        drawRoundRect(
+            color = color.copy(alpha = SCROLLBAR_ALPHA * visibility.value),
+            topLeft = Offset(0f, top),
+            size = Size(size.width, thumbHeight),
+            cornerRadius = CornerRadius(size.width / 2f),
+        )
+    }
+}
 
 /**
  * "Swipe up for keyboard," rising and fading a handful of times and then gone -- the same idea
@@ -1406,91 +1776,30 @@ private val MENU_CORNER_RADIUS = 14.dp
 private val MENU_SHADOW_ELEVATION = 10.dp
 private val MENU_BORDER_WIDTH = 1.5.dp
 
-/**
- * The copy notch's own width and height. The width is not a free choice: the close button
- * above it is centred in the same 48.dp Material gives every icon button by default with no
- * size of its own set, and both it and the notch sit the same [FIELD_SIDE_GAP] in from the
- * card's right edge -- so a centred icon in a notch of that same width lands on the same
- * vertical line as the close button above it, with no offset of its own needed to put it there.
- * The height is free to stay smaller, since only the width decides where the icon sits sideways.
- */
-private val COPY_TAB_WIDTH = 48.dp
-private val COPY_TAB_HEIGHT = 32.dp
+/** The format bar across the field's top: style toggles left, clipboard actions right. Also
+ *  the square size of each clipboard button on it, which is what centres their icons on the
+ *  strip with no offsets of their own to place. */
+private val FORMAT_BAR_HEIGHT = 40.dp
 
-private val COPY_TAB_ICON_SIZE = 16.dp
+/** The round chip behind each style toggle, and how strongly it fills while active. */
+private val FORMAT_TOGGLE_SIZE = 32.dp
+private const val FORMAT_TOGGLE_ACTIVE_ALPHA = 0.15f
 
-/** [OutlinedTextField]'s own default corner radius and outline width, matched here because
- *  [NotchedTopFieldShape] replaces that field's own border and background entirely -- see its
- *  colors in the field below for why -- and a border that used to belong to Material's default
- *  shape now has to keep looking like it still does. */
-private val FIELD_CORNER_RADIUS = 4.dp
-private val COPY_TAB_CORNER_RADIUS = 4.dp
+/** Room to land a finger on while the box is still empty -- the text alone would be one line. */
+private val EDITOR_MIN_HEIGHT = 48.dp
+
 private val FIELD_BORDER_WIDTH = 1.dp
 
-/**
- * One outline around a field and a small notch clipped onto its top-right corner, rather than
- * two separately bordered shapes placed so they touch -- the second reads as two things next to
- * each other no matter how exactly they meet; only tracing both as one path reads as a single
- * border going around both.
- *
- * The two inner corners, where the notch meets the field's own top edge, are left sharp on
- * purpose: a notch cut into a corner has a corner of its own there, the same way a torn-off
- * ticket stub does. Every other corner -- the field's own three, and the notch's two outer ones
- * -- is rounded.
- *
- * LTR only: the notch is always at the end edge in a left-to-right layout, and nothing here
- * mirrors it for a right-to-left one. None of this application's shipped languages are RTL.
- */
-private class NotchedTopFieldShape(
-    private val notchWidth: Dp,
-    private val notchHeight: Dp,
-    private val fieldCornerRadius: Dp,
-    private val notchCornerRadius: Dp,
-) : Shape {
-    override fun createOutline(
-        size: Size,
-        layoutDirection: LayoutDirection,
-        density: Density,
-    ): Outline {
-        val w = size.width
-        val h = size.height
-        val notchW = with(density) { notchWidth.toPx() }
-        val notchH = with(density) { notchHeight.toPx() }
-        val rf = with(density) { fieldCornerRadius.toPx() }
-        val rn = with(density) { notchCornerRadius.toPx() }
-        val notchLeft = w - notchW
+private val SCROLLBAR_WIDTH = 4.dp
+private val SCROLLBAR_MIN_THUMB_HEIGHT = 32.dp
 
-        val path = Path().apply {
-            // Field's top edge, from just past its own top-left corner to where the notch's
-            // left edge begins.
-            moveTo(rf, notchH)
-            lineTo(notchLeft, notchH)
-            // Straight up into the notch -- the one sharp corner, unrounded on purpose.
-            lineTo(notchLeft, rn)
-            // Notch's top-left corner.
-            arcTo(Rect(notchLeft, 0f, notchLeft + 2 * rn, 2 * rn), 180f, 90f, false)
-            // Notch's top edge.
-            lineTo(w - rn, 0f)
-            // Notch's top-right corner, which is also the field's own top-right corner --
-            // their edges share the same x = w, so nothing marks where one becomes the other.
-            arcTo(Rect(w - 2 * rn, 0f, w, 2 * rn), 270f, 90f, false)
-            // Field's right edge.
-            lineTo(w, h - rf)
-            // Field's bottom-right corner.
-            arcTo(Rect(w - 2 * rf, h - 2 * rf, w, h), 0f, 90f, false)
-            // Field's bottom edge.
-            lineTo(rf, h)
-            // Field's bottom-left corner.
-            arcTo(Rect(0f, h - 2 * rf, 2 * rf, h), 90f, 90f, false)
-            // Field's left edge, back up to the top-left corner.
-            lineTo(0f, notchH + rf)
-            // Field's top-left corner, closing exactly where this path started.
-            arcTo(Rect(0f, notchH, 2 * rf, notchH + 2 * rf), 180f, 90f, false)
-            close()
-        }
-        return Outline.Generic(path)
-    }
-}
+/** The thumb's rest opacity while visible; [VerticalScrollbar]'s own fade scales it away. */
+private const val SCROLLBAR_ALPHA = 0.5f
+
+/** How long the thumb lingers after the last scroll movement before starting to fade. */
+private const val SCROLLBAR_FADE_DELAY_MILLIS = 800L
+
+private const val SCROLLBAR_FADE_MILLIS = 300
 
 /** 70% of [MaterialTheme.typography.labelLarge]'s own size, doubled -- 1.4x in total. */
 private const val SWIPE_HINT_SIZE_MULTIPLIER = 1.4f
@@ -1528,6 +1837,13 @@ private const val VERSION_TRANSITION_MILLIS = 220
 private const val FOCUS_SETTLE_SCALE = 0.985f
 
 private const val FOCUS_SETTLE_MILLIS = 220
+
+/**
+ * How long [showKeyboard]'s scroll hold outlasts the focus handoff -- long enough to cover the
+ * focus-gain reveal and the keyboard's own resize on a slow device, short enough that a real
+ * scroll gesture right after opening the keyboard is not noticeably ignored.
+ */
+private const val SHOW_KEYBOARD_SCROLL_HOLD_MILLIS = 900L
 
 /**
  * The busy overlay's two layers: the ring's own gradient over a surface-coloured scrim
