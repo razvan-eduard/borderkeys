@@ -305,24 +305,55 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
             }
             SettingsSectionCard(strings[Keys.THEME_COLOURS]) {
               Disableable(disabled = auto) {
-                ColourRow(strings[Keys.THEME_BACKGROUND], theme.backgroundColor) {
-                    update { t -> t.copy(backgroundColor = it) }
-                }
-                ColourRow(strings[Keys.THEME_KEYS], theme.keyColor) { update { t -> t.copy(keyColor = it) } }
-                ColourRow(strings[Keys.THEME_PRESSED_KEY], theme.keyPressedColor) {
-                    update { t -> t.copy(keyPressedColor = it) }
-                }
-                ColourRow(strings[Keys.THEME_MODIFIER_KEYS], theme.modifierKeyColor) {
-                    update { t -> t.copy(modifierKeyColor = it) }
-                }
-                ColourRow(strings[Keys.THEME_LABELS], theme.textColor) { update { t -> t.copy(textColor = it) } }
-                ColourRow(strings[Keys.THEME_SECONDARY_LABELS], theme.secondaryTextColor) {
-                    update { t -> t.copy(secondaryTextColor = it) }
-                }
-                ColourRow(strings[Keys.THEME_ACCENT], theme.accentColor) { update { t -> t.copy(accentColor = it) } }
-                ColourRow(strings[Keys.THEME_SWIPE_TRAIL], theme.swipeTrailColor, preserveAlpha = true) {
-                    update { t -> t.copy(swipeTrailColor = it) }
-                }
+                ColourRow(
+                    strings[Keys.THEME_BACKGROUND],
+                    theme.backgroundColor,
+                    customColours = theme.customColours[KeyboardTheme.KEY_BACKGROUND] ?: emptyList(),
+                    onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_BACKGROUND to it)) } },
+                ) { update { t -> t.copy(backgroundColor = it) } }
+                ColourRow(
+                    strings[Keys.THEME_KEYS],
+                    theme.keyColor,
+                    customColours = theme.customColours[KeyboardTheme.KEY_KEY] ?: emptyList(),
+                    onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_KEY to it)) } },
+                ) { update { t -> t.copy(keyColor = it) } }
+                ColourRow(
+                    strings[Keys.THEME_PRESSED_KEY],
+                    theme.keyPressedColor,
+                    customColours = theme.customColours[KeyboardTheme.KEY_KEY_PRESSED] ?: emptyList(),
+                    onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_KEY_PRESSED to it)) } },
+                ) { update { t -> t.copy(keyPressedColor = it) } }
+                ColourRow(
+                    strings[Keys.THEME_MODIFIER_KEYS],
+                    theme.modifierKeyColor,
+                    customColours = theme.customColours[KeyboardTheme.KEY_MODIFIER_KEY] ?: emptyList(),
+                    onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_MODIFIER_KEY to it)) } },
+                ) { update { t -> t.copy(modifierKeyColor = it) } }
+                ColourRow(
+                    strings[Keys.THEME_LABELS],
+                    theme.textColor,
+                    customColours = theme.customColours[KeyboardTheme.KEY_TEXT] ?: emptyList(),
+                    onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_TEXT to it)) } },
+                ) { update { t -> t.copy(textColor = it) } }
+                ColourRow(
+                    strings[Keys.THEME_SECONDARY_LABELS],
+                    theme.secondaryTextColor,
+                    customColours = theme.customColours[KeyboardTheme.KEY_SECONDARY_TEXT] ?: emptyList(),
+                    onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_SECONDARY_TEXT to it)) } },
+                ) { update { t -> t.copy(secondaryTextColor = it) } }
+                ColourRow(
+                    strings[Keys.THEME_ACCENT],
+                    theme.accentColor,
+                    customColours = theme.customColours[KeyboardTheme.KEY_ACCENT] ?: emptyList(),
+                    onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_ACCENT to it)) } },
+                ) { update { t -> t.copy(accentColor = it) } }
+                ColourRow(
+                    strings[Keys.THEME_SWIPE_TRAIL],
+                    theme.swipeTrailColor,
+                    customColours = theme.customColours[KeyboardTheme.KEY_SWIPE_TRAIL] ?: emptyList(),
+                    onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_SWIPE_TRAIL to it)) } },
+                    preserveAlpha = true,
+                ) { update { t -> t.copy(swipeTrailColor = it) } }
               }
             }
             SettingsSectionCard(strings[Keys.THEME_APPLIED_HIGHLIGHT]) {
@@ -344,6 +375,8 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ColourRow(
                     strings[Keys.THEME_APPLIED_HIGHLIGHT_COLOUR],
                     theme.appliedHighlightColorOrDefault(),
+                    customColours = theme.customColours[KeyboardTheme.KEY_APPLIED_HIGHLIGHT] ?: emptyList(),
+                    onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_APPLIED_HIGHLIGHT to it)) } },
                     preserveAlpha = true,
                 ) { update { t -> t.copy(appliedHighlightColor = it) } }
             }
@@ -382,9 +415,13 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                         )
                     }
                 }
-                ColourRow(strings[Keys.THEME_PATTERN_COLOUR], theme.patternColor, preserveAlpha = true) {
-                    update { t -> t.copy(patternColor = it) }
-                }
+                ColourRow(
+                    strings[Keys.THEME_PATTERN_COLOUR],
+                    theme.patternColor,
+                    customColours = theme.customColours[KeyboardTheme.KEY_PATTERN] ?: emptyList(),
+                    onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_PATTERN to it)) } },
+                    preserveAlpha = true,
+                ) { update { t -> t.copy(patternColor = it) } }
                 ThemeSlider(
                     strings[Keys.THEME_PATTERN_SIZE], theme.patternScaleDp, 8f..64f,
                     strings[Keys.THEME_DP], default = 24f,
@@ -422,9 +459,12 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ) { update { t -> t.copy(backgroundImageDim = it / 100f) } }
                 Explanation(strings[Keys.THEME_PICTURE_DIM_NOTE])
             }
-            ColourRow(strings[Keys.THEME_SECOND_COLOUR], theme.gradientEnd()) {
-                    update { t -> t.copy(backgroundGradientColor = it) }
-                }
+            ColourRow(
+                strings[Keys.THEME_SECOND_COLOUR],
+                theme.gradientEnd(),
+                customColours = theme.customColours[KeyboardTheme.KEY_GRADIENT_END] ?: emptyList(),
+                onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_GRADIENT_END to it)) } },
+            ) { update { t -> t.copy(backgroundGradientColor = it) } }
                 Explanation(strings[Keys.THEME_SECOND_COLOUR_NOTE])
                 SwitchRow(
                     title = strings[Keys.THEME_FULL_WIDTH_BACKGROUND],

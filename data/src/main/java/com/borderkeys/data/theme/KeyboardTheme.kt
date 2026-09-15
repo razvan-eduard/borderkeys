@@ -127,6 +127,15 @@ data class KeyboardTheme(
      * Picking a colour here is what turns it on; nothing else about a theme has to change.
      */
     val appliedHighlightColor: Int = 0,
+
+    /**
+     * Colours the user picked through the wheel, that are not one of [ThemePalette.COLOURS],
+     * kept so they survive being shown once -- one list per editable colour field, keyed by the
+     * `KEY_*` constants below, appended to in the order picked. Not `ThemeScreen`'s job to know
+     * this exists as anything but a slice: each `ColourRow` call site reads and writes only its
+     * own key's list, never another field's.
+     */
+    val customColours: Map<String, List<Int>> = emptyMap(),
 ) {
     /**
      * Clamps every dimension into a range that can actually be drawn.
@@ -166,6 +175,13 @@ data class KeyboardTheme(
         } else {
             APPLIED_HIGHLIGHT_OUTLINE
         },
+        // Exact de-duplication only -- whether two entries are "the same" once alpha is
+        // ignored is a per-field question only the caller (preserveAlpha or not) can answer,
+        // and belongs in ThemePalette.inserted, not here. Newest kept on overflow: the oldest
+        // pick is the one most likely already forgotten.
+        customColours = customColours
+            .mapValues { (_, colours) -> colours.distinct().takeLast(ThemePalette.MAX_CUSTOM_COLOURS_PER_FIELD) }
+            .filterValues { it.isNotEmpty() },
     )
 
     /** The colour the background fades to, which is its own colour when it fades to nothing. */
@@ -213,5 +229,20 @@ data class KeyboardTheme(
 
         /** A filled chip -- [appliedHighlightColor] (or secondaryTextColor) behind the word. */
         const val APPLIED_HIGHLIGHT_BACKGROUND = 1
+
+        // Keys into [customColours]. Strings rather than the field references themselves,
+        // since a Map key has to be something a DataStore file can hold -- but named as
+        // constants so no call site retypes the field name as a literal a second time.
+        const val KEY_BACKGROUND = "background"
+        const val KEY_KEY = "key"
+        const val KEY_KEY_PRESSED = "keyPressed"
+        const val KEY_MODIFIER_KEY = "modifierKey"
+        const val KEY_TEXT = "text"
+        const val KEY_SECONDARY_TEXT = "secondaryText"
+        const val KEY_ACCENT = "accent"
+        const val KEY_SWIPE_TRAIL = "swipeTrail"
+        const val KEY_APPLIED_HIGHLIGHT = "appliedHighlight"
+        const val KEY_PATTERN = "pattern"
+        const val KEY_GRADIENT_END = "gradientEnd"
     }
 }

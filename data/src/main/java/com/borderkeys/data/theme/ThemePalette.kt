@@ -42,4 +42,50 @@ object ThemePalette {
         // middle. Anything between them is a job for the wheel at the end of the row.
         0xFF000000.toInt(), 0xFF2A2A34.toInt(), 0xFFC6C6D0.toInt(), 0xFFFFFFFF.toInt(),
     )
+
+    /** How many colours [KeyboardTheme.customColours] keeps per field before the oldest picks
+     *  are dropped -- the row already scrolls, so this is a bound against unlimited growth,
+     *  not a number anyone is expected to reach by hand. */
+    const val MAX_CUSTOM_COLOURS_PER_FIELD = 24
+
+    private const val RGB_MASK = 0x00FFFFFF
+
+    /** [colours]' index of the entry matching [target], or -1. RGB-only when [preserveAlpha]
+     *  is set, since the swipe trail is stored translucent while everything compared against it
+     *  here is opaque. */
+    fun indexOf(colours: List<Int>, target: Int, preserveAlpha: Boolean = false): Int =
+        colours.indexOfFirst { entry ->
+            if (preserveAlpha) (entry and RGB_MASK) == (target and RGB_MASK) else entry == target
+        }
+
+    fun contains(colours: List<Int>, target: Int, preserveAlpha: Boolean = false): Boolean =
+        indexOf(colours, target, preserveAlpha) >= 0
+
+    /** Where a newly-picked colour belongs -- named so a call site never hardcodes
+     *  `colours.size` to mean "the end of the row". */
+    fun appendIndex(colours: List<Int>): Int = colours.size
+
+    /**
+     * [colours] with [colour] inserted at [index], unless it is already there -- as one of
+     * [COLOURS] or already in [colours] itself -- in which case the list comes back unchanged:
+     * picking a colour the row already offers never duplicates it or moves it.
+     *
+     * Growing past [MAX_CUSTOM_COLOURS_PER_FIELD] drops from the front: the oldest pick is the
+     * one most likely already forgotten.
+     */
+    fun inserted(colours: List<Int>, colour: Int, index: Int, preserveAlpha: Boolean = false): List<Int> {
+        if (contains(COLOURS, colour, preserveAlpha) || contains(colours, colour, preserveAlpha)) {
+            return colours
+        }
+        val updated = colours.toMutableList().apply { add(index.coerceIn(0, size), colour) }
+        return if (updated.size > MAX_CUSTOM_COLOURS_PER_FIELD) {
+            updated.subList(updated.size - MAX_CUSTOM_COLOURS_PER_FIELD, updated.size)
+        } else {
+            updated
+        }
+    }
+
+    /** [colours] with the entry at [index] removed. */
+    fun removedAt(colours: List<Int>, index: Int): List<Int> =
+        colours.toMutableList().apply { removeAt(index) }
 }

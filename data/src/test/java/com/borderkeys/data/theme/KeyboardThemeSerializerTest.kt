@@ -217,4 +217,41 @@ class KeyboardThemeSerializerTest {
             read(both.encodeToByteArray()).backgroundPatterns,
         )
     }
+
+    @Test
+    fun `custom colours survive a round trip, keyed by field`() = runTest {
+        val original = KeyboardTheme(
+            customColours = mapOf(
+                KeyboardTheme.KEY_ACCENT to listOf(0xFF112233.toInt(), 0xFF445566.toInt()),
+                KeyboardTheme.KEY_SWIPE_TRAIL to listOf(0x88778899.toInt()),
+            ),
+        )
+        assertEquals(original, read(write(original)))
+    }
+
+    @Test
+    fun `custom colours are deduplicated and capped, oldest first dropped`() {
+        val repeated = KeyboardTheme(
+            customColours = mapOf(KeyboardTheme.KEY_ACCENT to listOf(1, 2, 1, 3)),
+        ).sanitised()
+        assertEquals(listOf(1, 2, 3), repeated.customColours[KeyboardTheme.KEY_ACCENT])
+
+        val overflowing = KeyboardTheme(
+            customColours = mapOf(
+                KeyboardTheme.KEY_ACCENT to (0 until ThemePalette.MAX_CUSTOM_COLOURS_PER_FIELD + 5).toList(),
+            ),
+        ).sanitised()
+        val kept = overflowing.customColours[KeyboardTheme.KEY_ACCENT]!!
+        assertEquals(ThemePalette.MAX_CUSTOM_COLOURS_PER_FIELD, kept.size)
+        assertEquals(5, kept.first())
+        assertEquals(ThemePalette.MAX_CUSTOM_COLOURS_PER_FIELD + 4, kept.last())
+    }
+
+    @Test
+    fun `a field left with no custom colours is dropped from the map entirely`() {
+        val emptied = KeyboardTheme(
+            customColours = mapOf(KeyboardTheme.KEY_ACCENT to emptyList()),
+        ).sanitised()
+        assertTrue(emptied.customColours.isEmpty())
+    }
 }

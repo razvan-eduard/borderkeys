@@ -6,6 +6,7 @@ package com.borderkeys.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,11 +15,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,7 +41,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.borderkeys.data.theme.ThemePalette
@@ -200,15 +207,34 @@ private fun hexOf(colour: Int): String {
  * palette holds opaque colours, so an exact comparison never matches and the row shows nothing
  * selected. With the flag set the row matches on RGB and keeps the alpha the theme already has,
  * so picking a colour changes the hue of the trail and leaves it as see-through as it was.
+ *
+ * Order: the standard palette, then [customColours] -- colours this field has actually had
+ * picked for it before, dot-marked, oldest first -- then, only if [current] is not covered by
+ * either of those, [current] itself, unmarked, so a preset whose colour was simply never added
+ * to the palette (Ocean's teal, for instance) still shows *something* ringed without looking
+ * like anyone chose it. The dashed circle at the end is the only way in: tapping it, or the
+ * unmarked trailing swatch, opens [ColourPickerSheet]; tapping a dot-marked swatch selects it
+ * outright, and long-pressing one asks to delete it.
  */
 @Composable
 fun ColourRow(
     label: String,
     current: Int,
+    customColours: List<Int>,
+    onCustomColoursChange: (List<Int>) -> Unit,
     preserveAlpha: Boolean = false,
     onPick: (Int) -> Unit,
 ) {
+    val strings = LocalStrings.current
     var picking by remember { mutableStateOf(false) }
+    var deletingIndex by remember { mutableStateOf<Int?>(null) }
+
+    fun withCurrentAlpha(colour: Int) =
+        if (preserveAlpha) (current and ALPHA_MASK) or (colour and RGB_MASK) else colour
+
+    fun matchesCurrent(colour: Int) =
+        if (preserveAlpha) (colour and RGB_MASK) == (current and RGB_MASK) else colour == current
+
     if (picking) {
         ColourPickerSheet(
             initial = current,
@@ -216,12 +242,43 @@ fun ColourRow(
             onDismiss = { picking = false },
             onPick = { colour ->
                 picking = false
-                onPick(
-                    if (preserveAlpha) (current and ALPHA_MASK) or (colour and RGB_MASK) else colour,
-                )
+                val applied = withCurrentAlpha(colour)
+                onPick(applied)
+                if (!ThemePalette.contains(ThemePalette.COLOURS, applied, preserveAlpha)) {
+                    onCustomColoursChange(
+                        ThemePalette.inserted(
+                            customColours,
+                            applied,
+                            ThemePalette.appendIndex(customColours),
+                            preserveAlpha,
+                        ),
+                    )
+                }
             },
         )
     }
+
+    deletingIndex?.let { index ->
+        val colour = customColours[index]
+        AlertDialog(
+            onDismissRequest = { deletingIndex = null },
+            title = { Text(strings[Keys.THEME_DELETE_CUSTOM_COLOUR_TITLE]) },
+            text = { Text(strings.getString(Keys.THEME_DELETE_CUSTOM_COLOUR_MESSAGE, hexOf(colour))) },
+            confirmButton = {
+                TextButton(onClick = {
+                    deletingIndex = null
+                    onCustomColoursChange(ThemePalette.removedAt(customColours, index))
+                    if (matchesCurrent(colour)) {
+                        onPick(withCurrentAlpha(ThemePalette.COLOURS.first()))
+                    }
+                }) { Text(strings[Keys.THEME_DELETE], color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingIndex = null }) { Text(strings[Keys.THEME_CANCEL]) }
+            },
+        )
+    }
+
     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
         Row(
@@ -231,71 +288,106 @@ fun ColourRow(
                 .padding(top = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // A colour from the editor is in no swatch, so without this it would be the
-            // current colour and invisible: nothing shows it and nothing wears the ring. It
-            // appears at the head of the row instead, exactly as VoxApps does it.
-            val custom = current.takeIf {
-                ThemePalette.COLOURS.none { entry ->
-                    if (preserveAlpha) (entry and RGB_MASK) == (it and RGB_MASK) else entry == it
-                }
-            }
-            if (custom != null) {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .background(Color(custom), CircleShape)
-                        .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                        .clickable { picking = true },
-                )
-            }
             for (colour in ThemePalette.COLOURS) {
-                val selected = if (preserveAlpha) {
-                    (colour and RGB_MASK) == (current and RGB_MASK)
-                } else {
-                    colour == current
-                }
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .background(Color(colour), CircleShape)
-                        .border(
-                            width = if (selected) 3.dp else 1.dp,
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            },
-                            shape = CircleShape,
-                        )
-                        .clickable {
-                            onPick(
-                                if (preserveAlpha) {
-                                    (current and ALPHA_MASK) or (colour and RGB_MASK)
-                                } else {
-                                    colour
-                                },
-                            )
-                        },
+                ColourSwatch(
+                    colour = colour,
+                    selected = matchesCurrent(colour),
+                    custom = false,
+                    onClick = { onPick(withCurrentAlpha(colour)) },
                 )
             }
-            // Last, after the ready-made colours, because it is the way out of them rather
-            // than one more of them. A pencil rather than a colour, as in VoxApps: it is the
-            // thing that opens the editor, not a colour to choose.
+            for ((index, colour) in customColours.withIndex()) {
+                ColourSwatch(
+                    colour = colour,
+                    selected = matchesCurrent(colour),
+                    custom = true,
+                    onClick = { onPick(withCurrentAlpha(colour)) },
+                    onLongClick = { deletingIndex = index },
+                )
+            }
+            // Only when the current value is not offered by either list above -- a preset's
+            // own colour that nobody has picked through the wheel yet. Unmarked and not
+            // deletable: there is nothing here the user added. Tapping it opens the sheet
+            // rather than re-selecting itself, since it is already the current colour.
+            val transient = current.takeIf {
+                !ThemePalette.contains(ThemePalette.COLOURS, it, preserveAlpha) &&
+                    !ThemePalette.contains(customColours, it, preserveAlpha)
+            }
+            if (transient != null) {
+                ColourSwatch(
+                    colour = transient,
+                    selected = true,
+                    custom = false,
+                    onClick = { picking = true },
+                )
+            }
+            // Last, after every colour, because it is the way out of them rather than one
+            // more of them: an empty, dashed circle -- no icon, no fill -- opens the sheet
+            // whose "Use colour" button appends a new dot-marked swatch just before this one.
+            val outline = MaterialTheme.colorScheme.outline
             Box(
                 modifier = Modifier
                     .size(30.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                    .clickable { picking = true },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(android.R.drawable.ic_menu_edit),
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                    .drawBehind {
+                        drawCircle(
+                            color = outline,
+                            style = Stroke(
+                                width = 1.dp.toPx(),
+                                pathEffect = PathEffect.dashPathEffect(
+                                    floatArrayOf(4.dp.toPx(), 3.dp.toPx()),
+                                ),
+                            ),
+                        )
+                    }
+                    .clickable(onClickLabel = strings[Keys.THEME_ADD_CUSTOM_COLOUR]) { picking = true },
+            )
+        }
+    }
+}
+
+/** One swatch, shared by the standard palette, the persisted custom colours and the transient
+ *  off-palette one -- [custom] is the only difference in how it looks (the corner dot), and
+ *  [onLongClick] the only difference in how it behaves. */
+@Composable
+private fun ColourSwatch(
+    colour: Int,
+    selected: Boolean,
+    custom: Boolean,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+) {
+    Box(
+        modifier = Modifier
+            .size(30.dp)
+            .background(Color(colour), CircleShape)
+            .border(
+                width = if (selected) 3.dp else 1.dp,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                },
+                shape = CircleShape,
+            )
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                },
+            ),
+    ) {
+        // The same idea as QuickActionsView's own "this one is yours" dot, adapted to Compose:
+        // a small corner mark rather than a second icon, since the swatch has no room for one.
+        if (custom) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 2.dp, y = (-2).dp)
+                    .size(8.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape),
+            )
         }
     }
 }
