@@ -60,7 +60,7 @@ import com.borderkeys.settings.ColourRow
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.KeyboardPreview
+import com.borderkeys.settings.PlacementPreview
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
@@ -164,7 +164,10 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
         // The real, live appearance -- including the auto dark/light switch, since editing is
         // disabled while it is on (see the Theme card below) and there is nothing left for a
         // preview to show except what is actually showing.
-        KeyboardPreview(appearance, Modifier.padding(vertical = 12.dp))
+        // Real placement, same as every other screen embedding this preview -- see
+        // PlacementPreview's own doc for why only its height is fixed to a standard fraction,
+        // not its width or anything else about where the keyboard actually sits.
+        PlacementPreview(appearance, Modifier.padding(vertical = 12.dp))
         Divider()
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             SettingsSectionCard(strings[Keys.SCREEN_THEME]) {

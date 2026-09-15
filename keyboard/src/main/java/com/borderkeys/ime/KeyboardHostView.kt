@@ -159,7 +159,14 @@ class KeyboardHostView(
         resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     private fun applyNavigationInset(insets: WindowInsets) {
-        val bottom = if (navigationBarCanMove && isLandscape() && !isGestureNavigation()) {
+        // isEnabled is never set to false anywhere in the real input method -- only the two
+        // preview composables in :settings do that. A preview is a widget embedded mid-scroll
+        // in an ordinary Activity window; the real window's navigation bar sits nowhere near
+        // it, and reserving room for one here would just be a gap this preview has no reason
+        // to leave.
+        val bottom = if (!isEnabled) {
+            0
+        } else if (navigationBarCanMove && isLandscape() && !isGestureNavigation()) {
             0
         } else {
             val type = WindowInsets.Type.navigationBars() or WindowInsets.Type.displayCutout()
