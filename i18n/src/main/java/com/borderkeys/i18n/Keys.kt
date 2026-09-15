@@ -545,7 +545,6 @@ object Keys {
     const val QUICK_CUSTOM_REMOVE_STEP_TITLE = "quick_custom_remove_step_title"
     const val QUICK_CUSTOM_STEPS = "quick_custom_steps"
     const val QUICK_CUSTOM_TITLE = "quick_custom_title"
-    const val QUICK_LABELS = "quick_labels"
     const val QUICK_LABELS_NOTE = "quick_labels_note"
     const val QUICK_LABELS_SHOW = "quick_labels_show"
     const val QUICK_MODE = "quick_mode"

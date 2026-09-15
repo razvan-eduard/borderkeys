@@ -88,6 +88,11 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     subtitle = strings[Keys.QUICK_SHOW_NOTE],
                     checked = preferences.quickActionsEnabled,
                 ) { value -> update { it.copy(quickActionsEnabled = value) } }
+                SwitchRow(
+                    title = strings[Keys.QUICK_LABELS_SHOW],
+                    subtitle = strings[Keys.QUICK_LABELS_NOTE],
+                    checked = preferences.quickActionsLabels,
+                ) { value -> update { it.copy(quickActionsLabels = value) } }
             }
 
             SettingsSectionCard(strings[Keys.QUICK_MODE]) {
@@ -126,14 +131,6 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     ) { update { it.copy(quickActionsSize = KeyboardPreferences.QUICK_ACTIONS_SIZE_HUGE) } }
                 }
                 Explanation(strings[Keys.QUICK_SIZE_NOTE])
-            }
-
-            SettingsSectionCard(strings[Keys.QUICK_LABELS]) {
-                SwitchRow(
-                    title = strings[Keys.QUICK_LABELS_SHOW],
-                    subtitle = strings[Keys.QUICK_LABELS_NOTE],
-                    checked = preferences.quickActionsLabels,
-                ) { value -> update { it.copy(quickActionsLabels = value) } }
             }
 
             SettingsSectionCard(strings[Keys.QUICK_PLACEMENT]) {
