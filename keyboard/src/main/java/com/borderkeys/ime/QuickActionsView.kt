@@ -542,7 +542,7 @@ class QuickActionsView(
         /** The label's text size, as a share of [iconBand][layoutButtons] -- the icon's own
          *  band, not the label's, so the text stays the same size regardless of how tightly
          *  [LABELS_THICKNESS_FRACTION] is tuned around it. */
-        const val LABEL_TEXT_FRACTION = 0.16f
+        const val LABEL_TEXT_FRACTION = 0.19f
 
         /** How much of a slot's width a label may take before it wraps, and then ellipsises. */
         const val LABEL_WIDTH_FRACTION = 0.94f
