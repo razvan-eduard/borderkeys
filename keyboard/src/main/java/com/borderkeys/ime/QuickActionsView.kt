@@ -7,8 +7,11 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.os.Trace
+import android.text.Layout
+import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import android.view.MotionEvent
@@ -139,13 +142,15 @@ class QuickActionsView(
     /** What each button is called, resolved with [items]; custom actions use their own name. */
     private val labels = arrayOfNulls<String>(MAX_BUTTONS)
 
-    /** [labels] cut to what a slot actually fits, recomputed with the geometry on layout. */
-    private val drawnLabels = arrayOfNulls<String>(MAX_BUTTONS)
+    /** [labels], wrapped to what a slot actually fits -- up to two tight lines, ellipsised only
+     *  if even that overflows -- recomputed with the geometry on layout, never on a draw. */
+    private val labelLayouts = arrayOfNulls<StaticLayout>(MAX_BUTTONS)
 
-    private val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        textAlign = Paint.Align.CENTER
-    }
-    private var labelBaselineY = 0f
+    // Left, not centre: StaticLayout does its own per-line centring via ALIGN_CENTER below, and
+    // a paint that also centred would offset every line a second time on top of that.
+    private val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private var labelLayoutWidth = 0
+    private var labelTopY = 0f
 
     /** Button centres, in view coordinates. Recomputed on layout, never per frame. */
     private val centreX = FloatArray(MAX_BUTTONS)
@@ -300,6 +305,33 @@ class QuickActionsView(
         // the extra thickness is the text's, not theirs.
         val iconBand = if (labelsActive()) thickness / LABELS_THICKNESS_FRACTION else thickness.toFloat()
         buttonSizePx = (iconBand * ICON_FRACTION).toInt().coerceAtLeast(1)
+        val gapPx = thickness * ICON_LABEL_GAP_FRACTION
+        if (labelsActive()) {
+            // Off iconBand, not the label's own band below it -- the label band shrinks
+            // whenever LABELS_THICKNESS_FRACTION is tightened, and a text size tied to it would
+            // shrink right along, unrelated to whether the letters themselves still need to be
+            // legible. iconBand tracks the size level instead, the same as the icon's own size.
+            labelPaint.textSize = iconBand * LABEL_TEXT_FRACTION
+            // Bold, not the label colour's own regular weight -- a caption this small reads
+            // better with more ink per letter, and it is the one piece of text in the bar
+            // competing with an icon rather than sitting on its own.
+            labelPaint.typeface = Typeface.create(paints.labelSecondary.typeface, Typeface.BOLD)
+        }
+        // The icon and its label sit together as one tight group, one gap between them, centred
+        // as a *unit* in the middle of the bar -- equal slack above the icon and below the
+        // label, rather than either one pinned to an edge with all the slack pushed to the
+        // other side. The group's own height assumes one line of label text; a label that wraps
+        // to a second line grows down into the bottom margin instead of re-centring the icon,
+        // which is what keeps every icon in the row at the same height regardless of whose
+        // label needed the extra line.
+        val oneLineLabelHeightPx = if (labelsActive()) {
+            labelPaint.fontMetrics.let { it.descent - it.ascent }
+        } else {
+            0f
+        }
+        val groupHeightPx = if (labelsActive()) buttonSizePx + gapPx + oneLineLabelHeightPx else buttonSizePx.toFloat()
+        val groupTopPx = if (labelsActive()) ((thickness - groupHeightPx) / 2f).coerceAtLeast(0f) else 0f
+        val iconCentreY = if (labelsActive()) groupTopPx + buttonSizePx / 2f else height / 2f
         val along = if (vertical) height else width
         val step = along.toFloat() / shown
         for (index in 0 until shown) {
@@ -309,20 +341,27 @@ class QuickActionsView(
                 centreY[index] = centre
             } else {
                 centreX[index] = centre
-                centreY[index] = if (labelsActive()) iconBand / 2f else height / 2f
+                centreY[index] = iconCentreY
             }
         }
         if (labelsActive()) {
-            val labelBand = height - iconBand
-            labelPaint.textSize = labelBand * LABEL_TEXT_FRACTION
-            labelPaint.typeface = paints.labelSecondary.typeface
-            // Baseline centred in the band, so ascenders and descenders share its slack.
-            labelBaselineY = iconBand + labelBand / 2f - (labelPaint.ascent() + labelPaint.descent()) / 2f
-            // Ellipsised here, once per geometry, not measured again on any draw.
-            val available = step * LABEL_WIDTH_FRACTION
+            // Right under the icon, not centred in the band below it -- see this function's own
+            // comment on why the group is centred as a whole instead.
+            labelTopY = groupTopPx + buttonSizePx + gapPx
+            // Wrapped here, once per geometry, not measured again on any draw. Two lines before
+            // an ellipsis, not one: a shortened label still overflowing a slot's width is rarer
+            // than a slot narrow enough that even "Copy line" doesn't fit it, and a second line
+            // reads better than three dots would for either case.
+            labelLayoutWidth = (step * LABEL_WIDTH_FRACTION).toInt().coerceAtLeast(1)
             for (index in 0 until shown) {
-                drawnLabels[index] = labels[index]?.let {
-                    TextUtils.ellipsize(it, labelPaint, available, TextUtils.TruncateAt.END).toString()
+                labelLayouts[index] = labels[index]?.let { text ->
+                    StaticLayout.Builder.obtain(text, 0, text.length, labelPaint, labelLayoutWidth)
+                        .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                        .setMaxLines(LABEL_MAX_LINES)
+                        .setEllipsize(TextUtils.TruncateAt.END)
+                        .setIncludePad(false)
+                        .setLineSpacing(0f, LABEL_LINE_SPACING_MULTIPLIER)
+                        .build()
                 }
             }
         }
@@ -371,10 +410,13 @@ class QuickActionsView(
                 // label naming a button it is not would be worse than none. Colour follows
                 // labelSecondary per draw, the same way the icons above take label's tint.
                 if (labelsActive() && !collapsedOpener) {
-                    val text = drawnLabels[index]
-                    if (text != null) {
+                    val labelLayout = labelLayouts[index]
+                    if (labelLayout != null) {
                         labelPaint.color = paints.labelSecondary.color
-                        canvas.drawText(text, centreX[index], labelBaselineY, labelPaint)
+                        canvas.save()
+                        canvas.translate(centreX[index] - labelLayoutWidth / 2f, labelTopY)
+                        labelLayout.draw(canvas)
+                        canvas.restore()
                     }
                 }
             }
@@ -495,13 +537,28 @@ class QuickActionsView(
          * of [SIZE_THICKNESS_FRACTION], so every size level pays the same proportional price
          * for its labels and the icons themselves never shrink to make room.
          */
-        const val LABELS_THICKNESS_FRACTION = 1.34f
+        const val LABELS_THICKNESS_FRACTION = 1.16f
 
-        /** The label's text size, as a share of the band it sits in. */
-        const val LABEL_TEXT_FRACTION = 0.62f
+        /** The label's text size, as a share of [iconBand][layoutButtons] -- the icon's own
+         *  band, not the label's, so the text stays the same size regardless of how tightly
+         *  [LABELS_THICKNESS_FRACTION] is tuned around it. */
+        const val LABEL_TEXT_FRACTION = 0.16f
 
-        /** How much of a slot's width a label may take before it is ellipsised. */
+        /** How much of a slot's width a label may take before it wraps, and then ellipsises. */
         const val LABEL_WIDTH_FRACTION = 0.94f
+
+        /** A label wraps to a second line before it is ellipsised -- a short label cut to
+         *  "Copy…" says less than the same word on two lines would. Never a third: past two
+         *  lines a label is competing with the icon above it for the same glance. */
+        const val LABEL_MAX_LINES = 2
+
+        /** Tighter than a normal line, on purpose -- two lines of a caption, not a paragraph. */
+        const val LABEL_LINE_SPACING_MULTIPLIER = 0.9f
+
+        /** The gap between the icon and its label, as a fraction of the bar's whole thickness --
+         *  see [layoutButtons]'s own comment for why the icon+label group is centred as a unit
+         *  rather than either one pinned to an edge. */
+        const val ICON_LABEL_GAP_FRACTION = 0.04f
 
         /** The custom-action dot's radius, as a fraction of the icon's own size -- see
          *  ClipboardPanelView's PIN_RADIUS_FRACTION, the same idea at the same rough scale. */
