@@ -6,14 +6,18 @@ package com.borderkeys.ime
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import android.os.Trace
+import android.text.TextPaint
+import android.text.TextUtils
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.content.ContextCompat
 import com.borderkeys.data.theme.CustomIcon
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.QuickActionBarItem
+import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
 import com.borderkeys.theme.ThemePaints
 
@@ -46,8 +50,27 @@ class QuickActionsView(
         set(value) {
             field = value.take(MAX_BUTTONS)
             resolveIcons()
+            resolveLabels()
             layoutButtons()
             invalidate()
+        }
+
+    /**
+     * Whether each button also says what it is, in small text under its icon -- the same idea
+     * as the labels under the draft box's own action bar. The label band is extra thickness on
+     * top of [sizeLevel]'s, so the icons stay exactly the size the level chose. A vertical bar
+     * has no room under an icon at all and ignores this entirely.
+     */
+    var showLabels: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                // Thickness changes with the label band -- the same first-frame reasoning as
+                // sizeLevel's setter, which this follows.
+                layoutButtons()
+                requestLayout()
+                invalidate()
+            }
         }
 
     /**
@@ -113,6 +136,17 @@ class QuickActionsView(
     private val moreIcon: Drawable? =
         ContextCompat.getDrawable(context, R.drawable.bk_action_more)
 
+    /** What each button is called, resolved with [items]; custom actions use their own name. */
+    private val labels = arrayOfNulls<String>(MAX_BUTTONS)
+
+    /** [labels] cut to what a slot actually fits, recomputed with the geometry on layout. */
+    private val drawnLabels = arrayOfNulls<String>(MAX_BUTTONS)
+
+    private val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER
+    }
+    private var labelBaselineY = 0f
+
     /** Button centres, in view coordinates. Recomputed on layout, never per frame. */
     private val centreX = FloatArray(MAX_BUTTONS)
     private val centreY = FloatArray(MAX_BUTTONS)
@@ -163,6 +197,41 @@ class QuickActionsView(
         CustomIcon.BOOKMARK -> R.drawable.bk_icon_bookmark
     }
 
+    private fun resolveLabels() {
+        for (index in labels.indices) {
+            labels[index] = if (index < items.size) labelFor(items[index]) else null
+        }
+    }
+
+    private fun labelFor(item: QuickActionBarItem): String = when (item) {
+        is QuickActionBarItem.Builtin -> strings[labelKey(item.action)]
+        is QuickActionBarItem.Custom -> item.action.name
+    }
+
+    /** The same catalogue entry every other surface calls this action by. */
+    private fun labelKey(action: QuickAction): String = when (action) {
+        QuickAction.COPY_PREVIOUS_WORD -> Keys.ACTION_COPY_PREVIOUS_WORD
+        QuickAction.COPY_LINE -> Keys.ACTION_COPY_LINE
+        QuickAction.COPY_ALL -> Keys.ACTION_COPY_ALL
+        QuickAction.PASTE -> Keys.ACTION_PASTE
+        QuickAction.CLIPBOARD_HISTORY -> Keys.ACTION_CLIPBOARD_HISTORY
+        QuickAction.SELECT_ALL -> Keys.ACTION_SELECT_ALL
+        QuickAction.CUT -> Keys.ACTION_CUT
+        QuickAction.SELECT_WORD -> Keys.ACTION_SELECT_WORD
+        QuickAction.DELETE_WORD -> Keys.ACTION_DELETE_WORD
+        QuickAction.CURSOR_START -> Keys.ACTION_CURSOR_START
+        QuickAction.CURSOR_END -> Keys.ACTION_CURSOR_END
+        QuickAction.NEWLINE -> Keys.ACTION_NEWLINE
+        QuickAction.SWITCH_LAYOUT -> Keys.ACTION_SWITCH_LAYOUT
+        QuickAction.SETTINGS -> Keys.ACTION_SETTINGS
+        QuickAction.UNDO -> Keys.ACTION_UNDO
+        QuickAction.COMPOSE -> Keys.ACTION_COMPOSE
+        QuickAction.REDO -> Keys.ACTION_REDO
+    }
+
+    /** Labels need a band under the icons; a vertical bar has nowhere to put one. */
+    private fun labelsActive(): Boolean = showLabels && !vertical
+
     private fun iconFor(action: QuickAction): Int = when (action) {
         QuickAction.COPY_PREVIOUS_WORD -> R.drawable.bk_action_copy_previous_word
         QuickAction.COPY_LINE -> R.drawable.bk_action_copy_line
@@ -203,7 +272,11 @@ class QuickActionsView(
 
     private fun barThicknessPx(): Int {
         val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_THICKNESS_PX
-        return (row * BAR_HEIGHT_FRACTION * SIZE_THICKNESS_FRACTION[sizeLevel]).toInt().coerceAtLeast(1)
+        val base = row * BAR_HEIGHT_FRACTION * SIZE_THICKNESS_FRACTION[sizeLevel]
+        // The label band is added on top of the level's own thickness rather than carved out
+        // of it, so turning labels on never shrinks the icons the level chose.
+        val withLabels = if (labelsActive()) base * LABELS_THICKNESS_FRACTION else base
+        return withLabels.toInt().coerceAtLeast(1)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -223,7 +296,10 @@ class QuickActionsView(
             return
         }
         val thickness = if (vertical) width else height
-        buttonSizePx = (thickness * ICON_FRACTION).toInt().coerceAtLeast(1)
+        // With labels on, the icons keep to the band the size level alone would have given --
+        // the extra thickness is the text's, not theirs.
+        val iconBand = if (labelsActive()) thickness / LABELS_THICKNESS_FRACTION else thickness.toFloat()
+        buttonSizePx = (iconBand * ICON_FRACTION).toInt().coerceAtLeast(1)
         val along = if (vertical) height else width
         val step = along.toFloat() / shown
         for (index in 0 until shown) {
@@ -233,7 +309,21 @@ class QuickActionsView(
                 centreY[index] = centre
             } else {
                 centreX[index] = centre
-                centreY[index] = height / 2f
+                centreY[index] = if (labelsActive()) iconBand / 2f else height / 2f
+            }
+        }
+        if (labelsActive()) {
+            val labelBand = height - iconBand
+            labelPaint.textSize = labelBand * LABEL_TEXT_FRACTION
+            labelPaint.typeface = paints.labelSecondary.typeface
+            // Baseline centred in the band, so ascenders and descenders share its slack.
+            labelBaselineY = iconBand + labelBand / 2f - (labelPaint.ascent() + labelPaint.descent()) / 2f
+            // Ellipsised here, once per geometry, not measured again on any draw.
+            val available = step * LABEL_WIDTH_FRACTION
+            for (index in 0 until shown) {
+                drawnLabels[index] = labels[index]?.let {
+                    TextUtils.ellipsize(it, labelPaint, available, TextUtils.TruncateAt.END).toString()
+                }
             }
         }
     }
@@ -276,6 +366,16 @@ class QuickActionsView(
                         (cx + half).toFloat(), (cy - half).toFloat(),
                         CUSTOM_DOT_RADIUS_FRACTION * buttonSizePx, paints.accent,
                     )
+                }
+                // Never under the collapsed opener: it draws [moreIcon], not items[0], and a
+                // label naming a button it is not would be worse than none. Colour follows
+                // labelSecondary per draw, the same way the icons above take label's tint.
+                if (labelsActive() && !collapsedOpener) {
+                    val text = drawnLabels[index]
+                    if (text != null) {
+                        labelPaint.color = paints.labelSecondary.color
+                        canvas.drawText(text, centreX[index], labelBaselineY, labelPaint)
+                    }
                 }
             }
         } finally {
@@ -389,6 +489,19 @@ class QuickActionsView(
 
         /** How much of the bar's thickness an icon takes, leaving a touch margin around it. */
         const val ICON_FRACTION = 0.52f
+
+        /**
+         * How much thicker the bar grows when [showLabels] adds its band -- multiplied on top
+         * of [SIZE_THICKNESS_FRACTION], so every size level pays the same proportional price
+         * for its labels and the icons themselves never shrink to make room.
+         */
+        const val LABELS_THICKNESS_FRACTION = 1.34f
+
+        /** The label's text size, as a share of the band it sits in. */
+        const val LABEL_TEXT_FRACTION = 0.62f
+
+        /** How much of a slot's width a label may take before it is ellipsised. */
+        const val LABEL_WIDTH_FRACTION = 0.94f
 
         /** The custom-action dot's radius, as a fraction of the icon's own size -- see
          *  ClipboardPanelView's PIN_RADIUS_FRACTION, the same idea at the same rough scale. */

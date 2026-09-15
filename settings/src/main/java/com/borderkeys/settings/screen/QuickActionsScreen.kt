@@ -128,6 +128,14 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                 Explanation(strings[Keys.QUICK_SIZE_NOTE])
             }
 
+            SettingsSectionCard(strings[Keys.QUICK_LABELS]) {
+                SwitchRow(
+                    title = strings[Keys.QUICK_LABELS_SHOW],
+                    subtitle = strings[Keys.QUICK_LABELS_NOTE],
+                    checked = preferences.quickActionsLabels,
+                ) { value -> update { it.copy(quickActionsLabels = value) } }
+            }
+
             SettingsSectionCard(strings[Keys.QUICK_PLACEMENT]) {
                 ChipRow {
                     PickerChip(

@@ -507,6 +507,16 @@ data class KeyboardPreferences(
     val quickActionsSize: Int = QUICK_ACTIONS_SIZE_DEFAULT,
 
     /**
+     * Whether each button on the bar also says what it is, in small text under its icon --
+     * the same idea as the labels under the draft box's own action bar.
+     *
+     * Off by default: the labels cost the bar a little extra thickness. A bar down a side
+     * has no room under an icon at all, so a vertical bar stays icons-only whatever this
+     * says.
+     */
+    val quickActionsLabels: Boolean = false,
+
+    /**
      * A permanent row of digits above the letters.
      *
      * Off by default. It costs about a fifth of the keyboard's height, and on a touch surface

@@ -232,6 +232,11 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `quick action labels default off`() {
+        assertFalse(KeyboardPreferences().quickActionsLabels)
+    }
+
+    @Test
     fun `the radial suggestion menu defaults off`() {
         assertFalse(KeyboardPreferences().radialMenuEnabled)
     }
