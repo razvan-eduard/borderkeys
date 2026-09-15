@@ -474,6 +474,11 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                     subtitle = strings[Keys.THEME_FULL_WIDTH_BACKGROUND_NOTE],
                     checked = theme.fullWidthBackground,
                 ) { value -> update { it.copy(fullWidthBackground = value) } }
+                SwitchRow(
+                    title = strings[Keys.THEME_NAVIGATION_BAR_BACKGROUND],
+                    subtitle = strings[Keys.THEME_NAVIGATION_BAR_BACKGROUND_NOTE],
+                    checked = theme.navigationBarBackground,
+                ) { value -> update { it.copy(navigationBarBackground = value) } }
             }
             SettingsSectionCard(strings[Keys.THEME_SHAPE]) {
                 ThemeSlider(

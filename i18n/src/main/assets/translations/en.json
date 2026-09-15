@@ -760,6 +760,8 @@
   "theme_my_themes": "My themes",
   "theme_my_themes_note": "Themes you've saved yourself. Tap one to use it; the buttons below act on whichever one is showing right now.",
   "theme_name_this_theme": "Name this theme",
+  "theme_navigation_bar_background": "Background behind the navigation bar",
+  "theme_navigation_bar_background_note": "Extends this theme's surface into the strip kept clear for the system's navigation bar. Off leaves that strip unpainted, so whatever sits behind the keyboard shows through it instead.",
   "theme_neon": "Neon",
   "theme_no_custom_themes": "You haven't saved any themes yet.",
   "theme_ocean": "Ocean",

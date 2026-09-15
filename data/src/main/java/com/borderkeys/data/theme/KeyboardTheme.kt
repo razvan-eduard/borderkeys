@@ -112,6 +112,17 @@ data class KeyboardTheme(
     val fullWidthBackground: Boolean = true,
 
     /**
+     * Whether the background reaches into the strip kept clear along the bottom edge for the
+     * system's own navigation bar.
+     *
+     * On by default, the same as [fullWidthBackground]: the keyboard reads as one surface all
+     * the way to its true edge. Off leaves that strip unpainted, so whatever the system draws
+     * behind its own navigation bar shows there instead of this theme's colour or pattern
+     * reaching a little past the keys that actually needed the room.
+     */
+    val navigationBarBackground: Boolean = true,
+
+    /**
      * How the suggestion strip marks the word a delimiter would apply: [APPLIED_HIGHLIGHT_OUTLINE]
      * (a traced border, the chip's own surface showing through) or [APPLIED_HIGHLIGHT_BACKGROUND]
      * (a filled chip, [appliedHighlightColor] painted behind the word).

@@ -760,6 +760,8 @@
   "theme_my_themes": "Mes thèmes",
   "theme_my_themes_note": "Les thèmes que vous avez enregistrés vous-même. Touchez-en un pour l'utiliser ; les boutons ci-dessous agissent sur celui actuellement affiché.",
   "theme_name_this_theme": "Nommer ce thème",
+  "theme_navigation_bar_background": "Arrière-plan derrière la barre de navigation",
+  "theme_navigation_bar_background_note": "Étend la surface de ce thème jusque dans la bande réservée à la barre de navigation du système. Désactivé laisse cette bande non peinte, ce qui laisse voir ce qui se trouve derrière le clavier.",
   "theme_neon": "Néon",
   "theme_no_custom_themes": "Vous n'avez encore enregistré aucun thème.",
   "theme_ocean": "Océan",

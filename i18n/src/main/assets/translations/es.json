@@ -760,6 +760,8 @@
   "theme_my_themes": "Mis temas",
   "theme_my_themes_note": "Temas que has guardado tú mismo. Toca uno para usarlo; los botones de abajo actúan sobre el que se muestra en este momento.",
   "theme_name_this_theme": "Nombra este tema",
+  "theme_navigation_bar_background": "Fondo detrás de la barra de navegación",
+  "theme_navigation_bar_background_note": "Extiende la superficie de este tema hasta la franja reservada para la barra de navegación del sistema. Desactivado deja esa franja sin pintar, dejando ver lo que hay detrás del teclado.",
   "theme_neon": "Neón",
   "theme_no_custom_themes": "Todavía no has guardado ningún tema.",
   "theme_ocean": "Océano",

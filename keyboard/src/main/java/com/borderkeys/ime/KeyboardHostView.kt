@@ -223,6 +223,16 @@ class KeyboardHostView(
             }
         }
 
+    /** Mirrors [com.borderkeys.data.theme.KeyboardTheme.navigationBarBackground]; see
+     *  [drawBackground] for what it actually changes. */
+    var navigationBarBackground: Boolean = true
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
     /** The height scale, kept so a drag can start from where the keyboard already is. */
     var heightScaleForDrag: Float = 1f
 
@@ -812,10 +822,15 @@ class KeyboardHostView(
      * Full width by default, including the space beside a one-handed or floating keyboard: that
      * space used to be a hole showing the application underneath, and a background that stops
      * at the keys leaves the pattern nowhere to show. Down to the keyboard's own bottom rather
-     * than the view's, so the gap a floating keyboard is lifted by stays a gap.
+     * than the view's, so the gap a floating keyboard is lifted by stays a gap -- and, the same
+     * way, short of [navigationBarInset] rather than the view's own bottom when
+     * [navigationBarBackground] is off, so that strip stays a gap too, showing whatever the
+     * system draws behind its own navigation bar instead of this surface reaching past the keys
+     * that needed the room.
      */
     private fun drawBackground(canvas: android.graphics.Canvas) {
-        val bottom = (height - bottomOffsetPx).toFloat()
+        val skippedInset = if (navigationBarBackground) 0 else navigationBarInset
+        val bottom = (height - bottomOffsetPx - skippedInset).toFloat()
         if (bottom <= 0f) {
             return
         }

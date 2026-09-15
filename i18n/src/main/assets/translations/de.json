@@ -760,6 +760,8 @@
   "theme_my_themes": "Meine Themen",
   "theme_my_themes_note": "Themen, die du selbst gespeichert hast. Tippe eins an, um es zu verwenden; die Schaltflächen unten wirken auf das gerade angezeigte.",
   "theme_name_this_theme": "Dieses Thema benennen",
+  "theme_navigation_bar_background": "Hintergrund hinter der Navigationsleiste",
+  "theme_navigation_bar_background_note": "Erstreckt die Oberfläche dieses Themas bis in den für die Navigationsleiste des Systems freigehaltenen Streifen. Aus lässt diesen Streifen ungefärbt, sodass sichtbar wird, was sich hinter der Tastatur befindet.",
   "theme_neon": "Neon",
   "theme_no_custom_themes": "Du hast noch keine Themen gespeichert.",
   "theme_ocean": "Ozean",

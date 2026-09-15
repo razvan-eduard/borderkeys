@@ -774,6 +774,8 @@ object Keys {
     const val THEME_MY_THEMES = "theme_my_themes"
     const val THEME_MY_THEMES_NOTE = "theme_my_themes_note"
     const val THEME_NAME_THIS_THEME = "theme_name_this_theme"
+    const val THEME_NAVIGATION_BAR_BACKGROUND = "theme_navigation_bar_background"
+    const val THEME_NAVIGATION_BAR_BACKGROUND_NOTE = "theme_navigation_bar_background_note"
     const val THEME_NEON = "theme_neon"
     const val THEME_NO_CUSTOM_THEMES = "theme_no_custom_themes"
     const val THEME_OCEAN = "theme_ocean"

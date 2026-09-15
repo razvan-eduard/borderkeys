@@ -610,6 +610,7 @@ class BorderKeysService :
                     // applied even when the paints are unchanged.
                     showPage(page)
                     view.fullWidthBackground = resolvedTheme.fullWidthBackground
+                    view.navigationBarBackground = resolvedTheme.navigationBarBackground
                     if (changed) {
                         view.keyboard.onThemeChanged()
                         view.quickSettings.onThemeChanged()
@@ -741,6 +742,7 @@ class BorderKeysService :
         view.onResizeFinished = { commitResize() }
         view.onResizeExit = { endResize() }
         view.fullWidthBackground = effectiveTheme().fullWidthBackground
+        view.navigationBarBackground = effectiveTheme().navigationBarBackground
         view.onThemeChanged()
         view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> pushKeyGeometry() }
         host = view
@@ -846,6 +848,7 @@ class BorderKeysService :
         val changed =
             paints.update(effectiveTheme(), resources.displayMetrics, activePlacement().heightScale, this)
         view.fullWidthBackground = effectiveTheme().fullWidthBackground
+        view.navigationBarBackground = effectiveTheme().navigationBarBackground
         if (changed) {
             view.keyboard.onThemeChanged()
             view.quickSettings.onThemeChanged()

@@ -760,6 +760,8 @@
   "theme_my_themes": "Temele mele",
   "theme_my_themes_note": "Teme pe care le-ai salvat chiar tu. Atinge una pentru a o folosi; butoanele de mai jos acționează asupra celei afișate acum.",
   "theme_name_this_theme": "Numește această temă",
+  "theme_navigation_bar_background": "Fundal în spatele barei de navigare",
+  "theme_navigation_bar_background_note": "Extinde suprafața acestei teme până în banda rezervată barei de navigare a sistemului. Dezactivat lasă acea bandă nepictată, arătând ce se află în spatele tastaturii.",
   "theme_neon": "Neon",
   "theme_no_custom_themes": "Nu ai salvat încă nicio temă.",
   "theme_ocean": "Ocean",

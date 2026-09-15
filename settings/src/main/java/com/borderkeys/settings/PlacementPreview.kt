@@ -145,6 +145,7 @@ fun PlacementPreview(
                     view.quickActions.visibility = android.view.View.GONE
                 }
                 view.fullWidthBackground = effectiveTheme.fullWidthBackground
+                view.navigationBarBackground = effectiveTheme.navigationBarBackground
 
                 val density = context.resources.displayMetrics.density
                 view.setPlacement(
