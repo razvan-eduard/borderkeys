@@ -21,6 +21,7 @@ import com.borderkeys.data.theme.CustomIcon
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.QuickActionBarItem
 import com.borderkeys.i18n.Keys
+import com.borderkeys.ime.fx.ParticleField
 import com.borderkeys.keyboard.R
 import com.borderkeys.theme.ThemePaints
 
@@ -158,6 +159,14 @@ class QuickActionsView(
     private var buttonSizePx = 0
 
     private var pressedIndex = -1
+
+    /** A burst per button press -- the same "structurally a key" treatment
+     *  [KeyboardCanvasView.fillParticles] gives the keys beside this bar. Exposed non-private so
+     *  [BorderKeysService] can push the user's particle-effect settings directly. */
+    val fillParticles = ParticleField(FILL_PARTICLE_POOL_CAPACITY) { invalidate() }
+
+    /** Traces the pressed button's own square bounds. */
+    val outlineParticles = ParticleField(OUTLINE_PARTICLE_POOL_CAPACITY) { invalidate() }
 
     init {
         setWillNotDraw(false)
@@ -420,6 +429,8 @@ class QuickActionsView(
                     }
                 }
             }
+            fillParticles.draw(canvas, paints.particlePaint)
+            outlineParticles.draw(canvas, paints.particlePaint)
         } finally {
             Trace.endSection()
         }
@@ -451,6 +462,14 @@ class QuickActionsView(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 pressedIndex = buttonAt(event.x, event.y)
+                if (pressedIndex >= 0) {
+                    fillParticles.spawnBurstAtPoint(centreX[pressedIndex], centreY[pressedIndex])
+                    val half = buttonSizePx / 2f
+                    outlineParticles.setAmbientRectanglePerimeter(
+                        centreX[pressedIndex] - half, centreY[pressedIndex] - half,
+                        centreX[pressedIndex] + half, centreY[pressedIndex] + half,
+                    )
+                }
                 invalidate()
                 return pressedIndex >= 0
             }
@@ -465,6 +484,7 @@ class QuickActionsView(
             MotionEvent.ACTION_UP -> {
                 val index = buttonAt(event.x, event.y)
                 pressedIndex = -1
+                outlineParticles.stopAmbient()
                 if (index < 0) {
                     invalidate()
                     return true
@@ -492,6 +512,7 @@ class QuickActionsView(
             }
             MotionEvent.ACTION_CANCEL -> {
                 pressedIndex = -1
+                outlineParticles.stopAmbient()
                 invalidate()
                 return true
             }
@@ -509,9 +530,21 @@ class QuickActionsView(
         }
     }
 
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        fillParticles.cancel()
+        outlineParticles.cancel()
+    }
+
     private companion object {
         /** The format's own cap; the preferences clamp to the same number. */
         const val MAX_BUTTONS = 10
+
+        /** [MAX_BUTTONS] could each in principle be pressed in quick succession -- sized for one
+         *  preset's own burst count (10) plus a little headroom, not for all ten buttons' bursts
+         *  landing in the same frame. */
+        const val FILL_PARTICLE_POOL_CAPACITY = 16
+        const val OUTLINE_PARTICLE_POOL_CAPACITY = 16
 
         /** The bar is a little shorter than a key row: it is a tool strip, not another row. */
         const val BAR_HEIGHT_FRACTION = 0.82f

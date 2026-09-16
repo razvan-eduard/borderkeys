@@ -369,6 +369,10 @@ data class KeyboardPreferences(
      */
     val radialBlurBackground: Boolean = true,
 
+    // Particle effects moved out to their own top-level ParticleEffectsSettings/DataStore --
+    // five regions x two layers each grew far past what belonged bolted onto this class. See
+    // that class's own doc.
+
     /**
      * Whether the first slot of the suggestion strip offers what is on the clipboard.
      *

@@ -13,6 +13,8 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardPreferencesSerializer
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.data.theme.KeyboardThemeSerializer
+import com.borderkeys.data.theme.ParticleEffectsSettings
+import com.borderkeys.data.theme.ParticleEffectsSettingsSerializer
 import com.borderkeys.data.theme.ThemeRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -113,8 +115,20 @@ object DataGraph {
         )
     }
 
+    /** Its own file, promoted out of [preferencesStore]/[themeStore] once particle effects grew
+     *  five regions x two layers of their own settings -- see [ParticleEffectsSettings]'s own
+     *  doc. */
+    private val particleEffectsStore by lazy {
+        DataStoreFactory.create(
+            serializer = ParticleEffectsSettingsSerializer,
+            corruptionHandler = ReplaceFileCorruptionHandler { ParticleEffectsSettings() },
+            scope = storeScope,
+            produceFile = { requireContext.dataStoreFile("keyboard_particle_effects.json") },
+        )
+    }
+
     val themes: ThemeRepository by lazy {
-        ThemeRepository(themeStore, lightThemeStore, preferencesStore, customThemeLibraryStore)
+        ThemeRepository(themeStore, lightThemeStore, preferencesStore, customThemeLibraryStore, particleEffectsStore)
     }
 
     val clipboard: ClipboardRepository by lazy {

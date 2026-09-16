@@ -49,6 +49,7 @@ import com.borderkeys.settings.screen.BackupScreen
 import com.borderkeys.settings.screen.ClipboardScreen
 import com.borderkeys.settings.screen.ComposerScreen
 import com.borderkeys.settings.screen.DictionaryScreen
+import com.borderkeys.settings.screen.EffectsScreen
 import com.borderkeys.settings.screen.HomeScreen
 import com.borderkeys.settings.screen.LanguagesScreen
 import com.borderkeys.settings.screen.LayoutScreen
@@ -350,6 +351,7 @@ private fun SettingsApp() {
             Screen.Theme -> ThemeScreen(modifier)
             Screen.Size -> SizeScreen(modifier)
             Screen.Sound -> SoundScreen(modifier)
+            Screen.Effects -> EffectsScreen(modifier)
             Screen.Typing -> TypingScreen(modifier)
             Screen.Dictionary -> DictionaryScreen(modifier)
             Screen.Clipboard -> ClipboardScreen(modifier)

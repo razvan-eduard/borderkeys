@@ -3,8 +3,10 @@
 
 package com.borderkeys.data.backup
 
+import com.borderkeys.data.theme.KeyboardPlacement
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
+import com.borderkeys.data.theme.ParticleEffectsSettings
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -35,6 +37,8 @@ data class BackupPayload(
      *  A list, not a single value like [theme]: importing adds to what is already saved rather
      *  than replacing it, the same as [words] does for the dictionary. */
     val customThemes: List<BackupCustomTheme> = emptyList(),
+    val particleEffects: ParticleEffectsSettings? = null,
+    val sizeAndPosition: BackupSizeAndPosition? = null,
     /** Which languages are on and how heavily they count. Not the packs; those are in the APK. */
     val packs: List<BackupPack> = emptyList(),
     val words: List<BackupWord> = emptyList(),
@@ -62,6 +66,12 @@ data class BackupPayload(
 
 @Serializable
 data class BackupCustomTheme(val id: String, val name: String, val theme: KeyboardTheme, val createdAt: Long)
+
+/** Both orientations' own size and position, as [KeyboardPreferences.placementFor] already
+ *  shapes them -- the whole of what "Size and position" now exports/imports independently of
+ *  [BackupPayload.preferences]. */
+@Serializable
+data class BackupSizeAndPosition(val portrait: KeyboardPlacement, val landscape: KeyboardPlacement)
 
 @Serializable
 data class BackupPack(val tag: String, val enabled: Boolean, val weight: Float)

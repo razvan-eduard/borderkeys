@@ -59,7 +59,9 @@ fun TransferScreen(
     val scope = rememberCoroutineScope()
     val backups = remember { DataGraph.backups }
     var parts by remember {
-        mutableStateOf(BackupRepository.Parts(settings = true, dictionary = true, languages = true))
+        mutableStateOf(
+            BackupRepository.Parts(settings = true, theme = true, dictionary = true, languages = true),
+        )
     }
     var sending by remember { mutableStateOf(false) }
 

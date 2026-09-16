@@ -19,11 +19,12 @@ data class KeyboardAppearance(
     val theme: KeyboardTheme,
     val lightTheme: KeyboardTheme,
     val preferences: KeyboardPreferences,
+    val particleEffects: ParticleEffectsSettings,
 ) {
     companion object {
         /** A usable placeholder for the one frame before the real flow has emitted -- the same
          *  role `KeyboardTheme()` and `KeyboardPreferences()` already play alone. */
         fun defaults(): KeyboardAppearance =
-            KeyboardAppearance(KeyboardTheme(), KeyboardTheme(), KeyboardPreferences())
+            KeyboardAppearance(KeyboardTheme(), KeyboardTheme(), KeyboardPreferences(), ParticleEffectsSettings())
     }
 }

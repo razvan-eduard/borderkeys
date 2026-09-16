@@ -547,6 +547,12 @@ class KeyboardHostView(
      * the moment it is not.
      */
     fun setRadialMenuVisible(visible: Boolean) {
+        if (visible) {
+            // Cancels any close deferred below for a celebration burst that had not finished
+            // yet -- the ring is being genuinely reused, not left to auto-hide underneath a
+            // fresh open a moment later.
+            radialSuggestionMenu.pendingHide = false
+        }
         if (radialMenuVisible == visible) {
             return
         }
@@ -558,7 +564,17 @@ class KeyboardHostView(
             radialSuggestionMenu.bringToFront()
             inlineSuggestions.visibility = GONE
         }
-        radialSuggestionMenu.visibility = if (visible) VISIBLE else GONE
+        // A resolved pick may still have a celebration burst animating over the ring's own (by
+        // then empty) wedges and scrim, which RadialSuggestionMenuView.onDraw already stops
+        // drawing the moment they are gone -- so the only thing deferring here does is let that
+        // burst keep drawing atop the keys for its own last few frames, rather than being cut
+        // off mid-flight. The View flips itself to GONE once the burst finishes; see
+        // RadialSuggestionMenuView's own pendingHide doc.
+        if (!visible && radialSuggestionMenu.hasLiveParticles()) {
+            radialSuggestionMenu.pendingHide = true
+        } else {
+            radialSuggestionMenu.visibility = if (visible) VISIBLE else GONE
+        }
         suggestionStrip.visibility = if (visible) GONE else VISIBLE
         // A real blur of the keys behind the ring, not just the scrim the ring draws over
         // itself -- applied to the source view directly (blur what keyboard actually rendered)

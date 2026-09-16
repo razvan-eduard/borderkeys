@@ -36,8 +36,11 @@ import com.borderkeys.data.draft.DraftProtocol
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.QuickActionBar
 import com.borderkeys.data.theme.QuickActionBarItem
+import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
+import com.borderkeys.data.theme.ParticleEffectsSettings
+import com.borderkeys.ime.fx.applyParticleLayer
 import com.borderkeys.predict.LearningBuffer
 import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.theme.DynamicColors
@@ -102,6 +105,7 @@ class BorderKeysService :
 
     private var privateMode = false
     private var preferences = KeyboardPreferences()
+    private var particleEffects = ParticleEffectsSettings()
 
     /**
      * The interface language, resolved once when the service starts.
@@ -328,7 +332,7 @@ class BorderKeysService :
     private fun forceResolveRadialRing() {
         val selection = host?.radialSuggestionMenu?.currentSelection()
             ?: RadialSuggestionMenuView.Selection.None
-        closeRadialRing()
+        closeRadialRing((selection as? RadialSuggestionMenuView.Selection.Word)?.index)
         resolveRadialSelection(selection)
     }
 
@@ -574,16 +578,17 @@ class BorderKeysService :
         scope.launch {
             combine(
                 DataGraph.themes.theme, DataGraph.themes.lightTheme, DataGraph.themes.preferences,
-            ) { theme, lightTheme, preferences ->
-                Triple(theme, lightTheme, preferences)
-            }.catch { error ->
+                DataGraph.themes.particleEffects,
+                ::KeyboardAppearance,
+            ).catch { error ->
                 // The theme store failing is not a reason to have no keyboard either; the
                 // defaults are perfectly usable colours.
                 android.util.Log.e("BorderKeys", "settings unavailable, using defaults", error)
-            }.collect { (newTheme, newLightTheme, newPreferences) ->
+            }.collect { (newTheme, newLightTheme, newPreferences, newParticleEffects) ->
                 theme = newTheme
                 lightTheme = newLightTheme
                 preferences = newPreferences
+                particleEffects = newParticleEffects
                 val resolvedTheme = ThemeMode.resolve(
                     newTheme, newLightTheme, newPreferences, this@BorderKeysService,
                 )
@@ -599,6 +604,7 @@ class BorderKeysService :
                 )
                 host?.let { view ->
                     applyPlacement(view, newPreferences)
+                    applyParticleSettings(view, newParticleEffects)
                     if (view.quickSettingsVisible) {
                         // Open while the settings application changed something: the panel shows
                         // what is stored, so it follows rather than holding a stale copy.
@@ -732,6 +738,7 @@ class BorderKeysService :
         paints.update(effectiveTheme(), resources.displayMetrics, activePlacement().heightScale, this)
         val view = KeyboardHostView(this, paints, strings)
         applyPlacement(view, preferences)
+        applyParticleSettings(view, particleEffects)
         view.keyboard.listener = this
         view.keyboard.hapticEnabled = preferences.hapticFeedback
         view.keyboard.swipeEnabled = preferences.swipeEnabled
@@ -800,6 +807,7 @@ class BorderKeysService :
             view.keyboard.swipeEnabled = preferences.swipeEnabled
         view.keyboard.soundEnabled = preferences.keySound
         view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
+            applyParticleSettings(view, particleEffects)
         }
         showPage(pageFor(info))
         shiftHeldByUser = false
@@ -977,6 +985,28 @@ class BorderKeysService :
             (placement.bottomOffsetDp * density).toInt(),
             (placement.horizontalOffsetDp * density).toInt(),
         )
+    }
+
+    /**
+     * Pushes the user's per-region particle-effect settings onto every view that owns a pair of
+     * [com.borderkeys.ime.fx.ParticleField]s -- one place that knows the whole list of five
+     * regions, rather than five call sites at either site below that could drift out of sync
+     * with each other. Each region's own colours now live on [ParticleEffectsSettings] directly,
+     * not on the theme -- unlike every other paint, a particle's colour is a per-layer setting
+     * a user dials in independently of the rest of the theme, not something [ThemePaints.update]
+     * has any reason to recompile.
+     */
+    private fun applyParticleSettings(view: KeyboardHostView, settings: ParticleEffectsSettings) {
+        val surfaces = listOf(
+            Triple(view.keyboard.fillParticles, view.keyboard.outlineParticles, settings.keyboard),
+            Triple(view.radialSuggestionMenu.fillParticles, view.radialSuggestionMenu.outlineParticles, settings.radial),
+            Triple(view.suggestionStrip.fillParticles, view.suggestionStrip.outlineParticles, settings.strip),
+            Triple(view.languageRevertPanel.fillParticles, view.languageRevertPanel.outlineParticles, settings.languageRevert),
+            Triple(view.quickActions.fillParticles, view.quickActions.outlineParticles, settings.quickActions),
+        )
+        for ((fill, outline, region) in surfaces) {
+            applyParticleLayer(fill, outline, region)
+        }
     }
 
     private fun pushKeyGeometry() {
@@ -1214,7 +1244,7 @@ class BorderKeysService :
             view.radialSuggestionMenu.acceptsOwnTouches = true
             return
         }
-        closeRadialRing()
+        closeRadialRing((selection as? RadialSuggestionMenuView.Selection.Word)?.index)
         resolveRadialSelection(selection)
     }
 
@@ -1244,12 +1274,23 @@ class BorderKeysService :
         }
     }
 
-    /** Cancels the pick-timeout, tells the controller, and hides the ring -- the cleanup every
-     *  path off the ring shares, regardless of what it resolved to or how it got there. */
-    private fun closeRadialRing() {
+    /**
+     * Cancels the pick-timeout, tells the controller, and hides the ring -- the cleanup every
+     * path off the ring shares, regardless of what it resolved to or how it got there.
+     *
+     * [celebrateIndex] is the wedge a `Selection.Word` resolved to, or null for every other way
+     * off the ring (Cancel, a timeout that fell through to cancelling, `radialLiftKeepsOpen`
+     * handing off to a fresh tap). Only a real pick gets the burst -- [celebrate] must run
+     * before [KeyboardHostView.setRadialMenuVisible] below, since that call reads whether the
+     * burst just spawned is still live to decide whether to hide the view immediately or defer.
+     */
+    private fun closeRadialRing(celebrateIndex: Int? = null) {
         val view = host
         view?.removeCallbacks(radialTimeoutRunnable)
         swipeRadialController.onResolved()
+        if (celebrateIndex != null) {
+            view?.radialSuggestionMenu?.celebrate(celebrateIndex)
+        }
         view?.setRadialMenuVisible(false)
     }
 

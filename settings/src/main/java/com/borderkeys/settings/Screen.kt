@@ -23,6 +23,7 @@ enum class Screen(val titleKey: String) {
     Theme(Keys.SCREEN_THEME),
     Size(Keys.SCREEN_SIZE_AND_POSITION),
     Sound(Keys.SCREEN_SOUND_AND_VIBRATION),
+    Effects(Keys.SCREEN_PARTICLE_EFFECTS),
     Typing(Keys.SCREEN_SUGGESTIONS_AND_CORRECTIONS),
     Dictionary(Keys.SCREEN_PERSONAL_DICTIONARY),
     Clipboard(Keys.SCREEN_CLIPBOARD),

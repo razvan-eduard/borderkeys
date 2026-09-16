@@ -32,6 +32,9 @@ class ThemeRepositoryCustomThemesTest {
             lightThemeStore = store(KeyboardThemeSerializer, "light_theme.json", KeyboardTheme()),
             preferencesStore = store(KeyboardPreferencesSerializer, "preferences.json", KeyboardPreferences()),
             customThemeLibraryStore = store(CustomThemeLibrarySerializer, "custom_themes.json", CustomThemeLibrary()),
+            particleEffectsStore = store(
+                ParticleEffectsSettingsSerializer, "particle_effects.json", ParticleEffectsSettings(),
+            ),
         )
     }
 

@@ -48,6 +48,10 @@ data class KeyboardTheme(
     val swipeTrailColor: Int = 0xCC6EA8FE.toInt(),
     val swipeTrailWidthDp: Float = 4f,
 
+    // Particle effects' own colours moved to ParticleFillLayer/ParticleOutlineLayer in the new
+    // top-level ParticleEffectsSettings -- each layer now needs its own pair, not one shared
+    // pair per theme. See that class's own doc.
+
     /**
      * A second background colour: a vertical gradient from the top of the keyboard to its
      * bottom edge. Zero means there is no second colour and the background is flat.

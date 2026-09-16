@@ -68,6 +68,11 @@ class ThemePaints {
     val labelTyped: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val swipeTrail: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
+    /** Shared by every particle-effect draw call across every view -- mutated per particle in
+     *  place, the same discipline every other `Paint` here already follows, never allocated on
+     *  a draw path. */
+    val particlePaint: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
     /**
      * A key's corner hint -- the character a long press would type, or the "more here" dots --
      * drawn at its own size rather than [labelSecondary]'s, which several other views share
@@ -168,6 +173,8 @@ class ThemePaints {
         swipeTrail.style = Paint.Style.STROKE
         swipeTrail.strokeCap = Paint.Cap.ROUND
         swipeTrail.strokeJoin = Paint.Join.ROUND
+
+        particlePaint.style = Paint.Style.FILL
     }
 
     /**

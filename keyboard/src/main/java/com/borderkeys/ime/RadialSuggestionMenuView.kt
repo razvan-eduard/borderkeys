@@ -13,6 +13,7 @@ import android.os.Trace
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import com.borderkeys.ime.fx.ParticleField
 import com.borderkeys.theme.ThemePaints
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -141,6 +142,64 @@ class RadialSuggestionMenuView(
      *  actually receives itself (see this class's own doc for why). */
     var hapticEnabled: Boolean = true
 
+    /** An ambient glow on whichever wedge is currently highlighted, plus a bigger burst on the
+     *  one actually picked -- exposed non-private so [BorderKeysService] can push the user's
+     *  particle-effect settings directly, the same way [hapticEnabled] already is. */
+    val fillParticles = ParticleField(FILL_PARTICLE_POOL_CAPACITY) { onParticlesInvalidated() }
+
+    /** Traces the highlighted wedge's own arc while [steerTo] hovers it -- see
+     *  [ParticleField.setAmbientArc]. No burst equivalent: [celebrate] only bursts
+     *  [fillParticles], letting this keep tracing the picked wedge as-is underneath it. */
+    val outlineParticles = ParticleField(OUTLINE_PARTICLE_POOL_CAPACITY) { onParticlesInvalidated() }
+
+    /**
+     * Set by [KeyboardHostView.setRadialMenuVisible] when it would otherwise hide this view
+     * while a [celebrate] burst is still animating. [onParticlesInvalidated] flips this view to
+     * [GONE] itself once the burst finishes, rather than the caller cutting it off mid-flight --
+     * and [KeyboardHostView.setRadialMenuVisible] clears it again immediately if the ring is
+     * reused before that happens, so a stale deferred hide can never fire after the fact.
+     */
+    var pendingHide: Boolean = false
+
+    private fun onParticlesInvalidated() {
+        if (pendingHide && !fillParticles.hasLiveParticles && !outlineParticles.hasLiveParticles) {
+            pendingHide = false
+            visibility = GONE
+        }
+        invalidate()
+    }
+
+    /** Whether a [celebrate] burst (or, in principle, the ambient glow) is still animating --
+     *  read by [KeyboardHostView.setRadialMenuVisible] to decide whether hiding this view must
+     *  wait for it to finish first. */
+    fun hasLiveParticles(): Boolean = fillParticles.hasLiveParticles || outlineParticles.hasLiveParticles
+
+    /**
+     * A bigger, one-shot burst at the wedge [index] resolved to, and the same resolved-and-done
+     * state [hide] used to leave this view in -- called by [BorderKeysService.closeRadialRing]
+     * right at the moment a pick resolves. Clearing [words] here rather than leaving that to
+     * [hide] matters specifically because of [pendingHide]: this view's own [visibility] now
+     * stays [VISIBLE] for as long as the burst takes to finish, and without this the stale wedge
+     * content would keep drawing underneath it for that whole stretch instead of just the burst
+     * floating on its own over the keys.
+     */
+    fun celebrate(index: Int) {
+        if (index !in words.indices) {
+            return
+        }
+        val midRadius = (ringInnerRadius() + outerRadius()) / 2f
+        val angleRad = Math.toRadians(wedgeCentreDegrees(index, words.size).toDouble())
+        fillParticles.spawnBurstAtPoint(
+            anchorX + (midRadius * cos(angleRad)).toFloat(),
+            anchorY + (midRadius * sin(angleRad)).toFloat(),
+            fillParticles.preset.burstCount * CELEBRATE_BURST_MULTIPLIER,
+        )
+        words = emptyList()
+        currentSelection = Selection.None
+        acceptsOwnTouches = false
+        invalidate()
+    }
+
     /** Steers the highlight to whatever [x]/[y] -- this view's own local pixels, the same space
      *  the anchor already is -- currently lands on. Called on every `onGestureSteered` from
      *  `BorderKeysService`, never from this view's own touch handling (there is none for the
@@ -154,6 +213,21 @@ class RadialSuggestionMenuView(
                 // on the keyboard underneath already gives, so a wedge feels like a key rather
                 // than announcing itself as a different kind of control.
                 performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            }
+            if (hit is Selection.Word) {
+                val midRadius = (ringInnerRadius() + outerRadius()) / 2f
+                val angleRad = Math.toRadians(wedgeCentreDegrees(hit.index, words.size).toDouble())
+                fillParticles.setAmbientPoint(
+                    anchorX + (midRadius * cos(angleRad)).toFloat(),
+                    anchorY + (midRadius * sin(angleRad)).toFloat(),
+                )
+                outlineParticles.setAmbientArc(
+                    anchorX, anchorY, midRadius,
+                    wedgeStartDeg[hit.index], wedgeSweepDeg[hit.index],
+                )
+            } else {
+                fillParticles.stopAmbient()
+                outlineParticles.stopAmbient()
             }
             invalidate()
         }
@@ -233,12 +307,18 @@ class RadialSuggestionMenuView(
     override fun onDraw(canvas: Canvas) {
         Trace.beginSection("RadialSuggestionMenuView.onDraw")
         try {
-            if (words.isEmpty()) {
-                return
+            // Not an early return on an empty list any more: celebrate() clears words the
+            // instant a pick resolves, specifically so the wedges and scrim stop drawing right
+            // away, while its own burst -- entirely independent of words -- keeps animating on
+            // its own for as long as it takes. See pendingHide's own doc for why this view can
+            // stay visible well after words is already empty.
+            if (words.isNotEmpty()) {
+                drawScrim(canvas)
+                drawWedges(canvas)
+                drawCancelButton(canvas)
             }
-            drawScrim(canvas)
-            drawWedges(canvas)
-            drawCancelButton(canvas)
+            fillParticles.draw(canvas, paints.particlePaint)
+            outlineParticles.draw(canvas, paints.particlePaint)
         } finally {
             Trace.endSection()
         }
@@ -316,6 +396,12 @@ class RadialSuggestionMenuView(
         canvas.drawLine(anchorX - mark, anchorY + mark, anchorX + mark, anchorY - mark, paints.label)
     }
 
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        fillParticles.cancel()
+        outlineParticles.cancel()
+    }
+
     companion object {
         /** More wedges than this and each one is narrower than a fingertip on any phone this
          *  runs on -- matches [com.borderkeys.data.theme.KeyboardPreferences.MAX_RADIAL_SUGGESTIONS],
@@ -323,6 +409,19 @@ class RadialSuggestionMenuView(
         const val MAX_WEDGES = 6
 
         const val DEFAULT_ROW_PX = 150f
+
+        /** Sized for one preset's own burst count (10) at [CELEBRATE_BURST_MULTIPLIER] plus the
+         *  ambient trickle running at the same time, not for [MAX_WEDGES] each celebrating at
+         *  once -- only one wedge is ever resolved per gesture. */
+        const val FILL_PARTICLE_POOL_CAPACITY = 20
+
+        /** No burst on this layer, only one wedge's own arc trace at a time -- see
+         *  [outlineParticles]'s own doc. */
+        const val OUTLINE_PARTICLE_POOL_CAPACITY = 16
+
+        /** How much bigger [celebrate]'s burst is than [steerTo]'s own ambient trickle -- a
+         *  deliberate, noticeably bigger moment for the one wedge actually picked. */
+        const val CELEBRATE_BURST_MULTIPLIER = 2
 
         /** The ring's outer edge, in row heights. */
         const val OUTER_RADIUS_ROWS = 1.7f

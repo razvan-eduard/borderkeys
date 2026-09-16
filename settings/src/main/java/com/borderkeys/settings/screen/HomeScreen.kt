@@ -125,6 +125,10 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
                 strings[Keys.HOME_SOUND_AND_VIBRATION],
                 strings[Keys.HOME_SOUND_AND_VIBRATION_NOTE],
             ) { open(Screen.Sound) }
+            SettingRow(
+                strings[Keys.HOME_PARTICLE_EFFECTS],
+                strings[Keys.HOME_PARTICLE_EFFECTS_NOTE],
+            ) { open(Screen.Effects) }
         }
         SettingsSectionCard(strings[Keys.SHORTCUTS_TITLE]) {
             // Listed because a gesture nobody is told about is a gesture nobody uses. Holding

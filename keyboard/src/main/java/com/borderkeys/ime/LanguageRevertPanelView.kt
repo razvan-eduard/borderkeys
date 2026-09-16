@@ -10,6 +10,7 @@ import android.graphics.Paint
 import android.os.Trace
 import android.view.MotionEvent
 import android.view.View
+import com.borderkeys.ime.fx.ParticleField
 import com.borderkeys.theme.ThemePaints
 
 /**
@@ -44,6 +45,20 @@ class LanguageRevertPanelView(
     private var pressedDismiss = false
     private var rowHeightPx = 0f
 
+    /** A burst on the row actually picked -- exposed non-private so [BorderKeysService] can push
+     *  the user's particle-effect settings directly, the same way
+     *  [KeyboardCanvasView.fillParticles] already is. */
+    val fillParticles = ParticleField(FILL_PARTICLE_POOL_CAPACITY) { invalidate() }
+
+    /** Traces the picked row's own rect, for the same short window [fillParticles] bursts in --
+     *  see the `ACTION_UP` handler below for why this one also needs a timed [stopAmbient]. */
+    val outlineParticles = ParticleField(OUTLINE_PARTICLE_POOL_CAPACITY) { invalidate() }
+
+    /** Stops [outlineParticles]' ambient trace ~500ms after a row is picked -- there is no
+     *  hover/hold state on this view to hook a natural start/stop pair to, unlike every other
+     *  particle-owning view in this package, since a row is removed right after being tapped. */
+    private val stopOutlineRunnable = Runnable { outlineParticles.stopAmbient() }
+
     init {
         setWillNotDraw(false)
         isHapticFeedbackEnabled = true
@@ -77,13 +92,18 @@ class LanguageRevertPanelView(
         Trace.beginSection("LanguageRevertPanelView.onDraw")
         try {
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paints.background)
-            if (rows.isEmpty()) {
-                return
+            // Not an early return on an empty list any more: picking the last row empties it on
+            // this same tap, and a burst just spawned on it must still get to draw itself out
+            // over however many frames are left, same reasoning as
+            // RadialSuggestionMenuView.onDraw's own restructuring.
+            if (rows.isNotEmpty()) {
+                val dismissWidth = rowHeightPx
+                for (index in rows.indices) {
+                    drawRow(canvas, index, index * rowHeightPx, dismissWidth)
+                }
             }
-            val dismissWidth = rowHeightPx
-            for (index in rows.indices) {
-                drawRow(canvas, index, index * rowHeightPx, dismissWidth)
-            }
+            fillParticles.draw(canvas, paints.particlePaint)
+            outlineParticles.draw(canvas, paints.particlePaint)
         } finally {
             Trace.endSection()
         }
@@ -143,6 +163,18 @@ class LanguageRevertPanelView(
                 if (pressedDismiss) {
                     listener?.onLanguageRevertDismissed()
                 } else if (pressedRow >= 0) {
+                    // Only the row actually picked -- never the dismiss control, which discards
+                    // rather than accepts.
+                    val top = pressedRow * rowHeightPx
+                    val right = width - rowHeightPx
+                    val bottom = top + rowHeightPx
+                    fillParticles.spawnBurstInRectangle(0f, top, right, bottom)
+                    // No hover/hold state exists to hook a natural stop to (the row is gone the
+                    // instant this listener call returns) -- so the trace gets a fixed, timed
+                    // window instead, long enough to actually be seen.
+                    removeCallbacks(stopOutlineRunnable)
+                    outlineParticles.setAmbientRectanglePerimeter(0f, top, right, bottom)
+                    postDelayed(stopOutlineRunnable, OUTLINE_STOP_DELAY_MILLIS)
                     listener?.onLanguageRevertPicked(rows[pressedRow])
                 }
                 pressedRow = -1
@@ -160,10 +192,26 @@ class LanguageRevertPanelView(
         return false
     }
 
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        removeCallbacks(stopOutlineRunnable)
+        fillParticles.cancel()
+        outlineParticles.cancel()
+    }
+
     private companion object {
         /** More than this and the offer is no longer "a couple of words," it is a list -- shown
          *  once, in commit order, rather than scrolled. */
         const val MAX_SHOWN = 4
+
+        /** [MAX_SHOWN] rows could each in principle be picked in quick succession -- sized for
+         *  one preset's own burst count (10) plus a little headroom, not for all four at once. */
+        const val FILL_PARTICLE_POOL_CAPACITY = 12
+        const val OUTLINE_PARTICLE_POOL_CAPACITY = 12
+
+        /** How long [outlineParticles]' timed trace runs after a row is picked -- see
+         *  [stopOutlineRunnable]'s own doc for why this view needs one at all. */
+        const val OUTLINE_STOP_DELAY_MILLIS = 500L
 
         const val ARROW = "→"
 

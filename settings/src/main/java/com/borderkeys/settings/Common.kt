@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -40,6 +41,7 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.backup.BackupRepository
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
+import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.keyboard.R
 import kotlinx.coroutines.launch
 
@@ -162,6 +164,16 @@ fun rememberThemeUpdater(): ((KeyboardTheme) -> KeyboardTheme) -> Unit {
     return { transform -> scope.launch { themes.updateTheme(transform) } }
 }
 
+/** The same, for [ParticleEffectsSettings] --
+ *  [EffectsScreen][com.borderkeys.settings.screen.EffectsScreen]'s own equivalent of
+ *  [rememberPreferencesUpdater]. */
+@Composable
+fun rememberParticleEffectsUpdater(): ((ParticleEffectsSettings) -> ParticleEffectsSettings) -> Unit {
+    val themes = remember { DataGraph.themes }
+    val scope = rememberCoroutineScope()
+    return { transform -> scope.launch { themes.updateParticleEffects(transform) } }
+}
+
 /**
  * Moves [from] to [to], clamped, and returns the new order.
  *
@@ -195,10 +207,10 @@ fun siblingPackage(context: Context): String? {
 private const val PLUS_SUFFIX = ".plus"
 
 /**
- * The four switches for what a backup file carries -- settings, dictionary, languages,
- * clipboard -- shared by the screen that writes a file and the one that sends everything to a
- * nearby device directly, since both are choosing the same four parts of the same
- * [BackupRepository.Parts].
+ * The seven switches for what a backup file carries -- settings, theme, particle effects, size
+ * and position, dictionary, languages, clipboard -- shared by the screen that writes a file and
+ * the one that sends everything to a nearby device directly, since both are choosing the same
+ * seven parts of the same [BackupRepository.Parts].
  */
 @Composable
 fun BackupPartSwitches(parts: BackupRepository.Parts, onChange: (BackupRepository.Parts) -> Unit) {
@@ -208,6 +220,21 @@ fun BackupPartSwitches(parts: BackupRepository.Parts, onChange: (BackupRepositor
         subtitle = strings[Keys.BACKUP_PART_SETTINGS_NOTE],
         checked = parts.settings,
     ) { value -> onChange(parts.copy(settings = value)) }
+    SwitchRow(
+        title = strings[Keys.BACKUP_PART_THEME],
+        subtitle = strings[Keys.BACKUP_PART_THEME_NOTE],
+        checked = parts.theme,
+    ) { value -> onChange(parts.copy(theme = value)) }
+    SwitchRow(
+        title = strings[Keys.BACKUP_PART_PARTICLE_EFFECTS],
+        subtitle = strings[Keys.BACKUP_PART_PARTICLE_EFFECTS_NOTE],
+        checked = parts.particleEffects,
+    ) { value -> onChange(parts.copy(particleEffects = value)) }
+    SwitchRow(
+        title = strings[Keys.BACKUP_PART_SIZE_AND_POSITION],
+        subtitle = strings[Keys.BACKUP_PART_SIZE_AND_POSITION_NOTE],
+        checked = parts.sizeAndPosition,
+    ) { value -> onChange(parts.copy(sizeAndPosition = value)) }
     SwitchRow(
         title = strings[Keys.BACKUP_PART_DICTIONARY],
         subtitle = strings[Keys.BACKUP_PART_DICTIONARY_NOTE],
@@ -223,6 +250,68 @@ fun BackupPartSwitches(parts: BackupRepository.Parts, onChange: (BackupRepositor
         subtitle = strings[Keys.BACKUP_PART_CLIPBOARD_NOTE],
         checked = parts.clipboard,
     ) { value -> onChange(parts.copy(clipboard = value)) }
+}
+
+/**
+ * One row per part [detected] as actually present in a parsed import file -- never all seven
+ * unconditionally the way [BackupPartSwitches]' own export-time rows are, since offering a tick
+ * for a section the file does not carry would be an offer to import nothing.
+ */
+@Composable
+fun BackupReviewChecklist(
+    detected: BackupRepository.Parts,
+    selected: BackupRepository.Parts,
+    onChange: (BackupRepository.Parts) -> Unit,
+) {
+    val strings = LocalStrings.current
+    Column {
+        if (detected.settings) {
+            BackupReviewRow(strings[Keys.BACKUP_PART_SETTINGS], selected.settings) {
+                onChange(selected.copy(settings = it))
+            }
+        }
+        if (detected.theme) {
+            BackupReviewRow(strings[Keys.BACKUP_PART_THEME], selected.theme) {
+                onChange(selected.copy(theme = it))
+            }
+        }
+        if (detected.particleEffects) {
+            BackupReviewRow(strings[Keys.BACKUP_PART_PARTICLE_EFFECTS], selected.particleEffects) {
+                onChange(selected.copy(particleEffects = it))
+            }
+        }
+        if (detected.sizeAndPosition) {
+            BackupReviewRow(strings[Keys.BACKUP_PART_SIZE_AND_POSITION], selected.sizeAndPosition) {
+                onChange(selected.copy(sizeAndPosition = it))
+            }
+        }
+        if (detected.dictionary) {
+            BackupReviewRow(strings[Keys.BACKUP_PART_DICTIONARY], selected.dictionary) {
+                onChange(selected.copy(dictionary = it))
+            }
+        }
+        if (detected.languages) {
+            BackupReviewRow(strings[Keys.BACKUP_PART_LANGUAGES], selected.languages) {
+                onChange(selected.copy(languages = it))
+            }
+        }
+        if (detected.clipboard) {
+            BackupReviewRow(strings[Keys.BACKUP_PART_CLIPBOARD], selected.clipboard) {
+                onChange(selected.copy(clipboard = it))
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackupReviewRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) },
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
 @Composable

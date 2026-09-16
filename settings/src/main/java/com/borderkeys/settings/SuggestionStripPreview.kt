@@ -13,7 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.borderkeys.data.theme.KeyboardAppearance
+import com.borderkeys.data.theme.ParticleRegionSettings
 import com.borderkeys.ime.SuggestionStripView
+import com.borderkeys.ime.fx.applyParticleLayer
 import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
 
@@ -35,6 +37,15 @@ import com.borderkeys.theme.ThemePaints
 fun SuggestionStripPreview(
     appearance: KeyboardAppearance,
     modifier: Modifier = Modifier,
+    /**
+     * When given, drawn regardless of its own [ParticleRegionSettings.enabled] -- for
+     * [com.borderkeys.settings.screen.EffectsScreen]'s Suggestion Strip card, where the whole
+     * point is previewing a look before deciding whether to switch the region on at all. Null
+     * for every other caller, so this preview's particles stay exactly as inert as they were
+     * before this parameter existed: this throwaway `SuggestionStripView` is never reached by
+     * `BorderKeysService`'s own preference wiring, so nothing else would ever turn them on.
+     */
+    previewParticles: ParticleRegionSettings? = null,
 ) {
     val context = LocalContext.current
     val strings = LocalStrings.current
@@ -62,6 +73,15 @@ fun SuggestionStripPreview(
                 view.appliedIndex = (preferences.suggestionCount / 2)
                     .coerceAtMost(sample.size - 1)
                     .coerceAtLeast(0)
+                // Ignores ParticleRegionSettings.enabled (the region's own master) on purpose,
+                // per previewParticles' own doc -- the whole point of this preview is showing a
+                // look before that switch is turned on at all.
+                if (previewParticles != null) {
+                    applyParticleLayer(view.fillParticles, view.outlineParticles, previewParticles.copy(enabled = true))
+                } else {
+                    view.fillParticles.enabled = false
+                    view.outlineParticles.enabled = false
+                }
                 view.requestLayout()
                 view.invalidate()
             },

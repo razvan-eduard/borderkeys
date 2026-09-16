@@ -8,6 +8,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.RenderNode
 import android.os.Trace
 import android.view.Choreographer
@@ -16,6 +17,7 @@ import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeProvider
 import android.view.View
 import android.view.ViewConfiguration
+import com.borderkeys.ime.fx.ParticleField
 import com.borderkeys.theme.ThemePaints
 import kotlin.math.max
 import kotlin.math.min
@@ -475,6 +477,15 @@ class KeyboardCanvasView(
     private val pressReleasing = BooleanArray(PRESS_POOL)
     private var lastFrameNanos = 0L
     private var animating = false
+
+    /** A burst per key press. Exposed non-private so [BorderKeysService] can push the user's
+     *  particle-effect settings directly, the same way [hapticEnabled] already is. */
+    val fillParticles = ParticleField(FILL_PARTICLE_POOL_CAPACITY) { invalidateParticleBounds() }
+
+    /** Traces the pressed key's own rounded-rect border. */
+    val outlineParticles = ParticleField(OUTLINE_PARTICLE_POOL_CAPACITY) { invalidateParticleBounds() }
+    private val particleBoundsScratch = RectF()
+    private val particleBoundsScratch2 = RectF()
 
     // ---- long press ------------------------------------------------------------------------
 
@@ -947,6 +958,9 @@ class KeyboardCanvasView(
             if (gestureActive) {
                 drawGestureTrail(canvas)
             }
+
+            fillParticles.draw(canvas, paints.particlePaint)
+            outlineParticles.draw(canvas, paints.particlePaint)
         } finally {
             Trace.endSection()
         }
@@ -1359,6 +1373,15 @@ class KeyboardCanvasView(
                 pressProgress[slot] = 0f
                 pressReleasing[slot] = false
                 invalidateKey(index)
+                // A key that is already lit (the loop above) does not get a second burst --
+                // this is specifically the moment a key starts being visually pressed, whether
+                // that is a fresh finger-down or a slide onto a new key without lifting.
+                // Both calls no-op on their own while their own particles.enabled is off.
+                fillParticles.spawnBurstAtPoint(geometry.centerX[index], geometry.centerY[index])
+                outlineParticles.setAmbientRectanglePerimeter(
+                    geometry.keyLeft[index], geometry.keyTop[index],
+                    geometry.keyRight[index], geometry.keyBottom[index],
+                )
                 scheduleFrame()
                 return
             }
@@ -1371,6 +1394,7 @@ class KeyboardCanvasView(
         for (slot in 0 until PRESS_POOL) {
             if (pressKey[slot] == index) {
                 pressReleasing[slot] = true
+                outlineParticles.stopAmbient()
                 scheduleFrame()
                 return
             }
@@ -1449,6 +1473,31 @@ class KeyboardCanvasView(
         invalidate(dirtyLeft, dirtyTop, dirtyRight, dirtyBottom)
     }
 
+    /** [fillParticles]/[outlineParticles]' own dirty rect -- the tight bounding box of whatever
+     *  is actually still live, not a whole-key or whole-view invalidate, for the same reason
+     *  [invalidateKey] itself is not a bare `invalidate()`: this view's RenderNode-cached static
+     *  layer has nothing to do with a particle burst, and re-recording it every particle frame
+     *  would defeat the one thing that layer exists for. */
+    @Suppress("DEPRECATION")
+    private fun invalidateParticleBounds() {
+        val hasFill = fillParticles.computeLiveBounds(particleBoundsScratch)
+        val hasOutline = outlineParticles.computeLiveBounds(particleBoundsScratch2)
+        if (!hasFill && !hasOutline) {
+            return
+        }
+        if (!hasFill) {
+            particleBoundsScratch.set(particleBoundsScratch2)
+        } else if (hasOutline) {
+            particleBoundsScratch.union(particleBoundsScratch2)
+        }
+        invalidate(
+            (particleBoundsScratch.left - PARTICLE_INVALIDATE_MARGIN_PX).toInt(),
+            (particleBoundsScratch.top - PARTICLE_INVALIDATE_MARGIN_PX).toInt(),
+            (particleBoundsScratch.right + PARTICLE_INVALIDATE_MARGIN_PX).toInt() + 1,
+            (particleBoundsScratch.bottom + PARTICLE_INVALIDATE_MARGIN_PX).toInt() + 1,
+        )
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         cancelPendingCallbacks()
@@ -1457,6 +1506,8 @@ class KeyboardCanvasView(
             Choreographer.getInstance().removeFrameCallback(frameCallback)
             animating = false
         }
+        fillParticles.cancel()
+        outlineParticles.cancel()
     }
 
     companion object {
@@ -1469,6 +1520,22 @@ class KeyboardCanvasView(
 
         private const val MAX_POINTERS = 16
         private const val PRESS_POOL = 10
+
+        /** Sized for the busiest preset's own burst count (10, see
+         *  [com.borderkeys.ime.fx.ParticleEffectPresets]) with headroom for two presses landing
+         *  close together -- not [MAX_POINTERS], which would size this for eleven simultaneous
+         *  full-hand chords. */
+        private const val FILL_PARTICLE_POOL_CAPACITY = 24
+
+        /** Comet's own spawn rate (40/s, see [com.borderkeys.ime.fx.ParticleOutlineStylePresets])
+         *  is the busiest outline preset there is -- sized for a bit under a second of it. */
+        private const val OUTLINE_PARTICLE_POOL_CAPACITY = 24
+
+        /** Compensates for anti-aliased circles bleeding a pixel or two past
+         *  [ParticleField.computeLiveBounds]'s own mathematical edge -- the same purpose
+         *  [invalidateKey]'s own `+ 2f` margin serves, kept as its own constant since a
+         *  particle's edge and a key's lift offset are not the same kind of margin. */
+        private const val PARTICLE_INVALIDATE_MARGIN_PX = 2f
         private const val LABEL_WIDTH_FRACTION = 0.82f
         private const val DEFAULT_ROW_HEIGHT_PX = 150f
         private const val MIN_ALTERNATIVE_WIDTH_PX = 96f

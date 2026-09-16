@@ -25,6 +25,7 @@ class ThemeRepository internal constructor(
     private val lightThemeStore: DataStore<KeyboardTheme>,
     private val preferencesStore: DataStore<KeyboardPreferences>,
     private val customThemeLibraryStore: DataStore<CustomThemeLibrary>,
+    private val particleEffectsStore: DataStore<ParticleEffectsSettings>,
 ) {
     val theme: Flow<KeyboardTheme> = themeStore.data
 
@@ -32,15 +33,16 @@ class ThemeRepository internal constructor(
      *  [KeyboardPreferences.THEME_MODE_AUTO_SYSTEM] and the system is not in dark mode. */
     val lightTheme: Flow<KeyboardTheme> = lightThemeStore.data
     val preferences: Flow<KeyboardPreferences> = preferencesStore.data
+    val particleEffects: Flow<ParticleEffectsSettings> = particleEffectsStore.data
 
     /** Themes the user built and named themselves, newest last -- see [CustomThemeEntry]. */
     val customThemes: Flow<List<CustomThemeEntry>> = customThemeLibraryStore.data.map { it.themes }
 
-    /** [theme], [lightTheme] and [preferences], combined -- see [KeyboardAppearance]. What
-     *  anything that draws or previews the keyboard should collect, rather than the three flows
-     *  above separately. */
+    /** [theme], [lightTheme], [preferences] and [particleEffects], combined -- see
+     *  [KeyboardAppearance]. What anything that draws or previews the keyboard should collect,
+     *  rather than the four flows above separately. */
     val appearance: Flow<KeyboardAppearance> =
-        combine(theme, lightTheme, preferences, ::KeyboardAppearance)
+        combine(theme, lightTheme, preferences, particleEffects, ::KeyboardAppearance)
 
     suspend fun updateTheme(transform: (KeyboardTheme) -> KeyboardTheme) {
         themeStore.updateData { current -> transform(current).sanitised() }
@@ -52,6 +54,10 @@ class ThemeRepository internal constructor(
 
     suspend fun updatePreferences(transform: (KeyboardPreferences) -> KeyboardPreferences) {
         preferencesStore.updateData { current -> transform(current).sanitised() }
+    }
+
+    suspend fun updateParticleEffects(transform: (ParticleEffectsSettings) -> ParticleEffectsSettings) {
+        particleEffectsStore.updateData { current -> transform(current).sanitised() }
     }
 
     suspend fun resetTheme() {
@@ -118,6 +124,9 @@ class ThemeRepository internal constructor(
     /** The blocking-read counterpart to [currentPreferences], for the same "must already be
      *  correct on the very first frame" reason. */
     fun currentLightTheme(): KeyboardTheme = runBlocking { lightTheme.first() }
+
+    /** The blocking-read counterpart to [currentPreferences], for [particleEffects]. */
+    fun currentParticleEffects(): ParticleEffectsSettings = runBlocking { particleEffects.first() }
 
     /** The blocking-read counterpart to [appearance], seeding a screen that shows a preview
      *  before the flow has had a chance to emit. */

@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,9 +29,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.backup.BackupFile
+import com.borderkeys.data.backup.BackupPayload
 import com.borderkeys.data.backup.BackupRepository
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.BackupPartSwitches
+import com.borderkeys.settings.BackupReviewChecklist
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.SettingsSectionCard
@@ -44,9 +48,13 @@ import kotlinx.coroutines.withContext
  * separate private directories -- and the only backup this application has at all, since system
  * backup is switched off on purpose.
  *
- * Four parts, each its own answer, because they are not equally private. A theme is a handful of
+ * Seven parts, each its own answer, because they are not equally private. A theme is a handful of
  * numbers. The dictionary is every word this device learned from what its owner typed. The
  * screen asks for a passphrase exactly when one of the private two is included, and says why.
+ *
+ * Reading a file stops short of applying it: what a file turns out to contain is shown as a
+ * checklist first (see [BackupReviewDialog]), since asking after the fact whether everything it
+ * had should really have been applied is not a question importing silently can still be asked.
  */
 @Composable
 fun BackupScreen(modifier: Modifier = Modifier) {
@@ -55,9 +63,19 @@ fun BackupScreen(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val backups = remember { DataGraph.backups }
 
-    var parts by remember { mutableStateOf(BackupRepository.Parts(settings = true)) }
+    var parts by remember { mutableStateOf(BackupRepository.Parts(settings = true, theme = true)) }
     var passphrase by remember { mutableStateOf("") }
     var notice by remember { mutableStateOf("") }
+
+    // What a just-read file turned out to contain, awaiting the person's own review -- null
+    // whenever nothing is pending. reviewDetected is fixed the moment the file is read and never
+    // changes again; reviewSelection starts as a copy of it, all ticked, and only narrows from
+    // there as rows are deliberately unticked -- the two would be the same value throughout if
+    // nothing were ever unticked, which is exactly why they have to be stored separately rather
+    // than one recomputed from the other.
+    var pendingImport by remember { mutableStateOf<BackupPayload?>(null) }
+    var reviewDetected by remember { mutableStateOf(BackupRepository.Parts()) }
+    var reviewSelection by remember { mutableStateOf(BackupRepository.Parts()) }
 
     /** Whether what has been chosen would put something private into the file. */
     val private = parts.dictionary || parts.clipboard
@@ -108,10 +126,12 @@ fun BackupScreen(modifier: Modifier = Modifier) {
                 }
                 return@launch
             }
-            // Everything the file turned out to have. Asking again which parts to take would be
-            // asking about a file the user has not seen the contents of.
-            withContext(Dispatchers.IO) { backups.apply(payload, backups.contentsOf(payload)) }
-            notice = strings[Keys.BACKUP_IMPORTED]
+            // Handed to the review dialog rather than applied outright -- what a file turns out
+            // to carry is shown before anything is written, all ticked to start.
+            val contents = backups.contentsOf(payload)
+            reviewDetected = contents
+            reviewSelection = contents
+            pendingImport = payload
         }
     }
 
@@ -162,4 +182,51 @@ fun BackupScreen(modifier: Modifier = Modifier) {
             }
         }
     }
+
+    val importing = pendingImport
+    if (importing != null) {
+        BackupReviewDialog(
+            detected = reviewDetected,
+            selected = reviewSelection,
+            onSelectedChange = { reviewSelection = it },
+            onConfirm = {
+                pendingImport = null
+                scope.launch {
+                    withContext(Dispatchers.IO) { backups.apply(importing, reviewSelection) }
+                    notice = strings[Keys.BACKUP_IMPORTED]
+                }
+            },
+            onDismiss = { pendingImport = null },
+        )
+    }
+}
+
+/**
+ * What a read-but-not-yet-applied file turned out to carry, ticked so a person can narrow it
+ * before anything is written -- see [BackupScreen]'s own doc for why importing stops here rather
+ * than applying outright. [detected] never changes once shown; only [selected] moves as rows are
+ * unticked.
+ */
+@Composable
+private fun BackupReviewDialog(
+    detected: BackupRepository.Parts,
+    selected: BackupRepository.Parts,
+    onSelectedChange: (BackupRepository.Parts) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val strings = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(strings[Keys.BACKUP_REVIEW_TITLE]) },
+        text = { BackupReviewChecklist(detected, selected, onSelectedChange) },
+        confirmButton = {
+            TextButton(enabled = selected.any, onClick = onConfirm) {
+                Text(strings[Keys.BACKUP_REVIEW_IMPORT])
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(strings[Keys.BACKUP_REVIEW_CANCEL]) }
+        },
+    )
 }
