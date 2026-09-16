@@ -687,10 +687,15 @@ class BorderKeysService :
             // KeyboardPreferences.radialTimeoutDefault says), the same as tapping outside the
             // ring on the keyboard itself already does -- not lose it, the way dismissRadialMenu
             // deliberately does for the very different case of a fresh key press mid-gesture.
+            // Resolved unconditionally, ahead of the composing check below: a tap that happens
+            // to land right where the previewed word already ends -- easy to do, since that is
+            // usually right where the caret already was -- must not read as "nothing happened"
+            // and leave the ring sitting there just because composingMatchesCaret says this
+            // particular caret position needs no re-deriving.
+            resolveRadialRingFromEditorTap()
             if (composingMatchesCaret(newSelEnd)) {
                 requestSuggestions()
             } else {
-                resolveRadialRingFromEditorTap()
                 adoptWordAtCaret()
             }
             // Shift is derived from the text before the caret, so moving the caret is exactly
