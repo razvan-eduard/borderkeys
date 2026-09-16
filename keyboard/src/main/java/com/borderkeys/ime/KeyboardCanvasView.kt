@@ -631,6 +631,17 @@ class KeyboardCanvasView(
         layout = newLayout
         if (width > 0 && height > 0) {
             compile(width, height)
+            // The key that caused this very switch -- ?123, ABC, the shift-symbols toggle --
+            // is still fading out its own press highlight over the next few frames (see
+            // onAnimationFrame), by an index into the layout that was current when the finger
+            // went down. A page with fewer keys than that index leaves it pointing past the end
+            // of the geometry these frames now read, so a slot the new layout has outgrown is
+            // dropped rather than carried into it.
+            for (slot in 0 until PRESS_POOL) {
+                if (pressKey[slot] != NO_KEY && pressKey[slot] >= geometry.keyCount) {
+                    pressKey[slot] = NO_KEY
+                }
+            }
         }
         requestLayout()
         invalidate()
