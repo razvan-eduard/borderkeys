@@ -1978,7 +1978,7 @@ class BorderKeysService :
      * the number row used to disappear when the symbols page came back. The accent and digit
      * steps look only at letter keys, so they pass a symbols page through untouched.
      */
-    private fun composedLayout(layout: KeyboardLayout): KeyboardLayout {
+    private fun composedLayout(layout: KeyboardLayout, allowNumberRow: Boolean = true): KeyboardLayout {
         var result = layout
         if (preferences.accentedCharacters && accentOverlays.isNotEmpty()) {
             result = result.withAccents(accentOverlays, accentSignature)
@@ -1987,12 +1987,15 @@ class BorderKeysService :
         // accents sit behind it in the long-press strip. Digits when there is no number row;
         // once the number row has taken them, the row shifts to a layer of symbols instead,
         // the way a hardware number row does.
-        result = if (preferences.numberRow) {
+        //
+        // [allowNumberRow] is false for the numpad-symbols pages: their numpad block already
+        // carries the digits, so a row of them above it would be the same digits twice.
+        result = if (preferences.numberRow && allowNumberRow) {
             result.withTopRowSymbols()
         } else {
             result.withTopRowDigits()
         }
-        if (preferences.numberRow) {
+        if (preferences.numberRow && allowNumberRow) {
             result = result.withNumberRow()
         }
         if (!preferences.emojiKey) {
@@ -2016,7 +2019,10 @@ class BorderKeysService :
         // The symbol pages carry an emoji key too, so they compose the same way. Only the
         // numeric keypad is left alone: it has neither a space bar nor room for one.
         val layout = when (next) {
-            PAGE_SYMBOLS -> composedLayout(symbolsPage())
+            PAGE_SYMBOLS -> composedLayout(
+                symbolsPage(),
+                allowNumberRow = preferences.symbolsNumberPosition == KeyboardPreferences.SYMBOLS_NUMBER_TOP,
+            )
             PAGE_SYMBOLS_SHIFT -> composedLayout(symbolsShiftLayout)
             PAGE_NUMPAD -> numpadLayout
             else -> composedLayout(alphabeticLayout)
