@@ -1525,6 +1525,16 @@ class BorderKeysService :
             }
             pendingCorrection = null
         }
+        // A word either side of a sentence mark is not a pair anyone meant: "Salut" and "Ce"
+        // from "Salut. Ce faci" would otherwise become exactly as real a bigram as two words
+        // from the same thought, purely because finishComposing (above) advances previousWord1
+        // for every delimiter alike. Cleared after learning runs -- the word just finished still
+        // learns its own pair against whatever came before it -- so only the context this
+        // delimiter would otherwise hand to the *next* word is the part that is dropped.
+        if (isSentenceEndingPunctuation(shifted)) {
+            previousWord1 = null
+            previousWord2 = null
+        }
         checkpointField()
         shiftAfterDelimiter(shifted)
         requestSuggestions()
@@ -1949,6 +1959,11 @@ class BorderKeysService :
         if (finished != null) {
             recordLearned(finished, contextWord, grandContextWord, composingCapitalisedByUser)
         }
+        // Enter is a harder break than any sentence mark typed mid-line -- see
+        // isSentenceEndingPunctuation's own doc for why this stops a bigram forming across it,
+        // whichever of the two branches above actually ran.
+        previousWord1 = null
+        previousWord2 = null
         requestSuggestions()
     }
 
@@ -2541,9 +2556,9 @@ class BorderKeysService :
         val words = before.split(*WORD_SEPARATORS).filter { it.isNotEmpty() }
         val caretInsideWord = isWordCharacter(before[before.length - 1].code)
         val partial = if (caretInsideWord) words.lastOrNull().orEmpty() else ""
-        val contextEnd = if (caretInsideWord) words.size - 1 else words.size
-        previousWord1 = words.getOrNull(contextEnd - 1)
-        previousWord2 = words.getOrNull(contextEnd - 2)
+        val (context1, context2) = contextWordsBefore(before, before.length - partial.length)
+        previousWord1 = context1
+        previousWord2 = context2
         lastQuery = partial
         if (partial.isNotEmpty()) {
             composing.append(partial)
@@ -2561,9 +2576,41 @@ class BorderKeysService :
             previousWord2 = null
             return
         }
-        val words = before.split(*WORD_SEPARATORS).filter { it.isNotEmpty() }
-        previousWord1 = words.getOrNull(words.size - 1)
-        previousWord2 = words.getOrNull(words.size - 2)
+        val (context1, context2) = contextWordsBefore(before, before.length)
+        previousWord1 = context1
+        previousWord2 = context2
+    }
+
+    /**
+     * The one or two words ending at [end] in [before], each null in place of reading through a
+     * sentence mark rather than across it -- [handleCharacter]'s own reset (see
+     * [isSentenceEndingPunctuation]) keeps this true while a word is actually being typed, and a
+     * caret move or a deletion re-derives context straight from the editor's text instead of
+     * from that running state, so it has to hold here too: without it, "Salut. Ce" read back
+     * from the text after a caret move would still hand "Ce" a context word "Salut" never meant
+     * to be one.
+     */
+    private fun contextWordsBefore(before: CharSequence, end: Int): Pair<String?, String?> {
+        fun wordEndingAt(limit: Int): Pair<String, Int>? {
+            var index = limit
+            while (index > 0 && !isWordCharacter(before[index - 1].code)) {
+                if (isSentenceEndingPunctuation(before[index - 1].code)) {
+                    return null
+                }
+                index--
+            }
+            if (index == 0) {
+                return null
+            }
+            val wordEnd = index
+            while (index > 0 && isWordCharacter(before[index - 1].code)) {
+                index--
+            }
+            return before.substring(index, wordEnd) to index
+        }
+        val first = wordEndingAt(end) ?: return null to null
+        val second = wordEndingAt(first.second)
+        return first.first to second?.first
     }
 
     /** True when what precedes the single trailing space is a word character. */
@@ -2581,6 +2628,14 @@ class BorderKeysService :
     private fun isTightPunctuation(code: Int): Boolean =
         code == '.'.code || code == ','.code || code == '!'.code || code == '?'.code ||
             code == ';'.code || code == ':'.code
+
+    /**
+     * Ends a sentence rather than merely a clause -- unlike [isTightPunctuation], which a comma
+     * or a colon satisfies too. Deliberately narrower: "mere, pere" is one thought a shopping
+     * list habit should still learn as a pair, the way "Salut. Ce faci" is two that should not.
+     */
+    private fun isSentenceEndingPunctuation(code: Int): Boolean =
+        code == '.'.code || code == '!'.code || code == '?'.code
 
     /** The space that follows a sentence mark, or nothing at all. */
     private fun spaceAfter(code: Int): String {
