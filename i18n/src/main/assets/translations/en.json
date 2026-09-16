@@ -684,7 +684,7 @@
   "suggestion_strip_preview_question": "question",
   "suggestion_strip_preview_through": "through",
   "suggestion_strip_preview_together": "together",
-  "swipe_a_preview_of_work_still_in_progress": "A preview of work still in progress. The checkpoint currently shipped measures well against real gestures, but carries a known scale mismatch from how it was trained, compensated for at runtime rather than fixed at the source. Turning this off always returns to the decoder above.",
+  "swipe_a_preview_of_work_still_in_progress": "A preview of work still in progress. This checkpoint measures far better against real recorded gestures than the one before it, and the scale mismatch that earlier one carried has now been fixed at the source rather than patched at runtime -- but it has not yet had the same time in live typing the geometric decoder above has. Turning this off always returns to the decoder above.",
   "swipe_a_real_field_nothing_typed_into": "A real field. Nothing typed into it is saved.",
   "swipe_all_of_it_runs_on_this": "All of it runs on this device, in about a tenth of a millisecond, and the free build contains no machine-learning model of any kind.",
   "swipe_decodes_gestures_with_a_trained_neural": "Decodes swipes with a trained neural network instead of the geometric decoder above.",

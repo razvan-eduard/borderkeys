@@ -8,27 +8,6 @@
 #include "../topk.hpp"
 
 namespace borderkeys {
-namespace {
-
-// TEMPORARY, TRACKED SHIM -- see HANDOFF.md's Thread 4, "Validated through the real C++ path"
-// and its predecessor "CORRECTION" section (2026-09-13) for the full story. checkpoint.pt / the
-// currently-shipped model.bkw were trained under a train.py bug that divided x/y -- already a
-// [0,1] canvas fraction -- by canvas_width/canvas_height a second time, so every training example
-// this checkpoint ever saw was squashed into a sliver near the coordinate origin, not the [0,1]^2
-// square resampleUniformTime documents and every other decoder in this codebase actually uses.
-// Reproducing that exact scale here, on top of the correct single normalisation
-// resampleUniformTime already does, is what measured 80.0%/85.0% top-1/top-3 on real held-out
-// human gestures through this exact decode path (tools/tcn_replay.py, 2026-09-13) -- feeding this
-// checkpoint the correct [0,1] scale instead decodes to noise, because it never saw that scale.
-//
-// DELETE kShimCanvasWidth/Height and the loop that uses them, together, the moment a checkpoint
-// trained under the fixed train.py/eval_layouts.py lands and is validated the same way. Do not
-// carry this forward "just in case" -- it is a property of this one checkpoint, not of the model
-// architecture or of real gestures in general.
-constexpr float kShimCanvasWidth = 406.19049072265625f;
-constexpr float kShimCanvasHeight = 170.36904907226562f;
-
-}  // namespace
 
 void TcnDecoder::setLayout(const KeyGeometry& geometry) {
     lastGeometry_ = &geometry;
@@ -68,12 +47,6 @@ int TcnDecoder::decode(const float* xs, const float* ys, const int64_t* ts, int 
     if (!resampleUniformTime(xs, ys, ts, count, ctcDecoder_.areaWidth(), ctcDecoder_.areaHeight(),
                              resampledX_, resampledY_)) {
         return 0;
-    }
-    // See the anonymous namespace above: reproduces this checkpoint's training-time scale bug on
-    // purpose. Temporary.
-    for (int i = 0; i < kTcnTimesteps; ++i) {
-        resampledX_[i] /= kShimCanvasWidth;
-        resampledY_[i] /= kShimCanvasHeight;
     }
     buildTcnFeatures(resampledX_, resampledY_, kTcnTimesteps, features_);
     encoder_.forward(features_, intention_, spectral_);
