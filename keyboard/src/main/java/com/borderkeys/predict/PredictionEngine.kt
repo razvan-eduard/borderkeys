@@ -292,9 +292,10 @@ class PredictionEngine(
         }
         val texts = Array(words.size) { words[it].word }
         val counts = IntArray(words.size) { words[it].count }
+        val deliberateCapitals = IntArray(words.size) { words[it].deliberateCapitals }
         worker.post {
             withHandle(Unit) { current ->
-                NativePredictor.nativeLoadUserWords(current, texts, counts)
+                NativePredictor.nativeLoadUserWords(current, texts, counts, deliberateCapitals)
             }
         }
     }
@@ -447,7 +448,9 @@ class PredictionEngine(
         worker.post {
             withHandle(Unit) { current ->
                 for (update in updates) {
-                    NativePredictor.nativeLearn(current, update.word, previous1, previous2)
+                    NativePredictor.nativeLearn(
+                        current, update.word, previous1, previous2, update.deliberateCapital,
+                    )
                 }
             }
         }

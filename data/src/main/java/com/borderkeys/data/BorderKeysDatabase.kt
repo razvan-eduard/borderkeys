@@ -42,7 +42,7 @@ import java.util.Arrays
         UserBigram::class,
         UserTrigram::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class BorderKeysDatabase : RoomDatabase() {
@@ -146,6 +146,21 @@ abstract class BorderKeysDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Personal words gain a count of how many times they were committed with a deliberate
+         * capital first letter -- see [com.borderkeys.data.entity.UserWord.deliberateCapitals].
+         * Additive like the clipboard columns above: an existing row simply starts at zero,
+         * which is exactly "no evidence yet" rather than a value that has to be backfilled.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `user_words` ADD COLUMN `deliberateCapitals` " +
+                        "INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -193,7 +208,9 @@ abstract class BorderKeysDatabase : RoomDatabase() {
                 DATABASE_NAME,
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(
+                    MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                )
                 // The settings screen and the IME run in the same process, but the text
                 // assistant runs in ":assist" and opens this database too. Without this, a write
                 // in one process leaves the other's Flows showing stale rows indefinitely.

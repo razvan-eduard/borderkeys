@@ -226,10 +226,11 @@ public:
     float userBoost(const char* text, uint32_t length) const override;
 
     void learn(const char* word, size_t wordLength, const char* previous1,
-               size_t previous1Length, const char* previous2, size_t previous2Length);
+               size_t previous1Length, const char* previous2, size_t previous2Length,
+               bool deliberateCapital = false);
 
     void loadUserWords(const char* const* words, const size_t* lengths, const int32_t* counts,
-                       int count);
+                       int count, const int32_t* deliberateCapitals = nullptr);
 
     /** Replaces the remembered word pairs. Called right after [loadUserWords], from the same
      *  database read, so both halves of a pair are already known words. */

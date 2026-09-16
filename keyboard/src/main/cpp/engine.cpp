@@ -1726,7 +1726,8 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
 }
 
 void Engine::learn(const char* word, size_t wordLength, const char* previous1,
-                   size_t previous1Length, const char* previous2, size_t previous2Length) {
+                   size_t previous1Length, const char* previous2, size_t previous2Length,
+                   bool deliberateCapital) {
     if (!created_ || word == nullptr || wordLength == 0) {
         return;
     }
@@ -1739,7 +1740,7 @@ void Engine::learn(const char* word, size_t wordLength, const char* previous1,
     // the scorer prefer the more specific evidence when there is any and fall back when there
     // is not, which is the same shape the language pack's own n-grams use.
 
-    const int32_t wordIndex = userModel_.learn(word, wordLength);
+    const int32_t wordIndex = userModel_.learn(word, wordLength, deliberateCapital);
     if (previous1 != nullptr && previous1Length > 0) {
         const int32_t index1 = userModel_.entryIndexFor(previous1, previous1Length);
         userModel_.learnBigram(index1, wordIndex);
@@ -1790,11 +1791,11 @@ void Engine::learn(const char* word, size_t wordLength, const char* previous1,
 }
 
 void Engine::loadUserWords(const char* const* words, const size_t* lengths,
-                           const int32_t* counts, int count) {
+                           const int32_t* counts, int count, const int32_t* deliberateCapitals) {
     if (!created_) {
         return;
     }
-    userModel_.bulkLoad(words, lengths, counts, count);
+    userModel_.bulkLoad(words, lengths, counts, count, deliberateCapitals);
 }
 
 void Engine::loadUserBigrams(const char* const* previous, const size_t* previousLengths,
@@ -1842,14 +1843,23 @@ bool Engine::candidateIsProperNoun(const Candidate& candidate) const {
         }
         return false;
     }
-    // A personal-dictionary or phrase candidate carries no proper-noun flag of its own -- the
-    // user model learns spelling and frequency, not classification, and a phrase is never a
-    // name. But a name typed once, corrected, and learned is still a name the second time: cross-
-    // checked by text (folded, so case and diacritics both wash out, matching how the trie itself
-    // is keyed) against every active pack's own dictionary, rather than just answering false and
-    // leaving AutoCorrection.matchCase with nothing but typed's own case to go on -- which is
-    // exactly backwards for a name someone typed in the middle of a sentence, lower case, on
-    // purpose, because that is where the word was.
+    // A word the user has deliberately capitalised themselves at least once -- shift physically
+    // pressed for that letter, never auto-capitalise's own doing -- is treated as a name from
+    // then on, regardless of how it happens to be typed the next time. See UserModel::learn's
+    // own doc for exactly what earns this, and BorderKeysService's capture of the distinction.
+    if (candidate.packIndex == Candidate::kUserPack && candidate.wordIndex >= 0 &&
+        userModel_.deliberateCapitals(static_cast<uint32_t>(candidate.wordIndex)) > 0) {
+        return true;
+    }
+    // Beyond that, a personal-dictionary or phrase candidate carries no proper-noun flag of its
+    // own -- the user model learns spelling and frequency, not classification on its own, and a
+    // phrase is never a name. But a name typed once, corrected, and learned is still a name the
+    // second time even without a deliberate capital of its own to point to (a correction picked
+    // from the strip, say): cross-checked by text (folded, so case and diacritics both wash out,
+    // matching how the trie itself is keyed) against every active pack's own dictionary, rather
+    // than just answering false and leaving AutoCorrection.matchCase with nothing but typed's own
+    // case to go on -- which is exactly backwards for a name someone typed in the middle of a
+    // sentence, lower case, on purpose, because that is where the word was.
     uint32_t length = 0;
     const char* text = candidateText(candidate, &length);
     if (text == nullptr || length == 0) {

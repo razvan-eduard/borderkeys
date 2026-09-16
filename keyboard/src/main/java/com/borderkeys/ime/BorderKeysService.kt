@@ -160,6 +160,19 @@ class BorderKeysService :
      */
     private var shiftHeldByUser = false
 
+    /**
+     * Whether the word now composing started with a capital letter the user typed themselves --
+     * shift physically pressed for that one character, never auto-capitalise's own doing.
+     *
+     * Unlike [shiftHeldByUser], which [handleCharacter] resets after every character, this is
+     * set once, only when [composing] is empty and about to receive its first character, and
+     * then left alone for the rest of the word -- it has to survive past that one keystroke to
+     * reach whichever `recordLearned` call eventually learns the finished word. Read there as
+     * evidence that this word is plausibly a name; see `UserModel::learn`'s own doc for what it
+     * becomes once learned.
+     */
+    private var composingCapitalisedByUser = false
+
     /** When the last space was committed, for the two-spaces-make-a-full-stop window. */
     private var lastSpaceAt = 0L
 
@@ -259,6 +272,10 @@ class BorderKeysService :
         val contextWord: String?,
         /** The word before [contextWord], for the same reason -- see [recordLearned]. */
         val grandContextWord: String?,
+        /** [composingCapitalisedByUser] at the moment [typed] was finished, carried alongside
+         *  it: that field moves on to the next word long before this correction is confirmed or
+         *  reverted, so whichever spelling ends up learned needs its own copy of the answer. */
+        val deliberateCapital: Boolean,
     )
 
     private var pendingCorrection: PendingCorrection? = null
@@ -1391,6 +1408,12 @@ class BorderKeysService :
             shiftState = ShiftState.OFF
             host?.keyboard?.shiftState = shiftState
         }
+        // Read before the reset just below, and only at the first letter of a fresh word --
+        // see composingCapitalisedByUser's own doc for why it has to be captured here rather
+        // than wherever the word eventually finishes.
+        if (composing.isEmpty() && isWordCharacter(shifted)) {
+            composingCapitalisedByUser = shiftHeldByUser && Character.isUpperCase(shifted)
+        }
         shiftHeldByUser = false
 
         if (isWordCharacter(shifted)) {
@@ -1486,13 +1509,14 @@ class BorderKeysService :
             // the whole point of the revert is that rejecting it is expected.
             pendingCorrection = PendingCorrection(
                 typed, correction, delimiter, contextWord, grandContextWord,
+                composingCapitalisedByUser,
             )
             if (preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
                 recordLanguageSwitchFlag(connection, typed, correction, delimiter)
             }
         } else {
             if (typed.isNotEmpty()) {
-                recordLearned(typed, contextWord, grandContextWord)
+                recordLearned(typed, contextWord, grandContextWord, composingCapitalisedByUser)
             }
             pendingCorrection = null
         }
@@ -1667,7 +1691,10 @@ class BorderKeysService :
     private fun confirmPendingCorrection() {
         val pending = pendingCorrection ?: return
         pendingCorrection = null
-        recordLearned(pending.corrected, pending.contextWord, pending.grandContextWord)
+        recordLearned(
+            pending.corrected, pending.contextWord, pending.grandContextWord,
+            pending.deliberateCapital,
+        )
     }
 
     /**
@@ -1701,7 +1728,10 @@ class BorderKeysService :
             // Backspace is an ordinary backspace, so this is the correction being accepted the
             // same way any other key would accept it. Dropping it unlearned instead would make
             // the setting quietly change what the dictionary remembers.
-            recordLearned(pending.corrected, pending.contextWord, pending.grandContextWord)
+            recordLearned(
+                pending.corrected, pending.contextWord, pending.grandContextWord,
+                pending.deliberateCapital,
+            )
             return false
         }
         val committed = pending.corrected + pending.delimiter
@@ -1709,7 +1739,10 @@ class BorderKeysService :
         if (before == null || before.toString() != committed) {
             // The cursor moved, or something else edited the field. Reverting blind would
             // delete text nobody asked us to touch, so the correction stands and is accepted.
-            recordLearned(pending.corrected, pending.contextWord, pending.grandContextWord)
+            recordLearned(
+                pending.corrected, pending.contextWord, pending.grandContextWord,
+                pending.deliberateCapital,
+            )
             return false
         }
         connection.beginBatchEdit()
@@ -1719,7 +1752,10 @@ class BorderKeysService :
         previousWord1 = pending.typed
         // Reverting is the user asserting that what they typed is a word, which is exactly the
         // signal the personal dictionary exists to record.
-        recordLearned(pending.typed, pending.contextWord, pending.grandContextWord)
+        recordLearned(
+            pending.typed, pending.contextWord, pending.grandContextWord,
+            pending.deliberateCapital,
+        )
         // And the word they rejected is unlearned. A correction is only offered that strongly
         // because something taught it -- often this dictionary, from an earlier typo confirmed
         // by accident -- and rejecting it is the clearest statement available that it should
@@ -1906,7 +1942,7 @@ class BorderKeysService :
             applyAutoShift()
         }
         if (finished != null) {
-            recordLearned(finished, contextWord, grandContextWord)
+            recordLearned(finished, contextWord, grandContextWord, composingCapitalisedByUser)
         }
         requestSuggestions()
     }
@@ -2622,8 +2658,19 @@ class BorderKeysService :
      * store rejects but the trigram store and the native model do not, so both were quietly
      * fed corrupted context on nearly every word typed. Both have to be captured before the
      * commit, at the same point every caller already captures [contextWord] alone.
+     *
+     * [deliberateCapital] is whether [word]'s first letter is upper case because the user
+     * pressed shift for it themselves -- see [composingCapitalisedByUser]'s own doc. A caller
+     * whose word never went through per-character typing at all (a swipe, or a tap on a strip
+     * suggestion that was already re-cased for display) passes `false`: neither one is the user
+     * manually pressing shift for a letter, so neither is evidence either way.
      */
-    private fun recordLearned(word: String, contextWord: String?, grandContextWord: String?) {
+    private fun recordLearned(
+        word: String,
+        contextWord: String?,
+        grandContextWord: String?,
+        deliberateCapital: Boolean = false,
+    ) {
         if (!learning.enabled || word.length < MIN_LEARNED_LENGTH) {
             return
         }
@@ -2642,7 +2689,7 @@ class BorderKeysService :
         if (learning.record(word, locale, now)) {
             engine.learn(
                 listOf(
-                    com.borderkeys.data.dao.LearnedWord(word, locale, 1, now),
+                    com.borderkeys.data.dao.LearnedWord(word, locale, 1, now, deliberateCapital),
                 ),
                 contextWord, grandContextWord,
             )

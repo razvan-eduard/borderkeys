@@ -336,7 +336,7 @@ jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composin
 }
 
 void nativeLearn(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word, jstring prev1,
-                 jstring prev2) {
+                 jstring prev2, jboolean deliberateCapital) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr) {
         return;
@@ -362,7 +362,7 @@ void nativeLearn(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word, jstr
 
     engine->learn(wordBuffer, static_cast<size_t>(wordLength), prev1Buffer,
                   static_cast<size_t>(prev1Length), prev2Buffer,
-                  static_cast<size_t>(prev2Length));
+                  static_cast<size_t>(prev2Length), deliberateCapital == JNI_TRUE);
 }
 
 /**
@@ -666,14 +666,17 @@ void nativeLoadUserBigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectA
 }
 
 void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray words,
-                         jintArray counts) {
+                         jintArray counts, jintArray deliberateCapitals) {
     Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || words == nullptr || counts == nullptr) {
+    if (engine == nullptr || words == nullptr || counts == nullptr ||
+        deliberateCapitals == nullptr) {
         return;
     }
     const jsize wordCount = env->GetArrayLength(words);
     const jsize countLength = env->GetArrayLength(counts);
-    if (wordCount <= 0 || countLength < wordCount || wordCount > kMaxUserWordsPerCall) {
+    const jsize capsLength = env->GetArrayLength(deliberateCapitals);
+    if (wordCount <= 0 || countLength < wordCount || capsLength < wordCount ||
+        wordCount > kMaxUserWordsPerCall) {
         return;
     }
 
@@ -682,11 +685,18 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
     // input rather than into a fixed buffer.
     StringColumn column(wordCount);
     Int32Column countValues(wordCount);
-    if (!column.valid() || !countValues.valid()) {
+    Int32Column capsValues(wordCount);
+    if (!column.valid() || !countValues.valid() || !capsValues.valid()) {
         return;
     }
 
     env->GetIntArrayRegion(counts, 0, wordCount, reinterpret_cast<jint*>(countValues.data()));
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        env->ExceptionClear();
+        return;
+    }
+    env->GetIntArrayRegion(deliberateCapitals, 0, wordCount,
+                           reinterpret_cast<jint*>(capsValues.data()));
     if (env->ExceptionCheck() == JNI_TRUE) {
         env->ExceptionClear();
         return;
@@ -696,9 +706,11 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
     // trigram loaders' shared copyStringArray does: a dropped word here has no paired count of
     // its own to drop alongside it the way a dropped bigram/trigram column entry does, so the
     // count at the same index has to move down with whichever word survived, not stay behind.
+    // deliberateCapitals moves with it for the same reason.
     char** const storage = column.data();
     size_t* const lengths = column.lengths();
     int32_t* const counts32 = countValues.data();
+    int32_t* const caps32 = capsValues.data();
     jsize kept = 0;
     for (jsize i = 0; i < wordCount; ++i) {
         jstring value = static_cast<jstring>(env->GetObjectArrayElement(words, i));
@@ -720,10 +732,11 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
         storage[kept] = copy;
         lengths[kept] = static_cast<size_t>(length);
         counts32[kept] = counts32[i];
+        caps32[kept] = caps32[i];
         ++kept;
     }
 
-    engine->loadUserWords(storage, lengths, counts32, static_cast<int>(kept));
+    engine->loadUserWords(storage, lengths, counts32, static_cast<int>(kept), caps32);
 }
 
 jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArray xs,
@@ -858,9 +871,9 @@ const JNINativeMethod kMethods[] = {
     {"nativeSuggest",
      "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F[Z)I",
      reinterpret_cast<void*>(nativeSuggest)},
-    {"nativeLearn", "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V",
+    {"nativeLearn", "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V",
      reinterpret_cast<void*>(nativeLearn)},
-    {"nativeLoadUserWords", "(J[Ljava/lang/String;[I)V",
+    {"nativeLoadUserWords", "(J[Ljava/lang/String;[I[I)V",
      reinterpret_cast<void*>(nativeLoadUserWords)},
     {"nativeLoadUserBigrams", "(J[Ljava/lang/String;[Ljava/lang/String;[I)V",
      reinterpret_cast<void*>(nativeLoadUserBigrams)},

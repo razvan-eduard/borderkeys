@@ -60,12 +60,23 @@ public:
     void clear();
 
     // Replaces everything with the given words. Used once at service start, from the Room
-    // table, so that native and database agree before the first keystroke.
+    // table, so that native and database agree before the first keystroke. `deliberateCapitals`
+    // is a parallel array, one count per word, or null when the caller has none to give (every
+    // entry then starts at zero) -- see [learn]'s own doc for what the count means.
     void bulkLoad(const char* const* words, const size_t* lengths, const int32_t* counts,
-                  int count);
+                  int count, const int32_t* deliberateCapitals = nullptr);
 
-    // Records that the user chose this word. Adds it if it is new. Returns its entry index.
-    int32_t learn(const char* word, size_t length);
+    /**
+     * Records that the user chose this word. Adds it if it is new. Returns its entry index.
+     *
+     * [deliberateCapital] is whether the word's first letter was upper case *because the user
+     * pressed shift for it themselves* -- never because auto-capitalise decided a sentence- or
+     * field-start position required it, since that path never sets it either. Each true adds
+     * one to the entry's own [deliberateCapitals] count, which never goes back down: this is a
+     * classification (is this plausibly a name), not a frequency, and one lower-case commit
+     * later does not make the earlier deliberate capital any less real.
+     */
+    int32_t learn(const char* word, size_t length, bool deliberateCapital = false);
 
     /**
      * Records that `next` followed `previous`.
@@ -132,6 +143,10 @@ public:
     const char* entryText(uint32_t entryIndex, uint32_t* lengthOut) const;
     uint32_t entryCount(uint32_t entryIndex) const;
 
+    /** How many times this entry has been committed with a deliberate capital first letter --
+     *  see [learn]. Zero means either never, or the plain word the entry itself defaults to. */
+    uint32_t deliberateCapitals(uint32_t entryIndex) const;
+
     // Words starting with an already folded prefix, in no particular order, up to `maxOut`.
     // Exact prefix only: a typo in a user word is still corrected, but through the language
     // pack, because that is where the geometry-aware walk lives. Duplicating the fuzzy search
@@ -154,6 +169,7 @@ private:
     struct Entry {
         std::string text;
         uint32_t count = 0;
+        uint32_t deliberateCapitals = 0;
     };
 
     int32_t childOf(int32_t node, uint32_t folded) const;

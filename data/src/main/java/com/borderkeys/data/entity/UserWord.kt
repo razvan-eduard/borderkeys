@@ -32,4 +32,9 @@ data class UserWord(
     val locale: String,
     val count: Int,
     val lastUsedAt: Long,
+    /** How many times this word has been committed with a deliberate capital first letter --
+     *  shift physically pressed for it, never auto-capitalise's own doing. Above zero, the
+     *  native model suggests it capitalised regardless of how it is typed the next time. Never
+     *  decremented: see [com.borderkeys.data.dao.UserWordDao.increment]. */
+    val deliberateCapitals: Int = 0,
 )

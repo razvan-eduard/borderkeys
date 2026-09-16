@@ -528,6 +528,45 @@ void runEngineTests() {
               "and is still recognised as the proper noun the pack itself flags it as");
     }
 
+    section("a personal word only becomes a proper noun once deliberately capitalised");
+    {
+        // "emanuel" is absent from the test pack entirely, unlike "border" above -- there is no
+        // shipped-pack flag to fall back to here, so this isolates UserModel::deliberateCapitals
+        // itself from the cross-pack fallback the previous section already covers.
+        LoadedEngine loaded;
+        loaded.open();
+        loaded.engine.learn("emanuel", 7, nullptr, 0, nullptr, 0, false);
+
+        Candidate out[Engine::kMaxCandidates];
+        int found = loaded.engine.suggest("eman", 4, nullptr, 0, nullptr, 0, out,
+                                           Engine::kMaxCandidates);
+        int userPackSlot = -1;
+        for (int i = 0; i < found; ++i) {
+            if (out[i].packIndex == Candidate::kUserPack) {
+                userPackSlot = i;
+                break;
+            }
+        }
+        check(userPackSlot >= 0, "the learned word is offered from the user model");
+        check(userPackSlot >= 0 && !loaded.engine.candidateIsProperNoun(out[userPackSlot]),
+              "and is not a proper noun yet -- it has never been capitalised on purpose");
+
+        // Learned a second time, this time with a deliberate capital -- the way it would arrive
+        // if the user had typed "Emanuel" with shift physically held for the "E".
+        loaded.engine.learn("emanuel", 7, nullptr, 0, nullptr, 0, true);
+        found = loaded.engine.suggest("eman", 4, nullptr, 0, nullptr, 0, out,
+                                       Engine::kMaxCandidates);
+        userPackSlot = -1;
+        for (int i = 0; i < found; ++i) {
+            if (out[i].packIndex == Candidate::kUserPack) {
+                userPackSlot = i;
+                break;
+            }
+        }
+        check(userPackSlot >= 0 && loaded.engine.candidateIsProperNoun(out[userPackSlot]),
+              "one deliberate capital is enough to mark it a name from then on");
+    }
+
     section("correction strictness is a bounded multiplier, not an override");
     {
         // kEditPenalty (40) so dominates any realistic frequency gap that even the most lenient

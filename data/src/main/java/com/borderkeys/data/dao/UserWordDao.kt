@@ -43,23 +43,37 @@ interface UserWordDao {
      * user editing their dictionary in Settings are two writers, in two processes when the
      * settings screen is open, and a read-modify-write between them loses whichever update
      * finished second.
+     *
+     * [deliberateCapitalDelta] is 0 or 1 -- see [UserWord.deliberateCapitals] for what it means.
+     * A plain addition on both branches, the same shape as [delta] itself: there is no revoke
+     * path, so nothing here ever needs to read the existing value to decide what to write.
      */
     @Query(
         """
-        INSERT INTO user_words (word, locale, count, lastUsedAt)
-        VALUES (:word, :locale, :delta, :lastUsedAt)
+        INSERT INTO user_words (word, locale, count, lastUsedAt, deliberateCapitals)
+        VALUES (:word, :locale, :delta, :lastUsedAt, :deliberateCapitalDelta)
         ON CONFLICT(word) DO UPDATE SET
             count = count + :delta,
             lastUsedAt = :lastUsedAt,
-            locale = :locale
+            locale = :locale,
+            deliberateCapitals = deliberateCapitals + :deliberateCapitalDelta
         """,
     )
-    suspend fun increment(word: String, locale: String, delta: Int, lastUsedAt: Long)
+    suspend fun increment(
+        word: String,
+        locale: String,
+        delta: Int,
+        lastUsedAt: Long,
+        deliberateCapitalDelta: Int,
+    )
 
     @Transaction
     suspend fun incrementAll(words: List<LearnedWord>) {
         for (entry in words) {
-            increment(entry.word, entry.locale, entry.delta, entry.lastUsedAt)
+            increment(
+                entry.word, entry.locale, entry.delta, entry.lastUsedAt,
+                if (entry.deliberateCapital) 1 else 0,
+            )
         }
     }
 
@@ -99,4 +113,6 @@ data class LearnedWord(
     val locale: String,
     val delta: Int,
     val lastUsedAt: Long,
+    /** See [UserWord.deliberateCapitals]. */
+    val deliberateCapital: Boolean = false,
 )

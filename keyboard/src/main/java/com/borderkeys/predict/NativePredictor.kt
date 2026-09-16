@@ -125,8 +125,20 @@ internal object NativePredictor {
      * This is the entire learning rule of the project: a count goes up. Nothing is retrained and
      * no gradient exists, which is also why the keyboard cannot slowly learn the user's typos --
      * a count only moves when a word was deliberately chosen.
+     *
+     * [deliberateCapital] is whether the word's first letter was upper case because the user
+     * pressed shift for it themselves, never because auto-capitalise applied it -- see
+     * BorderKeysService's own capture of the distinction. Enough of those, and the word is
+     * suggested capitalised from then on regardless of how it is typed the next time (see
+     * `outProperNoun` on [nativeSuggest]).
      */
-    external fun nativeLearn(handle: Long, word: String, prev1: String?, prev2: String?)
+    external fun nativeLearn(
+        handle: Long,
+        word: String,
+        prev1: String?,
+        prev2: String?,
+        deliberateCapital: Boolean,
+    )
 
     /**
      * Decodes a swipe into candidates, best first, and returns how many were written.
@@ -151,8 +163,14 @@ internal object NativePredictor {
         outScores: FloatArray,
     ): Int
 
-    /** Replaces the in-memory personal dictionary. Called once at start, from Room. */
-    external fun nativeLoadUserWords(handle: Long, words: Array<String>, counts: IntArray)
+    /** Replaces the in-memory personal dictionary. Called once at start, from Room.
+     *  [deliberateCapitals] is the parallel per-word count [nativeLearn]'s own doc describes. */
+    external fun nativeLoadUserWords(
+        handle: Long,
+        words: Array<String>,
+        counts: IntArray,
+        deliberateCapitals: IntArray,
+    )
 
     /**
      * Replaces the remembered word pairs. Called right after [nativeLoadUserWords], from the
