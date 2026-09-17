@@ -51,6 +51,7 @@ from one corpus is why --corpus is the recommended path.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -162,6 +163,64 @@ def read_ngram_counts(path: Path) -> tuple[Counter, Counter]:
     return bigrams, trigrams
 
 
+# What "proper noun" is called in each tagset the bundled grammars use (see docs/pos-tagging.md):
+# MULTEXT-East for Romanian (Np, plus its inflected forms), Penn for English (NNP/NNPS), STTS for
+# German (NE), UD-derived sets for Spanish and French (PROPN...), and ISDT for Italian (SP). Exact
+# for the two-letter ones -- "NE" must not match a negation tag, "SP" must not match MULTEXT's
+# "Spsa" preposition -- and a prefix for the rest.
+PROPER_NOUN_TAGS = frozenset({"NE", "SP"})
+PROPER_NOUN_TAG_PREFIXES = ("Np", "NNP", "PROPN")
+
+
+def is_proper_noun_tag(tag: str) -> bool:
+    return tag in PROPER_NOUN_TAGS or tag.startswith(PROPER_NOUN_TAG_PREFIXES)
+
+
+def strip_accents(word: str) -> str:
+    """The spelling without accents, by Unicode's own decomposition -- enough to tell "the same
+    word without its accents" from a different word (see common_words)."""
+    return "".join(c for c in unicodedata.normalize("NFD", word)
+                   if unicodedata.category(c) != "Mn")
+
+
+def is_ordinary(name: str, ordinary: set[str]) -> bool:
+    """Whether a name from the list is really one of [ordinary]'s words -- compared without
+    accents on both sides, because the compiler folds accents away too: "Sá" (a Portuguese
+    surname) lands on the same trie entry as "să" (Romanian "to"), the flag is OR'd across the
+    spellings that fold together, and every "sa" anyone typed came out "Să"."""
+    lowered = name.lower()
+    return lowered in ordinary or strip_accents(lowered) in ordinary
+
+
+def common_words(grammar: Path) -> set[str]:
+    """Words the language's own treebank tags as something other than a proper noun.
+
+    A name list from Wikidata is a classification source (see make_names.py) with no idea that
+    "in", "to", "of", "said" and "will" are also names of real people in its database -- enough of
+    them, in fact, to pass the family-name threshold. Flagged, those words were then capitalised
+    every time they were typed, which is a worse keyboard than one that never heard of names at
+    all. The treebank behind the `.pos` grammar has already decided what each common word is; a
+    word it calls a preposition, a verb or an adjective is not flagged, however many people are
+    called that. A word it has never seen ("sadoveanu") keeps the flag: absence from a treebank is
+    not evidence of anything.
+    """
+    data = json.loads(grammar.read_text(encoding="utf-8"))
+    tagset = data["tagset"]
+    ordinary: set[str] = set()
+    for word, index in data["tags"].items():
+        if is_proper_noun_tag(tagset[index]):
+            continue
+        lowered = word.lower()
+        ordinary.add(lowered)
+        # The spelling without accents too: people type "si" for "și" and "cat" for "cât", the
+        # corpus holds both, the treebank only the accented one -- and Wikidata has a family
+        # named Si. Folded with Unicode's own decomposition, which is enough to tell "the same
+        # word without its accents" from a different word; the engine's own stricter fold
+        # (proximity.cpp) is not needed for that.
+        ordinary.add(strip_accents(lowered))
+    return ordinary
+
+
 def read_wordlist(path: Path) -> Counter:
     counts: Counter = Counter()
     with path.open(encoding="utf-8", errors="replace") as handle:
@@ -186,6 +245,17 @@ def main() -> int:
     parser.add_argument("--wordlist", type=Path)
     parser.add_argument("--names", type=Path,
                         help="a make_names.py output, merged in and flagged as proper nouns")
+    parser.add_argument("--names-flag-only", type=Path,
+                        help="a second make_names.py output, typically fetched with a lower "
+                             "--min-family-uses: a name in it that the corpus already has gains "
+                             "the flag, one it does not have is NOT added -- a hundred thousand "
+                             "surnames at a flat frequency would outrank the corpus's own tail")
+    parser.add_argument("--names-exclude", type=Path,
+                        help="one word per line (# comments): names that are really ordinary "
+                             "words the grammar does not know -- never flagged, never added")
+    parser.add_argument("--grammar", type=Path,
+                        help="the language's dictionaries/<tag>.pos; a --names entry the treebank "
+                             "tags as an ordinary word (a preposition, a verb...) is not flagged")
     parser.add_argument("--tag", required=True, help="BCP-47, e.g. ro-RO")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--max-words", type=int, default=120_000,
@@ -235,9 +305,18 @@ def main() -> int:
     # the same scale as a real corpus count and would either always lose that ranking (if the
     # flat value is low) or crowd out real words (if it is not) -- neither is the point. A word
     # that is ALREADY in the corpus (a name that also happens to be a common word, e.g. "Will")
-    # keeps its own real frequency and just gains the flag, rather than being duplicated.
+    # keeps its own real frequency and just gains the flag, rather than being duplicated --
+    # compared lower-case, since the corpus is lower-cased on the way in and the name list is
+    # not; the flag is what makes the compiled word capitalise, not the spelling written here.
     proper_nouns: set[str] = set()
+    excluded: set[str] = set()
+    if arguments.names_exclude:
+        excluded = {line.strip().lower()
+                    for line in arguments.names_exclude.read_text(encoding="utf-8").splitlines()
+                    if line.strip() and not line.startswith("#")}
     if arguments.names:
+        ordinary = (common_words(arguments.grammar) if arguments.grammar else set()) | excluded
+        refused = 0
         for line in arguments.names.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line or line.startswith("#"):
@@ -246,10 +325,29 @@ def main() -> int:
             if len(parts) < 2:
                 continue
             name, frequency = parts[0], int(parts[1])
-            proper_nouns.add(name)
-            if name not in vocabulary:
-                ranked.append((name, frequency))
-                vocabulary.add(name)
+            key = name.lower()
+            if is_ordinary(name, ordinary):
+                refused += 1
+                continue
+            proper_nouns.add(key)
+            if key not in vocabulary:
+                ranked.append((key, frequency))
+                vocabulary.add(key)
+        print(f"names: {len(proper_nouns)} flagged, {refused} refused as ordinary words of the "
+              f"language" + ("" if arguments.grammar else " (no --grammar given, so none refused)"),
+              file=sys.stderr)
+    if arguments.names_flag_only:
+        ordinary = (common_words(arguments.grammar) if arguments.grammar else set()) | excluded
+        gained = 0
+        for line in arguments.names_flag_only.read_text(encoding="utf-8").splitlines():
+            parts = line.strip().split("\t")
+            if len(parts) < 2 or parts[0].startswith("#"):
+                continue
+            key = parts[0].lower()
+            if key in vocabulary and not is_ordinary(key, ordinary) and key not in proper_nouns:
+                proper_nouns.add(key)
+                gained += 1
+        print(f"names: {gained} corpus words gained the flag from --names-flag-only", file=sys.stderr)
 
     # An n-gram naming a word that did not survive the cutoff cannot be looked up, and the writer
     # would drop it anyway. Filtering here keeps the intermediate files honest.

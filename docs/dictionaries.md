@@ -121,6 +121,21 @@ written into the compiled `.tsv` with a third column, `name`, which `build_dict.
 regardless of typed case or shift state" (`AutoCorrection.matchCase` in
 `keyboard/src/main/java/com/borderkeys/ime/AutoCorrection.kt`).
 
+Pass the language's grammar too, when there is one (`--grammar dictionaries/ro_RO.pos`): Wikidata
+knows enough real people called "In", "To", "Said" and "Will" for those to pass the family-name
+threshold, and flagged they were capitalised every time anyone typed them. The treebank behind
+the `.pos` file has already decided what each ordinary word is, so a name it tags as a
+preposition, a verb or an adjective is not flagged; a word it has never seen keeps the flag,
+because absence from a treebank is not evidence of anything. Family names in particular need a
+lower threshold than the default 50 to reach past the handful every language shares
+(`--min-family-uses 5` is what the Romanian list was built with -- "Sadoveanu" has nowhere near
+fifty Wikidata people, and neither does most of the country's surnames). A list fetched that low
+is passed as `--names-flag-only`: a name the corpus already has gains the flag, one it does not
+have is left out, because a hundred thousand surnames at a flat frequency would outrank the
+corpus's own tail. What the treebank does not know it cannot refuse -- "asa", "cat", "tu", "cui"
+are all somebody's name -- so `dictionaries/<tag>.names-exclude` lists those by hand, one per
+line, and `--names-exclude` reads it.
+
 Coverage is genuinely uneven across languages -- Wikidata's own editor base skews toward
 English/German/French/Spanish, and Romanian will come back with fewer names than those do. That
 is `make_names.py` reporting the real state of a free source, not a bug to chase; its own printed

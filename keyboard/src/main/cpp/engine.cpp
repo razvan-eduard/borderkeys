@@ -1835,13 +1835,44 @@ const char* Engine::candidateText(const Candidate& candidate, uint32_t* lengthOu
     return pack.trie().wordText(static_cast<uint32_t>(candidate.wordIndex), lengthOut);
 }
 
+bool Engine::packsAgreeProperNoun(const uint32_t* folded, int foldedLength) const {
+    bool known = false;
+    for (int i = 0; i < kMaxPacks; ++i) {
+        if (!packs_[i].isOpen() || !packs_[i].active) {
+            continue;
+        }
+        const int32_t wordIndex = packs_[i].trie().lookupFolded(folded, foldedLength);
+        if (wordIndex < 0) {
+            continue;
+        }
+        if (!packs_[i].trie().isProperNoun(static_cast<uint32_t>(wordIndex))) {
+            return false;
+        }
+        known = true;
+    }
+    return known;
+}
+
 bool Engine::candidateIsProperNoun(const Candidate& candidate) const {
     if (candidate.packIndex >= 0 && candidate.packIndex < kMaxPacks) {
         const LanguagePack& pack = packs_[candidate.packIndex];
-        if (pack.isOpen() && candidate.wordIndex >= 0) {
-            return pack.trie().isProperNoun(static_cast<uint32_t>(candidate.wordIndex));
+        if (!pack.isOpen() || candidate.wordIndex < 0 ||
+            !pack.trie().isProperNoun(static_cast<uint32_t>(candidate.wordIndex))) {
+            return false;
         }
-        return false;
+        // Its own pack's flag is necessary, not sufficient: with several packs active, a word
+        // that is a name in one language and an ordinary word in another -- "Si" is a family
+        // name to the English list and "and" (și, typed without its accent) to the Romanian
+        // one -- must not come out capitalised every time it is typed. Every active pack that
+        // knows the word has to agree it is a name.
+        uint32_t length = 0;
+        const char* text = pack.trie().wordText(static_cast<uint32_t>(candidate.wordIndex), &length);
+        if (text == nullptr || length == 0) {
+            return true;
+        }
+        uint32_t folded[kMaxComposing];
+        const int foldedLength = foldUtf8(text, length, folded, kMaxComposing);
+        return foldedLength <= 0 || packsAgreeProperNoun(folded, foldedLength);
     }
     // A word the user has deliberately capitalised themselves at least once -- shift physically
     // pressed for that letter, never auto-capitalise's own doing -- is treated as a name from
@@ -1870,16 +1901,8 @@ bool Engine::candidateIsProperNoun(const Candidate& candidate) const {
     if (foldedLength <= 0) {
         return false;
     }
-    for (int i = 0; i < kMaxPacks; ++i) {
-        if (!packs_[i].isOpen() || !packs_[i].active) {
-            continue;
-        }
-        const int32_t wordIndex = packs_[i].trie().lookupFolded(folded, foldedLength);
-        if (wordIndex >= 0 && packs_[i].trie().isProperNoun(static_cast<uint32_t>(wordIndex))) {
-            return true;
-        }
-    }
-    return false;
+    // Agreement, not any one pack's say-so -- the same rule as for a pack's own candidate above.
+    return packsAgreeProperNoun(folded, foldedLength);
 }
 
 }  // namespace borderkeys

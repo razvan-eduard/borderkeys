@@ -1,0 +1,6 @@
+# Names the Wikidata list flags that are ordinary words this language's treebank does not know
+# (or knows only as a name), so make_pack.py's --grammar guard cannot refuse them. One per line,
+# case does not matter; listed here a word keeps its corpus row and never gains the flag.
+im
+o
+ernst

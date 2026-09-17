@@ -1,0 +1,32 @@
+# Names the Wikidata list flags that are ordinary words this language's treebank does not know
+# (or knows only as a name), so make_pack.py's --grammar guard cannot refuse them. One per line,
+# case does not matter; listed here a word keeps its corpus row and never gains the flag.
+south
+north
+west
+east
+court
+park
+bank
+king
+prime
+bill
+lake
+royal
+brown
+grand
+bay
+roman
+forest
+garden
+lord
+pope
+falls
+fox
+prince
+un
+al
+de
+san
+jan
+lee

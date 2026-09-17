@@ -278,6 +278,12 @@ public:
     // from what someone typed is still the same name a pack would have flagged, the second time
     // it comes up.
     bool candidateIsProperNoun(const Candidate& candidate) const;
+    /**
+     * Whether every active pack that knows [folded] flags it a proper noun -- false when none
+     * knows it, and false the moment one that knows it does not flag it. See
+     * candidateIsProperNoun for why a single pack's flag is not enough on its own.
+     */
+    bool packsAgreeProperNoun(const uint32_t* folded, int foldedLength) const;
 
     const KeyGeometry& geometry() const { return geometry_; }
 
