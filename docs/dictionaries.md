@@ -20,8 +20,7 @@ about what currently ships.
 ## The one command
 
 ```
-python3 tools/make_pack.py --corpus text.txt --tag ro-RO \
-    --out keyboard/src/main/assets/dict/ro_RO.bkd
+python3 tools/make_pack.py --corpus text.txt --tag ro-RO --out ro_RO.bkd
 ```
 
 Point it at plain text in the language and it counts the words, the pairs and the triples in one
@@ -141,9 +140,12 @@ English/German/French/Spanish, and Romanian will come back with fewer names than
 is `make_names.py` reporting the real state of a free source, not a bug to chase; its own printed
 count is the number to look at before deciding a language's list is worth shipping.
 
-Regenerating the six bundled dictionaries with names merged in, and committing the result to
-`dictionaries/*.tsv`, is a deliberate step for whoever maintains them to take -- this document
-describes how, not that it has been done.
+All six bundled lists have been through this: the names merged in, the treebank guard and the
+exclusion lists applied, and the Romanian family names refetched at the lower threshold. The
+committed `dictionaries/*.tsv` are the result, and the keyboard's own rule for using the flag
+is one more check: with several packs active, every pack that knows a word has to agree it is a
+name before it is capitalised, so a name in one language's list cannot capitalise an ordinary
+word of another's.
 
 ## Shipping one with the application
 

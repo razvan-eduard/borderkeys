@@ -168,13 +168,13 @@ what matters is what is redistributed.
 | Asset | Source | Licence | Notes |
 |---|---|---|---|
 | `assets/layouts/qwerty_ro.json`, `qwerty_en.json`, `symbols.json`, `symbols_shift.json`, `numpad.json` | Authored here | GPL-3.0-or-later | Key positions, labels, long-press alternates. No third-party layout description was copied; the Romanian alternates are the five letters of the alphabet's diacritic set and nothing else. |
-| `assets/dict/{ro_RO,en_US,es_ES,fr_FR,de_DE,it_IT}.bkd` | Compiled at build time from the word lists in `dictionaries`, which are counted from the **Wortschatz Leipzig** corpora | **CC BY 4.0** (the counts), GPL-3.0-or-later (the format and the compiler) | Six languages, each counted with `tools/make_pack.py` from three Leipzig 1M-sentence corpora combined -- wikipedia, news and newscrawl -- after the original 18,000-word single-genre packs were found to be missing everyday words ("pepene", "ovăz" in Romanian) that a single formal-prose source never wrote down. Raised again from the first combined-corpus cut (which capped at 50,000-80,000 words) once that cap itself started crowding out real but less common words -- proper nouns, informal vocabulary -- that the same three corpora already had counts for. Compiled word counts as they actually land in the trie, after the dedup that keeps one spelling per folded key: English 119,393, Romanian 96,026, German 89,201, Italian 89,117, Spanish 87,474, French 86,364; up to 550,000 pairs and triples for English and Romanian, 500,000 for the other four. That dedup sums every colliding spelling's frequency into the surviving entry rather than keeping only the winner's own -- Romanian in particular has three ways to write the same accented letter (comma-below, cedilla, and none) in the source corpora, and a word's effective frequency is the sum across every one of them it has rather than whichever single spelling happened to be counted most. All of it is published under CC BY 4.0; what is committed and shipped is **counts of words and pairs**, not the sentences they were counted from, and the attribution that licence asks for is this row, the entry in `REUSE.toml`, and the source link in the About screen. Compiled by a Gradle task running the same `tools/build_dict.py` the tests use, so the packs in an APK are always exactly what the committed lists compile to and no binary is committed. |
+| `assets/dict/{ro_RO,en_US,es_ES,fr_FR,de_DE,it_IT}.bkd` | Compiled at build time from the word lists in `dictionaries`, which are counted from the **Wortschatz Leipzig** corpora | **CC BY 4.0** (the counts), GPL-3.0-or-later (the format and the compiler) | Six languages, each counted with `tools/make_pack.py` from three Leipzig 1M-sentence corpora combined -- wikipedia, news and newscrawl -- after the original 18,000-word single-genre packs were found to be missing everyday words ("pepene", "ovăz" in Romanian) that a single formal-prose source never wrote down. Raised again from the first combined-corpus cut (which capped at 50,000-80,000 words) once that cap itself started crowding out real but less common words -- proper nouns, informal vocabulary -- that the same three corpora already had counts for. Compiled word counts as they actually land in the trie, after the dedup that keeps one spelling per folded key: English 140,442, Romanian 107,376, German 103,562, Italian 102,920, French 102,259, Spanish 100,755; up to 550,000 pairs and triples for English and Romanian, 500,000 for the other four. Each list also carries the names from 2.1.1, flagged in a third column; the counts above include them. That dedup sums every colliding spelling's frequency into the surviving entry rather than keeping only the winner's own -- Romanian in particular has three ways to write the same accented letter (comma-below, cedilla, and none) in the source corpora, and a word's effective frequency is the sum across every one of them it has rather than whichever single spelling happened to be counted most. All of it is published under CC BY 4.0; what is committed and shipped is **counts of words and pairs**, not the sentences they were counted from, and the attribution that licence asks for is this row, the entry in `REUSE.toml`, and the source link in the About screen. Compiled by a Gradle task running the same `tools/build_dict.py` the tests use, so the packs in an APK are always exactly what the committed lists compile to and no binary is committed. |
 | The part-of-speech sections inside those same `.bkd` files | Derived by `tools/build_pos.py` from **Universal Dependencies** treebanks: Romanian RRT, English EWT, German GSD, Spanish GSD, French GSD, Italian ISDT | **CC BY-SA 4.0** (the treebanks), GPL-3.0-or-later (the derivation and the format) | A tag per word and a matrix of how often one tag follows another, about 81 KB a language. Creative Commons declares a one-way compatibility from CC BY-SA 4.0 to GPL-3.0, which is what makes it shippable here: what is derived goes out under the GPL, and the attribution ShareAlike asks for is this row and the entry in `REUSE.toml`. No tagger is involved and no model is shipped — a treebank is text with a tag on every token, and only counts derived from it are committed. |
 | `assets/emoji/emoji.txt` | Compiled by `tools/build_emoji.py` from **Unicode's `emoji-test.txt`** | **Unicode-3.0** (the data), GPL-3.0-or-later (the compiler) | 1,886 emoji in the groups and the order that file defines, which is the order it explicitly recommends for keyboard palettes. 13 KB of code points; no images, because the glyphs come from the system font. The Unicode licence is permissive and BSD-shaped, and the attribution it asks for is this row and the entry in `REUSE.toml`. |
 | `assets/dexopt/baseline.prof`, `baseline.profm` | Generated by AGP at build time | GPL-3.0-or-later | A profile of this application's own classes, produced by the build. There is no checked-in `baseline-prof.txt` and no profile taken from anywhere else. |
 | `mipmap-anydpi-v26/ic_launcher.xml`, `drawable/ic_launcher_foreground.xml`, `drawable/ic_launcher_monochrome.xml` | Drawn here | GPL-3.0-or-later | The launcher icon: three keycaps over a space bar, in the keyboard's own theme colours. Vector paths, not raster art, and not derived from any icon set — so it is text the repository can diff and license, with no binary asset and no `.license` sidecar. minSdk is 30, so the adaptive icon always resolves and there are no legacy PNGs at five densities. |
 
-### 2.1.1 Available but not yet exercised: a names source
+### 2.1.1 The names source
 
 `tools/make_names.py` queries **Wikidata** for items that are an instance of *given name*
 (Q202444) or *family name* (Q101352), with a label in the target language, to build a per-language
@@ -184,17 +184,23 @@ mechanism). Wikidata's content is **CC0** -- public domain dedication, no attrib
 the most permissive terms anything in this document names -- per
 <https://www.wikidata.org/wiki/Wikidata:Licensing>.
 
-Recorded here even though `dictionaries/*.tsv` carries no merged names as of this writing: the
-tool exists and works (verified end to end against the real compiler, not just read), but
-regenerating and committing the six bundled dictionaries with names merged in is a deliberate
-step for whoever maintains them to take, not something a version bump did on its own. If that step
-is ever taken, this row is the answer to "what is the licence of the name list," written down
-before the question needs asking rather than after.
+All six bundled lists now carry the names that fetch returned, merged by `make_pack.py --names`
+and flagged in the list's third column (Romanian's family names refetched at a lower usage
+threshold and merged flag-only, so the corpus's own ranking is untouched). A name the language's
+own treebank (2.1, the part-of-speech row) tags as an ordinary word is refused, and a short
+hand-kept `dictionaries/<tag>.names-exclude` covers the words no treebank knows -- both under the
+project's own licence, since neither copies anything from Wikidata beyond the label itself. What
+ships is therefore CC0 labels compiled under the GPL, and this row is the answer to "what is the
+licence of the name list."
 
-**No dictionaries, no models, no fonts and no raster images of any kind.** The word packs are not
-in the APK by design — see 2.2. Every drawable in the application is a vector written in this
-repository, which is why an APK that draws a keyboard, a themed icon and a full settings UI still
-contains exactly six XML resources and not one image file.
+**No fonts and no raster images of any kind.** Every drawable in the application is a vector
+written in this repository, which is why an APK that draws a keyboard, a themed icon and a full
+settings UI still contains exactly six XML resources and not one image file. `core` ships no
+model file of any kind; `plus` ships exactly one, the row below.
+
+| Asset | Source | Licence | Notes |
+|---|---|---|---|
+| `assets/model.bkw`, **`plus` only** | Trained from scratch by `tools/swipe_model/train.py` on the **MIT-licensed** `futo-org/swipe.futo.org` gesture corpus (2.2.1); exported by `export_weights.py` into the flat binary `keyboard/src/main/cpp/gesture/tcn_weights.*` reads | GPL-3.0-or-later (the weights, as this project's own build product; the entry in `REUSE.toml` says so) | The experimental neural swipe decoder's weights: a 629,601-parameter TCN, about 2.4 MB, inference hand-written in C++ with no ML runtime. The corpus's licence does not attach to weights fit from it, and no other model's weights or output are involved anywhere in the pipeline. Behind a switch that is off by default, and compiled out of `core` entirely (`BORDERKEYS_NEURAL_SWIPE`): a freshly built `core` `libborderkeys.so` carries no decoder symbols. |
 
 Native libraries are redistributed too, and each carries its own terms:
 
@@ -214,9 +220,10 @@ Native libraries are redistributed too, and each carries its own terms:
 static STL duplicates its symbols across them. The LLVM exception permits redistribution in
 either form without additional obligations.
 
-Since the removal of the inert `BORDERKEYS_NEURAL_SWIPE` define (see 2.2), `libborderkeys.so` is
-**byte-identical between the two flavors** — which is the clearest possible statement that the
-prediction engine is the same code in the free build and the other one.
+`libborderkeys.so` is the same source in both flavors with one addition in `plus`: the TCN
+gesture decoder behind `BORDERKEYS_NEURAL_SWIPE` (2.1, `model.bkw`). The prediction engine, the
+dictionaries and the geometric swipe decoder are identical code in the free build and the other
+one; the difference is the one optional decoder and its weights, both of them this project's own.
 
 ### 2.2 Not shipped, and why
 
@@ -224,7 +231,7 @@ prediction engine is the same code in the free build and the other one.
 |---|---|
 | A bigger dictionary than what ships | **Resolved for Romanian, open for the rest.** The bundled dictionaries in 2.1 are already compiled from a real corpus, not hand-written -- see that row for what and how much. They stay bounded on purpose: bigger is a licence question with an answer (recorded there) and an APK-size question with a budget, not something to grow without noticing. A pack larger than what ships is still an import away, built the same way from a wordlist whose licence the builder read first. |
 | Word packs beyond the starters | **Resolved by not shipping any.** A pack is built with `tools/build_dict.py` from a word list whose licence the builder knows, and installed by the user from a local file. Nothing is downloaded, ever. This sidesteps the problem the earlier draft called unresolved — that many lexical corpora are not free — rather than solving it: the project ships no corpus, so it makes no claim about one. `LanguagePackEntry.licenseNote` is a required column so that a pack's terms travel with it in the database, and the Languages screen shows that note next to the pack. |
-| Swipe tier B, FUTO neural weights | **Not built, in either flavor.** See 2.3 for what the licence check found and why the integration is larger than the plan assumed. The `#if BORDERKEYS_NEURAL_SWIPE` that used to sit in `Engine::create` had two identical arms and has been removed; what keeps the option open is the `GestureScorer` / `GestureDecoder` split, not a compile-time flag. Consequently `plus` carries **no** non-free asset and declares no anti-feature. |
+| Swipe tier B, FUTO neural weights | **Not built, in either flavor.** See 2.3 for what the licence check found and why the integration is larger than the plan assumed. What shipped instead is option B2 (2.5): a decoder written here and weights trained here on the free corpus, in `plus` only, behind an off-by-default switch. Consequently `plus` carries **no** non-free asset and declares no anti-feature. |
 
 ### 2.2.1 The tier-B candidates, kept on the record
 
@@ -295,9 +302,12 @@ smaller entries already leave to the person choosing one applies just as well to
 Nothing is bundled either way. A 610 MB model in an APK is not a distribution mechanism, and
 F-Droid would be right to refuse it.
 
-### 2.5 Option B2 — what a free-weights swipe decoder would cost
+### 2.5 Option B2 — what a free-weights swipe decoder cost
 
-Recorded here so the option stays real rather than aspirational.
+Written before the work as an estimate, and kept: this is the option that was taken. The
+decoder is `keyboard/src/main/cpp/gesture/tcn_*`, the training pipeline `tools/swipe_model/`,
+and the shipped weights the `model.bkw` row in 2.1. It is experimental and off by default in
+`plus`; `core` compiles none of it.
 
 - **Data:** the MIT gesture corpus, already free. No collection needed.
 - **Model:** the published architecture is ~635K parameters, a TCN encoder with a spatial head
@@ -308,11 +318,9 @@ Recorded here so the option stays real rather than aspirational.
   resampling, Savitzky-Golay, the 8-D vector), CTC training loop, evaluation harness.
 - **Payoff:** swipe decoding gains a learned model without `plus` ever needing `NonFreeAssets`,
   and the extension point in the decoder means swapping the weights touches no other code.
-  (`plus` is free as built today; this is about keeping it that way if option B1 is ever
-  reconsidered, not about undoing something.)
 
-The code must therefore keep the weights behind a clean extension point — which is what the
-`GestureDecoder` interface in step 6.4 is for.
+The weights sit behind that extension point — the `GestureDecoder` interface — which is what
+lets `Engine::create` construct the TCN decoder in `plus` and only the geometric one in `core`.
 
 ### 2.6 Non-code files in the repository that are not shipped
 
@@ -361,7 +369,7 @@ Checked against F-Droid's published list rather than against the two that were e
 | Flavor | AntiFeatures | Why |
 |---|---|---|
 | `core` | *(none)* | No model, no non-free asset, no tracking, no network path, no advertising, no promoted non-free add-on, no upstream non-free component, no disabled algorithm. This flavor existing with an empty anti-feature list is the entire point of the flavor split. |
-| `plus` | *(none, as built today)* | The one anti-feature `plus` was expected to need, `NonFreeAssets`, was for the FUTO swipe weights. Those are not built (2.2), the APK contains no model file of any kind, and every model the text assistant will accept is Apache-2.0 and arrives from the user's own storage. `NonFreeAssets` becomes required the day option B1 lands, together with the visible attribution its licence demands — and not before. |
+| `plus` | *(none)* | The one anti-feature `plus` was expected to need, `NonFreeAssets`, was for the FUTO swipe weights. Those are not built (2.2). The one model file the APK carries, `model.bkw`, was trained by this project on a free corpus and is redistributed under the GPL like any other build product (2.1); every model the text assistant will accept is Apache-2.0 and arrives from the user's own storage. `NonFreeAssets` becomes required the day option B1 lands, together with the visible attribution its licence demands — and not before. |
 
 Row by row against the list, for `core` and `plus` alike:
 
@@ -372,7 +380,7 @@ Row by row against the list, for `core` and `plus` alike:
 | `NonFreeNet` | no | The application depends on no network service, free or otherwise. |
 | `NonFreeAdd` | no | Nothing promotes or requires a non-free add-on. Password managers are reached through the platform's inline autofill API, which is part of Android; no particular one is named or required. |
 | `NonFreeDep` | no | Every artifact on the release runtime classpath is Apache-2.0, BSD-3-Clause, MIT, public domain, or Apache-2.0 with LLVM exception — enumerated in section 1. |
-| `NonFreeAssets` | no | Section 2.1: the only assets are five layout descriptions written here and a build-generated profile. |
+| `NonFreeAssets` | no | Section 2.1: layouts written here, dictionaries and grammar counted from CC BY / CC BY-SA sources and compiled here, Unicode's emoji list, a build-generated profile, and -- in `plus` -- swipe-decoder weights trained here on an MIT corpus. Nothing under a non-free licence. |
 | `UpstreamNonFree` | no | This is not a build of a non-free upstream. |
 | `NonFreeComp` | no | No non-free component is bundled. |
 | `KnownVuln` | no | No dependency is on a version with a known advisory at the pinned versions in `gradle/libs.versions.toml`. |

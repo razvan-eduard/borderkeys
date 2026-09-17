@@ -49,19 +49,31 @@ Description: |-
       other edit.
     * Swipe typing decoded geometrically on-device, with an optional radial menu: pause
       mid-swipe, without lifting, to open a ring of alternatives and slide onto one, or onto
-      Cancel in the centre, all in one continuous stroke. Off by default.
+      Cancel in the centre, all in one continuous stroke — or keep the ring open and tap. A tap
+      anywhere outside it closes it and keeps the swiped word. Off by default.
+    * Autocorrect you can bound: off by default, and when on, the shortest word it may touch and
+      how different a correction may be from what you typed are settings. A correct word the
+      dictionaries do not know is left alone, and backspace puts back exactly what you typed.
+    * Shift the way every keyboard does it — spent by the next letter, locked by a hold or two
+      taps — and sentences capitalised even in fields that never asked, if you want them.
     * A names dictionary built from Wikidata (CC0), so a name capitalises correctly
-      mid-sentence instead of only at the start of one.
+      mid-sentence instead of only at the start of one — while everyday words that happen to be
+      somebody's name stay lower-case.
     * Alternate physical layouts — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona —
       alongside QWERTY, for every bundled language.
     * A personal dictionary you can see and edit: every learned word has a Forget and a Block
       right beside it, not a black box.
     * A row of quick actions for copy, paste, select-all and more, extendable with your own
-      macros.
+      macros — above the suggestions, below the keys or down a side, in four sizes, with
+      optional labels.
     * Built-in themes, full manual colour control, and a library to save, import and share
       your own.
+    * Particle effects on the keys, the ring, the strip and the bars: an outline layer that
+      traces each element's edge and a fill layer inside it, six built-in looks and your own
+      saved presets. Off by default.
     * Backup and restore everything this keyboard has learned and configured to a single file
-      you control. Nothing syncs anywhere on its own.
+      you control, with a checklist of what a file contains before any of it is applied.
+      Nothing syncs anywhere on its own.
     * Private mode is automatic in password fields and whenever an app sets
       IME_FLAG_NO_PERSONALIZED_LEARNING: no learning, no clipboard history, no personal
       dictionary.
@@ -139,7 +151,63 @@ Builds:
       - core
     ndk: 27.1.12297006
 
+  - versionName: 0.4.0
+    versionCode: 8
+    commit: v0.4.0
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
+  - versionName: 0.5.1
+    versionCode: 10
+    commit: v0.5.1
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
+  - versionName: 0.5.2
+    versionCode: 11
+    commit: v0.5.2
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
+  - versionName: 0.5.3
+    versionCode: 12
+    commit: v0.5.3
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
+  - versionName: 0.6.0
+    versionCode: 13
+    commit: v0.6.0
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
+  - versionName: 0.6.1
+    versionCode: 14
+    commit: v0.6.1
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
+  - versionName: 0.6.2
+    versionCode: 15
+    commit: v0.6.2
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
-CurrentVersion: 0.3.0
-CurrentVersionCode: 7
+CurrentVersion: 0.6.2
+CurrentVersionCode: 15
