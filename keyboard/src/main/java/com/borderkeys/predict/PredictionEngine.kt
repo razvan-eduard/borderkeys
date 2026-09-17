@@ -136,8 +136,21 @@ class PredictionEngine(
 
     private val workerLoop = Runnable { serveRequests() }
     private val publishResults = Runnable { publish() }
-    private val publishGesture = Runnable { publishGestureResult() }
-    private var gestureResultCount = 0
+
+    // The finished swipe's own result buffers. Never [nativeWords]/[nativeCount]: a typed
+    // request and a gesture decode each post their own publish, and sharing the buffer let one
+    // read the other's words -- a swipe candidate became the autocorrect for a typed word, or a
+    // typed prediction was committed as the swiped word.
+    private val gestureResultLock = Any()
+    private val gestureNativeWords = arrayOfNulls<String>(MAX_RESULTS)
+    private val gestureNativeScores = FloatArray(MAX_RESULTS)
+    private var gestureNativeCount = 0
+    private val gestureDisplayWords = arrayOfNulls<String>(MAX_RESULTS)
+
+    /** Same rule and same thread as [previewGeneration]: a decode that answers after the field
+     *  changed, or after the service cancelled, is dropped rather than composed into the new
+     *  field. */
+    private var gestureGeneration = 0
 
     // ---- swipe-preview path (radial menu) --------------------------------------------------
     //
@@ -209,13 +222,13 @@ class PredictionEngine(
             NativePredictor.nativeDestroy(toDestroy)
         }
         mainHandler.removeCallbacks(publishResults)
-        mainHandler.removeCallbacks(publishGesture)
-        // Not a removeCallbacks: the preview publish is a fresh lambda per call, not a shared
-        // Runnable field, precisely so a stale generation check inside it -- not object identity
-        // -- is what decides whether it still matters. Bumping the generation here covers the
-        // one case worker.removeCallbacksAndMessages(null) above cannot: a preview decode that
-        // was already running on the worker thread at the moment of this call.
+        // Not a removeCallbacks: the gesture and preview publishes are a fresh lambda per call,
+        // not a shared Runnable field, precisely so a stale generation check inside it -- not
+        // object identity -- is what decides whether it still matters. Bumping the generations
+        // here covers the one case worker.removeCallbacksAndMessages(null) above cannot: a
+        // decode that was already running on the worker thread at the moment of this call.
         previewGeneration++
+        gestureGeneration++
     }
 
     private inline fun <T> withHandle(fallback: T, block: (Long) -> T): T {
@@ -287,9 +300,8 @@ class PredictionEngine(
         private set
 
     fun loadUserWords(words: List<UserWord>) {
-        if (words.isEmpty()) {
-            return
-        }
+        // An empty list is pushed too: forgetting the last remembered words has to reach the
+        // engine, which replaces what it holds with what it is given.
         val texts = Array(words.size) { words[it].word }
         val counts = IntArray(words.size) { words[it].count }
         val deliberateCapitals = IntArray(words.size) { words[it].deliberateCapitals }
@@ -305,9 +317,8 @@ class PredictionEngine(
      * worker, which is what guarantees the words are in place before the pairs that name them.
      */
     fun loadUserBigrams(pairs: List<UserBigram>) {
-        if (pairs.isEmpty()) {
-            return
-        }
+        // An empty list is pushed too: forgetting the last remembered pairs has to reach the
+        // engine, which replaces what it holds with what it is given.
         val previous = Array(pairs.size) { pairs[it].previousWord }
         val next = Array(pairs.size) { pairs[it].word }
         val counts = IntArray(pairs.size) { pairs[it].count }
@@ -384,9 +395,8 @@ class PredictionEngine(
 
     /** Posted after [loadUserBigrams], so the words a triple names are already held. */
     fun loadUserTrigrams(triples: List<UserTrigram>) {
-        if (triples.isEmpty()) {
-            return
-        }
+        // An empty list is pushed too: forgetting the last remembered triples has to reach the
+        // engine, which replaces what it holds with what it is given.
         val previous2 = Array(triples.size) { triples[it].previousWord2 }
         val previous1 = Array(triples.size) { triples[it].previousWord1 }
         val next = Array(triples.size) { triples[it].word }
@@ -473,6 +483,16 @@ class PredictionEngine(
     fun cancelPending() {
         queue.clear()
         synchronized(resultLock) { nativeCount = 0 }
+        gestureGeneration++
+    }
+
+    /**
+     * Drops a swipe decode that has not answered yet -- the field changed under it -- so it
+     * cannot compose its word into whatever field comes next. The generation check in the
+     * posted publish is the whole mechanism, as for [cancelPendingPreview].
+     */
+    fun cancelPendingGesture() {
+        gestureGeneration++
     }
 
     /** Requests superseded before being served. Exposed for tracing and tests. */
@@ -502,31 +522,54 @@ class PredictionEngine(
             System.arraycopy(timestamps, 0, gestureTime, 0, points)
             gestureCount = points
         }
+        val generation = ++gestureGeneration
         worker.post {
             Trace.beginSection("PredictionEngine.decodeGesture")
             val found = try {
                 withHandle(0) { current ->
-                    synchronized(resultLock) {
+                    synchronized(gestureResultLock) {
                         val samples = synchronized(gestureLock) { gestureCount }
                         NativePredictor.nativeDecodeGesture(
                             current, gestureX, gestureY, gestureTime, samples,
-                            previous1, previous2, nativeWords, nativeScores,
+                            previous1, previous2, gestureNativeWords, gestureNativeScores,
                         )
                     }
                 }
             } finally {
                 Trace.endSection()
             }
-            synchronized(resultLock) { nativeCount = found }
-            mainHandler.removeCallbacks(publishGesture)
-            mainHandler.post(publishGesture)
+            synchronized(gestureResultLock) { gestureNativeCount = found }
+            mainHandler.post {
+                if (generation == gestureGeneration) {
+                    publishGestureResult()
+                }
+            }
         }
     }
 
+    /** Copies the swipe's answer out under its own lock and drops refused words, the same
+     *  filter [copyAndFilterResults] applies to typed suggestions. */
     private fun publishGestureResult() {
-        val written = copyAndFilterResults()
-        gestureResultCount = written
-        listener?.onGestureCandidates(displayWords, written)
+        val count: Int
+        synchronized(gestureResultLock) {
+            count = gestureNativeCount
+            for (index in 0 until count) {
+                gestureDisplayWords[index] = gestureNativeWords[index]
+            }
+        }
+        var written = 0
+        synchronized(blocked) {
+            for (index in 0 until count) {
+                val word = gestureDisplayWords[index] ?: continue
+                if (blocked.isEmpty() || word !in blocked) {
+                    gestureDisplayWords[written++] = word
+                }
+            }
+        }
+        for (index in written until MAX_RESULTS) {
+            gestureDisplayWords[index] = null
+        }
+        listener?.onGestureCandidates(gestureDisplayWords, written)
     }
 
     /**

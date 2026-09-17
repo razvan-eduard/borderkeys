@@ -17,7 +17,8 @@ import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeProvider
 import android.view.View
 import android.view.ViewConfiguration
-import com.borderkeys.ime.fx.ParticleField
+import com.borderkeys.ime.fx.ParticleSurface
+import com.borderkeys.ime.fx.RoundedRectElement
 import com.borderkeys.theme.ThemePaints
 import kotlin.math.max
 import kotlin.math.min
@@ -237,7 +238,10 @@ class KeyboardCanvasView(
         pointerKey[gesturePointer] = fromKey
         cancelPendingCallbacks()
         dismissAlternatives()
-        gesture.begin(gestureStartX, gestureStartY, 0L)
+        // The real pointer-down time, on the same clock every later sample carries. A zero
+        // here made the decoder's first interval span the whole uptime and collapse the
+        // resampled stroke to its two ends.
+        gesture.begin(gestureStartX, gestureStartY, pointerDownAt[gesturePointer])
     }
 
     /**
@@ -311,13 +315,31 @@ class KeyboardCanvasView(
     }
 
     /**
-     * Whether the radial ring is open for the swipe in progress -- the one pause this gesture
-     * gets has already fired. From here until the finger lifts, [onTouchEvent]'s `ACTION_MOVE`
-     * branch stops feeding [captureGestureSamples] entirely and calls [Listener.onGestureSteered]
-     * instead; there is no path back to plain gesture capture once this is true (see
-     * [Listener.onGesturePaused]'s own doc for why the trajectory is already final by then).
+     * Whether the radial ring is open for the swipe in progress -- a pause has fired and its
+     * decode is being shown, or awaited. While true, [onTouchEvent]'s `ACTION_MOVE` branch stops
+     * feeding [captureGestureSamples] and calls [Listener.onGestureSteered] instead. The one
+     * way back is [resumeGestureCapture]: the service found nothing to open a ring for, and the
+     * stroke goes on being captured as if the pause had never happened.
      */
     private var ringOpen = false
+
+    /**
+     * The pause opened no ring -- nothing decoded, or too few alternatives -- so the stroke is
+     * a plain swipe again: further movement is captured, the trail keeps drawing, the lift
+     * decodes the whole gesture through [Listener.onGesture], and a later pause may fire again.
+     * Without this the canvas kept routing every move to a ring nobody could see, the trail
+     * froze at the pause point and the rest of the word was lost.
+     */
+    fun resumeGestureCapture() {
+        if (!gestureActive) {
+            return
+        }
+        ringOpen = false
+    }
+
+    /** The system touch slop, in pixels -- what [onTouchEvent] itself uses to tell a swipe from
+     *  a press, shared so the ring's own "has the finger actually moved" test agrees with it. */
+    val touchSlopPx: Float get() = touchSlop.toFloat()
 
     private val pauseRunnable = Runnable { firePause() }
 
@@ -406,6 +428,31 @@ class KeyboardCanvasView(
     }
 
     /**
+     * The service closed the ring out from under a stroke that may still be down -- a second
+     * pointer pressed a key, the caret was tapped elsewhere, the field changed. Forgets that
+     * stroke without any callback of its own: its eventual lift must neither reach
+     * [Listener.onGestureRingResolved] (there is no ring left to read) nor [Listener.onGesture]
+     * (its one decode already happened at the pause), and must not type the key it started on
+     * either -- [beginGesture] keeps that key in [pointerKey] for the lift to clear, so it is
+     * cleared here instead and [onPointerUp] then ignores the pointer outright. A no-op when no
+     * stroke is active, which is the common case (a ring waiting for a tap has no stroke at all).
+     */
+    fun abandonRingStroke() {
+        removeCallbacks(pauseRunnable)
+        ringOpen = false
+        if (!gestureActive) {
+            return
+        }
+        gestureActive = false
+        if (gesturePointer in 0 until MAX_POINTERS) {
+            pointerKey[gesturePointer] = NO_KEY
+        }
+        gesturePointer = -1
+        gesture.reset()
+        invalidateTrailFully()
+    }
+
+    /**
      * Repaints only the rectangle the trail occupies.
      *
      * The four-argument `invalidate` is deprecated in favour of repainting the whole view, on
@@ -478,12 +525,16 @@ class KeyboardCanvasView(
     private var lastFrameNanos = 0L
     private var animating = false
 
-    /** A burst per key press. Exposed non-private so [BorderKeysService] can push the user's
+    /** Both particle layers for the keys -- a burst inside the pressed key and its outline traced
+     *  while it is down. Exposed non-private so [BorderKeysService] can push the user's
      *  particle-effect settings directly, the same way [hapticEnabled] already is. */
-    val fillParticles = ParticleField(FILL_PARTICLE_POOL_CAPACITY) { invalidateParticleBounds() }
+    val particles = ParticleSurface(FILL_PARTICLE_POOL_CAPACITY, OUTLINE_PARTICLE_POOL_CAPACITY) { invalidateParticleBounds() }
 
-    /** Traces the pressed key's own rounded-rect border. */
-    val outlineParticles = ParticleField(OUTLINE_PARTICLE_POOL_CAPACITY) { invalidateParticleBounds() }
+    /** The key currently being pressed, as the element the engine reads its shape from -- one
+     *  reusable instance re-pointed at [geometry]'s own arrays on every press, so the exact
+     *  rounded rectangle [drawStatic] paints is the one particles trace and fill. See
+     *  [com.borderkeys.ime.fx.ParticleElement]. */
+    private val keyElement = RoundedRectElement()
     private val particleBoundsScratch = RectF()
     private val particleBoundsScratch2 = RectF()
 
@@ -959,8 +1010,7 @@ class KeyboardCanvasView(
                 drawGestureTrail(canvas)
             }
 
-            fillParticles.draw(canvas, paints.particlePaint)
-            outlineParticles.draw(canvas, paints.particlePaint)
+            particles.draw(canvas, paints.particlePaint)
         } finally {
             Trace.endSection()
         }
@@ -1375,13 +1425,16 @@ class KeyboardCanvasView(
                 invalidateKey(index)
                 // A key that is already lit (the loop above) does not get a second burst --
                 // this is specifically the moment a key starts being visually pressed, whether
-                // that is a fresh finger-down or a slide onto a new key without lifting.
-                // Both calls no-op on their own while their own particles.enabled is off.
-                fillParticles.spawnBurstAtPoint(geometry.centerX[index], geometry.centerY[index])
-                outlineParticles.setAmbientRectanglePerimeter(
+                // that is a fresh finger-down or a slide onto a new key without lifting. The
+                // element is exactly the rounded rectangle drawStatic paints for this key; the
+                // engine decides where inside and around it particles go. No-ops on its own
+                // while the layers' own enabled flags are off.
+                keyElement.set(
                     geometry.keyLeft[index], geometry.keyTop[index],
                     geometry.keyRight[index], geometry.keyBottom[index],
+                    paints.keyCornerRadiusPx,
                 )
+                particles.press(keyElement)
                 scheduleFrame()
                 return
             }
@@ -1394,7 +1447,7 @@ class KeyboardCanvasView(
         for (slot in 0 until PRESS_POOL) {
             if (pressKey[slot] == index) {
                 pressReleasing[slot] = true
-                outlineParticles.stopAmbient()
+                particles.release()
                 scheduleFrame()
                 return
             }
@@ -1473,22 +1526,15 @@ class KeyboardCanvasView(
         invalidate(dirtyLeft, dirtyTop, dirtyRight, dirtyBottom)
     }
 
-    /** [fillParticles]/[outlineParticles]' own dirty rect -- the tight bounding box of whatever
-     *  is actually still live, not a whole-key or whole-view invalidate, for the same reason
+    /** [particles]' own dirty rect -- the tight bounding box of whatever is actually still live
+     *  on either layer, not a whole-key or whole-view invalidate, for the same reason
      *  [invalidateKey] itself is not a bare `invalidate()`: this view's RenderNode-cached static
      *  layer has nothing to do with a particle burst, and re-recording it every particle frame
      *  would defeat the one thing that layer exists for. */
     @Suppress("DEPRECATION")
     private fun invalidateParticleBounds() {
-        val hasFill = fillParticles.computeLiveBounds(particleBoundsScratch)
-        val hasOutline = outlineParticles.computeLiveBounds(particleBoundsScratch2)
-        if (!hasFill && !hasOutline) {
+        if (!particles.computeLiveBounds(particleBoundsScratch, particleBoundsScratch2)) {
             return
-        }
-        if (!hasFill) {
-            particleBoundsScratch.set(particleBoundsScratch2)
-        } else if (hasOutline) {
-            particleBoundsScratch.union(particleBoundsScratch2)
         }
         invalidate(
             (particleBoundsScratch.left - PARTICLE_INVALIDATE_MARGIN_PX).toInt(),
@@ -1506,8 +1552,7 @@ class KeyboardCanvasView(
             Choreographer.getInstance().removeFrameCallback(frameCallback)
             animating = false
         }
-        fillParticles.cancel()
-        outlineParticles.cancel()
+        particles.cancel()
     }
 
     companion object {
@@ -1522,14 +1567,15 @@ class KeyboardCanvasView(
         private const val PRESS_POOL = 10
 
         /** Sized for the busiest preset's own burst count (10, see
-         *  [com.borderkeys.ime.fx.ParticleEffectPresets]) with headroom for two presses landing
-         *  close together -- not [MAX_POINTERS], which would size this for eleven simultaneous
-         *  full-hand chords. */
-        private const val FILL_PARTICLE_POOL_CAPACITY = 24
+         *  [com.borderkeys.ime.fx.ParticleEffectPresets]) scaled up for a wide key like space
+         *  (see [com.borderkeys.ime.fx.ParticleSimulation.MAX_EXTENT_FACTOR]), with headroom for
+         *  two presses landing close together -- not [MAX_POINTERS], which would size this for
+         *  eleven simultaneous full-hand chords. */
+        private const val FILL_PARTICLE_POOL_CAPACITY = 40
 
-        /** Comet's own spawn rate (40/s, see [com.borderkeys.ime.fx.ParticleOutlineStylePresets])
-         *  is the busiest outline preset there is -- sized for a bit under a second of it. */
-        private const val OUTLINE_PARTICLE_POOL_CAPACITY = 24
+        /** Comet's own particle cap (18, see [com.borderkeys.ime.fx.ParticleOutlineStylePresets])
+         *  scaled up for the longest key outline there is, the space bar. */
+        private const val OUTLINE_PARTICLE_POOL_CAPACITY = 56
 
         /** Compensates for anti-aliased circles bleeding a pixel or two past
          *  [ParticleField.computeLiveBounds]'s own mathematical edge -- the same purpose
@@ -1545,9 +1591,9 @@ class KeyboardCanvasView(
         private const val DEFAULT_SPACE_STEP_PX = 56f
 
         /**
-         * Samples one swipe may hold before the buffer is decimated. Five hundred and twelve
-         * covers a long word at a high report rate; beyond that the path is oversampled
-         * relative to the sixty-four points the decoder reduces it to anyway.
+         * Fewer samples than this is a flick or a slip, not a word: nothing is decoded for it
+         * and no pause is detected in it. (The capture buffer's own capacity lives with
+         * [GestureCapture].)
          */
         private const val MIN_GESTURE_POINTS = 6
         private const val TRAIL_SEGMENTS = 4

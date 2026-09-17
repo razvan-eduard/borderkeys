@@ -50,6 +50,16 @@ class RadialSuggestionMenuViewTest {
         assertEquals(0, sweep.size)
     }
 
+    @Test
+    fun `isWithinRing accepts a touch on the ring and rejects one elsewhere on the keyboard`() {
+        // This view is laid out across the entire host, not just its own drawn circle -- a
+        // touch on some unrelated key, far from the ring's own anchor, must not read as "on"
+        // the ring, or the next word's own swipe gets eaten by this one's leftover ring.
+        assertTrue(RadialSuggestionMenuView.isWithinRing(100f, 100f, 100f, 100f, 80f))
+        assertTrue(RadialSuggestionMenuView.isWithinRing(180f, 100f, 100f, 100f, 80f))
+        assertTrue(!RadialSuggestionMenuView.isWithinRing(500f, 500f, 100f, 100f, 80f))
+    }
+
     /**
      * The property that actually matters: whatever [RadialSuggestionMenuView.drawWedges] paints
      * and whatever hit-testing accepts must agree, for every wedge count the setting allows

@@ -30,6 +30,7 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
@@ -94,7 +95,8 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
             checked = preferences.clipboardDeleteAfterUse,
         ) { value -> update { it.copy(clipboardDeleteAfterUse = value) } }
 
-        SettingsSectionCard(strings[Keys.CLIPBOARD_HOW_MANY_ITEMS]) {
+        SettingsSectionCard(strings[Keys.CLIPBOARD_RETENTION_TITLE]) {
+            SectionHeader(strings[Keys.CLIPBOARD_HOW_MANY_ITEMS])
             StepSlider(
                 label = strings.getString(
                     Keys.CLIPBOARD_ITEMS, preferences.clipboardMaxEntries,
@@ -104,9 +106,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
                 default = 60,
             ) { value -> update { it.copy(clipboardMaxEntries = value) } }
             Explanation(strings[Keys.CLIPBOARD_SIZE_NOTE])
-        }
-
-        SettingsSectionCard(strings[Keys.CLIPBOARD_KEEP_UNPINNED_ITEMS_FOR]) {
+            SectionHeader(strings[Keys.CLIPBOARD_KEEP_UNPINNED_ITEMS_FOR])
             StepSlider(
                 label = formatRetention(strings, preferences.clipboardRetentionMinutes),
                 steps = KeyboardPreferences.RETENTION_STEPS,

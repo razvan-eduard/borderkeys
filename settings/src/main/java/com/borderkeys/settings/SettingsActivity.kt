@@ -59,7 +59,6 @@ import com.borderkeys.settings.screen.QuickActionsScreen
 import com.borderkeys.settings.screen.SetupScreen
 import com.borderkeys.settings.screen.TransferScreen
 import com.borderkeys.settings.screen.SizeScreen
-import com.borderkeys.settings.screen.SoundScreen
 import com.borderkeys.settings.screen.TypingScreen
 import com.borderkeys.settings.screen.ThemeScreen
 
@@ -205,6 +204,10 @@ class SettingsActivity : ComponentActivity() {
     }
 }
 
+/** Screens whose own content draws the keyboard live (a `PlacementPreview` at the top), so the
+ *  "Try it here" probe below them is left out -- see the bottom bar in [SettingsApp]. */
+private val SCREENS_WITH_KEYBOARD_PREVIEW = setOf(Screen.Theme, Screen.Size, Screen.QuickActions)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsApp() {
@@ -265,6 +268,12 @@ private fun SettingsApp() {
 
     Scaffold(
         bottomBar = {
+            // Not under a screen that already shows the keyboard drawn live at the top -- Theme,
+            // Size and position, Quick actions: there the result is already on screen, and a
+            // second keyboard popping up over the preview only hides half of it.
+            if (current in SCREENS_WITH_KEYBOARD_PREVIEW) {
+                return@Scaffold
+            }
             // Deliberately not a full SettingsSectionCard: this rides along on every screen, so
             // it needs to cost little enough height to be worth always having on screen. One
             // line, the card's own label doubling as its explanation, same border/shape language
@@ -347,10 +356,9 @@ private fun SettingsApp() {
             Screen.Home -> HomeScreen(modifier, open)
             Screen.Setup -> SetupScreen(modifier, open)
             Screen.Languages -> LanguagesScreen(modifier)
-            Screen.Layout -> LayoutScreen(modifier, open)
+            Screen.Layout -> LayoutScreen(modifier)
             Screen.Theme -> ThemeScreen(modifier)
             Screen.Size -> SizeScreen(modifier)
-            Screen.Sound -> SoundScreen(modifier)
             Screen.Effects -> EffectsScreen(modifier)
             Screen.Typing -> TypingScreen(modifier)
             Screen.Dictionary -> DictionaryScreen(modifier)

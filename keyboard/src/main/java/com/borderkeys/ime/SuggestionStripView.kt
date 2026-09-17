@@ -11,7 +11,8 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import com.borderkeys.data.theme.KeyboardPreferences
-import com.borderkeys.ime.fx.ParticleField
+import com.borderkeys.ime.fx.ParticleSurface
+import com.borderkeys.ime.fx.RoundedRectElement
 import com.borderkeys.theme.ThemePaints
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
@@ -230,16 +231,20 @@ class SuggestionStripView(
     /** Reused so the outline around the applied chip allocates nothing on the draw path. */
     private val appliedRect = android.graphics.RectF()
 
-    /** An ambient glow around the applied chip or the decoding notice, plus a burst on whatever
-     *  chip is actually accepted -- exposed non-private so [BorderKeysService] can push the
-     *  user's particle-effect settings directly, the same way
-     *  [KeyboardCanvasView.fillParticles] already is. */
-    val fillParticles = ParticleField(FILL_PARTICLE_POOL_CAPACITY) { invalidate() }
+    /** Both particle layers for the strip: the applied chip and the decoding notice are *held*
+     *  (ambient inside, outline traced) for as long as they are on screen, and whichever chip
+     *  is actually tapped is *pressed* (a burst inside it). Exposed non-private so
+     *  [BorderKeysService] can push the user's particle-effect settings directly, the same way
+     *  [KeyboardCanvasView.particles] already is. */
+    val particles = ParticleSurface(FILL_PARTICLE_POOL_CAPACITY, OUTLINE_PARTICLE_POOL_CAPACITY) { invalidate() }
 
-    /** Traces the applied chip's or the decoding notice's own rect -- no outline equivalent for
-     *  the generic accept burst below, since a plain suggestion/clipboard/action chip has no
-     *  ambient window of its own the way the applied chip and the decoding notice already do. */
-    val outlineParticles = ParticleField(OUTLINE_PARTICLE_POOL_CAPACITY) { invalidate() }
+    /** The three things on this strip particles can affect, as elements the engine reads their
+     *  shapes from -- see [com.borderkeys.ime.fx.ParticleElement]. Each is exactly the rounded
+     *  rectangle the strip itself draws (or, for the decoding notice, the pill around the
+     *  glyph), re-set every frame it is on screen so it can never drift from the drawing. */
+    private val appliedChip = RoundedRectElement()
+    private val decodingNotice = RoundedRectElement()
+    private val tappedSlot = RoundedRectElement()
 
     /** Fires once per press, at which point the press stops being a tap. */
     private val longPressRunnable = Runnable {
@@ -282,11 +287,22 @@ class SuggestionStripView(
         if (!actionMode && source === words) {
             return
         }
+        // A fresh row of words is never the "forget this word?" question, and carries none of
+        // the previous row's marks: the question used to survive an ordinary push, so a later
+        // tap on a word could forget a different one or blank the row, and the italic/outline
+        // slots of the last row stayed on whatever the caller did not overwrite.
+        val wasActionMode = actionMode
+        actionMode = false
+        typedIndex = -1
+        appliedIndex = -1
         val newCount = sourceCount.coerceIn(0, MAX_SUGGESTIONS)
-        var changed = newCount != count
+        var changed = wasActionMode || newCount != count
         for (index in 0 until newCount) {
             val word = source[index]
             if (word == null) {
+                if (words[index] != null) {
+                    changed = true
+                }
                 charCount[index] = 0
                 words[index] = null
                 continue
@@ -418,9 +434,19 @@ class SuggestionStripView(
 
     /** Switches the strip to the assistant's actions for the current selection. */
     fun setActions(labels: Array<String?>, count: Int) {
-        actionMode = true
         setSuggestions(labels, count)
+        actionMode = true
+        invalidate()
     }
+
+    /**
+     * How many slots a row of words can fill right now: the visible limit less the clipboard
+     * chip's own slot. The service arranges its row against this rather than the bare setting,
+     * so the correction a delimiter applies is never placed in a slot the chip pushed off the
+     * strip.
+     */
+    val wordSlotLimit: Int
+        get() = (visibleLimit - chipOffset).coerceAtLeast(0)
 
     fun clear() {
         actionMode = false
@@ -458,16 +484,14 @@ class SuggestionStripView(
                 // stopped rather than left ticking silently behind a notice it would never
                 // reach the canvas from: private mode is meant to stay austere, not sprout
                 // effects the moment a password field is left.
-                fillParticles.stopAmbient()
-                outlineParticles.stopAmbient()
+                particles.release()
                 drawNotice(canvas, privateNoticeChars, privateNotice.length)
                 return
             }
             if (decoding && count == 0) {
                 syncDecodingAmbient()
                 drawNotice(canvas, decodingNoticeChars, DECODING_NOTICE.length)
-                fillParticles.draw(canvas, paints.particlePaint)
-                outlineParticles.draw(canvas, paints.particlePaint)
+                particles.draw(canvas, paints.particlePaint)
                 return
             }
             if (count == 0 && chipOffset == 0) {
@@ -475,16 +499,14 @@ class SuggestionStripView(
                 // idle one, so say what the row is waiting for -- but only while there is
                 // nothing to be about. Suppressed in action mode, where an empty strip means
                 // the assistant simply offered nothing.
-                fillParticles.stopAmbient()
-                outlineParticles.stopAmbient()
+                particles.release()
                 if (!actionMode && editorEmpty) {
                     drawNotice(canvas, idleNoticeChars, idleNotice.length)
                 }
                 // Still drawn, not skipped: a burst from the very suggestion that was just
                 // accepted -- the tap that emptied this row in the first place -- must still
                 // get to finish animating rather than vanish the instant the row goes idle.
-                fillParticles.draw(canvas, paints.particlePaint)
-                outlineParticles.draw(canvas, paints.particlePaint)
+                particles.draw(canvas, paints.particlePaint)
                 return
             }
 
@@ -572,11 +594,12 @@ class SuggestionStripView(
                     )
                     val radius = height * APPLIED_CORNER
                     canvas.drawRoundRect(appliedRect, radius, radius, paints.appliedHighlight)
-                    // The one chip that would act on its own, without a tap -- the ambient
-                    // glow says "this is what happens if you do nothing" the same way the
-                    // outline above already does, just in motion.
-                    fillParticles.setAmbientRectangle(appliedRect.left, appliedRect.top, appliedRect.right, appliedRect.bottom)
-                    outlineParticles.setAmbientRectanglePerimeter(appliedRect.left, appliedRect.top, appliedRect.right, appliedRect.bottom)
+                    // The one chip that would act on its own, without a tap -- held, so the
+                    // ambient glow says "this is what happens if you do nothing" the same way
+                    // the outline above already does, just in motion. The element is the very
+                    // rounded rect drawn one line up.
+                    appliedChip.set(appliedRect.left, appliedRect.top, appliedRect.right, appliedRect.bottom, radius)
+                    particles.hold(appliedChip)
                     appliedRectDrawnThisFrame = true
                 }
                 // Italic for what was typed, the full label colour for what would be applied,
@@ -602,11 +625,9 @@ class SuggestionStripView(
                 }
             }
             if (!appliedRectDrawnThisFrame) {
-                fillParticles.stopAmbient()
-                outlineParticles.stopAmbient()
+                particles.release()
             }
-            fillParticles.draw(canvas, paints.particlePaint)
-            outlineParticles.draw(canvas, paints.particlePaint)
+            particles.draw(canvas, paints.particlePaint)
         } finally {
             Trace.endSection()
         }
@@ -627,14 +648,12 @@ class SuggestionStripView(
     private fun syncDecodingAmbient() {
         val centerX = width / 2f
         val halfWidth = width * DECODING_GLOW_WIDTH_FRACTION / 2f
-        fillParticles.setAmbientRectangle(
-            centerX - halfWidth, height * 0.25f,
-            centerX + halfWidth, height * 0.75f,
-        )
-        outlineParticles.setAmbientRectanglePerimeter(
-            centerX - halfWidth, height * 0.25f,
-            centerX + halfWidth, height * 0.75f,
-        )
+        val top = height * 0.25f
+        val bottom = height * 0.75f
+        // A pill around the glyph -- nothing is actually drawn for it, so the element is the
+        // shape the glow is meant to read as, fully rounded rather than a bare box.
+        decodingNotice.set(centerX - halfWidth, top, centerX + halfWidth, bottom, (bottom - top) / 2f)
+        particles.hold(decodingNotice)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -683,7 +702,8 @@ class SuggestionStripView(
                     // which never touched this view at all.
                     val slotWidth = width.toFloat() / shownCount()
                     val left = slotWidth * slot
-                    fillParticles.spawnBurstInRectangle(left, 0f, left + slotWidth, height.toFloat())
+                    tappedSlot.set(left, 0f, left + slotWidth, height.toFloat())
+                    particles.press(tappedSlot)
                 }
                 if (slot == 0 && chipOffset == 1) {
                     tapHaptic()
@@ -736,8 +756,7 @@ class SuggestionStripView(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        fillParticles.cancel()
-        outlineParticles.cancel()
+        particles.cancel()
     }
 
     // Resolved once, here, rather than on every frame: a lookup returns an existing String but
@@ -764,14 +783,14 @@ class SuggestionStripView(
         const val MAX_SUGGESTIONS = KeyboardPreferences.MAX_SUGGESTIONS
 
         /** Sized for one preset's own burst count (10, see
-         *  [com.borderkeys.ime.fx.ParticleEffectPresets]) plus the applied chip's own ambient
-         *  trickle running at the same time -- not [MAX_SUGGESTIONS], which would size this for
-         *  every slot bursting at once. */
-        const val FILL_PARTICLE_POOL_CAPACITY = 20
+         *  [com.borderkeys.ime.fx.ParticleEffectPresets]) scaled up for a whole slot's area
+         *  (see [com.borderkeys.ime.fx.ParticleSimulation.MAX_EXTENT_FACTOR]) plus the applied
+         *  chip's own ambient trickle running at the same time -- not [MAX_SUGGESTIONS], which
+         *  would size this for every slot bursting at once. */
+        const val FILL_PARTICLE_POOL_CAPACITY = 48
 
-        /** No burst equivalent on this layer -- only the applied chip and decoding notice
-         *  ambients, so this can stay smaller than [FILL_PARTICLE_POOL_CAPACITY]. */
-        const val OUTLINE_PARTICLE_POOL_CAPACITY = 12
+        /** A chip's outline is long -- Comet's own cap (18) scaled up for it. */
+        const val OUTLINE_PARTICLE_POOL_CAPACITY = 56
 
         /** How wide the decoding notice's ambient glow is, as a fraction of the strip's own
          *  width -- centred, not edge to edge, so it reads as glowing around the glyph rather

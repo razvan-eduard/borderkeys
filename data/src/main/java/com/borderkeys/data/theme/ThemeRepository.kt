@@ -4,6 +4,7 @@
 package com.borderkeys.data.theme
 
 import androidx.datastore.core.DataStore
+import java.io.File
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -26,6 +27,7 @@ class ThemeRepository internal constructor(
     private val preferencesStore: DataStore<KeyboardPreferences>,
     private val customThemeLibraryStore: DataStore<CustomThemeLibrary>,
     private val particleEffectsStore: DataStore<ParticleEffectsSettings>,
+    private val customEffectsPresetLibraryStore: DataStore<CustomEffectsPresetLibrary>,
 ) {
     val theme: Flow<KeyboardTheme> = themeStore.data
 
@@ -37,6 +39,12 @@ class ThemeRepository internal constructor(
 
     /** Themes the user built and named themselves, newest last -- see [CustomThemeEntry]. */
     val customThemes: Flow<List<CustomThemeEntry>> = customThemeLibraryStore.data.map { it.themes }
+
+    /** Whole (outline, fill) looks the user built and named themselves -- the same idea as
+     *  [customThemes], one level down: applying one sets every region to match, rather than
+     *  being scoped to whichever region happened to be open when it was saved. */
+    val customEffectsPresets: Flow<List<CustomEffectsPresetEntry>> =
+        customEffectsPresetLibraryStore.data.map { it.presets }
 
     /** [theme], [lightTheme], [preferences] and [particleEffects], combined -- see
      *  [KeyboardAppearance]. What anything that draws or previews the keyboard should collect,
@@ -119,7 +127,101 @@ class ThemeRepository internal constructor(
         }
     }
 
+    /** See [saveCustomTheme] -- the same shape, for a whole (outline, fill) look. */
+    suspend fun saveCustomEffectsPreset(
+        name: String,
+        outline: ParticleOutlineLayer,
+        fill: ParticleFillLayer,
+        id: String = UUID.randomUUID().toString(),
+        createdAt: Long? = null,
+    ): String? {
+        var saved = false
+        customEffectsPresetLibraryStore.updateData { current ->
+            val existingIndex = current.presets.indexOfFirst { it.id == id }
+            val entry = CustomEffectsPresetEntry(
+                id = id,
+                name = name,
+                outline = outline,
+                fill = fill,
+                createdAt = createdAt
+                    ?: if (existingIndex >= 0) current.presets[existingIndex].createdAt else System.currentTimeMillis(),
+            ).sanitised()
+            val updated = when {
+                existingIndex >= 0 -> current.presets.toMutableList().also { it[existingIndex] = entry }
+                current.presets.size >= CustomEffectsPresetLibrary.MAX_CUSTOM_PRESETS -> return@updateData current
+                else -> current.presets + entry
+            }
+            saved = true
+            current.copy(presets = updated)
+        }
+        return if (saved) id else null
+    }
+
+    /**
+     * Folds the "custom outline presets" an earlier build kept in a file of their own into "My
+     * presets": one outline layer each, saved before a preset meant an (outline, fill) pair.
+     * Read once, then the file goes -- a preset someone saved and named must not vanish because
+     * the feature grew a second layer underneath it. The fill is the default one, exactly as a
+     * fresh region would get; the id and timestamp are kept, so importing twice cannot duplicate.
+     */
+    suspend fun importLegacyOutlinePresets(file: File) {
+        if (!file.isFile) {
+            return
+        }
+        val legacy = runCatching {
+            PERSISTED_JSON.decodeFromString(LegacyOutlinePresetLibrary.serializer(), file.readText())
+        }.getOrNull()
+        if (legacy != null) {
+            val known = customEffectsPresetLibraryStore.data.first().presets.map { it.id }.toSet()
+            for (preset in legacy.presets) {
+                if (preset.id in known || preset.name.isBlank()) {
+                    continue
+                }
+                saveCustomEffectsPreset(
+                    name = preset.name,
+                    outline = preset.layer,
+                    fill = ParticleFillLayer(),
+                    id = preset.id,
+                    createdAt = preset.createdAt,
+                )
+            }
+        }
+        file.delete()
+    }
+
+    suspend fun renameCustomEffectsPreset(id: String, name: String) {
+        customEffectsPresetLibraryStore.updateData { current ->
+            current.copy(
+                presets = current.presets.map {
+                    if (it.id == id) it.copy(name = name).sanitised() else it
+                },
+            )
+        }
+    }
+
+    suspend fun deleteCustomEffectsPreset(id: String) {
+        customEffectsPresetLibraryStore.updateData { current ->
+            current.copy(presets = current.presets.filterNot { it.id == id })
+        }
+        // A deleted preset cannot stay the applied one: the picker would have nothing to show
+        // as selected and nothing to name in "unsaved changes since ...".
+        particleEffectsStore.updateData { current ->
+            if (current.appliedPresetId == id) current.copy(appliedPresetId = "") else current
+        }
+    }
+
+    /**
+     * Records [id] as the preset the regions currently come from -- after saving one, so the
+     * chip just created reads as selected rather than the one it was saved on top of. Only
+     * the id changes; the regions are exactly as they were.
+     */
+    suspend fun markEffectsPresetApplied(id: String) {
+        particleEffectsStore.updateData { current -> current.copy(appliedPresetId = id).sanitised() }
+    }
+
     fun currentCustomThemes(): List<CustomThemeEntry> = runBlocking { customThemes.first() }
+
+    fun currentCustomEffectsPresets(): List<CustomEffectsPresetEntry> = runBlocking { customEffectsPresets.first() }
 
     /** The blocking-read counterpart to [currentPreferences], for the same "must already be
      *  correct on the very first frame" reason. */

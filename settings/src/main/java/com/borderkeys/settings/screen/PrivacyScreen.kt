@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 
@@ -42,7 +43,8 @@ fun PrivacyScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SettingsSectionCard(strings[Keys.PRIVACY_PERMISSIONS]) {
+        SettingsSectionCard(strings[Keys.PRIVACY_PERMISSIONS_AND_NETWORK]) {
+            SectionHeader(strings[Keys.PRIVACY_PERMISSIONS])
             if (permissions.isEmpty()) {
                 SettingRow(
                     title = strings[Keys.PRIVACY_NONE],
@@ -56,8 +58,7 @@ fun PrivacyScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.PRIVACY_HAPTIC_FEEDBACK_USES_THE_API_THAT],
             )
-        }
-        SettingsSectionCard(strings[Keys.PRIVACY_NETWORK]) {
+            SectionHeader(strings[Keys.PRIVACY_NETWORK])
             SettingRow(
                 title = strings[Keys.PRIVACY_THERE_IS_NONE],
                 subtitle = strings[Keys.PRIVACY_NO_INTERNET_PERMISSION_AND_NO_HTTP],

@@ -10,9 +10,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.inputmethodservice.InputMethodService
+import android.graphics.Matrix
 import android.os.Bundle
+import android.text.InputType
 import android.util.Size
 import android.view.View
+import android.view.inputmethod.CursorAnchorInfo
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsRequest
@@ -56,6 +59,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlin.math.hypot
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.i18n.Keys
 
@@ -100,6 +104,10 @@ class BorderKeysService :
 
     /** Whether the field holds any text at all, which is not the same as "we are composing". */
     private var editorEmpty = true
+
+    /** The field is a password box: its text is never sent to the engine (see
+     *  [requestSuggestions]), on top of everything [privateMode] already switches off. */
+    private var passwordField = false
     private var previousWord1: String? = null
     private var previousWord2: String? = null
 
@@ -192,6 +200,57 @@ class BorderKeysService :
      * into a second full stop.
      */
     private var pendingAutoSpace = false
+
+    /**
+     * Whether the word currently composing came from a swipe rather than typed letters. A swipe
+     * is a whole word: a letter typed straight after it starts the *next* word, with the space
+     * a swipe implies, rather than extending the swiped one -- "hello" then "w" is "hello w",
+     * not "hellow". Cleared the moment the swiped word is finished, edited (a backspace into it
+     * means the user is correcting it, so further letters do extend it) or replaced.
+     */
+    private var composingFromGesture = false
+
+    /**
+     * Whether the swiped word now composing was preceded by a space this class inserted itself
+     * -- see [spaceBeforeSwipedWord]. Read by [cancelRadialGesture], which has to take that
+     * space back too: cancelling a swipe means the text reads as if it never happened, and a
+     * stray trailing space is not that.
+     */
+    private var swipeAutoSpaceInserted = false
+
+    /**
+     * The user turned off a caps lock that auto-shift had put on for a field asking for
+     * capitals everywhere. Auto-shift would put it straight back on the next caret echo, so the
+     * release is honoured until the next letter is typed -- one lower-case word at a time, on
+     * purpose, in a field that wants capitals.
+     */
+    private var userReleasedAutoLock = false
+
+    /**
+     * A commit of this class's own is about to be echoed back by the editor as a caret move
+     * that leaves the composing region empty -- a delimiter, a picked suggestion. That echo is
+     * indistinguishable, by its numbers alone, from a tap that moved the caret somewhere new,
+     * and re-deriving everything from the editor for it costs a second engine round trip and a
+     * text read per keystroke. Set right before such a commit, spent by the very next selection
+     * report, and cleared by any key press so a report that never came cannot mute a real move.
+     */
+    private var ownEditPending = false
+
+    /**
+     * Whether this gesture's pause-time preview already composed a word. Read by [onGesture]
+     * when the stroke resumed after that preview opened no ring: the full stroke decodes then,
+     * and the preview's own guess is discarded rather than committed as a word of its own.
+     */
+    private var previewComposedThisGesture = false
+
+    /**
+     * Where the text field sat on screen when the ring opened -- the editor's own view matrix
+     * translation, from [onUpdateCursorAnchorInfo] -- or NaN before the first report. A change
+     * means the page scrolled under the ring, which is the one signal a tap elsewhere in the
+     * app produces, and closes it when [KeyboardPreferences.radialCloseOnEditorMove] is on.
+     */
+    private var ringEditorOriginX = Float.NaN
+    private var ringEditorOriginY = Float.NaN
 
     /**
      * The clip whose chip has already served its purpose: it was used, or a session that
@@ -315,39 +374,28 @@ class BorderKeysService :
     private var lastGestureX = 0f
     private var lastGestureY = 0f
 
-    /** The pause-time decode's rank #1 -- what [resolveRadialRing] applies when neither a wedge
-     *  nor the centre Cancel button was touched and [KeyboardPreferences.radialTimeoutDefault]
-     *  says to apply rather than cancel. Set in [onGesturePreviewCandidates], read once at
-     *  resolution and never relied on afterwards. */
+    /** What [syncDebugRing]'s sample ring offers -- placeholders, never typed by anyone. */
+    private val DEBUG_RING_WORDS = listOf("alpha", "bravo", "charlie", "delta", "echo", "foxtrot")
+
+    /** The pause-time decode's rank #1 -- what [resolveRadialRing] applies when the steering
+     *  finger lifted with neither a wedge nor the centre Cancel button touched and
+     *  [KeyboardPreferences.radialTimeoutDefault] says to apply rather than cancel. Set in
+     *  [onGesturePreviewCandidates], read once at resolution and never relied on afterwards. */
     private var radialTopWord: String? = null
 
     /**
      * Resolves the ring directly, unconditionally -- a real lift is the only thing that ever
      * gets to consider [KeyboardPreferences.radialLiftKeepsOpen] (see [resolveRadialRing]'s own
-     * doc); nothing else does, on purpose. Applies or cancels, never merely waits again --
-     * shared by the pick-timeout firing and by a tap landing in the editor itself (see
-     * [onUpdateSelection]), the two other ways the ring can end up resolved without an actual
-     * lift on it to read.
+     * doc); nothing else does, on purpose. Applies or cancels, never merely waits again -- the
+     * pick-timeout's own path, the one way the ring resolves without an actual lift on it to
+     * read. Everything else that ends the ring without a lift is a *dismissal*, not a
+     * resolution -- see [dismissRadialMenu].
      */
     private fun forceResolveRadialRing() {
         val selection = host?.radialSuggestionMenu?.currentSelection()
             ?: RadialSuggestionMenuView.Selection.None
         closeRadialRing((selection as? RadialSuggestionMenuView.Selection.Word)?.index)
         resolveRadialSelection(selection)
-    }
-
-    /**
-     * A tap in the editor itself is a resolution the ring never got to see directly -- see
-     * [onUpdateSelection]'s own comment for how this is detected from a caret that moved on its
-     * own. Guarded the same way [dismissRadialMenu] is, since most caret moves happen with no
-     * ring open at all and [forceResolveRadialRing] must not run against a stale
-     * [radialTopWord] left over from a gesture that already finished normally.
-     */
-    private fun resolveRadialRingFromEditorTap() {
-        if (swipeRadialController.state != SwipeRadialController.State.OPEN) {
-            return
-        }
-        forceResolveRadialRing()
     }
 
     /**
@@ -587,6 +635,7 @@ class BorderKeysService :
             }.collect { (newTheme, newLightTheme, newPreferences, newParticleEffects) ->
                 theme = newTheme
                 lightTheme = newLightTheme
+                val wasForcingDebugRing = preferences.debugForceRadialRing
                 preferences = newPreferences
                 particleEffects = newParticleEffects
                 val resolvedTheme = ThemeMode.resolve(
@@ -628,7 +677,16 @@ class BorderKeysService :
                     view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
                     applyQuickActions(view)
                     refreshClipboardChip()
-                    view.keyboard.swipeEnabled = newPreferences.swipeEnabled
+                    if (wasForcingDebugRing && !newPreferences.debugForceRadialRing) {
+                        // Switched off: a forced ring still open goes with it.
+                        closeDebugRing()
+                    }
+                    syncDebugRing()
+                    view.keyboard.swipeEnabled = newPreferences.swipeEnabled && swipeAllowedIn(currentInputEditorInfo)
+                    view.suggestionStripEnabled = newPreferences.showSuggestionStrip
+                    // Auto-capitalise toggled while the keyboard is up takes effect now, not
+                    // at the next caret move.
+                    applyAutoShift()
                     // The number row is a layout change, not a colour change, so it has to be
                     // applied even when the paints are unchanged.
                     showPage(page)
@@ -643,6 +701,32 @@ class BorderKeysService :
                 }
             }
         }
+    }
+
+    /**
+     * A tap in the editor itself -- the framework's own "the user clicked the text view"
+     * signal, sent on the tap's lift regardless of whether the caret ended up anywhere new.
+     * [onUpdateSelection] below only ever hears about a tap that *moved* the caret; one that
+     * lands right where the caret already was (the end of the word just swiped, typically)
+     * produces no selection update at all, and without this the ring would sit there through
+     * exactly the tap the user meant to close it with. Same outcome as any other touch outside
+     * the ring: close it, leave the text alone.
+     *
+     * [onUpdateEditorToolType] is the API 34 replacement the framework prefers to call; the
+     * deprecated [onViewClicked] still arrives on older releases and from editors that only
+     * know the old path. Both funnel into the same idempotent dismiss, so hearing about one
+     * tap twice costs nothing.
+     */
+    @Deprecated("Deprecated in Java")
+    override fun onViewClicked(focusChanged: Boolean) {
+        @Suppress("DEPRECATION")
+        super.onViewClicked(focusChanged)
+        dismissRadialMenu()
+    }
+
+    override fun onUpdateEditorToolType(toolType: Int) {
+        super.onUpdateEditorToolType(toolType)
+        dismissRadialMenu()
     }
 
     /**
@@ -674,8 +758,10 @@ class BorderKeysService :
         if (view.suggestionStrip.actionMode) {
             // Never the assistant's doing any more -- see below. What is left of actionMode
             // (rejecting a suggestion, "Forget / Cancel") is dismissed the same way selecting
-            // text dismisses anything else stale on the strip.
+            // text dismisses anything else stale on the strip -- and the word it was asking
+            // about goes with it, so a later tap cannot forget it by accident.
             view.suggestionStrip.clear()
+            pendingForget = null
         }
         if (!hasSelection) {
             // The caret moved. If our own edit moved it the composing region already agrees with
@@ -688,20 +774,37 @@ class BorderKeysService :
             // open (steered live, or kept open and waiting for a fresh tap), a touch that lands
             // in the editor itself -- a different window this class has no view in at all --
             // reaches here only as a caret that jumped somewhere our own composing text does not
-            // account for. Resolved rather than discarded: a swipe already composing a word
-            // that the user then taps away from should commit that word (or cancel, whichever
-            // KeyboardPreferences.radialTimeoutDefault says), the same as tapping outside the
-            // ring on the keyboard itself already does -- not lose it, the way dismissRadialMenu
-            // deliberately does for the very different case of a fresh key press mid-gesture.
-            // Resolved unconditionally, ahead of the composing check below: a tap that happens
-            // to land right where the previewed word already ends -- easy to do, since that is
-            // usually right where the caret already was -- must not read as "nothing happened"
-            // and leave the ring sitting there just because composingMatchesCaret says this
-            // particular caret position needs no re-deriving.
-            resolveRadialRingFromEditorTap()
-            if (composingMatchesCaret(newSelEnd)) {
-                requestSuggestions()
+            // account for. Dismissed, the same as a tap outside the ring on the keyboard: the
+            // ring closes and the swiped word stays exactly as it is, neither committed nor
+            // lost.
+            //
+            // Only when the caret genuinely moved, though. Opening the ring composes the top
+            // word first, and the editor echoes that very edit back here as a caret move a few
+            // milliseconds later -- before anyone has had a chance to touch anything. Treating
+            // that echo as a tap closed the ring the moment it opened, every time, which is
+            // what "keep the ring open" failing to keep it open actually was. composingMatchesCaret
+            // reads the editor's *current* text, not the update's own numbers, so even an echo
+            // that arrives late (the previous word's finishComposingText landing after the next
+            // ring already opened) still reads as "nothing moved". The one case this gives up:
+            // an editor that ends the composition on a tap landing exactly where the preview
+            // already ends leaves the ring open -- harmless now, since the next touch outside
+            // it closes it without doing anything else.
+            val caretMatches = composingMatchesCaret(newSelEnd)
+            if (caretMatches) {
+                // Only when the strip is not already about this exact word: the echo of our own
+                // keystroke arrives after handleCharacter has already asked, and asking twice
+                // per letter is wasted work -- and after a swipe it would replace the swipe's
+                // own alternatives on the strip with completions of the swiped word.
+                if (lastQuery != composing.toString()) {
+                    requestSuggestions()
+                }
+            } else if (ownEditPending) {
+                // The echo of a delimiter or a pick this class just committed: the caret is
+                // exactly where that commit left it, the context was already refreshed and the
+                // engine already asked. Nothing to re-derive, and no tap to read into it.
+                ownEditPending = false
             } else {
+                dismissRadialMenu()
                 adoptWordAtCaret()
             }
             // Shift is derived from the text before the caret, so moving the caret is exactly
@@ -710,7 +813,7 @@ class BorderKeysService :
         } else {
             // A real selection is even less ambiguous than a moved caret -- nothing this class
             // does on its own ever leaves a range selected, so this is always something else.
-            resolveRadialRingFromEditorTap()
+            dismissRadialMenu()
         }
         // A selection used to turn the strip into three assistant buttons here. It no longer
         // does anything: the strip is corrections and predictions, never anything else -- the
@@ -784,6 +887,7 @@ class BorderKeysService :
         // Recomputed on every field, from the EditorInfo alone. No setting can switch it off,
         // which is the point: it is a security requirement, not a preference.
         privateMode = PrivateMode.isPrivate(info)
+        passwordField = info != null && PrivateMode.isPasswordField(info.inputType)
         learning.enabled = preferences.learningEnabled && !privateMode
         engine.setLearningSpeed(
             KeyboardPreferences.learningSpeedFactor(preferences.learningSpeed),
@@ -804,16 +908,29 @@ class BorderKeysService :
             view.suggestionStrip.clear()
             view.suggestionStrip.hapticEnabled = preferences.hapticFeedback
             view.keyboard.hapticEnabled = preferences.hapticFeedback
-            view.keyboard.swipeEnabled = preferences.swipeEnabled
+            view.keyboard.swipeEnabled = preferences.swipeEnabled && swipeAllowedIn(info)
+            view.suggestionStripEnabled = preferences.showSuggestionStrip
         view.keyboard.soundEnabled = preferences.keySound
         view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
             applyParticleSettings(view, particleEffects)
         }
         showPage(pageFor(info))
+        // A fresh field starts from nothing: a caps lock left on in the last one -- which
+        // applyAutoShift would otherwise leave standing, respecting it as the user's own -- must
+        // not follow into a password box or a search bar.
         shiftHeldByUser = false
+        userReleasedAutoLock = false
+        autoLockedShift = false
+        shiftState = ShiftState.OFF
+        host?.keyboard?.shiftState = shiftState
+        ownEditPending = false
         resetComposing()
         resetFieldHistory()
         applyAutoShift()
+        updateEditorEmpty(currentInputConnection?.getTextBeforeCursor(1, 0)?.isNotEmpty() == true)
+        // Posted, not called: on the first field of a session the keyboard has not been laid
+        // out yet at this point, and the ring needs its size to be centred on it.
+        host?.post { syncDebugRing() }
 
         host?.setClipboardPanelVisible(false)
         host?.setEmojiPanelVisible(false)
@@ -824,6 +941,11 @@ class BorderKeysService :
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
+        // The keyboard is going away -- the user tapped something in the app that took it down,
+        // or left the field. That is the one signal the IME gets for "touched outside the
+        // keyboard", and a ring waiting for a tap must not outlive it. Closing keeps the swiped
+        // word as it is, the same as any other dismissal.
+        dismissRadialMenu()
         // Shown for one session. A clip that actually had a chip has had its chance to be
         // offered; keeping the offer alive across every field afterwards is what makes it
         // clutter rather than a convenience. shownClipSignature, not a fresh read of the
@@ -833,6 +955,12 @@ class BorderKeysService :
             withdrawnClip = shownClipSignature
         }
         unregisterClipboardListener()
+    }
+
+    /** Same reasoning as [onFinishInputView]: the window hiding for any reason ends the ring. */
+    override fun onWindowHidden() {
+        super.onWindowHidden()
+        dismissRadialMenu()
     }
 
     override fun onFinishInput() {
@@ -998,14 +1126,14 @@ class BorderKeysService :
      */
     private fun applyParticleSettings(view: KeyboardHostView, settings: ParticleEffectsSettings) {
         val surfaces = listOf(
-            Triple(view.keyboard.fillParticles, view.keyboard.outlineParticles, settings.keyboard),
-            Triple(view.radialSuggestionMenu.fillParticles, view.radialSuggestionMenu.outlineParticles, settings.radial),
-            Triple(view.suggestionStrip.fillParticles, view.suggestionStrip.outlineParticles, settings.strip),
-            Triple(view.languageRevertPanel.fillParticles, view.languageRevertPanel.outlineParticles, settings.languageRevert),
-            Triple(view.quickActions.fillParticles, view.quickActions.outlineParticles, settings.quickActions),
+            view.keyboard.particles to settings.keyboard,
+            view.radialSuggestionMenu.particles to settings.radial,
+            view.suggestionStrip.particles to settings.strip,
+            view.languageRevertPanel.particles to settings.languageRevert,
+            view.quickActions.particles to settings.quickActions,
         )
-        for ((fill, outline, region) in surfaces) {
-            applyParticleLayer(fill, outline, region)
+        for ((surface, region) in surfaces) {
+            applyParticleLayer(surface, region)
         }
     }
 
@@ -1033,6 +1161,9 @@ class BorderKeysService :
      * position is something we can ask for and set exactly.
      */
     override fun onCursorNudge(steps: Int) {
+        // A second finger dragging the space bar mid-steer is "something else happening", the
+        // same as a key press -- the ring goes, the swiped word stays.
+        dismissRadialMenu()
         val connection = currentInputConnection ?: return
         if (composing.isNotEmpty()) {
             // Committing first, because moving the caret out of a composing region leaves the
@@ -1057,16 +1188,17 @@ class BorderKeysService :
      * previous one composing would make the decoded word replace it.
      */
     override fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
-        if (!preferences.swipeEnabled) {
+        if (!preferences.swipeEnabled || !swipeAllowedIn(currentInputEditorInfo)) {
             return
         }
-        // A fresh swipe starting is one of the "something else is happening now" moments a stray
-        // ring should not survive -- and, with KeyboardPreferences.radialLiftKeepsOpen on, no
-        // longer rare: that setting can leave a ring from an earlier gesture waiting indefinitely
-        // for a tap that never comes, and simply swiping again is exactly how someone abandons it
-        // instead. Also invalidates a previous gesture's pause-time decode if it is somehow still
-        // in flight, so a late answer can never compose text or open a ring for a gesture that
-        // already ended.
+        radialTopWord = null
+        // A fresh swipe completing is one of the "something else is happening now" moments a
+        // stray ring should not survive. Rare: a ring waiting for a tap consumes every touch
+        // outside itself (see RadialSuggestionMenuView.onTouchEvent), so a new swipe cannot
+        // normally even start under one -- this is the safety net for a second pointer's swipe
+        // mid-steer. Also invalidates a previous gesture's pause-time decode if it is somehow
+        // still in flight, so a late answer can never compose text or open a ring for a gesture
+        // that already ended.
         dismissRadialMenu()
         engine.cancelPendingPreview()
         // Set here as well as in onGesturePaused: a confident, no-pause swipe never calls that,
@@ -1076,19 +1208,65 @@ class BorderKeysService :
             lastGestureX = xs[count - 1]
             lastGestureY = ys[count - 1]
         }
-        val connection = currentInputConnection
-        if (connection != null && composing.isNotEmpty()) {
-            val contextWord = previousWord1
-            val grandContextWord = previousWord2
-            connection.beginBatchEdit()
-            val finished = finishComposing(connection)
-            connection.endBatchEdit()
-            if (finished != null) {
-                recordLearned(finished, contextWord, grandContextWord)
-            }
+        if (previewComposedThisGesture) {
+            // The pause-time preview composed a guess but opened no ring, and the stroke went
+            // on: this decode of the whole stroke supersedes that guess, which is taken back
+            // rather than committed as a word of its own.
+            previewComposedThisGesture = false
+            cancelRadialGesture()
+        } else {
+            finishWordBeforeSwipe()
         }
         host?.postDelayed(gestureDecodingRunnable, GESTURE_DECODING_NOTICE_MILLIS)
         engine.decodeGesture(xs, ys, timestamps, count, previousWord1, previousWord2)
+    }
+
+    /**
+     * Finishes and learns the word in progress before a swipe replaces the composing region --
+     * a swipe starts a new word, and leaving the previous one composing would make the decoded
+     * word replace it. Shared by a completed swipe and a paused one, which used to skip this
+     * and lose the typed word under the swiped one.
+     */
+    private fun finishWordBeforeSwipe() {
+        val connection = currentInputConnection ?: return
+        if (composing.isEmpty()) {
+            return
+        }
+        val contextWord = previousWord1
+        val grandContextWord = previousWord2
+        // The editor echoes the end of the composing region as a caret report before the decode
+        // comes back; left to onUpdateSelection, that echo re-adopted the word just finished as
+        // the composing region again, and the swiped word's own space then replaced it -- "hel"
+        // plus a swipe came out as " word", the typed letters gone.
+        ownEditPending = true
+        connection.beginBatchEdit()
+        val finished = finishComposing(connection)
+        connection.endBatchEdit()
+        if (finished != null) {
+            recordLearned(finished, contextWord, grandContextWord, composingCapitalisedByUser)
+        }
+    }
+
+    /**
+     * Whether swiping (and the ring it can open) belongs in the field: a password box must not
+     * have dictionary words composed into it -- or shown in a ring over it -- an address or a
+     * URL is not made of words a swipe decodes to, and a number field would silently drop the
+     * letters. The keys still type in every one of them; only the gesture is off.
+     */
+    private fun swipeAllowedIn(info: EditorInfo?): Boolean {
+        val inputType = info?.inputType ?: return true
+        if (PrivateMode.isPasswordField(inputType)) {
+            return false
+        }
+        val variation = inputType and InputType.TYPE_MASK_VARIATION
+        return when (inputType and InputType.TYPE_MASK_CLASS) {
+            InputType.TYPE_CLASS_TEXT ->
+                variation != InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS &&
+                    variation != InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS &&
+                    variation != InputType.TYPE_TEXT_VARIATION_URI
+            InputType.TYPE_CLASS_NUMBER, InputType.TYPE_CLASS_PHONE, InputType.TYPE_CLASS_DATETIME -> false
+            else -> true
+        }
     }
 
     /**
@@ -1100,15 +1278,37 @@ class BorderKeysService :
      * `radialMenuEnabled` mirror of the same preference; this is the belt to that braces.
      */
     override fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
-        if (!preferences.radialMenuEnabled) {
+        if (!preferences.radialMenuEnabled || !swipeAllowedIn(currentInputEditorInfo)) {
+            host?.keyboard?.resumeGestureCapture()
             return
+        }
+        // Nothing from an earlier gesture may be applied by this one's lift -- see
+        // resolveRadialSelection: with no word to apply, an inconclusive lift cancels.
+        radialTopWord = null
+        if (previewComposedThisGesture) {
+            // A second pause on the same stroke: the first one's preview opened no ring and is
+            // still composing. It is a guess this decode supersedes, not a word to keep.
+            previewComposedThisGesture = false
+            cancelRadialGesture()
+        } else {
+            // The word in progress is finished first, exactly as a completed swipe finishes
+            // it: the preview composes over the composing region, and used to erase a
+            // half-typed word ("hel" + a paused swipe left just the swiped word). The context
+            // words the decode is given are then the finished word's own.
+            finishWordBeforeSwipe()
         }
         if (count > 0) {
             lastGestureX = xs[count - 1]
             lastGestureY = ys[count - 1]
         }
+        steerLeftPausePoint = false
         engine.decodeGesturePreview(xs, ys, timestamps, count, previousWord1, previousWord2)
     }
+
+    /** Whether the steering finger has moved past the touch slop since the pause -- before
+     *  that, a held-still finger's own jitter must not steer, least of all onto the centre
+     *  Cancel button the ring opens directly under it. */
+    private var steerLeftPausePoint = false
 
     /**
      * Steering, still on the same touch-down that paused -- forwarded straight to the ring,
@@ -1116,13 +1316,31 @@ class BorderKeysService :
      * was already frozen and decoded at the pause.
      */
     override fun onGestureSteered(x: Float, y: Float) {
+        val view = host ?: return
+        // A finger held still still reports moves -- the driver's own jitter -- and the ring
+        // opens with its centre Cancel button exactly under the pause point. Until the finger
+        // has genuinely left that point, nothing steers, so a pause-and-lift stays "nothing
+        // chosen" rather than a cancel nobody asked for.
+        if (!steerLeftPausePoint) {
+            val slop = view.keyboard.touchSlopPx
+            if (hypot(x - lastGestureX, y - lastGestureY) <= slop) {
+                return
+            }
+            steerLeftPausePoint = true
+        }
+        // Canvas-local coordinates, like every gesture point; the ring is laid out across the
+        // whole host, so they are offset by the keyboard's own origin -- the same offset
+        // radialAnchor applies to the anchor itself.
+        val menu = view.radialSuggestionMenu
+        val before = menu.currentSelection()
+        menu.steerTo(x + view.keyboard.left, y + view.keyboard.top)
         // The pick-timeout is a passivity guard, not a hard deadline: it exists for someone who
         // pauses and then genuinely does nothing, not for someone actively steering while they
-        // decide. Any real movement cancels it outright and it is never re-armed -- once the
-        // user has shown they are engaged, resolution waits for an actual lift, however long
-        // that takes.
-        host?.removeCallbacks(radialTimeoutRunnable)
-        host?.radialSuggestionMenu?.steerTo(x, y)
+        // decide. Real steering -- the highlight actually changing -- cancels it outright and it
+        // is never re-armed; jitter that changes nothing leaves it running.
+        if (menu.currentSelection() != before) {
+            view.removeCallbacks(radialTimeoutRunnable)
+        }
     }
 
     /** The finger lifted while the ring was open. Reads whatever [onGestureSteered] last
@@ -1138,12 +1356,114 @@ class BorderKeysService :
         cancelRadialGesture()
     }
 
-    /** A fresh, independent tap resolved while the ring was kept open after an inconclusive
-     *  lift -- see [KeyboardPreferences.radialLiftKeepsOpen] and [resolveRadialRing]'s own doc
-     *  for how it got into that state. */
+    /**
+     * A fresh, independent tap on the ring resolved while it was kept open after a lift -- see
+     * [KeyboardPreferences.radialLiftKeepsOpen] and [resolveRadialRing]'s own doc for how it got
+     * into that state. A wedge applies its word (with the same burst a steered pick gets) and
+     * the centre X cancels, exactly as at a lift. Neither -- a tap lifted in the dead zone
+     * between the two, or a cancelled stream -- only closes the ring: in tap mode the ring is
+     * modal, and the only touches that *do* anything are a wedge and the X; everything else,
+     * inside the ring or out, is a dismissal that leaves the swiped word as it is. Falling
+     * through to [KeyboardPreferences.radialTimeoutDefault] here, the way a lift's dead zone
+     * does, would commit (with a space) or delete the word from a tap that was aimed at
+     * nothing.
+     */
     override fun onRadialTapResolved(selection: RadialSuggestionMenuView.Selection) {
-        closeRadialRing()
-        resolveRadialSelection(selection)
+        when (selection) {
+            is RadialSuggestionMenuView.Selection.Word -> {
+                closeRadialRing(selection.index)
+                resolveRadialSelection(selection)
+            }
+            RadialSuggestionMenuView.Selection.Cancel -> {
+                closeRadialRing()
+                cancelRadialGesture()
+            }
+            RadialSuggestionMenuView.Selection.None -> dismissRadialMenu()
+        }
+    }
+
+    /** A touch landed outside the ring while it was waiting for a tap -- see
+     *  [RadialSuggestionMenuView.onTouchEvent]. The touch was consumed there; all that is left
+     *  to do is close the ring and leave the text alone. */
+    override fun onRadialDismissed() {
+        dismissRadialMenu()
+        // Optionally the keyboard goes with it -- KeyboardPreferences.radialOutsideTapHidesKeyboard.
+        if (preferences.radialOutsideTapHidesKeyboard) {
+            requestHideSelf(0)
+        }
+    }
+
+    /**
+     * The editor reporting where its text sits on screen -- requested only while a ring is open
+     * (see [closeRadialRing]/[watchEditorWhileRingOpen]). The first report is the baseline; a
+     * later one with the view moved means the page scrolled under the ring, which is the one
+     * signal a tap elsewhere in the app produces, and closes it when
+     * [KeyboardPreferences.radialCloseOnEditorMove] is on.
+     */
+    override fun onUpdateCursorAnchorInfo(cursorAnchorInfo: CursorAnchorInfo?) {
+        super.onUpdateCursorAnchorInfo(cursorAnchorInfo)
+        if (cursorAnchorInfo == null || swipeRadialController.state != SwipeRadialController.State.OPEN) {
+            return
+        }
+        val values = FloatArray(9)
+        cursorAnchorInfo.matrix.getValues(values)
+        val x = values[Matrix.MTRANS_X]
+        val y = values[Matrix.MTRANS_Y]
+        if (ringEditorOriginX.isNaN()) {
+            ringEditorOriginX = x
+            ringEditorOriginY = y
+            return
+        }
+        if (preferences.radialCloseOnEditorMove &&
+            hypot(x - ringEditorOriginX, y - ringEditorOriginY) > EDITOR_MOVE_DISMISS_PX
+        ) {
+            dismissRadialMenu()
+        }
+    }
+
+    /**
+     * While a ring is open the keyboard's window reaches the top of the screen -- see
+     * [KeyboardHostView.reserveScreenAbove] -- and this is what keeps the app from noticing:
+     * the top of the keyboard it is told about stays where the keys actually are, below the
+     * transparent room, so nothing it laid out moves; and the whole window is touchable, so a
+     * tap in that room comes here, to the ring's own outside-tap rule, rather than to the app.
+     * The keyboard's window is otherwise only as tall as the keyboard, which is why no setting
+     * on the window alone could ever have caught such a tap.
+     */
+    override fun onComputeInsets(outInsets: Insets) {
+        super.onComputeInsets(outInsets)
+        val view = host ?: return
+        if (view.reserveScreenAbove) {
+            outInsets.contentTopInsets += view.keyboardAreaTop
+            outInsets.visibleTopInsets += view.keyboardAreaTop
+            outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_FRAME
+        }
+    }
+
+    /** A real ring, open: the debug ring is meant to survive every tap and never takes over the
+     *  screen. */
+    private fun ringOwnsWholeScreen(): Boolean =
+        swipeRadialController.state == SwipeRadialController.State.OPEN && !debugRingOpen
+
+    /** Grows the window to the top of the screen while a ring is open and gives the room back
+     *  when it closes -- see [onComputeInsets]. */
+    private fun refreshTouchableArea() {
+        host?.reserveScreenAbove = ringOwnsWholeScreen()
+    }
+
+    /** Starts (or stops) the editor's cursor-anchor reports for [onUpdateCursorAnchorInfo]. A
+     *  request the editor does not support simply never reports; nothing else depends on it. */
+    private fun watchEditorWhileRingOpen(watch: Boolean) {
+        ringEditorOriginX = Float.NaN
+        ringEditorOriginY = Float.NaN
+        val connection = currentInputConnection ?: return
+        if (watch && preferences.radialCloseOnEditorMove) {
+            connection.requestCursorUpdates(
+                InputConnection.CURSOR_UPDATE_IMMEDIATE or InputConnection.CURSOR_UPDATE_MONITOR,
+            )
+        } else {
+            connection.requestCursorUpdates(0)
+        }
     }
 
     /**
@@ -1157,28 +1477,49 @@ class BorderKeysService :
     override fun onGesturePreviewCandidates(words: Array<String?>, count: Int) {
         val view = host ?: return
         val connection = currentInputConnection ?: return
+        if (count == 0 || words[0] == null) {
+            // Nothing to show: the stroke goes back to plain capture, so its lift decodes the
+            // whole gesture instead of resolving a ring that never existed.
+            view.keyboard.resumeGestureCapture()
+            return
+        }
+        // Cased and separated exactly as a confident swipe's own candidates are in
+        // onGestureCandidates -- one word, whichever way it arrived.
+        caseSwipedWords(words, count)
         val candidates = words.take(count).filterNotNull()
-        val best = candidates.firstOrNull() ?: return
+        val best = candidates.first()
         radialTopWord = best
         connection.beginBatchEdit()
+        spaceBeforeSwipedWord(connection)
         composing.setLength(0)
         composing.append(best)
         connection.setComposingText(composing, 1)
         connection.endBatchEdit()
+        composingFromGesture = true
+        previewComposedThisGesture = true
+        lastQuery = best
+        suggestionQuery = best
+        knownQuery = best
+        topSuggestion = best
+        topSuggestionIsProperNoun = false
 
         val wedgeWords = candidates.drop(1).take(preferences.radialSuggestionCount)
         if (!swipeRadialController.onRingOpened(wedgeWords)) {
-            // Too few alternatives to make a ring worth showing -- the top candidate is already
-            // composing above, which is exactly what a confident swipe would have left behind
-            // too. KeyboardCanvasView's own ringOpen is still true at this point (set before this
-            // decode came back), so the eventual lift still resolves through resolveRadialRing,
-            // finds no wedge/no Cancel touched, and applies radialTopWord -- the same word,
-            // through the same path, just with nothing drawn to steer against in between.
+            // Too few alternatives to make a ring worth showing. The top candidate is composing
+            // above as a live preview, and the stroke goes back to plain capture: if the finger
+            // lifts now, the whole gesture is decoded once more and its own best word replaces
+            // the preview (onGesture discards it first, via previewComposedThisGesture); if the
+            // finger moves on, the trail keeps drawing and the rest of the word is captured
+            // rather than steering a ring nobody can see.
+            radialTopWord = null
+            view.keyboard.resumeGestureCapture()
             return
         }
         val (anchorX, anchorY) = radialAnchor(view)
         view.radialSuggestionMenu.show(anchorX, anchorY, wedgeWords)
         view.setRadialMenuVisible(true)
+        watchEditorWhileRingOpen(true)
+        refreshTouchableArea()
         view.removeCallbacks(radialTimeoutRunnable)
         // Not armed at all with radialLiftKeepsOpen on: that setting means the ring never
         // resolves on its own anywhere in its lifetime, not just after an inconclusive lift --
@@ -1238,8 +1579,14 @@ class BorderKeysService :
      */
     private fun resolveRadialRing() {
         val view = host ?: return
+        previewComposedThisGesture = false
         val selection = view.radialSuggestionMenu.currentSelection()
-        if (selection == RadialSuggestionMenuView.Selection.None && preferences.radialLiftKeepsOpen) {
+        // Only a ring that is actually open can be kept open: a pause whose decode found too
+        // few alternatives never showed one, and switching a hidden view to tap mode would
+        // leave it eating the next word's touches.
+        if (selection == RadialSuggestionMenuView.Selection.None && preferences.radialLiftKeepsOpen &&
+            swipeRadialController.state == SwipeRadialController.State.OPEN
+        ) {
             view.removeCallbacks(radialTimeoutRunnable)
             view.radialSuggestionMenu.acceptsOwnTouches = true
             return
@@ -1250,13 +1597,13 @@ class BorderKeysService :
 
     /**
      * A wedge applies that word. The centre Cancel button discards everything -- the *only*
-     * deliberate way to cancel, by design. Neither (the dead zone, whether released there,
-     * tapped there, or timed out from it) falls through to
-     * [KeyboardPreferences.radialTimeoutDefault]: apply rank #1 (the default -- passivity is
-     * never destructive unless the user chose otherwise) or cancel, matching what a deliberate
-     * Cancel tap would have done. Shared by every way the ring can finish: an actual lift, a
-     * fresh tap after [KeyboardPreferences.radialLiftKeepsOpen] kept it open, and the
-     * pick-timeout elapsing from either state.
+     * deliberate way to cancel, by design. Neither (the steering finger lifted in the dead zone,
+     * or timed out from it) falls through to [KeyboardPreferences.radialTimeoutDefault]: apply
+     * rank #1 (the default -- passivity is never destructive unless the user chose otherwise) or
+     * cancel, matching what a deliberate Cancel would have done. Shared by every way the ring
+     * can *resolve*: an actual lift, a wedge tapped after [KeyboardPreferences.radialLiftKeepsOpen]
+     * kept it open, and the pick-timeout elapsing. A dismissal (see [dismissRadialMenu]) never
+     * comes through here.
      */
     private fun resolveRadialSelection(selection: RadialSuggestionMenuView.Selection) {
         when (selection) {
@@ -1275,21 +1622,81 @@ class BorderKeysService :
     }
 
     /**
-     * Cancels the pick-timeout, tells the controller, and hides the ring -- the cleanup every
-     * path off the ring shares, regardless of what it resolved to or how it got there.
+     * [KeyboardPreferences.debugForceRadialRing]: opens a sample ring, tap-only, whenever one is
+     * wanted and none is open -- on every new field, and the moment the toggle is switched on.
+     * Whatever closes a real ring closes this one too (a tap outside it, the centre X); it comes
+     * back on the next field. Never in a release build, whatever the stored preference says.
+     */
+    private fun syncDebugRing() {
+        val view = host ?: return
+        val debuggable = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (!debuggable || !preferences.debugForceRadialRing || !preferences.radialMenuEnabled) {
+            return
+        }
+        if (swipeRadialController.state == SwipeRadialController.State.OPEN || view.keyboard.width == 0) {
+            return
+        }
+        val words = DEBUG_RING_WORDS.take(preferences.radialSuggestionCount)
+        if (!swipeRadialController.onRingOpened(words)) {
+            return
+        }
+        radialTopWord = null
+        debugRingOpen = true
+        val x = view.keyboard.left + view.keyboard.width / 2f
+        val y = view.keyboard.top + view.keyboard.height / 2f
+        view.radialSuggestionMenu.show(x, y, words)
+        view.radialSuggestionMenu.acceptsOwnTouches = true
+        view.setRadialMenuVisible(true)
+    }
+
+    /** Whether the ring currently open is [syncDebugRing]'s sample rather than a real gesture's.
+     *  A debug ring ignores every dismissal (field focus, caret moves and stray taps would
+     *  otherwise close it the instant it opened) and comes straight back after a wedge or the
+     *  X resolves it -- only the toggle itself ([closeDebugRing]) ends it. */
+    private var debugRingOpen = false
+
+    private fun closeDebugRing() {
+        if (!debugRingOpen) {
+            return
+        }
+        debugRingOpen = false
+        closeRadialRing()
+    }
+
+    /**
+     * Cancels the pick-timeout, tells the controller, clears the ring and hides it -- the cleanup
+     * every path off the ring shares, regardless of what it resolved to or how it got there.
      *
      * [celebrateIndex] is the wedge a `Selection.Word` resolved to, or null for every other way
-     * off the ring (Cancel, a timeout that fell through to cancelling, `radialLiftKeepsOpen`
-     * handing off to a fresh tap). Only a real pick gets the burst -- [celebrate] must run
-     * before [KeyboardHostView.setRadialMenuVisible] below, since that call reads whether the
-     * burst just spawned is still live to decide whether to hide the view immediately or defer.
+     * off the ring (Cancel, a timeout that fell through to cancelling, a dismissal). Only a real
+     * pick gets the burst; every path clears the view's own wedges, tap mode and ambient glow
+     * ([RadialSuggestionMenuView.hide], which [RadialSuggestionMenuView.celebrate] ends in too)
+     * -- and both must run before [KeyboardHostView.setRadialMenuVisible] below, since that call
+     * reads whether anything is still animating to decide whether to hide the view immediately
+     * or defer until it finishes. Leaving the ambient glow running there is exactly what used to
+     * keep a tapped ring on screen forever: the deferred hide waited for particles that an
+     * emitter nobody stopped kept replacing.
      */
     private fun closeRadialRing(celebrateIndex: Int? = null) {
         val view = host
         view?.removeCallbacks(radialTimeoutRunnable)
+        previewComposedThisGesture = false
+        val wasOpen = swipeRadialController.state == SwipeRadialController.State.OPEN
         swipeRadialController.onResolved()
+        if (wasOpen) {
+            watchEditorWhileRingOpen(false)
+            refreshTouchableArea()
+        }
+        if (debugRingOpen) {
+            // Resolved by a wedge or the X: back on the next frame, for as long as the debug
+            // toggle wants it -- see syncDebugRing.
+            debugRingOpen = false
+            view?.post { syncDebugRing() }
+        }
         if (celebrateIndex != null) {
             view?.radialSuggestionMenu?.celebrate(celebrateIndex)
+        } else {
+            view?.radialSuggestionMenu?.hide()
         }
         view?.setRadialMenuVisible(false)
     }
@@ -1306,11 +1713,74 @@ class BorderKeysService :
             connection.beginBatchEdit()
             connection.setComposingText("", 1)
             connection.finishComposingText()
+            // The space this class put in front of the swiped word goes with it -- see
+            // swipeAutoSpaceInserted's own doc. Checked against the text rather than trusted
+            // blindly, the same way every other deletion here is.
+            if (swipeAutoSpaceInserted) {
+                val before = connection.getTextBeforeCursor(1, 0)
+                if (before != null && before.length == 1 && before[0] == ' ') {
+                    connection.deleteSurroundingText(1, 0)
+                }
+            }
             connection.endBatchEdit()
         }
         composing.setLength(0)
+        composingFromGesture = false
+        swipeAutoSpaceInserted = false
         host?.suggestionStrip?.clear()
+        refreshContextFromEditor()
+        // The swipe spent a one-shot shift when it composed; with the word gone, the sentence
+        // start it was capitalising is a sentence start again.
+        applyAutoShift()
         requestSuggestions()
+    }
+
+    /**
+     * Cases every swipe candidate the way typed letters would come out under the current shift
+     * -- capitalised for a one-shot shift (a sentence start, or the shift key pressed before the
+     * swipe), shouted under caps lock, untouched otherwise -- then spends a one-shot shift the
+     * way [handleCharacter] does for a first letter. Without this a swipe at the start of a
+     * sentence produced a lower-case word and left shift armed for the first letter typed
+     * afterwards, capitalising that one instead. Never lower-cases: the decoder already
+     * capitalises names on its own, and that must survive.
+     */
+    private fun caseSwipedWords(words: Array<String?>, count: Int) {
+        val state = shiftState
+        if (state != ShiftState.OFF) {
+            for (index in 0 until count) {
+                words[index] = words[index]?.let { word ->
+                    if (state == ShiftState.LOCKED) word.uppercase() else word.replaceFirstChar { it.uppercaseChar() }
+                }
+            }
+        }
+        composingCapitalisedByUser = shiftHeldByUser && state != ShiftState.OFF
+        if (state == ShiftState.ON) {
+            shiftState = ShiftState.OFF
+            host?.keyboard?.shiftState = shiftState
+        }
+        shiftHeldByUser = false
+    }
+
+    /**
+     * Inserts the space a swiped word needs in front of it, if what precedes the caret is
+     * something a word does not run straight on from -- letters, digits or a closing mark.
+     * Nothing after whitespace, an empty field, or an opener (a bracket, a quote, a slash, a
+     * hyphen, an apostrophe: "l'" + swipe "homme" is "l'homme"). Two swipes in a row used to
+     * land as one run of letters, and a swipe after a half-typed word glued itself onto it.
+     * Remembered in [swipeAutoSpaceInserted] so a cancelled swipe can take it back.
+     */
+    private fun spaceBeforeSwipedWord(connection: InputConnection) {
+        swipeAutoSpaceInserted = false
+        val before = connection.getTextBeforeCursor(1, 0)
+        if (before.isNullOrEmpty()) {
+            return
+        }
+        val previous = before[0]
+        if (previous.isWhitespace() || previous in SWIPE_NO_SPACE_AFTER) {
+            return
+        }
+        connection.commitText(" ", 1)
+        swipeAutoSpaceInserted = true
     }
 
     /**
@@ -1330,19 +1800,43 @@ class BorderKeysService :
         val view = host
         view?.suggestionStrip?.decoding = false
         if (count == 0) {
+            // Nothing decoded: the row goes back to predictions for whatever is before the
+            // caret, not to a blank it would otherwise sit in until the next keystroke.
             view?.suggestionStrip?.clear()
+            requestSuggestions()
             return
         }
         val connection = currentInputConnection ?: return
-        val best = words[0] ?: return
+        if (words[0] == null) {
+            return
+        }
+        // Every candidate follows shift exactly as typed letters would -- a swipe at a sentence
+        // start is capitalised, one under caps lock is shouted -- and the swipe then spends a
+        // one-shot shift the way a first letter does. See caseSwipedWords.
+        caseSwipedWords(words, count)
+        val best = words[0]!!
 
         connection.beginBatchEdit()
+        spaceBeforeSwipedWord(connection)
         composing.setLength(0)
         composing.append(best)
         connection.setComposingText(composing, 1)
         connection.endBatchEdit()
-
-        view?.suggestionStrip?.setSuggestions(words, count)
+        composingFromGesture = true
+        // The strip is now about this word: its alternatives, not completions of it. lastQuery
+        // is what onUpdateSelection's echo of this very edit compares against to decide whether
+        // to ask the engine again -- set here so it does not, and the alternatives stay up.
+        // None of the chips is "the typed word" or "the correction a delimiter would apply".
+        lastQuery = best
+        suggestionQuery = best
+        knownQuery = best
+        topSuggestion = best
+        topSuggestionIsProperNoun = false
+        view?.suggestionStrip?.let { strip ->
+            strip.typedIndex = -1
+            strip.appliedIndex = -1
+            strip.setSuggestions(words, count)
+        }
 
         if (view != null && preferences.radialMenuEnabled && preferences.radialLiftKeepsOpen) {
             radialTopWord = best
@@ -1353,6 +1847,8 @@ class BorderKeysService :
                 view.radialSuggestionMenu.show(anchorX, anchorY, wedgeWords)
                 view.radialSuggestionMenu.acceptsOwnTouches = true
                 view.setRadialMenuVisible(true)
+                watchEditorWhileRingOpen(true)
+                refreshTouchableArea()
             }
         }
     }
@@ -1366,11 +1862,15 @@ class BorderKeysService :
     override fun onText(text: CharSequence) {
         dismissRadialMenu()
         val connection = currentInputConnection ?: return
+        confirmPendingCorrection()
         connection.beginBatchEdit()
         finishComposing(connection)
         connection.commitText(text, 1)
         connection.endBatchEdit()
         checkpointField()
+        refreshContextFromEditor()
+        applyAutoShift()
+        requestSuggestions()
     }
 
     override fun onKey(code: Int, keyIndex: Int) {
@@ -1419,6 +1919,10 @@ class BorderKeysService :
             switchLanguage()
             return true
         }
+        if (code == KeyCodes.SHIFT) {
+            lockShift()
+            return true
+        }
         // Holding backspace takes the whole word before the cursor, not one more character than
         // a tap would have. The correction gets first refusal, the same as the quick actions
         // bar's own undo button does for the identical situation: a hold that lands right after
@@ -1429,6 +1933,7 @@ class BorderKeysService :
                 deleteWordBeforeCursor(connection)
             }
             refreshContextFromEditor()
+            applyAutoShift()
             requestSuggestions()
             return true
         }
@@ -1445,25 +1950,57 @@ class BorderKeysService :
 
     private fun handleCharacter(code: Int) {
         val connection = currentInputConnection ?: return
+        ownEditPending = false
         val shifted = if (shiftState != ShiftState.OFF) {
             Character.toUpperCase(code)
         } else {
             code
         }
-        if (shiftState == ShiftState.ON) {
+        val letter = isWordCharacter(shifted)
+        // A one-shot shift is spent by the letter it capitalised and by nothing else: shift,
+        // space, letter is a capital, the way every keyboard does it. Spending it on the space
+        // used to make the sequence unrecoverable -- and, combined with the swallowed
+        // habit-space below, ate the capital auto-shift had armed after every sentence mark.
+        if (letter && shiftState == ShiftState.ON) {
             shiftState = ShiftState.OFF
             host?.keyboard?.shiftState = shiftState
         }
         // Read before the reset just below, and only at the first letter of a fresh word --
         // see composingCapitalisedByUser's own doc for why it has to be captured here rather
         // than wherever the word eventually finishes.
-        if (composing.isEmpty() && isWordCharacter(shifted)) {
-            composingCapitalisedByUser = shiftHeldByUser && Character.isUpperCase(shifted)
+        val heldByUser = shiftHeldByUser
+        if (composing.isEmpty() && letter) {
+            composingCapitalisedByUser = heldByUser && Character.isUpperCase(shifted)
         }
-        shiftHeldByUser = false
+        if (letter) {
+            // The letter spent it. A delimiter leaves it standing, so the shift the user pressed
+            // still reaches the first letter after the space.
+            shiftHeldByUser = false
+            userReleasedAutoLock = false
+        }
 
-        if (isWordCharacter(shifted)) {
+        if (letter) {
             pendingAutoSpace = false
+            if (composingFromGesture) {
+                // The swiped word is a whole word; this letter begins the next one. Finished
+                // and learned exactly as a delimiter would finish it, then separated by the
+                // space a swipe implies -- see composingFromGesture's own doc.
+                composingFromGesture = false
+                val contextWord = previousWord1
+                val grandContextWord = previousWord2
+                connection.beginBatchEdit()
+                val finished = finishComposing(connection)
+                connection.commitText(" ", 1)
+                connection.endBatchEdit()
+                if (finished != null) {
+                    recordLearned(finished, contextWord, grandContextWord, composingCapitalisedByUser)
+                }
+                checkpointField()
+                // A fresh word: whether this first letter is a deliberate capital is decided
+                // now, the same as the capture above did for an empty composing region -- and
+                // by the same rule: only a shift the user pressed counts, never auto-shift's.
+                composingCapitalisedByUser = heldByUser && Character.isUpperCase(shifted)
+            }
             composing.appendCodePoint(shifted)
             // One IPC for the whole update. setComposingText replaces the composing region, so
             // the editor is told the new word rather than the character that changed.
@@ -1487,10 +2024,19 @@ class BorderKeysService :
         val contextWord = previousWord1
         val grandContextWord = previousWord2
 
-        // The space we just added ourselves, typed again out of habit. Swallowed, and the
+        // The space we just added ourselves, typed again out of habit. Swallowed once, kept
+        // swallowing, or kept -- KeyboardPreferences.autoSpaceHabit's three answers -- and the
         // window for the two-spaces rule is not opened by it either.
-        if (shifted == ' '.code && typed.isEmpty() && pendingAutoSpace) {
-            pendingAutoSpace = false
+        if (shifted == ' '.code && typed.isEmpty() && pendingAutoSpace &&
+            preferences.autoSpaceHabit != KeyboardPreferences.AUTO_SPACE_KEEP
+        ) {
+            if (preferences.autoSpaceHabit == KeyboardPreferences.AUTO_SPACE_SWALLOW_FIRST) {
+                pendingAutoSpace = false
+            }
+            // Nothing was committed, so no caret echo will re-derive shift for this keystroke:
+            // done here, or the capital armed after the sentence mark is lost to the very space
+            // habit types next.
+            shiftAfterDelimiter(heldByUser)
             return
         }
 
@@ -1501,12 +2047,16 @@ class BorderKeysService :
             System.currentTimeMillis() - lastSpaceAt < DOUBLE_SPACE_MILLIS &&
             endsWithWordCharacterBeforeSpace(connection)
         ) {
+            ownEditPending = true
             connection.beginBatchEdit()
             connection.deleteSurroundingText(1, 0)
             connection.commitText(". ", 1)
             connection.endBatchEdit()
             lastSpaceAt = 0L
             pendingSpacePeriod = true
+            // The space after the full stop is one this keyboard added: a third space typed
+            // out of the same habit is treated like any other habit-space.
+            pendingAutoSpace = true
             pendingCorrection = null
             checkpointField()
             refreshContextFromEditor()
@@ -1519,12 +2069,14 @@ class BorderKeysService :
         }
         pendingSpacePeriod = false
 
+        ownEditPending = true
         connection.beginBatchEdit()
         // "word ." is not something anyone means. A space before a sentence mark is taken back
         // before the mark lands, which is what makes adding one after a mark safe: the pair of
-        // settings is one idea, and either half alone would be worse than neither.
+        // settings is one idea, and either half alone would be worse than neither. Except in
+        // French, where the space before "!", "?", ";" and ":" is the typography, not a typo.
         if (typed.isEmpty() && preferences.removeSpaceBeforePunctuation &&
-            isTightPunctuation(shifted)
+            isTightPunctuation(shifted) && !isFrenchSpacedPunctuation(shifted)
         ) {
             val before = connection.getTextBeforeCursor(1, 0)
             if (before != null && before.length == 1 && before[0] == ' ') {
@@ -1577,7 +2129,7 @@ class BorderKeysService :
             previousWord2 = null
         }
         checkpointField()
-        shiftAfterDelimiter(shifted)
+        shiftAfterDelimiter(heldByUser)
         requestSuggestions()
         if (preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
             checkLanguageSwitch()
@@ -1686,19 +2238,25 @@ class BorderKeysService :
     }
 
     /**
-     * A safety net, not a primary path: the ring's whole lifetime is scoped to one touch-down
-     * (opens at the pause, resolves at that same pointer's lift -- see [resolveRadialRing]), so
-     * it cannot normally still be open when a key press or a fresh gesture reaches this class.
-     * The one way it still could is a second pointer -- a shift-hold on the other hand -- pressing
-     * a key while the first is still steering. Forces a cancel rather than guessing, the same
-     * reasoning [onGestureRingCancelled] already uses for an interrupted touch stream.
+     * Closes the ring and touches nothing else: the swiped word stays composing exactly as it
+     * was, nothing is committed, nothing is deleted. Per the user's own spec, this is what every
+     * way off the ring that is not a wedge or the centre X does -- a touch outside the ring on
+     * the keyboard ([onRadialDismissed]), a tap into the editor itself ([onUpdateSelection]), a
+     * key pressed or a gesture completed by another pointer mid-steer, a field switch. The X
+     * is the *only* thing that deletes the word ([cancelRadialGesture]); a dismissal that did
+     * the same used to mean the first stray tap after every swipe threw that swipe away.
+     *
+     * Also tells [KeyboardCanvasView] to forget the steering stroke if one is still down: the
+     * ring it was steering is gone, so its eventual lift must neither resolve against an empty
+     * ring nor type the key it started on -- see [KeyboardCanvasView.abandonRingStroke]. A
+     * no-op there, and here, when nothing is open at all, which is most of the time.
      */
     private fun dismissRadialMenu() {
-        if (swipeRadialController.state != SwipeRadialController.State.OPEN) {
+        if (swipeRadialController.state != SwipeRadialController.State.OPEN || debugRingOpen) {
             return
         }
         closeRadialRing()
-        cancelRadialGesture()
+        host?.keyboard?.abandonRingStroke()
     }
 
     /**
@@ -1766,6 +2324,7 @@ class BorderKeysService :
         return AutoCorrection.correctionFor(
             typed, topSuggestion, suggestionQuery, knownQuery, preferences.minCorrectionLength,
             topSuggestionIsProperNoun,
+            maxEdits = AutoCorrection.maxEditsFor(typed.length, preferences.correctionDistance),
         )
     }
 
@@ -1903,8 +2462,9 @@ class BorderKeysService :
     }
 
     private fun handleDelete() {
-        // Unconditional, before anything else -- see dismissRadialMenu's own doc for why this
-        // is a rare safety net rather than a primary path under the single-stroke design.
+        // Unconditional, before anything else -- a second pointer's backspace mid-steer closes
+        // the ring and then deletes as it normally would; see dismissRadialMenu's own doc for
+        // why closing never touches the swiped word itself.
         dismissRadialMenu()
         val connection = currentInputConnection ?: return
         val hasSelection = selectionEnd > selectionStart
@@ -1913,10 +2473,20 @@ class BorderKeysService :
         // the selected text exactly where it was, which reads as the key having done nothing.
         if (hasSelection) {
             composing.setLength(0)
-            pendingCorrection = null
+            composingFromGesture = false
+            // Learned, not dropped: a correction that survived to a later, unrelated edit was
+            // accepted -- see revertCorrection's own reasoning on what dropping it would mean.
+            confirmPendingCorrection()
             connection.commitText("", 1)
             refreshContextFromEditor()
+            applyAutoShift()
             requestSuggestions()
+            return
+        }
+        // A swiped word can be taken back whole -- see KeyboardPreferences.swipeBackspaceDeletesWord.
+        if (composingFromGesture && preferences.swipeBackspaceDeletesWord && composing.isNotEmpty()) {
+            cancelRadialGesture()
+            applyAutoShift()
             return
         }
         if (pendingSpacePeriod) {
@@ -1936,14 +2506,22 @@ class BorderKeysService :
             }
         }
         if (revertCorrection(connection)) {
+            applyAutoShift()
+            requestSuggestions()
             return
         }
         if (composing.isNotEmpty()) {
+            // Backspacing into a swiped word means the user is correcting it, so from here on
+            // typed letters extend it like any typed word -- see composingFromGesture's doc.
+            composingFromGesture = false
             // A surrogate pair is one character to the user and two to the buffer.
             val length = composing.length
             val start = composing.offsetByCodePoints(length, -1)
             composing.setLength(start)
             connection.setComposingText(composing, 1)
+            if (composing.isEmpty()) {
+                applyAutoShift()
+            }
             requestSuggestions()
             return
         }
@@ -1959,6 +2537,9 @@ class BorderKeysService :
         connection.deleteSurroundingText(toDelete, 0)
         connection.endBatchEdit()
         refreshContextFromEditor()
+        // Re-derived here, not left to the caret echo: the strip's predictions are cased by
+        // whatever shift state they find when they arrive, and the echo can lose that race.
+        applyAutoShift()
         requestSuggestions()
     }
 
@@ -1988,14 +2569,7 @@ class BorderKeysService :
         } else {
             connection.commitText("\n", 1)
             connection.endBatchEdit()
-            checkpointField()
-            // Every other path that commits text re-derives shift from what is now before the
-            // cursor (shiftAfterDelimiter, the auto-space-period fixups below) -- this one committed
-            // a newline, sentenceEndsBeforeCursor's own first check, and skipped it, which is why a
-            // line just started stayed lower-case: shift was left at whatever it was before Enter,
-            // usually OFF right after finishing a word.
-            refreshContextFromEditor()
-            applyAutoShift()
+            afterNewlineCommitted()
         }
         if (finished != null) {
             recordLearned(finished, contextWord, grandContextWord, composingCapitalisedByUser)
@@ -2008,20 +2582,58 @@ class BorderKeysService :
         requestSuggestions()
     }
 
+    /**
+     * The bookkeeping a committed newline needs, shared by [handleEnter] and the quick-action
+     * bar's own newline button so neither can drift from the other. Every other path that
+     * commits text re-derives shift from what is now before the cursor; a newline is
+     * sentenceEndsBeforeCursor's own first check, and skipping it is why a line just started
+     * stayed lower-case. The spacing state is a line's own: a space this keyboard added at the
+     * end of the previous line must not swallow the first one typed on the next.
+     */
+    private fun afterNewlineCommitted() {
+        checkpointField()
+        pendingAutoSpace = false
+        pendingSpacePeriod = false
+        lastSpaceAt = 0L
+        refreshContextFromEditor()
+        applyAutoShift()
+    }
+
     private fun handleShift() {
         val now = System.currentTimeMillis()
+        // Two taps inside the window lock, from whatever state the first tap found -- an
+        // auto-lit shift at a sentence start included, which used to need a third tap because
+        // the first one only ever turned it off.
+        val doubleTap = now - lastShiftPressAt < DOUBLE_TAP_MILLIS
+        val releasedAutoLock = shiftState == ShiftState.LOCKED && autoLockedShift
         shiftState = when {
             shiftState == ShiftState.LOCKED -> ShiftState.OFF
-            shiftState == ShiftState.ON && now - lastShiftPressAt < DOUBLE_TAP_MILLIS -> ShiftState.LOCKED
+            doubleTap -> ShiftState.LOCKED
             shiftState == ShiftState.ON -> ShiftState.OFF
             else -> ShiftState.ON
         }
         lastShiftPressAt = now
         // Pressed deliberately, so the automatic state stops having an opinion until the next
-        // character consumes it.
+        // letter consumes it.
         shiftHeldByUser = shiftState != ShiftState.OFF
         autoLockedShift = false
+        userReleasedAutoLock = releasedAutoLock
         host?.keyboard?.shiftState = shiftState
+        // The strip cases its predictions by the shift state at the moment they arrive, so a
+        // shift pressed afterwards has to ask again -- otherwise a chip tapped next commits the
+        // case the strip was showing, not the one the key now promises.
+        requestSuggestions()
+    }
+
+    /** Holding shift locks it -- the third way in besides the double tap, and the one people
+     *  find without being told. */
+    private fun lockShift() {
+        shiftState = ShiftState.LOCKED
+        shiftHeldByUser = true
+        autoLockedShift = false
+        userReleasedAutoLock = false
+        host?.keyboard?.shiftState = shiftState
+        requestSuggestions()
     }
 
     /**
@@ -2288,8 +2900,42 @@ class BorderKeysService :
         }
         composing.setLength(0)
         composing.append(word)
-        connection.commitText("$word ", 1)
+        // A pick replaces the *whole* word the caret sits in, not just the part before the
+        // caret: the composing region adoptWordAtCaret marks stops at the caret (so typing
+        // still inserts there), and "wor|d" picked as "world" used to leave "world d".
+        val after = connection.getTextAfterCursor(CONTEXT_WINDOW_CHARS, 0)
+        var tail = 0
+        if (after != null) {
+            while (tail < after.length && isWordCharacter(after[tail].code)) {
+                tail++
+            }
+        }
+        if (tail > 0) {
+            connection.deleteSurroundingText(0, tail)
+        }
+        // The space that follows a picked word is only added where there is not one already:
+        // picking a suggestion for a word the caret merely sits in, mid-sentence, would
+        // otherwise leave "word  next" with two spaces. At the end of the field, or before
+        // anything that is not whitespace, the space is what lets typing carry straight on.
+        val nextChar = after?.getOrNull(tail)
+        val space = if (nextChar != null && nextChar.isWhitespace()) "" else " "
+        ownEditPending = true
+        connection.commitText(word + space, 1)
         connection.endBatchEdit()
+        composingFromGesture = false
+        swipeAutoSpaceInserted = false
+        // The space is this keyboard's own: a habit-space typed next is treated like one after
+        // punctuation. Nothing to arm when no space was added.
+        pendingAutoSpace = space.isNotEmpty()
+        // A pick consumes shift exactly the way typing the word's first letter would have: a
+        // one-shot shift pressed before picking a prediction at a sentence start was spent on
+        // that word (the strip already showed it capitalised) and must not carry over to the
+        // first letter of the next one. Then re-derived from the text now before the caret.
+        if (shiftState == ShiftState.ON) {
+            shiftState = ShiftState.OFF
+            host?.keyboard?.shiftState = shiftState
+        }
+        shiftHeldByUser = false
 
         // Choosing a candidate that was not already the top one is the learning signal. This is
         // where personalisation happens: a count goes up, and nothing is retrained.
@@ -2312,6 +2958,8 @@ class BorderKeysService :
         previousWord1 = words.lastOrNull() ?: word
         composing.setLength(0)
         host?.suggestionStrip?.clear()
+        checkpointField()
+        applyAutoShift()
         requestSuggestions()
     }
 
@@ -2345,7 +2993,21 @@ class BorderKeysService :
             val dictionary = DataGraph.dictionary
             // The repository suspends on its own dispatcher; the reloads only post to the
             // prediction thread, so there is nothing here to move off the main thread.
-            dictionary.forget(word)
+            //
+            // The chip label is re-cased for the row ("Hello" at a sentence start), so the
+            // personal entry is looked up without regard to case and deleted under its own
+            // spelling. A word the personal dictionary does not hold came from a language pack,
+            // which cannot be edited: it is blocked instead, under the pack's own lower-case
+            // spelling, so the prompt does something for every word it is shown for.
+            val personal = dictionary.findIgnoreCase(word)
+            if (personal != null) {
+                dictionary.forget(personal.word)
+            } else {
+                dictionary.block(word.lowercase())
+                val blockedWords = dictionary.blockedWordSet()
+                engine.setBlockedWords(blockedWords)
+                learning.setBlockedWords(blockedWords)
+            }
             loadPersonalModel(dictionary)
             requestSuggestions()
         }
@@ -2424,19 +3086,22 @@ class BorderKeysService :
                 }
             }
         }
-        val shown = if (preferences.showSuggestionStrip) {
-            suggestionRow.arrange(
-                words, count, lastQuery, preferences.suggestionCount,
-                correcting = correctionFor(lastQuery) != null,
-            )
-        } else {
-            count
+        // With the strip off there is no row to arrange: the answer above (topSuggestion,
+        // knownQuery) is all autocorrect needs, and it was recorded before this point.
+        if (!preferences.showSuggestionStrip) {
+            return
         }
-        host?.suggestionStrip?.let { strip ->
-            strip.typedIndex = suggestionRow.typedIndex
-            strip.appliedIndex = suggestionRow.appliedIndex
-            strip.setSuggestions(words, shown)
-        }
+        val strip = host?.suggestionStrip ?: return
+        // Arranged for the slots that actually hold words: the clipboard chip takes one, and
+        // the arrangement used to be told the full count, so the outlined correction could sit
+        // in a slot the chip had pushed off screen while space still applied it.
+        val shown = suggestionRow.arrange(
+            words, count, lastQuery, preferences.suggestionCount.coerceAtMost(strip.wordSlotLimit),
+            correcting = correctionFor(lastQuery) != null,
+        )
+        strip.setSuggestions(words, shown)
+        strip.typedIndex = suggestionRow.typedIndex
+        strip.appliedIndex = suggestionRow.appliedIndex
     }
 
     /** Where the typed word and the word a delimiter would apply end up on the strip. */
@@ -2462,10 +3127,14 @@ class BorderKeysService :
     private var lastQuery: String = ""
 
     private fun requestSuggestions() {
-        if (!preferences.showSuggestionStrip) {
+        lastQuery = composing.toString()
+        // A password never leaves its field: nothing typed into one is sent to the engine, so
+        // nothing can be predicted, corrected or learned from it. The strip's own setting is
+        // not a reason to skip the request -- autocorrect needs the answer whether or not a row
+        // is drawn from it, and used to switch off silently with the strip.
+        if (passwordField) {
             return
         }
-        lastQuery = composing.toString()
         engine.requestSuggestions(lastQuery, previousWord1, previousWord2)
     }
 
@@ -2489,6 +3158,8 @@ class BorderKeysService :
 
     /** Ends the composing region and returns the word that was committed, if any. */
     private fun finishComposing(connection: InputConnection): String? {
+        composingFromGesture = false
+        swipeAutoSpaceInserted = false
         if (composing.isEmpty()) {
             connection.finishComposingText()
             return null
@@ -2503,10 +3174,12 @@ class BorderKeysService :
 
     private fun resetComposing() {
         dismissRadialMenu()
-        // A field switch is the one moment a pause-time decode still in flight for the field
-        // being left really could arrive late -- invalidated here so it can never compose text
-        // or open a ring in the new field it lands in instead.
+        // A field switch is the one moment a decode still in flight for the field being left
+        // really could arrive late -- invalidated here, pause-time and lift-time both, so it can
+        // never compose text or open a ring in the new field it lands in instead.
         engine.cancelPendingPreview()
+        engine.cancelPendingGesture()
+        previewComposedThisGesture = false
         pendingCorrection = null
         pendingForget = null
         // A new field starts with typed == "" and no in-flight request could ever answer for
@@ -2518,6 +3191,8 @@ class BorderKeysService :
         suggestionQuery = ""
         knownQuery = ""
         composing.setLength(0)
+        composingFromGesture = false
+        swipeAutoSpaceInserted = false
         currentInputConnection?.finishComposingText()
         refreshContextFromEditor()
         host?.suggestionStrip?.clear()
@@ -2572,6 +3247,10 @@ class BorderKeysService :
      */
     private fun adoptWordAtCaret() {
         composing.setLength(0)
+        composingFromGesture = false
+        swipeAutoSpaceInserted = false
+        // Whatever the previous word's first letter was is not evidence about this one.
+        composingCapitalisedByUser = false
         // The pending correction is deliberately *not* cleared here.
         //
         // Committing a correction ends the composing region, so the selection change that
@@ -2590,14 +3269,16 @@ class BorderKeysService :
             engine.requestSuggestions("", null, null)
             return
         }
-        // One read, split once. The run touching the caret is the word being asked about; the
-        // words before it are its context. Splitting the whole window and then deciding which
-        // part is which is cheaper than two getTextBeforeCursor calls, and it cannot disagree
-        // with itself the way two reads at two moments can.
-        val words = before.split(*WORD_SEPARATORS).filter { it.isNotEmpty() }
-        val caretInsideWord = isWordCharacter(before[before.length - 1].code)
-        val partial = if (caretInsideWord) words.lastOrNull().orEmpty() else ""
-        val (context1, context2) = contextWordsBefore(before, before.length - partial.length)
+        // One read. The run of word characters touching the caret is the word being asked
+        // about -- by the same definition of "word character" every typed word already uses
+        // (isWordCharacter), so "user@example" adopts "example" exactly as typing it would have
+        // composed, rather than the whole address -- and the words before it are its context.
+        var start = before.length
+        while (start > 0 && isWordCharacter(before[start - 1].code)) {
+            start--
+        }
+        val partial = before.substring(start)
+        val (context1, context2) = contextWordsBefore(before, start)
         previousWord1 = context1
         previousWord2 = context2
         lastQuery = partial
@@ -2635,7 +3316,11 @@ class BorderKeysService :
         fun wordEndingAt(limit: Int): Pair<String, Int>? {
             var index = limit
             while (index > 0 && !isWordCharacter(before[index - 1].code)) {
-                if (isSentenceEndingPunctuation(before[index - 1].code)) {
+                // A line break is a harder stop than any sentence mark -- handleEnter's own
+                // rule, kept here too so a caret move or a deletion re-reading the text does not
+                // quietly hand the first word of a line the last word of the one above as
+                // context.
+                if (isSentenceEndingPunctuation(before[index - 1].code) || before[index - 1] == '\n') {
                     return null
                 }
                 index--
@@ -2657,7 +3342,9 @@ class BorderKeysService :
     /** True when what precedes the single trailing space is a word character. */
     private fun endsWithWordCharacterBeforeSpace(connection: InputConnection): Boolean {
         val before = connection.getTextBeforeCursor(2, 0) ?: return false
-        return before.length == 2 && before[1] == ' ' && isWordCharacter(before[0].code)
+        // A digit counts: "in 2026  " ends a sentence exactly as "in June  " does.
+        return before.length == 2 && before[1] == ' ' &&
+            (isWordCharacter(before[0].code) || before[0].isDigit())
     }
 
     /**
@@ -2690,12 +3377,21 @@ class BorderKeysService :
         return if (after != null && after.isNotEmpty() && after[0] == ' ') "" else " "
     }
 
-    private fun shiftAfterDelimiter(code: Int) {
-        if (shiftState == ShiftState.LOCKED || shiftHeldByUser) {
+    /** Re-derives shift after a delimiter, unless caps lock is on or the user pressed shift
+     *  themselves ([heldByUser], captured before the keystroke touched the flag) -- their
+     *  decision stands until a letter spends it. */
+    private fun shiftAfterDelimiter(heldByUser: Boolean) {
+        if (shiftState == ShiftState.LOCKED || heldByUser) {
             return
         }
         applyAutoShift()
     }
+
+    /** Whether [code] is a mark French sets off with a space before it -- "!", "?", ";" and
+     *  ":" -- and the active language is French, so that space is left where it is. */
+    private fun isFrenchSpacedPunctuation(code: Int): Boolean =
+        (code == '!'.code || code == '?'.code || code == ';'.code || code == ':'.code) &&
+            currentSubtypeTag().startsWith("fr", ignoreCase = true)
 
     /**
      * Sets shift from what the editor asked for and what is already written.
@@ -2712,7 +3408,7 @@ class BorderKeysService :
         if (shiftState == ShiftState.LOCKED && !autoLockedShift) {
             return
         }
-        if (shiftHeldByUser) {
+        if (shiftHeldByUser || userReleasedAutoLock) {
             return
         }
         val wanted = autoShiftState()
@@ -2908,8 +3604,13 @@ class BorderKeysService :
             // Anything the running build cannot read, for any reason: a format it does not
             // know, a file that no longer matches its recorded hash, a file that is gone. All
             // three end the same way for a pack that came from inside the application -- the
-            // current one is in assets, so it is copied over whatever is there.
+            // current one is in assets, so it is copied over whatever is there. So is a pack
+            // this build ships a different edition of: the word count BundledDictionaries
+            // records is the shipped pack's own, and a copy made by an earlier build keeps its
+            // old count in the entry, which is how a fixed dictionary reaches an existing
+            // install at all -- the copy itself is intact, so nothing else here would notice.
             val stale = !file.isFile ||
+                entry.wordCount != bundled.wordCount ||
                 LanguagePackInspector.inspect(file) !is LanguagePackInspector.Result.Valid ||
                 runCatching { LanguagePackRepository.sha256Of(file) }.getOrNull() != entry.sha256
             if (!stale) {
@@ -2948,7 +3649,7 @@ class BorderKeysService :
             )
             android.util.Log.i(
                 "BorderKeys",
-                "replaced the bundled ${entry.tag} pack, which this build cannot read",
+                "replaced the bundled ${entry.tag} pack: unreadable by this build, or an older edition than it ships",
             )
         }
     }
@@ -3105,7 +3806,10 @@ class BorderKeysService :
             QuickAction.NEWLINE -> {
                 finishComposing(connection)
                 connection.commitText("\n", 1)
-                checkpointField()
+                afterNewlineCommitted()
+                // The same hard break handleEnter draws: no bigram forms across a line.
+                previousWord1 = null
+                previousWord2 = null
             }
             QuickAction.SWITCH_LAYOUT -> switchLanguage()
             QuickAction.SETTINGS -> openSettings()
@@ -3129,10 +3833,8 @@ class BorderKeysService :
             QuickAction.UNDO -> restoreFieldVersion(fieldHistory.back())
             QuickAction.REDO -> restoreFieldVersion(fieldHistory.forward())
         }
-        if (action != QuickAction.CLIPBOARD_HISTORY) {
-            refreshContextFromEditor()
-            requestSuggestions()
-        }
+        // No refresh here: onQuickAction does it once for the whole tap, per its own doc, and
+        // a second (or, for a macro, an n-th) engine round trip per step bought nothing.
     }
 
     /** The word immediately before the cursor, empty when the cursor follows a space. */
@@ -3617,6 +4319,10 @@ class BorderKeysService :
         /** How close two spaces must be to mean the end of a sentence rather than two spaces. */
         const val DOUBLE_SPACE_MILLIS = 1200L
 
+        /** What a swiped word runs straight on from without a space in between -- openers and
+         *  joiners, see [spaceBeforeSwipedWord]. Everything else gets a space. */
+        const val SWIPE_NO_SPACE_AFTER = "([{\"'/-_@#\n"
+
         /** How much of a copied text the chip shows before it stops being a label. */
         const val CHIP_PREVIEW_CHARS = 24
 
@@ -3631,6 +4337,10 @@ class BorderKeysService :
         const val MIN_LEARNED_LENGTH = 2
 
         const val GESTURE_DECODING_NOTICE_MILLIS = 50L
+
+        /** How far the text field must move on screen, in pixels, before that reads as the page
+         *  scrolling under an open ring rather than a layout settling by a pixel. */
+        const val EDITOR_MOVE_DISMISS_PX = 8f
         const val MAX_CLIP_LENGTH = 20_000
         const val MAX_INLINE_SUGGESTIONS = 5
         const val MIN_CHIP_WIDTH_DP = 120

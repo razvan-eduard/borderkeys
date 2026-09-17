@@ -246,6 +246,44 @@ class KeyboardPreferencesTest {
         assertFalse(KeyboardPreferences().radialLiftKeepsOpen)
     }
 
+    @Test
+    fun `a tap outside the ring only closes the ring by default, and the ring follows a moving field`() {
+        assertFalse(KeyboardPreferences().radialOutsideTapHidesKeyboard)
+        assertTrue(KeyboardPreferences().radialCloseOnEditorMove)
+    }
+
+    @Test
+    fun `the habitual space after an automatic one is swallowed once by default, and the value is clamped`() {
+        assertEquals(KeyboardPreferences.AUTO_SPACE_SWALLOW_FIRST, KeyboardPreferences().autoSpaceHabit)
+        assertEquals(
+            KeyboardPreferences.AUTO_SPACE_SWALLOW_FIRST,
+            KeyboardPreferences(autoSpaceHabit = 7).sanitised().autoSpaceHabit,
+        )
+        assertEquals(
+            KeyboardPreferences.AUTO_SPACE_KEEP,
+            KeyboardPreferences(autoSpaceHabit = KeyboardPreferences.AUTO_SPACE_KEEP).sanitised().autoSpaceHabit,
+        )
+    }
+
+    @Test
+    fun `backspace after a swiped word takes one letter by default`() {
+        assertFalse(KeyboardPreferences().swipeBackspaceDeletesWord)
+    }
+
+    @Test
+    fun `the correction distance defaults to normal and rejects anything but its three values`() {
+        assertEquals(KeyboardPreferences.CORRECTION_DISTANCE_NORMAL, KeyboardPreferences().correctionDistance)
+        assertEquals(
+            KeyboardPreferences.CORRECTION_DISTANCE_NORMAL,
+            KeyboardPreferences(correctionDistance = -1).sanitised().correctionDistance,
+        )
+        assertEquals(
+            KeyboardPreferences.CORRECTION_DISTANCE_LOOSE,
+            KeyboardPreferences(correctionDistance = KeyboardPreferences.CORRECTION_DISTANCE_LOOSE)
+                .sanitised().correctionDistance,
+        )
+    }
+
     /** On by default, unlike blurBehindKeyboard -- see radialBlurBackground's own doc for why:
      *  this one only runs while the ring itself is up, not every frame the window is visible. */
     @Test

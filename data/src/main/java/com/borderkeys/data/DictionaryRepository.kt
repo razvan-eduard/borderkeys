@@ -106,6 +106,8 @@ class DictionaryRepository internal constructor(
      * after the user deleted it from their dictionary, which is the setting appearing not to
      * work in the most alarming possible way.
      */
+    suspend fun findIgnoreCase(word: String): UserWord? = userWords.findIgnoreCase(word)
+
     suspend fun forget(word: String) = database.withTransaction {
         userWords.delete(word)
         userBigrams.deleteInvolving(word)

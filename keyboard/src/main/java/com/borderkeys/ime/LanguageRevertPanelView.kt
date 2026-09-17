@@ -10,7 +10,8 @@ import android.graphics.Paint
 import android.os.Trace
 import android.view.MotionEvent
 import android.view.View
-import com.borderkeys.ime.fx.ParticleField
+import com.borderkeys.ime.fx.ParticleSurface
+import com.borderkeys.ime.fx.RoundedRectElement
 import com.borderkeys.theme.ThemePaints
 
 /**
@@ -45,19 +46,20 @@ class LanguageRevertPanelView(
     private var pressedDismiss = false
     private var rowHeightPx = 0f
 
-    /** A burst on the row actually picked -- exposed non-private so [BorderKeysService] can push
-     *  the user's particle-effect settings directly, the same way
-     *  [KeyboardCanvasView.fillParticles] already is. */
-    val fillParticles = ParticleField(FILL_PARTICLE_POOL_CAPACITY) { invalidate() }
+    /** Both particle layers for the panel: the row actually picked is pressed (a burst inside
+     *  it, its outline traced) -- exposed non-private so [BorderKeysService] can push the user's
+     *  particle-effect settings directly, the same way [KeyboardCanvasView.particles] already
+     *  is. See the `ACTION_UP` handler below for why the trace needs a timed release here. */
+    val particles = ParticleSurface(FILL_PARTICLE_POOL_CAPACITY, OUTLINE_PARTICLE_POOL_CAPACITY) { invalidate() }
 
-    /** Traces the picked row's own rect, for the same short window [fillParticles] bursts in --
-     *  see the `ACTION_UP` handler below for why this one also needs a timed [stopAmbient]. */
-    val outlineParticles = ParticleField(OUTLINE_PARTICLE_POOL_CAPACITY) { invalidate() }
+    /** The picked row, as the element the engine reads its shape from -- the same rect
+     *  [drawRow] paints. */
+    private val rowElement = RoundedRectElement()
 
-    /** Stops [outlineParticles]' ambient trace ~500ms after a row is picked -- there is no
-     *  hover/hold state on this view to hook a natural start/stop pair to, unlike every other
-     *  particle-owning view in this package, since a row is removed right after being tapped. */
-    private val stopOutlineRunnable = Runnable { outlineParticles.stopAmbient() }
+    /** Releases the picked row ~500ms after the tap -- there is no hover/hold state on this
+     *  view to hook a natural start/stop pair to, unlike every other particle-owning view in
+     *  this package, since a row is removed right after being tapped. */
+    private val stopOutlineRunnable = Runnable { particles.release() }
 
     init {
         setWillNotDraw(false)
@@ -102,8 +104,7 @@ class LanguageRevertPanelView(
                     drawRow(canvas, index, index * rowHeightPx, dismissWidth)
                 }
             }
-            fillParticles.draw(canvas, paints.particlePaint)
-            outlineParticles.draw(canvas, paints.particlePaint)
+            particles.draw(canvas, paints.particlePaint)
         } finally {
             Trace.endSection()
         }
@@ -168,12 +169,12 @@ class LanguageRevertPanelView(
                     val top = pressedRow * rowHeightPx
                     val right = width - rowHeightPx
                     val bottom = top + rowHeightPx
-                    fillParticles.spawnBurstInRectangle(0f, top, right, bottom)
                     // No hover/hold state exists to hook a natural stop to (the row is gone the
                     // instant this listener call returns) -- so the trace gets a fixed, timed
                     // window instead, long enough to actually be seen.
                     removeCallbacks(stopOutlineRunnable)
-                    outlineParticles.setAmbientRectanglePerimeter(0f, top, right, bottom)
+                    rowElement.set(0f, top, right, bottom)
+                    particles.press(rowElement)
                     postDelayed(stopOutlineRunnable, OUTLINE_STOP_DELAY_MILLIS)
                     listener?.onLanguageRevertPicked(rows[pressedRow])
                 }
@@ -195,8 +196,7 @@ class LanguageRevertPanelView(
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         removeCallbacks(stopOutlineRunnable)
-        fillParticles.cancel()
-        outlineParticles.cancel()
+        particles.cancel()
     }
 
     private companion object {
@@ -204,13 +204,14 @@ class LanguageRevertPanelView(
          *  once, in commit order, rather than scrolled. */
         const val MAX_SHOWN = 4
 
-        /** [MAX_SHOWN] rows could each in principle be picked in quick succession -- sized for
-         *  one preset's own burst count (10) plus a little headroom, not for all four at once. */
-        const val FILL_PARTICLE_POOL_CAPACITY = 12
-        const val OUTLINE_PARTICLE_POOL_CAPACITY = 12
+        /** A row is a wide element -- sized for one preset's own burst count (10) scaled up for
+         *  its area (see [com.borderkeys.ime.fx.ParticleSimulation.MAX_EXTENT_FACTOR]), not for
+         *  all [MAX_SHOWN] rows at once. */
+        const val FILL_PARTICLE_POOL_CAPACITY = 32
+        const val OUTLINE_PARTICLE_POOL_CAPACITY = 56
 
-        /** How long [outlineParticles]' timed trace runs after a row is picked -- see
-         *  [stopOutlineRunnable]'s own doc for why this view needs one at all. */
+        /** How long the picked row stays pressed after the tap -- see [stopOutlineRunnable]'s
+         *  own doc for why this view needs a timer at all. */
         const val OUTLINE_STOP_DELAY_MILLIS = 500L
 
         const val ARROW = "→"

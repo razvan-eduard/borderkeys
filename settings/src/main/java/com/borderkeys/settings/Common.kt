@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -137,10 +139,18 @@ fun SwitchRow(
  * copy was compared against the others: a label, whether it is the one currently chosen, and what
  * picking it does. The differences between the screens were in what `onClick` writes, never in
  * what the chip itself is.
+ *
+ * [shape] defaults to the same [FilterChipDefaults.shape] an unstyled [FilterChip] already draws
+ * with on its own, so every ordinary caller is unaffected. It exists as a parameter at all so a
+ * caller that draws something *else* meant to trace this exact chip's own outline --
+ * `com.borderkeys.settings.screen.EffectsScreen`'s particle-style preview, for instance -- can
+ * read the real value once and hand the identical [androidx.compose.ui.graphics.Shape] to both,
+ * rather than that second drawing guessing at a corner radius of its own that this chip's real
+ * shape could change out from under it.
  */
 @Composable
-fun PickerChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
+fun PickerChip(label: String, selected: Boolean, shape: Shape = FilterChipDefaults.shape, onClick: () -> Unit) {
+    FilterChip(selected = selected, onClick = onClick, label = { Text(label) }, shape = shape)
 }
 
 /**

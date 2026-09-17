@@ -55,7 +55,12 @@ fun SettingsSectionCard(
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
+                // titleLarge, not titleSmall: this is the one line in the card meant to read as
+                // its title, and titleSmall (14sp in Material3's default scale) is actually
+                // *smaller* than the bodyLarge (16sp) style a card's own section labels already
+                // use inside it -- a title reading smaller than its own body text is backwards
+                // regardless of which screen's card it is.
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )

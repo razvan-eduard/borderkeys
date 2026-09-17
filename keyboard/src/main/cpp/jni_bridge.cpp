@@ -486,7 +486,13 @@ void nativeLoadUserTrigrams(JNIEnv* env, jobject /*thiz*/, jlong handle,
         return;
     }
     const jsize tripleCount = env->GetArrayLength(previous2);
-    if (tripleCount <= 0 || env->GetArrayLength(previous1) < tripleCount ||
+    // An empty list is a load too: the model replaces what it holds with what it is given, so
+    // this is how forgetting the last remembered triple reaches the engine.
+    if (tripleCount == 0) {
+        engine->loadUserTrigrams(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0);
+        return;
+    }
+    if (tripleCount < 0 || env->GetArrayLength(previous1) < tripleCount ||
         env->GetArrayLength(next) < tripleCount ||
         env->GetArrayLength(counts) < tripleCount || tripleCount > kMaxUserWordsPerCall) {
         return;
@@ -639,7 +645,12 @@ void nativeLoadUserBigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectA
         return;
     }
     const jsize pairCount = env->GetArrayLength(previous);
-    if (pairCount <= 0 || env->GetArrayLength(next) < pairCount ||
+    // Same as the trigrams: an empty list clears the pairs the engine holds.
+    if (pairCount == 0) {
+        engine->loadUserBigrams(nullptr, nullptr, nullptr, nullptr, nullptr, 0);
+        return;
+    }
+    if (pairCount < 0 || env->GetArrayLength(next) < pairCount ||
         env->GetArrayLength(counts) < pairCount || pairCount > kMaxUserWordsPerCall) {
         return;
     }
@@ -675,7 +686,13 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
     const jsize wordCount = env->GetArrayLength(words);
     const jsize countLength = env->GetArrayLength(counts);
     const jsize capsLength = env->GetArrayLength(deliberateCapitals);
-    if (wordCount <= 0 || countLength < wordCount || capsLength < wordCount ||
+    // An empty list is a load too: the model replaces what it holds with what it is given, so
+    // this is how forgetting the last remembered word reaches the engine.
+    if (wordCount == 0) {
+        engine->loadUserWords(nullptr, nullptr, nullptr, 0, nullptr);
+        return;
+    }
+    if (wordCount < 0 || countLength < wordCount || capsLength < wordCount ||
         wordCount > kMaxUserWordsPerCall) {
         return;
     }

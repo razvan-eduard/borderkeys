@@ -32,7 +32,6 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PickerChip
-import com.borderkeys.settings.Screen
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
@@ -48,7 +47,7 @@ import com.borderkeys.settings.rememberPreferencesUpdater
  * key toggles that used to live there are here now, where the rest of the keys are.
  */
 @Composable
-fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
+fun LayoutScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val context = LocalContext.current
     val themes = remember { DataGraph.themes }
@@ -65,14 +64,6 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-
-        SettingsSectionCard(strings[Keys.SCREEN_SIZE_AND_POSITION]) {
-            SettingRow(
-                title = strings[Keys.LAYOUT_RESIZE],
-                subtitle = strings[Keys.LAYOUT_RESIZE_NOTE],
-                onClick = { open(Screen.Size) },
-            )
-        }
 
         SettingsSectionCard(strings[Keys.LAYOUT_NUMBERS_AND_SYMBOLS]) {
             SwitchRow(
@@ -137,6 +128,18 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 subtitle = strings[Keys.SIZE_SPACE_CURSOR_NOTE],
                 checked = preferences.spaceCursorControl,
             ) { value -> update { it.copy(spaceCursorControl = value) } }
+            // The two ways a key press can be felt without being seen. Here with the keys
+            // rather than on a screen of their own: two switches were not a screen.
+            SwitchRow(
+                title = strings[Keys.SIZE_KEY_SOUND],
+                subtitle = strings[Keys.SIZE_KEY_SOUND_NOTE],
+                checked = preferences.keySound,
+            ) { value -> update { it.copy(keySound = value) } }
+            SwitchRow(
+                title = strings[Keys.SOUND_HAPTIC_FEEDBACK],
+                subtitle = strings[Keys.SOUND_HAPTIC_FEEDBACK_NOTE],
+                checked = preferences.hapticFeedback,
+            ) { value -> update { it.copy(hapticFeedback = value) } }
 
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
                 Text(

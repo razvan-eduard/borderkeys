@@ -35,6 +35,17 @@ class ParticleEffectsSettingsTest {
     }
 
     @Test
+    fun `the applied preset survives a round trip, and a file from before it reads as none`() = runTest {
+        val original = ParticleEffectsSettings(appliedPresetId = "fire")
+        assertEquals("fire", read(write(original)).appliedPresetId)
+        val before = write(ParticleEffectsSettings()).decodeToString().replace(""","appliedPresetId":""""", "")
+        assertFalse(before.contains("appliedPresetId"))
+        assertEquals("", read(before.encodeToByteArray()).appliedPresetId)
+        assertEquals("x".repeat(ParticleEffectsSettings.MAX_PRESET_ID_LENGTH),
+            ParticleEffectsSettings(appliedPresetId = "x".repeat(200)).sanitised().appliedPresetId)
+    }
+
+    @Test
     fun `an empty file reads as the default rather than failing`() = runTest {
         assertEquals(ParticleEffectsSettings(), read(ByteArray(0)))
     }
@@ -67,6 +78,21 @@ class ParticleEffectsSettingsTest {
 
         val outline = ParticleOutlineLayer(type = -1).sanitised()
         assertEquals(ParticleEffectsSettings.OUTLINE_NONE, outline.type)
+    }
+
+    @Test
+    fun `Fill None is a real in-range value, not something sanitised clamps away`() {
+        val fill = ParticleFillLayer(type = ParticleEffectsSettings.FILL_NONE).sanitised()
+        assertEquals(ParticleEffectsSettings.FILL_NONE, fill.type)
+    }
+
+    @Test
+    fun `Outline Fire and Wind are real in-range values, not something sanitised clamps away`() {
+        val fire = ParticleOutlineLayer(type = ParticleEffectsSettings.OUTLINE_FIRE).sanitised()
+        assertEquals(ParticleEffectsSettings.OUTLINE_FIRE, fire.type)
+
+        val wind = ParticleOutlineLayer(type = ParticleEffectsSettings.OUTLINE_WIND).sanitised()
+        assertEquals(ParticleEffectsSettings.OUTLINE_WIND, wind.type)
     }
 
     @Test
@@ -114,6 +140,71 @@ class ParticleEffectsSettingsTest {
         assertEquals(ParticleEffectsSettings.FILL_GLOW, switched.type)
         assertEquals(0xFF123456.toInt(), switched.primaryColor)
         assertEquals(1.8f, switched.speed, 0.001f)
+        assertFalse(switched.matchesPreset())
+    }
+
+    @Test
+    fun `every fill and outline preset has its own distinct default colours`() {
+        val fillColours = listOf(
+            ParticleEffectsSettings.FILL_FIRE,
+            ParticleEffectsSettings.FILL_GLOW,
+            ParticleEffectsSettings.FILL_WAVES,
+            ParticleEffectsSettings.FILL_RAINBOW,
+            ParticleEffectsSettings.FILL_NEON,
+        ).map { ParticleFillLayer(type = it).primaryColor }
+        assertEquals("fill presets should not share a primary colour", fillColours.size, fillColours.toSet().size)
+
+        val outlineColours = listOf(
+            ParticleEffectsSettings.OUTLINE_COMET,
+            ParticleEffectsSettings.OUTLINE_PULSE,
+            ParticleEffectsSettings.OUTLINE_SPARKLE,
+        ).map { ParticleOutlineLayer(type = it).primaryColor }
+        assertEquals(
+            "outline presets should not share a primary colour",
+            outlineColours.size,
+            outlineColours.toSet().size,
+        )
+    }
+
+    @Test
+    fun `withPresetType on an untouched layer selects the new preset cleanly, not as Custom`() {
+        // Nothing customised yet, so speed/density are still at their own shared defaults --
+        // this is the one case where the result can honestly still match a fresh instance of
+        // the new type, colours included.
+        val fresh = ParticleFillLayer(type = ParticleEffectsSettings.FILL_GLOW)
+        val switched = fresh.withPresetType(ParticleEffectsSettings.FILL_FIRE)
+        assertEquals(ParticleEffectsSettings.FILL_FIRE, switched.type)
+        assertEquals(ParticleFillLayer(type = ParticleEffectsSettings.FILL_FIRE).primaryColor, switched.primaryColor)
+        assertTrue(switched.matchesPreset())
+    }
+
+    @Test
+    fun `withPresetType adopts the new preset's own colours but keeps speed and density`() {
+        val customised = ParticleFillLayer(
+            type = ParticleEffectsSettings.FILL_FIRE,
+            primaryColor = 0xFF123456.toInt(),
+            speed = 1.8f,
+            density = 1.6f,
+        )
+        val switched = customised.withPresetType(ParticleEffectsSettings.FILL_WAVES)
+        assertEquals(ParticleEffectsSettings.FILL_WAVES, switched.type)
+        assertEquals(ParticleFillLayer(type = ParticleEffectsSettings.FILL_WAVES).primaryColor, switched.primaryColor)
+        assertEquals(1.8f, switched.speed, 0.001f)
+        assertEquals(1.6f, switched.density, 0.001f)
+        // Still reads as Custom -- correctly: an already-customised speed/density surviving the
+        // switch is exactly why, the same as it already would for the preset left behind.
+        assertFalse(switched.matchesPreset())
+    }
+
+    @Test
+    fun `withPresetType on Outline also keeps width`() {
+        val customised = ParticleOutlineLayer(
+            type = ParticleEffectsSettings.OUTLINE_COMET,
+            width = 1.9f,
+        )
+        val switched = customised.withPresetType(ParticleEffectsSettings.OUTLINE_SPARKLE)
+        assertEquals(ParticleEffectsSettings.OUTLINE_SPARKLE, switched.type)
+        assertEquals(1.9f, switched.width, 0.001f)
         assertFalse(switched.matchesPreset())
     }
 }

@@ -7,7 +7,9 @@ import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -134,6 +136,30 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.CORRECTIONS_SPACE_AFTER_NOTE],
                 checked = preferences.spaceAfterPunctuation,
             ) { value -> update { it.copy(spaceAfterPunctuation = value) } }
+            Text(
+                strings[Keys.CORRECTIONS_AUTO_SPACE_HABIT],
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PickerChip(
+                    strings[Keys.CORRECTIONS_AUTO_SPACE_SWALLOW_FIRST],
+                    preferences.autoSpaceHabit == KeyboardPreferences.AUTO_SPACE_SWALLOW_FIRST,
+                ) { update { it.copy(autoSpaceHabit = KeyboardPreferences.AUTO_SPACE_SWALLOW_FIRST) } }
+                PickerChip(
+                    strings[Keys.CORRECTIONS_AUTO_SPACE_SWALLOW_ALL],
+                    preferences.autoSpaceHabit == KeyboardPreferences.AUTO_SPACE_SWALLOW_ALL,
+                ) { update { it.copy(autoSpaceHabit = KeyboardPreferences.AUTO_SPACE_SWALLOW_ALL) } }
+                PickerChip(
+                    strings[Keys.CORRECTIONS_AUTO_SPACE_KEEP],
+                    preferences.autoSpaceHabit == KeyboardPreferences.AUTO_SPACE_KEEP,
+                ) { update { it.copy(autoSpaceHabit = KeyboardPreferences.AUTO_SPACE_KEEP) } }
+            }
+            Explanation(strings[Keys.CORRECTIONS_AUTO_SPACE_HABIT_NOTE])
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_SPACE_BEFORE],
                 subtitle = strings[Keys.CORRECTIONS_SPACE_BEFORE_NOTE],
@@ -171,6 +197,30 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS_NOTE],
             )
+            Text(
+                strings[Keys.CORRECTIONS_DISTANCE],
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PickerChip(
+                    strings[Keys.CORRECTIONS_DISTANCE_STRICT],
+                    preferences.correctionDistance == KeyboardPreferences.CORRECTION_DISTANCE_STRICT,
+                ) { update { it.copy(correctionDistance = KeyboardPreferences.CORRECTION_DISTANCE_STRICT) } }
+                PickerChip(
+                    strings[Keys.CORRECTIONS_DISTANCE_NORMAL],
+                    preferences.correctionDistance == KeyboardPreferences.CORRECTION_DISTANCE_NORMAL,
+                ) { update { it.copy(correctionDistance = KeyboardPreferences.CORRECTION_DISTANCE_NORMAL) } }
+                PickerChip(
+                    strings[Keys.CORRECTIONS_DISTANCE_LOOSE],
+                    preferences.correctionDistance == KeyboardPreferences.CORRECTION_DISTANCE_LOOSE,
+                ) { update { it.copy(correctionDistance = KeyboardPreferences.CORRECTION_DISTANCE_LOOSE) } }
+            }
+            Explanation(strings[Keys.CORRECTIONS_DISTANCE_NOTE])
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_BACKSPACE_PUTS_BACK_WHAT_YOU_TYPED],
                 subtitle = strings[Keys.CORRECTIONS_THE_BACKSPACE_STRAIGHT_AFTER_A_CORRECTION],
@@ -246,6 +296,11 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.SWIPE_DRAG_ACROSS_THE_LETTERS_INSTEAD_OF],
                 checked = preferences.swipeEnabled,
             ) { value -> update { it.copy(swipeEnabled = value) } }
+            SwitchRow(
+                title = strings[Keys.SWIPE_BACKSPACE_WORD],
+                subtitle = strings[Keys.SWIPE_BACKSPACE_WORD_NOTE],
+                checked = preferences.swipeBackspaceDeletesWord,
+            ) { value -> update { it.copy(swipeBackspaceDeletesWord = value) } }
 
             Text(
                 strings[Keys.SWIPE_THE_TRAIL],
@@ -473,6 +528,41 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     subtitle = strings[Keys.RADIAL_BLUR_BACKGROUND_NOTE],
                     checked = preferences.radialBlurBackground,
                 ) { value -> update { it.copy(radialBlurBackground = value) } }
+                Text(
+                    strings[Keys.RADIAL_OUTSIDE_TAP],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PickerChip(
+                        strings[Keys.RADIAL_OUTSIDE_TAP_CLOSES_RING],
+                        !preferences.radialOutsideTapHidesKeyboard,
+                    ) { update { it.copy(radialOutsideTapHidesKeyboard = false) } }
+                    PickerChip(
+                        strings[Keys.RADIAL_OUTSIDE_TAP_HIDES_KEYBOARD],
+                        preferences.radialOutsideTapHidesKeyboard,
+                    ) { update { it.copy(radialOutsideTapHidesKeyboard = true) } }
+                }
+                Explanation(strings[Keys.RADIAL_OUTSIDE_TAP_NOTE])
+                SwitchRow(
+                    title = strings[Keys.RADIAL_CLOSE_ON_EDITOR_MOVE],
+                    subtitle = strings[Keys.RADIAL_CLOSE_ON_EDITOR_MOVE_NOTE],
+                    checked = preferences.radialCloseOnEditorMove,
+                ) { value -> update { it.copy(radialCloseOnEditorMove = value) } }
+                // Debug builds only -- see KeyboardPreferences.debugForceRadialRing's own doc.
+                val debuggable = LocalContext.current.applicationInfo.flags and
+                    android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+                if (debuggable) {
+                    SwitchRow(
+                        title = strings[Keys.RADIAL_DEBUG_FORCE_OPEN],
+                        subtitle = strings[Keys.RADIAL_DEBUG_FORCE_OPEN_NOTE],
+                        checked = preferences.debugForceRadialRing,
+                    ) { value -> update { it.copy(debugForceRadialRing = value) } }
+                }
                 Explanation(strings[Keys.RADIAL_EXPLANATION])
             }
         }

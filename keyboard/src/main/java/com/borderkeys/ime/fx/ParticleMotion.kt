@@ -47,6 +47,19 @@ object ParticleMotion {
     fun riseAndShrinkRadius(spawnRadiusPx: Float, ageSeconds: Float, shrinkPerSecond: Float): Float =
         spawnRadiusPx * exp(-shrinkPerSecond * ageSeconds)
 
+    /**
+     * The outline layer's own motion: straight out along the spawn point's outward normal
+     * ([normalX]/[normalY]) at [outwardPxPerSecond], plus a constant drift of [driftPxPerSecond]
+     * along the preset's emit direction ([driftX]/[driftY], a unit vector). Both terms are linear
+     * in age, so like every other motion here there is no state to carry between frames; and
+     * since the normal always points away from the element, a particle is never inside it.
+     */
+    fun outwardX(spawnX: Float, normalX: Float, driftX: Float, ageSeconds: Float, outwardPxPerSecond: Float, driftPxPerSecond: Float): Float =
+        spawnX + (normalX * outwardPxPerSecond + driftX * driftPxPerSecond) * ageSeconds
+
+    fun outwardY(spawnY: Float, normalY: Float, driftY: Float, ageSeconds: Float, outwardPxPerSecond: Float, driftPxPerSecond: Float): Float =
+        spawnY + (normalY * outwardPxPerSecond + driftY * driftPxPerSecond) * ageSeconds
+
     /** Oscillates around the spawn point -- the "Glow" and "Rainbow" presets' motion. */
     fun pulseInPlaceY(spawnY: Float, ageSeconds: Float, amplitudePx: Float, frequencyHz: Float): Float =
         spawnY + amplitudePx * sin(ageSeconds * frequencyHz * TWO_PI)

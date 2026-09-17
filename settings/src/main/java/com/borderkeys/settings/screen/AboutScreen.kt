@@ -65,6 +65,21 @@ fun AboutScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.ABOUT_THE_COMMIT_ABOVE_IS_THE_ONE],
             )
+            SettingRow(
+                strings[Keys.ABOUT_GPL_3_0_OR_LATER],
+                strings[Keys.ABOUT_YOU_MAY_USE_STUDY_CHANGE_AND],
+            )
+            Explanation(
+                strings[Keys.ABOUT_EVERY_DEPENDENCY_AND_EVERY_ASSET_IS],
+            )
+            // Only in the build that actually has it -- a note about what inference is licensed
+            // under would otherwise sit in the core build, next to a feature that build does not
+            // carry at all.
+            if (hasAssistant) {
+                Explanation(
+                    strings[Keys.ABOUT_INFERENCE_USES_LLAMA_CPP_MIT_LICENSED],
+                )
+            }
         }
 
         // Only in the build that does not have it. Offering the assistant to somebody already
@@ -87,25 +102,6 @@ fun AboutScreen(modifier: Modifier = Modifier) {
                     ) { Text(strings[Keys.ABOUT_PLUS_RELEASES]) }
                 }
                 Explanation(strings[Keys.ABOUT_PLUS_REPOSITORY_NOTE])
-            }
-        }
-        SettingsSectionCard(strings[Keys.ABOUT_LICENCE]) {
-            SettingRow(
-                strings[Keys.ABOUT_GPL_3_0_OR_LATER],
-                strings[Keys.ABOUT_YOU_MAY_USE_STUDY_CHANGE_AND],
-            )
-            Explanation(
-                strings[Keys.ABOUT_EVERY_DEPENDENCY_AND_EVERY_ASSET_IS],
-            )
-        }
-        // Only in the build that actually has it -- a note about what inference is licensed
-        // under would otherwise sit in the core build, next to a feature that build does not
-        // carry at all.
-        if (hasAssistant) {
-            SettingsSectionCard(strings[Keys.ABOUT_TEXT_ASSISTANT]) {
-                Explanation(
-                    strings[Keys.ABOUT_INFERENCE_USES_LLAMA_CPP_MIT_LICENSED],
-                )
             }
         }
         SettingsSectionCard(strings[Keys.ABOUT_OTHER_APPS]) {

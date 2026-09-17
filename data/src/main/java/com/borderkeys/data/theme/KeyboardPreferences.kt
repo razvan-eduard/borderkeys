@@ -56,6 +56,14 @@ data class KeyboardPreferences(
      */
     val learningSpeed: Int = LEARNING_BALANCED,
     val swipeEnabled: Boolean = true,
+
+    /**
+     * Whether the backspace pressed right after a swiped word removes the whole word (and the
+     * space the swipe put in front of it) rather than its last letter. Off by default: one
+     * letter is what backspace does everywhere else, and it keeps a swiped word editable in
+     * place. On is the other common convention, where a swipe is accepted or rejected whole.
+     */
+    val swipeBackspaceDeletesWord: Boolean = false,
     /**
      * Off, and it stays off unless the user says otherwise.
      *
@@ -115,6 +123,15 @@ data class KeyboardPreferences(
      * so either can be switched off alone.
      */
     val spaceAfterPunctuation: Boolean = true,
+
+    /**
+     * What a space typed straight after one this keyboard added itself does -- after a
+     * sentence mark, a picked suggestion, a swiped word, or the double-space full stop.
+     * [AUTO_SPACE_SWALLOW_FIRST] (default) drops that one habitual space and keeps any after
+     * it; [AUTO_SPACE_SWALLOW_ALL] keeps dropping spaces until something else is typed;
+     * [AUTO_SPACE_KEEP] never drops one. Clamped to a valid value on read.
+     */
+    val autoSpaceHabit: Int = AUTO_SPACE_SWALLOW_FIRST,
 
     /**
      * Whether a space before a punctuation mark is removed when the mark is typed.
@@ -351,9 +368,11 @@ data class KeyboardPreferences(
      * On: the ring is shown -- kept open if a pause had already opened it, or opened fresh and
      * tap-only after a confident no-pause lift -- and waits indefinitely for a deliberate tap on
      * a word or the centre Cancel button. Nothing resolves it on its own; no clock, no default
-     * applied for you. This is the same shape the ring had before the single-stroke redesign, for
-     * anyone who would rather look at the alternatives for as long as they want rather than race
-     * a countdown.
+     * applied for you. While it waits it is modal: a touch anywhere else -- on the keyboard or
+     * in the text field -- only closes it, typing nothing and leaving the swiped word exactly as
+     * it is; the centre X remains the only thing that removes that word. This is the same shape
+     * the ring had before the single-stroke redesign, for anyone who would rather look at the
+     * alternatives for as long as they want rather than race a countdown.
      */
     val radialLiftKeepsOpen: Boolean = false,
 
@@ -368,6 +387,32 @@ data class KeyboardPreferences(
      * all -- this only ever removes the extra blur on top of that, never the dimming itself.
      */
     val radialBlurBackground: Boolean = true,
+
+    /**
+     * Whether a tap outside the ring, on the keyboard, also takes the keyboard down. Off by
+     * default: the tap only closes the ring, and the keys are right there for the next word. A
+     * tap in the text field, and the keyboard being hidden for any reason, always close the ring
+     * regardless of this.
+     */
+    val radialOutsideTapHidesKeyboard: Boolean = false,
+
+    /**
+     * Whether the ring closes when the text field moves on screen while it is open -- the one
+     * signal a keyboard gets for a tap elsewhere in the app that scrolled the page. On by
+     * default. A tap that neither scrolls nor takes focus nor hides the keyboard is invisible to
+     * every keyboard, and no setting can change that.
+     */
+    val radialCloseOnEditorMove: Boolean = true,
+
+    /**
+     * Debug builds only: keeps a sample ring open on every field so its particle effects can be
+     * seen and tuned without swiping a real gesture each time -- the ring is the one surface an
+     * emulator cannot open on demand (a paused swipe needs a real continuous finger). The
+     * settings row that flips this is only shown in a debuggable build, and the keyboard
+     * ignores it in a release one, so a stray `true` in a backup can never leave a ring stuck
+     * open for a user.
+     */
+    val debugForceRadialRing: Boolean = false,
 
     // Particle effects moved out to their own top-level ParticleEffectsSettings/DataStore --
     // five regions x two layers each grew far past what belonged bolted onto this class. See
@@ -623,6 +668,18 @@ data class KeyboardPreferences(
     val revertCorrectionOnBackspace: Boolean = true,
 
     /**
+     * How far a correction may be from what was typed before a delimiter applies it, counted in
+     * single-letter edits (a letter missing, added, wrong, or two swapped) after case and accents
+     * are set aside. [CORRECTION_DISTANCE_STRICT] allows one edit; [CORRECTION_DISTANCE_NORMAL]
+     * (default) one edit, or two in a word of eight letters or more; [CORRECTION_DISTANCE_LOOSE]
+     * two edits always. This is a ceiling on top of [correctionStrictness], which only decides
+     * how a candidate is *ranked*: without it, a correct word the dictionaries simply do not
+     * know ("snobul") was replaced by whatever ranked first, however far away it was ("noul").
+     * Clamped to a valid value on read.
+     */
+    val correctionDistance: Int = CORRECTION_DISTANCE_NORMAL,
+
+    /**
      * The shortest word a delimiter will replace.
      *
      * Three by default: one- and two-letter words are where a correction is least likely to be
@@ -792,6 +849,16 @@ data class KeyboardPreferences(
             radialMenuSize
         } else {
             RADIAL_SIZE_MEDIUM
+        },
+        autoSpaceHabit = if (autoSpaceHabit in AUTO_SPACE_SWALLOW_FIRST..AUTO_SPACE_KEEP) {
+            autoSpaceHabit
+        } else {
+            AUTO_SPACE_SWALLOW_FIRST
+        },
+        correctionDistance = if (correctionDistance in CORRECTION_DISTANCE_STRICT..CORRECTION_DISTANCE_LOOSE) {
+            correctionDistance
+        } else {
+            CORRECTION_DISTANCE_NORMAL
         },
         radialTimeoutDefault = if (radialTimeoutDefault in
             RADIAL_TIMEOUT_APPLY_TOP..RADIAL_TIMEOUT_CANCEL
@@ -1203,6 +1270,16 @@ data class KeyboardPreferences(
         const val RADIAL_SIZE_LARGE = 2
 
         /** [radialTimeoutDefault] values. */
+        /** [autoSpaceHabit] values. */
+        const val AUTO_SPACE_SWALLOW_FIRST = 0
+        const val AUTO_SPACE_SWALLOW_ALL = 1
+        const val AUTO_SPACE_KEEP = 2
+
+        /** [correctionDistance] values. */
+        const val CORRECTION_DISTANCE_STRICT = 0
+        const val CORRECTION_DISTANCE_NORMAL = 1
+        const val CORRECTION_DISTANCE_LOOSE = 2
+
         const val RADIAL_TIMEOUT_APPLY_TOP = 0
         const val RADIAL_TIMEOUT_CANCEL = 1
 

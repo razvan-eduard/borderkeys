@@ -13,7 +13,11 @@ import android.os.Trace
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
-import com.borderkeys.ime.fx.ParticleField
+import com.borderkeys.ime.fx.AnnularWedgeElement
+import com.borderkeys.ime.fx.ParticleElement
+import com.borderkeys.ime.fx.ParticleGeometry
+import com.borderkeys.ime.fx.ParticleSurface
+import com.borderkeys.ime.fx.RoundedRectElement
 import com.borderkeys.theme.ThemePaints
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -34,6 +38,11 @@ import kotlin.math.sin
  * a lift or a timeout produces is *read out* via [currentSelection], not discovered through this
  * view's own `onTouchEvent`.
  *
+ * The one exception is the tap-only phase [acceptsOwnTouches] describes: once the original
+ * pointer is gone and the ring is waiting for a fresh tap, it is modal. A wedge or the centre X
+ * acts; a touch anywhere else on the host only closes the ring, leaving the text exactly as it
+ * was and typing nothing -- see [onTouchEvent]'s own doc.
+ *
  * No new drawable assets: wedges are flat-filled arcs in this theme's own paints, the same
  * "canvas draws itself" style [KeyboardCanvasView]/[LanguageRevertPanelView] already use.
  */
@@ -53,9 +62,15 @@ class RadialSuggestionMenuView(
 
     /** Only used while [acceptsOwnTouches] -- see that property's own doc. */
     interface Listener {
-        /** A fresh, independent tap resolved to [selection] -- a wedge, the centre button, or
-         *  neither (tapped elsewhere, or the touch stream was cancelled). */
+        /** A fresh, independent tap that started on the ring resolved to [selection] -- a wedge,
+         *  the centre button, or neither (lifted in the dead zone, or the touch stream was
+         *  cancelled). */
         fun onRadialTapResolved(selection: Selection)
+
+        /** A fresh touch landed outside the ring while it was waiting for a tap: close it and
+         *  leave the text alone. The touch itself is consumed here and never reaches the keys
+         *  underneath -- see [onTouchEvent]'s own doc. */
+        fun onRadialDismissed()
     }
 
     var listener: Listener? = null
@@ -63,6 +78,20 @@ class RadialSuggestionMenuView(
     private var words: List<String> = emptyList()
     private var anchorX = 0f
     private var anchorY = 0f
+
+    /**
+     * The room above the keys this view is laid out over but must leave alone -- see
+     * [KeyboardHostView.reserveScreenAbove]. Nothing is drawn there: no scrim, no ring; the
+     * ring is kept below it exactly as it was kept inside the keyboard before the room existed.
+     * Taps there still reach this view, which is the whole point of the room.
+     */
+    var topInset: Float = 0f
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
     private var currentSelection: Selection = Selection.None
 
     /**
@@ -118,22 +147,47 @@ class RadialSuggestionMenuView(
             anchorX
         }
         this.anchorY = if (height > 0) {
-            anchorY.coerceIn(outer, (height - outer).coerceAtLeast(outer))
+            anchorY.coerceIn(topInset + outer, (height - outer).coerceAtLeast(topInset + outer))
         } else {
             anchorY
+        }
+        // Alive from the moment it opens, not only once a wedge is hovered -- see ringElement.
+        particles.hold(ringElement)
+        invalidate()
+    }
+
+    /**
+     * Moves an open ring down (or up) by [dy], re-clamped to this view's bounds -- for the host
+     * growing or shrinking above the keys while the ring is showing (see
+     * [KeyboardHostView.reserveScreenAbove]): the ring was anchored to where the keys were, and
+     * the keys just moved. Nothing to do while no ring is showing.
+     */
+    fun shiftBy(dy: Float) {
+        if (words.isEmpty() || dy == 0f) {
+            return
+        }
+        val outer = outerRadius()
+        anchorY = if (height > 0) {
+            (anchorY + dy).coerceIn(topInset + outer, (height - outer).coerceAtLeast(topInset + outer))
+        } else {
+            anchorY + dy
         }
         invalidate()
     }
 
-    /** Clears the menu. Idempotent -- every dismiss path in `BorderKeysService` calls this
-     *  unconditionally, whether or not anything was actually showing. */
+    /**
+     * Clears the menu: wedges, highlight, the tap-only mode and both ambient emitters. Idempotent
+     * -- `BorderKeysService.closeRadialRing` calls this on every way off the ring except a real
+     * pick, which goes through [celebrate] instead. Never an early return on empty [words]: the
+     * flags and emitters can be stale on their own after a close, and leaving an ambient running
+     * is exactly what would keep [pendingHide] waiting forever (see its own doc).
+     */
     fun hide() {
-        if (words.isEmpty()) {
-            return
-        }
         words = emptyList()
         currentSelection = Selection.None
         acceptsOwnTouches = false
+        ownTouchStreamActive = false
+        particles.release()
         invalidate()
     }
 
@@ -142,15 +196,38 @@ class RadialSuggestionMenuView(
      *  actually receives itself (see this class's own doc for why). */
     var hapticEnabled: Boolean = true
 
-    /** An ambient glow on whichever wedge is currently highlighted, plus a bigger burst on the
-     *  one actually picked -- exposed non-private so [BorderKeysService] can push the user's
-     *  particle-effect settings directly, the same way [hapticEnabled] already is. */
-    val fillParticles = ParticleField(FILL_PARTICLE_POOL_CAPACITY) { onParticlesInvalidated() }
+    /** Both particle layers for the ring: whichever wedge (or the centre button) the finger is
+     *  currently over is *held* -- an ambient glow inside it, its own real outline traced -- and
+     *  the wedge actually picked gets a bigger burst ([celebrate]). Exposed non-private so
+     *  [BorderKeysService] can push the user's particle-effect settings directly, the same way
+     *  [hapticEnabled] already is. */
+    val particles = ParticleSurface(FILL_PARTICLE_POOL_CAPACITY, OUTLINE_PARTICLE_POOL_CAPACITY) { onParticlesInvalidated() }
 
-    /** Traces the highlighted wedge's own arc while [steerTo] hovers it -- see
-     *  [ParticleField.setAmbientArc]. No burst equivalent: [celebrate] only bursts
-     *  [fillParticles], letting this keep tracing the picked wedge as-is underneath it. */
-    val outlineParticles = ParticleField(OUTLINE_PARTICLE_POOL_CAPACITY) { onParticlesInvalidated() }
+    /** The highlighted wedge and the centre button, as the elements the engine reads their
+     *  shapes from -- the exact annular slice [drawWedges] paints and the exact circle
+     *  [drawCancelButton] paints. See [com.borderkeys.ime.fx.ParticleElement]. */
+    private val wedgeElement = AnnularWedgeElement()
+    private val cancelElement = RoundedRectElement()
+
+    /**
+     * The ring itself, held for as long as it is open with nothing highlighted -- so a ring
+     * waiting for a tap is alive, not inert. Its outline is its outer circle only, so particles
+     * radiate outward off the ring rather than inward into the gap around the centre button;
+     * its fill is the full annulus the wedges occupy. The one element in this app whose two
+     * regions differ, and exactly what [com.borderkeys.ime.fx.ParticleElement]'s two `open`
+     * properties exist for.
+     */
+    private val ringElement = object : ParticleElement() {
+        override val geometry: ParticleGeometry?
+            get() = if (words.isEmpty()) null else ParticleGeometry.circle(anchorX, anchorY, outerRadius())
+
+        override val fillGeometry: ParticleGeometry?
+            get() = if (words.isEmpty()) {
+                null
+            } else {
+                ParticleGeometry.AnnularWedge(anchorX, anchorY, ringInnerRadius(), outerRadius(), 0f, 360f)
+            }
+    }
 
     /**
      * Set by [KeyboardHostView.setRadialMenuVisible] when it would otherwise hide this view
@@ -162,7 +239,7 @@ class RadialSuggestionMenuView(
     var pendingHide: Boolean = false
 
     private fun onParticlesInvalidated() {
-        if (pendingHide && !fillParticles.hasLiveParticles && !outlineParticles.hasLiveParticles) {
+        if (pendingHide && !particles.hasLiveParticles) {
             pendingHide = false
             visibility = GONE
         }
@@ -172,32 +249,34 @@ class RadialSuggestionMenuView(
     /** Whether a [celebrate] burst (or, in principle, the ambient glow) is still animating --
      *  read by [KeyboardHostView.setRadialMenuVisible] to decide whether hiding this view must
      *  wait for it to finish first. */
-    fun hasLiveParticles(): Boolean = fillParticles.hasLiveParticles || outlineParticles.hasLiveParticles
+    fun hasLiveParticles(): Boolean = particles.hasLiveParticles
 
     /**
-     * A bigger, one-shot burst at the wedge [index] resolved to, and the same resolved-and-done
-     * state [hide] used to leave this view in -- called by [BorderKeysService.closeRadialRing]
-     * right at the moment a pick resolves. Clearing [words] here rather than leaving that to
-     * [hide] matters specifically because of [pendingHide]: this view's own [visibility] now
-     * stays [VISIBLE] for as long as the burst takes to finish, and without this the stale wedge
-     * content would keep drawing underneath it for that whole stretch instead of just the burst
-     * floating on its own over the keys.
+     * A bigger, one-shot burst at the wedge [index] resolved to, then the same resolved-and-done
+     * state [hide] leaves this view in -- called by [BorderKeysService.closeRadialRing] right at
+     * the moment a pick resolves. Clearing everything here matters specifically because of
+     * [pendingHide]: this view's own [visibility] stays [VISIBLE] for as long as the burst takes
+     * to finish, and without this the stale wedge content would keep drawing underneath it for
+     * that whole stretch instead of just the burst floating on its own over the keys -- and the
+     * ambient glow [steerTo] started would keep the burst company forever, so the deferred hide
+     * would never actually fire. Spawned before [hide] so the burst survives the clear.
      */
     fun celebrate(index: Int) {
         if (index !in words.indices) {
+            hide()
             return
         }
-        val midRadius = (ringInnerRadius() + outerRadius()) / 2f
-        val angleRad = Math.toRadians(wedgeCentreDegrees(index, words.size).toDouble())
-        fillParticles.spawnBurstAtPoint(
-            anchorX + (midRadius * cos(angleRad)).toFloat(),
-            anchorY + (midRadius * sin(angleRad)).toFloat(),
-            fillParticles.preset.burstCount * CELEBRATE_BURST_MULTIPLIER,
+        setWedgeElement(index)
+        particles.celebrate(wedgeElement, CELEBRATE_BURST_MULTIPLIER)
+        hide()
+    }
+
+    /** Points [wedgeElement] at wedge [index]'s own real shape -- the same annular slice
+     *  [drawWedges] paints from the same two boundary arrays. */
+    private fun setWedgeElement(index: Int) {
+        wedgeElement.set(
+            anchorX, anchorY, ringInnerRadius(), outerRadius(), wedgeStartDeg[index], wedgeSweepDeg[index],
         )
-        words = emptyList()
-        currentSelection = Selection.None
-        acceptsOwnTouches = false
-        invalidate()
     }
 
     /** Steers the highlight to whatever [x]/[y] -- this view's own local pixels, the same space
@@ -214,20 +293,20 @@ class RadialSuggestionMenuView(
                 // than announcing itself as a different kind of control.
                 performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
             }
-            if (hit is Selection.Word) {
-                val midRadius = (ringInnerRadius() + outerRadius()) / 2f
-                val angleRad = Math.toRadians(wedgeCentreDegrees(hit.index, words.size).toDouble())
-                fillParticles.setAmbientPoint(
-                    anchorX + (midRadius * cos(angleRad)).toFloat(),
-                    anchorY + (midRadius * sin(angleRad)).toFloat(),
-                )
-                outlineParticles.setAmbientArc(
-                    anchorX, anchorY, midRadius,
-                    wedgeStartDeg[hit.index], wedgeSweepDeg[hit.index],
-                )
-            } else {
-                fillParticles.stopAmbient()
-                outlineParticles.stopAmbient()
+            // Whatever is highlighted is held: the engine fills its interior and traces its
+            // outline from the one shape the element declares -- the wedge's own annular slice,
+            // or the centre button's own circle -- so the glow, the dots and the stroke can
+            // never disagree with the highlight drawn underneath them.
+            when (hit) {
+                is Selection.Word -> {
+                    setWedgeElement(hit.index)
+                    particles.hold(wedgeElement)
+                }
+                Selection.Cancel -> {
+                    cancelElement.setCircle(anchorX, anchorY, centerRadius())
+                    particles.hold(cancelElement)
+                }
+                Selection.None -> particles.hold(ringElement)
             }
             invalidate()
         }
@@ -237,16 +316,49 @@ class RadialSuggestionMenuView(
      *  timeout), never polled on a timer. */
     fun currentSelection(): Selection = currentSelection
 
+    /** Whether the touch stream currently down started close enough to this ring to be *for*
+     *  it -- decided once, at that stream's own `ACTION_DOWN`, and remembered for its `MOVE`/
+     *  `UP` rather than re-checked, so a drag that wanders outside mid-gesture does not suddenly
+     *  let go of a touch that started as a real attempt to steer. See [onTouchEvent]'s own doc
+     *  for why this decision has to exist at all. */
+    private var ownTouchStreamActive = false
+
     /**
-     * Handles a fresh, independent tap while [acceptsOwnTouches] -- the only case this view ever
-     * sees its own touch stream at all, see that property's own doc. Deliberately the same shape
-     * as [steerTo]/[currentSelection] (highlight follows the finger, resolution reads whatever it
+     * Handles a fresh, independent touch while [acceptsOwnTouches] -- the only case this view
+     * ever sees its own touch stream at all, see that property's own doc.
+     *
+     * A touch that starts on the ring steers it: deliberately the same shape as
+     * [steerTo]/[currentSelection] (highlight follows the finger, resolution reads whatever it
      * last settled on) rather than a separate code path, so the two interactions feel identical
-     * even though one is pushed in and the other is this view's own.
+     * even though one is pushed in and the other is this view's own. [ownTouchStreamActive]
+     * remembers that decision from the stream's own `ACTION_DOWN`, so a drag that wanders
+     * outside mid-gesture does not suddenly let go of a touch that started as a real steer.
+     *
+     * A touch that starts anywhere else is a dismissal, and is *consumed*: this view is laid out
+     * across the entire host (see [com.borderkeys.ime.KeyboardHostView.onLayout]'s own call
+     * site), so `return true` at that `ACTION_DOWN` is what keeps the key underneath from being
+     * pressed. The ring waiting for a tap is modal by design -- per the user's own spec, tapping
+     * outside it closes it without inserting anything, the same as the centre X except that the
+     * swiped word already composing in the field is left exactly as it is. Letting the touch
+     * through instead (the earlier design) meant every stray tap both typed a letter *and*, via
+     * `onKey`'s safety-net dismiss, threw the swiped word away. The listener closes the ring
+     * synchronously inside [Listener.onRadialDismissed], which drops [acceptsOwnTouches], so the
+     * rest of that stream -- still routed here, since this view claimed its down -- is ignored
+     * by the guard at the top rather than needing its own bookkeeping.
      */
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!acceptsOwnTouches) {
+            return false
+        }
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            ownTouchStreamActive = isWithinRing(event.x, event.y, anchorX, anchorY, outerRadius())
+            if (!ownTouchStreamActive) {
+                listener?.onRadialDismissed()
+                return true
+            }
+        }
+        if (!ownTouchStreamActive) {
             return false
         }
         when (event.actionMasked) {
@@ -307,6 +419,10 @@ class RadialSuggestionMenuView(
     override fun onDraw(canvas: Canvas) {
         Trace.beginSection("RadialSuggestionMenuView.onDraw")
         try {
+            // Nothing above the keys, particles included -- see topInset.
+            if (topInset > 0f) {
+                canvas.clipRect(0f, topInset, width.toFloat(), height.toFloat())
+            }
             // Not an early return on an empty list any more: celebrate() clears words the
             // instant a pick resolves, specifically so the wedges and scrim stop drawing right
             // away, while its own burst -- entirely independent of words -- keeps animating on
@@ -317,8 +433,7 @@ class RadialSuggestionMenuView(
                 drawWedges(canvas)
                 drawCancelButton(canvas)
             }
-            fillParticles.draw(canvas, paints.particlePaint)
-            outlineParticles.draw(canvas, paints.particlePaint)
+            particles.draw(canvas, paints.particlePaint)
         } finally {
             Trace.endSection()
         }
@@ -327,7 +442,8 @@ class RadialSuggestionMenuView(
     private fun drawScrim(canvas: Canvas) {
         val baseAlpha = paints.background.alpha
         paints.background.alpha = SCRIM_ALPHA
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paints.background)
+        // Over the keyboard only, never the room above it: the app there stays exactly as it was.
+        canvas.drawRect(0f, topInset, width.toFloat(), height.toFloat(), paints.background)
         paints.background.alpha = baseAlpha
     }
 
@@ -398,8 +514,7 @@ class RadialSuggestionMenuView(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        fillParticles.cancel()
-        outlineParticles.cancel()
+        particles.cancel()
     }
 
     companion object {
@@ -410,14 +525,14 @@ class RadialSuggestionMenuView(
 
         const val DEFAULT_ROW_PX = 150f
 
-        /** Sized for one preset's own burst count (10) at [CELEBRATE_BURST_MULTIPLIER] plus the
-         *  ambient trickle running at the same time, not for [MAX_WEDGES] each celebrating at
-         *  once -- only one wedge is ever resolved per gesture. */
-        const val FILL_PARTICLE_POOL_CAPACITY = 20
+        /** Sized for one preset's own burst count (10) at [CELEBRATE_BURST_MULTIPLIER], scaled
+         *  up for a wedge's area (see [com.borderkeys.ime.fx.ParticleSimulation.MAX_EXTENT_FACTOR])
+         *  plus the ambient trickle running at the same time -- not for [MAX_WEDGES] each
+         *  celebrating at once; only one wedge is ever resolved per gesture. */
+        const val FILL_PARTICLE_POOL_CAPACITY = 80
 
-        /** No burst on this layer, only one wedge's own arc trace at a time -- see
-         *  [outlineParticles]'s own doc. */
-        const val OUTLINE_PARTICLE_POOL_CAPACITY = 16
+        /** One wedge's own outline at a time -- a long one, so Comet's cap (18) scaled up. */
+        const val OUTLINE_PARTICLE_POOL_CAPACITY = 56
 
         /** How much bigger [celebrate]'s burst is than [steerTo]'s own ambient trickle -- a
          *  deliberate, noticeably bigger moment for the one wedge actually picked. */
@@ -450,6 +565,13 @@ class RadialSuggestionMenuView(
             if (d < 0f) d += 360f
             return d
         }
+
+        /** Whether ([x], [y]) is close enough to ([centerX], [centerY]) to count as a touch *on*
+         *  the ring, not merely somewhere on the host this view happens to span -- see
+         *  [onTouchEvent]'s own doc for why that distinction has to be checked at all. Pure and
+         *  public for the same reason [wedgeCentreDegrees] is: testable without a `View`. */
+        fun isWithinRing(x: Float, y: Float, centerX: Float, centerY: Float, radius: Float): Boolean =
+            hypot(x - centerX, y - centerY) <= radius
 
         /**
          * The ergonomic wedge order: best thumb reach first. Up-right and up-left diagonals are

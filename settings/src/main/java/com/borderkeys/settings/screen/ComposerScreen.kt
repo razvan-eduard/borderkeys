@@ -42,6 +42,7 @@ import com.borderkeys.keyboard.R
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PickerChip
+import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.move
@@ -71,21 +72,16 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SettingsSectionCard(strings[Keys.COMPOSER_SETTINGS_ENABLE]) {
+        SettingsSectionCard(strings[Keys.SCREEN_DRAFT_BOX]) {
             SwitchRow(
                 title = strings[Keys.COMPOSER_SETTINGS_ENABLE],
                 subtitle = strings[Keys.COMPOSER_SETTINGS_ENABLE_NOTE],
                 checked = preferences.composerEnabled,
             ) { value -> update { it.copy(composerEnabled = value) } }
-        }
-
-        // Everything below describes the box. With the box switched off it would be a screen
-        // of settings for something that cannot happen.
-        if (!preferences.composerEnabled) {
-            return@Column
-        }
-
-        SettingsSectionCard(strings[Keys.COMPOSER_SETTINGS_TEXT_SIZE]) {
+            // Everything below describes the box. With the box switched off it would be
+            // settings for something that cannot happen.
+            if (preferences.composerEnabled) {
+            SectionHeader(strings[Keys.COMPOSER_SETTINGS_TEXT_SIZE])
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -103,14 +99,16 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
                     preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE,
                 ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE) } }
             }
-        }
-
-        SettingsSectionCard(strings[Keys.COMPOSER_SETTINGS_SELECTION]) {
             SwitchRow(
                 title = strings[Keys.COMPOSER_SETTINGS_SNAP_SELECTION],
                 subtitle = strings[Keys.COMPOSER_SETTINGS_SNAP_SELECTION_NOTE],
                 checked = preferences.composerSnapSelectionToWords,
             ) { value -> update { it.copy(composerSnapSelectionToWords = value) } }
+            }
+        }
+
+        if (!preferences.composerEnabled) {
+            return@Column
         }
 
         SettingsSectionCard(strings[Keys.COMPOSER_SETTINGS_BAR]) {

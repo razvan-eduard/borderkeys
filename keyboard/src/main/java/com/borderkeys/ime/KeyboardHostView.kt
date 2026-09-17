@@ -223,6 +223,33 @@ class KeyboardHostView(
             }
         }
 
+    /**
+     * Whether this view claims the rest of the screen above the keys, transparent, for as long
+     * as a ring is open. The keyboard's window is normally only as tall as the keyboard, so a
+     * tap on the app above it is the app's -- which, for a ring, means the app takes the focus
+     * or scrolls and the keyboard only ever hears about it second-hand, if at all. Grown to the
+     * top of the screen, the window gets that tap itself: [radialSuggestionMenu] is laid out
+     * over the whole view, so its own outside-tap rule closes the ring and the tap goes no
+     * further. The app is told nothing changed -- `BorderKeysService.onComputeInsets` keeps the
+     * reported top of the keyboard at [keyboardAreaTop] -- so nothing on screen moves.
+     */
+    var reserveScreenAbove: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                requestLayout()
+            }
+        }
+
+    /** How far down the window the keyboard actually starts: the transparent room above it
+     *  when [reserveScreenAbove], else zero. */
+    var keyboardAreaTop: Int = 0
+        private set
+
+    /** [keyboardAreaTop] as of the last layout, so a change between layouts can be handed to the
+     *  ring as the distance the keys moved under it. */
+    private var laidOutKeyboardAreaTop = 0
+
     /** Mirrors [com.borderkeys.data.theme.KeyboardTheme.navigationBarBackground]; see
      *  [drawBackground] for what it actually changes. */
     var navigationBarBackground: Boolean = true
@@ -450,7 +477,7 @@ class KeyboardHostView(
     fun showInlineSuggestions(show: Boolean) {
         val wantsInline = show && inlineSuggestions.hasSuggestions
         val inlineVisibility = if (wantsInline) VISIBLE else GONE
-        val stripVisibility = if (wantsInline) GONE else VISIBLE
+        val stripVisibility = if (wantsInline) GONE else stripRestored()
         if (inlineSuggestions.visibility != inlineVisibility ||
             suggestionStrip.visibility != stripVisibility
         ) {
@@ -473,6 +500,29 @@ class KeyboardHostView(
     val quickSettingsVisible: Boolean get() = quickSettings.visibility == VISIBLE
 
     val clipboardPanelVisible: Boolean get() = clipboardPanel.visibility == VISIBLE
+
+    /**
+     * Whether the suggestion row is wanted at all (`KeyboardPreferences.showSuggestionStrip`).
+     * Off, the row is GONE and stays GONE through every panel that would otherwise restore it
+     * on its way out; the setting used to be read only by the service, which stopped asking the
+     * engine and left the row up, blank.
+     */
+    var suggestionStripEnabled: Boolean = true
+        set(value) {
+            if (field == value) {
+                return
+            }
+            field = value
+            val overlaid = clipboardPanelVisible || languageRevertPanelVisible ||
+                radialMenuVisible || inlineSuggestions.visibility == VISIBLE
+            if (!overlaid) {
+                suggestionStrip.visibility = stripRestored()
+                requestLayout()
+            }
+        }
+
+    /** What the strip goes back to when whatever covered it leaves. */
+    private fun stripRestored(): Int = if (suggestionStripEnabled) VISIBLE else GONE
 
     /**
      * Shows or hides the clipboard history, standing the keys down while it is up.
@@ -505,7 +555,7 @@ class KeyboardHostView(
         // The history is its own screen with its own back control -- a suggestion strip above it
         // would be completing text nobody is typing. Restored to the strip on the way out;
         // an inline-autofill response arriving later puts itself back.
-        suggestionStrip.visibility = if (visible) GONE else VISIBLE
+        suggestionStrip.visibility = if (visible) GONE else stripRestored()
         if (visible) {
             inlineSuggestions.visibility = GONE
         }
@@ -526,7 +576,7 @@ class KeyboardHostView(
             return
         }
         languageRevertPanel.visibility = if (visible) VISIBLE else GONE
-        suggestionStrip.visibility = if (visible) GONE else VISIBLE
+        suggestionStrip.visibility = if (visible) GONE else stripRestored()
         if (visible) {
             inlineSuggestions.visibility = GONE
         }
@@ -547,13 +597,18 @@ class KeyboardHostView(
      * the moment it is not.
      */
     fun setRadialMenuVisible(visible: Boolean) {
+        // A view still VISIBLE only because a celebration burst is finishing (pendingHide) is
+        // already hidden as far as the strip, the blur and everything else here is concerned --
+        // comparing against the raw visibility would make a ring reopened during that burst
+        // return early below with the strip still up and the keys unblurred.
+        val wasShown = radialMenuVisible && !radialSuggestionMenu.pendingHide
         if (visible) {
             // Cancels any close deferred below for a celebration burst that had not finished
             // yet -- the ring is being genuinely reused, not left to auto-hide underneath a
             // fresh open a moment later.
             radialSuggestionMenu.pendingHide = false
         }
-        if (radialMenuVisible == visible) {
+        if (wasShown == visible) {
             return
         }
         if (visible) {
@@ -575,7 +630,15 @@ class KeyboardHostView(
         } else {
             radialSuggestionMenu.visibility = if (visible) VISIBLE else GONE
         }
-        suggestionStrip.visibility = if (visible) GONE else VISIBLE
+        // INVISIBLE, not GONE: the row keeps its height while the ring is up, so the keyboard
+        // window does not shrink -- and the keys under the finger shift -- in the middle of the
+        // very stroke that opened it. The other overlays take the row's slot themselves; this
+        // one floats over the keys and has nothing to put there.
+        suggestionStrip.visibility = when {
+            !visible -> stripRestored()
+            suggestionStripEnabled -> INVISIBLE
+            else -> GONE
+        }
         // A real blur of the keys behind the ring, not just the scrim the ring draws over
         // itself -- applied to the source view directly (blur what keyboard actually rendered)
         // rather than attempting a backdrop-filter of "whatever is behind this overlay," which
@@ -675,7 +738,19 @@ class KeyboardHostView(
             }
         }
 
-        val totalHeight = height + navigationBarInset + bottomOffsetPx
+        val keyboardHeight = height + navigationBarInset + bottomOffsetPx
+        // See reserveScreenAbove: the transparent room above the keys is whatever the window
+        // has left, which a wrap-content window is measured against as an upper bound.
+        keyboardAreaTop = if (reserveScreenAbove) {
+            val available = when (MeasureSpec.getMode(heightMeasureSpec)) {
+                MeasureSpec.UNSPECIFIED -> resources.displayMetrics.heightPixels
+                else -> MeasureSpec.getSize(heightMeasureSpec)
+            }
+            (available - keyboardHeight).coerceAtLeast(0)
+        } else {
+            0
+        }
+        val totalHeight = keyboardHeight + keyboardAreaTop
         // Measured unconditionally, not gated behind its own visibility like every other child
         // here, and against the host's final total size rather than a row of its own -- this
         // overlays everything, not just the keys, so it must not add to totalHeight itself. See
@@ -717,7 +792,8 @@ class KeyboardHostView(
         } else {
             right
         }
-        var y = 0
+        // Everything starts below the room reserved above the keys, when there is any.
+        var y = keyboardAreaTop
         if (quickActions.visibility != GONE && quickActionsPlacement == PLACEMENT_ABOVE_STRIP) {
             quickActions.layout(left, y, right, y + barThickness)
             y += barThickness
@@ -762,7 +838,15 @@ class KeyboardHostView(
         // last was before this view even existed -- so that clamp silently no-ops against a view
         // that has never actually been positioned at all, letting the ring land wherever the raw
         // anchor said to, off the edge of the screen included.
+        radialSuggestionMenu.topInset = keyboardAreaTop.toFloat()
         radialSuggestionMenu.layout(0, 0, width, b - t)
+        // A ring opens before the room above the keys is reserved (the reservation is what its
+        // opening asks for), so it was anchored to keys that have since moved down by exactly
+        // this much; and it is still showing when the room goes again on the way out.
+        if (keyboardAreaTop != laidOutKeyboardAreaTop) {
+            radialSuggestionMenu.shiftBy((keyboardAreaTop - laidOutKeyboardAreaTop).toFloat())
+            laidOutKeyboardAreaTop = keyboardAreaTop
+        }
         if (quickSettings.visibility != GONE) {
             quickSettings.layout(bodyLeft, y, bodyRight, y + quickSettings.measuredHeight)
             y += quickSettings.measuredHeight
@@ -846,18 +930,21 @@ class KeyboardHostView(
      */
     private fun drawBackground(canvas: android.graphics.Canvas) {
         val skippedInset = if (navigationBarBackground) 0 else navigationBarInset
+        // Never into the room reserved above the keys: that stays transparent, the app showing
+        // through exactly as it did before the window grew.
+        val top = keyboardAreaTop.toFloat()
         val bottom = (height - bottomOffsetPx - skippedInset).toFloat()
-        if (bottom <= 0f) {
+        if (bottom <= top) {
             return
         }
         if (fullWidthBackground) {
-            paints.backgroundPainter.draw(canvas, 0f, 0f, width.toFloat(), bottom)
+            paints.backgroundPainter.draw(canvas, 0f, top, width.toFloat(), bottom)
             drawOutline(canvas, 0f, width.toFloat(), bottom)
             return
         }
         val contentWidth = (width * widthScale).toInt().coerceAtLeast(1)
         val left = contentLeft(width, contentWidth).toFloat()
-        paints.backgroundPainter.draw(canvas, left, 0f, left + contentWidth, bottom)
+        paints.backgroundPainter.draw(canvas, left, top, left + contentWidth, bottom)
         drawOutline(canvas, left, left + contentWidth, bottom)
     }
 

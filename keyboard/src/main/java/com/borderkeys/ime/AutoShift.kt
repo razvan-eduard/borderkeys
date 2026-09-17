@@ -50,7 +50,10 @@ internal object AutoShift {
         val words = (inputType and InputType.TYPE_TEXT_FLAG_CAP_WORDS) != 0
         val sentences = (inputType and InputType.TYPE_TEXT_FLAG_CAP_SENTENCES) != 0
         if (!words && !sentences) {
-            if (!forceCapitaliseSentences || isPasswordVariation(inputType)) {
+            // Nor an address: an e-mail or a URL is not made of sentences, and a field that
+            // asked for neither capitals nor sentences and is one of those is not asking
+            // quietly -- it is telling.
+            if (!forceCapitaliseSentences || isPasswordVariation(inputType) || isAddressVariation(inputType)) {
                 return OFF
             }
             // The field asked for nothing, so there is no reqModes bit for the platform's own
@@ -123,6 +126,15 @@ internal object AutoShift {
         return variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
             variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
             variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+    }
+
+    /** Whether [inputType] is an e-mail address or a URI field, in either of Android's two
+     *  spellings of e-mail -- the other fields the force override leaves alone. */
+    private fun isAddressVariation(inputType: Int): Boolean {
+        val variation = inputType and InputType.TYPE_MASK_VARIATION
+        return variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
+            variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS ||
+            variation == InputType.TYPE_TEXT_VARIATION_URI
     }
 
     private const val OFF = 0

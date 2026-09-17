@@ -158,6 +158,37 @@ class AutoShiftTest {
     }
 
     @Test
+    fun `the force override never touches an e-mail or a URL field`() {
+        val email = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+        val webEmail = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
+        val uri = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        for (variation in listOf(email, webEmail, uri)) {
+            assertEquals(
+                0,
+                AutoShift.stateFor(
+                    autoCapitaliseEnabled = true, inputType = variation, composingIsEmpty = true,
+                    forceCapitaliseSentences = true, textBeforeCursor = { "" },
+                ) { error("an address field is left alone even with the force override on") },
+            )
+        }
+    }
+
+    @Test
+    fun `an e-mail field that itself asks for sentences still gets them`() {
+        // The exemption is the force override's alone: a field that asked for capitals is
+        // answered as asked, address or not -- the platform's own answer decides.
+        val asked = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS or
+            InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        assertEquals(
+            1,
+            AutoShift.stateFor(
+                autoCapitaliseEnabled = true, inputType = asked, composingIsEmpty = true,
+                forceCapitaliseSentences = true, textBeforeCursor = { "" },
+            ) { InputType.TYPE_TEXT_FLAG_CAP_SENTENCES },
+        )
+    }
+
+    @Test
     fun `the force override never touches a visible or web password field either`() {
         val visible = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
         val web = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD

@@ -48,8 +48,17 @@ internal object AutoCorrection {
         knownWord: String,
         minimumLength: Int,
         isProperNoun: Boolean = false,
+        maxEdits: Int = Int.MAX_VALUE,
     ): String? {
         if (suggestion.isNullOrEmpty() || typed != suggestionQuery) {
+            return null
+        }
+        // How far the candidate is from what was typed, once case and accents are set aside --
+        // a ceiling on top of the engine's own ranking, which only ever decides *which*
+        // candidate comes first, never whether it is close enough to be a correction at all. A
+        // correct word the dictionaries simply do not know ("snobul") used to be replaced by
+        // whatever ranked first, however far away ("noul", two edits on six letters).
+        if (editDistance(stripDiacritics(typed), stripDiacritics(suggestion)) > maxEdits) {
             return null
         }
         // Cased once, up front, rather than compared raw and separately case-insensitively:
@@ -89,6 +98,57 @@ internal object AutoCorrection {
     private fun isDiacriticOnlyDifference(typed: String, suggestion: String): Boolean =
         stripDiacritics(typed) == stripDiacritics(suggestion)
 
+    /**
+     * The edit ceiling [correctionFor] applies for a word of [typedLength] letters under the
+     * user's `correctionDistance` setting (`KeyboardPreferences.CORRECTION_DISTANCE_*`, passed
+     * as a plain int because `:keyboard` cannot reference `:data`'s constants):
+     * strict is one edit, loose is two, and the default allows the second edit only once a
+     * word is long enough (eight letters) for two slips to be likelier than a different word.
+     */
+    fun maxEditsFor(typedLength: Int, distanceSetting: Int): Int = when (distanceSetting) {
+        DISTANCE_STRICT -> 1
+        DISTANCE_LOOSE -> 2
+        else -> if (typedLength >= LONG_WORD_LETTERS) 2 else 1
+    }
+
+    /**
+     * Optimal string alignment distance -- Levenshtein plus a swap of two adjacent letters as a
+     * single edit, since "teh" for "the" is one slip, not two. Both inputs are already folded by
+     * the caller. Two short rows, allocated per call; this runs once per delimiter, never per
+     * frame.
+     */
+    fun editDistance(a: String, b: String): Int {
+        if (a == b) return 0
+        if (a.isEmpty()) return b.length
+        if (b.isEmpty()) return a.length
+        var twoBack = IntArray(b.length + 1)
+        var previous = IntArray(b.length + 1) { it }
+        var current = IntArray(b.length + 1)
+        for (i in 1..a.length) {
+            current[0] = i
+            for (j in 1..b.length) {
+                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+                current[j] = minOf(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost)
+                if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) {
+                    current[j] = minOf(current[j], twoBack[j - 2] + 1)
+                }
+            }
+            val rotate = twoBack
+            twoBack = previous
+            previous = current
+            current = rotate
+        }
+        return previous[b.length]
+    }
+
+    /** Mirrors `KeyboardPreferences.CORRECTION_DISTANCE_STRICT/LOOSE`; `:keyboard` cannot
+     *  reference `:data`'s constants directly, the same reasoning `forSetting` gives elsewhere. */
+    const val DISTANCE_STRICT = 0
+    const val DISTANCE_LOOSE = 2
+
+    /** From this many letters on, the default setting allows a second edit. */
+    const val LONG_WORD_LETTERS = 8
+
     private fun stripDiacritics(word: String): String =
         Normalizer.normalize(word, Normalizer.Form.NFD)
             .filterNot { Character.getType(it) == Character.NON_SPACING_MARK.toInt() }
@@ -121,9 +181,11 @@ internal object AutoCorrection {
         if (typed.isEmpty() || correction.isEmpty()) {
             return correction
         }
-        // Shouted, and more than one letter: two capitals are a decision, one is the start of a
-        // sentence. A single "I" stays "I" rather than becoming a shout.
-        if (typed.length > 1 && typed.any { it.isLetter() } && typed.none { it.isLowerCase() }) {
+        // Shouted, and more than one *letter*: two capitals are a decision, one is the start of a
+        // sentence. A single "I" stays "I" rather than becoming a shout -- and so does "I'" or
+        // "A-", where the second character is an apostrophe or hyphen (word characters to the
+        // keyboard, but not capitals anyone chose).
+        if (typed.count { it.isLetter() } > 1 && typed.none { it.isLowerCase() }) {
             return correction.uppercase()
         }
         if (isProperNoun) {

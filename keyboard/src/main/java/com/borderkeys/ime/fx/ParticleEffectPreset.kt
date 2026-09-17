@@ -5,7 +5,14 @@ package com.borderkeys.ime.fx
 
 /** Which [ParticleMotion] function moves a particle -- resolved once per particle per frame by
  *  [ParticleField], not stored per particle. */
-enum class ParticleMotionKind { RISE_AND_SHRINK, PULSE_IN_PLACE, WAVE_DRIFT, STATIC_FLICKER }
+/**
+ * [OUTWARD] is the outline layer's own motion: a particle leaves its spawn point along the
+ * outline's outward normal at [ParticleEffectPreset.outwardSpeedPxPerSecond], plus a drift along
+ * [ParticleEffectPreset.emitDirectionX]/[ParticleEffectPreset.emitDirectionY] at
+ * [ParticleEffectPreset.driftPxPerSecond], shrinking as it goes -- so an outline effect radiates
+ * *out of* the element and is never seen inside it (that is what the fill layer is for).
+ */
+enum class ParticleMotionKind { RISE_AND_SHRINK, PULSE_IN_PLACE, WAVE_DRIFT, STATIC_FLICKER, OUTWARD }
 
 /** Which [ParticleColor] function colours a particle. */
 enum class ParticleColorKind { THERMAL_GRADIENT, CROSSFADE, HUE_CYCLE, SINGLE_COLOR_PULSE }
@@ -53,4 +60,27 @@ data class ParticleEffectPreset(
      *  is spawned traveling (the outline "Comet" look); every other preset leaves this at its
      *  harmless default. */
     val travelLoopsPerSecond: Float = 0f,
+    /** A real stroke traced along the current ambient shape itself, under the particles --
+     *  `0f` (every preset but the outline "Fire"/"Wind" looks) means no stroke at all, so
+     *  Comet/Pulse/Sparkle and every Fill preset stay pure particle scatter, unchanged. See
+     *  [ParticleSimulation.drawAmbientStroke]. */
+    val strokeWidthPx: Float = 0f,
+    /** [ParticleMotionKind.OUTWARD] only: how fast a particle leaves the outline along its
+     *  outward normal. */
+    val outwardSpeedPxPerSecond: Float = 0f,
+    /**
+     * An emission direction for an outline preset -- unit vector, screen coordinates (`0, -1`
+     * is up). Two things read it: [ParticleMotionKind.OUTWARD] drifts along it at
+     * [driftPxPerSecond], and, with [emitConeCos] above `-1`, particles only spawn on the parts
+     * of the outline whose outward normal points within that cone of it -- fire rises, so it
+     * shoots off the top of a key and never off its bottom edge into the row below. `0, 0`
+     * (every preset but the outline Fire/Wind looks) means no direction: spawn everywhere,
+     * drift nowhere.
+     */
+    val emitDirectionX: Float = 0f,
+    val emitDirectionY: Float = 0f,
+    /** Minimum dot product between an outline point's outward normal and the emit direction for
+     *  a particle to spawn there -- `-1` accepts the whole outline, `0` the half facing the
+     *  emit direction, higher a narrower cone. */
+    val emitConeCos: Float = -1f,
 )

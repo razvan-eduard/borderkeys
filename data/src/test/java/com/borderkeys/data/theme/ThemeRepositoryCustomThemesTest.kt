@@ -35,6 +35,9 @@ class ThemeRepositoryCustomThemesTest {
             particleEffectsStore = store(
                 ParticleEffectsSettingsSerializer, "particle_effects.json", ParticleEffectsSettings(),
             ),
+            customEffectsPresetLibraryStore = store(
+                CustomEffectsPresetLibrarySerializer, "custom_effects_presets.json", CustomEffectsPresetLibrary(),
+            ),
         )
     }
 

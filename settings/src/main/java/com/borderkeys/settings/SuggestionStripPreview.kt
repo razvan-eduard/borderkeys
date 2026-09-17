@@ -77,10 +77,10 @@ fun SuggestionStripPreview(
                 // per previewParticles' own doc -- the whole point of this preview is showing a
                 // look before that switch is turned on at all.
                 if (previewParticles != null) {
-                    applyParticleLayer(view.fillParticles, view.outlineParticles, previewParticles.copy(enabled = true))
+                    applyParticleLayer(view.particles, previewParticles.copy(enabled = true))
                 } else {
-                    view.fillParticles.enabled = false
-                    view.outlineParticles.enabled = false
+                    view.particles.fill.enabled = false
+                    view.particles.outline.enabled = false
                 }
                 view.requestLayout()
                 view.invalidate()

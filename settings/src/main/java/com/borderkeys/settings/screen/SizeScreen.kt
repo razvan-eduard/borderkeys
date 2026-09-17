@@ -160,6 +160,10 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                         default = defaultPlacement(landscapeTab).horizontalOffsetDp,
                     ) { value -> updatePlacement { it.copy(horizontalOffsetDp = value) } }
                 }
+                TextButton(
+                    onClick = { updatePlacement { defaultPlacement(landscapeTab) } },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                ) { Text(strings[Keys.SIZE_RESET_SIZE_AND_POSITION]) }
             }
             // Not per-orientation: edge arrows and the blur behind the keyboard are a gutter
             // treatment, the same on both sides of a rotation, not a size or position value.
@@ -179,12 +183,6 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                         checked = preferences.blurBehindKeyboard,
                     ) { value -> update { it.copy(blurBehindKeyboard = value) } }
                 }
-            }
-            SettingsSectionCard(strings[Keys.SIZE_RESET]) {
-                TextButton(
-                    onClick = { updatePlacement { defaultPlacement(landscapeTab) } },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                ) { Text(strings[Keys.SIZE_RESET_SIZE_AND_POSITION]) }
             }
         }
     }

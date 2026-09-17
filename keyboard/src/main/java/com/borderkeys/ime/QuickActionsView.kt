@@ -21,7 +21,8 @@ import com.borderkeys.data.theme.CustomIcon
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.QuickActionBarItem
 import com.borderkeys.i18n.Keys
-import com.borderkeys.ime.fx.ParticleField
+import com.borderkeys.ime.fx.ParticleSurface
+import com.borderkeys.ime.fx.RoundedRectElement
 import com.borderkeys.keyboard.R
 import com.borderkeys.theme.ThemePaints
 
@@ -160,13 +161,32 @@ class QuickActionsView(
 
     private var pressedIndex = -1
 
-    /** A burst per button press -- the same "structurally a key" treatment
-     *  [KeyboardCanvasView.fillParticles] gives the keys beside this bar. Exposed non-private so
+    /** Both particle layers for the bar -- the same "structurally a key" treatment
+     *  [KeyboardCanvasView.particles] gives the keys beside it. Exposed non-private so
      *  [BorderKeysService] can push the user's particle-effect settings directly. */
-    val fillParticles = ParticleField(FILL_PARTICLE_POOL_CAPACITY) { invalidate() }
+    val particles = ParticleSurface(FILL_PARTICLE_POOL_CAPACITY, OUTLINE_PARTICLE_POOL_CAPACITY) { invalidate() }
 
-    /** Traces the pressed button's own square bounds. */
-    val outlineParticles = ParticleField(OUTLINE_PARTICLE_POOL_CAPACITY) { invalidate() }
+    /** The pressed button, as the element the engine reads its shape from: exactly the pressed
+     *  highlight square [onDraw] paints under it -- see [pressedBounds]. */
+    private val buttonElement = RoundedRectElement()
+
+    /** The one definition of a button's pressed surface, read by [onDraw] to paint it and by
+     *  [pressButton] to hand particles the same rectangle. */
+    private fun pressedBounds(index: Int, out: android.graphics.RectF) {
+        val half = buttonSizePx / 2
+        val padding = (half + (half / 2)).toFloat()
+        out.set(centreX[index] - padding, centreY[index] - padding, centreX[index] + padding, centreY[index] + padding)
+    }
+
+    private val pressedBoundsScratch = android.graphics.RectF()
+
+    private fun pressButton(index: Int) {
+        pressedBounds(index, pressedBoundsScratch)
+        buttonElement.set(
+            pressedBoundsScratch.left, pressedBoundsScratch.top, pressedBoundsScratch.right, pressedBoundsScratch.bottom,
+        )
+        particles.press(buttonElement)
+    }
 
     init {
         setWillNotDraw(false)
@@ -388,12 +408,8 @@ class QuickActionsView(
                 val cx = centreX[index].toInt()
                 val cy = centreY[index].toInt()
                 if (index == pressedIndex) {
-                    val padding = half + (half / 2)
-                    canvas.drawRect(
-                        (cx - padding).toFloat(), (cy - padding).toFloat(),
-                        (cx + padding).toFloat(), (cy + padding).toFloat(),
-                        paints.keyPressedFill,
-                    )
+                    pressedBounds(index, pressedBoundsScratch)
+                    canvas.drawRect(pressedBoundsScratch, paints.keyPressedFill)
                 }
                 val collapsedOpener = collapsible && !expanded
                 val icon = if (collapsedOpener) moreIcon else icons[index]
@@ -429,8 +445,7 @@ class QuickActionsView(
                     }
                 }
             }
-            fillParticles.draw(canvas, paints.particlePaint)
-            outlineParticles.draw(canvas, paints.particlePaint)
+            particles.draw(canvas, paints.particlePaint)
         } finally {
             Trace.endSection()
         }
@@ -463,12 +478,7 @@ class QuickActionsView(
             MotionEvent.ACTION_DOWN -> {
                 pressedIndex = buttonAt(event.x, event.y)
                 if (pressedIndex >= 0) {
-                    fillParticles.spawnBurstAtPoint(centreX[pressedIndex], centreY[pressedIndex])
-                    val half = buttonSizePx / 2f
-                    outlineParticles.setAmbientRectanglePerimeter(
-                        centreX[pressedIndex] - half, centreY[pressedIndex] - half,
-                        centreX[pressedIndex] + half, centreY[pressedIndex] + half,
-                    )
+                    pressButton(pressedIndex)
                 }
                 invalidate()
                 return pressedIndex >= 0
@@ -477,6 +487,8 @@ class QuickActionsView(
                 val index = buttonAt(event.x, event.y)
                 if (index != pressedIndex) {
                     pressedIndex = index
+                    // The highlight follows the finger onto another button; so do the particles.
+                    if (index >= 0) pressButton(index) else particles.release()
                     invalidate()
                 }
                 return true
@@ -484,7 +496,7 @@ class QuickActionsView(
             MotionEvent.ACTION_UP -> {
                 val index = buttonAt(event.x, event.y)
                 pressedIndex = -1
-                outlineParticles.stopAmbient()
+                particles.release()
                 if (index < 0) {
                     invalidate()
                     return true
@@ -512,7 +524,7 @@ class QuickActionsView(
             }
             MotionEvent.ACTION_CANCEL -> {
                 pressedIndex = -1
-                outlineParticles.stopAmbient()
+                particles.release()
                 invalidate()
                 return true
             }
@@ -532,8 +544,7 @@ class QuickActionsView(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        fillParticles.cancel()
-        outlineParticles.cancel()
+        particles.cancel()
     }
 
     private companion object {
@@ -543,8 +554,8 @@ class QuickActionsView(
         /** [MAX_BUTTONS] could each in principle be pressed in quick succession -- sized for one
          *  preset's own burst count (10) plus a little headroom, not for all ten buttons' bursts
          *  landing in the same frame. */
-        const val FILL_PARTICLE_POOL_CAPACITY = 16
-        const val OUTLINE_PARTICLE_POOL_CAPACITY = 16
+        const val FILL_PARTICLE_POOL_CAPACITY = 24
+        const val OUTLINE_PARTICLE_POOL_CAPACITY = 32
 
         /** The bar is a little shorter than a key row: it is a tool strip, not another row. */
         const val BAR_HEIGHT_FRACTION = 0.82f

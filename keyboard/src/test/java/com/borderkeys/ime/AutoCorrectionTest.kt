@@ -216,6 +216,73 @@ class AutoCorrectionTest {
     }
 
     @Test
+    fun `edit distance counts a swap of two adjacent letters as one edit`() {
+        assertEquals(1, AutoCorrection.editDistance("teh", "the"))
+        assertEquals(1, AutoCorrection.editDistance("helo", "hello"))
+        assertEquals(1, AutoCorrection.editDistance("recieve", "receive"))
+        assertEquals(2, AutoCorrection.editDistance("snobul", "noul"))
+        assertEquals(1, AutoCorrection.editDistance("definately", "definitely"))
+        assertEquals(2, AutoCorrection.editDistance("acomodate", "accommodate"))
+        assertEquals(0, AutoCorrection.editDistance("same", "same"))
+        assertEquals(4, AutoCorrection.editDistance("", "four"))
+    }
+
+    @Test
+    fun `the default distance allows a second edit only in a long word`() {
+        assertEquals(1, AutoCorrection.maxEditsFor(6, 1))
+        assertEquals(2, AutoCorrection.maxEditsFor(8, 1))
+        assertEquals(1, AutoCorrection.maxEditsFor(12, AutoCorrection.DISTANCE_STRICT))
+        assertEquals(2, AutoCorrection.maxEditsFor(3, AutoCorrection.DISTANCE_LOOSE))
+    }
+
+    @Test
+    fun `a correct word the dictionaries do not know is not replaced by something far away`() {
+        // "snobul" is Romanian for "the snob"; the dictionaries only know "snob". Two edits on
+        // six letters is a different word, not a slip -- left alone under the default ceiling.
+        assertNull(
+            AutoCorrection.correctionFor(
+                typed = "snobul", suggestion = "noul",
+                suggestionQuery = "snobul", knownWord = "", minimumLength = minimum,
+                maxEdits = AutoCorrection.maxEditsFor(6, 1),
+            ),
+        )
+        // The same distance on a long word is two slips, and still corrects.
+        assertEquals(
+            "accommodate",
+            AutoCorrection.correctionFor(
+                typed = "acomodate", suggestion = "accommodate",
+                suggestionQuery = "acomodate", knownWord = "", minimumLength = minimum,
+                maxEdits = AutoCorrection.maxEditsFor(9, 1),
+            ),
+        )
+        // A transposition is one edit and always corrects.
+        assertEquals(
+            "the",
+            AutoCorrection.correctionFor(
+                typed = "teh", suggestion = "the",
+                suggestionQuery = "teh", knownWord = "", minimumLength = minimum,
+                maxEdits = AutoCorrection.maxEditsFor(3, AutoCorrection.DISTANCE_STRICT),
+            ),
+        )
+        // An accent-only restoration is zero edits after folding, whatever the ceiling.
+        assertEquals(
+            "să",
+            AutoCorrection.correctionFor(
+                typed = "sa", suggestion = "să",
+                suggestionQuery = "sa", knownWord = "", minimumLength = minimum,
+                maxEdits = 1,
+            ),
+        )
+    }
+
+    @Test
+    fun `an apostrophe or hyphen after one capital is not a shout`() {
+        assertEquals("I'm", AutoCorrection.matchCase("I'", "i'm"))
+        assertEquals("A-level", AutoCorrection.matchCase("A-", "a-level"))
+        assertEquals("THE", AutoCorrection.matchCase("TH", "the"))
+    }
+
+    @Test
     fun `a suggestion identical to what was typed is not a correction`() {
         // Every other test here supplies a genuinely different suggestion or one differing by
         // case, which is the separate branch matchCase exists for -- none of them exercises the

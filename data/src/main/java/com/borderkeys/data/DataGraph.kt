@@ -7,6 +7,8 @@ import android.content.Context
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.dataStoreFile
+import com.borderkeys.data.theme.CustomEffectsPresetLibrary
+import com.borderkeys.data.theme.CustomEffectsPresetLibrarySerializer
 import com.borderkeys.data.theme.CustomThemeLibrary
 import com.borderkeys.data.theme.CustomThemeLibrarySerializer
 import com.borderkeys.data.theme.KeyboardPreferences
@@ -19,6 +21,7 @@ import com.borderkeys.data.theme.ThemeRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.io.File
 
 /**
@@ -127,8 +130,31 @@ object DataGraph {
         )
     }
 
+    /** "My presets" -- see [CustomEffectsPresetLibrary]'s own doc. */
+    private val customEffectsPresetLibraryStore by lazy {
+        DataStoreFactory.create(
+            serializer = CustomEffectsPresetLibrarySerializer,
+            corruptionHandler = ReplaceFileCorruptionHandler { CustomEffectsPresetLibrary() },
+            scope = storeScope,
+            produceFile = { requireContext.dataStoreFile("keyboard_custom_effects_presets.json") },
+        )
+    }
+
     val themes: ThemeRepository by lazy {
-        ThemeRepository(themeStore, lightThemeStore, preferencesStore, customThemeLibraryStore, particleEffectsStore)
+        ThemeRepository(
+            themeStore,
+            lightThemeStore,
+            preferencesStore,
+            customThemeLibraryStore,
+            particleEffectsStore,
+            customEffectsPresetLibraryStore,
+        ).also { repository ->
+            // Presets an earlier build saved under a different file and a narrower shape --
+            // see ThemeRepository.importLegacyOutlinePresets. Off the caller's thread: the first
+            // reader is a settings screen composing, and this is a one-time file read.
+            val legacy = requireContext.dataStoreFile("keyboard_custom_outline_presets.json")
+            storeScope.launch { repository.importLegacyOutlinePresets(legacy) }
+        }
     }
 
     val clipboard: ClipboardRepository by lazy {

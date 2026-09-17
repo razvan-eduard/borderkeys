@@ -122,10 +122,6 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
                 strings[Keys.HOME_HEIGHT_ONE_HANDED_MODE_FLOATING_AND],
             ) { open(Screen.Size) }
             SettingRow(
-                strings[Keys.HOME_SOUND_AND_VIBRATION],
-                strings[Keys.HOME_SOUND_AND_VIBRATION_NOTE],
-            ) { open(Screen.Sound) }
-            SettingRow(
                 strings[Keys.HOME_PARTICLE_EFFECTS],
                 strings[Keys.HOME_PARTICLE_EFFECTS_NOTE],
             ) { open(Screen.Effects) }
@@ -143,6 +139,8 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
             ShortcutRow(R.drawable.bk_icon_globe, strings[Keys.SHORTCUTS_GLOBE])
             ShortcutRow(R.drawable.bk_icon_space_bar, strings[Keys.SHORTCUTS_SPACE_HOLD])
             ShortcutRow(R.drawable.bk_icon_space_bar, strings[Keys.SHORTCUTS_SPACE])
+            ShortcutRow(null, strings[Keys.SHORTCUTS_SHIFT_HOLD])
+            ShortcutRow(R.drawable.bk_action_delete_word, strings[Keys.SHORTCUTS_BACKSPACE_HOLD])
             ShortcutRow(null, strings[Keys.SHORTCUTS_SUGGESTION])
         }
 
@@ -158,8 +156,8 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
 
 /**
  * One gesture in the [Keys.SHORTCUTS_TITLE] card: the key it is about, drawn, and what holding
- * or sliding on it does, in text. [icon] is null only for [Keys.SHORTCUTS_SUGGESTION], which is
- * not about a key at all.
+ * or sliding on it does, in text. [icon] is null for a gesture with no drawing of its key to
+ * lead with -- a suggestion chip, or the shift key, whose glyph is the layout's own.
  */
 @Composable
 private fun ShortcutRow(icon: Int?, text: String) {

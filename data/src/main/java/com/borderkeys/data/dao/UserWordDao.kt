@@ -36,6 +36,12 @@ interface UserWordDao {
     @Query("SELECT * FROM user_words WHERE word = :word LIMIT 1")
     suspend fun find(word: String): UserWord?
 
+    /** The entry for [word] whatever its case -- a chip label is re-cased for the row it sits
+     *  in, and the stored spelling is whatever the word was last committed as. ASCII folding
+     *  only, which is SQLite's own NOCASE; an accented capital is rare enough to live with. */
+    @Query("SELECT * FROM user_words WHERE word = :word COLLATE NOCASE LIMIT 1")
+    suspend fun findIgnoreCase(word: String): UserWord?
+
     /**
      * Adds [delta] to a word's count, inserting it if it is new, in one statement.
      *

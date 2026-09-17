@@ -11,11 +11,11 @@ package com.borderkeys.ime.fx
  * requirement; adjust by eye against a real device.
  *
  * `:keyboard` has no dependency on `:data`, so this deliberately takes and returns a raw `Int` in
- * [forSetting] rather than `ParticleEffectsSettings`' own type -- the mapping (0=Fire, 1=Glow,
- * 2=Waves, 3=Rainbow, 4=Neon Pulse) matches `ParticleEffectsSettings.FILL_*` by convention, not
- * by a shared reference. If either list of five is ever reordered, the other must move with it.
- * This is Fill's own catalogue -- Outline has its own, separate, three-preset catalogue, see
- * [ParticleOutlineStylePresets].
+ * [forSetting] rather than `ParticleEffectsSettings`' own type -- the mapping (0=None, 1=Fire,
+ * 2=Glow, 3=Waves, 4=Rainbow, 5=Neon Pulse) matches `ParticleEffectsSettings.FILL_*` by
+ * convention, not by a shared reference. If either list is ever reordered, the other must move
+ * with it. This is Fill's own catalogue -- Outline has its own, separate, three-preset catalogue,
+ * see [ParticleOutlineStylePresets].
  */
 object ParticleEffectPresets {
 
@@ -88,15 +88,17 @@ object ParticleEffectPresets {
     )
 
     /** [preset] is `ParticleEffectsSettings.FILL_*` by convention -- see this object's own doc
-     *  for why that is a convention rather than a shared reference. Out-of-range values fall
-     *  back to [GLOW] rather than crashing, the same defensiveness
-     *  `ParticleFillLayer.sanitised()` already applies to the stored setting itself. */
+     *  for why that is a convention rather than a shared reference. `FILL_NONE`/an out-of-range
+     *  value fall back to [GLOW] rather than crashing, the same defensiveness
+     *  `ParticleFillLayer.sanitised()` already applies to the stored setting itself; in practice
+     *  a caller never asks for a preset when the type is None -- see [applyParticleLayer]'s own
+     *  gating. */
     fun forSetting(preset: Int): ParticleEffectPreset = when (preset) {
-        0 -> FIRE
-        1 -> GLOW
-        2 -> WAVES
-        3 -> RAINBOW
-        4 -> NEON_PULSE
+        1 -> FIRE
+        2 -> GLOW
+        3 -> WAVES
+        4 -> RAINBOW
+        5 -> NEON_PULSE
         else -> GLOW
     }
 }

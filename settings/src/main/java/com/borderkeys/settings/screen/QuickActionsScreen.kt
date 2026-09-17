@@ -44,6 +44,7 @@ import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.PlacementPreview
+import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.move
@@ -95,7 +96,8 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                 ) { value -> update { it.copy(quickActionsLabels = value) } }
             }
 
-            SettingsSectionCard(strings[Keys.QUICK_MODE]) {
+            SettingsSectionCard(strings[Keys.QUICK_BAR_TITLE]) {
+                SectionHeader(strings[Keys.QUICK_MODE])
                 ChipRow {
                     PickerChip(
                         strings[Keys.QUICK_MODE_FULL],
@@ -109,9 +111,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     }
                 }
                 Explanation(strings[Keys.QUICK_MODE_NOTE])
-            }
-
-            SettingsSectionCard(strings[Keys.QUICK_SIZE]) {
+                SectionHeader(strings[Keys.QUICK_SIZE])
                 ChipRow {
                     PickerChip(
                         strings[Keys.QUICK_SIZE_DEFAULT],
@@ -131,9 +131,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     ) { update { it.copy(quickActionsSize = KeyboardPreferences.QUICK_ACTIONS_SIZE_HUGE) } }
                 }
                 Explanation(strings[Keys.QUICK_SIZE_NOTE])
-            }
-
-            SettingsSectionCard(strings[Keys.QUICK_PLACEMENT]) {
+                SectionHeader(strings[Keys.QUICK_PLACEMENT])
                 ChipRow {
                     PickerChip(
                         strings[Keys.QUICK_PLACEMENT_ABOVE],

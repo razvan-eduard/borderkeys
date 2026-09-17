@@ -358,8 +358,6 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                     preserveAlpha = true,
                 ) { update { t -> t.copy(swipeTrailColor = it) } }
               }
-            }
-            SettingsSectionCard(strings[Keys.THEME_APPLIED_HIGHLIGHT]) {
                 SwitchRow(
                     title = strings[Keys.THEME_FILL_THE_CORRECTION_CHIP],
                     subtitle = strings[Keys.THEME_FILL_THE_CORRECTION_CHIP_NOTE],
