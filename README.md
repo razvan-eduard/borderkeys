@@ -53,10 +53,11 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   dictionaries simply do not know is left alone rather than replaced by something far away, and
   the backspace straight after a correction puts back exactly what you typed.
 - **Capitals and spaces the way every keyboard does them.** Shift is spent by the next letter
-  only; two quick taps or a hold lock it. Sentences are capitalised on the field's own request,
-  or — a separate switch — even in fields that never made one. Two spaces make a full stop, a
+  only; two quick taps or a hold lock it. Capitals are off, on when the field asks for them, or
+  on everywhere — one choice, since some apps forget to ask. Two spaces make a full stop, a
   space is added after punctuation and a picked suggestion, and the space you type out of habit
-  right after can be ignored once, always, or kept.
+  right after can be ignored once, always, or kept. The capital after a full stop is decided
+  from what the keyboard just wrote, so it comes even in apps whose editor answers late.
 - **Swipe typing**, geometric (SHARK²) and deterministic in both flavors — no model, no training
   data, no accuracy number that depends on what you happened to type it on. A small loop at a
   doubled letter tells "hello" from "helo". Swiping switches itself off in password, e-mail,
@@ -86,6 +87,13 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 - **Text shortcuts.** A word that stands for a longer text — "omw" for "on my way", an address, a
   sign-off — expands when a space or a punctuation mark follows it, takes the capital you gave the
   shortcut, and comes back with the backspace straight after, like any other correction.
+- **Keys that answer back.** The pressed key shows itself enlarged above your finger while it is
+  held, the held key's alternates pop up in the same place, and the keypress vibration comes in
+  three strengths — from the phone's own feedback classes, so still without a vibration
+  permission. Long-press hints, the hold duration and what the enter key does are settings too.
+- **Settings that stay out of the way.** Every card leads with what changes how typing feels;
+  the calibration values, the workarounds for particular apps and the choices made once fold
+  under an "Advanced settings" line, closed until you open it.
 - **Private mode is automatic.** In a password field, or wherever an app asks for no personalised
   learning, there is no learning, no clipboard history, no swipe, no ring — and a password's text
   never reaches the prediction engine at all.
@@ -96,11 +104,15 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 
 ### Quick actions
 
-A row of buttons for what otherwise takes several gestures — copying a word, pasting, selecting
-everything — built in, and extendable: a **custom quick action** is a macro of steps you define
-yourself, pinned onto the bar exactly like a built-in one. The bar can sit above the suggestions,
-below the keys, or down either side; it comes in four sizes, with optional labels under the
-buttons, and the settings screen shows the real bar live while you change it.
+A row of buttons for what otherwise takes several gestures — copying a word, a line or
+everything, pasting, cutting, selecting a word or all of it, deleting a word, moving the cursor to
+either end or one character left or right, undo and redo, a new line — plus two edits on the text
+itself: **Capital** flips the first letter of the word at the cursor, **Normalise** capitalises
+the start of every sentence in the field. Built in, and extendable: a **custom quick action** is
+a macro of steps you define yourself, pinned onto the bar exactly like a built-in one. The bar
+can sit above the suggestions, below the keys, or down either side; it comes in four sizes, with
+optional labels under the buttons and an outline around each — its own switch, since the buttons
+are not keys — and the settings screen shows the real bar live while you change it.
 
 <p align="center">
   <img src="docs/images/quick_actions.png" alt="The quick actions screen: the bar drawn live above its settings, with labels under the buttons" width="40%">
@@ -112,8 +124,9 @@ Built-in themes across several colour families, full manual control over every c
 corner radius, and a **custom theme library**: save what you built, import a theme someone
 shared, export and rename your own — kept separately from whichever single theme is active
 right now. Colours picked through the wheel are kept per field, the background can reach the
-whole width or stop at the keys, leave the navigation bar's strip bare or paint it, and the
-outline frames the whole keyboard rather than each key.
+whole width or stop at the keys, leave the navigation bar's strip bare or paint it, and the key
+outline follows every key-shaped control — the keys, the held-key popup, the panel chips — and
+frames the whole keyboard.
 
 <p align="center">
   <img src="docs/images/custom_theme.png" alt="The theme screen: the keyboard drawn live, then the preset families and manual controls" width="40%">
@@ -126,9 +139,10 @@ panel and the quick-action bar — each with two independent layers: a **fill** 
 the element (Fire, Glow, Waves, Rainbow, Neon pulse) and an **outline** that traces the element's
 own edge and radiates outward (Comet, Pulse, Sparkle, Fire, Wind), with their own colours, speed,
 density and width. Every element hands the particle system its exact geometry, so an outline
-follows a key, a wedge or a chip precisely and survives any resize. Six built-in looks and your
-own saved presets set all five surfaces at once; whatever you change afterwards shows as unsaved
-changes against the preset you started from. Off by default.
+follows a key, a wedge or a chip precisely and survives any resize. Six built-in looks — Off is
+one of them — and your own saved presets set all five surfaces at once; whatever you change
+afterwards shows as unsaved changes against the preset you started from, and each layer's colours
+and dials sit under its own Advanced fold. Off by default.
 
 <p align="center">
   <img src="docs/images/particle_effects.png" alt="The particle effects screen: presets, then each surface's outline and fill layers" width="40%">
@@ -151,7 +165,8 @@ instead of opening an idle box first.
 ### Backup, restore, and control
 
 Everything this keyboard has learned and configured — dictionaries, settings, theme, size and
-position, particle effects, quick actions, saved instructions — writes to and reads from a
+position, particle effects, quick actions, text shortcuts, saved instructions — writes to and
+reads from a
 single file, under your control, on your schedule, with a checklist of exactly what a file
 contains shown before any of it is applied. The two builds can hand their settings and
 dictionaries to each other directly, without a file. Nothing syncs anywhere on its own.
@@ -178,15 +193,21 @@ learned dictionary of the other build.
 
 ### Typing, in both builds
 
-| Suggestions match the case you typed | Settings | Theme | Several languages at once |
+| A held key, its popup, and names capitalised on their own | Settings | Theme | Several languages at once |
 |---|---|---|---|
 | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/2_home.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/3_theme.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/4_languages.jpg) |
 
 ### The radial menu and the effects, in both builds
 
-| A ring of alternatives, mid-swipe | What a tap outside the ring does, and the rest | Particle effects | Quick actions, drawn live |
+| A ring of alternatives, with its particles | The ring's settings, the dials folded away | Particle effects: presets, then each surface | A layer unfolded: colours and dials |
 |---|---|---|---|
-| ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/5_radial_menu.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/6_radial_settings.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/7_particle_effects.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/8_quick_actions.jpg) |
+| ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/5_radial_menu.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/6_radial_settings.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/7_particle_effects.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/11_particle_layers.jpg) |
+
+### The bar, the keys and the shortcuts, in both builds
+
+| Quick actions, drawn live, outlined | Layout & keys: the popup and the vibration strength | Capitals: off, when the app asks, always | Text shortcuts |
+|---|---|---|---|
+| ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/8_quick_actions.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/9_layout_keys.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/10_typing_settings.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/12_text_shortcuts.jpg) |
 
 ### The assistant, `plus` only
 
