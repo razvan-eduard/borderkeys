@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
@@ -239,6 +240,19 @@ private fun SettingsApp() {
     }
     val current = stack.last()
 
+    // What each screen remembers about itself -- above all where it was scrolled to -- kept
+    // while the screen is on the stack and dropped when it is popped. The switch at the bottom
+    // takes a screen out of the composition the moment another is opened over it, and a screen
+    // composed again from nothing starts at the top: Home came back scrolled to its first card
+    // after every trip into a setting, however far down the card that led there was. A screen
+    // that has been popped is forgotten on purpose, so opening it again starts at the top, the
+    // way a screen entered anew is expected to.
+    val screenStates = rememberSaveableStateHolder()
+    val pop = {
+        val popped = stack.removeAt(stack.size - 1)
+        screenStates.removeState(popped.name)
+    }
+
     // The one step Setup cannot do by itself -- enabling BorderKeys sends the user out to system
     // settings, which this application has no way to detect finishing, so that step stays a
     // button the person presses on purpose -- and the one it can offer unasked, the same way a
@@ -253,12 +267,13 @@ private fun SettingsApp() {
     // may still want to do, and this does not walk them away from it just because step 2 finished.
     LaunchedEffect(current, isDefault) {
         if (current == Screen.Setup && isDefault) {
+            stack.forEach { screenStates.removeState(it.name) }
             stack.clear()
             stack.add(Screen.Home)
         }
     }
 
-    androidx.activity.compose.BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.size - 1) }
+    androidx.activity.compose.BackHandler(enabled = stack.size > 1) { pop() }
 
     // Global rather than Typing's own: whatever screen a setting was just changed on -- a theme
     // colour, a key size, the swipe trail width -- this is the one place to feel the result
@@ -337,7 +352,7 @@ private fun SettingsApp() {
                 },
                 navigationIcon = {
                     if (stack.size > 1) {
-                        IconButton(onClick = { stack.removeAt(stack.size - 1) }) {
+                        IconButton(onClick = pop) {
                             Icon(
                                 painter = painterResource(
                                     android.R.drawable.ic_menu_close_clear_cancel,
@@ -352,23 +367,25 @@ private fun SettingsApp() {
     ) { insets ->
         val open: (Screen) -> Unit = { stack.add(it) }
         val modifier = Modifier.padding(insets)
-        when (current) {
-            Screen.Home -> HomeScreen(modifier, open)
-            Screen.Setup -> SetupScreen(modifier, open)
-            Screen.Languages -> LanguagesScreen(modifier)
-            Screen.Layout -> LayoutScreen(modifier)
-            Screen.Theme -> ThemeScreen(modifier)
-            Screen.Size -> SizeScreen(modifier)
-            Screen.Effects -> EffectsScreen(modifier)
-            Screen.Typing -> TypingScreen(modifier)
-            Screen.Dictionary -> DictionaryScreen(modifier)
-            Screen.Clipboard -> ClipboardScreen(modifier)
-            Screen.QuickActions -> QuickActionsScreen(modifier)
-            Screen.Composer -> ComposerScreen(modifier)
-            Screen.Backup -> BackupScreen(modifier)
-            Screen.Assistant -> AssistantScreen(modifier)
-            Screen.Privacy -> PrivacyScreen(modifier)
-            Screen.About -> AboutScreen(modifier)
+        screenStates.SaveableStateProvider(current.name) {
+            when (current) {
+                Screen.Home -> HomeScreen(modifier, open)
+                Screen.Setup -> SetupScreen(modifier, open)
+                Screen.Languages -> LanguagesScreen(modifier)
+                Screen.Layout -> LayoutScreen(modifier)
+                Screen.Theme -> ThemeScreen(modifier)
+                Screen.Size -> SizeScreen(modifier)
+                Screen.Effects -> EffectsScreen(modifier)
+                Screen.Typing -> TypingScreen(modifier)
+                Screen.Dictionary -> DictionaryScreen(modifier)
+                Screen.Clipboard -> ClipboardScreen(modifier)
+                Screen.QuickActions -> QuickActionsScreen(modifier)
+                Screen.Composer -> ComposerScreen(modifier)
+                Screen.Backup -> BackupScreen(modifier)
+                Screen.Assistant -> AssistantScreen(modifier)
+                Screen.Privacy -> PrivacyScreen(modifier)
+                Screen.About -> AboutScreen(modifier)
+            }
         }
     }
 }
