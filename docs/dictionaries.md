@@ -12,7 +12,8 @@ keyboard's suggestions is the quality of those counts.
 The six dictionaries that ship with the application (`en_US`, `ro_RO`, `de_DE`, `es_ES`, `fr_FR`,
 `it_IT`) are built from combined Wortschatz Leipzig corpora (wikipedia, news, and newscrawl
 together, not one genre alone -- a single-genre cut was found to be missing everyday words) via
-`tools/make_pack.py --corpus`, 90,000 to 120,000 words each. What each one actually used, and its
+`tools/make_pack.py --corpus`, some 99,000 to 129,000 words each once the names are merged in.
+What each one actually used, and its
 licence, is recorded in `docs/licensing.md` section 2 rather than here, so there is one place to
 check rather than two that can disagree. This document is about replacing or adding to them, not
 about what currently ships.
@@ -209,5 +210,8 @@ so "everyone" cannot become "Everton" just because a football club is in the cor
 
 Drop the word list in `dictionaries/` as `<tag>.tsv` — with `_` where the tag has `-` — and the
 Gradle task in `keyboard/build.gradle.kts` compiles it into the APK's assets on every build. Add
-an entry to `BundledDictionaries.ALL` so the Languages screen offers it. No binary is committed:
-the pack in an APK is always what the committed list compiles to.
+an entry to `BundledDictionaries.ALL`, with the word count and the compiled size the build
+prints, so the Languages screen offers it -- and keep those two numbers current whenever the
+list changes, because they label the entry and the start-up repair uses them to tell an
+installed copy from the pack the build ships. No binary is committed: the pack in an APK is
+always what the committed list compiles to.

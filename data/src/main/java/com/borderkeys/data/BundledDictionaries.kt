@@ -18,9 +18,10 @@ import java.nio.ByteOrder
  * validated by the same native code, recorded in the same table, and can be weighted, disabled
  * and removed the same way.
  *
- * They are also deliberately small. A starter dictionary written by this project is a licence
- * question with an answer; a large corpus is one without, which is the whole reason nothing was
- * bundled before. Replacing one with a proper compiled corpus is an import away, and the entry
+ * Each one is word and pair counts from the Wortschatz Leipzig corpora (CC BY 4.0; what and how
+ * much is recorded in `docs/licensing.md` section 2.1) compiled in this repository -- a licence
+ * question with a written answer, which is what lets a corpus-sized pack be bundled at all.
+ * Replacing one with a pack built from another corpus is an import away, and the entry
  * disappears from the list once its language is installed.
  */
 object BundledDictionaries {
