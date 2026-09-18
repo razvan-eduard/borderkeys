@@ -108,6 +108,14 @@ class BorderKeysService :
     private val engine = PredictionEngine()
     private val learning = LearningBuffer()
 
+    /** Whether this is a debuggable build -- the gate on [debugLog] and [debugTypeWordAtOpen]. */
+    private val debuggable: Boolean by lazy {
+        applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+    }
+
+    /** How many fields [debugTypeWordAtOpen] has typed into, for the letter it appends. */
+    private var debugTypedOpens = 0
+
     private var host: KeyboardHostView? = null
 
     private val composing = StringBuilder(48)
@@ -525,6 +533,7 @@ class BorderKeysService :
         }
         observeSettings()
         observeLanguagePacks()
+        debugLog { "service created, pid ${android.os.Process.myPid()}" }
     }
 
     /**
@@ -615,6 +624,10 @@ class BorderKeysService :
             val blockedWords = dictionary.blockedWordSet()
             engine.setBlockedWords(blockedWords)
             learning.setBlockedWords(blockedWords)
+            debugLog {
+                "dictionaries loaded: $activeLanguageTags, ${blockedWords.size} blocked, " +
+                    "learning.enabled=${learning.enabled}"
+            }
         }
     }
 
@@ -714,6 +727,11 @@ class BorderKeysService :
                 val wasForcingDebugRing = preferences.debugForceRadialRing
                 preferences = newPreferences
                 particleEffects = newParticleEffects
+                debugLog {
+                    "preferences applied: learningEnabled=${newPreferences.learningEnabled} " +
+                        "autoCorrectOnSpace=${newPreferences.autoCorrectOnSpace} " +
+                        "learning.enabled=${learning.enabled}"
+                }
                 val resolvedTheme = ThemeMode.resolve(
                     newTheme, newLightTheme, newPreferences, this@BorderKeysService,
                 )
@@ -973,6 +991,11 @@ class BorderKeysService :
         privateMode = PrivateMode.isPrivate(info)
         passwordField = info != null && PrivateMode.isPasswordField(info.inputType)
         learning.enabled = preferences.learningEnabled && !privateMode
+        debugLog {
+            "start input view: restarting=$restarting private=$privateMode password=$passwordField " +
+                "learningEnabled=${preferences.learningEnabled} learning.enabled=${learning.enabled} " +
+                "inputType=${info?.inputType} imeOptions=${info?.imeOptions} package=${info?.packageName}"
+        }
         // The other half of not learning here: nothing already learned is offered either. A
         // password field never reaches the engine at all (see requestSuggestions), but a field
         // that merely asked for no personalised learning still asks for suggestions, and they
@@ -1026,10 +1049,15 @@ class BorderKeysService :
         registerClipboardListener()
         refreshClipboardChip()
         pushKeyGeometry()
+        debugTypeWordAtOpen()
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
+        debugLog {
+            "finish input view: finishingInput=$finishingInput composing='$composing' " +
+                "buffered=${learning.size}"
+        }
         // The keyboard is going away -- the user tapped something in the app that took it down,
         // or left the field. That is the one signal the IME gets for "touched outside the
         // keyboard", and a ring waiting for a tap must not outlive it. Closing keeps the swiped
@@ -1054,6 +1082,7 @@ class BorderKeysService :
 
     override fun onFinishInput() {
         super.onFinishInput()
+        debugLog { "finish input: composing='$composing' buffered=${learning.size}" }
         // The session is over, so everything held in memory is written now rather than waiting
         // for a debounce that may never fire: the process can be killed the moment the keyboard
         // is hidden.
@@ -1122,6 +1151,7 @@ class BorderKeysService :
     }
 
     override fun onDestroy() {
+        debugLog { "destroy: composing='$composing' buffered=${learning.size}" }
         runCatching { unregisterReceiver(wallpaperChangedReceiver) }
         unregisterClipboardListener()
         // The platform's own onDestroy finishes the current input first -- onFinishInput
@@ -1720,6 +1750,60 @@ class BorderKeysService :
     }
 
     /**
+     * One line under the `BorderKeysDebug` tag, in a debuggable build only. The message is built
+     * lazily, so a release build pays for none of the string work.
+     */
+    private inline fun debugLog(message: () -> String) {
+        if (debuggable) {
+            android.util.Log.d(DEBUG_TAG, message())
+        }
+    }
+
+    /**
+     * Debuggable builds only: types a word through the same [onKey] path a finger takes, the
+     * moment a field opens, so the whole learning path can be watched in logcat without a hand
+     * on the emulator.
+     *
+     * Armed with `adb shell settings put global borderkeys_debug_type <word>`, disarmed with
+     * `settings delete global borderkeys_debug_type`. One letter is appended per field opened in
+     * this process, so every open learns a word the dictionary has not seen. Posted rather than
+     * called: on the first field of a session the keyboard has not been laid out yet when
+     * [onStartInputView] runs.
+     */
+    private fun debugTypeWordAtOpen() {
+        if (!debuggable) {
+            return
+        }
+        val base = runCatching {
+            android.provider.Settings.Global.getString(contentResolver, DEBUG_TYPE_SETTING)
+        }.getOrNull()
+        if (base.isNullOrBlank()) {
+            return
+        }
+        val word = base.trim() + ('a' + debugTypedOpens % 26)
+        debugTypedOpens++
+        host?.postDelayed({
+            // The field this was posted for may have gone by now -- the one that happened to
+            // have focus when the input method was switched, say -- and the platform still
+            // answers with its connection for a moment after onFinishInput. Nothing is typed
+            // into a field the keyboard is no longer showing for.
+            if (!isInputViewShown) {
+                debugLog { "debug typing '$word' skipped: the keyboard is no longer shown" }
+                return@postDelayed
+            }
+            debugLog { "debug typing '$word'" }
+            for (letter in word) {
+                onKey(letter.code, -1)
+            }
+            onKey(' '.code, -1)
+            debugLog {
+                "debug typed '$word': composing='$composing' buffered=${learning.size} " +
+                    "learning.enabled=${learning.enabled}"
+            }
+        }, DEBUG_TYPE_DELAY_MILLIS)
+    }
+
+    /**
      * [KeyboardPreferences.debugForceRadialRing]: opens a sample ring, tap-only, whenever one is
      * wanted and none is open -- on every new field, and the moment the toggle is switched on.
      * Whatever closes a real ring closes this one too (a tap outside it, the centre X); it comes
@@ -2129,6 +2213,12 @@ class BorderKeysService :
         // mean the shortcut.
         val shortcut = if (composingFromGesture) null else TextShortcuts.expansionFor(typed, preferences.textShortcuts)
         val correction = shortcut ?: correctionFor(typed)
+        debugLog {
+            "delimiter $shifted: typed='$typed' shortcut=$shortcut correction=$correction " +
+                "autoCorrect=${preferences.autoCorrectOnSpace} top=$topSuggestion " +
+                "query='$suggestionQuery' known='$knownQuery' name=$topSuggestionIsProperNoun " +
+                "gesture=$composingFromGesture"
+        }
         // Captured before anything commits: finishComposing and the correction branch both
         // advance previousWord1 to the word being written now.
         val contextWord = previousWord1
@@ -2420,6 +2510,10 @@ class BorderKeysService :
     private fun confirmPendingCorrection() {
         val pending = pendingCorrection ?: return
         pendingCorrection = null
+        debugLog {
+            "pending correction settled: typed='${pending.typed}' corrected='${pending.corrected}' " +
+                "learn=${pending.learn}"
+        }
         if (!pending.learn) {
             return
         }
@@ -3297,6 +3391,9 @@ class BorderKeysService :
     }
 
     private fun resetComposing() {
+        if (composing.isNotEmpty()) {
+            debugLog { "composing reset while holding '$composing'" }
+        }
         dismissRadialMenu()
         // A field switch is the one moment a decode still in flight for the field being left
         // really could arrive late -- invalidated here, pause-time and lift-time both, so it can
@@ -3628,6 +3725,7 @@ class BorderKeysService :
         deliberateCapital: Boolean = false,
     ) {
         if (!learning.enabled || word.length < MIN_LEARNED_LENGTH) {
+            debugLog { "recordLearned('$word') refused: learning.enabled=${learning.enabled}" }
             return
         }
         // The input-method subtype the globe key last landed on, not a claim about the word's
@@ -3642,7 +3740,12 @@ class BorderKeysService :
         if (contextWord != null && grandContextWord != null) {
             learning.recordTriple(grandContextWord, contextWord, word, now)
         }
-        if (learning.record(word, locale, now)) {
+        val accepted = learning.record(word, locale, now)
+        debugLog {
+            "recordLearned('$word'): locale=$locale accepted=$accepted buffered=${learning.size} " +
+                "context=$contextWord grand=$grandContextWord host=${host != null}"
+        }
+        if (accepted) {
             engine.learn(
                 listOf(
                     com.borderkeys.data.dao.LearnedWord(word, locale, 1, now, deliberateCapital),
@@ -3650,12 +3753,20 @@ class BorderKeysService :
                 contextWord, grandContextWord,
             )
         }
-        val view = host ?: return
+        val view = host
+        if (view == null) {
+            debugLog { "recordLearned('$word'): no host, so no flush is scheduled" }
+            return
+        }
         view.removeCallbacks(flushLearningRunnable)
         if (learning.isDue(System.currentTimeMillis())) {
             flushLearning()
         } else {
-            view.postDelayed(flushLearningRunnable, LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+            val posted = view.postDelayed(flushLearningRunnable, LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+            debugLog {
+                "flush scheduled in ${LearningBuffer.DEFAULT_DEBOUNCE_MILLIS} ms: posted=$posted " +
+                    "attached=${view.isAttachedToWindow}"
+            }
         }
     }
 
@@ -3666,8 +3777,22 @@ class BorderKeysService :
      * one of those on the path of a key press would spend the whole two-millisecond budget.
      */
     private fun flushLearning() {
-        val batch = drainLearning() ?: return
-        learningScope.launch { persistLearning(batch) }
+        val batch = drainLearning()
+        debugLog {
+            if (batch == null) {
+                "flush: nothing buffered"
+            } else {
+                "flush: ${batch.updates.size} words, ${batch.pairs.size} pairs, " +
+                    "${batch.triples.size} triples"
+            }
+        }
+        if (batch == null) {
+            return
+        }
+        learningScope.launch {
+            runCatching { persistLearning(batch) }
+                .onFailure { error -> android.util.Log.e("BorderKeys", "learning flush failed", error) }
+        }
     }
 
     /**
@@ -3721,9 +3846,14 @@ class BorderKeysService :
     }
 
     private suspend fun persistLearning(batch: LearningBatch) {
+        val rowsBefore = if (debuggable) DataGraph.dictionary.wordCount() else 0
         DataGraph.dictionary.applyLearned(batch.updates)
         DataGraph.dictionary.applyLearnedBigrams(batch.pairs)
         DataGraph.dictionary.applyLearnedTrigrams(batch.triples)
+        val rowsAfter = if (debuggable) DataGraph.dictionary.wordCount() else 0
+        debugLog {
+            "persisted ${batch.updates.map { it.word }}: user_words rows $rowsBefore -> $rowsAfter"
+        }
         maybeDecayPersonalDictionary()
     }
 
@@ -4671,6 +4801,11 @@ class BorderKeysService :
         const val LINE_WINDOW_CHARS = 1024
 
         const val MIN_LEARNED_LENGTH = 2
+
+        /** Debug builds only -- see [debugLog] and [debugTypeWordAtOpen]. */
+        private const val DEBUG_TAG = "BorderKeysDebug"
+        private const val DEBUG_TYPE_SETTING = "borderkeys_debug_type"
+        private const val DEBUG_TYPE_DELAY_MILLIS = 800L
 
         const val GESTURE_DECODING_NOTICE_MILLIS = 50L
 
