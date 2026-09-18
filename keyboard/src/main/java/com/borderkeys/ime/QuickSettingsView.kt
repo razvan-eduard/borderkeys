@@ -193,6 +193,11 @@ class QuickSettingsView(
                 // three of the four chips unreadable on a dark theme.
                 canvas.drawRoundRect(left, chipTop, left + chipWidth, chipBottom, radius, radius,
                     outlinePaint)
+            } else if (paints.showKeyBorders) {
+                // The keys' own hairline on the chips that are not selected: the selected one
+                // keeps the accent outline above, which is what marks it.
+                canvas.drawRoundRect(left, chipTop, left + chipWidth, chipBottom, radius, radius,
+                    paints.keyStroke)
             }
             val label = chipLabels[i]
             canvas.drawText(label, left + (chipWidth - labelPaint.measureText(label)) / 2f,
@@ -207,6 +212,9 @@ class QuickSettingsView(
         if (numberRow) {
             canvas.drawRoundRect(padding, toggleTop, padding + chipWidth * 2f, toggleBottom,
                 radius, radius, outlinePaint)
+        } else if (paints.showKeyBorders) {
+            canvas.drawRoundRect(padding, toggleTop, padding + chipWidth * 2f, toggleBottom,
+                radius, radius, paints.keyStroke)
         }
         canvas.drawText(
             toggleLabel,

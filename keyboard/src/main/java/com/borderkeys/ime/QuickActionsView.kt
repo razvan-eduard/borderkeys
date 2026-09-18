@@ -411,6 +411,16 @@ class QuickActionsView(
                     pressedBounds(index, pressedBoundsScratch)
                     canvas.drawRect(pressedBoundsScratch, paints.keyPressedFill)
                 }
+                // The "outline the keys" setting: each button traced on the same rectangle
+                // its press lights, with the keys' own corner radius, so the bar reads as a
+                // row of keys when the keys themselves are outlined.
+                if (paints.showKeyBorders) {
+                    pressedBounds(index, pressedBoundsScratch)
+                    canvas.drawRoundRect(
+                        pressedBoundsScratch, paints.keyCornerRadiusPx, paints.keyCornerRadiusPx,
+                        paints.keyStroke,
+                    )
+                }
                 val collapsedOpener = collapsible && !expanded
                 val icon = if (collapsedOpener) moreIcon else icons[index]
                 if (icon != null) {

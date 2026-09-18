@@ -1109,17 +1109,32 @@ class KeyboardHostView(
             left, top, left + cellWidth * count, top + rowHeight, radius, radius,
             paints.modifierKeyFill,
         )
+        val selected = keyboard.alternativesSelectedIndex
+        if (selected in 0 until count) {
+            val cellLeft = left + cellWidth * selected
+            canvas.drawRoundRect(
+                cellLeft, top, cellLeft + cellWidth, top + rowHeight, radius, radius,
+                paints.accent,
+            )
+        }
+        // The "outline the keys" setting reaches the popup too: it is a row of keys, drawn
+        // the way KeyboardCanvasView draws its own -- the stroke on the edge itself -- with a
+        // hairline between cells where the keys' own gaps would be. Under the labels, so a
+        // glyph that reaches a cell's edge is not crossed by the line.
+        if (paints.showKeyBorders) {
+            canvas.drawRoundRect(
+                left, top, left + cellWidth * count, top + rowHeight, radius, radius,
+                paints.keyStroke,
+            )
+            for (position in 1 until count) {
+                val x = left + cellWidth * position
+                canvas.drawLine(x, top, x, top + rowHeight, paints.keyStroke)
+            }
+        }
         val base = paints.label.textSize
         paints.label.textSize = keyboard.alternativesTextSizePx
-        val selected = keyboard.alternativesSelectedIndex
         for (position in 0 until count) {
             val cellLeft = left + cellWidth * position
-            if (position == selected) {
-                canvas.drawRoundRect(
-                    cellLeft, top, cellLeft + cellWidth, top + rowHeight, radius, radius,
-                    paints.accent,
-                )
-            }
             alternativeLabel[0] = keyboard.alternativeCharAt(position)
             canvas.drawText(
                 alternativeLabel, 0, 1,
