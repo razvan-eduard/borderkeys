@@ -65,9 +65,9 @@ fun TypingScreen(modifier: Modifier = Modifier) {
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         // Everything about what the strip offers and how much of it: on/off, how many slots,
-        // the clipboard as an extra source, and two-word phrases -- one card rather than three,
-        // since all four are the same question ("what shows up in that row") from different
-        // angles, not four separate decisions.
+        // the clipboard as an extra source, two-word phrases, and the words it must never offer
+        // -- one card rather than several, since all of them are the same question ("what shows
+        // up in that row") from different angles, not separate decisions.
         SettingsSectionCard(strings[Keys.CORRECTIONS_SUGGESTIONS]) {
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_SHOW_THE_SUGGESTION_STRIP],
@@ -94,6 +94,11 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.CORRECTIONS_ONLY_FROM_WHAT_YOU_HAVE_WRITTEN],
             )
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_BLOCK_OFFENSIVE_WORDS],
+                subtitle = strings[Keys.CORRECTIONS_BLOCK_OFFENSIVE_WORDS_NOTE],
+                checked = preferences.blockOffensiveWords,
+            ) { value -> update { it.copy(blockOffensiveWords = value) } }
         }
 
         // Punctuation/capitals and autocorrect-as-you-type folded into one card: both are edits

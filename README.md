@@ -59,6 +59,9 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   you typed — one letter, two only in long words, or two — are each a setting. A correct word the
   dictionaries simply do not know is left alone rather than replaced by something far away, and
   the backspace straight after a correction puts back exactly what you typed.
+- **Offensive words, blocked on request.** One switch keeps a per-language list of profanity
+  and slurs out of suggestions, corrections and learning. What you type yourself is never
+  touched, and the lists are plain text in the repository, one per bundled language.
 - **Capitals and spaces the way every keyboard does them.** Shift is spent by the next letter
   only; two quick taps or a hold lock it. Capitals are off, on when the field asks for them, or
   on everywhere — one choice, since some apps forget to ask. Two spaces make a full stop, a

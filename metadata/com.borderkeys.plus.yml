@@ -52,6 +52,9 @@ Description: |-
     * Autocorrect you can bound: off by default, and when on, the shortest word it may touch and
       how different a correction may be from what you typed are settings. A correct word the
       dictionaries do not know is left alone, and backspace puts back exactly what you typed.
+    * Block offensive words, if you want to: one switch keeps a per-language list of profanity
+      and slurs out of suggestions, corrections and learning. What you type yourself is never
+      touched.
     * Shift the way every keyboard does it — spent by the next letter, locked by a hold or two
       taps. Capitals off, on when the field asks, or on everywhere: one choice, since some apps
       forget to ask.

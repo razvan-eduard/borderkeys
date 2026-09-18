@@ -905,5 +905,7 @@
   "about_dictionary_sources": "Dictionary sources",
   "about_dictionary_sources_note": "The six bundled dictionaries are word and pair counts from the Wortschatz Leipzig corpora (Universität Leipzig), published under CC BY 4.0 and compiled in this repository. Nothing is fetched at any point.",
   "about_open_dictionary_sources": "Open the Leipzig corpora site",
-  "about_version_unknown": "unknown"
+  "about_version_unknown": "unknown",
+  "corrections_block_offensive_words": "Block offensive words",
+  "corrections_block_offensive_words_note": "Never suggested, never applied as a correction, never learned. What you type yourself is left exactly as you typed it; a swipe that lands on one shows the next guess instead."
 }

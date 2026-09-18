@@ -905,5 +905,7 @@
   "about_dictionary_sources": "Quellen der Wörterbücher",
   "about_dictionary_sources_note": "Die sechs mitgelieferten Wörterbücher sind Wort- und Paarhäufigkeiten aus den Wortschatz-Leipzig-Korpora (Universität Leipzig), veröffentlicht unter CC BY 4.0 und in diesem Repository kompiliert. Es wird zu keinem Zeitpunkt etwas heruntergeladen.",
   "about_open_dictionary_sources": "Website der Leipziger Korpora öffnen",
-  "about_version_unknown": "unbekannt"
+  "about_version_unknown": "unbekannt",
+  "corrections_block_offensive_words": "Anstößige Wörter blockieren",
+  "corrections_block_offensive_words_note": "Nie vorgeschlagen, nie als Korrektur eingesetzt, nie gelernt. Was du selbst tippst, bleibt genau so; ein Wisch, der auf eines trifft, zeigt stattdessen den nächsten Vorschlag."
 }

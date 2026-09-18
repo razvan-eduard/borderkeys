@@ -305,6 +305,8 @@ object Keys {
     const val CORRECTIONS_AUTO_SPACE_SWALLOW_ALL = "corrections_auto_space_swallow_all"
     const val CORRECTIONS_AUTO_SPACE_SWALLOW_FIRST = "corrections_auto_space_swallow_first"
     const val CORRECTIONS_BACKSPACE_PUTS_BACK_WHAT_YOU_TYPED = "corrections_backspace_puts_back_what_you_typed"
+    const val CORRECTIONS_BLOCK_OFFENSIVE_WORDS = "corrections_block_offensive_words"
+    const val CORRECTIONS_BLOCK_OFFENSIVE_WORDS_NOTE = "corrections_block_offensive_words_note"
     const val CORRECTIONS_CAPITALISE = "corrections_capitalise"
     const val CORRECTIONS_CAPITALISE_ALWAYS = "corrections_capitalise_always"
     const val CORRECTIONS_CAPITALISE_MODE_NOTE = "corrections_capitalise_mode_note"

@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+#
+# Mots que le clavier ne suggère, ne complète et n'apprend jamais tant que « Bloquer les mots
+# grossiers » est activé. Tapés lettre par lettre, ils restent intacts. Un mot par ligne ; la
+# casse et les accents ne comptent pas (chaque entrée et chaque candidat sont ramenés à la même
+# forme avant la comparaison) ; une ligne commençant par « # » est un commentaire. Les formes
+# fléchies sont des mots distincts pour le moteur, donc chacune est listée.
+#
+# Grossièretés et insultes visant un groupe seulement. L'anatomie, la médecine et les mots
+# familiers restent suggérables à dessein.
+
+bamboula
+bâtard
+bâtarde
+bâtards
+bite
+bites
+bougnoule
+bougnoules
+branler
+branleur
+branleurs
+branleuse
+chiasse
+chié
+chier
+chieur
+chieuse
+con
+connard
+connards
+connasse
+connasses
+conne
+connes
+cons
+couille
+couilles
+cul
+culs
+emmerde
+emmerder
+emmerdeur
+emmerdeuse
+enculé
+enculée
+enculées
+enculer
+enculés
+enculeur
+enculeurs
+enfoiré
+enfoirée
+enfoirés
+foutre
+gouine
+gouines
+grogniasse
+merde
+merdes
+merdeuse
+merdeux
+nègre
+nègres
+négresse
+négro
+négros
+nique
+niquée
+niquer
+niqués
+pédé
+pédés
+pouffiasse
+putain
+putains
+pute
+putes
+salaud
+salauds
+salopard
+salopards
+salope
+saloperie
+saloperies
+salopes
+youpin
+youpins

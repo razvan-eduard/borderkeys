@@ -905,5 +905,7 @@
   "about_dictionary_sources": "Sursele dicționarelor",
   "about_dictionary_sources_note": "Cele șase dicționare incluse sunt frecvențe de cuvinte și perechi din corpusurile Wortschatz Leipzig (Universität Leipzig), publicate sub CC BY 4.0 și compilate în acest depozit. Nimic nu este descărcat vreodată.",
   "about_open_dictionary_sources": "Deschide site-ul corpusurilor Leipzig",
-  "about_version_unknown": "necunoscută"
+  "about_version_unknown": "necunoscută",
+  "corrections_block_offensive_words": "Blochează cuvintele vulgare",
+  "corrections_block_offensive_words_note": "Nu sunt sugerate, nu sunt aplicate drept corecturi, nu sunt învățate. Ce scrii tu rămâne exact așa cum l-ai scris; o glisare care ajunge la unul arată în schimb următoarea propunere."
 }

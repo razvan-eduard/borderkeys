@@ -445,6 +445,11 @@ class PredictionEngine(
         }
     }
 
+    /**
+     * What is never offered: the words the user refused, and the offensive-word list while its
+     * switch is on. Already folded by the caller ([WordFold]); the two filters below fold each
+     * candidate the same way before looking it up.
+     */
     fun setBlockedWords(words: Set<String>) {
         synchronized(blocked) {
             blocked.clear()
@@ -591,7 +596,7 @@ class PredictionEngine(
         synchronized(blocked) {
             for (index in 0 until count) {
                 val word = gestureDisplayWords[index] ?: continue
-                if (blocked.isEmpty() || word !in blocked) {
+                if (blocked.isEmpty() || WordFold.fold(word) !in blocked) {
                     gestureDisplayProperNoun[written] = gestureDisplayProperNoun[index]
                     gestureDisplayWords[written++] = word
                 }
@@ -751,7 +756,10 @@ class PredictionEngine(
      * The copy happens under the lock -- sixteen references, uncontended -- so the prediction
      * thread can start overwriting the moment this returns. Blocked words are filtered here
      * rather than in the engine: the native side has no notion of a word the user refused, and
-     * this is a set lookup on at most sixteen strings, once per answer.
+     * this is a set lookup on at most sixteen strings, once per answer. Each is folded first,
+     * so "Shit" at a sentence start and "căcat" with its accents are the same refusal as their
+     * plain spellings; the fold hands a plain lower-case word straight back, which is nearly
+     * every candidate, so the common case still allocates nothing.
      */
     private fun copyAndFilterResults(): Int {
         var count: Int
@@ -766,7 +774,7 @@ class PredictionEngine(
         synchronized(blocked) {
             for (index in 0 until count) {
                 val word = displayWords[index] ?: continue
-                if (blocked.isEmpty() || word !in blocked) {
+                if (blocked.isEmpty() || WordFold.fold(word) !in blocked) {
                     displayWords[written] = word
                     displayProperNoun[written] = displayProperNoun[index]
                     written++

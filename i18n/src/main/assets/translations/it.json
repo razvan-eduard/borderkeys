@@ -905,5 +905,7 @@
   "about_dictionary_sources": "Fonti dei dizionari",
   "about_dictionary_sources_note": "I sei dizionari inclusi sono frequenze di parole e coppie dai corpora Wortschatz Leipzig (Universität Leipzig), pubblicate con licenza CC BY 4.0 e compilate in questo repository. Non viene mai scaricato nulla.",
   "about_open_dictionary_sources": "Apri il sito dei corpora di Lipsia",
-  "about_version_unknown": "sconosciuta"
+  "about_version_unknown": "sconosciuta",
+  "corrections_block_offensive_words": "Blocca le parole volgari",
+  "corrections_block_offensive_words_note": "Mai suggerite, mai applicate come correzione, mai imparate. Ciò che scrivi tu resta esattamente com'è; uno scorrimento che finisce su una mostra la proposta successiva."
 }
