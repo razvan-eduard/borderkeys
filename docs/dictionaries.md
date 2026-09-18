@@ -124,7 +124,7 @@ A name list is only half of it, because a name and an ordinary word can be the s
 "Dan" is a Romanian word and a first name, "Mai" is May and a Vietnamese name, "President" is
 a real surname. Wikidata is right about all of them, and a keyboard that capitalised every
 "mai" would be worse than one that missed "Sadoveanu". So `make_pack.py` decides, per word,
-whether the flag may be applied, from three things it knows:
+whether the flag may be applied, from four things it knows:
 
 - **What the treebank says.** Pass the language's grammar (`--grammar dictionaries/ro_RO.pos`):
   a word the treebank behind it tags as a preposition, a verb or an adjective is never flagged,
@@ -134,6 +134,22 @@ whether the flag may be applied, from three things it knows:
   word among the 300 most frequent that the treebank has no tag for at all is one it splits
   before tagging ("del", "au", "zur" are multiword tokens in Universal Dependencies), and is
   refused too.
+- **What the spelling dictionary says**, for the words the treebank never met. A treebank is
+  small -- a few hundred thousand tokens -- and past its vocabulary the tiers below ask a
+  single person of a rare word, which Wikidata has for "thunder", "needle" and "wage" alike:
+  several thousand ordinary English words came out flagged that way. `tools/make_ordinary.py`
+  runs the corpus words the name list touches through Hunspell and writes the ones that are a
+  lower-case *headword* of the language's dictionary to `dictionaries/<tag>.names-ordinary`,
+  read by `--names-ordinary`; a word on it is never flagged unless the treebank itself tags it
+  as a name. The English dictionary is given beside every other language's, because a corpus
+  of Romanian or German web text is full of English ("hot", "life", "service", "happy") that
+  the language's own dictionary has never heard of and Wikidata has a family name for.
+  Headwords only, on purpose: Hunspell also accepts what its affix rules can build,
+  and half of Romania's surnames are an ordinary word with the article on the end ("Lupu",
+  "Ciobanu", "Moraru"), which a rule that read "wages" as a form of "wage" refused wholesale.
+  And the treebank's verdict outranks the dictionary's on purpose too: one that met "Dan" and
+  "Ion" mostly as names knows more than a dictionary that also lists a martial-arts rank and a
+  charged particle.
 - **How many people carry the name.** `make_names.py` writes that count as a fourth column, and
   `make_pack.py` demands more of it the more common the word is in the corpus
   (`NAME_EVIDENCE_TIERS`): thousands of people for a word among the 300 most frequent, a few
@@ -141,9 +157,15 @@ whether the flag may be applied, from three things it knows:
   first names at ranks 300-1000 carry 400-800 people ("Mihai", "Vasile", "Iulia"), the words that
   must not be flagged carry under 200 ("satu", "tine"); past rank 1,000 a surname is a small
   family ("Trump" 82, "Năstase" 28), so the bar drops with the rank.
-- **A hand-kept list.** What neither of the above catches -- "asa", "cat", "tu", "cui" are all
-  somebody's name and none of it is in the treebank -- goes in
-  `dictionaries/<tag>.names-exclude`, one word per line, read by `--names-exclude`.
+- **A hand-kept list.** What none of the above catches goes in
+  `dictionaries/<tag>.names-exclude`, one word per line, read by `--names-exclude`. Two kinds
+  of word land there: ones no source knows at all ("asa", "cat", "tu", "cui" are all somebody's
+  name), and the treebank's own blind spot -- it keeps one tag per word, the one it used most,
+  and a treebank of web text meets "Apple", "Orange" and "Hidden" (the company, the county, the
+  valley) more often than the fruit, the colour and the adjective, so it calls them names and
+  the dictionary's objection is overruled. "kingdom", "cloud", "tower", "saint", "parent",
+  "truc", "borsa", "wild" and a couple of hundred more across the six languages are listed by
+  hand for that reason, each after reading the full list of words both sources claim.
 
 A name the corpus never wrote down is added at the flat frequency only with fifty people behind
 it (`NAME_ADD_MIN_USES`), which keeps the additions to roughly a tenth of the corpus's own size;
@@ -163,10 +185,23 @@ is `make_names.py` reporting the real state of a free source, not a bug to chase
 count is the number to look at before deciding a language's list is worth shipping.
 
 All six bundled lists have been through this, from a fetch of all four given-name classes with
-the family floor at 5. The committed `dictionaries/*.tsv` are the result, and the keyboard's
-own rule for using the flag is one more check: with several packs active, every pack that knows
-a word has to agree it is a name before it is capitalised, so a name in one language's list
-cannot capitalise an ordinary word of another's.
+the family floor at 5, the six `.names-ordinary` lists from the LibreOffice Hunspell
+dictionaries (`docs/licensing.md` 2.1.1 names them), and the hand lists. Regenerating one
+language, with `hunspell` on PATH and the `.dic`/`.aff` pair beside each other:
+
+```
+python3 tools/make_names.py --language ro --min-family-uses 5 --out names_ro.tsv
+python3 tools/make_ordinary.py --words dictionaries/ro_RO.tsv --names names_ro.tsv \
+    --dictionary /path/to/ro_RO /path/to/en_US --out dictionaries/ro_RO.names-ordinary
+python3 tools/make_pack.py --frequencies ro_words.txt --names-flag-only names_ro.tsv \
+    --grammar dictionaries/ro_RO.pos --names-ordinary dictionaries/ro_RO.names-ordinary \
+    --names-exclude dictionaries/ro_RO.names-exclude --tag ro-RO --out ro_RO.bkd --keep-intermediate
+```
+
+The committed `dictionaries/*.tsv` are the result, and the keyboard's own rule for using the
+flag is one more check: with several packs active, every pack that knows a word has to agree
+it is a name before it is capitalised, so a name in one language's list cannot capitalise an
+ordinary word of another's.
 
 ## Shipping one with the application
 

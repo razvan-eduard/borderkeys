@@ -187,12 +187,21 @@ the most permissive terms anything in this document names -- per
 All six bundled lists now carry the names that fetch returned, merged by `make_pack.py --names`
 and flagged in the list's third column. Which of them may carry the flag is decided from how
 many people Wikidata knows by the name against how common the word is in the corpus, from what
-the language's own treebank (2.1, the part-of-speech row) says the word is, and from a short
-hand-kept `dictionaries/<tag>.names-exclude` -- see `docs/dictionaries.md`. All of that is the
-project's own work under its own licence; nothing is copied from Wikidata beyond the label and
-a count. What
-ships is therefore CC0 labels compiled under the GPL, and this row is the answer to "what is the
-licence of the name list."
+the language's own treebank (2.1, the part-of-speech row) says the word is, from whether the
+language's spelling dictionary lists the word in lower case, and from a hand-kept
+`dictionaries/<tag>.names-exclude` -- see `docs/dictionaries.md`. All of that is the project's
+own work under its own licence; nothing is copied from Wikidata beyond the label and a count.
+What ships is therefore CC0 labels compiled under the GPL, and this row is the answer to "what
+is the licence of the name list."
+
+The spelling-dictionary check reads the **Hunspell dictionaries LibreOffice ships**, through the
+`hunspell` binary at list-building time (`tools/make_ordinary.py`): `en_US` (SCOWL, MIT/BSD
+terms), `de_DE_frami` (GPL-2.0-or-later), `es_ES` (GPL-3.0/LGPL-3.0/MPL-1.1 tri-licence), `fr`
+(MPL-2.0), `it_IT` (GPL-3.0), `ro_RO` (GPL-2.0/LGPL-2.1/MPL-1.1 tri-licence). None of them is
+copied or shipped. What is committed, as `dictionaries/<tag>.names-ordinary`, is a yes/no per
+corpus word -- the words the dictionary lists in lower case -- which is a fact about the
+language recorded under this project's own GPL-3.0-or-later, and every one of those licences
+permits deriving that from the dictionary.
 
 **No fonts and no raster images of any kind.** Every drawable in the application is a vector
 written in this repository, which is why an APK that draws a keyboard, a themed icon and a full

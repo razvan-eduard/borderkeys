@@ -79,6 +79,15 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# The words each language's Hunspell spelling dictionary lists in lower case, read off the
+# LibreOffice dictionaries by tools/make_ordinary.py: a yes/no per corpus word, not a copy of
+# any dictionary. Which dictionaries, and their licences, is in docs/licensing.md 2.1.1.
+[[annotations]]
+path = "dictionaries/*.names-ordinary"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 BorderKeys contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # Part-of-speech tags and transition matrices, derived by tools/build_pos.py from Universal
 # Dependencies treebanks. The treebanks are CC-BY-SA-4.0; Creative Commons declares a one-way
 # compatibility from CC-BY-SA-4.0 to GPL-3.0, so what is derived from them ships under the GPL.

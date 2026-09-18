@@ -3605,13 +3605,21 @@ class BorderKeysService :
             // know, a file that no longer matches its recorded hash, a file that is gone. All
             // three end the same way for a pack that came from inside the application -- the
             // current one is in assets, so it is copied over whatever is there. So is a pack
-            // this build ships a different edition of: the word count and size
-            // BundledDictionaries records are the shipped pack's own, and a copy made by an
-            // earlier build keeps its old numbers in the entry, which is how a fixed
-            // dictionary reaches an existing install at all -- the copy itself is intact, so
-            // nothing else here would notice. Both numbers, because a list whose words only
-            // gained name flags compiles to the same count and a different size.
+            // this build ships a different edition of, which is how a fixed dictionary reaches
+            // an existing install at all -- the copy itself is intact, so nothing else here
+            // would notice. The edition is read off the content CRC in each pack's header, the
+            // shipped one against the installed one: the word count and size
+            // BundledDictionaries records are checked too, but a list whose words only gained
+            // or lost name flags has compiled to the same count and, by alignment, the same
+            // size, and only the CRC told the two apart.
+            val shipped = runCatching {
+                BundledDictionaries.open(assets, bundled).use { BundledDictionaries.contentCrc(it) }
+            }.getOrNull()
+            val installed = runCatching {
+                file.inputStream().use { BundledDictionaries.contentCrc(it) }
+            }.getOrNull()
             val stale = !file.isFile ||
+                shipped == null || shipped != installed ||
                 entry.wordCount != bundled.wordCount ||
                 entry.sizeBytes != bundled.sizeBytes ||
                 LanguagePackInspector.inspect(file) !is LanguagePackInspector.Result.Valid ||

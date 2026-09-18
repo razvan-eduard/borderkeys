@@ -73,9 +73,10 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   default — the ordinary suggestion strip is unchanged either way.
 - **A names dictionary** built from Wikidata (CC0), so a name capitalises correctly mid-sentence
   instead of only at the start of one or after a shift — "Sadoveanu" and "Popescu" as much as
-  "Andrei". Everyday words that happen to be somebody's name ("in", "will", "si") stay
+  "Andrei". Everyday words that happen to be somebody's name ("in", "will", "si", "cloud") stay
   lower-case: a word only earns the flag when enough real people carry it for how common the
-  word is, and never when the language's own treebank calls it an ordinary word.
+  word is, never when the language's own treebank calls it an ordinary word, and never when
+  its spelling dictionary lists it as one unless the treebank knows better.
 - **Alternate physical layouts** — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona — for
   the 26-letter alphabets every bundled dictionary already knows, plus a number row, a symbols
   page with a proper number pad, and a numeric keypad in numeric fields.

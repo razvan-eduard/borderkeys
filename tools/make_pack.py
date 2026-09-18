@@ -207,16 +207,20 @@ class OrdinaryWords:
     """[exact]: the treebank's ordinary words, lower-cased. [folded]: the same words keyed by
     their accent-stripped spelling, keeping the most frequent one where several collide.
     [proper]: the words the treebank tags as proper nouns, lower-cased -- the one positive
-    signal a treebank gives, read by name_allowed."""
+    signal a treebank gives, read by name_allowed. [spelled]: the corpus words that are
+    lower-case headwords of the language's spelling dictionary (make_ordinary.py) -- the
+    witness for the words the treebank never met."""
 
-    def __init__(self, exact: set[str], folded: dict[str, str], proper: set[str] | None = None) -> None:
+    def __init__(self, exact: set[str], folded: dict[str, str], proper: set[str] | None = None,
+                 spelled: set[str] | None = None) -> None:
         self.exact = exact
         self.folded = folded
         self.proper = proper or set()
+        self.spelled = spelled or set()
 
     @staticmethod
     def empty() -> "OrdinaryWords":
-        return OrdinaryWords(set(), {}, set())
+        return OrdinaryWords(set(), {}, set(), set())
 
 
 # How many real people Wikidata has to know by a name before a word that common in the corpus
@@ -238,6 +242,17 @@ NAME_EVIDENCE_TIERS = ((300, 2000), (1000, 400), (3000, 8), (8000, 3))
 # multiword tokens in Universal Dependencies) -- and never a name. Only the very top: past it,
 # a treebank simply has not seen every real first name ("Iulia", "Dana", "Klaus").
 UNTAGGED_FREQUENT_RANK = 300
+
+# Past its own vocabulary a treebank says nothing at all, the tiers below ask a single person of
+# a rare word, and Wikidata knows one person named "Thunder", "Needle" and "Wage" each: several
+# thousand ordinary English words came out flagged that way. The spelling dictionary is the
+# second witness (make_ordinary.py) for exactly those words -- the ones the treebank never met.
+# Where it has met a word, its verdict stands either way: a treebank that saw "Dan" and "Ion"
+# mostly as names outranks a dictionary that also knows a martial-arts rank and a charged
+# particle, and one that saw "will" mostly as a verb has already refused it. What that leaves
+# is the treebank's own blind spot -- one tag per word, and a treebank of web text meets
+# "Apple" and "Hidden" (the company, the valley) more often than the fruit and the adjective --
+# which is what dictionaries/<tag>.names-exclude is for.
 
 # A name the corpus never wrote down is added at the flat frequency only with this many people
 # behind it -- the family-name floor the first bundled lists were built with, which kept them
@@ -261,9 +276,12 @@ def name_evidence_needed(rank: int | None) -> int:
 def name_allowed(key: str, uses: int, rank: int | None, ordinary: OrdinaryWords, frequencies: dict[str, int]) -> bool:
     """Whether the corpus word [key] may carry the proper-noun flag on the strength of [uses]
     people Wikidata knows by that name: never when the treebank calls it an ordinary word,
-    never when it is frequent and the treebank has no tag for it, and otherwise only with as
-    many people behind it as its frequency demands."""
+    never when the treebank does not know it and the spelling dictionary calls it an ordinary
+    word, never when it is frequent and the treebank has no tag for it, and otherwise only with
+    as many people behind it as its frequency demands."""
     if len(key) < 2 or is_ordinary(key, ordinary, frequencies):
+        return False
+    if key in ordinary.spelled and key not in ordinary.proper:
         return False
     if rank is not None and rank <= UNTAGGED_FREQUENT_RANK and key not in ordinary.proper:
         return False
@@ -365,6 +383,10 @@ def main() -> int:
     parser.add_argument("--names-include", type=Path,
                         help="one word per line (# comments): proper nouns the name lists cannot "
                              "know -- months, weekdays -- flagged whatever the evidence says")
+    parser.add_argument("--names-ordinary", type=Path,
+                        help="a make_ordinary.py output: corpus words that are lower-case "
+                             "headwords of the language's spelling dictionary -- never flagged "
+                             "unless the treebank itself tags them as names")
     parser.add_argument("--grammar", type=Path,
                         help="the language's dictionaries/<tag>.pos; a --names entry the treebank "
                              "tags as an ordinary word (a preposition, a verb...) is not flagged")
@@ -428,6 +450,8 @@ def main() -> int:
     ranks = {w: index + 1 for index, (w, _) in enumerate(ranked)}
     ordinary = common_words(arguments.grammar, frequencies) if arguments.grammar else OrdinaryWords.empty()
     ordinary.exact |= excluded
+    if arguments.names_ordinary:
+        ordinary.spelled |= read_word_list(arguments.names_ordinary)
     if arguments.names:
         refused = 0
         for name, frequency, uses in read_names(arguments.names):
