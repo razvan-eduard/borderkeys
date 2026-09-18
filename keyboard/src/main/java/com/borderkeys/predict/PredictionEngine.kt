@@ -78,14 +78,14 @@ class PredictionEngine(
          * A decoded swipe. Separate from [onSuggestions] because the service treats it
          * differently: the first candidate is committed immediately rather than offered.
          */
-        fun onGestureCandidates(words: Array<String?>, count: Int)
+        fun onGestureCandidates(words: Array<String?>, count: Int, properNoun: BooleanArray)
 
         /**
          * A decode of a swipe still in progress, from [decodeGesturePreview] -- see that method's
          * own doc for why it is a fully separate path from [onGestureCandidates] rather than a
          * reuse of it.
          */
-        fun onGesturePreviewCandidates(words: Array<String?>, count: Int)
+        fun onGesturePreviewCandidates(words: Array<String?>, count: Int, properNoun: BooleanArray)
     }
 
     var listener: ResultListener? = null
@@ -144,6 +144,8 @@ class PredictionEngine(
     private val gestureResultLock = Any()
     private val gestureNativeWords = arrayOfNulls<String>(MAX_RESULTS)
     private val gestureNativeScores = FloatArray(MAX_RESULTS)
+    private val gestureNativeProperNoun = BooleanArray(MAX_RESULTS)
+    private val gestureDisplayProperNoun = BooleanArray(MAX_RESULTS)
     private var gestureNativeCount = 0
     private val gestureDisplayWords = arrayOfNulls<String>(MAX_RESULTS)
 
@@ -168,6 +170,11 @@ class PredictionEngine(
     private val previewResultLock = Any()
     private val previewNativeWords = arrayOfNulls<String>(MAX_RESULTS)
     private val previewNativeScores = FloatArray(MAX_RESULTS)
+    /** Parallel to the words, the same name bit the final decode carries: the preview's top
+     *  candidate composes into the field at pause time exactly as a final decode's does, so it
+     *  needs the flag for the same reason -- a swiped name is capitalised from it. */
+    private val previewNativeProperNoun = BooleanArray(MAX_RESULTS)
+    private val previewDisplayProperNoun = BooleanArray(MAX_RESULTS)
     private var previewNativeCount = 0
     private val previewDisplayWords = arrayOfNulls<String>(MAX_RESULTS)
 
@@ -445,9 +452,30 @@ class PredictionEngine(
         }
     }
 
-    fun snapshotUserModel(path: String) {
+    /**
+     * Whether the personal dictionary is consulted at all -- off for a private field, see
+     * `Engine::setPersonalModelEnabled`. Applied per field from `onStartInputView`, the same
+     * place learning is switched off for it.
+     */
+    fun setPersonalModelEnabled(enabled: Boolean) {
         worker.post {
-            withHandle(Unit) { current -> NativePredictor.nativeSnapshotUserModel(current, path) }
+            withHandle(Unit) { current ->
+                NativePredictor.nativeSetPersonalModelEnabled(current, enabled)
+            }
+        }
+    }
+
+    /**
+     * [dominantPack] as a language tag rather than a slot, delivered on the UI thread the same
+     * way. Null while the engine is undecided. Posted once per completed word, like
+     * [dominantPack] itself -- never on the per-keystroke path.
+     */
+    fun dominantLanguageTag(onResult: (String?) -> Unit) {
+        worker.post {
+            val tag = withHandle<String?>(null) { current ->
+                NativePredictor.nativeDominantLanguageTag(current)
+            }
+            mainHandler.post { onResult(tag) }
         }
     }
 
@@ -532,6 +560,7 @@ class PredictionEngine(
                         NativePredictor.nativeDecodeGesture(
                             current, gestureX, gestureY, gestureTime, samples,
                             previous1, previous2, gestureNativeWords, gestureNativeScores,
+                            gestureNativeProperNoun,
                         )
                     }
                 }
@@ -555,6 +584,7 @@ class PredictionEngine(
             count = gestureNativeCount
             for (index in 0 until count) {
                 gestureDisplayWords[index] = gestureNativeWords[index]
+                gestureDisplayProperNoun[index] = gestureNativeProperNoun[index]
             }
         }
         var written = 0
@@ -562,14 +592,16 @@ class PredictionEngine(
             for (index in 0 until count) {
                 val word = gestureDisplayWords[index] ?: continue
                 if (blocked.isEmpty() || word !in blocked) {
+                    gestureDisplayProperNoun[written] = gestureDisplayProperNoun[index]
                     gestureDisplayWords[written++] = word
                 }
             }
         }
         for (index in written until MAX_RESULTS) {
             gestureDisplayWords[index] = null
+            gestureDisplayProperNoun[index] = false
         }
-        listener?.onGestureCandidates(gestureDisplayWords, written)
+        listener?.onGestureCandidates(gestureDisplayWords, written, gestureDisplayProperNoun)
     }
 
     /**
@@ -604,6 +636,7 @@ class PredictionEngine(
                     NativePredictor.nativeDecodeGesture(
                         current, previewGestureX, previewGestureY, previewGestureTime, samples,
                         previous1, previous2, previewNativeWords, previewNativeScores,
+                        previewNativeProperNoun,
                     )
                 }
             }
@@ -634,9 +667,10 @@ class PredictionEngine(
             count = previewNativeCount
             for (index in 0 until count) {
                 previewDisplayWords[index] = previewNativeWords[index]
+                previewDisplayProperNoun[index] = previewNativeProperNoun[index]
             }
         }
-        listener?.onGesturePreviewCandidates(previewDisplayWords, count)
+        listener?.onGesturePreviewCandidates(previewDisplayWords, count, previewDisplayProperNoun)
     }
 
     private fun serveRequests() {

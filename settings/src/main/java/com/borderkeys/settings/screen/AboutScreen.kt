@@ -22,7 +22,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.settings.BuildConfig
-import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
@@ -42,7 +41,7 @@ fun AboutScreen(modifier: Modifier = Modifier) {
     val version = remember {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrNull() ?: "unknown"
+        }.getOrNull() ?: strings[Keys.ABOUT_VERSION_UNKNOWN]
     }
     val hasAssistant = remember {
         val intent = Intent().setClassName(context.packageName, AssistProtocol.SERVICE_CLASS)
@@ -72,6 +71,13 @@ fun AboutScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.ABOUT_EVERY_DEPENDENCY_AND_EVERY_ASSET_IS],
             )
+            // The attribution the bundled dictionaries' licence asks for, on the screen
+            // docs/licensing.md says it is on -- it said so before there was anything here.
+            SettingRow(strings[Keys.ABOUT_DICTIONARY_SOURCES], strings[Keys.ABOUT_DICTIONARY_SOURCES_NOTE])
+            Button(
+                onClick = { open(context, DICTIONARY_SOURCES_URL) },
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            ) { Text(strings[Keys.ABOUT_OPEN_DICTIONARY_SOURCES]) }
             // Only in the build that actually has it -- a note about what inference is licensed
             // under would otherwise sit in the core build, next to a feature that build does not
             // carry at all.
@@ -139,6 +145,9 @@ private val OTHER_APPS = listOf(
 )
 
 private const val VOXAPPS_REPO_URL = "https://github.com/razvan-eduard/VoxApps"
+
+/** Where the six bundled dictionaries' word counts come from -- see docs/licensing.md 2.1. */
+private const val DICTIONARY_SOURCES_URL = "https://wortschatz.uni-leipzig.de/"
 
 /**
  * Hands an address to whatever opens addresses.

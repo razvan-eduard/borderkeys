@@ -67,6 +67,29 @@ fun openKeyboardPicker(context: Context) {
 }
 
 /**
+ * How many times the current lifecycle owner has resumed since this was first composed -- a
+ * key to `remember` against for an answer that lives in system settings and changes only while
+ * this screen is away, such as the keyboard being enabled or chosen there. One implementation
+ * for every screen that sends the person out to change such a thing and has to notice on the
+ * way back; Home, Setup and [rememberBorderKeysDefaultState] all read it.
+ */
+@Composable
+fun rememberResumedCount(): State<Int> {
+    val resumed = remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                resumed.intValue += 1
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    return resumed
+}
+
+/**
  * Whether BorderKeys is the selected keyboard, kept live -- offering the picker itself, the
  * moment it can, whenever it is not.
  *
@@ -91,17 +114,7 @@ fun rememberBorderKeysDefaultState(): State<Boolean> {
     // Re-offers the picker once per genuine return to this screen (a resumed tick), not on
     // every raw window-focus flicker -- the same dialog reopening every time focus so much as
     // blinks would be worse than the tap it is trying to save.
-    var resumed by remember { mutableIntStateOf(0) }
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                resumed += 1
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+    val resumed by rememberResumedCount()
     val windowInfo = LocalWindowInfo.current
     LaunchedEffect(resumed) {
         snapshotFlow { windowInfo.isWindowFocused }.first { it }
@@ -111,21 +124,26 @@ fun rememberBorderKeysDefaultState(): State<Boolean> {
         }
     }
 
-    // Polled rather than left to the next resumed tick to catch it: a choice made in the
-    // picker's own dialog is the whole point of having offered it, and the caller waiting on
-    // this value should not need the person to leave and return to this screen a second time
-    // just to have that choice noticed.
+    // A choice made in the picker's own dialog neither pauses nor resumes this activity, so it
+    // is noticed two ways. The window regaining focus when the dialog closes is the first: the
+    // answer is re-read on every focus return. A poll behind that is the second, for a picker
+    // that never took the window's focus at all -- bounded per resume, so a screen left open on
+    // a phone that never switches is not a wakeup every half second for as long as it stays
+    // open, which it used to be.
     LaunchedEffect(Unit) {
-        while (isActive) {
-            if (isDefault.value) {
-                break
+        snapshotFlow { windowInfo.isWindowFocused }.collect { focused ->
+            if (focused && !isDefault.value) {
+                isDefault.value = isBorderKeysDefault(context)
             }
-            val current = isBorderKeysDefault(context)
-            if (current) {
-                isDefault.value = true
-                break
-            }
+        }
+    }
+    LaunchedEffect(resumed) {
+        val deadline = System.currentTimeMillis() + BORDERKEYS_DEFAULT_POLL_WINDOW_MILLIS
+        while (isActive && !isDefault.value && System.currentTimeMillis() < deadline) {
             delay(BORDERKEYS_DEFAULT_POLL_MILLIS)
+            if (isBorderKeysDefault(context)) {
+                isDefault.value = true
+            }
         }
     }
 
@@ -134,3 +152,6 @@ fun rememberBorderKeysDefaultState(): State<Boolean> {
 
 /** How often [rememberBorderKeysDefaultState] polls while BorderKeys is not yet the default. */
 private const val BORDERKEYS_DEFAULT_POLL_MILLIS = 500L
+
+/** How long after each resume the poll keeps going before the focus watcher alone is trusted. */
+private const val BORDERKEYS_DEFAULT_POLL_WINDOW_MILLIS = 60_000L

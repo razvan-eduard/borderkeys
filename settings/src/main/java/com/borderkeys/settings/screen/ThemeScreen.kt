@@ -249,22 +249,27 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 if (customThemes.isEmpty()) {
                     Explanation(strings[Keys.THEME_NO_CUSTOM_THEMES])
                 } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        for (entry in customThemes) {
-                            // Same carry-over as a preset: showKeyBorders is a shape choice, not
-                            // part of what makes this the theme the user saved.
-                            val entryTheme = entry.theme.copy(showKeyBorders = theme.showKeyBorders)
-                            PresetCard(
-                                name = entry.name,
-                                preset = entry.theme,
-                                selected = theme == entryTheme,
-                            ) { update { entryTheme } }
+                    // Greyed out while auto is on, exactly like the presets above: a saved
+                    // theme is a preset the user made, and tapping one here used to write the
+                    // dark store while the light theme was what the auto switch was showing.
+                    Disableable(disabled = auto) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            for (entry in customThemes) {
+                                // Same carry-over as a preset: showKeyBorders is a shape choice,
+                                // not part of what makes this the theme the user saved.
+                                val entryTheme = entry.theme.copy(showKeyBorders = theme.showKeyBorders)
+                                PresetCard(
+                                    name = entry.name,
+                                    preset = entry.theme,
+                                    selected = theme == entryTheme,
+                                ) { update { entryTheme } }
+                            }
                         }
                     }
                 }
@@ -432,43 +437,43 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ) {
                     update { t -> t.copy(patternScaleDp = it) }
                 }
-                // Shown as the background's own colour when there is no second one, so the row
-                // has something ringed and picking that same colour is how a gradient is removed.
                 // A picture is not an alternative to a pattern. Both are layers on the same
-            // surface, and choosing one has never been a reason to be refused the other.
-            Text(
-                strings[Keys.THEME_PICTURE],
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-            )
-            Explanation(strings[Keys.THEME_PICTURE_NOTE])
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                TextButton(onClick = { picture.launch(arrayOf("image/*")) }) {
-                    Text(strings[Keys.THEME_CHOOSE_PICTURE])
+                // surface, and choosing one has never been a reason to be refused the other.
+                Text(
+                    strings[Keys.THEME_PICTURE],
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+                )
+                Explanation(strings[Keys.THEME_PICTURE_NOTE])
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextButton(onClick = { picture.launch(arrayOf("image/*")) }) {
+                        Text(strings[Keys.THEME_CHOOSE_PICTURE])
+                    }
+                    if (theme.backgroundImage.isNotEmpty()) {
+                        TextButton(onClick = {
+                            BackgroundImages.forget(context)
+                            update { t -> t.copy(backgroundImage = "") }
+                        }) { Text(strings[Keys.THEME_REMOVE_PICTURE]) }
+                    }
                 }
                 if (theme.backgroundImage.isNotEmpty()) {
-                    TextButton(onClick = {
-                        BackgroundImages.forget(context)
-                        update { t -> t.copy(backgroundImage = "") }
-                    }) { Text(strings[Keys.THEME_REMOVE_PICTURE]) }
+                    ThemeSlider(
+                        strings[Keys.THEME_PICTURE_DIM], theme.backgroundImageDim * 100f, 0f..100f,
+                        strings[Keys.THEME_PERCENT], default = 55f,
+                    ) { update { t -> t.copy(backgroundImageDim = it / 100f) } }
+                    Explanation(strings[Keys.THEME_PICTURE_DIM_NOTE])
                 }
-            }
-            if (theme.backgroundImage.isNotEmpty()) {
-                ThemeSlider(
-                    strings[Keys.THEME_PICTURE_DIM], theme.backgroundImageDim * 100f, 0f..100f,
-                    strings[Keys.THEME_PERCENT], default = 55f,
-                ) { update { t -> t.copy(backgroundImageDim = it / 100f) } }
-                Explanation(strings[Keys.THEME_PICTURE_DIM_NOTE])
-            }
-            ColourRow(
-                strings[Keys.THEME_SECOND_COLOUR],
-                theme.gradientEnd(),
-                customColours = theme.customColours[KeyboardTheme.KEY_GRADIENT_END] ?: emptyList(),
-                onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_GRADIENT_END to it)) } },
-            ) { update { t -> t.copy(backgroundGradientColor = it) } }
+                // Shown as the background's own colour when there is no second one, so the row
+                // has something ringed and picking that same colour is how a gradient is removed.
+                ColourRow(
+                    strings[Keys.THEME_SECOND_COLOUR],
+                    theme.gradientEnd(),
+                    customColours = theme.customColours[KeyboardTheme.KEY_GRADIENT_END] ?: emptyList(),
+                    onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_GRADIENT_END to it)) } },
+                ) { update { t -> t.copy(backgroundGradientColor = it) } }
                 Explanation(strings[Keys.THEME_SECOND_COLOUR_NOTE])
                 AdvancedSection {
                     SwitchRow(
@@ -533,15 +538,18 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 }
                 Button(
                     onClick = {
+                        // KeyboardTheme's own defaults, not a second copy of them: seven
+                        // literals here used to have to match seven there by hand.
+                        val defaults = KeyboardTheme()
                         update {
                             it.copy(
-                                keyCornerRadiusDp = 8f,
-                                keyGapDp = 4f,
-                                rowHeightDp = 52f,
-                                labelTextSizeSp = 20f,
-                                accentTextSizeSp = 15.5f,
-                                pressedElevation = 2f,
-                                swipeTrailWidthDp = 4f,
+                                keyCornerRadiusDp = defaults.keyCornerRadiusDp,
+                                keyGapDp = defaults.keyGapDp,
+                                rowHeightDp = defaults.rowHeightDp,
+                                labelTextSizeSp = defaults.labelTextSizeSp,
+                                accentTextSizeSp = defaults.accentTextSizeSp,
+                                pressedElevation = defaults.pressedElevation,
+                                swipeTrailWidthDp = defaults.swipeTrailWidthDp,
                             )
                         }
                     },

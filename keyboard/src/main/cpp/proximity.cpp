@@ -92,6 +92,16 @@ int utf8Encode(uint32_t codePoint, char* out) {
     return 4;
 }
 
+// Whether a Latin Extended-A code point is the capital of the pair it belongs to -- see the
+// comment inside foldCodePoint on the block's two parities. Mirrors _latin_extended_a_upper()
+// in tools/build_dict.py, which the native tests diff this against.
+static bool latinExtendedAUpper(uint32_t codePoint) {
+    const bool evenCapital = codePoint <= 0x137u || (codePoint >= 0x14Au && codePoint <= 0x177u);
+    const bool oddCapital = (codePoint >= 0x139u && codePoint <= 0x148u) ||
+                            (codePoint >= 0x179u && codePoint <= 0x17Eu);
+    return (evenCapital && (codePoint & 1u) == 0u) || (oddCapital && (codePoint & 1u) == 1u);
+}
+
 uint32_t foldCodePoint(uint32_t codePoint) {
     if (codePoint < 128u) {
         if (codePoint >= 'A' && codePoint <= 'Z') {
@@ -126,11 +136,14 @@ uint32_t foldCodePoint(uint32_t codePoint) {
             break;
     }
 
-    // Latin Extended-A. Odd code points in 0x100..0x177 are the lowercase of the even one
-    // before them, which is why the case fold is a single bitwise test rather than a table.
+    // Latin Extended-A. The block pairs each capital with its lowercase, but not on one parity
+    // throughout: in 0x100..0x137 and 0x14A..0x177 the capital is the even code point, in
+    // 0x139..0x148 and 0x179..0x17E it is the odd one, 0x138 (kra) and 0x149 ('n) have no
+    // capital at all, and 0x178 is the capital of Latin-1's 0xFF. One bitwise test across the
+    // whole block folded "ł" to "Ń" and left "Ź" unfolded, so the case fold is per range.
     if (codePoint >= 0x100u && codePoint <= 0x17Fu) {
         uint32_t lower = codePoint;
-        if (lower < 0x178u && (lower & 1u) == 0u) {
+        if (latinExtendedAUpper(codePoint)) {
             lower += 1u;
         }
         switch (lower) {

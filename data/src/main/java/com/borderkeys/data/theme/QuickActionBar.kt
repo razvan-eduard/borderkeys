@@ -8,7 +8,7 @@ package com.borderkeys.data.theme
  * one of the user's own [CustomQuickAction] macros. [KeyboardPreferences.quickActions] stays a
  * plain `List<Int>` for both, the same trick [ComposerBar]/[ComposerBarItem] already play for the
  * draft box's bar: a custom action's id is drawn from a range ([CustomQuickAction.nextId]) that
- * can never collide with [QuickAction]'s own 1-17, so the two kinds share one ordered list
+ * can never collide with [QuickAction]'s own 1-21, so the two kinds share one ordered list
  * without the persisted shape changing at all. A separate type from [ComposerBarItem] rather than
  * a shared generic one, for the same reason [QuickAction] and [ComposerAction] already do not
  * share code beyond [idMatching]/[idsMatching]: two different enums, no common supertype to hang

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -33,7 +34,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.TextShortcut
-import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingsSectionCard
@@ -59,6 +59,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
+    var confirmingForgetAll by remember { mutableStateOf(false) }
 
     val words by (if (query.isBlank()) repository.words else repository.search(query))
         .collectAsStateWithLifecycle(initialValue = emptyList())
@@ -69,15 +70,21 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val csv = repository.exportCsv()
+            val export = repository.exportCsv()
             val written = withContext(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openOutputStream(uri)?.use {
-                        it.write(csv.encodeToByteArray())
+                        it.write(export.csv.encodeToByteArray())
                     }
                 }.isSuccess
             }
-            message = if (written) strings.getString(Keys.DICTIONARY_EXPORTED_WORDS, words.size) else strings[Keys.DICTIONARY_EXPORT_FAILED]
+            // The count of what was written, not of the list on screen -- that one is capped
+            // and follows the search box, and used to be what this sentence reported.
+            message = if (written) {
+                strings.getString(Keys.DICTIONARY_EXPORTED_WORDS, export.words)
+            } else {
+                strings[Keys.DICTIONARY_EXPORT_FAILED]
+            }
         }
     }
 
@@ -262,7 +269,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 TextButton(onClick = { importer.launch(arrayOf("text/*", "*/*")) }) {
                     Text(strings[Keys.DICTIONARY_IMPORT_CSV])
                 }
-                TextButton(onClick = { scope.launch { repository.forgetEverything() } }) {
+                TextButton(onClick = { confirmingForgetAll = true }) {
                     Text(strings[Keys.DICTIONARY_FORGET_EVERYTHING])
                 }
             }
@@ -278,5 +285,24 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 strings[Keys.DICTIONARY_THIS_IS_THE_ONLY_FORM_OF],
             )
         }
+    }
+
+    // Asked first: this is every word and pair the device has learned, and the one tap that
+    // used to do it sat on a row beside Export and Import.
+    if (confirmingForgetAll) {
+        AlertDialog(
+            onDismissRequest = { confirmingForgetAll = false },
+            title = { Text(strings[Keys.DICTIONARY_FORGET_EVERYTHING_TITLE]) },
+            text = { Text(strings[Keys.COMMON_CANNOT_BE_UNDONE]) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmingForgetAll = false
+                    scope.launch { repository.forgetEverything() }
+                }) { Text(strings[Keys.DICTIONARY_FORGET_EVERYTHING], color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingForgetAll = false }) { Text(strings[Keys.THEME_CANCEL]) }
+            },
+        )
     }
 }

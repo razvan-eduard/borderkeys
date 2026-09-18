@@ -76,6 +76,21 @@ struct LoadedEngine {
         return true;
     }
 
+    /** Loads the test pack once more under `tag`, returning the engine's own status. */
+    int32_t loadUnder(const char* tag) {
+        struct stat info {};
+        if (stat(BORDERKEYS_TEST_PACK, &info) != 0) {
+            return kBkdErrArgument;
+        }
+        const int fd = ::open(BORDERKEYS_TEST_PACK, O_RDONLY);
+        if (fd < 0) {
+            return kBkdErrArgument;
+        }
+        const int32_t status = engine.loadLanguage(tag, fd, 0, info.st_size, 1.0f);
+        ::close(fd);
+        return status;
+    }
+
     /** The rank of `expected` among the suggestions for `composing`, or -1. */
     int rankOf(const char* composing, const char* expected, const char* previous = nullptr) {
         Candidate out[Engine::kMaxCandidates];
@@ -301,6 +316,35 @@ void runEngineTests() {
         check(!duplicate, "no word appears twice in one set of suggestions");
     }
 
+    section("a pack no longer named gives its slot back");
+    {
+        // Settings can enable more languages than the engine has slots over time -- not at
+        // once, but one switched off and another on in its place. A pack that stopped being
+        // named in setActiveLanguages used to stay open and merely inactive, so its slot was
+        // never returned, and the replacement's load failed with kBkdErrNoSlot while nothing on
+        // the Kotlin side looked at the status.
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads the first pack");
+        check(loaded.openSecondPack("en-US"), "and a second one under another tag");
+        check(loaded.rankOf("keyboarf", "keyboard") >= 0, "both are consulted");
+
+        const char* only[1] = {"ro-RO"};
+        const float weight[1] = {1.0f};
+        loaded.engine.setActiveLanguages(only, weight, 1);
+        check(loaded.rankOf("keyboarf", "keyboard") >= 0, "the one still named keeps answering");
+
+        // Three more distinct tags fit (four slots, one in use); a fifth does not, and says so
+        // rather than evicting anything.
+        check(loaded.loadUnder("de-DE") == kBkdOk, "the freed slot takes a new tag");
+        check(loaded.loadUnder("fr-FR") == kBkdOk, "and a third");
+        check(loaded.loadUnder("it-IT") == kBkdOk, "and a fourth");
+        check(loaded.loadUnder("es-ES") == kBkdErrNoSlot, "a fifth tag is refused with kBkdErrNoSlot");
+
+        loaded.engine.setActiveLanguages(nullptr, nullptr, 0);
+        check(loaded.rankOf("keyboarf", "keyboard") < 0, "an empty set closes every pack");
+        check(loaded.loadUnder("es-ES") == kBkdOk, "and every slot is free again");
+    }
+
     section("more than one active pack");
     {
         // Nothing before this exercised more than one active language pack -- every case above
@@ -388,16 +432,29 @@ void runEngineTests() {
         check(model.countFor("borders", 7) == 2, "learning increments a count");
         check(model.countFor("Borders", 7) == 2, "and the lookup is case folded");
         check(model.countFor("absent", 6) == 0, "an unlearned word has no count");
+    }
 
-        const std::string path = std::string(BORDERKEYS_TEST_PACK) + ".user";
-        check(model.snapshot(path.c_str()), "the model snapshots");
-        UserModel restored;
-        check(restored.restore(path.c_str()), "and restores");
-        check(restored.countFor("borders", 7) == 2, "with its counts intact");
-        ::remove(path.c_str());
+    section("a private field does not consult the personal dictionary");
+    {
+        // The other half of not learning from a private field: what this device learned from
+        // its owner must not be offered back into a password box or a field that asked for no
+        // personalised learning. The model stays loaded -- switching it back on costs nothing.
+        LoadedEngine loaded;
+        loaded.open();
+        const char* words[1] = {"borderkeysword"};
+        const size_t lengths[1] = {14};
+        const int32_t counts[1] = {40};
+        loaded.engine.loadUserWords(words, lengths, counts, 1);
+        check(loaded.rankOf("borderkeysw", "borderkeysword") == 0, "a personal word is offered");
 
-        UserModel refused;
-        check(!refused.restore("/nonexistent/path/user.bku"), "a missing snapshot is refused");
+        loaded.engine.setPersonalModelEnabled(false);
+        check(loaded.rankOf("borderkeysw", "borderkeysword") < 0,
+              "and not at all while the field is private");
+        check(loaded.rankOf("keyboarf", "keyboard") >= 0, "the dictionaries still answer");
+
+        loaded.engine.setPersonalModelEnabled(true);
+        check(loaded.rankOf("borderkeysw", "borderkeysword") == 0,
+              "and it is back the moment an ordinary field switches it on again");
     }
 
     section("phrases the user repeats");

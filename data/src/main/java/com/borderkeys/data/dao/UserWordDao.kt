@@ -84,6 +84,14 @@ interface UserWordDao {
     }
 
     /**
+     * Lifts a word's deliberate-capital count to at least [count] -- for a restore, which
+     * carries the count another device had reached rather than one more commit's worth. Never
+     * lowers it, for the same reason [increment] never does.
+     */
+    @Query("UPDATE user_words SET deliberateCapitals = MAX(deliberateCapitals, :count) WHERE word = :word")
+    suspend fun raiseDeliberateCapitals(word: String, count: Int)
+
+    /**
      * Halves the count of anything not used since [cutoff], and nothing else.
      *
      * A plain conditional `UPDATE`, not a read-modify-write: [increment] above is deliberately

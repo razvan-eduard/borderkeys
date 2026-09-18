@@ -15,20 +15,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.DefaultableSlider
-import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
@@ -55,6 +57,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
     val entries by repository.entries.collectAsStateWithLifecycle(initialValue = emptyList())
     val preferences by themes.preferences
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
+    var confirmingDeleteAll by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SwitchRow(
@@ -156,10 +159,29 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
                 )
             }
             TextButton(
-                onClick = { scope.launch { repository.deleteAll() } },
+                onClick = { confirmingDeleteAll = true },
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             ) { Text(strings[Keys.CLIPBOARD_DELETE_EVERYTHING_INCLUDING_PINNED]) }
         }
+    }
+
+    // Asked first: pinned entries are the ones somebody chose to keep, and this is the one
+    // action here that takes them too.
+    if (confirmingDeleteAll) {
+        AlertDialog(
+            onDismissRequest = { confirmingDeleteAll = false },
+            title = { Text(strings[Keys.CLIPBOARD_DELETE_EVERYTHING_TITLE]) },
+            text = { Text(strings[Keys.COMMON_CANNOT_BE_UNDONE]) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmingDeleteAll = false
+                    scope.launch { repository.deleteAll() }
+                }) { Text(strings[Keys.CLIPBOARD_DELETE], color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingDeleteAll = false }) { Text(strings[Keys.THEME_CANCEL]) }
+            },
+        )
     }
 }
 

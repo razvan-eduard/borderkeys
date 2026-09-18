@@ -111,10 +111,36 @@ jfloat nativeCharsPerToken(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
  * `minOutputTokens`, `maxOutputTokensCeiling` and `useRemainingContext` together decide the
  * token budget, and for `reuseSharedPrefix`.
  */
-jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instruction, jstring text,
-                  jfloat outputRatio, jint minOutputTokens, jint maxOutputTokensCeiling,
-                  jboolean useRemainingContext, jboolean reuseSharedPrefix,
-                  jboolean cleanFormatting, jintArray outStatus, jbooleanArray outTruncated) {
+/**
+ * Copies a Java byte array into a NUL-terminated std::string. False when it is absent or the
+ * copy raised.
+ *
+ * Bytes rather than a jstring: GetStringUTFChars produces JNI's "modified UTF-8", which writes
+ * a supplementary character -- an emoji -- as two encoded surrogates. That is not UTF-8, and the
+ * tokenizer received every emoji in a selection as garbage. The Kotlin side encodes real UTF-8
+ * and decodes the answer the same way.
+ */
+bool copyBytes(JNIEnv* env, jbyteArray array, std::string* out) {
+    if (array == nullptr) {
+        return false;
+    }
+    const jsize length = env->GetArrayLength(array);
+    out->assign(static_cast<size_t>(length), '\0');
+    if (length > 0) {
+        env->GetByteArrayRegion(array, 0, length, reinterpret_cast<jbyte*>(&(*out)[0]));
+        if (env->ExceptionCheck() == JNI_TRUE) {
+            env->ExceptionClear();
+            return false;
+        }
+    }
+    return true;
+}
+
+jbyteArray nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jbyteArray instruction,
+                     jbyteArray text, jfloat outputRatio, jint minOutputTokens,
+                     jint maxOutputTokensCeiling, jboolean useRemainingContext,
+                     jboolean reuseSharedPrefix, jboolean cleanFormatting, jintArray outStatus,
+                     jbooleanArray outTruncated) {
     TextAssist* const assist = assistFrom(handle);
     jint status = TextAssist::kErrArgument;
     bool truncated = false;
@@ -132,14 +158,9 @@ jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instructi
         return nullptr;
     }
 
-    const char* const instructionUtf = env->GetStringUTFChars(instruction, nullptr);
-    if (instructionUtf == nullptr) {
-        report();
-        return nullptr;
-    }
-    const char* const textUtf = env->GetStringUTFChars(text, nullptr);
-    if (textUtf == nullptr) {
-        env->ReleaseStringUTFChars(instruction, instructionUtf);
+    std::string instructionUtf8;
+    std::string textUtf8;
+    if (!copyBytes(env, instruction, &instructionUtf8) || !copyBytes(env, text, &textUtf8)) {
         report();
         return nullptr;
     }
@@ -149,10 +170,11 @@ jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instructi
     // runs llama.cpp's own code over data this process did not produce.
     status = [&]() -> jint {
         try {
-            return assist->run(instructionUtf, textUtf, static_cast<float>(outputRatio),
-                                minOutputTokens, maxOutputTokensCeiling,
-                                useRemainingContext == JNI_TRUE, reuseSharedPrefix == JNI_TRUE,
-                                cleanFormatting == JNI_TRUE, &answer, &truncated);
+            return assist->run(instructionUtf8.c_str(), textUtf8.c_str(),
+                                static_cast<float>(outputRatio), minOutputTokens,
+                                maxOutputTokensCeiling, useRemainingContext == JNI_TRUE,
+                                reuseSharedPrefix == JNI_TRUE, cleanFormatting == JNI_TRUE,
+                                &answer, &truncated);
         } catch (const std::exception&) {
             return TextAssist::kErrException;
         } catch (...) {
@@ -160,14 +182,23 @@ jstring nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring instructi
         }
     }();
 
-    env->ReleaseStringUTFChars(text, textUtf);
-    env->ReleaseStringUTFChars(instruction, instructionUtf);
     report();
 
     if (status != TextAssist::kOk) {
         return nullptr;
     }
-    return env->NewStringUTF(answer.c_str());
+    // Real UTF-8 back too: NewStringUTF would have needed modified UTF-8 and mangled an emoji
+    // the model wrote the same way GetStringUTFChars mangled one it was given.
+    const jsize size = static_cast<jsize>(answer.size());
+    jbyteArray out = env->NewByteArray(size);
+    if (out == nullptr) {
+        env->ExceptionClear();
+        return nullptr;
+    }
+    if (size > 0) {
+        env->SetByteArrayRegion(out, 0, size, reinterpret_cast<const jbyte*>(answer.data()));
+    }
+    return out;
 }
 
 void nativeCancel(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
@@ -186,8 +217,7 @@ const JNINativeMethod kMethods[] = {
     {"nativeIsLoaded", "(J)Z", reinterpret_cast<void*>(nativeIsLoaded)},
     {"nativeContextTokens", "(J)I", reinterpret_cast<void*>(nativeContextTokens)},
     {"nativeCharsPerToken", "(J)F", reinterpret_cast<void*>(nativeCharsPerToken)},
-    {"nativeRun", "(JLjava/lang/String;Ljava/lang/String;FIIZZZ[I[Z)Ljava/lang/String;",
-     reinterpret_cast<void*>(nativeRun)},
+    {"nativeRun", "(J[B[BFIIZZZ[I[Z)[B", reinterpret_cast<void*>(nativeRun)},
     {"nativeCancel", "(J)V", reinterpret_cast<void*>(nativeCancel)},
 };
 

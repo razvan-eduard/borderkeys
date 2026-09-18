@@ -228,7 +228,7 @@ private fun SettingsApp() {
         context.packageManager.resolveService(intent, 0) != null
     }
 
-    // A list, used as a back stack. Ten screens with no arguments between them do not need a
+    // A list, used as a back stack. Sixteen screens with no arguments between them do not need a
     // navigation graph, a route parser or argument encoding.
     //
     // Opens straight to Setup, not Home, when BorderKeys is not yet the selected keyboard --

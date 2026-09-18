@@ -10,8 +10,9 @@
 
 namespace borderkeys {
 
-// What this device has learned about the person using it. Mutable, in RAM, never leaves the
-// process except through an explicit snapshot into the app's private storage.
+// What this device has learned about the person using it. Mutable, in RAM, and never written
+// anywhere by this class: the Room tables in :data are the one durable copy, and the model is
+// rebuilt from them at every start.
 //
 // This is the whole of "personalisation" in BorderKeys. There is no model being fine-tuned and
 // no gradient anywhere: a count goes up when the user picks a word that was not the top
@@ -154,11 +155,6 @@ public:
     // holds thousands of words rather than hundreds of thousands.
     int completions(const uint32_t* foldedPrefix, int prefixLength, Completion* out,
                     int maxOut) const;
-
-    // Binary snapshot into the app's private storage. Written on a debounce, never per
-    // keystroke. Returns true only if the file was fully written and renamed into place.
-    bool snapshot(const char* path) const;
-    bool restore(const char* path);
 
 private:
     struct Node {

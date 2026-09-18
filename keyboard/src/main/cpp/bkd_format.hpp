@@ -17,11 +17,12 @@
 // process. Everything here is therefore written as if the producer were hostile, including the
 // packs we generate ourselves -- because at load time we cannot tell the difference.
 //
-// Layout: a fixed 256-byte header, then section payloads at header-declared offsets. Nothing
-// is parsed: the loader validates the header, checks every section against the real file size,
-// and reinterprets pointers into the mapping. Opening a pack is O(1) in the dictionary size.
-// The one linear pass is the content checksum, which is deliberate and is paid once, off the
-// UI thread, at load; see kBkdContentChecked.
+// Layout: a fixed 336-byte header (256 in version 1, grown twice since -- see the version notes
+// below), then section payloads at header-declared offsets. Nothing is parsed: the loader
+// validates the header, checks every section against the real file size, and reinterprets
+// pointers into the mapping. Opening a pack is O(1) in the dictionary size. The one linear pass
+// is the content checksum, which is deliberate and is paid once, off the UI thread, at load --
+// the content-CRC step of the header validation below.
 
 namespace borderkeys {
 

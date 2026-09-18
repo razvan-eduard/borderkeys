@@ -40,7 +40,7 @@ data class CustomQuickAction(
 
         /**
          * Where freshly created custom quick actions draw their id from -- clear of
-         * [QuickAction]'s own 1-17, so no id is ever ambiguous between a built-in action and a
+         * [QuickAction]'s own 1-21, so no id is ever ambiguous between a built-in action and a
          * user-made one. Unlike [CustomAction] this type has no prior on-disk shape to backfill
          * ids for, so [nextId] is the only id-allocation this type needs.
          */

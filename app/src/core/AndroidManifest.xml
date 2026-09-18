@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    The four text-selection menu entries that run the assistant (Correct, Shorten, Summarise
+    and Custom action), removed from the core build. :settings declares them for both flavors,
+    because a library manifest has no way to tell the flavors apart, and the core build has no
+    assistant to run them with: every one of them used to appear in every application's
+    selection menu on the core build, and picking one landed on "The assistant is not
+    installed".
+
+    "Draft with BorderKeys" stays. The draft box works without a model.
+
+    verifyNoInternetPermission also checks the merged core manifest for these names, so a
+    rename on the :settings side that stopped matching here fails the build rather than ships.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <activity-alias
+            android:name="com.borderkeys.settings.ProcessTextCorrectAlias"
+            tools:node="remove" />
+        <activity-alias
+            android:name="com.borderkeys.settings.ProcessTextShortenAlias"
+            tools:node="remove" />
+        <activity-alias
+            android:name="com.borderkeys.settings.ProcessTextSummariseAlias"
+            tools:node="remove" />
+        <activity-alias
+            android:name="com.borderkeys.settings.ProcessTextCustomAlias"
+            tools:node="remove" />
+    </application>
+
+</manifest>

@@ -148,8 +148,9 @@ internal object NativePredictor {
      * carrying the curvature. Smoothing and resampling happen on the native side so the
      * geometric and neural tiers cannot disagree about how the features were produced.
      *
-     * [outWords] and [outScores] are the same reused buffers the tap path uses; this runs on
-     * the prediction thread, never on the UI thread.
+     * [outWords], [outScores] and [outProperNoun] are the same kind of reused buffers the tap
+     * path uses -- [outProperNoun] parallel to [outWords], the same name bit [nativeSuggest]
+     * reports; this runs on the prediction thread, never on the UI thread.
      */
     external fun nativeDecodeGesture(
         handle: Long,
@@ -161,6 +162,7 @@ internal object NativePredictor {
         prev2: String?,
         outWords: Array<String?>,
         outScores: FloatArray,
+        outProperNoun: BooleanArray,
     ): Int
 
     /** Replaces the in-memory personal dictionary. Called once at start, from Room.
@@ -237,11 +239,13 @@ internal object NativePredictor {
     )
 
     /**
-     * Writes the personal dictionary to [path] in the app's private storage. Returns 0 on
-     * success. Called on a debounce and at `onFinishInput`, never on a keystroke: Kotlin decides
-     * when, the native side only executes.
+     * Whether the personal dictionary is consulted at all -- off for a private field, see
+     * `Engine::setPersonalModelEnabled`'s own doc. The model stays loaded either way.
      */
-    external fun nativeSnapshotUserModel(handle: Long, path: String): Int
+    external fun nativeSetPersonalModelEnabled(handle: Long, enabled: Boolean)
+
+    /** The language tag of [nativeDominantPack]'s pack, or null while the engine is undecided. */
+    external fun nativeDominantLanguageTag(handle: Long): String?
 
     /**
      * What [packIndex] alone would spell [word] as, ignoring whichever pack the engine currently

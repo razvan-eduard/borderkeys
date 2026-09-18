@@ -16,7 +16,7 @@ import java.io.OutputStream
  *
  * Every default here is the conservative one. Anything that records more about the user than the
  * feature strictly needs starts off, and turning it on is an explicit act with an explanation
- * next to it -- which is the only honest way to ship a feature like [perAppLanguageMemory].
+ * next to it.
  */
 @Serializable
 data class KeyboardPreferences(
@@ -65,12 +65,14 @@ data class KeyboardPreferences(
      */
     val swipeBackspaceDeletesWord: Boolean = false,
     /**
-     * Off, and it stays off unless the user says otherwise.
+     * Reserved, and read by nothing.
      *
-     * Remembering which languages are used in which app means storing a hash of the target
-     * package name against learned weights. That is a behavioural profile, however small and
-     * however local -- so it is opt-in, the hash is stored rather than the package name, and
-     * Settings can delete it.
+     * A per-app language memory was designed -- a hash of the target package against learned
+     * weights, opt-in because it is a behavioural profile however small -- and never built. The
+     * switch that set this was offered anyway, which made it a setting that did nothing, and the
+     * Privacy screen described a feature that did not exist. Both are gone; the field stays only
+     * so a store written while the switch existed still parses. Wire the feature up before
+     * offering it again.
      */
     val perAppLanguageMemory: Boolean = false,
     val hapticFeedback: Boolean = true,
@@ -214,8 +216,6 @@ data class KeyboardPreferences(
     val bottomOffsetDp: Float = 0f,
     /** Horizontal offset from centre, in dp. Floating mode only. */
     val horizontalOffsetDp: Float = 0f,
-    /** The gap between the two clusters at [MODE_SPLIT], in dp. Unused otherwise. */
-    val splitGapDp: Float = 80f,
 
     /**
      * Landscape's own height, width, position, offsets and split gap -- everything above this
@@ -291,12 +291,10 @@ data class KeyboardPreferences(
      * geometric one (tier A) that always ships. `plus`-only in effect -- a `core` build has no
      * tier B compiled in at all, so this setting does nothing there.
      *
-     * Off by default, and "experimental" is not a formality: the shipped checkpoint carries a
-     * known, tracked training-time scale bug that a runtime shim compensates for (see
-     * `keyboard/src/main/cpp/gesture/tcn_decoder.cpp` and HANDOFF.md's Thread 4) rather than a
-     * cleanly retrained model. It measures well on real gesture data through the actual decode
-     * path, but this is genuinely a preview of work still in progress, not a finished feature
-     * quietly defaulting on.
+     * Off by default, and "experimental" is not a formality: the shipped checkpoint measures
+     * well on real gesture data through the actual decode path, but it has had far less time in
+     * live typing than the geometric decoder it sits beside. This is genuinely a preview of work
+     * still in progress, not a finished feature quietly defaulting on.
      */
     val experimentalSwipeModelEnabled: Boolean = false,
 
@@ -540,7 +538,7 @@ data class KeyboardPreferences(
     /**
      * The actions on the bar, in order, as [QuickAction] ids -- or, since a custom macro can be
      * pinned here too, one of [customQuickActions]' own ids. The two id spaces never overlap
-     * ([CustomQuickAction.nextId] draws from a range clear of [QuickAction]'s 1-17), so this
+     * ([CustomQuickAction.nextId] draws from a range clear of [QuickAction]'s 1-21), so this
      * stays one flat `List<Int>` rather than needing its own persisted shape change, the same
      * trick [composerBar] already plays; [QuickActionBar.resolve] is what turns an id back into
      * whichever kind it names.
@@ -859,9 +857,9 @@ data class KeyboardPreferences(
         themeMode = if (themeMode == THEME_MODE_AUTO_SYSTEM) THEME_MODE_AUTO_SYSTEM else THEME_MODE_MANUAL,
         clipboardRetentionMinutes = clipboardRetentionMinutes.coerceIn(1, 60 * 24 * 30),
         clipboardMaxEntries = clipboardMaxEntries.coerceIn(1, 1000),
-        // heightScale, widthScale, positionMode, bottomOffsetDp, horizontalOffsetDp and
-        // splitGapDp all come from `portrait` above instead of their own coerceIn here -- see
-        // that val's comment.
+        // heightScale, widthScale, positionMode, bottomOffsetDp and horizontalOffsetDp all
+        // come from `portrait` above instead of their own coerceIn here -- see that val's
+        // comment.
         heightScale = portrait.heightScale,
         widthScale = portrait.widthScale,
         positionMode = portrait.positionMode,
@@ -923,7 +921,6 @@ data class KeyboardPreferences(
         },
         bottomOffsetDp = portrait.bottomOffsetDp,
         horizontalOffsetDp = portrait.horizontalOffsetDp,
-        splitGapDp = portrait.splitGapDp,
         landscape = landscape.sanitised(),
         // A language code, not free text. Bounded so a corrupt file cannot carry an arbitrarily
         // long string into every lookup; an unknown code resolves to English anyway.
@@ -991,7 +988,7 @@ data class KeyboardPreferences(
     fun placementFor(isLandscape: Boolean): KeyboardPlacement = if (isLandscape) {
         landscape
     } else {
-        KeyboardPlacement(heightScale, widthScale, positionMode, bottomOffsetDp, horizontalOffsetDp, splitGapDp)
+        KeyboardPlacement(heightScale, widthScale, positionMode, bottomOffsetDp, horizontalOffsetDp)
     }
 
     /** [transform] applied to whichever orientation's placement [isLandscape] selects, written
@@ -1010,7 +1007,6 @@ data class KeyboardPreferences(
                 positionMode = updated.positionMode,
                 bottomOffsetDp = updated.bottomOffsetDp,
                 horizontalOffsetDp = updated.horizontalOffsetDp,
-                splitGapDp = updated.splitGapDp,
             )
         }
     }
@@ -1056,9 +1052,6 @@ data class KeyboardPreferences(
 
         /** Lifted off the bottom edge and movable, for a large screen or a split view. */
         const val MODE_FLOATING = 3
-
-        /** Two key clusters, one at each edge, with a gap between them -- see [splitGapDp]. */
-        const val MODE_SPLIT = 4
 
         /**
          * Several repetitions before a word or phrase leads. For someone who writes about many
@@ -1365,11 +1358,6 @@ data class KeyboardPreferences(
         const val MIN_HEIGHT_SCALE = 0.65f
         const val MAX_HEIGHT_SCALE = 1.6f
         const val MIN_WIDTH_SCALE = 0.55f
-
-        /** Narrow enough to still read as two clusters, wide enough that the gap always fits
-         *  inside even the narrowest allowed width. */
-        const val MIN_SPLIT_GAP_DP = 24f
-        const val MAX_SPLIT_GAP_DP = 320f
 
         /**
          * The width the keyboard takes the first time it leaves the dock.

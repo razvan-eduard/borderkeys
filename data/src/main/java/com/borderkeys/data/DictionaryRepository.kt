@@ -144,7 +144,14 @@ class DictionaryRepository internal constructor(
      * the device unless a person carries it. The format lives in [DictionaryCsv], where it can
      * be tested without a database.
      */
-    suspend fun exportCsv(): String = DictionaryCsv.encode(userWords.topWords(Int.MAX_VALUE))
+    suspend fun exportCsv(): CsvExport {
+        val words = userWords.topWords(Int.MAX_VALUE)
+        return CsvExport(DictionaryCsv.encode(words), words.size)
+    }
+
+    /** The CSV text and how many words it carries -- the count a screen reports is this one,
+     *  not the length of whichever (searched, capped) list happened to be showing. */
+    class CsvExport(val csv: String, val words: Int)
 
     /**
      * Imports an export, merging counts into whatever is already here. Returns the row count.

@@ -148,6 +148,20 @@ _LATIN_EXT_A_FOLD = {
 }
 
 
+def _latin_extended_a_upper(code_point: int) -> bool:
+    """Whether a Latin Extended-A code point is the capital of the pair it belongs to.
+
+    The block pairs each capital with its lowercase, but not on one parity throughout:
+    0x100..0x137 and 0x14A..0x177 put the capital on the even code point, 0x139..0x148 and
+    0x179..0x17E on the odd one, 0x138 (kra) and 0x149 ('n) have no capital, and 0x178 is the
+    capital of Latin-1's 0xFF. One parity test across the whole block folded "ł" to "Ń" and
+    left "Ź" unfolded. Mirrors latinExtendedAUpper() in proximity.cpp.
+    """
+    even_capital = code_point <= 0x137 or 0x14A <= code_point <= 0x177
+    odd_capital = 0x139 <= code_point <= 0x148 or 0x179 <= code_point <= 0x17E
+    return (even_capital and code_point % 2 == 0) or (odd_capital and code_point % 2 == 1)
+
+
 def fold_code_point(code_point: int) -> int:
     """Lowercase and strip the diacritic. Mirrors foldCodePoint() in proximity.cpp."""
     if code_point < 128:
@@ -162,7 +176,7 @@ def fold_code_point(code_point: int) -> int:
 
     if 0x100 <= code_point <= 0x17F:
         lower = code_point
-        if lower < 0x178 and (lower & 1) == 0:
+        if _latin_extended_a_upper(code_point):
             lower += 1
         if lower in _LATIN_EXT_A_FOLD:
             return ord(_LATIN_EXT_A_FOLD[lower])
@@ -868,10 +882,18 @@ def main(argv: list[str]) -> int:
     arguments = parser.parse_args(argv)
 
     if arguments.dump_folds:
+        # To --out when given, so a build step can write the table where a test will read it;
+        # to stdout otherwise, for a person diffing by hand.
+        lines = []
         for code_point in range(0, 0x2000):
             folded = fold_code_point(code_point)
             if folded != code_point:
-                print(f"{code_point:04X}\t{folded:04X}")
+                lines.append(f"{code_point:04X}\t{folded:04X}")
+        table = "\n".join(lines) + "\n"
+        if arguments.out:
+            arguments.out.write_text(table, encoding="utf-8")
+        else:
+            sys.stdout.write(table)
         return 0
 
     if arguments.selftest:

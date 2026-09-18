@@ -607,7 +607,14 @@ class KeyboardPreferencesTest {
             defaults.composerSnapSelectionToWords,
         )
         val bar = ComposerAction.fromIds(defaults.composerBar)
-        assertTrue("insert has to be on the bar", bar.contains(ComposerAction.INSERT))
+        // Insert is the fixed button at the bar's end, drawn by the box itself, not a list
+        // entry -- see ComposerBar.resolve. A default that listed it was a row Settings offered
+        // that moved nothing.
+        assertFalse("insert is not a bar entry", bar.contains(ComposerAction.INSERT))
+        assertTrue(
+            "the sanitised default is the default",
+            defaults.sanitised().composerBar == defaults.composerBar,
+        )
         assertFalse(
             "a button that opens an empty list should not be there on a new install",
             bar.contains(ComposerAction.SAVED_PROMPTS),
@@ -616,13 +623,24 @@ class KeyboardPreferencesTest {
 
     @Test
     fun `a bar written by a later build opens rather than failing`() {
+        // 8 is Insert's id, which an earlier build did write into the bar: dropped like an
+        // unknown id rather than kept, since the bar no longer lists it.
         val fromLater = KeyboardPreferences(composerBar = listOf(8, 9999, 1, 1))
         val kept = fromLater.sanitised().composerBar
         assertEquals(
-            "an unknown id should be dropped and a repeat should not be drawn twice",
-            listOf(ComposerAction.INSERT.id, ComposerAction.CORRECT.id),
+            "an unknown id and Insert should be dropped, and a repeat not drawn twice",
+            listOf(ComposerAction.CORRECT.id),
             kept,
         )
+    }
+
+    @Test
+    fun `the bar holds eight and sanitising cuts a longer one`() {
+        val ids = ComposerAction.entries.filter { it != ComposerAction.INSERT }.map { it.id }
+        assertEquals(9, ids.size)
+        val kept = KeyboardPreferences(composerBar = ids).sanitised().composerBar
+        assertEquals(ComposerBar.MAX_ITEMS, kept.size)
+        assertEquals(ids.take(ComposerBar.MAX_ITEMS), kept)
     }
 
     @Test

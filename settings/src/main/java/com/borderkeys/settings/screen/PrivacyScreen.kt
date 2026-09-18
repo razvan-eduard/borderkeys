@@ -15,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
@@ -89,10 +88,6 @@ fun PrivacyScreen(modifier: Modifier = Modifier) {
             SettingRow(
                 title = strings[Keys.PRIVACY_NO_TELEMETRY_NO_CRASH_REPORTING_NO],
                 subtitle = strings[Keys.PRIVACY_NONE_OF_IT_EXISTS_TO_BE],
-            )
-            SettingRow(
-                title = strings[Keys.PRIVACY_PER_APP_LANGUAGE_MEMORY_IS_OFF],
-                subtitle = strings[Keys.PRIVACY_IT_WOULD_STORE_A_HASH_OF],
             )
         }
     }

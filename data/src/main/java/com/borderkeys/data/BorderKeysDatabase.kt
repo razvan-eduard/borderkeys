@@ -133,34 +133,6 @@ abstract class BorderKeysDatabase : RoomDatabase() {
          * Adds the table of three-word sequences, for predicting from two words of context
          * rather than one. Additive like the two before it.
          */
-        /**
-         * Clipboard entries gained a URI and a MIME type, so an image can be remembered
-         * alongside text. Added as nullable columns rather than a new table: an image clip is
-         * a clipboard entry in every respect that matters -- it expires, it pins, it is listed
-         * in the same order -- and a second table would have to be merged back on every read.
-         */
-        val MIGRATION_4_5 = object : Migration(4, 5) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `uri` TEXT")
-                db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `mimeType` TEXT")
-            }
-        }
-
-        /**
-         * Personal words gain a count of how many times they were committed with a deliberate
-         * capital first letter -- see [com.borderkeys.data.entity.UserWord.deliberateCapitals].
-         * Additive like the clipboard columns above: an existing row simply starts at zero,
-         * which is exactly "no evidence yet" rather than a value that has to be backfilled.
-         */
-        val MIGRATION_5_6 = object : Migration(5, 6) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "ALTER TABLE `user_words` ADD COLUMN `deliberateCapitals` " +
-                        "INTEGER NOT NULL DEFAULT 0",
-                )
-            }
-        }
-
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -186,6 +158,34 @@ abstract class BorderKeysDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_user_trigrams_previousWord1` " +
                         "ON `user_trigrams` (`previousWord1`)",
+                )
+            }
+        }
+
+        /**
+         * Clipboard entries gained a URI and a MIME type, so an image can be remembered
+         * alongside text. Added as nullable columns rather than a new table: an image clip is
+         * a clipboard entry in every respect that matters -- it expires, it pins, it is listed
+         * in the same order -- and a second table would have to be merged back on every read.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `uri` TEXT")
+                db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `mimeType` TEXT")
+            }
+        }
+
+        /**
+         * Personal words gain a count of how many times they were committed with a deliberate
+         * capital first letter -- see [com.borderkeys.data.entity.UserWord.deliberateCapitals].
+         * Additive like the clipboard columns above: an existing row simply starts at zero,
+         * which is exactly "no evidence yet" rather than a value that has to be backfilled.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `user_words` ADD COLUMN `deliberateCapitals` " +
+                        "INTEGER NOT NULL DEFAULT 0",
                 )
             }
         }

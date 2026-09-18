@@ -878,7 +878,7 @@ class KeyboardCanvasView(
      * The lock light: caps lock is otherwise invisible, since every other letter on the board
      * already looks identical whether shift is on for one character or locked -- see
      * [shiftState]'s own doc. A fixed colour rather than a themed one, the same reasoning as
-     * `ComposerView.insertGreen`: a lit indicator reads by its colour before anything else, and
+     * the draft box's Insert button: a lit indicator reads by its colour before anything else, and
      * a theme whose accent sits close to the key's own fill would make it hardest to notice on
      * the one keyboard where it matters most that it is still on.
      */

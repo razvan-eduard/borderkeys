@@ -114,6 +114,17 @@ val composeDependencyGroups = listOf(
 )
 
 /**
+ * The text-selection menu entries that run the assistant, which the core build must not carry
+ * -- see app/src/core/AndroidManifest.xml. Full names, as the merged manifest spells them.
+ */
+val assistantOnlyComponents = listOf(
+    "com.borderkeys.settings.ProcessTextCorrectAlias",
+    "com.borderkeys.settings.ProcessTextShortenAlias",
+    "com.borderkeys.settings.ProcessTextSummariseAlias",
+    "com.borderkeys.settings.ProcessTextCustomAlias",
+)
+
+/**
  * Fails the build when a merged manifest declares a networking permission.
  *
  * Reads the merged artifact rather than the module's own manifest on purpose: the module
@@ -126,6 +137,15 @@ abstract class VerifyNoInternetPermission : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val mergedManifests: ConfigurableFileCollection
 
+    /**
+     * Component names that must not appear in these manifests -- the assistant's PROCESS_TEXT
+     * entries, for the core flavor. :settings declares them for both flavors, since a library
+     * manifest cannot tell flavors apart; app/src/core/AndroidManifest.xml removes them again;
+     * this is what notices if that removal ever stops matching what :settings declares.
+     */
+    @get:Input
+    abstract val forbiddenComponents: ListProperty<String>
+
     @get:OutputFile
     abstract val receipt: RegularFileProperty
 
@@ -137,6 +157,12 @@ abstract class VerifyNoInternetPermission : DefaultTask() {
         mergedManifests.files.filter { it.isFile }.sortedBy { it.absolutePath }.forEach { manifest ->
             inspected += manifest.absolutePath
             val text = manifest.readText()
+            forbiddenComponents.get().forEach { component ->
+                if (text.contains("android:name=\"$component\"")) {
+                    violations += "$component declared in ${manifest.absolutePath} " +
+                        "(an assistant entry in a build without the assistant)"
+                }
+            }
             PERMISSION_ELEMENT.findAll(text).forEach { match ->
                 val element = match.value
                 // `tools:node="remove"` is a request to delete a permission, not to declare
@@ -299,6 +325,11 @@ project(":app") {
                     // Resolves to build/intermediates/merged_manifests/<variant>/AndroidManifest.xml,
                     // but asking the artifact API for it also wires the producer dependency.
                     mergedManifests.from(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                    // The assistant's own PROCESS_TEXT entries must not survive the merge into
+                    // the core build -- see app/src/core/AndroidManifest.xml.
+                    forbiddenComponents.set(
+                        if (variant.flavorName == "core") assistantOnlyComponents else emptyList(),
+                    )
                     receipt.set(
                         app.layout.buildDirectory.file(
                             "reports/borderkeys/no-internet-permission-${variant.name}.txt",

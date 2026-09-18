@@ -60,10 +60,10 @@ android {
         // the code is not in it" guarantee the assistant already has.
         //
         // Wired into Engine::create() (2026-09-13), gated behind an "experimental swipe model"
-        // preference, off by default -- see docs/licensing.md section 2.5, tools/swipe_model/,
-        // and HANDOFF.md's Thread 4 for the checkpoint's current known caveat (a training-time
-        // scale bug, compensated in gesture/tcn_decoder.cpp, tracked for removal once a
-        // checkpoint trained under the fix lands).
+        // preference, off by default -- see docs/licensing.md section 2.5 and tools/swipe_model/.
+        // The checkpoint that shipped with a training-time scale bug, compensated at runtime in
+        // gesture/tcn_decoder.cpp, was replaced on 2026-09-16 by one trained under the fix; the
+        // shim went with it.
         create("plus") {
             dimension = "engine"
             externalNativeBuild {

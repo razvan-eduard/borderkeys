@@ -6,7 +6,6 @@ package com.borderkeys.ime
 import android.content.res.AssetManager
 import org.json.JSONException
 import org.json.JSONObject
-import com.borderkeys.i18n.Keys
 
 /**
  * Reads a layout asset into a [KeyboardLayout].
@@ -58,11 +57,11 @@ object LayoutLoader {
         if (rows.isEmpty()) {
             throw JSONException("a layout needs at least one row with at least one key")
         }
+        // The asset's "label" is not read: nothing shows a layout's name, and the value the
+        // files carry is an English word, not a catalogue key -- the one place it could have
+        // been shown would have shown it untranslated.
         return KeyboardLayout(
             id = root.optString("id", "unnamed"),
-            // A catalogue key, not text: the loader runs off the UI thread with no catalogue
-            // in hand, and the label is only ever shown by something that has one.
-            label = root.optString("label", Keys.LAYOUT_KEYBOARD_2),
             languageTag = root.optString("languageTag", "und"),
             rows = rows,
         )

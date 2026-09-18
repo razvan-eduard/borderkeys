@@ -16,8 +16,7 @@ package com.borderkeys.data.assist
  */
 object AssistProtocol {
 
-    /** The service the keyboard binds to, by name. */
-    const val SERVICE_PACKAGE_SUFFIX = ""
+    /** The service the keyboard binds to, by name, inside its own package. */
     const val SERVICE_CLASS = "com.borderkeys.assist.TextAssistService"
 
     // ---- messages -------------------------------------------------------------------------

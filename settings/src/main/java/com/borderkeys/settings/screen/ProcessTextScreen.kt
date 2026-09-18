@@ -146,19 +146,19 @@ import kotlinx.coroutines.launch
  * The draft box, reached from a selection in *any* application rather than from inside the
  * keyboard.
  *
- * That distinction is the whole reason this screen exists. The keyboard's own composer
- * (`ComposerView`, in `:keyboard`) can only ever be opened while the software keyboard is on
- * screen, which Android only shows over a focused editable field -- so it can rewrite a message
- * you are drafting, but never a paragraph you are merely reading. `ACTION_PROCESS_TEXT` is
- * Android's own mechanism for the second case: an entry in every application's text-selection
- * menu, offered for *any* selection, editable or not, with no keyboard involved at all.
+ * That distinction is the whole reason this screen exists. The keyboard's Compose quick action
+ * can only be tapped while the software keyboard is on screen, which Android only shows over a
+ * focused editable field -- so it can rewrite a message you are drafting, but never a paragraph
+ * you are merely reading. `ACTION_PROCESS_TEXT` is Android's own mechanism for the second case:
+ * an entry in every application's text-selection menu, offered for *any* selection, editable or
+ * not, with no keyboard involved at all.
  *
- * A fresh screen rather than a reuse of `ComposerView`. That view exists to be typed into by the
- * keyboard's *own* key-press handling through a fake `InputConnection`
- * (`ComposerInputConnection`) -- it has no way to accept ordinary typing from whatever keyboard
- * happens to be active while a plain Activity is on screen, which is the normal case here. What
- * *is* reused is everything underneath the drawing: [Composer], the pure version graph, and
- * [AssistClient], which was already `Context`-generic and needed no change at all.
+ * One screen serves both. The quick action launches this activity too (`DraftProtocol`, see
+ * [com.borderkeys.settings.SettingsActivity]), so there is a single draft box, typed into by
+ * whatever keyboard is active while a plain Activity is on screen -- the in-keyboard view it
+ * once had, drawn on the keyboard's own canvas and fed through a fake `InputConnection`, is
+ * gone. What it shares with the keyboard underneath the drawing is [Composer], the pure version
+ * graph, and [AssistClient], which was already `Context`-generic.
  */
 @Composable
 fun ProcessTextScreen(
@@ -1258,7 +1258,7 @@ fun ProcessTextScreen(
                             Icon(
                                 painter = painterResource(R.drawable.bk_composer_insert),
                                 contentDescription = strings[Keys.COMPOSER_INSERT],
-                                // Fixed, not the theme's colour -- see ComposerView.insertGreen. A
+                                // Fixed, not the theme's colour -- see INSERT_GREEN's own doc. A
                                 // play button reads as "send" by its colour before its shape, and a
                                 // theme with a red or orange accent would otherwise tint the one
                                 // affirmative action on the bar to look like a stop.
@@ -1419,8 +1419,9 @@ private fun NotDefaultKeyboardBox(
     }
 }
 
-/** Mirrors ComposerView.insertGreen; kept as its own constant rather than shared across a
- *  Compose/Canvas boundary neither side has a reason to cross for one colour. */
+/** The same green as the keyboard's caps-lock light (KeyboardCanvasView's shiftLockLedPaint);
+ *  kept as its own constant rather than shared across a Compose/Canvas boundary neither side has
+ *  a reason to cross for one colour. */
 private val INSERT_GREEN = Color(0xFF43A047)
 
 /**
@@ -2042,13 +2043,6 @@ private fun SavePromptRow(
 }
 
 /**
- * What the working overlay says while a request is in flight -- what it is actually doing,
- * not a generic "Working," and specific about which language or which tone rather than a bare
- * "Translating" or "Changing tone." An exhaustive `when` on purpose and no `else`: a task added
- * to AssistTask.kt without a line added here is a compile error, not a silent fallback to a
- * label that says nothing about what that new task does.
- */
-/**
  * A multiplier on the field's own ambient text size for [KeyboardPreferences.composerTextSize]'s
  * three steps -- Medium is exactly the size the field already had before this setting existed,
  * so nobody's box changes size until they actually reach for the new control.
@@ -2059,6 +2053,13 @@ private fun composerFontScale(step: Int): Float = when (step) {
     else -> 1f
 }
 
+/**
+ * What the working overlay says while a request is in flight -- what it is actually doing,
+ * not a generic "Working," and specific about which language or which tone rather than a bare
+ * "Translating" or "Changing tone." An exhaustive `when` on purpose and no `else`: a task added
+ * to AssistTask.kt without a line added here is a compile error, not a silent fallback to a
+ * label that says nothing about what that new task does.
+ */
 private fun workingLabel(strings: com.borderkeys.i18n.LanguageManager, task: AssistTask): String =
     when (task) {
         AssistTask.SUMMARISE -> strings[Keys.COMPOSER_WORKING_SUMMARISE]

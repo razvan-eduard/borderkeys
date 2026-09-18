@@ -43,7 +43,6 @@ import com.borderkeys.data.assist.KnownAssistModels
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.CautionNote
 import com.borderkeys.settings.DefaultableSlider
-import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LinkedText
 import com.borderkeys.settings.SettingsSectionCard
@@ -72,6 +71,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
     )
     var importing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var removingModel by remember { mutableStateOf<com.borderkeys.data.entity.AssistModelEntry?>(null) }
     // Set only right after a successful import, to the URI just imported from -- asked about
     // there rather than upfront, so the choice is "delete the file that became this model" with
     // the model already sitting safely in the list, not a checkbox ticked in advance of an
@@ -138,7 +138,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                                     Text(strings[Keys.ASSISTANT_ACTIVATE])
                                 }
                             }
-                            TextButton(onClick = { scope.launch { repository.remove(model) } }) {
+                            TextButton(onClick = { removingModel = model }) {
                                 Text(strings[Keys.ASSISTANT_REMOVE])
                             }
                         }
@@ -271,6 +271,25 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 strings[Keys.ASSISTANT_IT_IS_REACHED_ONLY_FROM_A],
             )
         }
+    }
+
+    // Asked first: the model's own copy is hundreds of megabytes that took a while to import,
+    // and the original may already have been deleted at this screen's own suggestion.
+    removingModel?.let { model ->
+        AlertDialog(
+            onDismissRequest = { removingModel = null },
+            title = { Text(strings[Keys.ASSISTANT_REMOVE_MODEL_TITLE]) },
+            text = { Text(strings.getString(Keys.THEME_DELETE_THEME_MESSAGE, model.displayName)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    removingModel = null
+                    scope.launch { repository.remove(model) }
+                }) { Text(strings[Keys.ASSISTANT_REMOVE], color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { removingModel = null }) { Text(strings[Keys.ASSISTANT_CANCEL]) }
+            },
+        )
     }
 
     offeringDeleteSource?.let { uri ->

@@ -14,12 +14,6 @@
 namespace borderkeys {
 namespace {
 
-// A snapshot is our own file in our own private storage, but it is still parsed after coming
-// off a disk that a crash may have truncated mid-write, so it carries the same magic-and-
-// version discipline as a language pack.
-constexpr uint32_t kSnapshotMagic = 0x314B5542u;  // 'B','U','K','1'
-constexpr uint32_t kSnapshotVersion = 1u;
-constexpr uint32_t kMaxSnapshotEntries = 1000000u;
 constexpr uint32_t kMaxWordBytes = 256u;
 constexpr int kMaxWordCodePoints = 64;
 
@@ -489,102 +483,6 @@ int UserModel::completions(const uint32_t* foldedPrefix, int prefixLength, Compl
     int written = 0;
     collect(node, out, maxOut, &written);
     return written;
-}
-
-bool UserModel::snapshot(const char* path) const {
-    if (path == nullptr) {
-        return false;
-    }
-    // Written to a sibling and renamed, so that a process killed mid-write leaves the previous
-    // snapshot intact rather than a truncated one that restore() would then have to reject.
-    std::string temporary(path);
-    temporary += ".tmp";
-
-    std::FILE* const file = std::fopen(temporary.c_str(), "wb");
-    if (file == nullptr) {
-        return false;
-    }
-
-    bool ok = true;
-    const uint32_t header[4] = {kSnapshotMagic, kSnapshotVersion,
-                                static_cast<uint32_t>(entries_.size()), totalCount_};
-    ok = ok && std::fwrite(header, sizeof(header), 1, file) == 1;
-    for (size_t i = 0; ok && i < entries_.size(); ++i) {
-        const Entry& entry = entries_[i];
-        const uint32_t length = static_cast<uint32_t>(entry.text.size());
-        ok = ok && std::fwrite(&entry.count, sizeof(entry.count), 1, file) == 1;
-        ok = ok && std::fwrite(&length, sizeof(length), 1, file) == 1;
-        ok = ok && (length == 0 || std::fwrite(entry.text.data(), 1, length, file) == length);
-    }
-    ok = (std::fclose(file) == 0) && ok;
-    if (!ok) {
-        std::remove(temporary.c_str());
-        return false;
-    }
-    if (std::rename(temporary.c_str(), path) != 0) {
-        std::remove(temporary.c_str());
-        return false;
-    }
-    return true;
-}
-
-bool UserModel::restore(const char* path) {
-    if (path == nullptr) {
-        return false;
-    }
-    std::FILE* const file = std::fopen(path, "rb");
-    if (file == nullptr) {
-        return false;
-    }
-
-    uint32_t header[4];
-    if (std::fread(header, sizeof(header), 1, file) != 1 || header[0] != kSnapshotMagic ||
-        header[1] != kSnapshotVersion || header[2] > kMaxSnapshotEntries) {
-        std::fclose(file);
-        return false;
-    }
-
-    clear();
-    const uint32_t declared = header[2];
-    char buffer[kMaxWordBytes];
-    for (uint32_t i = 0; i < declared; ++i) {
-        uint32_t count = 0;
-        uint32_t length = 0;
-        if (std::fread(&count, sizeof(count), 1, file) != 1 ||
-            std::fread(&length, sizeof(length), 1, file) != 1 || length > kMaxWordBytes) {
-            // Truncated or nonsense: keep whatever was read so far rather than throwing away a
-            // dictionary because its tail was lost, and report the failure so the caller can
-            // fall back to the database, which is the authoritative copy anyway.
-            std::fclose(file);
-            return false;
-        }
-        if (length != 0 && std::fread(buffer, 1, length, file) != length) {
-            std::fclose(file);
-            return false;
-        }
-        if (length == 0 || count == 0) {
-            continue;
-        }
-        uint32_t folded[kMaxWordCodePoints];
-        const int folds = foldUtf8(buffer, length, folded, kMaxWordCodePoints);
-        if (folds <= 0) {
-            continue;
-        }
-        int32_t node = 0;
-        for (int c = 0; c < folds; ++c) {
-            node = childOfOrCreate(node, folded[c]);
-        }
-        if (nodes_[node].entryIndex < 0) {
-            nodes_[node].entryIndex = static_cast<int32_t>(entries_.size());
-            entries_.push_back(Entry{std::string(buffer, length), 0u});
-        }
-        Entry& entry = entries_[static_cast<size_t>(nodes_[node].entryIndex)];
-        entry.text.assign(buffer, length);
-        entry.count = count;
-    }
-    totalCount_ = header[3];
-    std::fclose(file);
-    return true;
 }
 
 }  // namespace borderkeys

@@ -13,7 +13,7 @@ import com.borderkeys.i18n.Keys
  * `entries` gives the back stack something cheap to hold.
  *
  * Not `navigation-compose`: that would bring a graph builder, a route parser and argument
- * encoding to move between thirteen screens that pass nothing to each other.
+ * encoding to move between sixteen screens that pass nothing to each other.
  */
 enum class Screen(val titleKey: String) {
     Home(Keys.SCREEN_BORDERKEYS),

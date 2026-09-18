@@ -47,6 +47,7 @@ import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.isBorderKeysDefault
 import com.borderkeys.settings.isBorderKeysEnabled
 import com.borderkeys.settings.openKeyboardPicker
+import com.borderkeys.settings.rememberResumedCount
 import com.borderkeys.settings.siblingPackage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -77,17 +78,7 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
     // settings, and every button here sends the user out to change them -- a screen that read
     // them once at composition would show the state they were in before the user did the thing
     // it asked for, and the step below would stay locked after being finished.
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    var resumed by remember { mutableStateOf(0) }
-    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                resumed += 1
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+    val resumed by rememberResumedCount()
     val enabled = remember(resumed) { isBorderKeysEnabled(context) }
     val isDefault = remember(resumed) { isBorderKeysDefault(context) }
 

@@ -42,6 +42,10 @@ class LanguageRevertPanelView(
     var listener: Listener? = null
 
     private var rows: List<LanguageSwitchCorrector.Replacement> = emptyList()
+
+    /** What [drawRow] paints for each of [rows], built when the rows are set rather than
+     *  concatenated afresh on every frame -- the draw path allocates nothing. */
+    private var rowTexts: List<String> = emptyList()
     private var pressedRow = -1
     private var pressedDismiss = false
     private var rowHeightPx = 0f
@@ -68,17 +72,20 @@ class LanguageRevertPanelView(
 
     /** Replaces the offered list -- always the whole thing, since one flip is checked once. */
     fun offer(replacements: List<LanguageSwitchCorrector.Replacement>) {
-        rows = replacements.take(MAX_SHOWN)
-        requestLayout()
-        invalidate()
+        setRows(replacements.take(MAX_SHOWN))
     }
 
     /** Removes one row after it was applied, returning how many are left. */
     fun remove(replacement: LanguageSwitchCorrector.Replacement): Int {
-        rows = rows.filterNot { it == replacement }
+        setRows(rows.filterNot { it == replacement })
+        return rows.size
+    }
+
+    private fun setRows(replacements: List<LanguageSwitchCorrector.Replacement>) {
+        rows = replacements
+        rowTexts = replacements.map { "${it.previousText} $ARROW ${it.text}" }
         requestLayout()
         invalidate()
-        return rows.size
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -122,7 +129,7 @@ class LanguageRevertPanelView(
         val midY = top + rowHeightPx / 2f + paints.labelBaselineOffsetPx
         val previous = paints.label.textAlign
         paints.label.textAlign = Paint.Align.LEFT
-        val text = "${replacement.previousText} $ARROW ${replacement.text}"
+        val text = rowTexts[index]
         canvas.save()
         canvas.clipRect(0f, top, width - dismissWidth, bottom)
         canvas.drawText(text, paints.rowHeightPx * 0.3f, midY, paints.label)

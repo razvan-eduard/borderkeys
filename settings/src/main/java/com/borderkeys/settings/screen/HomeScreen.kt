@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,21 +29,25 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.keyboard.R
-import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.Screen
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.isBorderKeysDefault
 import com.borderkeys.settings.isBorderKeysEnabled
+import com.borderkeys.settings.rememberResumedCount
 import com.borderkeys.settings.siblingPackage
 
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
     val strings = LocalStrings.current
     val context = LocalContext.current
-    val enabled = isBorderKeysEnabled(context)
-    val isDefault = isBorderKeysDefault(context)
+    // Re-read whenever this screen comes back to the front, the same way Setup does: both
+    // answers live in system settings, the setup card sends the person out to change them, and
+    // a card that asked only once kept saying "not enabled" after they had enabled it.
+    val resumed by rememberResumedCount()
+    val enabled = remember(resumed) { isBorderKeysEnabled(context) }
+    val isDefault = remember(resumed) { isBorderKeysDefault(context) }
     // Resolving the service is the only honest way to ask "is this the plus build": the class is
     // simply absent otherwise, and a BuildConfig flag would be a claim rather than a fact.
     val hasAssistant = remember(context) {

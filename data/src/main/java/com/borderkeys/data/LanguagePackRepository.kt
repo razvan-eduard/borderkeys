@@ -34,6 +34,9 @@ class LanguagePackRepository internal constructor(
 
     suspend fun enabledPacks(): List<LanguagePackEntry> = dao.enabledPacks()
 
+    /** How many packs are switched on -- what the [MAX_ENABLED] limit is checked against. */
+    suspend fun enabledCount(): Int = dao.enabledPacks().size
+
     /**
      * Every installed pack, enabled or not.
      *
@@ -44,6 +47,36 @@ class LanguagePackRepository internal constructor(
     suspend fun allPacks(): List<LanguagePackEntry> = packs.first()
 
     fun fileFor(entry: LanguagePackEntry): File = File(packsDirectory, entry.fileName)
+
+    /**
+     * The SHA-256 of every pack file hashed in this process, keyed by path and remembered with
+     * the size and modification time it was hashed at.
+     *
+     * A pack is tens of megabytes and is asked about more than once: the repair pass at start,
+     * the integrity sweep after it, and both again whenever the pack list changes. Hashing each
+     * file once per process is the whole difference between a start that reads every pack once
+     * and one that reads it three times. The size and time in the entry are what notice a file
+     * rewritten in place; [stage] seeds the entry for what it just wrote, since it already
+     * hashed the bytes on the way through.
+     */
+    private val hashes = HashMap<String, CachedHash>()
+
+    private class CachedHash(val sizeBytes: Long, val modifiedAt: Long, val sha256: String)
+
+    /** [sha256Of], remembered per file until its size or modification time changes. */
+    fun cachedSha256(file: File): String {
+        val size = file.length()
+        val modified = file.lastModified()
+        synchronized(hashes) {
+            val cached = hashes[file.path]
+            if (cached != null && cached.sizeBytes == size && cached.modifiedAt == modified) {
+                return cached.sha256
+            }
+        }
+        val sha256 = sha256Of(file)
+        synchronized(hashes) { hashes[file.path] = CachedHash(size, modified, sha256) }
+        return sha256
+    }
 
     /**
      * Result of copying a candidate into private storage. The caller validates it natively --
@@ -101,7 +134,11 @@ class LanguagePackRepository internal constructor(
             destination.delete()
             return Result.failure(error)
         }
-        return Result.success(StagedPack(destination, total, digest.digest().toHexString()))
+        val sha256 = digest.digest().toHexString()
+        synchronized(hashes) {
+            hashes[destination.path] = CachedHash(total, destination.lastModified(), sha256)
+        }
+        return Result.success(StagedPack(destination, total, sha256))
     }
 
     suspend fun register(entry: LanguagePackEntry): Long = dao.insert(entry)
@@ -142,7 +179,7 @@ class LanguagePackRepository internal constructor(
         val failed = ArrayList<LanguagePackEntry>()
         for (entry in dao.enabledPacks()) {
             val file = fileFor(entry)
-            val actual = runCatching { sha256Of(file) }.getOrNull()
+            val actual = runCatching { cachedSha256(file) }.getOrNull()
             if (actual == null || actual != entry.sha256 || file.length() != entry.sizeBytes) {
                 dao.markIntegrityFailure(entry.id, now())
                 failed += entry
@@ -154,6 +191,17 @@ class LanguagePackRepository internal constructor(
     companion object {
         /** Matches kMaxPackBytes in bkd_format.hpp. Checked on both sides, on purpose. */
         const val MAX_PACK_BYTES: Long = 64L * 1024L * 1024L
+
+        /**
+         * How many packs may be switched on at once. Matches `Engine::kMaxPacks` in
+         * engine.hpp -- LanguagePackLimitTest reads that header and fails if the two drift.
+         *
+         * Enforced here, in Settings and in the keyboard's own load, because the native bridge
+         * refuses more tags than the engine has slots for outright: six dictionaries ship, and
+         * a fifth one switched on used to leave the keyboard with no prediction at all and no
+         * word on screen about why.
+         */
+        const val MAX_ENABLED = 4
 
         fun sha256Of(file: File): String {
             val digest = MessageDigest.getInstance("SHA-256")

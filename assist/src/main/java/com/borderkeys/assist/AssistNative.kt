@@ -83,8 +83,9 @@ internal object AssistNative {
      */
     external fun nativeRun(
         handle: Long,
-        instruction: String,
-        text: String,
+        /** UTF-8 bytes, not a String, in both directions -- see TextAssistService's call site. */
+        instruction: ByteArray,
+        text: ByteArray,
         outputRatio: Float,
         minOutputTokens: Int,
         maxOutputTokensCeiling: Int,
@@ -93,7 +94,7 @@ internal object AssistNative {
         cleanFormatting: Boolean,
         outStatus: IntArray,
         outTruncated: BooleanArray,
-    ): String?
+    ): ByteArray?
 
     /** Asks the running generation to stop at the next token. Safe from another thread. */
     external fun nativeCancel(handle: Long)

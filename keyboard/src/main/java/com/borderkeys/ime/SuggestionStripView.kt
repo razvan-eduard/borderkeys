@@ -76,11 +76,9 @@ class SuggestionStripView(
         fun onSuggestionLongPressed(index: Int, word: String)
 
         /**
-         * One of the assistant's actions was tapped.
-         *
-         * The strip carries these because a text selection and a word in progress cannot both
-         * exist: while text is selected there is nothing to suggest, so the row is free, and
-         * putting the actions where the user is already looking beats a button they must find.
+         * One of the strip's own action chips was tapped -- today only the "Forget / Cancel"
+         * pair a held suggestion turns the row into ([actionMode]). The assistant's actions
+         * lived here once; they are reached through the draft box now and never from the strip.
          */
         fun onActionPicked(index: Int)
 
@@ -88,7 +86,8 @@ class SuggestionStripView(
         fun onClipboardPicked()
     }
 
-    /** True while the strip is showing assistant actions rather than word suggestions. */
+    /** True while the strip is showing action chips (the forget-this-word question) rather than
+     *  word suggestions. */
     var actionMode: Boolean = false
         private set
 
@@ -825,9 +824,8 @@ class SuggestionStripView(
         private const val MIN_TEXT_SCALE = 0.62f
 
         /**
-         * Deliberately not translatable through resources yet: it is drawn from a fixed
-         * `CharArray` on a path that must not allocate, and localisation of the keyboard's own
-         * chrome arrives with the settings screen.
+         * An ellipsis, not a sentence -- nothing to translate. Drawn from a fixed `CharArray`
+         * on a path that must not allocate.
          */
         private const val DECODING_NOTICE = "…"
     }

@@ -91,7 +91,13 @@ class BackupRepository(
         // that has forgotten exactly the uncommon words it was worth carrying for.
         val words = if (parts.dictionary) {
             database.userWordDao().topWords(Int.MAX_VALUE).map {
-                BackupWord(word = it.word, locale = it.locale, count = it.count)
+                BackupWord(
+                    word = it.word,
+                    locale = it.locale,
+                    count = it.count,
+                    lastUsedAt = it.lastUsedAt,
+                    deliberateCapitals = it.deliberateCapitals,
+                )
             }
         } else {
             emptyList()
@@ -258,10 +264,18 @@ class BackupRepository(
                             word = it.word,
                             locale = it.locale,
                             delta = it.count,
-                            lastUsedAt = stamp,
+                            // A file from before the stamp travelled carries zero and reads as
+                            // "used now" -- what every restored word got back then. A real
+                            // stamp comes across, so decay picks up where the old device left it.
+                            lastUsedAt = if (it.lastUsedAt > 0L) it.lastUsedAt else stamp,
                         )
                     },
                 )
+                for (word in payload.words) {
+                    if (word.deliberateCapitals > 0) {
+                        database.userWordDao().raiseDeliberateCapitals(word.word, word.deliberateCapitals)
+                    }
+                }
                 database.userBigramDao().incrementAll(
                     payload.bigrams.map {
                         LearnedBigram(
