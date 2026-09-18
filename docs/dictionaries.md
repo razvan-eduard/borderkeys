@@ -120,32 +120,53 @@ written into the compiled `.tsv` with a third column, `name`, which `build_dict.
 regardless of typed case or shift state" (`AutoCorrection.matchCase` in
 `keyboard/src/main/java/com/borderkeys/ime/AutoCorrection.kt`).
 
-Pass the language's grammar too, when there is one (`--grammar dictionaries/ro_RO.pos`): Wikidata
-knows enough real people called "In", "To", "Said" and "Will" for those to pass the family-name
-threshold, and flagged they were capitalised every time anyone typed them. The treebank behind
-the `.pos` file has already decided what each ordinary word is, so a name it tags as a
-preposition, a verb or an adjective is not flagged; a word it has never seen keeps the flag,
-because absence from a treebank is not evidence of anything. Family names in particular need a
-lower threshold than the default 50 to reach past the handful every language shares
-(`--min-family-uses 5` is what the Romanian list was built with -- "Sadoveanu" has nowhere near
-fifty Wikidata people, and neither does most of the country's surnames). A list fetched that low
-is passed as `--names-flag-only`: a name the corpus already has gains the flag, one it does not
-have is left out, because a hundred thousand surnames at a flat frequency would outrank the
-corpus's own tail. What the treebank does not know it cannot refuse -- "asa", "cat", "tu", "cui"
-are all somebody's name -- so `dictionaries/<tag>.names-exclude` lists those by hand, one per
-line, and `--names-exclude` reads it.
+A name list is only half of it, because a name and an ordinary word can be the same string:
+"Dan" is a Romanian word and a first name, "Mai" is May and a Vietnamese name, "President" is
+a real surname. Wikidata is right about all of them, and a keyboard that capitalised every
+"mai" would be worse than one that missed "Sadoveanu". So `make_pack.py` decides, per word,
+whether the flag may be applied, from three things it knows:
+
+- **What the treebank says.** Pass the language's grammar (`--grammar dictionaries/ro_RO.pos`):
+  a word the treebank behind it tags as a preposition, a verb or an adjective is never flagged,
+  however many people are called that. The accent-stripped match is weighed, not applied
+  blindly: "și" outranks "si" in the corpus and refuses it, but "măria" (41 uses) must not
+  refuse "Maria" (7,149), so the ordinary word has to be at least as frequent as the name. A
+  word among the 300 most frequent that the treebank has no tag for at all is one it splits
+  before tagging ("del", "au", "zur" are multiword tokens in Universal Dependencies), and is
+  refused too.
+- **How many people carry the name.** `make_names.py` writes that count as a fourth column, and
+  `make_pack.py` demands more of it the more common the word is in the corpus
+  (`NAME_EVIDENCE_TIERS`): thousands of people for a word among the 300 most frequent, a few
+  hundred up to rank 1,000, single digits past rank 3,000. Read off the Romanian data: real
+  first names at ranks 300-1000 carry 400-800 people ("Mihai", "Vasile", "Iulia"), the words that
+  must not be flagged carry under 200 ("satu", "tine"); past rank 1,000 a surname is a small
+  family ("Trump" 82, "Năstase" 28), so the bar drops with the rank.
+- **A hand-kept list.** What neither of the above catches -- "asa", "cat", "tu", "cui" are all
+  somebody's name and none of it is in the treebank -- goes in
+  `dictionaries/<tag>.names-exclude`, one word per line, read by `--names-exclude`.
+
+A name the corpus never wrote down is added at the flat frequency only with fifty people behind
+it (`NAME_ADD_MIN_USES`), which keeps the additions to roughly a tenth of the corpus's own size;
+the given-name tail alone is over a hundred thousand labels a language, most of them a handful
+of people each. `--names-flag-only` is the same rule without the additions.
+
+Two things the fetch itself has to get right. Wikidata types most given names as a *male*,
+*female* or *unisex* given name rather than as the bare class, so a query for "given name"
+alone finds the rarer items and misses "Maria" and "Laurențiu"; `make_names.py` asks for all
+four classes. And family names need a lower floor than the 50 the first lists used
+(`--min-family-uses 5`): "Sadoveanu" has nowhere near fifty Wikidata people, and neither does
+most of the country's surnames -- the tiers above are what keeps that low floor safe.
 
 Coverage is genuinely uneven across languages -- Wikidata's own editor base skews toward
 English/German/French/Spanish, and Romanian will come back with fewer names than those do. That
 is `make_names.py` reporting the real state of a free source, not a bug to chase; its own printed
 count is the number to look at before deciding a language's list is worth shipping.
 
-All six bundled lists have been through this: the names merged in, the treebank guard and the
-exclusion lists applied, and the Romanian family names refetched at the lower threshold. The
-committed `dictionaries/*.tsv` are the result, and the keyboard's own rule for using the flag
-is one more check: with several packs active, every pack that knows a word has to agree it is a
-name before it is capitalised, so a name in one language's list cannot capitalise an ordinary
-word of another's.
+All six bundled lists have been through this, from a fetch of all four given-name classes with
+the family floor at 5. The committed `dictionaries/*.tsv` are the result, and the keyboard's
+own rule for using the flag is one more check: with several packs active, every pack that knows
+a word has to agree it is a name before it is capitalised, so a name in one language's list
+cannot capitalise an ordinary word of another's.
 
 ## Shipping one with the application
 

@@ -183,16 +183,117 @@ def strip_accents(word: str) -> str:
                    if unicodedata.category(c) != "Mn")
 
 
-def is_ordinary(name: str, ordinary: set[str]) -> bool:
-    """Whether a name from the list is really one of [ordinary]'s words -- compared without
-    accents on both sides, because the compiler folds accents away too: "Sá" (a Portuguese
-    surname) lands on the same trie entry as "să" (Romanian "to"), the flag is OR'd across the
-    spellings that fold together, and every "sa" anyone typed came out "Să"."""
+def is_ordinary(name: str, ordinary: "OrdinaryWords", frequencies: dict[str, int]) -> bool:
+    """Whether a name from the list is really one of the language's ordinary words.
+
+    An exact match on the lower-cased spelling is one. So is a match once accents are stripped
+    from both sides -- the compiler folds accents away too, so "Sá" (a Portuguese surname) lands
+    on the same trie entry as "să" (Romanian "to"), the flag is OR'd across the spellings that
+    fold together, and every "sa" anyone typed came out "Să" -- but only when the ordinary word
+    is at least as frequent in the corpus as the name is: "și" outweighs "si" and refuses it,
+    while "măria" (41 uses) must not refuse "Maria" (7,149), which is what an accent-blind rule
+    did. A name the corpus does not know at all counts as frequency zero, so any real word wins.
+    """
     lowered = name.lower()
-    return lowered in ordinary or strip_accents(lowered) in ordinary
+    if lowered in ordinary.exact:
+        return True
+    accented = ordinary.folded.get(strip_accents(lowered))
+    if accented is None:
+        return False
+    return frequencies.get(accented, 0) >= frequencies.get(lowered, 0)
 
 
-def common_words(grammar: Path) -> set[str]:
+class OrdinaryWords:
+    """[exact]: the treebank's ordinary words, lower-cased. [folded]: the same words keyed by
+    their accent-stripped spelling, keeping the most frequent one where several collide.
+    [proper]: the words the treebank tags as proper nouns, lower-cased -- the one positive
+    signal a treebank gives, read by name_allowed."""
+
+    def __init__(self, exact: set[str], folded: dict[str, str], proper: set[str] | None = None) -> None:
+        self.exact = exact
+        self.folded = folded
+        self.proper = proper or set()
+
+    @staticmethod
+    def empty() -> "OrdinaryWords":
+        return OrdinaryWords(set(), {}, set())
+
+
+# How many real people Wikidata has to know by a name before a word that common in the corpus
+# may capitalise itself every time it is typed: (rank ceiling, people needed). A word among the
+# language's 300 most frequent is almost never written as a name -- "president", "states" and
+# "red" are all somebody's name to Wikidata, and every one of them would have come out
+# capitalised -- so it takes thousands of people to overturn that; a word past the 8,000 most
+# frequent is rare enough that a single recorded person is evidence. Read off the Romanian
+# corpus against the fetch: at ranks 300-1000 the real first names carry 400-800 people
+# ("Mihai" 692, "Vasile" 799, "Iulia" 637) where the words that must not be flagged carry under
+# 200 ("satu" 182, "tine" 49); past rank 1000 a surname is a small family ("Trump" 82,
+# "Dumitrescu" 137, "Năstase" 28) and the threshold has to drop with it. The counts are of
+# people whose name item carries a label in the language, so they run low for names spelled
+# the same everywhere, which is why the lower tiers are single digits.
+NAME_EVIDENCE_TIERS = ((300, 2000), (1000, 400), (3000, 8), (8000, 3))
+
+# A word among this many most frequent that the treebank has no tag for at all is not a word
+# the treebank never met -- it is one it splits before tagging ("del", "au", "zur" are all
+# multiword tokens in Universal Dependencies) -- and never a name. Only the very top: past it,
+# a treebank simply has not seen every real first name ("Iulia", "Dana", "Klaus").
+UNTAGGED_FREQUENT_RANK = 300
+
+# A name the corpus never wrote down is added at the flat frequency only with this many people
+# behind it -- the family-name floor the first bundled lists were built with, which kept them
+# to roughly a tenth of the corpus's own size. Lower, and the given-name tail alone (over a
+# hundred thousand labels a language, most of them a handful of people each) would double the
+# pack and offer names nobody in the language writes.
+NAME_ADD_MIN_USES = 50
+
+
+def name_evidence_needed(rank: int | None) -> int:
+    """People Wikidata must know by a name for a corpus word of [rank] (1 = most frequent, None
+    = not in the corpus) to be flagged -- see NAME_EVIDENCE_TIERS."""
+    if rank is None:
+        return 1
+    for ceiling, needed in NAME_EVIDENCE_TIERS:
+        if rank <= ceiling:
+            return needed
+    return 1
+
+
+def name_allowed(key: str, uses: int, rank: int | None, ordinary: OrdinaryWords, frequencies: dict[str, int]) -> bool:
+    """Whether the corpus word [key] may carry the proper-noun flag on the strength of [uses]
+    people Wikidata knows by that name: never when the treebank calls it an ordinary word,
+    never when it is frequent and the treebank has no tag for it, and otherwise only with as
+    many people behind it as its frequency demands."""
+    if len(key) < 2 or is_ordinary(key, ordinary, frequencies):
+        return False
+    if rank is not None and rank <= UNTAGGED_FREQUENT_RANK and key not in ordinary.proper:
+        return False
+    return uses >= name_evidence_needed(rank)
+
+
+def read_word_list(path: Path) -> set[str]:
+    """One word per line, lower-cased; blank lines and # comments skipped."""
+    return {line.strip().lower() for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.startswith("#")}
+
+
+def read_names(path: Path) -> list[tuple[str, int, int]]:
+    """A make_names.py output: (name, flat frequency, people) per row. Files written before
+    the people count existed carry three columns; those names count as backed by one person,
+    which the tiers above read as "rare word or nothing"."""
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        uses = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 1
+        rows.append((parts[0], int(parts[1]), uses))
+    return rows
+
+
+def common_words(grammar: Path, frequencies: dict[str, int] | None = None) -> OrdinaryWords:
     """Words the language's own treebank tags as something other than a proper noun.
 
     A name list from Wikidata is a classification source (see make_names.py) with no idea that
@@ -206,19 +307,27 @@ def common_words(grammar: Path) -> set[str]:
     """
     data = json.loads(grammar.read_text(encoding="utf-8"))
     tagset = data["tagset"]
-    ordinary: set[str] = set()
+    frequencies = frequencies or {}
+    exact: set[str] = set()
+    folded: dict[str, str] = {}
+    proper: set[str] = set()
     for word, index in data["tags"].items():
         if is_proper_noun_tag(tagset[index]):
+            proper.add(word.lower())
             continue
         lowered = word.lower()
-        ordinary.add(lowered)
+        exact.add(lowered)
         # The spelling without accents too: people type "si" for "și" and "cat" for "cât", the
         # corpus holds both, the treebank only the accented one -- and Wikidata has a family
         # named Si. Folded with Unicode's own decomposition, which is enough to tell "the same
         # word without its accents" from a different word; the engine's own stricter fold
-        # (proximity.cpp) is not needed for that.
-        ordinary.add(strip_accents(lowered))
-    return ordinary
+        # (proximity.cpp) is not needed for that. Weighed, not applied blindly -- see is_ordinary.
+        stripped = strip_accents(lowered)
+        if stripped != lowered:
+            current = folded.get(stripped)
+            if current is None or frequencies.get(lowered, 0) > frequencies.get(current, 0):
+                folded[stripped] = lowered
+    return OrdinaryWords(exact, folded, proper)
 
 
 def read_wordlist(path: Path) -> Counter:
@@ -253,6 +362,9 @@ def main() -> int:
     parser.add_argument("--names-exclude", type=Path,
                         help="one word per line (# comments): names that are really ordinary "
                              "words the grammar does not know -- never flagged, never added")
+    parser.add_argument("--names-include", type=Path,
+                        help="one word per line (# comments): proper nouns the name lists cannot "
+                             "know -- months, weekdays -- flagged whatever the evidence says")
     parser.add_argument("--grammar", type=Path,
                         help="the language's dictionaries/<tag>.pos; a --names entry the treebank "
                              "tags as an ordinary word (a preposition, a verb...) is not flagged")
@@ -309,42 +421,36 @@ def main() -> int:
     # compared lower-case, since the corpus is lower-cased on the way in and the name list is
     # not; the flag is what makes the compiled word capitalise, not the spelling written here.
     proper_nouns: set[str] = set()
-    excluded: set[str] = set()
-    if arguments.names_exclude:
-        excluded = {line.strip().lower()
-                    for line in arguments.names_exclude.read_text(encoding="utf-8").splitlines()
-                    if line.strip() and not line.startswith("#")}
+    excluded = read_word_list(arguments.names_exclude) if arguments.names_exclude else set()
+    included = read_word_list(arguments.names_include) if arguments.names_include else set()
+    proper_nouns |= {w for w in included if w in vocabulary}
+    frequencies = {w: c for w, c in ranked}
+    ranks = {w: index + 1 for index, (w, _) in enumerate(ranked)}
+    ordinary = common_words(arguments.grammar, frequencies) if arguments.grammar else OrdinaryWords.empty()
+    ordinary.exact |= excluded
     if arguments.names:
-        ordinary = (common_words(arguments.grammar) if arguments.grammar else set()) | excluded
         refused = 0
-        for line in arguments.names.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split("\t")
-            if len(parts) < 2:
-                continue
-            name, frequency = parts[0], int(parts[1])
+        for name, frequency, uses in read_names(arguments.names):
             key = name.lower()
-            if is_ordinary(name, ordinary):
+            if not name_allowed(key, uses, ranks.get(key), ordinary, frequencies):
                 refused += 1
                 continue
-            proper_nouns.add(key)
             if key not in vocabulary:
+                if uses < NAME_ADD_MIN_USES:
+                    refused += 1
+                    continue
                 ranked.append((key, frequency))
                 vocabulary.add(key)
+            proper_nouns.add(key)
         print(f"names: {len(proper_nouns)} flagged, {refused} refused as ordinary words of the "
               f"language" + ("" if arguments.grammar else " (no --grammar given, so none refused)"),
               file=sys.stderr)
     if arguments.names_flag_only:
-        ordinary = (common_words(arguments.grammar) if arguments.grammar else set()) | excluded
         gained = 0
-        for line in arguments.names_flag_only.read_text(encoding="utf-8").splitlines():
-            parts = line.strip().split("\t")
-            if len(parts) < 2 or parts[0].startswith("#"):
-                continue
-            key = parts[0].lower()
-            if key in vocabulary and not is_ordinary(key, ordinary) and key not in proper_nouns:
+        for name, _, uses in read_names(arguments.names_flag_only):
+            key = name.lower()
+            if key in vocabulary and key not in proper_nouns and \
+                    name_allowed(key, uses, ranks.get(key), ordinary, frequencies):
                 proper_nouns.add(key)
                 gained += 1
         print(f"names: {gained} corpus words gained the flag from --names-flag-only", file=sys.stderr)

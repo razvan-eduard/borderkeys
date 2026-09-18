@@ -2,3 +2,7 @@
 # (or knows only as a name), so make_pack.py's --grammar guard cannot refuse them. One per line,
 # case does not matter; listed here a word keeps its corpus row and never gains the flag.
 don
+el
+nice
+rose
+van

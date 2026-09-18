@@ -41,11 +41,15 @@ import urllib.request
 
 ENDPOINT = "https://query.wikidata.org/sparql"
 
-# A given name (Q202444) or a family name (Q101352) -- not "subclass of" either, which would
-# pull in every more-specific naming convention Wikidata models (e.g. "Icelandic patronymic") and
-# cost a much more expensive server-side traversal for names this project has no way to render
-# any differently anyway.
-GIVEN_NAME = "Q202444"
+# A given name or a family name (Q101352) -- not "subclass of" either, which would pull in every
+# more-specific naming convention Wikidata models (e.g. "Icelandic patronymic") and cost a much
+# more expensive server-side traversal for names this project has no way to render any
+# differently anyway. Given names are the one place the flat "instance of" read is not enough:
+# Wikidata types most of them as a *male*, *female* or *unisex* given name rather than as the
+# bare class, so a query for Q202444 alone misses "Maria" and "Laurențiu" while finding the
+# rarer items someone typed as plain "given name". The four classes are listed explicitly rather
+# than traversed.
+GIVEN_NAME_CLASSES = ("Q202444", "Q12308941", "Q11879590", "Q3409032")
 FAMILY_NAME = "Q101352"
 
 # One flat tier for every name this script emits -- see the module doc for why a real per-name
@@ -88,14 +92,19 @@ def query_page(language: str, limit: int, offset: int, endpoint: str, min_given_
     # already well-filtered at usage>=1. Confirmed 2026-09-12 that an absolute family-name
     # threshold (50) holds steady (13k-15k) across languages with very different raw sizes
     # (ro/en/de), so this doesn't need to scale per language.
+    # Each branch also returns how many distinct people carry the name: that count is the one
+    # real measure of how established a name is, and make_pack.py weighs it against how common
+    # the same word is in the corpus -- a word among the language's most frequent needs far
+    # more people behind it before it may capitalise itself every time it is typed.
     query = f"""
     PREFIX wd: <http://www.wikidata.org/entity/>
     PREFIX wdt: <http://www.wikidata.org/prop/direct/>
     PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    SELECT DISTINCT ?nameLabel WHERE {{
+    SELECT ?nameLabel ?uses WHERE {{
       {{
-        SELECT ?nameLabel WHERE {{
-          ?name wdt:P31 wd:{GIVEN_NAME} .
+        SELECT ?nameLabel (COUNT(DISTINCT ?person) AS ?uses) WHERE {{
+          VALUES ?givenClass {{ {" ".join("wd:" + q for q in GIVEN_NAME_CLASSES)} }}
+          ?name wdt:P31 ?givenClass .
           ?name rdfs:label ?nameLabel .
           FILTER(LANG(?nameLabel) = "{language}")
           ?person wdt:P735 ?name .
@@ -105,7 +114,7 @@ def query_page(language: str, limit: int, offset: int, endpoint: str, min_given_
       }}
       UNION
       {{
-        SELECT ?nameLabel WHERE {{
+        SELECT ?nameLabel (COUNT(DISTINCT ?person) AS ?uses) WHERE {{
           ?name wdt:P31 wd:{FAMILY_NAME} .
           ?name rdfs:label ?nameLabel .
           FILTER(LANG(?nameLabel) = "{language}")
@@ -128,7 +137,8 @@ def query_page(language: str, limit: int, offset: int, endpoint: str, min_given_
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
                 payload = json.loads(response.read())
-            return [row["nameLabel"]["value"] for row in payload["results"]["bindings"]]
+            return [(row["nameLabel"]["value"], int(row["uses"]["value"]))
+                    for row in payload["results"]["bindings"]]
         except urllib.error.HTTPError as error:
             last_error = error
             if error.code == 429:
@@ -151,7 +161,7 @@ def fetch_names(language: str, limit: int | None, page_size: int, endpoint: str,
                  min_given_uses: int, min_family_uses: int) -> list[str]:
     """Pages through Wikidata until a page comes back short (the real end of the result set) or
     `limit` is reached, whichever comes first."""
-    names: list[str] = []
+    names: list[tuple[str, int]] = []
     offset = 0
     while True:
         page_limit = page_size if limit is None else min(page_size, limit - len(names))
@@ -200,12 +210,16 @@ def main() -> int:
     # A name can legitimately appear more than once across given-name and family-name items
     # (Wikidata models them as separate entities even when the string is identical, e.g. many
     # surnames also exist as given names) -- deduplicated here since the pack format has no use
-    # for the same word twice.
-    unique = sorted(set(names))
+    # for the same word twice, keeping the larger of its people counts. That count goes out as
+    # a fourth column, which make_pack.py reads and build_dict.py ignores.
+    uses: dict[str, int] = {}
+    for name, count in names:
+        uses[name] = max(uses.get(name, 0), count)
+    unique = sorted(uses)
 
     with open(arguments.out, "w", encoding="utf-8") as handle:
         for name in unique:
-            handle.write(f"{name}\t{FLAT_FREQUENCY}\tname\n")
+            handle.write(f"{name}\t{FLAT_FREQUENCY}\tname\t{uses[name]}\n")
 
     print(f"wrote {len(unique)} names ({len(names) - len(unique)} duplicates dropped) "
           f"for {arguments.language!r} to {arguments.out}")

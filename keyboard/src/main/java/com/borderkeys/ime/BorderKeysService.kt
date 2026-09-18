@@ -3605,12 +3605,15 @@ class BorderKeysService :
             // know, a file that no longer matches its recorded hash, a file that is gone. All
             // three end the same way for a pack that came from inside the application -- the
             // current one is in assets, so it is copied over whatever is there. So is a pack
-            // this build ships a different edition of: the word count BundledDictionaries
-            // records is the shipped pack's own, and a copy made by an earlier build keeps its
-            // old count in the entry, which is how a fixed dictionary reaches an existing
-            // install at all -- the copy itself is intact, so nothing else here would notice.
+            // this build ships a different edition of: the word count and size
+            // BundledDictionaries records are the shipped pack's own, and a copy made by an
+            // earlier build keeps its old numbers in the entry, which is how a fixed
+            // dictionary reaches an existing install at all -- the copy itself is intact, so
+            // nothing else here would notice. Both numbers, because a list whose words only
+            // gained name flags compiles to the same count and a different size.
             val stale = !file.isFile ||
                 entry.wordCount != bundled.wordCount ||
+                entry.sizeBytes != bundled.sizeBytes ||
                 LanguagePackInspector.inspect(file) !is LanguagePackInspector.Result.Valid ||
                 runCatching { LanguagePackRepository.sha256Of(file) }.getOrNull() != entry.sha256
             if (!stale) {
@@ -3868,8 +3871,17 @@ class BorderKeysService :
         if (text.isEmpty() || privateMode) {
             return
         }
-        clipboardManager?.setPrimaryClip(ClipData.newPlainText(null, text))
-        refreshClipboardChip()
+        val clip = ClipData.newPlainText(null, text)
+        clipboardManager?.setPrimaryClip(clip)
+        // A copy is a new offer, the same as onClipboardChanged treats one, and the chip is
+        // built from the clip in hand rather than read back from the clipboard: on some devices
+        // the clipboard service applies the write after this call returns, and the change
+        // listener is not delivered for a clip the keyboard set itself -- so a read-back here
+        // still saw the previous clip (or the one just withdrawn) and the chip never appeared,
+        // while a copy made in the app reached refreshClipboardChip through onStartInputView
+        // and worked.
+        withdrawnClip = null
+        refreshClipboardChip(clip)
     }
 
     /**
@@ -4045,14 +4057,13 @@ class BorderKeysService :
      * label is built here and handed to the view as a finished string: the strip draws, it does
      * not decide what to say.
      */
-    private fun refreshClipboardChip() {
+    private fun refreshClipboardChip(clip: ClipData? = clipboardManager?.primaryClip) {
         val strip = host?.suggestionStrip ?: return
         if (privateMode || !preferences.clipboardSuggestion) {
             strip.clipboardChip = null
             shownClipSignature = null
             return
         }
-        val clip = clipboardManager?.primaryClip
         val description = clip?.description
         if (clip == null || clip.itemCount == 0 || description == null ||
             clipSignature(clip) == withdrawnClip

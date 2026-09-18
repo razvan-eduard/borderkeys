@@ -1,0 +1,21 @@
+# Words that are proper nouns in this language whatever the name lists say: capitalised on
+# their own like a name, without needing people to be called that. One per line, case does not
+# matter. Months and weekdays: Wikidata knows a few people named April, none named Wednesday.
+january
+february
+march
+april
+june
+july
+august
+september
+october
+november
+december
+monday
+tuesday
+wednesday
+thursday
+friday
+saturday
+sunday
