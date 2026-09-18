@@ -722,6 +722,7 @@
   "size_bigger_keys_are_easier_to_hit": "Tastele mai mari sunt mai ușor de nimerit și lasă mai puțin din aplicație vizibil. Nu există un răspuns corect; există doar cel care se potrivește degetului tău.",
   "size_blur_what_shows_through": "Estompează ce se vede prin ea",
   "size_blurs_the_application_behind_the_empty": "Estompează aplicația din spatele benzii goale. Sistemul o compune la fiecare cadru cât timp tastatura este vizibilă, iar unele dispozitive o refuză din start.",
+  "size_blur_needs_narrow_background": "Doar cât timp fundalul nu umple toată lățimea. Oprește comutatorul de mai sus ca să estompezi ce se vede lângă taste.",
   "size_costs_about_a_fifth_of_the": "Costă cam a cincea parte din înălțimea tastaturii. Fără el, cifrele stau pe apăsarea lungă a primului rând de litere.",
   "size_distance_from_the_bottom_edge": "Distanța față de marginea de jos",
   "size_docked": "Fixată",

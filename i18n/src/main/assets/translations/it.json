@@ -722,6 +722,7 @@
   "size_bigger_keys_are_easier_to_hit": "I tasti più grandi si colpiscono più facilmente e lasciano vedere meno dell'app. Non esiste una risposta giusta; esiste solo quella che si adatta al tuo pollice.",
   "size_blur_what_shows_through": "Sfoca ciò che si vede dietro",
   "size_blurs_the_application_behind_the_empty": "Sfoca l'applicazione dietro la striscia vuota. Il sistema la compone a ogni fotogramma in cui la tastiera è visibile, e alcuni dispositivi la rifiutano del tutto.",
+  "size_blur_needs_narrow_background": "Solo quando lo sfondo non riempie tutta la larghezza. Disattiva l'interruttore qui sopra per sfocare ciò che si vede accanto ai tasti.",
   "size_costs_about_a_fifth_of_the": "Costa circa un quinto dell'altezza della tastiera. Senza, le cifre stanno sulla pressione prolungata della riga superiore di lettere.",
   "size_distance_from_the_bottom_edge": "Distanza dal bordo inferiore",
   "size_docked": "Agganciata",

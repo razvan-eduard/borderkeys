@@ -722,6 +722,7 @@
   "size_bigger_keys_are_easier_to_hit": "Größere Tasten trifft man leichter und lassen weniger von der App sehen. Es gibt keine richtige Antwort; es gibt nur die, die zu deinem Daumen passt.",
   "size_blur_what_shows_through": "Durchscheinendes weichzeichnen",
   "size_blurs_the_application_behind_the_empty": "Zeichnet die Anwendung hinter dem leeren Streifen weich. Das System setzt sie in jedem Bild zusammen, solange die Tastatur sichtbar ist, und manche Geräte verweigern es rundweg.",
+  "size_blur_needs_narrow_background": "Nur wenn der Hintergrund nicht die ganze Breite ausfüllt. Schalte den Schalter oben aus, um zu verwischen, was neben den Tasten durchscheint.",
   "size_costs_about_a_fifth_of_the": "Kostet etwa ein Fünftel der Tastaturhöhe. Ohne sie liegen die Ziffern auf dem langen Druck der obersten Buchstabenreihe.",
   "size_distance_from_the_bottom_edge": "Abstand zum unteren Rand",
   "size_docked": "Angedockt",

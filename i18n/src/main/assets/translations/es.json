@@ -722,6 +722,7 @@
   "size_bigger_keys_are_easier_to_hit": "Las teclas más grandes son más fáciles de acertar y dejan ver menos de la aplicación. No hay una respuesta correcta; solo la que le va a tu pulgar.",
   "size_blur_what_shows_through": "Desenfocar lo que se ve detrás",
   "size_blurs_the_application_behind_the_empty": "Desenfoca la aplicación que hay detrás de la franja vacía. El sistema lo compone en cada fotograma mientras el teclado está visible, y algunos dispositivos lo rechazan de plano.",
+  "size_blur_needs_narrow_background": "Solo mientras el fondo no ocupe todo el ancho. Desactiva el interruptor de arriba para difuminar lo que se ve junto a las teclas.",
   "size_costs_about_a_fifth_of_the": "Cuesta alrededor de una quinta parte de la altura del teclado. Sin ella, los dígitos están en la pulsación larga de la fila superior de letras.",
   "size_distance_from_the_bottom_edge": "Distancia al borde inferior",
   "size_docked": "Anclado",
