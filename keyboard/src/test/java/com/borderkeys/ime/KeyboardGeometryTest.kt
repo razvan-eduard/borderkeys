@@ -345,7 +345,7 @@ class NumberRowSymbolsTest {
 
     /** q..p, each with the diacritic an accent overlay would have left on it, and one row below. */
     private fun topRowWithAccentOnT(): KeyboardLayout = KeyboardLayout(
-        "t", "t", "und",
+        "t", "und",
         listOf(
             KeyboardLayout.Row(
                 0f, 1f,
@@ -392,7 +392,7 @@ class NumberRowSymbolsTest {
     @Test
     fun `an accent overlay sits behind the base symbol and dedupes`() {
         val base = KeyboardLayout(
-            "t", "t", "und",
+            "t", "und",
             listOf(
                 KeyboardLayout.Row(
                     0f, 1f,
@@ -424,7 +424,7 @@ class NumberRowSymbolsTest {
     @Test
     fun `removing the emoji key widens the space bar`() {
         val withEmoji = KeyboardLayout(
-            id = "t", label = "t", languageTag = "und",
+            id = "t", languageTag = "und",
             rows = listOf(
                 KeyboardLayout.Row(
                     0f, 1f,
@@ -445,7 +445,7 @@ class NumberRowSymbolsTest {
     @Test
     fun `a layout without an emoji key is left alone`() {
         val plain = KeyboardLayout(
-            id = "t", label = "t", languageTag = "und",
+            id = "t", languageTag = "und",
             rows = listOf(
                 KeyboardLayout.Row(0f, 1f, listOf(
                     KeyboardLayout.Key(' '.code, "", "", 4f, 0),

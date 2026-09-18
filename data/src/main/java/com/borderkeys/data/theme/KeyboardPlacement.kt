@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
  * Size and position, as one value -- so the keyboard can hold two of them, one per orientation.
  *
  * [KeyboardPreferences]'s own `heightScale`/`widthScale`/`positionMode`/`bottomOffsetDp`/
- * `horizontalOffsetDp`/`splitGapDp` are portrait's copy of exactly these fields, kept flat
+ * `horizontalOffsetDp` are portrait's copy of exactly these fields, kept flat
  * rather than moved in here, so an existing install's portrait sizing survives this change
  * without a migration: the stored file already has those keys at the top level, and
  * `ignoreUnknownKeys`/defaults mean a landscape object that was never there before just
@@ -26,9 +26,6 @@ data class KeyboardPlacement(
     val positionMode: Int = KeyboardPreferences.MODE_DOCKED,
     val bottomOffsetDp: Float = 0f,
     val horizontalOffsetDp: Float = 0f,
-    /** Only meaningful at [KeyboardPreferences.MODE_SPLIT]. Wider default than portrait's: a
-     *  landscape screen has far more spare width either side of a person's two thumbs. */
-    val splitGapDp: Float = 140f,
 ) {
     /**
      * A file that parses is not a file that makes sense -- the same reasoning
@@ -41,7 +38,10 @@ data class KeyboardPlacement(
             KeyboardPreferences.MIN_HEIGHT_SCALE, KeyboardPreferences.MAX_HEIGHT_SCALE,
         ),
         widthScale = widthScale.coerceIn(KeyboardPreferences.MIN_WIDTH_SCALE, 1f),
-        positionMode = if (positionMode in KeyboardPreferences.MODE_DOCKED..KeyboardPreferences.MODE_SPLIT) {
+        // Docked to floating, and nothing past it: a split mode once held the next value, was
+        // never drawn by anything, and a hand-edited file selecting it got a keyboard that
+        // silently fell back to being centred. It now falls back to docked, on purpose.
+        positionMode = if (positionMode in KeyboardPreferences.MODE_DOCKED..KeyboardPreferences.MODE_FLOATING) {
             positionMode
         } else {
             KeyboardPreferences.MODE_DOCKED
@@ -49,9 +49,6 @@ data class KeyboardPlacement(
         bottomOffsetDp = bottomOffsetDp.coerceIn(0f, KeyboardPreferences.MAX_BOTTOM_OFFSET_DP),
         horizontalOffsetDp = horizontalOffsetDp.coerceIn(
             KeyboardPreferences.MIN_HORIZONTAL_OFFSET_DP, KeyboardPreferences.MAX_HORIZONTAL_OFFSET_DP,
-        ),
-        splitGapDp = splitGapDp.coerceIn(
-            KeyboardPreferences.MIN_SPLIT_GAP_DP, KeyboardPreferences.MAX_SPLIT_GAP_DP,
         ),
     )
 }

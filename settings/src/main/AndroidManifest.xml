@@ -84,6 +84,11 @@
             it opens a picker of them instead, one tap short of instant rather than instant, which
             is what a fixed set of manifest entries can and cannot do for a list nothing here
             controls the size of.
+
+            All four are plus-only in effect: a library manifest cannot tell the flavors apart,
+            so app/src/core/AndroidManifest.xml removes them again from the build that has no
+            assistant to run them with, and the app's manifest check fails a core build that
+            still carries one.
         -->
         <activity-alias
             android:name=".ProcessTextCorrectAlias"

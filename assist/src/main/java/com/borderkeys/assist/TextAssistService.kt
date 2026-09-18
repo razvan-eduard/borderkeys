@@ -294,11 +294,16 @@ class TextAssistService : Service() {
         // type there, and the native cleanup exists to remove formatting nobody asked for --
         // not formatting the request asked for by name. See AssistNative.nativeRun's own doc.
         val cleanFormatting = task != AssistTask.CUSTOM
+        // Bytes, not strings, across the boundary in both directions: JNI's "modified UTF-8"
+        // writes a supplementary character -- an emoji -- as two encoded surrogates, which is
+        // not UTF-8, and the tokenizer received it as garbage; the answer had the same problem
+        // on the way back. String.toByteArray is real UTF-8, and so is String(bytes).
         val answer = AssistNative.nativeRun(
-            current, instruction, text, task.outputRatio, task.minOutputTokens,
+            current, instruction.toByteArray(Charsets.UTF_8), text.toByteArray(Charsets.UTF_8),
+            task.outputRatio, task.minOutputTokens,
             AssistTask.MAX_OUTPUT_TOKENS, task.usesRemainingContext, continueJob,
             cleanFormatting, status, truncatedOut,
-        )
+        )?.toString(Charsets.UTF_8)
         if (answer == null) {
             replyWithError(reply, requestId, mapNativeStatus(status[0]))
             return

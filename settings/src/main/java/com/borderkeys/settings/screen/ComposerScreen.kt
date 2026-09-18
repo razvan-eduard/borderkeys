@@ -141,10 +141,16 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
                 )
             }
             Explanation(strings[Keys.COMPOSER_SETTINGS_BAR_NOTE])
+            // Insert is never on offer: it is the fixed button at the bar's end, drawn whatever
+            // this list says -- see ComposerBar.resolve. And the bar holds MAX_ITEMS, which the
+            // copy above has always said and nothing used to enforce.
             val addableBuiltins = ComposerAction.entries.filterNot { builtin ->
-                chosen.any { it is ComposerBarItem.Builtin && it.action == builtin }
+                builtin == ComposerAction.INSERT ||
+                    chosen.any { it is ComposerBarItem.Builtin && it.action == builtin }
             }
-            if (addableBuiltins.isNotEmpty() || pinnableCustomActions.isNotEmpty()) {
+            if (chosen.size < ComposerBar.MAX_ITEMS &&
+                (addableBuiltins.isNotEmpty() || pinnableCustomActions.isNotEmpty())
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .clickable { picking = !picking }

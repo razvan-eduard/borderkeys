@@ -93,7 +93,9 @@ fun BackupScreen(modifier: Modifier = Modifier) {
                     context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
                 }.isSuccess
             }
-            notice = if (ok) strings[Keys.BACKUP_WRITTEN] else strings[Keys.BACKUP_ERROR_DAMAGED]
+            // A write that failed, said as one: this used to borrow the "file is damaged"
+            // sentence, which describes a file that could not be read.
+            notice = if (ok) strings[Keys.BACKUP_WRITTEN] else strings[Keys.BACKUP_ERROR_WRITE_FAILED]
         }
     }
 

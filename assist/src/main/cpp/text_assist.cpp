@@ -86,9 +86,10 @@ struct WrapTag {
 
 /**
  * Every reasoning-block spelling this application has reason to expect. `<think>` is what Qwen3
- * and SmolLM3 -- the two families in KnownAssistModels.kt today -- actually emit; the other two
- * are the same idea under the names used elsewhere in the wider GGUF ecosystem. Kept as a list a
- * model addition might extend, rather than one pair hardcoded to today's two families.
+ * and SmolLM3 -- the reasoning-tuned families in KnownAssistModels.kt; EuroLLM, the third, has
+ * no thinking phase -- actually emit; the other two are the same idea under the names used
+ * elsewhere in the wider GGUF ecosystem. Kept as a list a model addition might extend, rather
+ * than one pair hardcoded to today's families.
  */
 constexpr WrapTag kReasoningTags[] = {
     {"<think>", "</think>"},
@@ -503,8 +504,10 @@ std::string TextAssist::applyChatTemplate(const char* instruction, const char* t
     std::string content;
     content.reserve(std::strlen(instruction) + std::strlen(text) + 24 + std::strlen(kNoThink));
     content += instruction;
-    // Every model in KnownAssistModels.kt is Qwen3 or SmolLM3, and both read a literal
-    // "/no_think" anywhere in the last turn as a request to skip their extended-thinking phase.
+    // Qwen3 and SmolLM3 -- the reasoning-tuned families in KnownAssistModels.kt -- read a literal
+    // "/no_think" anywhere in the last turn as a request to skip their extended-thinking phase;
+    // EuroLLM has no such phase, and for it the token is a few characters of prompt it was never
+    // trained to react to.
     // Without it, a reasoning-tuned model spends the entire (small, task-sized) output budget
     // narrating its reasoning and never reaches the actual answer -- which reads as "translate
     // does nothing" rather than as a formatting problem, because nothing resembling an answer
@@ -554,6 +557,30 @@ std::string TextAssist::applyChatTemplate(const char* instruction, const char* t
     return std::string(buffer.data(), static_cast<size_t>(written));
 }
 
+namespace {
+
+/**
+ * Sets a flag for exactly as long as the scope it lives in.
+ *
+ * TextAssist::run used to write `running_ = false` by hand before each of its returns, which
+ * covered every return and not the one exit that is not a return: a C++ exception, thrown from
+ * inside llama.cpp and caught at the JNI boundary in assist_jni.cpp. One of those left the flag
+ * set for the life of the process, and every request after it was answered kErrBusy until the
+ * idle timeout killed the service. A destructor runs on that exit too.
+ */
+class RunningGuard {
+public:
+    explicit RunningGuard(bool& flag) : flag_(flag) { flag_ = true; }
+    ~RunningGuard() { flag_ = false; }
+    RunningGuard(const RunningGuard&) = delete;
+    RunningGuard& operator=(const RunningGuard&) = delete;
+
+private:
+    bool& flag_;
+};
+
+}  // namespace
+
 int32_t TextAssist::run(const char* instruction, const char* text, float outputRatio,
                         int minOutputTokens, int maxOutputTokensCeiling, bool useRemainingContext,
                         bool reuseSharedPrefix, bool cleanFormatting, std::string* out,
@@ -574,7 +601,7 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
         return kErrTooLong;
     }
 
-    running_ = true;
+    const RunningGuard running(running_);
     cancelRequested_ = false;
     out->clear();
 
@@ -586,7 +613,6 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
                                            static_cast<int32_t>(prompt.size()), nullptr, 0, true,
                                            true);
     if (needed <= 0) {
-        running_ = false;
         return kErrTokenise;
     }
 
@@ -600,7 +626,6 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
 
     // The prompt and the answer share one window, so the check is against both.
     if (needed + maxOutputTokens >= contextTokens_) {
-        running_ = false;
         return kErrTooLong;
     }
     if (useRemainingContext) {
@@ -620,7 +645,6 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
     std::vector<llama_token> tokens(static_cast<size_t>(needed));
     if (llama_tokenize(vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()), tokens.data(),
                        needed, true, true) < 0) {
-        running_ = false;
         return kErrTokenise;
     }
 
@@ -662,7 +686,6 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
     llama_batch batch = llama_batch_get_one(tokens.data() + commonLen,
                                             static_cast<int32_t>(tokens.size() - commonLen));
     if (llama_decode(context_, batch) != 0) {
-        running_ = false;
         return kErrDecode;
     }
     lastPromptTokens_.assign(tokens.begin(), tokens.end());
@@ -687,7 +710,6 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
         llama_sampler_accept(sampler_, next);
         batch = llama_batch_get_one(&next, 1);
         if (llama_decode(context_, batch) != 0) {
-            running_ = false;
             return kErrDecode;
         }
     }
@@ -699,7 +721,6 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
     }
 
     *out = cleanResult(*out, text, cleanFormatting);
-    running_ = false;
     return kOk;
 }
 

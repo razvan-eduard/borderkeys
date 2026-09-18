@@ -31,8 +31,13 @@
         true as printed, not true with a footnote.
 
         The trade is explicit: nothing in this app may register a dynamic BroadcastReceiver
-        through ContextCompat with RECEIVER_NOT_EXPORTED on API 30-32. Nothing does, and an
-        IME has no reason to.
+        through ContextCompat with RECEIVER_NOT_EXPORTED, because on API 30-32 that call
+        throws the moment this permission is missing: it did, and took the input method down
+        in onCreate. The one dynamic receiver there is, BorderKeysService's wallpaper
+        listener, goes through the platform's own registerReceiver instead: with
+        RECEIVER_NOT_EXPORTED from API 33, where the platform enforces the flag itself, and
+        plain below that, where the broadcast it listens for is a protected system broadcast
+        nothing but the platform can send.
     -->
     <permission
         android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"

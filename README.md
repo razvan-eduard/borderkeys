@@ -133,8 +133,9 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 </p>
 
 - **Private mode is automatic.** In a password field, or wherever an app asks for no personalised
-  learning, there is no learning, no clipboard history, no swipe, no ring — and a password's text
-  never reaches the prediction engine at all.
+  learning, there is no learning, no clipboard history, no assistant, and nothing from your
+  personal dictionary in the suggestions — and a password's text never reaches the prediction
+  engine at all.
 
 ### Quick actions
 

@@ -15,8 +15,10 @@ package com.borderkeys.data.theme
  * back through versions is the one thing you do without looking -- the same argument that keeps
  * backspace where it is.
  *
- * Everything here except [INSERT] needs the assistant. In a build without it the bar is Insert
- * alone, which is honest: the box is still a place to write that the application cannot see.
+ * Everything here except [INSERT] needs the assistant -- and [INSERT] is not a bar item at all
+ * any more: it is the fixed button at the bar's end, drawn by the box itself, and
+ * [ComposerBar.resolve] drops it from the list. In a build without the assistant the bar is
+ * empty, which is honest: the box is still a place to write that the application cannot see.
  */
 enum class ComposerAction(val id: Int) {
 
@@ -68,10 +70,11 @@ enum class ComposerAction(val id: Int) {
          * What a new install starts with.
          *
          * Everything except the saved prompts, which are empty on a new install and would be a
-         * button that opens an empty list. It appears the first time one is saved.
+         * button that opens an empty list -- it appears the first time one is saved -- and
+         * except [INSERT], which is not a bar entry at all (see [ComposerBar.resolve]).
          */
         val DEFAULT: List<ComposerAction> = listOf(
-            CORRECT, TRANSLATE, TONE, SHORTEN, SUMMARISE, KEEP_SELECTION, PROMPT, SHOW_ORIGINAL, INSERT,
+            CORRECT, TRANSLATE, TONE, SHORTEN, SUMMARISE, KEEP_SELECTION, PROMPT, SHOW_ORIGINAL,
         )
 
         fun fromId(id: Int): ComposerAction? = idMatching(entries.toTypedArray(), id) { it.id }

@@ -915,7 +915,6 @@ class KeyboardHostView(
         canvas.drawPath(arrowPath, paint)
     }
 
-    @android.annotation.SuppressLint("ClickableViewAccessibility")
     /**
      * Paints the surface the keys sit on.
      *
@@ -1261,6 +1260,9 @@ class KeyboardHostView(
      */
     override fun onInterceptTouchEvent(event: android.view.MotionEvent): Boolean = resizing
 
+    // The touches this takes are the resize drags, which have no click to perform; the lint
+    // suppression used to sit on drawBackground, which handles no touches at all.
+    @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
         if (resizing) {
             return handleResizeTouch(event)

@@ -165,12 +165,17 @@ void nativeSetActiveLanguages(JNIEnv* env, jobject /*thiz*/, jlong handle, jobje
     if (engine == nullptr || tags == nullptr) {
         return;
     }
-    const jsize count = env->GetArrayLength(tags);
-    if (count <= 0 || count > Engine::kMaxPacks) {
-        // More tags than the engine has slots is a caller bug, not something to half-apply.
+    const jsize total = env->GetArrayLength(tags);
+    if (total <= 0) {
+        // Nothing enabled: every pack closes -- see Engine::setActiveLanguages.
         engine->setActiveLanguages(nullptr, nullptr, 0);
         return;
     }
+    // Clamped, not refused. The Kotlin side orders the set heaviest first and caps it at
+    // LanguagePackRepository.MAX_ENABLED, so a longer list here is a database edited past the
+    // limit -- and the answer to that used to be switching every dictionary off, which is how a
+    // fifth enabled pack silently took prediction away from the other four.
+    const jsize count = (total > Engine::kMaxPacks) ? Engine::kMaxPacks : total;
 
     char storage[Engine::kMaxPacks][kStringBufferBytes];
     const char* pointers[Engine::kMaxPacks];
@@ -577,6 +582,21 @@ void nativeSetPhraseSuggestions(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
     engine->setPhraseSuggestions(enabled == JNI_TRUE);
 }
 
+void nativeSetPersonalModelEnabled(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
+                                   jboolean enabled) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return;
+    }
+    engine->setPersonalModelEnabled(enabled == JNI_TRUE);
+}
+
+jstring nativeDominantLanguageTag(JNIEnv* env, jobject /*thiz*/, jlong handle) {
+    Engine* const engine = engineFrom(handle);
+    const char* const tag = engine == nullptr ? nullptr : engine->dominantLanguageTag();
+    return tag == nullptr ? nullptr : env->NewStringUTF(tag);
+}
+
 /**
  * Loads tier B's trained weights from a plain byte array, not an fd/offset/length window like a
  * language pack -- at ~2.5 MB this is small enough to read fully into memory once at startup, and
@@ -758,7 +778,8 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
 
 jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArray xs,
                          jfloatArray ys, jlongArray ts, jint count, jstring prev1, jstring prev2,
-                         jobjectArray outWords, jfloatArray outScores) {
+                         jobjectArray outWords, jfloatArray outScores,
+                         jbooleanArray outProperNoun) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || xs == nullptr || ys == nullptr || outWords == nullptr ||
         outScores == nullptr || count < 2) {
@@ -824,6 +845,7 @@ jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArra
     }
 
     float scores[Engine::kMaxCandidates];
+    jboolean properNoun[Engine::kMaxCandidates];
     int written = 0;
     char text[kStringBufferBytes];
     for (int i = 0; i < found; ++i) {
@@ -848,31 +870,23 @@ jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArra
         // Already bounded to [0, 1000] by Engine::decodeGesture -- see its own comment for why
         // that is where this happens rather than here.
         scores[written] = candidates[i].score;
+        // The same bit nativeSuggest reports for a typed word: the trie stores a name in lower
+        // case with this flag set, and a swipe used to arrive without it, so a swiped name was
+        // never capitalised at all.
+        properNoun[written] = engine->candidateIsProperNoun(candidates[i]) ? JNI_TRUE : JNI_FALSE;
         ++written;
     }
     if (written > 0) {
         env->SetFloatArrayRegion(outScores, 0, written, scores);
+        if (outProperNoun != nullptr && env->GetArrayLength(outProperNoun) >= written) {
+            env->SetBooleanArrayRegion(outProperNoun, 0, written, properNoun);
+        }
         if (env->ExceptionCheck() == JNI_TRUE) {
             env->ExceptionClear();
             return 0;
         }
     }
     return written;
-}
-
-jint nativeSnapshotUserModel(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring path) {
-    Engine* const engine = engineFrom(handle);
-    if (engine == nullptr) {
-        return borderkeys::kBkdErrArgument;
-    }
-    // A filesystem path can be longer than a word, so it gets its own bound rather than the
-    // word-sized one copyString defaults to.
-    constexpr jsize kMaxPathUnits = 512;
-    char buffer[kMaxPathUnits * 3 + 1];
-    if (copyString(env, path, buffer, sizeof(buffer), kMaxPathUnits) <= 0) {
-        return borderkeys::kBkdErrArgument;
-    }
-    return engine->snapshotUserModel(buffer) ? borderkeys::kBkdOk : -1;
 }
 
 const JNINativeMethod kMethods[] = {
@@ -911,10 +925,12 @@ const JNINativeMethod kMethods[] = {
      "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I)V",
      reinterpret_cast<void*>(nativeLoadUserTrigrams)},
     {"nativeDecodeGesture",
-     "(J[F[F[JILjava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F)I",
+     "(J[F[F[JILjava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F[Z)I",
      reinterpret_cast<void*>(nativeDecodeGesture)},
-    {"nativeSnapshotUserModel", "(JLjava/lang/String;)I",
-     reinterpret_cast<void*>(nativeSnapshotUserModel)},
+    {"nativeSetPersonalModelEnabled", "(JZ)V",
+     reinterpret_cast<void*>(nativeSetPersonalModelEnabled)},
+    {"nativeDominantLanguageTag", "(J)Ljava/lang/String;",
+     reinterpret_cast<void*>(nativeDominantLanguageTag)},
     {"nativeCandidateForPack", "(JILjava/lang/String;)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeCandidateForPack)},
     {"nativeDominantPack", "(J)I", reinterpret_cast<void*>(nativeDominantPack)},

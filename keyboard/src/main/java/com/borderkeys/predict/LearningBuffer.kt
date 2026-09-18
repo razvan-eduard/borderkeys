@@ -20,7 +20,8 @@ import com.borderkeys.data.dao.LearnedWord
  * Deliberately free of Android and of coroutines: it is a counter with a clock passed in, which
  * makes the debounce and the eviction testable on the JVM instead of on a device.
  *
- * Not thread safe. It is touched from the prediction thread and drained from the same one.
+ * Not thread safe. It is written and drained on the main thread, by BorderKeysService alone;
+ * the prediction thread never sees it.
  */
 class LearningBuffer(
     private val debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS,

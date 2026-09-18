@@ -58,6 +58,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import kotlin.math.hypot
 import com.borderkeys.i18n.LanguageManager
@@ -84,6 +85,24 @@ class BorderKeysService :
     PredictionEngine.ResultListener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /**
+     * Where learning is written to the database -- deliberately not [scope].
+     *
+     * [scope] is cancelled in [onDestroy], and a write to the personal dictionary is the one
+     * piece of work here that has to outlive the moment it was started: cancelling it between
+     * the word table and the pair table leaves a half-recorded batch, and cancelling it before
+     * it started loses the batch outright. Nothing on this scope runs longer than a transaction,
+     * and nothing here ever needs to stop it.
+     */
+    private val learningScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Serialises [loadDictionaries]: the start-up load and a reload from [observeLanguagePacks]
+     * both run on the IO dispatcher, and a pack switched in Settings while the first load is
+     * still hashing must queue behind it rather than map the same files twice at once.
+     */
+    private val dictionaryLoad = kotlinx.coroutines.sync.Mutex()
     private val paints = ThemePaints()
     private val engine = PredictionEngine()
     private val learning = LearningBuffer()
@@ -158,6 +177,20 @@ class BorderKeysService :
 
     /** Distinguishes one enabled-language set from another in the compiled-geometry cache key. */
     private var accentSignature: String = ""
+
+    /**
+     * The tags of the packs the engine was last told to consult, heaviest first -- the same list
+     * [loadDictionaries] hands to `setActiveLanguages`. Written on the IO dispatcher, read on
+     * the main thread, hence volatile.
+     */
+    @Volatile
+    private var activeLanguageTags: List<String> = emptyList()
+
+    /**
+     * The language the engine currently considers the conversation written in, refreshed after
+     * every completed word -- see [writingInFrench]. Null until the evidence has settled.
+     */
+    private var dominantLanguageTag: String? = null
 
     /** Which page is on screen. The numeric one is chosen by the field, not by the user. */
     private var page = PAGE_ALPHABETIC
@@ -430,6 +463,28 @@ class BorderKeysService :
 
     // ---- lifecycle ---------------------------------------------------------------------------
 
+    /**
+     * Listens for the wallpaper changing, so a keyboard following the system colours redraws.
+     *
+     * The platform call, not ContextCompat's. The app manifest removes the signature permission
+     * ContextCompat needs to emulate RECEIVER_NOT_EXPORTED below API 33 (see the comment there:
+     * "no permissions at all" has to be true as printed), and without that permission
+     * ContextCompat throws on API 30-32 -- which took the whole input method down in [onCreate]
+     * on exactly the devices minSdk exists for. ACTION_WALLPAPER_CHANGED is a protected system
+     * broadcast that only the platform can send, so on 30-32 the plain registration is already
+     * unspoofable; from 33 the platform demands an explicit flag for every dynamic receiver and
+     * gets one.
+     */
+    @android.annotation.SuppressLint("UnspecifiedRegisterReceiverFlag")
+    private fun registerWallpaperReceiver() {
+        val filter = IntentFilter(Intent.ACTION_WALLPAPER_CHANGED)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(wallpaperChangedReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(wallpaperChangedReceiver, filter)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         DataGraph.install(applicationContext)
@@ -443,13 +498,7 @@ class BorderKeysService :
         engine.start()
 
         clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        // ContextCompat, not the raw call: API 33 refuses registerReceiver for a protected
-        // system broadcast without an explicit exported/not-exported flag, and this is a
-        // system-only broadcast nothing outside the platform should be able to spoof anyway.
-        androidx.core.content.ContextCompat.registerReceiver(
-            this, wallpaperChangedReceiver, IntentFilter(Intent.ACTION_WALLPAPER_CHANGED),
-            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
+        registerWallpaperReceiver()
 
         scope.launch(Dispatchers.IO) {
             val manager = getSystemService(Context.INPUT_METHOD_SERVICE)
@@ -471,6 +520,7 @@ class BorderKeysService :
             runCatching { loadDictionaries() }
                 .onFailure { error -> degradeWithoutDictionaries(error) }
             loadSwipeModel()
+            File(filesDir, LEGACY_USER_MODEL_SNAPSHOT).delete()
         }
         observeSettings()
         observeLanguagePacks()
@@ -502,50 +552,69 @@ class BorderKeysService :
      * mapped.
      */
     private suspend fun loadDictionaries() {
-        val repository = DataGraph.languagePacks
-        // Repaired before the integrity sweep runs, not after: the sweep switches off anything
-        // whose file no longer matches, and a pack that has been switched off is a pack the
-        // repair would never look at again.
-        reinstallOutdatedBundledPacks(repository)
-        repository.verifyEnabled()
+        dictionaryLoad.withLock {
+            val repository = DataGraph.languagePacks
+            // Repaired before the integrity sweep runs, not after: the sweep switches off
+            // anything whose file no longer matches, and a pack that has been switched off is a
+            // pack the repair would never look at again.
+            reinstallOutdatedBundledPacks(repository)
+            repository.verifyEnabled()
 
-        val enabled = repository.enabledPacks()
-
-        // The accent overlays follow the enabled packs: turn a language on and its diacritics
-        // appear on the letter keys, turn it off and they are gone. Built here, on the same
-        // list, so the two can never disagree.
-        accentOverlays = AccentOverlays.merge(enabled.map { AccentOverlays.load(assets, it.tag) })
-        accentSignature = enabled.joinToString(",") { it.tag }
-        withContext(Dispatchers.Main) { host?.let { showPage(page) } }
-
-        for (entry in enabled) {
-            val file = repository.fileFor(entry)
-            if (!file.isFile) {
-                continue
-            }
-            runCatching {
-                val descriptor = android.content.res.AssetFileDescriptor(
-                    android.os.ParcelFileDescriptor.open(
-                        file, android.os.ParcelFileDescriptor.MODE_READ_ONLY,
-                    ),
-                    0L,
-                    file.length(),
+            // Heaviest first -- the DAO orders them so -- and cut to what the engine has slots
+            // for. Settings holds the count at the limit, so the cut is a backstop for a
+            // database restored or edited past it. It used to be no backstop at all: the bridge
+            // refused more tags than slots outright, and a fifth enabled pack left the keyboard
+            // with no prediction, no correction and no swipe, and nothing on screen to say why.
+            val everyEnabled = repository.enabledPacks()
+            val enabled = everyEnabled.take(LanguagePackRepository.MAX_ENABLED)
+            if (enabled.size < everyEnabled.size) {
+                android.util.Log.w(
+                    "BorderKeys",
+                    "${everyEnabled.size} packs enabled, loading the ${enabled.size} heaviest",
                 )
-                engine.loadLanguage(entry.tag, descriptor, entry.weight)
             }
-        }
-        if (enabled.isNotEmpty()) {
-            engine.setActiveLanguages(
-                Array(enabled.size) { enabled[it].tag },
-                FloatArray(enabled.size) { enabled[it].weight },
-            )
-        }
 
-        val dictionary = DataGraph.dictionary
-        loadPersonalModel(dictionary)
-        val blockedWords = dictionary.blockedWordSet()
-        engine.setBlockedWords(blockedWords)
-        learning.setBlockedWords(blockedWords)
+            // The accent overlays follow the enabled packs: turn a language on and its
+            // diacritics appear on the letter keys, turn it off and they are gone. Built here,
+            // on the same list, so the two can never disagree.
+            accentOverlays = AccentOverlays.merge(enabled.map { AccentOverlays.load(assets, it.tag) })
+            accentSignature = enabled.joinToString(",") { it.tag }
+            activeLanguageTags = enabled.map { it.tag }
+            withContext(Dispatchers.Main) { host?.let { showPage(page) } }
+
+            // The final set reaches the engine before the files do, and again after. The engine
+            // closes whatever it has open that is not named, which is what frees a slot for a
+            // pack switched on in another's place; a tag that is named and already open keeps
+            // its slot and is replaced in place by the load below. Sent even when the set is
+            // empty: switching every pack off has to reach the engine as "nothing", not leave
+            // the last set active, which is what skipping the call for an empty list used to do.
+            val tags = Array(enabled.size) { enabled[it].tag }
+            val weights = FloatArray(enabled.size) { enabled[it].weight }
+            engine.setActiveLanguages(tags, weights)
+            for (entry in enabled) {
+                val file = repository.fileFor(entry)
+                if (!file.isFile) {
+                    continue
+                }
+                runCatching {
+                    val descriptor = android.content.res.AssetFileDescriptor(
+                        android.os.ParcelFileDescriptor.open(
+                            file, android.os.ParcelFileDescriptor.MODE_READ_ONLY,
+                        ),
+                        0L,
+                        file.length(),
+                    )
+                    engine.loadLanguage(entry.tag, descriptor, entry.weight)
+                }
+            }
+            engine.setActiveLanguages(tags, weights)
+
+            val dictionary = DataGraph.dictionary
+            loadPersonalModel(dictionary)
+            val blockedWords = dictionary.blockedWordSet()
+            engine.setBlockedWords(blockedWords)
+            learning.setBlockedWords(blockedWords)
+        }
     }
 
     /**
@@ -617,7 +686,10 @@ class BorderKeysService :
                         host?.let { showPage(page) }
                         return@collect
                     }
-                    runCatching { loadDictionaries() }
+                    // Off the main thread: this re-hashes every enabled pack and maps them,
+                    // and it used to run right here on Main.immediate -- a switch toggled in
+                    // Settings had the input method's own thread reading a hundred megabytes.
+                    runCatching { withContext(Dispatchers.IO) { loadDictionaries() } }
                         .onFailure { error ->
                             android.util.Log.e("BorderKeys", "reloading packs failed", error)
                         }
@@ -900,6 +972,11 @@ class BorderKeysService :
         privateMode = PrivateMode.isPrivate(info)
         passwordField = info != null && PrivateMode.isPasswordField(info.inputType)
         learning.enabled = preferences.learningEnabled && !privateMode
+        // The other half of not learning here: nothing already learned is offered either. A
+        // password field never reaches the engine at all (see requestSuggestions), but a field
+        // that merely asked for no personalised learning still asks for suggestions, and they
+        // used to come from the personal dictionary like anywhere else.
+        engine.setPersonalModelEnabled(!privateMode)
         engine.setLearningSpeed(
             KeyboardPreferences.learningSpeedFactor(preferences.learningSpeed),
         )
@@ -921,8 +998,8 @@ class BorderKeysService :
             view.keyboard.hapticEnabled = preferences.hapticFeedback
             view.keyboard.swipeEnabled = preferences.swipeEnabled && swipeAllowedIn(info)
             view.suggestionStripEnabled = preferences.showSuggestionStrip
-        view.keyboard.soundEnabled = preferences.keySound
-        view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
+            view.keyboard.soundEnabled = preferences.keySound
+            view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
             applyParticleSettings(view, particleEffects)
         }
         showPage(pageFor(info))
@@ -1046,7 +1123,7 @@ class BorderKeysService :
     override fun onDestroy() {
         runCatching { unregisterReceiver(wallpaperChangedReceiver) }
         unregisterClipboardListener()
-        flushLearning()
+        flushLearningBeforeDestroy()
         // Zeroes the handle under a lock before freeing, so a request already in flight
         // completes against a live engine and anything after it sees zero and returns.
         engine.shutdown()
@@ -1485,7 +1562,11 @@ class BorderKeysService :
      * already what composing, or the pick-timeout, or a release in the dead zone all agree on --
      * see [resolveRadialRing].
      */
-    override fun onGesturePreviewCandidates(words: Array<String?>, count: Int) {
+    override fun onGesturePreviewCandidates(
+        words: Array<String?>,
+        count: Int,
+        properNoun: BooleanArray,
+    ) {
         val view = host ?: return
         val connection = currentInputConnection ?: return
         if (count == 0 || words[0] == null) {
@@ -1496,7 +1577,7 @@ class BorderKeysService :
         }
         // Cased and separated exactly as a confident swipe's own candidates are in
         // onGestureCandidates -- one word, whichever way it arrived.
-        caseSwipedWords(words, count)
+        caseSwipedWords(words, count, properNoun)
         val candidates = words.take(count).filterNotNull()
         val best = candidates.first()
         radialTopWord = best
@@ -1512,7 +1593,7 @@ class BorderKeysService :
         suggestionQuery = best
         knownQuery = best
         topSuggestion = best
-        topSuggestionIsProperNoun = false
+        topSuggestionIsProperNoun = properNoun[0]
 
         val wedgeWords = candidates.drop(1).take(preferences.radialSuggestionCount)
         if (!swipeRadialController.onRingOpened(wedgeWords)) {
@@ -1752,10 +1833,17 @@ class BorderKeysService :
      * swipe), shouted under caps lock, untouched otherwise -- then spends a one-shot shift the
      * way [handleCharacter] does for a first letter. Without this a swipe at the start of a
      * sentence produced a lower-case word and left shift armed for the first letter typed
-     * afterwards, capitalising that one instead. Never lower-cases: the decoder already
-     * capitalises names on its own, and that must survive.
+     * afterwards, capitalising that one instead. Never lower-cases. A name comes back from the
+     * decoder lower-case with [properNoun] set -- the trie stores it that way, exactly as the
+     * typed path receives it -- so it is capitalised here, before shift is considered. This used
+     * to assume the decoder had already done that, and no swiped name was ever capitalised.
      */
-    private fun caseSwipedWords(words: Array<String?>, count: Int) {
+    private fun caseSwipedWords(words: Array<String?>, count: Int, properNoun: BooleanArray) {
+        for (index in 0 until count) {
+            if (properNoun[index]) {
+                words[index] = words[index]?.replaceFirstChar { it.uppercaseChar() }
+            }
+        }
         val state = shiftState
         if (state != ShiftState.OFF) {
             for (index in 0 until count) {
@@ -1806,7 +1894,7 @@ class BorderKeysService :
      * lift, but that setting means offering the alternatives without a clock attached whenever
      * there is any way to, not only after a pause.
      */
-    override fun onGestureCandidates(words: Array<String?>, count: Int) {
+    override fun onGestureCandidates(words: Array<String?>, count: Int, properNoun: BooleanArray) {
         host?.removeCallbacks(gestureDecodingRunnable)
         val view = host
         view?.suggestionStrip?.decoding = false
@@ -1824,7 +1912,7 @@ class BorderKeysService :
         // Every candidate follows shift exactly as typed letters would -- a swipe at a sentence
         // start is capitalised, one under caps lock is shouted -- and the swipe then spends a
         // one-shot shift the way a first letter does. See caseSwipedWords.
-        caseSwipedWords(words, count)
+        caseSwipedWords(words, count, properNoun)
         val best = words[0]!!
 
         connection.beginBatchEdit()
@@ -1842,7 +1930,7 @@ class BorderKeysService :
         suggestionQuery = best
         knownQuery = best
         topSuggestion = best
-        topSuggestionIsProperNoun = false
+        topSuggestionIsProperNoun = properNoun[0]
         view?.suggestionStrip?.let { strip ->
             strip.typedIndex = -1
             strip.appliedIndex = -1
@@ -2148,6 +2236,10 @@ class BorderKeysService :
         checkpointField()
         shiftAfterDelimiter(heldByUser, justCommitted = delimiter)
         requestSuggestions()
+        // Which language the engine now thinks this is, kept for the punctuation rules that
+        // differ by language -- see writingInFrench. One cheap answer per completed word, and
+        // not gated on the language-switch setting the check below is.
+        engine.dominantLanguageTag { tag -> dominantLanguageTag = tag }
         if (preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
             checkLanguageSwitch()
         }
@@ -2457,17 +2549,21 @@ class BorderKeysService :
             return
         }
         val connection = currentInputConnection ?: return
-        val current = connection.getExtractedText(
+        val extracted = connection.getExtractedText(
             ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
             0,
-        )?.text?.toString() ?: return
+        ) ?: return
+        val current = extracted.text?.toString() ?: return
         if (current == target) {
             return
         }
         val span = FieldRestore.diff(current, target)
         connection.beginBatchEdit()
         finishComposing(connection)
-        val boundary = span.deleteFrom + span.deleteCount
+        // The diff's offsets are into the extracted window, which starts at startOffset into
+        // the field -- zero for any field short enough to fit whole, and not zero for a long
+        // one, where forgetting it (as this used to) put every history step at the wrong place.
+        val boundary = extracted.startOffset + span.deleteFrom + span.deleteCount
         connection.setSelection(boundary, boundary)
         if (span.deleteCount > 0) {
             connection.deleteSurroundingText(span.deleteCount, 0)
@@ -3411,10 +3507,28 @@ class BorderKeysService :
     }
 
     /** Whether [code] is a mark French sets off with a space before it -- "!", "?", ";" and
-     *  ":" -- and the active language is French, so that space is left where it is. */
+     *  ":" -- and the text is French, so that space is left where it is. */
     private fun isFrenchSpacedPunctuation(code: Int): Boolean =
         (code == '!'.code || code == '?'.code || code == ';'.code || code == ':'.code) &&
-            currentSubtypeTag().startsWith("fr", ignoreCase = true)
+            writingInFrench()
+
+    /**
+     * Whether the text being written is French: the language the engine currently considers
+     * dominant, or, before it has decided, the only language enabled at all.
+     *
+     * Not the input-method subtype. That is the *layout* the globe key picked -- AZERTY happens
+     * to carry an fr-FR tag and QWERTZ a de-DE one -- and keying this on it meant French spacing
+     * for everything typed on an AZERTY and never for French typed on the QWERTY, which is how
+     * most of it is.
+     */
+    private fun writingInFrench(): Boolean {
+        val dominant = dominantLanguageTag
+        if (dominant != null) {
+            return dominant.startsWith("fr", ignoreCase = true)
+        }
+        val tags = activeLanguageTags
+        return tags.isNotEmpty() && tags.all { it.startsWith("fr", ignoreCase = true) }
+    }
 
     /**
      * Sets shift from what the editor asked for and what is already written.
@@ -3540,26 +3654,61 @@ class BorderKeysService :
     }
 
     /**
-     * Writes the buffered learning to the database and asks the native model to snapshot itself.
+     * Writes the buffered learning to the database.
      *
      * Never on a keystroke. An INSERT is a transaction, a disk write and an encryption pass, and
      * one of those on the path of a key press would spend the whole two-millisecond budget.
      */
     private fun flushLearning() {
+        val batch = drainLearning() ?: return
+        learningScope.launch { persistLearning(batch) }
+    }
+
+    /**
+     * The last flush, from [onDestroy]: waits for the write instead of handing it off.
+     *
+     * [flushLearning] gives its batch to a coroutine and returns, which is right on a keystroke
+     * and was wrong at the end of the service's life -- there the next line is `scope.cancel()`,
+     * and a flush that had not reached the database yet went with it, so the last few minutes of
+     * typing were learned in memory and never on disk. Bounded, because a database that does not
+     * answer must not hold the input method's main thread on the way out.
+     */
+    private fun flushLearningBeforeDestroy() {
+        val batch = drainLearning() ?: return
+        runCatching {
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withTimeoutOrNull(FINAL_FLUSH_TIMEOUT_MILLIS) {
+                    withContext(Dispatchers.IO) { persistLearning(batch) }
+                }
+            }
+        }.onFailure { error ->
+            android.util.Log.w("BorderKeys", "the final learning flush failed", error)
+        }
+    }
+
+    /** What [learning] had accumulated, taken out of it in one go. */
+    private class LearningBatch(
+        val updates: List<com.borderkeys.data.dao.LearnedWord>,
+        val pairs: List<com.borderkeys.data.dao.LearnedBigram>,
+        val triples: List<com.borderkeys.data.dao.LearnedTrigram>,
+    )
+
+    /** Empties [learning], or returns null when there was nothing in it. */
+    private fun drainLearning(): LearningBatch? {
         val updates = learning.drain()
         val pairs = learning.drainPairs()
         val triples = learning.drainTriples()
         if (updates.isEmpty() && pairs.isEmpty() && triples.isEmpty()) {
-            return
+            return null
         }
-        val snapshotPath = File(filesDir, USER_MODEL_SNAPSHOT).absolutePath
-        scope.launch(Dispatchers.IO) {
-            DataGraph.dictionary.applyLearned(updates)
-            DataGraph.dictionary.applyLearnedBigrams(pairs)
-            DataGraph.dictionary.applyLearnedTrigrams(triples)
-            maybeDecayPersonalDictionary()
-            engine.snapshotUserModel(snapshotPath)
-        }
+        return LearningBatch(updates, pairs, triples)
+    }
+
+    private suspend fun persistLearning(batch: LearningBatch) {
+        DataGraph.dictionary.applyLearned(batch.updates)
+        DataGraph.dictionary.applyLearnedBigrams(batch.pairs)
+        DataGraph.dictionary.applyLearnedTrigrams(batch.triples)
+        maybeDecayPersonalDictionary()
     }
 
     /**
@@ -3628,6 +3777,28 @@ class BorderKeysService :
             .onFailure { android.util.Log.w("BorderKeys", "pack repair failed", it) }
     }
 
+    /**
+     * The pack files [LanguagePackInspector] has accepted in this process, as `path:sha256`.
+     *
+     * The inspection reads and checksums the whole file, and it used to run on every pass of
+     * [repairBundledPacks] -- once at start and again on every change to the pack list -- for
+     * files whose hash beside it had just proved unchanged. A pack that passed once passes
+     * again until its bytes change, and the hash in the key is what notices when they do.
+     */
+    private val readablePacks = HashSet<String>()
+
+    private fun packReadable(file: File, sha256: String): Boolean {
+        val key = "${file.path}:$sha256"
+        if (key in readablePacks) {
+            return true
+        }
+        val readable = LanguagePackInspector.inspect(file) is LanguagePackInspector.Result.Valid
+        if (readable) {
+            readablePacks += key
+        }
+        return readable
+    }
+
     private suspend fun repairBundledPacks(
         repository: com.borderkeys.data.LanguagePackRepository,
     ) {
@@ -3655,8 +3826,8 @@ class BorderKeysService :
                 shipped == null || shipped != installed ||
                 entry.wordCount != bundled.wordCount ||
                 entry.sizeBytes != bundled.sizeBytes ||
-                LanguagePackInspector.inspect(file) !is LanguagePackInspector.Result.Valid ||
-                runCatching { LanguagePackRepository.sha256Of(file) }.getOrNull() != entry.sha256
+                runCatching { repository.cachedSha256(file) }.getOrNull() != entry.sha256 ||
+                !packReadable(file, entry.sha256)
             if (!stale) {
                 continue
             }
@@ -3671,6 +3842,7 @@ class BorderKeysService :
                 staged.file.delete()
                 continue
             }
+            readablePacks += "${staged.file.path}:${staged.sha256}"
             repository.replace(
                 LanguagePackEntry(
                     id = entry.id,
@@ -4019,11 +4191,14 @@ class BorderKeysService :
             return
         }
         scope.launch {
-            val entries = withContext(Dispatchers.IO) {
-                DataGraph.clipboard.recent(MAX_CLIPBOARD_CARDS)
-            }
             val view = host ?: return@launch
-            view.clipboardPanel.setEntries(entries)
+            // Read and decoded off the main thread, both: a thumbnail is a bitmap decode, and
+            // it used to happen inside setEntries, on the thread that draws the keys.
+            val (entries, thumbnails) = withContext(Dispatchers.IO) {
+                val recent = DataGraph.clipboard.recent(MAX_CLIPBOARD_CARDS)
+                recent to view.clipboardPanel.decodeThumbnails(recent)
+            }
+            view.clipboardPanel.setEntries(entries, thumbnails)
             view.setClipboardPanelVisible(true)
         }
     }
@@ -4101,10 +4276,11 @@ class BorderKeysService :
             return
         }
         scope.launch {
-            val entries = withContext(Dispatchers.IO) {
-                DataGraph.clipboard.recent(MAX_CLIPBOARD_CARDS)
+            val (entries, thumbnails) = withContext(Dispatchers.IO) {
+                val recent = DataGraph.clipboard.recent(MAX_CLIPBOARD_CARDS)
+                recent to view.clipboardPanel.decodeThumbnails(recent)
             }
-            view.clipboardPanel.setEntries(entries)
+            view.clipboardPanel.setEntries(entries, thumbnails)
         }
     }
 
@@ -4332,7 +4508,12 @@ class BorderKeysService :
      * leak a password even in principle -- there is no API through which we could read one.
      */
     override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
-        if (privateMode.not() && currentInputEditorInfo == null) {
+        // Nothing to style a request for without a field. Not gated on private mode, and it
+        // used to be, oddly, the other way round -- refusing only when the field was *not*
+        // private and absent: the chips come from the autofill service, which is exactly
+        // where a password manager's own suggestions belong in a password field, and their
+        // text never passes through this keyboard (see above).
+        if (currentInputEditorInfo == null) {
             return null
         }
         val chipBackground = ViewStyle.Builder()
@@ -4418,7 +4599,15 @@ class BorderKeysService :
         const val PAGE_SYMBOLS_SHIFT = 2
         const val PAGE_NUMPAD = 3
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
-        const val USER_MODEL_SNAPSHOT = "user_model.bku"
+        /**
+         * The file the native personal model used to be written into on every flush and never
+         * read back from -- the Room tables were always the copy it was rebuilt from at start.
+         * Deleted at start on any install that still has one.
+         */
+        const val LEGACY_USER_MODEL_SNAPSHOT = "user_model.bku"
+
+        /** How long [flushLearningBeforeDestroy] waits for the database before giving up. */
+        const val FINAL_FLUSH_TIMEOUT_MILLIS = 2_000L
 
         /** Neither changes the field, so neither is worth a suggestions refresh afterward --
          *  see onQuickAction's own comment. */
@@ -4466,8 +4655,6 @@ class BorderKeysService :
         /** How far either side of the cursor "the line" is looked for. */
         const val LINE_WINDOW_CHARS = 1024
 
-        /** BkdStatus.kBkdErrVersion, mirrored so the service can tell that case from the rest. */
-        const val BKD_ERR_VERSION = -4
         const val MIN_LEARNED_LENGTH = 2
 
         const val GESTURE_DECODING_NOTICE_MILLIS = 50L
@@ -4480,9 +4667,5 @@ class BorderKeysService :
         const val MIN_CHIP_WIDTH_DP = 120
         const val BLUR_RADIUS_DP = 24f
         const val CHIP_PADDING_PX = 12
-
-        val WORD_SEPARATORS = charArrayOf(
-            ' ', '\n', '\t', '.', ',', '!', '?', ';', ':', '(', ')', '[', ']', '"', '/',
-        )
     }
 }

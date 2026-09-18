@@ -98,15 +98,27 @@ class ClipboardPanelView(
         empty.toCharArray(emptyChars, 0, 0, emptyLength)
     }
 
-    /** Replaces the list, decoding thumbnails for whatever images are in it. */
-    fun setEntries(list: List<ClipEntry>) {
-        entries = list
-        thumbnails.keys.retainAll(list.map { it.id }.toSet())
+    /**
+     * Decodes a thumbnail for every image in [list], keyed by entry id -- on whatever thread
+     * calls it, which should not be the one that draws: this reads and decodes files, and used
+     * to do so inside [setEntries] on the main thread. The caller hands the result to
+     * [setEntries] afterwards.
+     */
+    fun decodeThumbnails(list: List<ClipEntry>): Map<Long, Bitmap?> {
+        val decoded = HashMap<Long, Bitmap?>()
         for (entry in list) {
-            if (entry.isImage && !thumbnails.containsKey(entry.id)) {
-                thumbnails[entry.id] = decodeThumbnail(entry)
+            if (entry.isImage) {
+                decoded[entry.id] = decodeThumbnail(entry)
             }
         }
+        return decoded
+    }
+
+    /** Replaces the list and the thumbnails [decodeThumbnails] produced for it. */
+    fun setEntries(list: List<ClipEntry>, decoded: Map<Long, Bitmap?>) {
+        entries = list
+        thumbnails.clear()
+        thumbnails.putAll(decoded)
         scroller.forceFinished(true)
         scrollTo(0, 0)
         measureContent()
@@ -253,7 +265,6 @@ class ClipboardPanelView(
         val previous = paints.label.textAlign
         paints.label.textAlign = android.graphics.Paint.Align.LEFT
         val label = labelFor(entry)
-        val available = cardRect.right - inset - textLeft
         canvas.save()
         canvas.clipRect(textLeft, top, cardRect.right - inset, top + cardHeightPx)
         canvas.drawText(
@@ -270,9 +281,6 @@ class ClipboardPanelView(
                 cardRect.right - inset, top + inset + PIN_RADIUS_FRACTION * cardHeightPx,
                 PIN_RADIUS_FRACTION * cardHeightPx, paints.accent,
             )
-        }
-        if (available <= 0f) {
-            return
         }
     }
 

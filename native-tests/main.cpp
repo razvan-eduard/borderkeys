@@ -9,12 +9,14 @@ void runFormatTests();
 void runEngineTests();
 void runGestureTests();
 void runTcnTests();
+void runFoldTests();
 
 int main() {
     runFormatTests();
     runEngineTests();
     runGestureTests();
     runTcnTests();
+    runFoldTests();
 
     std::printf("\n%d checks, %d failures\n", borderkeys_test::checks, borderkeys_test::failures);
     return borderkeys_test::failures == 0 ? 0 : 1;

@@ -16,7 +16,6 @@ package com.borderkeys.ime
  */
 class KeyboardLayout(
     val id: String,
-    val label: String,
     val languageTag: String,
     val rows: List<Row>,
 ) {
@@ -111,7 +110,6 @@ class KeyboardLayout(
         }
         return KeyboardLayout(
             id = id + suffix,
-            label = label,
             languageTag = languageTag,
             rows = rewritten,
         )
@@ -148,7 +146,7 @@ class KeyboardLayout(
                 },
             )
         }
-        return KeyboardLayout("$id$ACCENTS_SUFFIX$signature", label, languageTag, rewritten)
+        return KeyboardLayout("$id$ACCENTS_SUFFIX$signature", languageTag, rewritten)
     }
 
     /**
@@ -198,7 +196,7 @@ class KeyboardLayout(
                 },
             )
         }
-        return KeyboardLayout("$id$suffix", label, languageTag, rewritten)
+        return KeyboardLayout("$id$suffix", languageTag, rewritten)
     }
 
     private fun Key.withAlternatives(alternatives: String): Key =
@@ -225,7 +223,6 @@ class KeyboardLayout(
         }
         return KeyboardLayout(
             id = id + NUMBER_ROW_SUFFIX,
-            label = label,
             languageTag = languageTag,
             rows = listOf(Row(0f, NUMBER_ROW_HEIGHT, digits)) + rows,
         )
@@ -280,7 +277,6 @@ class KeyboardLayout(
             }
             return KeyboardLayout(
                 id = "fallback_qwerty",
-                label = "QWERTY",
                 languageTag = "en-US",
                 rows = listOf(
                     Row(0f, 1f, letters("qwertyuiop")),

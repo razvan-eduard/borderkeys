@@ -64,18 +64,32 @@ add_custom_command(
 )
 add_custom_target(test_pack DEPENDS ${TEST_PACK})
 
+# The same script's fold table, for the same reason: foldCodePoint() in proximity.cpp and
+# fold_code_point() in build_dict.py index the same trie, and a code point they disagree on is a
+# word the engine can never reach. test_fold.cpp diffs the two.
+set(TEST_FOLDS ${CMAKE_CURRENT_BINARY_DIR}/folds.tsv)
+add_custom_command(
+    OUTPUT ${TEST_FOLDS}
+    COMMAND ${Python3_EXECUTABLE} ${TOOLS_DIR}/build_dict.py --dump-folds --out ${TEST_FOLDS}
+    DEPENDS ${TOOLS_DIR}/build_dict.py
+    COMMENT "Dumping tools/build_dict.py's fold table for the native tests"
+)
+add_custom_target(test_folds DEPENDS ${TEST_FOLDS})
+
 add_executable(borderkeys_tests
     main.cpp
     test_format.cpp
     test_engine.cpp
     test_gesture.cpp
     test_tcn.cpp
+    test_fold.cpp
 )
-add_dependencies(borderkeys_tests test_pack)
+add_dependencies(borderkeys_tests test_pack test_folds)
 target_link_libraries(borderkeys_tests borderkeys_engine)
 target_compile_options(borderkeys_tests PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
 target_compile_definitions(borderkeys_tests PRIVATE
     BORDERKEYS_TEST_PACK="${TEST_PACK}"
+    BORDERKEYS_TEST_FOLDS="${TEST_FOLDS}"
     BORDERKEYS_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
 )
 

@@ -151,6 +151,15 @@ public:
     void destroy();
 
     int32_t loadLanguage(const char* tag, int fd, int64_t offset, int64_t length, float weight);
+
+    /**
+     * Makes `tags` the whole set of languages consulted, with their weights.
+     *
+     * Anything open that is not named is closed and its slot freed -- this is the only way a
+     * slot ever comes back, so a caller replacing one language with another names the final set
+     * here first and loads the newcomer after. An empty set (`count` 0, or null `tags`) closes
+     * everything. At most kMaxPacks tags; the bridge clamps a longer list to the first kMaxPacks.
+     */
     void setActiveLanguages(const char* const* tags, const float* weights, int count);
     bool setKeyGeometry(const int32_t* codes, const float* centersX, const float* centersY,
                         int count, float keyWidth, float keyHeight);
@@ -264,7 +273,23 @@ public:
 
     /** Whether two-word suggestions are offered at all. Off unless the user asks for them. */
     void setPhraseSuggestions(bool enabled) { phraseSuggestions_ = enabled; }
-    bool snapshotUserModel(const char* path);
+
+    /**
+     * Whether the personal dictionary takes part in suggestions at all.
+     *
+     * Off for a private field -- a password, or one whose application asked for no personalised
+     * learning. What this device learned from its owner must not be offered back into a field
+     * that asked to be forgotten; that is the other half of not learning from it. The model
+     * stays loaded and untouched, it is simply not consulted until an ordinary field switches
+     * it back on.
+     */
+    void setPersonalModelEnabled(bool enabled) { personalModelEnabled_ = enabled; }
+
+    /**
+     * The tag of the pack the conversation is currently considered written in, or null while
+     * undecided -- the same answer as dominantPack(), as a language rather than a slot.
+     */
+    const char* dominantLanguageTag() const;
 
     // Resolves a candidate to its display text. The pointer is owned by the mapping or by the
     // user model and stays valid until the pack is closed or the model is rewritten.
@@ -410,9 +435,9 @@ private:
     /**
      * Tier B: `plus`-only, and only used once [loadSwipeWeights] has succeeded and
      * [setSwipeModelEnabled] has turned it on -- an "experimental swipe model" preference the
-     * user opts into, off by default. See `keyboard/src/main/cpp/gesture/tcn_decoder.cpp`'s own
-     * comment on the scale-compensation shim this checkpoint currently needs, and HANDOFF.md's
-     * Thread 4 for why it is there and when to remove it.
+     * user opts into, off by default. The shipped checkpoint is trained under the fixed feature
+     * scaling; the runtime scale-compensation shim an earlier one needed is gone from
+     * `gesture/tcn_decoder.cpp`.
      */
     std::unique_ptr<TcnDecoder> neuralDecoder_;
     bool neuralEnabled_ = false;
@@ -440,6 +465,7 @@ private:
     int32_t userContext2_ = -1;
 
     bool phraseSuggestions_ = false;
+    bool personalModelEnabled_ = true;
 
     /**
      * Text for the phrase candidates of the request being answered.

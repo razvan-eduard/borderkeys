@@ -599,8 +599,36 @@ int32_t Engine::loadLanguage(const char* tag, int fd, int64_t offset, int64_t le
 }
 
 void Engine::setActiveLanguages(const char* const* tags, const float* weights, int count) {
-    for (LanguagePack& pack : packs_) {
+    // A pack that is open and no longer named is closed, not merely deactivated. The slot it
+    // held is what a pack switched on in its place needs -- loadLanguage replaces an open tag in
+    // place but takes a free slot for a new one, and a pack that was only deactivated kept its
+    // slot for the life of the process, so the fourth language a user switched off and the fifth
+    // they switched on could never be loaded at all. The per-slot context and evidence go with
+    // it: the next pack in the slot is a different language, and an index into a trie that is
+    // no longer mapped is not something to leave lying around for it.
+    for (int i = 0; i < kMaxPacks; ++i) {
+        LanguagePack& pack = packs_[i];
         pack.active = false;
+        if (!pack.isOpen()) {
+            continue;
+        }
+        bool named = false;
+        for (int j = 0; tags != nullptr && j < count; ++j) {
+            if (tags[j] != nullptr && std::strcmp(pack.tag(), tags[j]) == 0) {
+                named = true;
+                break;
+            }
+        }
+        if (!named) {
+            pack.close();
+            languageEvidence_[i] = 0.0f;
+            contextWord1_[i] = -1;
+            contextWord2_[i] = -1;
+            contextTag1_[i] = LanguagePack::kNoPosTag;
+            if (dominantPack_ == i) {
+                dominantPack_ = -1;
+            }
+        }
     }
     if (tags == nullptr) {
         return;
@@ -847,9 +875,14 @@ void Engine::resolveContext(const char* previous1, size_t previous1Length, const
     userContext2_ = -1;
     if (previous1 != nullptr && previous1Length > 0) {
         length1 = foldUtf8(previous1, previous1Length, folded, kMaxComposing);
-        userContext1_ = userModel_.entryIndexFor(previous1, previous1Length);
+        if (personalModelEnabled_) {
+            userContext1_ = userModel_.entryIndexFor(previous1, previous1Length);
+        }
     }
-    if (previous2 != nullptr && previous2Length > 0) {
+    // Left at -1 for a private field: every personal-context path below -- the pair bonus, the
+    // phrase and successor searches -- keys off these two, so this one gate is what keeps a
+    // password field's context from being answered out of the owner's own history.
+    if (personalModelEnabled_ && previous2 != nullptr && previous2Length > 0) {
         userContext2_ = userModel_.entryIndexFor(previous2, previous2Length);
     }
     for (int i = 0; i < kMaxPacks; ++i) {
@@ -997,7 +1030,7 @@ void Engine::setCorrectionStrictness(float scale) {
 }
 
 float Engine::userBoostFor(const char* text, uint32_t length) const {
-    if (userModel_.size() == 0 || text == nullptr || length == 0) {
+    if (!personalModelEnabled_ || userModel_.size() == 0 || text == nullptr || length == 0) {
         return 0.0f;
     }
     return userBoostForCount(userModel_.countFor(text, length));
@@ -1517,7 +1550,7 @@ void Engine::searchUserSuccessors(TopK<Candidate>& heap) {
 }
 
 void Engine::searchUserModel(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap) {
-    if (userModel_.size() == 0) {
+    if (!personalModelEnabled_ || userModel_.size() == 0) {
         return;
     }
     const size_t mark = arena_.used();
@@ -1608,8 +1641,8 @@ int Engine::knownSpelling(const char* word, size_t length, char* out, int outByt
         return static_cast<int>(textLength);
     }
     // The personal dictionary counts. A word this device has learned is a word this device
-    // should not be arguing with.
-    const int32_t entry = userModel_.entryIndexFor(word, length);
+    // should not be arguing with -- except in a private field, where it is not consulted at all.
+    const int32_t entry = personalModelEnabled_ ? userModel_.entryIndexFor(word, length) : -1;
     if (entry >= 0) {
         uint32_t textLength = 0;
         const char* const text = userModel_.entryText(static_cast<uint32_t>(entry), &textLength);
@@ -1807,8 +1840,11 @@ void Engine::loadUserBigrams(const char* const* previous, const size_t* previous
     userModel_.bulkLoadBigrams(previous, previousLengths, next, nextLengths, counts, count);
 }
 
-bool Engine::snapshotUserModel(const char* path) {
-    return created_ && userModel_.snapshot(path);
+const char* Engine::dominantLanguageTag() const {
+    if (dominantPack_ < 0 || dominantPack_ >= kMaxPacks || !packs_[dominantPack_].isOpen()) {
+        return nullptr;
+    }
+    return packs_[dominantPack_].tag();
 }
 
 const char* Engine::candidateText(const Candidate& candidate, uint32_t* lengthOut) const {

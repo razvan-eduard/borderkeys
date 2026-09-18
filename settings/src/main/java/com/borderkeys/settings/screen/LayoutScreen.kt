@@ -238,12 +238,13 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 onClick = {
                     context.startActivity(
                         Intent("android.settings.INPUT_METHOD_SUBTYPE_SETTINGS")
+                            // The input method's own component id: a name, not a sentence,
+                            // so it is built here from the class rather than read out of the
+                            // catalogue, where it sat as a translatable string that one "fixed"
+                            // translation would have broken this button with.
                             .putExtra(
                                 android.provider.Settings.EXTRA_INPUT_METHOD_ID,
-                                strings.getString(
-                                    Keys.LAYOUT_COM_BORDERKEYS_IME_BORDERKEYSSERVICE,
-                                    context.packageName,
-                                ),
+                                "${context.packageName}/${com.borderkeys.ime.BorderKeysService::class.java.name}",
                             )
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     )

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -34,13 +35,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.LanguagePackRepository
 import com.borderkeys.data.entity.LanguagePackEntry
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.predict.LanguagePackInspector
 import com.borderkeys.settings.DefaultableSlider
-import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PickerChip
@@ -48,7 +49,6 @@ import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
-import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -88,6 +88,11 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
         }
     }
 
+    // The engine consults at most MAX_ENABLED packs at once, and the bridge refuses a larger
+    // set outright rather than taking the first few -- so a fifth switch turned on here used to
+    // switch prediction off for all five. The switches stop at the limit instead, and say so.
+    val atLimit = packs.count { it.enabled } >= LanguagePackRepository.MAX_ENABLED
+
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         InterfaceLanguage(preferences) { code ->
             scope.launch { DataGraph.themes.updatePreferences { it.copy(uiLanguage = code) } }
@@ -100,21 +105,18 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
                 )
             }
             for (pack in packs) {
-                PackRow(pack, repository, scope)
+                PackRow(pack, repository, scope, canSwitchOn = !atLimit)
             }
-            // How the packs are weighed against each other while writing, and whether that is
-            // remembered per app: both about the packs above, both set once.
+            if (atLimit) {
+                Explanation(
+                    strings.getString(Keys.LANGUAGES_LIMIT_REACHED, LanguagePackRepository.MAX_ENABLED),
+                )
+            }
+            // How the packs are weighed against each other while writing: about the packs
+            // above, and set once.
             AdvancedSection {
                 LanguageLock(preferences) { lock ->
                     scope.launch { DataGraph.themes.updatePreferences { it.copy(languageLock = lock) } }
-                }
-                SectionHeader(strings[Keys.LANGUAGES_PER_APP_LANGUAGE_MEMORY])
-                SwitchRow(
-                    title = strings[Keys.LANGUAGES_REMEMBER_WHICH_LANGUAGES_YOU_USE_IN],
-                    subtitle = strings[Keys.LANGUAGES_OFF_BY_DEFAULT_IT_STORES_A],
-                    checked = preferences.perAppLanguageMemory,
-                ) { value ->
-                    scope.launch { themes.updatePreferences { it.copy(perAppLanguageMemory = value) } }
                 }
             }
         }
@@ -221,6 +223,7 @@ private suspend fun importPack(
 
         is LanguagePackInspector.Result.Valid -> {
             val info = verdict.info
+            val room = repository.enabledCount() < LanguagePackRepository.MAX_ENABLED
             repository.register(
                 LanguagePackEntry(
                     tag = info.tag,
@@ -231,7 +234,7 @@ private suspend fun importPack(
                     sizeBytes = pack.sizeBytes,
                     sha256 = pack.sha256,
                     importedAt = System.currentTimeMillis(),
-                    enabled = true,
+                    enabled = room,
                     weight = 1f,
                     // Nothing here can know the licence of a word list someone compiled
                     // themselves, and inventing one would be worse than admitting it. The
@@ -239,12 +242,13 @@ private suspend fun importPack(
                     licenseNote = strings[Keys.LANGUAGES_NOT_RECORDED_SET_BY_WHOEVER_BUILT],
                 ),
             )
-            strings.getString(
+            val added = strings.getString(
                 Keys.LANGUAGES_ADDED_WORDS_FOR_2,
                 info.wordCount,
                 info.tag,
                 pack.sha256.take(16),
             )
+            if (room) added else added + " " + switchedOffNote(strings)
         }
     }
 }
@@ -295,6 +299,7 @@ private suspend fun installBundled(
 
         is LanguagePackInspector.Result.Valid -> {
             val info = verdict.info
+            val room = repository.enabledCount() < LanguagePackRepository.MAX_ENABLED
             repository.register(
                 LanguagePackEntry(
                     tag = info.tag,
@@ -305,21 +310,40 @@ private suspend fun installBundled(
                     sizeBytes = pack.sizeBytes,
                     sha256 = pack.sha256,
                     importedAt = System.currentTimeMillis(),
-                    enabled = true,
+                    enabled = room,
                     weight = 1f,
-                    licenseNote = strings[Keys.LANGUAGES_GPL_3_0_OR_LATER_THE],
+                    // What docs/licensing.md records for the six shipped packs: counts from
+                    // the Wortschatz Leipzig corpora under CC BY 4.0, compiled here. This used
+                    // to claim the list was written in this repository under the GPL, which
+                    // was true of the first hand-written starters and of nothing since.
+                    licenseNote = strings[Keys.LANGUAGES_CC_BY_LEIPZIG],
                 ),
             )
-            strings.getString(Keys.LANGUAGES_ADDED_WORDS_FOR, info.wordCount, info.tag)
+            val added = strings.getString(Keys.LANGUAGES_ADDED_WORDS_FOR, info.wordCount, info.tag)
+            if (room) added else added + " " + switchedOffNote(strings)
         }
     }
 }
 
+/**
+ * What an import says when the pack was recorded but not switched on: the limit was reached,
+ * so switching it on is a choice the person makes by switching another off first -- see
+ * [LanguagePackRepository.MAX_ENABLED].
+ */
+private fun switchedOffNote(strings: LanguageManager): String =
+    strings.getString(Keys.LANGUAGES_ADDED_SWITCHED_OFF, LanguagePackRepository.MAX_ENABLED)
+
+/**
+ * One installed pack. [canSwitchOn] is false once [LanguagePackRepository.MAX_ENABLED] packs are
+ * on: a pack that is already on can always be switched off, one that is off cannot be switched
+ * on until another goes.
+ */
 @Composable
 private fun PackRow(
     pack: LanguagePackEntry,
     repository: com.borderkeys.data.LanguagePackRepository,
     scope: kotlinx.coroutines.CoroutineScope,
+    canSwitchOn: Boolean,
 ) {
     val strings = LocalStrings.current
     Column(modifier = Modifier.padding(vertical = 4.dp)) {
@@ -335,6 +359,7 @@ private fun PackRow(
             trailing = {
                 Switch(
                     checked = pack.enabled,
+                    enabled = pack.enabled || canSwitchOn,
                     onCheckedChange = { scope.launch { repository.setEnabled(pack.id, it) } },
                 )
             },
@@ -345,10 +370,29 @@ private fun PackRow(
             range = 0.05f..4f,
             default = 1f,
         ) { value -> scope.launch { repository.setWeight(pack.id, value) } }
+        var confirmingRemove by remember { mutableStateOf(false) }
         TextButton(
-            onClick = { scope.launch { repository.remove(pack) } },
+            onClick = { confirmingRemove = true },
             modifier = Modifier.padding(horizontal = 12.dp),
         ) { Text(strings[Keys.LANGUAGES_REMOVE]) }
+        if (confirmingRemove) {
+            // Asked first: removing deletes the file. A bundled pack is one tap to add back; an
+            // imported one may not be on the phone any more.
+            AlertDialog(
+                onDismissRequest = { confirmingRemove = false },
+                title = { Text(strings[Keys.LANGUAGES_REMOVE_PACK_TITLE]) },
+                text = { Text(strings.getString(Keys.THEME_DELETE_THEME_MESSAGE, pack.displayName)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmingRemove = false
+                        scope.launch { repository.remove(pack) }
+                    }) { Text(strings[Keys.LANGUAGES_REMOVE], color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmingRemove = false }) { Text(strings[Keys.THEME_CANCEL]) }
+                },
+            )
+        }
     }
 }
 

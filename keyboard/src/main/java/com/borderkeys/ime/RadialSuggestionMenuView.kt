@@ -76,6 +76,13 @@ class RadialSuggestionMenuView(
     var listener: Listener? = null
 
     private var words: List<String> = emptyList()
+
+    /**
+     * [words] as the [Selection.Word] each wedge resolves to, built once in [show]: [hitTest]
+     * runs on every steer and [drawWedges] on every frame, and both used to allocate a fresh
+     * selection per wedge to compare or return -- the one thing a draw path here may not do.
+     */
+    private var wordSelections: List<Selection.Word> = emptyList()
     private var anchorX = 0f
     private var anchorY = 0f
 
@@ -133,6 +140,7 @@ class RadialSuggestionMenuView(
      *  happening in practice. */
     fun show(anchorX: Float, anchorY: Float, words: List<String>) {
         this.words = words.take(MAX_WEDGES)
+        wordSelections = this.words.mapIndexed { index, word -> Selection.Word(index, word) }
         currentSelection = Selection.None
         recomputeWedgeBoundaries()
         // Clamped to this view's own bounds, always -- regardless of which anchor mode chose
@@ -184,6 +192,7 @@ class RadialSuggestionMenuView(
      */
     fun hide() {
         words = emptyList()
+        wordSelections = emptyList()
         currentSelection = Selection.None
         acceptsOwnTouches = false
         ownTouchStreamActive = false
@@ -396,7 +405,7 @@ class RadialSuggestionMenuView(
             val start = normalizeDegrees(wedgeStartDeg[index])
             val delta = normalizeDegrees(angleDeg - start)
             if (delta < wedgeSweepDeg[index]) {
-                return Selection.Word(index, words[index])
+                return wordSelections[index]
             }
         }
         return Selection.None
@@ -459,7 +468,7 @@ class RadialSuggestionMenuView(
         val previousAlign = paints.label.textAlign
         paints.label.textAlign = Paint.Align.CENTER
         for (index in words.indices) {
-            val fill = if (currentSelection == Selection.Word(index, words[index])) {
+            val fill = if (currentSelection == wordSelections[index]) {
                 paints.accent
             } else {
                 paints.keyFill
