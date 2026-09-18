@@ -198,10 +198,12 @@ python3 tools/make_pack.py --frequencies ro_words.txt --names-flag-only names_ro
     --names-exclude dictionaries/ro_RO.names-exclude --tag ro-RO --out ro_RO.bkd --keep-intermediate
 ```
 
-The committed `dictionaries/*.tsv` are the result, and the keyboard's own rule for using the
-flag is one more check: with several packs active, every pack that knows a word has to agree
+The committed `dictionaries/*.tsv` are the result, and the keyboard's own rules for using the
+flag are two more checks: with several packs active, every pack that knows a word has to agree
 it is a name before it is capitalised, so a name in one language's list cannot capitalise an
-ordinary word of another's.
+ordinary word of another's; and autocorrect lets a name correct only its own letters --
+"maria" to "Maria", "laurentiu" to "Laurențiu" -- never an ordinary word an edit or two away,
+so "everyone" cannot become "Everton" just because a football club is in the corpus.
 
 ## Shipping one with the application
 

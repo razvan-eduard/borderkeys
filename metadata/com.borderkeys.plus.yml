@@ -53,7 +53,14 @@ Description: |-
       how different a correction may be from what you typed are settings. A correct word the
       dictionaries do not know is left alone, and backspace puts back exactly what you typed.
     * Shift the way every keyboard does it — spent by the next letter, locked by a hold or two
-      taps — and sentences capitalised even in fields that never asked, if you want them.
+      taps. Capitals off, on when the field asks, or on everywhere: one choice, since some apps
+      forget to ask.
+    * The pressed key shows itself enlarged above your finger while it is held, and the keypress
+      vibration follows the phone's own setting or one of three strengths, from its own feedback
+      classes — still with no vibration permission.
+    * Text shortcuts: a word that stands for a longer text expands when a space or a punctuation
+      mark follows it, keeps the capital you gave it, and comes back with the backspace straight
+      after.
     * A names dictionary built from Wikidata (CC0), so a name capitalises correctly
       mid-sentence instead of only at the start of one — while everyday words that happen to be
       somebody's name stay lower-case.
@@ -61,9 +68,12 @@ Description: |-
       alongside QWERTY, for every bundled language.
     * A personal dictionary you can see and edit: every learned word has a Forget and a Block
       right beside it, not a black box.
-    * A row of quick actions for copy, paste, select-all and more, extendable with your own
-      macros — above the suggestions, below the keys or down a side, in four sizes, with
-      optional labels.
+    * A row of quick actions — copy, paste, cut, select, delete a word, move the cursor, undo
+      and redo, flip a word's capital, capitalise every sentence in the field — extendable with
+      your own macros; above the suggestions, below the keys or down a side, in four sizes, with
+      optional labels and outlines.
+    * Every settings card leads with what changes how typing feels; the calibration values and
+      the choices made once fold under an "Advanced settings" line.
     * Built-in themes, full manual colour control, and a library to save, import and share
       your own.
     * Particle effects on the keys, the ring, the strip and the bars: an outline layer that
