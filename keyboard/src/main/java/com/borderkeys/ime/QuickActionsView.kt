@@ -206,19 +206,18 @@ class QuickActionsView(
      * labels -- only its height does, to take the label in.
      */
     private fun pressedBounds(index: Int, out: android.graphics.RectF) {
-        val half = buttonSizePx / 2f
-        val lift = buttonSizePx * TAB_LIFT_FRACTION
+        val gap = buttonSizePx * TAB_FREE_GAP_FRACTION
         val alongHalf = slotPx * TAB_ALONG_FRACTION / 2f
         val cx = centreX[index]
         val cy = centreY[index]
+        // Flush against the attached edge -- the two square corners meet the keyboard -- and a
+        // small gap in from the free edge, so the tab's rounded top does not run into the top
+        // of the bar.
         when (attachedEdge) {
-            EDGE_TOP -> {
-                val far = (if (labelsActive()) labelBandBottomY else cy + half) + lift
-                out.set(cx - alongHalf, 0f, cx + alongHalf, far.coerceAtMost(height.toFloat()))
-            }
-            EDGE_LEFT -> out.set(0f, cy - alongHalf, (cx + half + lift).coerceAtMost(width.toFloat()), cy + alongHalf)
-            EDGE_RIGHT -> out.set((cx - half - lift).coerceAtLeast(0f), cy - alongHalf, width.toFloat(), cy + alongHalf)
-            else -> out.set(cx - alongHalf, (cy - half - lift).coerceAtLeast(0f), cx + alongHalf, height.toFloat())
+            EDGE_TOP -> out.set(cx - alongHalf, 0f, cx + alongHalf, height - gap)
+            EDGE_LEFT -> out.set(0f, cy - alongHalf, width - gap, cy + alongHalf)
+            EDGE_RIGHT -> out.set(gap, cy - alongHalf, width.toFloat(), cy + alongHalf)
+            else -> out.set(cx - alongHalf, gap, cx + alongHalf, height.toFloat())
         }
     }
 
@@ -689,9 +688,9 @@ class QuickActionsView(
          *  the outline traces -- leaving a gap between neighbours like the keys' own. */
         const val TAB_ALONG_FRACTION = 0.94f
 
-        /** How far past the icon (or the label) the tab reaches on its free side, the corner
-         *  that is rounded, as a share of the icon's size. */
-        const val TAB_LIFT_FRACTION = 0.25f
+        /** The gap the tab leaves in from the bar's free edge -- the rounded side -- as a share
+         *  of the icon's size, so the rounded top does not touch the top of the bar. */
+        const val TAB_FREE_GAP_FRACTION = 0.14f
 
         /** Which edge of the bar meets the keyboard -- see [attachedEdge]. */
         const val EDGE_TOP = 0
@@ -714,7 +713,7 @@ class QuickActionsView(
 
         /** The margin the bar keeps around its content on the free edge and the attached one,
          *  as a share of the icon -- small, so the bar wraps the icon and label tightly. */
-        const val EDGE_MARGIN_FRACTION = 0.24f
+        const val EDGE_MARGIN_FRACTION = 0.28f
 
         /** The custom-action dot's radius, as a fraction of the icon's own size -- see
          *  ClipboardPanelView's PIN_RADIUS_FRACTION, the same idea at the same rough scale. */
