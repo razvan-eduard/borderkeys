@@ -39,6 +39,7 @@ import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
+import com.borderkeys.settings.rememberThemeUpdater
 
 /**
  * Where the keyboard is and how big -- once per orientation.
@@ -60,6 +61,7 @@ fun SizeScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val repository = remember { DataGraph.themes }
     val update = rememberPreferencesUpdater()
+    val updateTheme = rememberThemeUpdater()
     val appearance by repository.appearance
         .collectAsStateWithLifecycle(initialValue = remember { repository.currentAppearance() })
     val (theme, _, preferences) = appearance
@@ -166,26 +168,37 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                     onClick = { updatePlacement { defaultPlacement(landscapeTab) } },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 ) { Text(strings[Keys.SIZE_RESET_SIZE_AND_POSITION]) }
-                // Not per-orientation: edge arrows and the blur behind the keyboard are a
-                // gutter treatment, the same on both sides of a rotation, not a size or
-                // position value -- and set once, so they sit under the fold.
+                // Everything about the empty strip a narrowed keyboard leaves beside it, in one
+                // card: whether the background fills it, whether the app behind is blurred when
+                // it does not, and the reach-across arrow. Not per-orientation -- a gutter
+                // treatment is the same on both sides of a rotation -- and set once, so under
+                // the fold. "Background across the whole width" is a theme value, kept here with
+                // the blur it gates rather than on the Theme screen away from it.
                 AdvancedSection {
                     SectionHeader(strings[Keys.SIZE_THE_SPACE_BESIDE_THE_KEYS])
+                    SwitchRow(
+                        title = strings[Keys.THEME_FULL_WIDTH_BACKGROUND],
+                        subtitle = strings[Keys.THEME_FULL_WIDTH_BACKGROUND_NOTE],
+                        checked = theme.fullWidthBackground,
+                    ) { value -> updateTheme { it.copy(fullWidthBackground = value) } }
+                    // Shown always, so it does not look deleted, but only usable when something
+                    // can show through: with the background reaching both edges there is nothing
+                    // behind the gutter to blur, so it is disabled with a note pointing at the
+                    // switch above that frees it.
+                    SwitchRow(
+                        title = strings[Keys.SIZE_BLUR_WHAT_SHOWS_THROUGH],
+                        subtitle = strings[Keys.SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY],
+                        checked = preferences.blurBehindKeyboard,
+                        enabled = !theme.fullWidthBackground,
+                    ) { value -> update { it.copy(blurBehindKeyboard = value) } }
+                    if (theme.fullWidthBackground) {
+                        Explanation(strings[Keys.SIZE_BLUR_NEEDS_NARROW_BACKGROUND])
+                    }
                     SwitchRow(
                         title = strings[Keys.SIZE_ARROW_TO_MOVE_IT_ACROSS],
                         subtitle = strings[Keys.SIZE_AN_ARROW_IN_THE_EMPTY_STRIP],
                         checked = preferences.edgeArrows,
                     ) { value -> update { it.copy(edgeArrows = value) } }
-                    // Only when something can show through. With the background reaching both
-                    // edges there is nothing behind the gutter to blur, and a switch that does
-                    // nothing is worse than a switch that is not there.
-                    if (!theme.fullWidthBackground) {
-                        SwitchRow(
-                            title = strings[Keys.SIZE_BLUR_WHAT_SHOWS_THROUGH],
-                            subtitle = strings[Keys.SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY],
-                            checked = preferences.blurBehindKeyboard,
-                        ) { value -> update { it.copy(blurBehindKeyboard = value) } }
-                    }
                 }
             }
         }

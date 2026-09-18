@@ -722,6 +722,7 @@
   "size_bigger_keys_are_easier_to_hit": "Des touches plus grandes se touchent plus facilement et laissent voir moins de l'application. Il n'y a pas de bonne réponse ; il n'y a que celle qui convient à votre pouce.",
   "size_blur_what_shows_through": "Flouter ce qui transparaît",
   "size_blurs_the_application_behind_the_empty": "Floute l'application derrière la bande vide. Le système la compose à chaque image tant que le clavier est visible, et certains appareils le refusent purement et simplement.",
+  "size_blur_needs_narrow_background": "Seulement quand le fond ne remplit pas toute la largeur. Désactive l'interrupteur ci-dessus pour flouter ce qui apparaît à côté des touches.",
   "size_costs_about_a_fifth_of_the": "Coûte environ un cinquième de la hauteur du clavier. Sans elle, les chiffres sont sur l'appui long de la rangée de lettres du haut.",
   "size_distance_from_the_bottom_edge": "Distance au bord inférieur",
   "size_docked": "Ancré",

@@ -722,6 +722,7 @@
   "size_bigger_keys_are_easier_to_hit": "Bigger keys are easier to hit and leave less of the app visible. There is no right answer; there is only the one that fits your thumb.",
   "size_blur_what_shows_through": "Blur what shows through",
   "size_blurs_the_application_behind_the_empty": "Blurs the application behind the empty strip. The system composites it on every frame the keyboard is visible, and some devices refuse it outright.",
+  "size_blur_needs_narrow_background": "Only while the background does not fill the whole width. Turn off the switch above to blur what shows through beside the keys.",
   "size_costs_about_a_fifth_of_the": "Costs about a fifth of the keyboard's height. Without it, the digits sit on the long press of the top letter row.",
   "size_distance_from_the_bottom_edge": "Distance from the bottom edge",
   "size_docked": "Docked",

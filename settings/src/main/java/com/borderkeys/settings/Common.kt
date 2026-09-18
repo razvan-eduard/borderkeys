@@ -167,13 +167,16 @@ fun SwitchRow(
     title: String,
     subtitle: String? = null,
     checked: Boolean,
+    enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     SettingRow(
         title = title,
         subtitle = subtitle,
-        onClick = { onCheckedChange(!checked) },
-        trailing = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
+        // Disabled shows the row greyed and unresponsive rather than hidden, so a setting
+        // gated on another one is still discoverable, with a note to say what unlocks it.
+        onClick = if (enabled) ({ onCheckedChange(!checked) }) else null,
+        trailing = { Switch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange) },
     )
 }
 

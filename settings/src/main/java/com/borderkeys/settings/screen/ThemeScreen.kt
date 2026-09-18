@@ -476,11 +476,8 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ) { update { t -> t.copy(backgroundGradientColor = it) } }
                 Explanation(strings[Keys.THEME_SECOND_COLOUR_NOTE])
                 AdvancedSection {
-                    SwitchRow(
-                        title = strings[Keys.THEME_FULL_WIDTH_BACKGROUND],
-                        subtitle = strings[Keys.THEME_FULL_WIDTH_BACKGROUND_NOTE],
-                        checked = theme.fullWidthBackground,
-                    ) { value -> update { it.copy(fullWidthBackground = value) } }
+                    // "Background across the whole width" lives on the Size screen now, in the
+                    // same card as the blur it gates -- see that screen's own comment.
                     SwitchRow(
                         title = strings[Keys.THEME_NAVIGATION_BAR_BACKGROUND],
                         subtitle = strings[Keys.THEME_NAVIGATION_BAR_BACKGROUND_NOTE],

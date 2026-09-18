@@ -747,6 +747,7 @@ object Keys {
     const val SIZE_AN_ARROW_IN_THE_EMPTY_STRIP = "size_an_arrow_in_the_empty_strip"
     const val SIZE_ARROW_TO_MOVE_IT_ACROSS = "size_arrow_to_move_it_across"
     const val SIZE_BIGGER_KEYS_ARE_EASIER_TO_HIT = "size_bigger_keys_are_easier_to_hit"
+    const val SIZE_BLUR_NEEDS_NARROW_BACKGROUND = "size_blur_needs_narrow_background"
     const val SIZE_BLUR_WHAT_SHOWS_THROUGH = "size_blur_what_shows_through"
     const val SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY = "size_blurs_the_application_behind_the_empty"
     const val SIZE_COSTS_ABOUT_A_FIFTH_OF_THE = "size_costs_about_a_fifth_of_the"
