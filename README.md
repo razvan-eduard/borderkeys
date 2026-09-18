@@ -38,8 +38,9 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   n-grams have no evidence at all, a part-of-speech tag per word and a tag transition matrix
   break the tie; [`docs/pos-tagging.md`](docs/pos-tagging.md) records exactly how much that is
   worth, because the number is smaller than it looks.
-- **Several languages active at once.** Every installed dictionary is consulted on every word;
-  the one that actually recognises what you typed wins, without a manual switch. How quickly the
+- **Several languages active at once.** Every dictionary you have switched on — up to four at a
+  time — is consulted on every word; the one that actually recognises what you typed wins,
+  without a manual switch. How quickly the
   keyboard commits to one language once it has seen enough — off, patient, balanced, quick or
   strict — is a setting.
 
@@ -146,8 +147,8 @@ itself: **Capital** flips the first letter of the word at the cursor, **Normalis
 the start of every sentence in the field. Built in, and extendable: a **custom quick action** is
 a macro of steps you define yourself, pinned onto the bar exactly like a built-in one. The bar
 can sit above the suggestions, below the keys, or down either side; it comes in four sizes, with
-optional labels under the buttons and an outline around each — its own switch, since the buttons
-are not keys — and the settings screen shows the real bar live while you change it.
+optional labels under the buttons and an outline around each whenever the theme outlines the
+keys — and the settings screen shows the real bar live while you change it.
 
 <p align="center">
   <img src="docs/images/quick_actions.png" alt="The quick actions screen: the bar drawn live above its settings, with labels under the buttons" width="40%">
@@ -215,6 +216,7 @@ dictionaries to each other directly, without a file. Nothing syncs anywhere on i
 | Zero permissions, no `INTERNET` in the merged manifest | ✓ | ✓ |
 | Experimental neural swipe decoder, opt-in | | ✓ |
 | On-device text assistant (draft box) | | ✓ |
+| Correct, Shorten, Summarise and your own instructions in every app's text-selection menu | | ✓ |
 
 Both stay free software end to end — `plus` only *adds* to `core`, it never trades privacy
 for the extra features. The separation is at compile time, not behind a runtime flag: unpack
@@ -278,7 +280,9 @@ NDK 27.1.12297006.
 Three checks run as part of `assemble` and fail the build rather than warn:
 
 - `verifyNoInternetPermission` — reads the *merged* manifest, so a library that injects
-  `INTERNET` during the merge is caught rather than inherited.
+  `INTERNET` during the merge is caught rather than inherited. On `core` it also refuses the
+  assistant's four text-selection entries, so the free build never advertises a Correct,
+  Shorten, Summarise or custom action it cannot run.
 - `verifyNoForbiddenDependencies` — walks the release runtime classpath for telemetry, HTTP
   clients and DI containers, transitively.
 - `verifyKeyboardHasNoCompose` — walks `:keyboard`'s classpath for any Compose artifact.

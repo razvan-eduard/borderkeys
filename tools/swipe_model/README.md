@@ -21,7 +21,8 @@ This directory is tracked in git, and the weights it exports ship as
   with warmup+cosine decay. Run as `python -u train.py --device mps` (or `cuda`/`cpu`,
   auto-detected). Supports `--resume` to recover after a crash/kill/forced restart — checkpoints
   (model + optimizer + epoch + step) are written every epoch to `checkpoint.pt`.
-- `model.py` — `TcnEncoder` architecture (629,601 parameters), `dct_basis`/`key_log_probs`.
+- `model.py` — `TcnEncoder` architecture (629,601 parameters in the encoder; the exported weight
+  file also carries the 12,640-parameter key embedding, 642,241 in all), `dct_basis`/`key_log_probs`.
 - `features_np.py` — feature extraction: 64-point resampling, Savitzky-Golay smoothing.
 - `augment.py` — trajectory + keyboard-layout augmentation for training-time data variety.
 - `prepare_corpus.py`, `futo_layout.py`, `futo_to_layout.py` — corpus/layout prep, built from the

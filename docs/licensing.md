@@ -241,8 +241,8 @@ one; the difference is the one optional decoder and its weights, both of them th
 
 | Asset | Position |
 |---|---|
-| A bigger dictionary than what ships | **Resolved for Romanian, open for the rest.** The bundled dictionaries in 2.1 are already compiled from a real corpus, not hand-written -- see that row for what and how much. They stay bounded on purpose: bigger is a licence question with an answer (recorded there) and an APK-size question with a budget, not something to grow without noticing. A pack larger than what ships is still an import away, built the same way from a wordlist whose licence the builder read first. |
-| Word packs beyond the starters | **Resolved by not shipping any.** A pack is built with `tools/build_dict.py` from a word list whose licence the builder knows, and installed by the user from a local file. Nothing is downloaded, ever. This sidesteps the problem the earlier draft called unresolved — that many lexical corpora are not free — rather than solving it: the project ships no corpus, so it makes no claim about one. `LanguagePackEntry.licenseNote` is a required column so that a pack's terms travel with it in the database, and the Languages screen shows that note next to the pack. |
+| A bigger dictionary than what ships | **Resolved for all six.** The bundled dictionaries in 2.1 are already compiled from a real corpus, not hand-written -- see that row for what and how much. They stay bounded on purpose: bigger is a licence question with an answer (recorded there) and an APK-size question with a budget, not something to grow without noticing. A pack larger than what ships is still an import away, built the same way from a wordlist whose licence the builder read first. |
+| Word packs beyond the six bundled | **Resolved by not shipping any.** A pack is built with `tools/build_dict.py` from a word list whose licence the builder knows, and installed by the user from a local file. Nothing is downloaded, ever. This sidesteps the problem the earlier draft called unresolved — that many lexical corpora are not free — rather than solving it: the project ships no corpus, so it makes no claim about one. `LanguagePackEntry.licenseNote` is a required column so that a pack's terms travel with it in the database, and the Languages screen shows that note next to the pack. |
 | Swipe tier B, FUTO neural weights | **Not built, in either flavor.** See 2.3 for what the licence check found and why the integration is larger than the plan assumed. What shipped instead is option B2 (2.5): a decoder written here and weights trained here on the free corpus, in `plus` only, behind an off-by-default switch. Consequently `plus` carries **no** non-free asset and declares no anti-feature. |
 
 ### 2.2.1 The tier-B candidates, kept on the record
@@ -344,7 +344,7 @@ produced by this project's own tooling; none is a third-party dataset.
 | `native-tests/data/corpus/*.bkd`, 18 blobs | Deliberately damaged copies of the pack `tools/build_dict.py --selftest` produces: truncated headers, wrong magic, sizes that lie, section offsets past the end of the file, a capacity that is not a power of two, an unterminated language tag | GPL-3.0-or-later |
 | `native-tests/data/gestures.csv` | Synthesised by `tools/gesture_replay.py --synthesise`; no recorded human gesture is in this repository | GPL-3.0-or-later |
 | `native-tests/data/qwerty_1080.layout` | The QWERTY geometry at 1080 px, written out for the replay harness | GPL-3.0-or-later |
-| `data/schemas/com.borderkeys.data.BorderKeysDatabase/{1,2}.json` | Emitted by Room's annotation processor from our own entities | GPL-3.0-or-later |
+| `data/schemas/com.borderkeys.data.BorderKeysDatabase/1.json` through `6.json` | Emitted by Room's annotation processor from our own entities, one per schema version | GPL-3.0-or-later |
 | `docs/gesture-accuracy.json` | The accuracy figure CI compares against | GPL-3.0-or-later |
 
 ---

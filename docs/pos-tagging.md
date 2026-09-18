@@ -69,8 +69,9 @@ not matter, but because this particular use of the tag is insensitive to it.
 
 ## Cost
 
-Per language: 18 KB of tags plus a 255×255 matrix at one byte each, 65 KB. **81 KB**, against a
-2.1 MB pack. The lookup is two array reads and an add.
+Per language: 18 KB of tags plus a 255×255 matrix at one byte each, 65 KB. **81 KB**, against
+the 2.1 MB pack of the time -- the shipped packs are 16 to 22 MB now, so the share is smaller
+still. The lookup is two array reads and an add.
 
 ## Licensing
 
@@ -128,4 +129,5 @@ Version 2 of `.bkd`. Two sections were added and the header grew from 256 to 320
 their descriptors, so a version 1 pack is refused rather than read with the new fields zeroed —
 every section offset in an old file means something different now. Bundled dictionaries are
 compiled at build time and are unaffected; a pack someone imported by hand has to be imported
-again, and the refusal says so.
+again, and the refusal says so. Version 3 later added the word-flag section the names use and
+grew the header once more, to 336 bytes, by the same rule; `bkd_format.hpp` keeps the history.
