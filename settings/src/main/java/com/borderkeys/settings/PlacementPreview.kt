@@ -140,7 +140,6 @@ fun PlacementPreview(
                         preferences.quickActionsMode == KeyboardPreferences.QUICK_ACTIONS_COLLAPSED
                     view.quickActions.sizeLevel = preferences.quickActionsSize
                     view.quickActions.showLabels = preferences.quickActionsLabels
-                    view.quickActions.outlineButtons = preferences.quickActionsOutlined
                     view.quickActionsPlacement = preferences.quickActionsPlacement
                 } else {
                     view.quickActions.visibility = android.view.View.GONE
