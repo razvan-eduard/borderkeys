@@ -95,7 +95,8 @@ class BorderKeysService :
      * it started loses the batch outright. Nothing on this scope runs longer than a transaction,
      * and nothing here ever needs to stop it.
      */
-    private val learningScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val learningJob = SupervisorJob()
+    private val learningScope = CoroutineScope(learningJob + Dispatchers.IO)
 
     /**
      * Serialises [loadDictionaries]: the start-up load and a reload from [observeLanguagePacks]
@@ -1123,13 +1124,18 @@ class BorderKeysService :
     override fun onDestroy() {
         runCatching { unregisterReceiver(wallpaperChangedReceiver) }
         unregisterClipboardListener()
+        // The platform's own onDestroy finishes the current input first -- onFinishInput
+        // records the word being composed and asks for fresh suggestions -- and it has to run
+        // while the engine is still alive: with the engine shut down before it, as it used to
+        // be, that request went to a prediction thread that had already quit, one dead-thread
+        // warning per destroy. Everything of ours comes after it.
+        super.onDestroy()
         flushLearningBeforeDestroy()
         // Zeroes the handle under a lock before freeing, so a request already in flight
         // completes against a live engine and anything after it sees zero and returns.
         engine.shutdown()
         scope.cancel()
         host = null
-        super.onDestroy()
     }
 
     // ---- geometry ------------------------------------------------------------------------------
@@ -3674,11 +3680,21 @@ class BorderKeysService :
      * answer must not hold the input method's main thread on the way out.
      */
     private fun flushLearningBeforeDestroy() {
-        val batch = drainLearning() ?: return
+        val batch = drainLearning()
+        val inFlight = learningJob.children.toList()
+        if (batch == null && inFlight.isEmpty()) {
+            return
+        }
         runCatching {
             kotlinx.coroutines.runBlocking {
                 kotlinx.coroutines.withTimeoutOrNull(FINAL_FLUSH_TIMEOUT_MILLIS) {
-                    withContext(Dispatchers.IO) { persistLearning(batch) }
+                    // A flush that already left -- onFinishInput's, a moment ago inside
+                    // super.onDestroy() -- is still writing on learningScope; it is waited for
+                    // the same as whatever is left here.
+                    inFlight.forEach { it.join() }
+                    if (batch != null) {
+                        withContext(Dispatchers.IO) { persistLearning(batch) }
+                    }
                 }
             }
         }.onFailure { error ->
