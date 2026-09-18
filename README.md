@@ -42,11 +42,21 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   the one that actually recognises what you typed wins, without a manual switch. How quickly the
   keyboard commits to one language once it has seen enough — off, patient, balanced, quick or
   strict — is a setting.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/4_languages.jpg" alt="The Languages screen: installed packs, their weights, and the ones included with the app" width="30%">
+</p>
+
 - **Retroactive correction when the conversation's language turns out to differ.** A correction
   applied while typing can be wrong not because the guess was bad, but because the keyboard read
   the wrong language at the time — the sentence itself proves it a few words later. BorderKeys
   notices the flip and offers the affected word back (or fixes it automatically, your choice),
   landing on the field's own undo history like any other edit.
+
+<p align="center">
+  <img src="docs/images/language_switch.png" alt="The retroactive language-switch correction offer, in the suggestion strip's own slot" width="40%">
+</p>
+
 - **Autocorrect you can bound.** Off by default, and when on: the shortest word it may touch,
   how strict the engine's own ranking has to be, and how different a correction may be from what
   you typed — one letter, two only in long words, or two — are each a setting. A correct word the
@@ -58,6 +68,11 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   space is added after punctuation and a picked suggestion, and the space you type out of habit
   right after can be ignored once, always, or kept. The capital after a full stop is decided
   from what the keyboard just wrote, so it comes even in apps whose editor answers late.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/10_typing_settings.jpg" alt="Capitals: off, when the app asks, or always" width="30%">
+</p>
+
 - **Swipe typing**, geometric (SHARK²) and deterministic in both flavors — no model, no training
   data, no accuracy number that depends on what you happened to type it on. A small loop at a
   doubled letter tells "hello" from "helo". Swiping switches itself off in password, e-mail,
@@ -72,12 +87,23 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   field, or elsewhere on the screen — closes it and keeps the swiped word, and can hide the
   keyboard too if you prefer. Position, size and the blur behind it are adjustable. Off by
   default — the ordinary suggestion strip is unchanged either way.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/5_radial_menu.jpg" alt="The ring of alternatives around the finger, with its particles" width="30%">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/6_radial_settings.jpg" alt="The ring's settings, the detection dials folded away" width="30%">
+</p>
+
 - **A names dictionary** built from Wikidata (CC0), so a name capitalises correctly mid-sentence
   instead of only at the start of one or after a shift — "Sadoveanu" and "Popescu" as much as
   "Andrei". Everyday words that happen to be somebody's name ("in", "will", "si", "cloud") stay
   lower-case: a word only earns the flag when enough real people carry it for how common the
   word is, never when the language's own treebank calls it an ordinary word, and never when
   its spelling dictionary lists it as one unless the treebank knows better.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg" alt="Laurențiu and Maria capitalised on their own in the strip, and a held key's popup" width="30%">
+</p>
+
 - **Alternate physical layouts** — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona — for
   the 26-letter alphabets every bundled dictionary already knows, plus a number row, a symbols
   page with a proper number pad, and a numeric keypad in numeric fields.
@@ -87,29 +113,32 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 - **Text shortcuts.** A word that stands for a longer text — "omw" for "on my way", an address, a
   sign-off — expands when a space or a punctuation mark follows it, takes the capital you gave the
   shortcut, and comes back with the backspace straight after, like any other correction.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/12_text_shortcuts.jpg" alt="The Personal dictionary screen, with the text shortcuts card" width="30%">
+</p>
+
 - **Keys that answer back.** The pressed key shows itself enlarged above your finger while it is
   held, the held key's alternates pop up in the same place, and the keypress vibration follows
   the phone's own setting or one of three strengths — its own feedback classes, so still without
   a vibration permission. Long-press hints, the hold duration and what the enter key does are
   settings too.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/9_layout_keys.jpg" alt="Layout & keys: the popup switch and the vibration strength" width="30%">
+</p>
+
 - **Settings that stay out of the way.** Every card leads with what changes how typing feels;
   the calibration values, the workarounds for particular apps and the choices made once fold
   under an "Advanced settings" line, closed until you open it.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/2_home.jpg" alt="The settings home" width="30%">
+</p>
+
 - **Private mode is automatic.** In a password field, or wherever an app asks for no personalised
   learning, there is no learning, no clipboard history, no swipe, no ring — and a password's text
   never reaches the prediction engine at all.
-
-| A held key, its popup, and names capitalised on their own | Capitals: off, when the app asks, always | Several languages at once | Text shortcuts |
-|---|---|---|---|
-| ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/10_typing_settings.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/4_languages.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/12_text_shortcuts.jpg) |
-
-| A ring of alternatives, with its particles | The ring's settings, the dials folded away | Layout & keys: the popup and the vibration | Settings, each card leading with what matters |
-|---|---|---|---|
-| ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/5_radial_menu.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/6_radial_settings.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/9_layout_keys.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/2_home.jpg) |
-
-<p align="center">
-  <img src="docs/images/language_switch.png" alt="The retroactive language-switch correction offer, in the suggestion strip's own slot" width="40%">
-</p>
 
 ### Quick actions
 
