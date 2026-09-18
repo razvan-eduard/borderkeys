@@ -84,8 +84,9 @@ hide it. It is also one less dependency: no runtime, no model file, no version t
 
 ## What is not yet known
 
-39% of the pack's vocabulary — 6,978 of 18,000 words — gets no tag, because the treebank never
-contains them. Those are the rare words, and the blind positions are exactly where the previous
+39% of the pack's vocabulary — 6,978 of 18,000 words, measured on the original single-corpus
+packs; the shipped ~100,000-word packs have a larger untagged tail still, since the treebank's
+own vocabulary did not grow with them — gets no tag, because the treebank never contains them. Those are the rare words, and the blind positions are exactly where the previous
 word is rare, so grammar may be unavailable where it is most wanted. The measurement above
 already includes this dilution: a position whose previous word has no tag falls back to
 frequency and is counted as such.

@@ -9,12 +9,11 @@ Offline PyTorch training for the swipe-typing model. This is the *training* side
 runtime that actually ships in the app is a hand-written C++ inference implementation under
 `keyboard/src/main/cpp/gesture/` (`tcn_encoder.*`, `tcn_decoder.*`, `tcn_ctc_decoder.*`,
 `tcn_weights.*`, `tcn_features.*`), which reads the weights this pipeline exports. No ML runtime
-(TFLite/ONNX/NNAPI) is used anywhere in this project — the model is small enough (~630K params)
+(TFLite/ONNX/NNAPI) is used anywhere in this project — the model is small enough (~640K params)
 that a bespoke C++ decoder was worth writing instead.
 
-**This whole directory is currently untracked in git.** Nothing here has ever been committed.
-Whether/when to commit it (and the exported weights) is a decision for whoever's driving that
-session, not assumed here — but treat it as at-risk until it is.
+This directory is tracked in git, and the weights it exports ship as
+`keyboard/src/plus/assets/model.bkw` (the `plus` flavor only; `core` compiles the decoder out).
 
 ## What's here
 
@@ -46,10 +45,10 @@ session, not assumed here — but treat it as at-risk until it is.
 - To check on a run in progress: `ps aux | grep train.py` and `tail -f train.log` (progress is one
   `epoch N/120: loss X.XXXX` line per epoch, nothing more granular).
 
-## Status as of 2026-09-12
+## Status
 
-A training run was in progress: PID 7294, started 2026-09-11 ~23:10 local time, at epoch 97/120
-(loss 0.8547, decreasing steadily) as of the last check. **Re-check `ps aux`/`train.log` before
-assuming anything about where it landed** — it may have finished, be further along, or have
-stopped. If it finished, `export_weights.py` has **not** been run against the result yet as of
-this note — the runtime `tcn_weights.*` files have not been regenerated from this run.
+The shipped checkpoint is the one exported on 2026-09-16 (`model.bkw`, weight-file version 2,
+642,241 parameters, about 2.5 MB), trained under the fixed feature scaling -- the runtime
+scale-compensation shim an earlier checkpoint needed is gone. To replace it: train with
+`train.py`, evaluate with `eval_ctc.py`, export with `export_weights.py`, and let
+`tools/tcn_replay.py` compare the result against the baseline before committing it.

@@ -72,7 +72,7 @@ that is off by default; the geometric decoder stays the one in use until you tur
 
 * No model is bundled and none can be downloaded automatically — there is still no
   INTERNET permission anywhere in the app. A model arrives only when you pick a GGUF file
-  yourself, and it is refused unless its SHA-256 matches one of three entries compiled
+  yourself, and it is refused unless its SHA-256 matches one of five entries compiled
   into the build.
 * Inference runs in a separate process that is started when you ask for something and
   stops ninety seconds after you stop asking. The model is unloaded with it.

@@ -10,7 +10,7 @@
 # No AntiFeatures. This adds llama.cpp (MIT, compiled from the vendored source) and the libc++ it
 # links against (Apache-2.0 with the LLVM exception). It bundles no model and cannot fetch one:
 # there is still no INTERNET permission. A model arrives only when the user picks a file whose
-# SHA-256 matches an entry compiled into the build, and all three of those are Apache-2.0. See
+# SHA-256 matches an entry compiled into the build, and all five of those are Apache-2.0. See
 # docs/licensing.md section 2.2.1.
 
 Categories:
@@ -102,7 +102,7 @@ Description: |-
 
     * No model is bundled and none can be downloaded automatically — there is still no
       INTERNET permission anywhere in the app. A model arrives only when you pick a GGUF file
-      yourself, and it is refused unless its SHA-256 matches one of three entries compiled
+      yourself, and it is refused unless its SHA-256 matches one of five entries compiled
       into the build.
     * Inference runs in a separate process that is started when you ask for something and
       stops ninety seconds after you stop asking. The model is unloaded with it.
