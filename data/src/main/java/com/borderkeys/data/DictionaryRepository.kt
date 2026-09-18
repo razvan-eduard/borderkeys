@@ -42,9 +42,6 @@ class DictionaryRepository internal constructor(
     suspend fun topBigrams(limit: Int = MAX_BIGRAMS_IN_MEMORY): List<UserBigram> =
         userBigrams.topPairs(limit)
 
-    /** How many words are remembered. */
-    suspend fun wordCount(): Int = userWords.count()
-
     /** How many pairs are remembered. Shown in Settings, because it should be visible. */
     suspend fun bigramCount(): Int = userBigrams.count()
 

@@ -101,29 +101,6 @@ reuse lint
 If you touched the gesture decoder, also run `tools/gesture_replay.py`. Top-1 accuracy must
 not fall below the value recorded in `docs/`; CI compares against it.
 
-## What a debug build will tell you
-
-A debuggable build — `assembleCoreDebug`, `assemblePlusDebug`; for the emulator, never for
-measuring latency — logs every gate on the learning path under one tag: the field's private
-flags, the correction decided at a delimiter, what the buffer accepted, when the flush is due,
-the database write and the row count before and after it.
-
-```bash
-adb logcat -s BorderKeysDebug:D
-```
-
-It can also type for you. Arm it with a word and open any field:
-
-```bash
-adb shell settings put global borderkeys_debug_type <word>
-adb shell settings delete global borderkeys_debug_type   # disarm
-```
-
-The keyboard then types that word — plus one fresh letter per field opened, so every open is a
-word the dictionary has not seen — through the same `onKey` path a finger takes, the moment the
-field opens. A release build carries none of this: the gate is the build's own debuggable flag,
-and the messages are never built there.
-
 ## Commit messages
 
 Present tense, and say why the change is correct rather than what it touched. The diff already
