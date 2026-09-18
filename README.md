@@ -99,6 +99,14 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   learning, there is no learning, no clipboard history, no swipe, no ring — and a password's text
   never reaches the prediction engine at all.
 
+| A held key, its popup, and names capitalised on their own | Capitals: off, when the app asks, always | Several languages at once | Text shortcuts |
+|---|---|---|---|
+| ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/10_typing_settings.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/4_languages.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/12_text_shortcuts.jpg) |
+
+| A ring of alternatives, with its particles | The ring's settings, the dials folded away | Layout & keys: the popup and the vibration | Settings, each card leading with what matters |
+|---|---|---|---|
+| ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/5_radial_menu.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/6_radial_settings.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/9_layout_keys.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/2_home.jpg) |
+
 <p align="center">
   <img src="docs/images/language_switch.png" alt="The retroactive language-switch correction offer, in the suggestion strip's own slot" width="40%">
 </p>
@@ -129,9 +137,9 @@ whole width or stop at the keys, leave the navigation bar's strip bare or paint 
 outline follows every key-shaped control — the keys, the held-key popup, the panel chips — and
 frames the whole keyboard.
 
-<p align="center">
-  <img src="docs/images/custom_theme.png" alt="The theme screen: the keyboard drawn live, then the preset families and manual controls" width="40%">
-</p>
+| The theme screen, the keyboard drawn live | Presets, then the colours |
+|---|---|
+| ![](docs/images/custom_theme.png) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/3_theme.jpg) |
 
 ### Particle effects
 
@@ -145,9 +153,9 @@ one of them — and your own saved presets set all five surfaces at once; whatev
 afterwards shows as unsaved changes against the preset you started from, and each layer's colours
 and dials sit under its own Advanced fold. Off by default.
 
-<p align="center">
-  <img src="docs/images/particle_effects.png" alt="The particle effects screen: presets, then each surface's outline and fill layers" width="40%">
-</p>
+| Presets, then each surface's layers | A layer unfolded: colours and dials |
+|---|---|
+| ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/7_particle_effects.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/11_particle_layers.jpg) |
 
 ### The assistant, `plus` only
 
@@ -159,9 +167,9 @@ text selection in *any* app through four more entries in the system's own text-s
 (Correct, Shorten, Summarise, and any of your own saved instructions), each running immediately
 instead of opening an idle box first.
 
-<p align="center">
-  <img src="docs/images/draft_box.png" alt="The draft box above the keys, with its formatting bar and a bold heading" width="40%">
-</p>
+| Draft box, with its formatting bar | Working, on-device | A version kept for every step | The models this build will run |
+|---|---|---|---|
+| ![](fastlane/com.borderkeys.plus/metadata/android/en-US/images/phoneScreenshots/5_draft_box.jpg) | ![](fastlane/com.borderkeys.plus/metadata/android/en-US/images/phoneScreenshots/6_translating.jpg) | ![](fastlane/com.borderkeys.plus/metadata/android/en-US/images/phoneScreenshots/7_translated.jpg) | ![](fastlane/com.borderkeys.plus/metadata/android/en-US/images/phoneScreenshots/8_assistant_models.jpg) |
 
 ### Backup, restore, and control
 
@@ -189,32 +197,6 @@ for the extra features. The separation is at compile time, not behind a runtime 
 Both are published as **separate applications** (`com.borderkeys` and `com.borderkeys.plus`) so
 they can be installed side by side — choosing the assistant never costs you the settings or the
 learned dictionary of the other build.
-
-## Screenshots
-
-### Typing, in both builds
-
-| A held key, its popup, and names capitalised on their own | Settings | Theme | Several languages at once |
-|---|---|---|---|
-| ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/2_home.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/3_theme.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/4_languages.jpg) |
-
-### The radial menu and the effects, in both builds
-
-| A ring of alternatives, with its particles | The ring's settings, the dials folded away | Particle effects: presets, then each surface | A layer unfolded: colours and dials |
-|---|---|---|---|
-| ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/5_radial_menu.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/6_radial_settings.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/7_particle_effects.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/11_particle_layers.jpg) |
-
-### The bar, the keys and the shortcuts, in both builds
-
-| Quick actions, drawn live, outlined | Layout & keys: the popup and the vibration strength | Capitals: off, when the app asks, always | Text shortcuts |
-|---|---|---|---|
-| ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/8_quick_actions.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/9_layout_keys.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/10_typing_settings.jpg) | ![](fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/12_text_shortcuts.jpg) |
-
-### The assistant, `plus` only
-
-| Draft box, with its formatting bar | Working, on-device | A version kept for every step | The models this build will run |
-|---|---|---|---|
-| ![](fastlane/com.borderkeys.plus/metadata/android/en-US/images/phoneScreenshots/5_draft_box.jpg) | ![](fastlane/com.borderkeys.plus/metadata/android/en-US/images/phoneScreenshots/6_translating.jpg) | ![](fastlane/com.borderkeys.plus/metadata/android/en-US/images/phoneScreenshots/7_translated.jpg) | ![](fastlane/com.borderkeys.plus/metadata/android/en-US/images/phoneScreenshots/8_assistant_models.jpg) |
 
 ## Why the modules are split the way they are
 
