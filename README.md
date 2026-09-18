@@ -331,7 +331,8 @@ gh attestation verify BorderKeys-v0.6.2-core.apk --repo razvan-eduard/borderkeys
   a compatibility verdict, plus the reproducible-build settings and the F-Droid anti-feature
   checklist.
 - [`docs/dictionaries.md`](docs/dictionaries.md) — how a language pack is built from a corpus,
-  and how the names list is merged into it.
+  how the names list is merged into it, and what the offensive-word lists behind the "Block
+  offensive words" switch do and do not cover.
 - [`docs/pos-tagging.md`](docs/pos-tagging.md) — what the grammar tags inside a pack are worth,
   measured.
 - [`docs/translations.md`](docs/translations.md) — adding a language or a string to the
