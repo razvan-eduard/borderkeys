@@ -313,6 +313,8 @@
   "corrections_show_the_suggestion_strip": "Afficher la barre de suggestions",
   "corrections_space_after": "Espace après la ponctuation",
   "corrections_space_after_note": "Ajoute l'espace que vous alliez taper après un point, une virgule, un point d'interrogation ou d'exclamation. Si vous appuyez sur espace juste après, il est ignoré plutôt que doublé.",
+  "corrections_space_after_pick": "Espace après une suggestion choisie",
+  "corrections_space_after_pick_note": "Toucher un mot dans la barre ajoute aussi l'espace qui suit, pour continuer directement. Désactivé, le mot arrive seul et la touche suivante est à toi. Jamais une deuxième espace s'il y en a déjà une.",
   "corrections_space_before": "Retirer l'espace avant la ponctuation",
   "corrections_space_before_note": "Une espace devant un point n'est ce que personne veut dire, et c'est ce que produit un clavier qui ajoute des espaces s'il ne les reprend pas aussi. Seulement pour les signes qui se collent au mot : un tiret ou une parenthèse veut souvent l'espace.",
   "corrections_suggest_whole_phrases": "Suggérer des tournures entières",

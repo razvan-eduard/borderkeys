@@ -237,6 +237,11 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `a picked suggestion gets its space by default`() {
+        assertTrue(KeyboardPreferences().spaceAfterSuggestion)
+    }
+
+    @Test
     fun `quick action outlines default off`() {
         assertFalse(KeyboardPreferences().quickActionsOutlined)
     }

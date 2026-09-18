@@ -2940,7 +2940,7 @@ class BorderKeysService :
         // otherwise leave "word  next" with two spaces. At the end of the field, or before
         // anything that is not whitespace, the space is what lets typing carry straight on.
         val nextChar = after?.getOrNull(tail)
-        val space = if (nextChar != null && nextChar.isWhitespace()) "" else " "
+        val space = if (!preferences.spaceAfterSuggestion || (nextChar != null && nextChar.isWhitespace())) "" else " "
         ownEditPending = true
         connection.commitText(word + space, 1)
         connection.endBatchEdit()

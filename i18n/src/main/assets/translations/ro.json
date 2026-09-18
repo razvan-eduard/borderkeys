@@ -313,6 +313,8 @@
   "corrections_show_the_suggestion_strip": "Arată bara de sugestii",
   "corrections_space_after": "Spațiu după punctuație",
   "corrections_space_after_note": "Adaugă spațiul pe care oricum urma să-l scrii, după punct, virgulă, semnul întrebării sau al exclamării. Dacă apeși tu spațiu imediat după, e ignorat, nu dublat.",
+  "corrections_space_after_pick": "Spațiu după o sugestie aleasă",
+  "corrections_space_after_pick_note": "Atingerea unui cuvânt din strip adaugă și spațiul de după el, ca scrisul să continue direct. Oprit, cuvântul intră singur și următoarea tastă e a ta. Niciodată un al doilea spațiu când există deja unul.",
   "corrections_space_before": "Elimină spațiul dinaintea punctuației",
   "corrections_space_before_note": "Un spațiu în fața punctului nu e ceva ce vrea cineva, și e exact ce produce o tastatură care adaugă spații dacă nu le și ia înapoi. Doar pentru semnele care se lipesc de cuvânt — o linie de dialog sau o paranteză vrea deseori spațiul.",
   "corrections_suggest_whole_phrases": "Sugerează fraze întregi",

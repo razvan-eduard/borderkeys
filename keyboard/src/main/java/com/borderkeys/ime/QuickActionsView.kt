@@ -172,6 +172,9 @@ class QuickActionsView(
      *  bottom whether its own label took one line or two. Zero while labels are off. */
     private var labelBandBottomY = 0f
 
+    /** Where the icon-and-label group starts, the other edge of the same rectangle. */
+    private var groupTopY = 0f
+
     /** One slot's width along the bar, for the button rectangle's own width with labels on. */
     private var slotPx = 0f
 
@@ -200,10 +203,18 @@ class QuickActionsView(
         val padding = (half + (half / 2)).toFloat()
         if (labelsActive()) {
             val halfWidth = slotPx * LABELLED_BUTTON_WIDTH_FRACTION / 2f
-            val inset = buttonSizePx * LABEL_INSET_FRACTION
+            // The same room above the icon as below the label, and never more than half of
+            // what the bar actually has to spare on that side: the rectangle floats inside the
+            // bar rather than touching its bottom edge while a gap shows at the top, which is
+            // what a fixed inset clamped to the view's height used to do.
+            val pad = minOf(
+                buttonSizePx * LABEL_INSET_FRACTION,
+                groupTopY / 2f,
+                (height - labelBandBottomY) / 2f,
+            ).coerceAtLeast(0f)
             out.set(
-                centreX[index] - halfWidth, centreY[index] - padding,
-                centreX[index] + halfWidth, (labelBandBottomY + inset).coerceAtMost(height.toFloat()),
+                centreX[index] - halfWidth, groupTopY - pad,
+                centreX[index] + halfWidth, labelBandBottomY + pad,
             )
         } else {
             out.set(centreX[index] - padding, centreY[index] - padding, centreX[index] + padding, centreY[index] + padding)
@@ -400,6 +411,7 @@ class QuickActionsView(
         }
         val groupHeightPx = if (labelsActive()) buttonSizePx + gapPx + oneLineLabelHeightPx else buttonSizePx.toFloat()
         val groupTopPx = if (labelsActive()) ((thickness - groupHeightPx) / 2f).coerceAtLeast(0f) else 0f
+        groupTopY = groupTopPx
         val iconCentreY = if (labelsActive()) groupTopPx + buttonSizePx / 2f else height / 2f
         val along = if (vertical) height else width
         val step = along.toFloat() / shown
@@ -652,9 +664,9 @@ class QuickActionsView(
          *  [outlineButtons] traces -- leaving a gap between neighbours like the keys' own. */
         const val LABELLED_BUTTON_WIDTH_FRACTION = 0.94f
 
-        /** How far below the label band the button's rectangle reaches, as a share of the
-         *  icon's size, so the outline is not drawn through the descenders. */
-        const val LABEL_INSET_FRACTION = 0.14f
+        /** The room a labelled button's rectangle keeps above its icon and below its label,
+         *  as a share of the icon's size -- at most; the bar's own slack caps it. */
+        const val LABEL_INSET_FRACTION = 0.22f
 
         /** A label wraps to a second line before it is ellipsised -- a short label cut to
          *  "Copy…" says less than the same word on two lines would. Never a third: past two

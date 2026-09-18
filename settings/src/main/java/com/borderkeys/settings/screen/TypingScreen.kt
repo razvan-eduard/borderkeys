@@ -144,6 +144,11 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.CORRECTIONS_SPACE_AFTER_NOTE],
                 checked = preferences.spaceAfterPunctuation,
             ) { value -> update { it.copy(spaceAfterPunctuation = value) } }
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_SPACE_AFTER_PICK],
+                subtitle = strings[Keys.CORRECTIONS_SPACE_AFTER_PICK_NOTE],
+                checked = preferences.spaceAfterSuggestion,
+            ) { value -> update { it.copy(spaceAfterSuggestion = value) } }
 
             Text(
                 strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE],

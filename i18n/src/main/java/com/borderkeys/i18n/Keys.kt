@@ -327,6 +327,8 @@ object Keys {
     const val CORRECTIONS_SHOW_THE_SUGGESTION_STRIP = "corrections_show_the_suggestion_strip"
     const val CORRECTIONS_SPACE_AFTER = "corrections_space_after"
     const val CORRECTIONS_SPACE_AFTER_NOTE = "corrections_space_after_note"
+    const val CORRECTIONS_SPACE_AFTER_PICK = "corrections_space_after_pick"
+    const val CORRECTIONS_SPACE_AFTER_PICK_NOTE = "corrections_space_after_pick_note"
     const val CORRECTIONS_SPACE_BEFORE = "corrections_space_before"
     const val CORRECTIONS_SPACE_BEFORE_NOTE = "corrections_space_before_note"
     const val CORRECTIONS_SUGGEST_WHOLE_PHRASES = "corrections_suggest_whole_phrases"

@@ -136,6 +136,14 @@ data class KeyboardPreferences(
     val spaceAfterPunctuation: Boolean = true,
 
     /**
+     * Whether picking a suggestion from the strip also puts a space after the word, so typing
+     * carries straight on. On, as every keyboard does it; off for someone who picks a word and
+     * then wants to type the punctuation or suffix that follows it themselves. Never a second
+     * space: one already there is left alone either way.
+     */
+    val spaceAfterSuggestion: Boolean = true,
+
+    /**
      * What a space typed straight after one this keyboard added itself does -- after a
      * sentence mark, a picked suggestion, a swiped word, or the double-space full stop.
      * [AUTO_SPACE_SWALLOW_FIRST] (default) drops that one habitual space and keeps any after

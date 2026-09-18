@@ -313,6 +313,8 @@
   "corrections_show_the_suggestion_strip": "Mostrar la barra de sugerencias",
   "corrections_space_after": "Espacio tras la puntuación",
   "corrections_space_after_note": "Añade el espacio que ibas a escribir tras un punto, una coma o un signo de interrogación o exclamación. Si pulsas espacio justo después, se ignora en lugar de duplicarse.",
+  "corrections_space_after_pick": "Espacio tras una sugerencia elegida",
+  "corrections_space_after_pick_note": "Tocar una palabra en la tira añade también el espacio de después, para seguir escribiendo directamente. Desactivado, la palabra entra sola y la siguiente tecla es tuya. Nunca un segundo espacio si ya hay uno.",
   "corrections_space_before": "Quitar el espacio antes de la puntuación",
   "corrections_space_before_note": "Un espacio delante de un punto no es lo que nadie quiere decir, y es lo que produce un teclado que añade espacios si no los retira también. Solo para los signos que se pegan a la palabra: una raya o un paréntesis suele querer el espacio.",
   "corrections_suggest_whole_phrases": "Sugerir expresiones completas",
