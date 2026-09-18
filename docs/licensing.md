@@ -106,7 +106,7 @@ Result: `libborderkeysassist.so` is 3.2 MB stripped for arm64-v8a and 2.4 MB for
 
 | Component | Licence | Verdict |
 |---|---|---|
-| Android Gradle Plugin 9.3.1 | Apache-2.0 | Build tool; not distributed. |
+| Android Gradle Plugin 9.3.2 | Apache-2.0 | Build tool; not distributed. |
 | Kotlin Gradle plugins (compose, serialization) 2.4.10 | Apache-2.0 | Build tool. |
 | KSP 2.3.11 | Apache-2.0 | Build tool. |
 | `androidx.room:room-compiler` 2.8.4 | Apache-2.0 | Annotation processor; generated code is ours. |
@@ -176,8 +176,10 @@ what matters is what is redistributed.
 
 ### 2.1.1 The names source
 
-`tools/make_names.py` queries **Wikidata** for items that are an instance of *given name*
-(Q202444) or *family name* (Q101352), with a label in the target language, to build a per-language
+`tools/make_names.py` queries **Wikidata** for items that are an instance of one of four
+given-name classes (*given name*, Q202444, and the three narrower classes `GIVEN_NAME_CLASSES` in
+the script lists -- see `docs/dictionaries.md` for why one is not enough) or of *family name*
+(Q101352), with a label in the target language, to build a per-language
 word list `tools/make_pack.py --names` can merge into a compiled dictionary, flagged so the
 keyboard always capitalises them (see `docs/dictionaries.md`'s own "Names" section for the
 mechanism). Wikidata's content is **CC0** -- public domain dedication, no attribution required,
@@ -210,7 +212,7 @@ model file of any kind; `plus` ships exactly one, the row below.
 
 | Asset | Source | Licence | Notes |
 |---|---|---|---|
-| `assets/model.bkw`, **`plus` only** | Trained from scratch by `tools/swipe_model/train.py` on the **MIT-licensed** `futo-org/swipe.futo.org` gesture corpus (2.2.1); exported by `export_weights.py` into the flat binary `keyboard/src/main/cpp/gesture/tcn_weights.*` reads | GPL-3.0-or-later (the weights, as this project's own build product; the entry in `REUSE.toml` says so) | The experimental neural swipe decoder's weights: a 629,601-parameter TCN, about 2.4 MB, inference hand-written in C++ with no ML runtime. The corpus's licence does not attach to weights fit from it, and no other model's weights or output are involved anywhere in the pipeline. Behind a switch that is off by default, and compiled out of `core` entirely (`BORDERKEYS_NEURAL_SWIPE`): a freshly built `core` `libborderkeys.so` carries no decoder symbols. |
+| `assets/model.bkw`, **`plus` only** | Trained from scratch by `tools/swipe_model/train.py` on the **MIT-licensed** `futo-org/swipe.futo.org` gesture corpus (2.2.1); exported by `export_weights.py` into the flat binary `keyboard/src/main/cpp/gesture/tcn_weights.*` reads | GPL-3.0-or-later (the weights, as this project's own build product; the entry in `REUSE.toml` says so) | The experimental neural swipe decoder's weights: a 642,241-parameter TCN (weight-file version 2, 2,568,972 bytes, about 2.5 MB), inference hand-written in C++ with no ML runtime. The corpus's licence does not attach to weights fit from it, and no other model's weights or output are involved anywhere in the pipeline. Behind a switch that is off by default, and compiled out of `core` entirely (`BORDERKEYS_NEURAL_SWIPE`): a freshly built `core` `libborderkeys.so` carries no decoder symbols. |
 
 Native libraries are redistributed too, and each carries its own terms:
 
