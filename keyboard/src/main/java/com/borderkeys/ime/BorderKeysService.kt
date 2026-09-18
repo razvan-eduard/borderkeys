@@ -2060,7 +2060,7 @@ class BorderKeysService :
             pendingCorrection = null
             checkpointField()
             refreshContextFromEditor()
-            applyAutoShift()
+            applyAutoShift(justCommitted = ". ")
             requestSuggestions()
             return
         }
@@ -2129,7 +2129,7 @@ class BorderKeysService :
             previousWord2 = null
         }
         checkpointField()
-        shiftAfterDelimiter(heldByUser)
+        shiftAfterDelimiter(heldByUser, justCommitted = delimiter)
         requestSuggestions()
         if (preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
             checkLanguageSwitch()
@@ -3379,12 +3379,13 @@ class BorderKeysService :
 
     /** Re-derives shift after a delimiter, unless caps lock is on or the user pressed shift
      *  themselves ([heldByUser], captured before the keystroke touched the flag) -- their
-     *  decision stands until a letter spends it. */
-    private fun shiftAfterDelimiter(heldByUser: Boolean) {
+     *  decision stands until a letter spends it. [justCommitted] is what this keystroke wrote,
+     *  for an editor that has not caught up yet -- see [applyAutoShift]. */
+    private fun shiftAfterDelimiter(heldByUser: Boolean, justCommitted: String = "") {
         if (shiftState == ShiftState.LOCKED || heldByUser) {
             return
         }
-        applyAutoShift()
+        applyAutoShift(justCommitted)
     }
 
     /** Whether [code] is a mark French sets off with a space before it -- "!", "?", ";" and
@@ -3403,15 +3404,24 @@ class BorderKeysService :
      *
      * A shift the user pressed is left alone. Deciding for them immediately after they decided
      * for themselves is the one thing worse than not deciding at all.
+     *
+     * [justCommitted] is the text this keyboard wrote a moment ago -- a full stop and its
+     * space -- when the call comes straight after the commit. An editor with an asynchronous
+     * input connection answers the caps-mode and text-before-caret questions from the state
+     * it had *before* that commit, and read that way "salut" ends no sentence: the capital
+     * armed after every full stop was lost in exactly those apps, and only came back if the
+     * editor's own caret echo arrived later to re-derive it. Appended to whatever the editor
+     * reports, the answer is the same whether it has caught up or not: "salut. " and
+     * "salut. . " both end a sentence, "salut, , " does not.
      */
-    private fun applyAutoShift() {
+    private fun applyAutoShift(justCommitted: String = "") {
         if (shiftState == ShiftState.LOCKED && !autoLockedShift) {
             return
         }
         if (shiftHeldByUser || userReleasedAutoLock) {
             return
         }
-        val wanted = autoShiftState()
+        val wanted = autoShiftState(justCommitted)
         autoLockedShift = wanted == ShiftState.LOCKED
         if (shiftState != wanted) {
             shiftState = wanted
@@ -3428,7 +3438,7 @@ class BorderKeysService :
      * hand -- the same computation the framework and every other IME already do, correctly
      * handling word/sentence boundaries and an empty field without this class re-deriving them.
      */
-    private fun autoShiftState(): Int {
+    private fun autoShiftState(justCommitted: String = ""): Int {
         val info = currentInputEditorInfo ?: return ShiftState.OFF
         return AutoShift.stateFor(
             autoCapitaliseEnabled = preferences.autoCapitalise,
@@ -3439,7 +3449,8 @@ class BorderKeysService :
                 currentInputConnection?.getCursorCapsMode(info.inputType) ?: info.initialCapsMode
             },
             textBeforeCursor = {
-                currentInputConnection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
+                val before = currentInputConnection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
+                if (justCommitted.isEmpty()) before else (before ?: "").toString() + justCommitted
             },
         )
     }
