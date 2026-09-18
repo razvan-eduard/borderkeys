@@ -36,6 +36,7 @@ import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
@@ -106,41 +107,43 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SettingsSectionCard(strings[Keys.DICTIONARY_HOW_QUICKLY_IT_LEARNS]) {
-            Explanation(
-                strings[Keys.DICTIONARY_THIS_DOES_NOT_CHANGE_WHAT_IS],
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PickerChip(
-                    strings[Keys.DICTIONARY_CAUTIOUS],
-                    preferences.learningSpeed == KeyboardPreferences.LEARNING_CAUTIOUS,
-                ) { update { it.copy(learningSpeed = KeyboardPreferences.LEARNING_CAUTIOUS) } }
-                PickerChip(
-                    strings[Keys.DICTIONARY_BALANCED],
-                    preferences.learningSpeed == KeyboardPreferences.LEARNING_BALANCED,
-                ) { update { it.copy(learningSpeed = KeyboardPreferences.LEARNING_BALANCED) } }
-                PickerChip(
-                    strings[Keys.DICTIONARY_IMMEDIATE],
-                    preferences.learningSpeed == KeyboardPreferences.LEARNING_IMMEDIATE,
-                ) { update { it.copy(learningSpeed = KeyboardPreferences.LEARNING_IMMEDIATE) } }
-            }
-            Explanation(
-                when (preferences.learningSpeed) {
-                    KeyboardPreferences.LEARNING_CAUTIOUS ->
-                        strings[Keys.DICTIONARY_ABOUT_SIX_REPETITIONS_BEFORE_A_PHRASE]
-                    KeyboardPreferences.LEARNING_IMMEDIATE ->
-                        strings[Keys.DICTIONARY_THE_FIRST_TIME_COUNTS_BEST_IF]
-                    else ->
-                        strings[Keys.DICTIONARY_A_PHRASE_WRITTEN_TWICE_STARTS_TO]
-                },
-            )
             SwitchRow(
                 title = strings[Keys.DICTIONARY_LEARN_AT_ALL],
                 subtitle = strings[Keys.DICTIONARY_OFF_MEANS_NOTHING_NEW_IS_RECORDED],
                 checked = preferences.learningEnabled,
             ) { value -> update { it.copy(learningEnabled = value) } }
+            AdvancedSection {
+                Explanation(
+                    strings[Keys.DICTIONARY_THIS_DOES_NOT_CHANGE_WHAT_IS],
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PickerChip(
+                        strings[Keys.DICTIONARY_CAUTIOUS],
+                        preferences.learningSpeed == KeyboardPreferences.LEARNING_CAUTIOUS,
+                    ) { update { it.copy(learningSpeed = KeyboardPreferences.LEARNING_CAUTIOUS) } }
+                    PickerChip(
+                        strings[Keys.DICTIONARY_BALANCED],
+                        preferences.learningSpeed == KeyboardPreferences.LEARNING_BALANCED,
+                    ) { update { it.copy(learningSpeed = KeyboardPreferences.LEARNING_BALANCED) } }
+                    PickerChip(
+                        strings[Keys.DICTIONARY_IMMEDIATE],
+                        preferences.learningSpeed == KeyboardPreferences.LEARNING_IMMEDIATE,
+                    ) { update { it.copy(learningSpeed = KeyboardPreferences.LEARNING_IMMEDIATE) } }
+                }
+                Explanation(
+                    when (preferences.learningSpeed) {
+                        KeyboardPreferences.LEARNING_CAUTIOUS ->
+                            strings[Keys.DICTIONARY_ABOUT_SIX_REPETITIONS_BEFORE_A_PHRASE]
+                        KeyboardPreferences.LEARNING_IMMEDIATE ->
+                            strings[Keys.DICTIONARY_THE_FIRST_TIME_COUNTS_BEST_IF]
+                        else ->
+                            strings[Keys.DICTIONARY_A_PHRASE_WRITTEN_TWICE_STARTS_TO]
+                    },
+                )
+            }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },

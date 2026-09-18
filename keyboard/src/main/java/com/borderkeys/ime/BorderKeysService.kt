@@ -663,7 +663,6 @@ class BorderKeysService :
                     view.keyboard.soundEnabled = newPreferences.keySound
                     view.keyboard.spaceCursorEnabled = newPreferences.spaceCursorControl
                     view.keyboard.holdHintsEnabled = newPreferences.longPressHints
-                    view.keyboard.largeKeyText = newPreferences.largeKeyText
                     view.keyboard.longPressDelayMillis = newPreferences.longPressMillis.toLong()
                     view.keyboard.radialMenuEnabled = newPreferences.radialMenuEnabled
                     view.keyboard.radialPauseDwellMillis =
@@ -848,7 +847,6 @@ class BorderKeysService :
         view.keyboard.soundEnabled = preferences.keySound
         view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
         view.keyboard.holdHintsEnabled = preferences.longPressHints
-        view.keyboard.largeKeyText = preferences.largeKeyText
         view.keyboard.longPressDelayMillis = preferences.longPressMillis.toLong()
         view.keyboard.radialMenuEnabled = preferences.radialMenuEnabled
         view.keyboard.radialPauseDwellMillis = preferences.radialPauseDwellMillis.toLong()
@@ -3857,6 +3855,17 @@ class BorderKeysService :
             QuickAction.REDO -> restoreFieldVersion(fieldHistory.forward())
             QuickAction.CAPITAL -> toggleCapitalAtCursor(connection)
             QuickAction.NORMALISE -> normaliseField(connection)
+            // As the arrow keys a hardware keyboard would send, not as setSelection: the editor
+            // then moves the caret its own way -- past a surrogate pair, out of a selection,
+            // across a line in a web view -- rather than by our count of characters.
+            QuickAction.CURSOR_LEFT -> {
+                resetComposing()
+                sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_DPAD_LEFT)
+            }
+            QuickAction.CURSOR_RIGHT -> {
+                resetComposing()
+                sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_DPAD_RIGHT)
+            }
         }
         // No refresh here: onQuickAction does it once for the whole tap, per its own doc, and
         // a second (or, for a macro, an n-th) engine round trip per step bought nothing.

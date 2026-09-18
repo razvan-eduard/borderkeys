@@ -182,22 +182,6 @@ class KeyboardCanvasView(
             }
         }
 
-    /**
-     * Larger key labels, at the cost of the wide ones being shrunk to fit sooner.
-     *
-     * A multiplier on the theme's own label size, applied where the sizes are fixed in
-     * [measureLabels], so the draw path is unchanged.
-     */
-    var largeKeyText: Boolean = false
-        set(value) {
-            if (field != value) {
-                field = value
-                measureLabels()
-                backgroundValid = false
-                invalidate()
-            }
-        }
-
     private fun longPressDelayFor(index: Int): Long =
         if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.REPEATABLE)) {
             minOf(longPressDelayMillis, LONG_PRESS_MILLIS)
@@ -783,7 +767,7 @@ class KeyboardCanvasView(
      */
     private fun measureLabels() {
         val themeSize = paints.label.textSize
-        val base = themeSize * if (largeKeyText) LARGE_KEY_TEXT_SCALE else 1f
+        val base = themeSize
         for (index in 0 until geometry.keyCount) {
             val length = geometry.labelLength[index]
             if (length == 0) {
@@ -1621,9 +1605,6 @@ class KeyboardCanvasView(
          *  two gestures feel like one -- referencing this is what keeps that true instead of
          *  being a second 380L typed by hand and promised to match. */
         internal const val LONG_PRESS_MILLIS = 380L
-
-        /** How much [largeKeyText] enlarges the theme's label size. */
-        private const val LARGE_KEY_TEXT_SCALE = 1.28f
 
         /** A hint dot's radius, as a fraction of [ThemePaints.hint]'s own text size. */
         private const val HINT_DOT_RADIUS_FRACTION = 0.09f

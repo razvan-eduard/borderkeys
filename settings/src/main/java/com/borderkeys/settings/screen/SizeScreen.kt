@@ -35,6 +35,8 @@ import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.PlacementPreview
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
 
@@ -164,24 +166,26 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                     onClick = { updatePlacement { defaultPlacement(landscapeTab) } },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 ) { Text(strings[Keys.SIZE_RESET_SIZE_AND_POSITION]) }
-            }
-            // Not per-orientation: edge arrows and the blur behind the keyboard are a gutter
-            // treatment, the same on both sides of a rotation, not a size or position value.
-            SettingsSectionCard(strings[Keys.SIZE_THE_SPACE_BESIDE_THE_KEYS]) {
-                SwitchRow(
-                    title = strings[Keys.SIZE_ARROW_TO_MOVE_IT_ACROSS],
-                    subtitle = strings[Keys.SIZE_AN_ARROW_IN_THE_EMPTY_STRIP],
-                    checked = preferences.edgeArrows,
-                ) { value -> update { it.copy(edgeArrows = value) } }
-                // Only when something can show through. With the background reaching both edges
-                // there is nothing behind the gutter to blur, and a switch that does nothing is
-                // worse than a switch that is not there.
-                if (!theme.fullWidthBackground) {
+                // Not per-orientation: edge arrows and the blur behind the keyboard are a
+                // gutter treatment, the same on both sides of a rotation, not a size or
+                // position value -- and set once, so they sit under the fold.
+                AdvancedSection {
+                    SectionHeader(strings[Keys.SIZE_THE_SPACE_BESIDE_THE_KEYS])
                     SwitchRow(
-                        title = strings[Keys.SIZE_BLUR_WHAT_SHOWS_THROUGH],
-                        subtitle = strings[Keys.SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY],
-                        checked = preferences.blurBehindKeyboard,
-                    ) { value -> update { it.copy(blurBehindKeyboard = value) } }
+                        title = strings[Keys.SIZE_ARROW_TO_MOVE_IT_ACROSS],
+                        subtitle = strings[Keys.SIZE_AN_ARROW_IN_THE_EMPTY_STRIP],
+                        checked = preferences.edgeArrows,
+                    ) { value -> update { it.copy(edgeArrows = value) } }
+                    // Only when something can show through. With the background reaching both
+                    // edges there is nothing behind the gutter to blur, and a switch that does
+                    // nothing is worse than a switch that is not there.
+                    if (!theme.fullWidthBackground) {
+                        SwitchRow(
+                            title = strings[Keys.SIZE_BLUR_WHAT_SHOWS_THROUGH],
+                            subtitle = strings[Keys.SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY],
+                            checked = preferences.blurBehindKeyboard,
+                        ) { value -> update { it.copy(blurBehindKeyboard = value) } }
+                    }
                 }
             }
         }

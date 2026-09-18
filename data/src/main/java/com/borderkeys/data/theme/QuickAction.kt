@@ -95,6 +95,12 @@ enum class QuickAction(val id: Int) {
      * changes nothing else: "hello there. i am here" becomes "Hello there. I am here".
      */
     NORMALISE(19),
+
+    /** Moves the cursor one character left -- the arrow key a phone keyboard does not have. */
+    CURSOR_LEFT(20),
+
+    /** Moves the cursor one character right. */
+    CURSOR_RIGHT(21),
     ;
 
     /**

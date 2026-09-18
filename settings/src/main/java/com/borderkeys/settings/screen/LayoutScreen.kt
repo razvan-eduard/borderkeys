@@ -33,6 +33,7 @@ import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
@@ -71,30 +72,31 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.SIZE_COSTS_ABOUT_A_FIFTH_OF_THE],
                 checked = preferences.numberRow,
             ) { value -> update { it.copy(numberRow = value) } }
-
-            Explanation(strings[Keys.LAYOUT_WHERE_THE_DIGITS_SIT])
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PickerChip(
-                    strings[Keys.LAYOUT_DIGITS_TOP],
-                    preferences.symbolsNumberPosition == KeyboardPreferences.SYMBOLS_NUMBER_TOP,
-                ) { update { it.copy(symbolsNumberPosition = KeyboardPreferences.SYMBOLS_NUMBER_TOP) } }
-                PickerChip(
-                    strings[Keys.LAYOUT_DIGITS_LEFT],
-                    preferences.symbolsNumberPosition == KeyboardPreferences.SYMBOLS_NUMBER_LEFT,
-                ) { update { it.copy(symbolsNumberPosition = KeyboardPreferences.SYMBOLS_NUMBER_LEFT) } }
-                PickerChip(
-                    strings[Keys.LAYOUT_DIGITS_RIGHT],
-                    preferences.symbolsNumberPosition == KeyboardPreferences.SYMBOLS_NUMBER_RIGHT,
-                ) { update { it.copy(symbolsNumberPosition = KeyboardPreferences.SYMBOLS_NUMBER_RIGHT) } }
-            }
             SwitchRow(
                 title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
                 subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
                 checked = preferences.numericKeypad,
             ) { value -> update { it.copy(numericKeypad = value) } }
+            AdvancedSection {
+                Explanation(strings[Keys.LAYOUT_WHERE_THE_DIGITS_SIT])
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PickerChip(
+                        strings[Keys.LAYOUT_DIGITS_TOP],
+                        preferences.symbolsNumberPosition == KeyboardPreferences.SYMBOLS_NUMBER_TOP,
+                    ) { update { it.copy(symbolsNumberPosition = KeyboardPreferences.SYMBOLS_NUMBER_TOP) } }
+                    PickerChip(
+                        strings[Keys.LAYOUT_DIGITS_LEFT],
+                        preferences.symbolsNumberPosition == KeyboardPreferences.SYMBOLS_NUMBER_LEFT,
+                    ) { update { it.copy(symbolsNumberPosition = KeyboardPreferences.SYMBOLS_NUMBER_LEFT) } }
+                    PickerChip(
+                        strings[Keys.LAYOUT_DIGITS_RIGHT],
+                        preferences.symbolsNumberPosition == KeyboardPreferences.SYMBOLS_NUMBER_RIGHT,
+                    ) { update { it.copy(symbolsNumberPosition = KeyboardPreferences.SYMBOLS_NUMBER_RIGHT) } }
+                }
+            }
         }
 
         SettingsSectionCard(strings[Keys.LAYOUT_KEYS]) {
@@ -108,11 +110,6 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.LAYOUT_LONG_PRESS_HINTS_NOTE],
                 checked = preferences.longPressHints,
             ) { value -> update { it.copy(longPressHints = value) } }
-            SwitchRow(
-                title = strings[Keys.LAYOUT_LARGE_KEY_TEXT],
-                subtitle = strings[Keys.LAYOUT_LARGE_KEY_TEXT_NOTE],
-                checked = preferences.largeKeyText,
-            ) { value -> update { it.copy(largeKeyText = value) } }
             SwitchRow(
                 title = strings[Keys.SIZE_EMOJI_KEY],
                 subtitle = strings[Keys.SIZE_EMOJI_KEY_NOTE],
@@ -141,41 +138,49 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 checked = preferences.hapticFeedback,
             ) { value -> update { it.copy(hapticFeedback = value) } }
 
-            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
-                Text(
-                    strings[Keys.LAYOUT_LONG_PRESS_DURATION],
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+            // Set once and left: how long a hold is, and what the enter key does in a field
+            // that has its own action -- the latter folded in from its own card, which was a
+            // title over three chips.
+            AdvancedSection {
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                    Text(
+                        strings[Keys.LAYOUT_LONG_PRESS_DURATION],
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
+                DefaultableSlider(
+                    label = strings.getString(Keys.LAYOUT_LONG_PRESS_MS, preferences.longPressMillis),
+                    value = preferences.longPressMillis.toFloat(),
+                    range = KeyboardPreferences.MIN_LONG_PRESS_MILLIS.toFloat()..
+                        KeyboardPreferences.MAX_LONG_PRESS_MILLIS.toFloat(),
+                    default = KeyboardPreferences.DEFAULT_LONG_PRESS_MILLIS.toFloat(),
+                    steps = 10,
+                ) { value -> update { it.copy(longPressMillis = value.toInt()) } }
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                    Text(
+                        strings[Keys.LAYOUT_ENTER_KEY],
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PickerChip(
+                        strings[Keys.LAYOUT_ENTER_KEY_AUTO],
+                        preferences.enterKeyBehavior == KeyboardPreferences.ENTER_KEY_AUTO,
+                    ) { update { it.copy(enterKeyBehavior = KeyboardPreferences.ENTER_KEY_AUTO) } }
+                    PickerChip(
+                        strings[Keys.LAYOUT_ENTER_KEY_FORCE_ACTION],
+                        preferences.enterKeyBehavior == KeyboardPreferences.ENTER_KEY_FORCE_ACTION,
+                    ) { update { it.copy(enterKeyBehavior = KeyboardPreferences.ENTER_KEY_FORCE_ACTION) } }
+                    PickerChip(
+                        strings[Keys.LAYOUT_ENTER_KEY_FORCE_NEWLINE],
+                        preferences.enterKeyBehavior == KeyboardPreferences.ENTER_KEY_FORCE_NEWLINE,
+                    ) { update { it.copy(enterKeyBehavior = KeyboardPreferences.ENTER_KEY_FORCE_NEWLINE) } }
+                }
+                Explanation(strings[Keys.LAYOUT_ENTER_KEY_NOTE])
             }
-            DefaultableSlider(
-                label = strings.getString(Keys.LAYOUT_LONG_PRESS_MS, preferences.longPressMillis),
-                value = preferences.longPressMillis.toFloat(),
-                range = KeyboardPreferences.MIN_LONG_PRESS_MILLIS.toFloat()..
-                    KeyboardPreferences.MAX_LONG_PRESS_MILLIS.toFloat(),
-                default = KeyboardPreferences.DEFAULT_LONG_PRESS_MILLIS.toFloat(),
-                steps = 10,
-            ) { value -> update { it.copy(longPressMillis = value.toInt()) } }
-        }
-
-        SettingsSectionCard(strings[Keys.LAYOUT_ENTER_KEY]) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PickerChip(
-                    strings[Keys.LAYOUT_ENTER_KEY_AUTO],
-                    preferences.enterKeyBehavior == KeyboardPreferences.ENTER_KEY_AUTO,
-                ) { update { it.copy(enterKeyBehavior = KeyboardPreferences.ENTER_KEY_AUTO) } }
-                PickerChip(
-                    strings[Keys.LAYOUT_ENTER_KEY_FORCE_ACTION],
-                    preferences.enterKeyBehavior == KeyboardPreferences.ENTER_KEY_FORCE_ACTION,
-                ) { update { it.copy(enterKeyBehavior = KeyboardPreferences.ENTER_KEY_FORCE_ACTION) } }
-                PickerChip(
-                    strings[Keys.LAYOUT_ENTER_KEY_FORCE_NEWLINE],
-                    preferences.enterKeyBehavior == KeyboardPreferences.ENTER_KEY_FORCE_NEWLINE,
-                ) { update { it.copy(enterKeyBehavior = KeyboardPreferences.ENTER_KEY_FORCE_NEWLINE) } }
-            }
-            Explanation(strings[Keys.LAYOUT_ENTER_KEY_NOTE])
         }
 
         SettingsSectionCard(strings[Keys.LAYOUT_LAYOUTS_ON_THIS_KEYBOARD]) {

@@ -44,6 +44,7 @@ import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.move
 import com.borderkeys.settings.rememberPreferencesUpdater
@@ -81,29 +82,31 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
             // Everything below describes the box. With the box switched off it would be
             // settings for something that cannot happen.
             if (preferences.composerEnabled) {
-            SectionHeader(strings[Keys.COMPOSER_SETTINGS_TEXT_SIZE])
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PickerChip(
-                    strings[Keys.COMPOSER_TEXT_SIZE_SMALL],
-                    preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL,
-                ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL) } }
-                PickerChip(
-                    strings[Keys.COMPOSER_TEXT_SIZE_MEDIUM],
-                    preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM,
-                ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM) } }
-                PickerChip(
-                    strings[Keys.COMPOSER_TEXT_SIZE_LARGE],
-                    preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE,
-                ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE) } }
-            }
-            SwitchRow(
-                title = strings[Keys.COMPOSER_SETTINGS_SNAP_SELECTION],
-                subtitle = strings[Keys.COMPOSER_SETTINGS_SNAP_SELECTION_NOTE],
-                checked = preferences.composerSnapSelectionToWords,
-            ) { value -> update { it.copy(composerSnapSelectionToWords = value) } }
+                AdvancedSection {
+                    SectionHeader(strings[Keys.COMPOSER_SETTINGS_TEXT_SIZE])
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        PickerChip(
+                            strings[Keys.COMPOSER_TEXT_SIZE_SMALL],
+                            preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL,
+                        ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL) } }
+                        PickerChip(
+                            strings[Keys.COMPOSER_TEXT_SIZE_MEDIUM],
+                            preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM,
+                        ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM) } }
+                        PickerChip(
+                            strings[Keys.COMPOSER_TEXT_SIZE_LARGE],
+                            preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE,
+                        ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE) } }
+                    }
+                    SwitchRow(
+                        title = strings[Keys.COMPOSER_SETTINGS_SNAP_SELECTION],
+                        subtitle = strings[Keys.COMPOSER_SETTINGS_SNAP_SELECTION_NOTE],
+                        checked = preferences.composerSnapSelectionToWords,
+                    ) { value -> update { it.copy(composerSnapSelectionToWords = value) } }
+                }
             }
         }
 

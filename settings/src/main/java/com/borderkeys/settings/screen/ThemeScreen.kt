@@ -62,6 +62,7 @@ import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PlacementPreview
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
 import com.borderkeys.settings.rememberThemeUpdater
@@ -358,28 +359,30 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                     preserveAlpha = true,
                 ) { update { t -> t.copy(swipeTrailColor = it) } }
               }
-                SwitchRow(
-                    title = strings[Keys.THEME_FILL_THE_CORRECTION_CHIP],
-                    subtitle = strings[Keys.THEME_FILL_THE_CORRECTION_CHIP_NOTE],
-                    checked = theme.appliedHighlightStyle == KeyboardTheme.APPLIED_HIGHLIGHT_BACKGROUND,
-                ) { value ->
-                    update {
-                        it.copy(
-                            appliedHighlightStyle = if (value) {
-                                KeyboardTheme.APPLIED_HIGHLIGHT_BACKGROUND
-                            } else {
-                                KeyboardTheme.APPLIED_HIGHLIGHT_OUTLINE
-                            },
-                        )
+                AdvancedSection {
+                    SwitchRow(
+                        title = strings[Keys.THEME_FILL_THE_CORRECTION_CHIP],
+                        subtitle = strings[Keys.THEME_FILL_THE_CORRECTION_CHIP_NOTE],
+                        checked = theme.appliedHighlightStyle == KeyboardTheme.APPLIED_HIGHLIGHT_BACKGROUND,
+                    ) { value ->
+                        update {
+                            it.copy(
+                                appliedHighlightStyle = if (value) {
+                                    KeyboardTheme.APPLIED_HIGHLIGHT_BACKGROUND
+                                } else {
+                                    KeyboardTheme.APPLIED_HIGHLIGHT_OUTLINE
+                                },
+                            )
+                        }
                     }
+                    ColourRow(
+                        strings[Keys.THEME_APPLIED_HIGHLIGHT_COLOUR],
+                        theme.appliedHighlightColorOrDefault(),
+                        customColours = theme.customColours[KeyboardTheme.KEY_APPLIED_HIGHLIGHT] ?: emptyList(),
+                        onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_APPLIED_HIGHLIGHT to it)) } },
+                        preserveAlpha = true,
+                    ) { update { t -> t.copy(appliedHighlightColor = it) } }
                 }
-                ColourRow(
-                    strings[Keys.THEME_APPLIED_HIGHLIGHT_COLOUR],
-                    theme.appliedHighlightColorOrDefault(),
-                    customColours = theme.customColours[KeyboardTheme.KEY_APPLIED_HIGHLIGHT] ?: emptyList(),
-                    onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_APPLIED_HIGHLIGHT to it)) } },
-                    preserveAlpha = true,
-                ) { update { t -> t.copy(appliedHighlightColor = it) } }
             }
             SettingsSectionCard(strings[Keys.THEME_BACKGROUND_SECTION]) {
                 Text(
@@ -467,16 +470,18 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_GRADIENT_END to it)) } },
             ) { update { t -> t.copy(backgroundGradientColor = it) } }
                 Explanation(strings[Keys.THEME_SECOND_COLOUR_NOTE])
-                SwitchRow(
-                    title = strings[Keys.THEME_FULL_WIDTH_BACKGROUND],
-                    subtitle = strings[Keys.THEME_FULL_WIDTH_BACKGROUND_NOTE],
-                    checked = theme.fullWidthBackground,
-                ) { value -> update { it.copy(fullWidthBackground = value) } }
-                SwitchRow(
-                    title = strings[Keys.THEME_NAVIGATION_BAR_BACKGROUND],
-                    subtitle = strings[Keys.THEME_NAVIGATION_BAR_BACKGROUND_NOTE],
-                    checked = theme.navigationBarBackground,
-                ) { value -> update { it.copy(navigationBarBackground = value) } }
+                AdvancedSection {
+                    SwitchRow(
+                        title = strings[Keys.THEME_FULL_WIDTH_BACKGROUND],
+                        subtitle = strings[Keys.THEME_FULL_WIDTH_BACKGROUND_NOTE],
+                        checked = theme.fullWidthBackground,
+                    ) { value -> update { it.copy(fullWidthBackground = value) } }
+                    SwitchRow(
+                        title = strings[Keys.THEME_NAVIGATION_BAR_BACKGROUND],
+                        subtitle = strings[Keys.THEME_NAVIGATION_BAR_BACKGROUND_NOTE],
+                        checked = theme.navigationBarBackground,
+                    ) { value -> update { it.copy(navigationBarBackground = value) } }
+                }
             }
             SettingsSectionCard(strings[Keys.THEME_SHAPE]) {
                 ThemeSlider(
@@ -503,23 +508,28 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ) {
                     update { t -> t.copy(labelTextSizeSp = it) }
                 }
-                ThemeSlider(
-                    strings[Keys.THEME_ACCENT_SIZE], theme.accentTextSizeSp, 6f..32f,
-                    strings[Keys.THEME_SP], default = 15.5f,
-                ) {
-                    update { t -> t.copy(accentTextSizeSp = it) }
-                }
-                ThemeSlider(
-                    strings[Keys.THEME_PRESS_DEPTH], theme.pressedElevation, 0f..16f,
-                    strings[Keys.THEME_DP], default = 2f,
-                ) {
-                    update { t -> t.copy(pressedElevation = it) }
-                }
-                ThemeSlider(
-                    strings[Keys.THEME_TRAIL_WIDTH], theme.swipeTrailWidthDp, 1f..24f,
-                    strings[Keys.THEME_DP], default = 4f,
-                ) {
-                    update { t -> t.copy(swipeTrailWidthDp = it) }
+                // The finer dials: the hint text's own size, how far a pressed key sinks, and
+                // the swipe trail's width -- its one home now that the Typing screen no longer
+                // carries a second slider for the same value.
+                AdvancedSection {
+                    ThemeSlider(
+                        strings[Keys.THEME_ACCENT_SIZE], theme.accentTextSizeSp, 6f..32f,
+                        strings[Keys.THEME_SP], default = 15.5f,
+                    ) {
+                        update { t -> t.copy(accentTextSizeSp = it) }
+                    }
+                    ThemeSlider(
+                        strings[Keys.THEME_PRESS_DEPTH], theme.pressedElevation, 0f..16f,
+                        strings[Keys.THEME_DP], default = 2f,
+                    ) {
+                        update { t -> t.copy(pressedElevation = it) }
+                    }
+                    ThemeSlider(
+                        strings[Keys.THEME_TRAIL_WIDTH], theme.swipeTrailWidthDp, 1f..24f,
+                        strings[Keys.THEME_DP], default = 4f,
+                    ) {
+                        update { t -> t.copy(swipeTrailWidthDp = it) }
+                    }
                 }
                 Button(
                     onClick = {

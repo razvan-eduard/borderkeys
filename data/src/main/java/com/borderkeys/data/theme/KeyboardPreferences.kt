@@ -602,9 +602,6 @@ data class KeyboardPreferences(
     /** The small character drawn in a key's corner showing what its long press would type. */
     val longPressHints: Boolean = true,
 
-    /** Larger text on the keys, for legibility over density. */
-    val largeKeyText: Boolean = false,
-
     /**
      * How long a key must be held before the long press fires, in milliseconds. Clamped to
      * [MIN_LONG_PRESS_MILLIS]..[MAX_LONG_PRESS_MILLIS] on read.

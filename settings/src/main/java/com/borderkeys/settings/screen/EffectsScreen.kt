@@ -61,6 +61,7 @@ import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.ParticleChipPreview
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SuggestionStripPreview
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberParticleEffectsUpdater
@@ -666,6 +667,7 @@ private fun OutlineLayerSection(
 
     val primaryKey = particleColourKey(regionKey, "outline", "primary")
     val secondaryKey = particleColourKey(regionKey, "outline", "secondary")
+    AdvancedSection {
     ColourRow(
         strings[Keys.PARTICLE_EFFECTS_PRIMARY_COLOUR],
         layer.primaryColor,
@@ -699,6 +701,7 @@ private fun OutlineLayerSection(
         default = ParticleEffectsSettings.DEFAULT_WIDTH,
         steps = PARTICLE_SLIDER_STEPS,
     ) { value -> onChange { it.copy(width = value) } }
+    }
 }
 
 /**
@@ -765,6 +768,7 @@ private fun FillLayerSection(
 
     val primaryKey = particleColourKey(regionKey, "fill", "primary")
     val secondaryKey = particleColourKey(regionKey, "fill", "secondary")
+    AdvancedSection {
     ColourRow(
         strings[Keys.PARTICLE_EFFECTS_PRIMARY_COLOUR],
         layer.primaryColor,
@@ -791,6 +795,7 @@ private fun FillLayerSection(
         default = ParticleEffectsSettings.DEFAULT_DENSITY,
         steps = PARTICLE_SLIDER_STEPS,
     ) { value -> onChange { it.copy(density = value) } }
+    }
 }
 
 /** Renaming an existing preset needs nothing beyond a name -- unlike saving a new one, it is

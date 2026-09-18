@@ -47,6 +47,7 @@ import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LinkedText
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -222,6 +223,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
             }
         }
         SettingsSectionCard(strings[Keys.ASSISTANT_HOW_IT_CHOOSES_WORDS]) {
+          AdvancedSection {
             Text(
                 strings[Keys.ASSISTANT_TEMPERATURE],
                 style = MaterialTheme.typography.bodyLarge,
@@ -259,6 +261,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULTS]) }
             Explanation(strings[Keys.COMMON_RESET_TO_DEFAULTS_NOTE])
+          }
         }
         SettingsSectionCard(strings[Keys.ASSISTANT_HOW_IT_RUNS]) {
             Explanation(

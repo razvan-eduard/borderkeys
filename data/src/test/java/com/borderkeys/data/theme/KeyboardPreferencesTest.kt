@@ -612,7 +612,6 @@ class KeyboardPreferencesTest {
         assertEquals(KeyboardPreferences.SYMBOLS_NUMBER_TOP, fresh.symbolsNumberPosition)
         assertEquals(true, fresh.accentedCharacters)
         assertEquals(true, fresh.longPressHints)
-        assertEquals(false, fresh.largeKeyText)
         assertEquals(KeyboardPreferences.DEFAULT_LONG_PRESS_MILLIS, fresh.longPressMillis)
 
         // An out-of-range digit position is not a fourth arrangement.

@@ -34,6 +34,7 @@ import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SuggestionStripPreview
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
@@ -86,16 +87,6 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 strings[Keys.CORRECTIONS_THE_STRIP_IS_A_FIXED_WIDTH],
             )
             SwitchRow(
-                title = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD],
-                subtitle = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD_NOTE],
-                checked = preferences.clipboardSuggestion,
-            ) { value -> update { it.copy(clipboardSuggestion = value) } }
-            SwitchRow(
-                title = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE],
-                subtitle = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE_NOTE],
-                checked = preferences.clipboardSuggestionOnce,
-            ) { value -> update { it.copy(clipboardSuggestionOnce = value) } }
-            SwitchRow(
                 title = strings[Keys.CORRECTIONS_SUGGEST_WHOLE_PHRASES],
                 subtitle = strings[Keys.CORRECTIONS_OFFERS_VREAU_S_WHERE_IT_WOULD],
                 checked = preferences.phraseSuggestions,
@@ -116,16 +107,33 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
-            SwitchRow(
-                title = strings[Keys.CORRECTIONS_CAPITALISE],
-                subtitle = strings[Keys.CORRECTIONS_CAPITALISE_NOTE],
-                checked = preferences.autoCapitalise,
-            ) { value -> update { it.copy(autoCapitalise = value) } }
-            SwitchRow(
-                title = strings[Keys.CORRECTIONS_FORCE_CAPITALISE],
-                subtitle = strings[Keys.CORRECTIONS_FORCE_CAPITALISE_NOTE],
-                checked = preferences.forceCapitaliseSentences,
-            ) { value -> update { it.copy(forceCapitaliseSentences = value) } }
+            // One choice, three answers, over two stored switches: "capitalise for me" and
+            // "even fields that don't ask" were dependent -- the second did nothing without the
+            // first -- and read as two decisions when they are one.
+            Text(
+                strings[Keys.CORRECTIONS_CAPITALISE],
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PickerChip(
+                    strings[Keys.CORRECTIONS_CAPITALISE_OFF],
+                    !preferences.autoCapitalise,
+                ) { update { it.copy(autoCapitalise = false) } }
+                PickerChip(
+                    strings[Keys.CORRECTIONS_CAPITALISE_WHEN_ASKED],
+                    preferences.autoCapitalise && !preferences.forceCapitaliseSentences,
+                ) { update { it.copy(autoCapitalise = true, forceCapitaliseSentences = false) } }
+                PickerChip(
+                    strings[Keys.CORRECTIONS_CAPITALISE_ALWAYS],
+                    preferences.autoCapitalise && preferences.forceCapitaliseSentences,
+                ) { update { it.copy(autoCapitalise = true, forceCapitaliseSentences = true) } }
+            }
+            Explanation(strings[Keys.CORRECTIONS_CAPITALISE_MODE_NOTE])
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_DOUBLE_SPACE],
                 subtitle = strings[Keys.CORRECTIONS_DOUBLE_SPACE_NOTE],
@@ -136,35 +144,6 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.CORRECTIONS_SPACE_AFTER_NOTE],
                 checked = preferences.spaceAfterPunctuation,
             ) { value -> update { it.copy(spaceAfterPunctuation = value) } }
-            Text(
-                strings[Keys.CORRECTIONS_AUTO_SPACE_HABIT],
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
-            FlowRow(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PickerChip(
-                    strings[Keys.CORRECTIONS_AUTO_SPACE_SWALLOW_FIRST],
-                    preferences.autoSpaceHabit == KeyboardPreferences.AUTO_SPACE_SWALLOW_FIRST,
-                ) { update { it.copy(autoSpaceHabit = KeyboardPreferences.AUTO_SPACE_SWALLOW_FIRST) } }
-                PickerChip(
-                    strings[Keys.CORRECTIONS_AUTO_SPACE_SWALLOW_ALL],
-                    preferences.autoSpaceHabit == KeyboardPreferences.AUTO_SPACE_SWALLOW_ALL,
-                ) { update { it.copy(autoSpaceHabit = KeyboardPreferences.AUTO_SPACE_SWALLOW_ALL) } }
-                PickerChip(
-                    strings[Keys.CORRECTIONS_AUTO_SPACE_KEEP],
-                    preferences.autoSpaceHabit == KeyboardPreferences.AUTO_SPACE_KEEP,
-                ) { update { it.copy(autoSpaceHabit = KeyboardPreferences.AUTO_SPACE_KEEP) } }
-            }
-            Explanation(strings[Keys.CORRECTIONS_AUTO_SPACE_HABIT_NOTE])
-            SwitchRow(
-                title = strings[Keys.CORRECTIONS_SPACE_BEFORE],
-                subtitle = strings[Keys.CORRECTIONS_SPACE_BEFORE_NOTE],
-                checked = preferences.removeSpaceBeforePunctuation,
-            ) { value -> update { it.copy(removeSpaceBeforePunctuation = value) } }
 
             Text(
                 strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE],
@@ -178,24 +157,6 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             ) { value -> update { it.copy(autoCorrectOnSpace = value) } }
             Explanation(
                 strings[Keys.CORRECTIONS_THE_USUAL_OBJECTION_TO_AUTOCORRECT_IS],
-            )
-            Text(
-                strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS],
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
-            DefaultableSlider(
-                label = strings.getString(
-                    Keys.CORRECTIONS_TIMES_THE_DEFAULT,
-                    "%.1f".format(preferences.correctionStrictness),
-                ),
-                value = preferences.correctionStrictness,
-                range = KeyboardPreferences.MIN_CORRECTION_STRICTNESS..
-                    KeyboardPreferences.MAX_CORRECTION_STRICTNESS,
-                default = KeyboardPreferences.DEFAULT_CORRECTION_STRICTNESS,
-            ) { value -> update { it.copy(correctionStrictness = value) } }
-            Explanation(
-                strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS_NOTE],
             )
             Text(
                 strings[Keys.CORRECTIONS_DISTANCE],
@@ -229,28 +190,80 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.CORRECTIONS_A_CORRECTION_IS_ONLY_LEARNED_ONCE],
             )
-            Text(
-                strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH],
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
-            DefaultableSlider(
-                label = strings.getString(Keys.CORRECTIONS_LETTERS_OR_MORE, preferences.minCorrectionLength),
-                value = preferences.minCorrectionLength.toFloat(),
-                range = KeyboardPreferences.MIN_CORRECTION_LENGTH.toFloat()..
-                    KeyboardPreferences.MAX_CORRECTION_LENGTH.toFloat(),
-                default = 3f,
-                steps = KeyboardPreferences.MAX_CORRECTION_LENGTH -
-                    KeyboardPreferences.MIN_CORRECTION_LENGTH - 1,
-            ) { value -> update { it.copy(minCorrectionLength = value.toInt()) } }
-            Explanation(
-                strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH_NOTE],
-            )
-            Button(
-                onClick = { update { resetCorrectionDefaults(it) } },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULTS]) }
-            Explanation(strings[Keys.COMMON_RESET_TO_DEFAULTS_NOTE])
+            // The knobs behind the choices above: how a habit-space after an automatic one is
+            // treated, the space before punctuation, and the two finer autocorrect dials that
+            // sit under "how different a correction may be" -- the one level most people set.
+            AdvancedSection {
+                Text(
+                    strings[Keys.CORRECTIONS_AUTO_SPACE_HABIT],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PickerChip(
+                        strings[Keys.CORRECTIONS_AUTO_SPACE_SWALLOW_FIRST],
+                        preferences.autoSpaceHabit == KeyboardPreferences.AUTO_SPACE_SWALLOW_FIRST,
+                    ) { update { it.copy(autoSpaceHabit = KeyboardPreferences.AUTO_SPACE_SWALLOW_FIRST) } }
+                    PickerChip(
+                        strings[Keys.CORRECTIONS_AUTO_SPACE_SWALLOW_ALL],
+                        preferences.autoSpaceHabit == KeyboardPreferences.AUTO_SPACE_SWALLOW_ALL,
+                    ) { update { it.copy(autoSpaceHabit = KeyboardPreferences.AUTO_SPACE_SWALLOW_ALL) } }
+                    PickerChip(
+                        strings[Keys.CORRECTIONS_AUTO_SPACE_KEEP],
+                        preferences.autoSpaceHabit == KeyboardPreferences.AUTO_SPACE_KEEP,
+                    ) { update { it.copy(autoSpaceHabit = KeyboardPreferences.AUTO_SPACE_KEEP) } }
+                }
+                Explanation(strings[Keys.CORRECTIONS_AUTO_SPACE_HABIT_NOTE])
+                SwitchRow(
+                    title = strings[Keys.CORRECTIONS_SPACE_BEFORE],
+                    subtitle = strings[Keys.CORRECTIONS_SPACE_BEFORE_NOTE],
+                    checked = preferences.removeSpaceBeforePunctuation,
+                ) { value -> update { it.copy(removeSpaceBeforePunctuation = value) } }
+                Text(
+                    strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                DefaultableSlider(
+                    label = strings.getString(
+                        Keys.CORRECTIONS_TIMES_THE_DEFAULT,
+                        "%.1f".format(preferences.correctionStrictness),
+                    ),
+                    value = preferences.correctionStrictness,
+                    range = KeyboardPreferences.MIN_CORRECTION_STRICTNESS..
+                        KeyboardPreferences.MAX_CORRECTION_STRICTNESS,
+                    default = KeyboardPreferences.DEFAULT_CORRECTION_STRICTNESS,
+                ) { value -> update { it.copy(correctionStrictness = value) } }
+                Explanation(
+                    strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS_NOTE],
+                )
+                Text(
+                    strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                DefaultableSlider(
+                    label = strings.getString(Keys.CORRECTIONS_LETTERS_OR_MORE, preferences.minCorrectionLength),
+                    value = preferences.minCorrectionLength.toFloat(),
+                    range = KeyboardPreferences.MIN_CORRECTION_LENGTH.toFloat()..
+                        KeyboardPreferences.MAX_CORRECTION_LENGTH.toFloat(),
+                    default = 3f,
+                    steps = KeyboardPreferences.MAX_CORRECTION_LENGTH -
+                        KeyboardPreferences.MIN_CORRECTION_LENGTH - 1,
+                ) { value -> update { it.copy(minCorrectionLength = value.toInt()) } }
+                Explanation(
+                    strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH_NOTE],
+                )
+                Button(
+                    onClick = { update { resetCorrectionDefaults(it) } },
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULTS]) }
+                Explanation(strings[Keys.COMMON_RESET_TO_DEFAULTS_NOTE])
+            }
         }
 
         // Its own card rather than folded into the one above: this is not another correction-as-
@@ -302,49 +315,41 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 checked = preferences.swipeBackspaceDeletesWord,
             ) { value -> update { it.copy(swipeBackspaceDeletesWord = value) } }
 
-            Text(
-                strings[Keys.SWIPE_THE_TRAIL],
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
-            DefaultableSlider(
-                label = strings.getString(Keys.SWIPE_WIDTH_DP, theme.swipeTrailWidthDp.toInt()),
-                value = theme.swipeTrailWidthDp.coerceIn(1f, 24f),
-                range = 1f..24f,
-                default = 4f,
-            ) { value -> updateTheme { it.copy(swipeTrailWidthDp = value) } }
-            Explanation(strings[Keys.SWIPE_THE_COLOUR_IS_ON_THE_THEME])
-
-            Text(
-                strings[Keys.SWIPE_HOW_IT_DECODES],
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
-            Explanation(
-                strings[Keys.SWIPE_YOUR_GESTURE_IS_SMOOTHED_REDUCED_TO],
-            )
-            Explanation(
-                strings[Keys.SWIPE_ALL_OF_IT_RUNS_ON_THIS],
-            )
-            if (!preferences.swipeEnabled) {
-                Explanation(strings[Keys.SWIPE_SWIPE_TYPING_IS_CURRENTLY_OFF_SO])
-            }
-
-            // `plus`-only: a `core` build compiles no tier B at all, so this section does not
-            // exist there rather than existing and doing nothing. See SwipeModelAvailability's
-            // own doc for why this is a compile-time check, not a runtime one.
-            if (SwipeModelAvailability.neuralSwipeModelSupported) {
+            // The trail's width and colour live together on the Theme screen; the decoding
+            // notes and the experimental model are for whoever wants to know how it works.
+            AdvancedSection {
                 Text(
-                    strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
+                    strings[Keys.SWIPE_HOW_IT_DECODES],
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 )
-                CautionNote(strings[Keys.SWIPE_A_PREVIEW_OF_WORK_STILL_IN_PROGRESS])
-                SwitchRow(
-                    title = strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
-                    subtitle = strings[Keys.SWIPE_DECODES_GESTURES_WITH_A_TRAINED_NEURAL],
-                    checked = preferences.experimentalSwipeModelEnabled,
-                ) { value -> update { it.copy(experimentalSwipeModelEnabled = value) } }
+                Explanation(
+                    strings[Keys.SWIPE_YOUR_GESTURE_IS_SMOOTHED_REDUCED_TO],
+                )
+                Explanation(
+                    strings[Keys.SWIPE_ALL_OF_IT_RUNS_ON_THIS],
+                )
+                if (!preferences.swipeEnabled) {
+                    Explanation(strings[Keys.SWIPE_SWIPE_TYPING_IS_CURRENTLY_OFF_SO])
+                }
+
+                // `plus`-only: a `core` build compiles no tier B at all, so this section does
+                // not exist there rather than existing and doing nothing. See
+                // SwipeModelAvailability's own doc for why this is a compile-time check, not a
+                // runtime one.
+                if (SwipeModelAvailability.neuralSwipeModelSupported) {
+                    Text(
+                        strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    )
+                    CautionNote(strings[Keys.SWIPE_A_PREVIEW_OF_WORK_STILL_IN_PROGRESS])
+                    SwitchRow(
+                        title = strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
+                        subtitle = strings[Keys.SWIPE_DECODES_GESTURES_WITH_A_TRAINED_NEURAL],
+                        checked = preferences.experimentalSwipeModelEnabled,
+                    ) { value -> update { it.copy(experimentalSwipeModelEnabled = value) } }
+                }
             }
         }
 
@@ -359,46 +364,27 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 checked = preferences.radialMenuEnabled,
             ) { value -> update { it.copy(radialMenuEnabled = value) } }
             if (preferences.radialMenuEnabled) {
-                DefaultableSlider(
-                    label = strings.getString(Keys.RADIAL_COUNT, preferences.radialSuggestionCount),
-                    value = preferences.radialSuggestionCount.toFloat(),
-                    range = KeyboardPreferences.MIN_RADIAL_SUGGESTIONS.toFloat()..
-                        KeyboardPreferences.MAX_RADIAL_SUGGESTIONS.toFloat(),
-                    default = KeyboardPreferences.DEFAULT_RADIAL_SUGGESTIONS.toFloat(),
-                    steps = KeyboardPreferences.MAX_RADIAL_SUGGESTIONS -
-                        KeyboardPreferences.MIN_RADIAL_SUGGESTIONS - 1,
-                ) { value -> update { it.copy(radialSuggestionCount = value.toInt()) } }
-                // Shown and stepped in tenths of a second, not milliseconds -- a hundred-odd
-                // possible millisecond values is a false precision nobody can actually feel or
-                // aim for on a slider; the underlying KeyboardPreferences fields stay
-                // millisecond Ints regardless, since that's what Handler.postDelayed wants.
-                DefaultableSlider(
-                    label = strings.getString(
-                        Keys.RADIAL_PAUSE_DWELL_S,
-                        "%.1f".format(preferences.radialPauseDwellMillis / 1000f),
-                    ),
-                    value = preferences.radialPauseDwellMillis / 1000f,
-                    range = (KeyboardPreferences.MIN_RADIAL_PAUSE_DWELL_MILLIS / 1000f)..
-                        (KeyboardPreferences.MAX_RADIAL_PAUSE_DWELL_MILLIS / 1000f),
-                    default = KeyboardPreferences.DEFAULT_RADIAL_PAUSE_DWELL_MILLIS / 1000f,
-                    steps = (KeyboardPreferences.MAX_RADIAL_PAUSE_DWELL_MILLIS -
-                        KeyboardPreferences.MIN_RADIAL_PAUSE_DWELL_MILLIS) / 100 - 1,
-                ) { value ->
-                    update { it.copy(radialPauseDwellMillis = (value * 1000f).roundToInt()) }
-                }
-                DefaultableSlider(
-                    label = strings.getString(
-                        Keys.RADIAL_MIN_PATH_LETTERS,
-                        "%.1f".format(preferences.radialMinPathLetters),
-                    ),
-                    value = preferences.radialMinPathLetters,
-                    range = KeyboardPreferences.MIN_RADIAL_MIN_PATH_LETTERS..
-                        KeyboardPreferences.MAX_RADIAL_MIN_PATH_LETTERS,
-                    default = KeyboardPreferences.DEFAULT_RADIAL_MIN_PATH_LETTERS,
-                    steps = ((KeyboardPreferences.MAX_RADIAL_MIN_PATH_LETTERS -
-                        KeyboardPreferences.MIN_RADIAL_MIN_PATH_LETTERS) / 0.5f).roundToInt() - 1,
-                ) { value ->
-                    update { it.copy(radialMinPathLetters = (value * 2f).roundToInt() / 2f) }
+                Text(
+                    strings[Keys.RADIAL_TIMEOUT_DEFAULT],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PickerChip(
+                        strings[Keys.RADIAL_TIMEOUT_APPLY_TOP],
+                        preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP,
+                    ) {
+                        update { it.copy(radialTimeoutDefault = KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP) }
+                    }
+                    PickerChip(
+                        strings[Keys.RADIAL_TIMEOUT_CANCEL],
+                        preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL,
+                    ) {
+                        update { it.copy(radialTimeoutDefault = KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) }
+                    }
                 }
                 DefaultableSlider(
                     label = strings.getString(
@@ -439,6 +425,11 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 ) {
                     CautionNote(strings[Keys.RADIAL_TIMEOUT_OVERLAP_WARNING])
                 }
+                SwitchRow(
+                    title = strings[Keys.RADIAL_LIFT_KEEPS_OPEN],
+                    subtitle = strings[Keys.RADIAL_LIFT_KEEPS_OPEN_NOTE],
+                    checked = preferences.radialLiftKeepsOpen,
+                ) { value -> update { it.copy(radialLiftKeepsOpen = value) } }
                 Text(
                     strings[Keys.RADIAL_POSITION],
                     style = MaterialTheme.typography.bodyLarge,
@@ -496,72 +487,90 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                         preferences.radialMenuSize == KeyboardPreferences.RADIAL_SIZE_LARGE,
                     ) { update { it.copy(radialMenuSize = KeyboardPreferences.RADIAL_SIZE_LARGE) } }
                 }
-                Text(
-                    strings[Keys.RADIAL_TIMEOUT_DEFAULT],
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    PickerChip(
-                        strings[Keys.RADIAL_TIMEOUT_APPLY_TOP],
-                        preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP,
-                    ) {
-                        update { it.copy(radialTimeoutDefault = KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP) }
+                // The dials behind the ring: how many words, how a pause is detected, and
+                // what closes it -- set once, if ever.
+                AdvancedSection {
+                    DefaultableSlider(
+                        label = strings.getString(Keys.RADIAL_COUNT, preferences.radialSuggestionCount),
+                        value = preferences.radialSuggestionCount.toFloat(),
+                        range = KeyboardPreferences.MIN_RADIAL_SUGGESTIONS.toFloat()..
+                            KeyboardPreferences.MAX_RADIAL_SUGGESTIONS.toFloat(),
+                        default = KeyboardPreferences.DEFAULT_RADIAL_SUGGESTIONS.toFloat(),
+                        steps = KeyboardPreferences.MAX_RADIAL_SUGGESTIONS -
+                            KeyboardPreferences.MIN_RADIAL_SUGGESTIONS - 1,
+                    ) { value -> update { it.copy(radialSuggestionCount = value.toInt()) } }
+                    // Shown and stepped in tenths of a second, not milliseconds -- a hundred-odd
+                    // possible millisecond values is a false precision nobody can actually feel or
+                    // aim for on a slider; the underlying KeyboardPreferences fields stay
+                    // millisecond Ints regardless, since that's what Handler.postDelayed wants.
+                    DefaultableSlider(
+                        label = strings.getString(
+                            Keys.RADIAL_PAUSE_DWELL_S,
+                            "%.1f".format(preferences.radialPauseDwellMillis / 1000f),
+                        ),
+                        value = preferences.radialPauseDwellMillis / 1000f,
+                        range = (KeyboardPreferences.MIN_RADIAL_PAUSE_DWELL_MILLIS / 1000f)..
+                            (KeyboardPreferences.MAX_RADIAL_PAUSE_DWELL_MILLIS / 1000f),
+                        default = KeyboardPreferences.DEFAULT_RADIAL_PAUSE_DWELL_MILLIS / 1000f,
+                        steps = (KeyboardPreferences.MAX_RADIAL_PAUSE_DWELL_MILLIS -
+                            KeyboardPreferences.MIN_RADIAL_PAUSE_DWELL_MILLIS) / 100 - 1,
+                    ) { value ->
+                        update { it.copy(radialPauseDwellMillis = (value * 1000f).roundToInt()) }
                     }
-                    PickerChip(
-                        strings[Keys.RADIAL_TIMEOUT_CANCEL],
-                        preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL,
-                    ) {
-                        update { it.copy(radialTimeoutDefault = KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) }
+                    DefaultableSlider(
+                        label = strings.getString(
+                            Keys.RADIAL_MIN_PATH_LETTERS,
+                            "%.1f".format(preferences.radialMinPathLetters),
+                        ),
+                        value = preferences.radialMinPathLetters,
+                        range = KeyboardPreferences.MIN_RADIAL_MIN_PATH_LETTERS..
+                            KeyboardPreferences.MAX_RADIAL_MIN_PATH_LETTERS,
+                        default = KeyboardPreferences.DEFAULT_RADIAL_MIN_PATH_LETTERS,
+                        steps = ((KeyboardPreferences.MAX_RADIAL_MIN_PATH_LETTERS -
+                            KeyboardPreferences.MIN_RADIAL_MIN_PATH_LETTERS) / 0.5f).roundToInt() - 1,
+                    ) { value ->
+                        update { it.copy(radialMinPathLetters = (value * 2f).roundToInt() / 2f) }
                     }
-                }
-                SwitchRow(
-                    title = strings[Keys.RADIAL_LIFT_KEEPS_OPEN],
-                    subtitle = strings[Keys.RADIAL_LIFT_KEEPS_OPEN_NOTE],
-                    checked = preferences.radialLiftKeepsOpen,
-                ) { value -> update { it.copy(radialLiftKeepsOpen = value) } }
-                SwitchRow(
-                    title = strings[Keys.RADIAL_BLUR_BACKGROUND],
-                    subtitle = strings[Keys.RADIAL_BLUR_BACKGROUND_NOTE],
-                    checked = preferences.radialBlurBackground,
-                ) { value -> update { it.copy(radialBlurBackground = value) } }
-                Text(
-                    strings[Keys.RADIAL_OUTSIDE_TAP],
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    PickerChip(
-                        strings[Keys.RADIAL_OUTSIDE_TAP_CLOSES_RING],
-                        !preferences.radialOutsideTapHidesKeyboard,
-                    ) { update { it.copy(radialOutsideTapHidesKeyboard = false) } }
-                    PickerChip(
-                        strings[Keys.RADIAL_OUTSIDE_TAP_HIDES_KEYBOARD],
-                        preferences.radialOutsideTapHidesKeyboard,
-                    ) { update { it.copy(radialOutsideTapHidesKeyboard = true) } }
-                }
-                Explanation(strings[Keys.RADIAL_OUTSIDE_TAP_NOTE])
-                SwitchRow(
-                    title = strings[Keys.RADIAL_CLOSE_ON_EDITOR_MOVE],
-                    subtitle = strings[Keys.RADIAL_CLOSE_ON_EDITOR_MOVE_NOTE],
-                    checked = preferences.radialCloseOnEditorMove,
-                ) { value -> update { it.copy(radialCloseOnEditorMove = value) } }
-                // Debug builds only -- see KeyboardPreferences.debugForceRadialRing's own doc.
-                val debuggable = LocalContext.current.applicationInfo.flags and
-                    android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
-                if (debuggable) {
                     SwitchRow(
-                        title = strings[Keys.RADIAL_DEBUG_FORCE_OPEN],
-                        subtitle = strings[Keys.RADIAL_DEBUG_FORCE_OPEN_NOTE],
-                        checked = preferences.debugForceRadialRing,
-                    ) { value -> update { it.copy(debugForceRadialRing = value) } }
+                        title = strings[Keys.RADIAL_BLUR_BACKGROUND],
+                        subtitle = strings[Keys.RADIAL_BLUR_BACKGROUND_NOTE],
+                        checked = preferences.radialBlurBackground,
+                    ) { value -> update { it.copy(radialBlurBackground = value) } }
+                    Text(
+                        strings[Keys.RADIAL_OUTSIDE_TAP],
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    )
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        PickerChip(
+                            strings[Keys.RADIAL_OUTSIDE_TAP_CLOSES_RING],
+                            !preferences.radialOutsideTapHidesKeyboard,
+                        ) { update { it.copy(radialOutsideTapHidesKeyboard = false) } }
+                        PickerChip(
+                            strings[Keys.RADIAL_OUTSIDE_TAP_HIDES_KEYBOARD],
+                            preferences.radialOutsideTapHidesKeyboard,
+                        ) { update { it.copy(radialOutsideTapHidesKeyboard = true) } }
+                    }
+                    Explanation(strings[Keys.RADIAL_OUTSIDE_TAP_NOTE])
+                    SwitchRow(
+                        title = strings[Keys.RADIAL_CLOSE_ON_EDITOR_MOVE],
+                        subtitle = strings[Keys.RADIAL_CLOSE_ON_EDITOR_MOVE_NOTE],
+                        checked = preferences.radialCloseOnEditorMove,
+                    ) { value -> update { it.copy(radialCloseOnEditorMove = value) } }
+                    // Debug builds only -- see KeyboardPreferences.debugForceRadialRing's own doc.
+                    val debuggable = LocalContext.current.applicationInfo.flags and
+                        android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+                    if (debuggable) {
+                        SwitchRow(
+                            title = strings[Keys.RADIAL_DEBUG_FORCE_OPEN],
+                            subtitle = strings[Keys.RADIAL_DEBUG_FORCE_OPEN_NOTE],
+                            checked = preferences.debugForceRadialRing,
+                        ) { value -> update { it.copy(debugForceRadialRing = value) } }
+                    }
                 }
                 Explanation(strings[Keys.RADIAL_EXPLANATION])
             }
@@ -572,9 +581,9 @@ fun TypingScreen(modifier: Modifier = Modifier) {
 /**
  * [preferences] with every field this screen's suggestion and correction cards control put back
  * to [KeyboardPreferences]'s own default -- theme, swipe, language and everything outside those
- * cards untouched. Swipe has no reset of its own here: its one tunable control is a trail width
- * that is really a theme choice, not the kind of setting someone tunes past usefulness and needs
- * a way back from the way the correction knobs above it are.
+ * cards untouched. Swipe has no reset of its own here: its two switches are not the kind of
+ * setting someone tunes past usefulness and needs a way back from the way the correction knobs
+ * above it are, and the trail's width lives with its colour on the Theme screen.
  */
 private fun resetCorrectionDefaults(preferences: KeyboardPreferences): KeyboardPreferences {
     val defaults = KeyboardPreferences()

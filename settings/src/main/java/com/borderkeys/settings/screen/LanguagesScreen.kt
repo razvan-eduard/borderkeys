@@ -46,6 +46,7 @@ import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.Dispatchers
@@ -91,10 +92,6 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
         InterfaceLanguage(preferences) { code ->
             scope.launch { DataGraph.themes.updatePreferences { it.copy(uiLanguage = code) } }
         }
-        LanguageLock(preferences) { lock ->
-            scope.launch { DataGraph.themes.updatePreferences { it.copy(languageLock = lock) } }
-        }
-
         SettingsSectionCard(strings[Keys.LANGUAGES_INSTALLED_PACKS]) {
             if (packs.isEmpty()) {
                 SettingRow(
@@ -104,6 +101,21 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
             }
             for (pack in packs) {
                 PackRow(pack, repository, scope)
+            }
+            // How the packs are weighed against each other while writing, and whether that is
+            // remembered per app: both about the packs above, both set once.
+            AdvancedSection {
+                LanguageLock(preferences) { lock ->
+                    scope.launch { DataGraph.themes.updatePreferences { it.copy(languageLock = lock) } }
+                }
+                SectionHeader(strings[Keys.LANGUAGES_PER_APP_LANGUAGE_MEMORY])
+                SwitchRow(
+                    title = strings[Keys.LANGUAGES_REMEMBER_WHICH_LANGUAGES_YOU_USE_IN],
+                    subtitle = strings[Keys.LANGUAGES_OFF_BY_DEFAULT_IT_STORES_A],
+                    checked = preferences.perAppLanguageMemory,
+                ) { value ->
+                    scope.launch { themes.updatePreferences { it.copy(perAppLanguageMemory = value) } }
+                }
             }
         }
         val installable = BundledDictionaries.ALL.filter { candidate ->
@@ -159,15 +171,6 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.LANGUAGES_A_PACK_S_HEADER_IS_VALIDATED],
             )
-        }
-        SettingsSectionCard(strings[Keys.LANGUAGES_PER_APP_LANGUAGE_MEMORY]) {
-            SwitchRow(
-                title = strings[Keys.LANGUAGES_REMEMBER_WHICH_LANGUAGES_YOU_USE_IN],
-                subtitle = strings[Keys.LANGUAGES_OFF_BY_DEFAULT_IT_STORES_A],
-                checked = preferences.perAppLanguageMemory,
-            ) { value ->
-                scope.launch { themes.updatePreferences { it.copy(perAppLanguageMemory = value) } }
-            }
         }
     }
 }

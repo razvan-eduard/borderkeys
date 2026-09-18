@@ -32,6 +32,7 @@ import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
@@ -62,38 +63,54 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
             checked = preferences.clipboardEnabled,
         ) { value -> update { it.copy(clipboardEnabled = value) } }
 
+        // The chip on the suggestion strip, here with the rest of the clipboard rather than
+        // on the Typing screen: it is the clipboard showing up somewhere, not a suggestion.
         SwitchRow(
-            title = strings[Keys.CLIPBOARD_REMEMBER_IMAGES],
-            subtitle = strings[Keys.CLIPBOARD_REMEMBER_IMAGES_NOTE],
-            checked = preferences.clipboardImages,
-        ) { value ->
-            scope.launch {
-                themes.updatePreferences { it.copy(clipboardImages = value) }
-                // Turning it off forgets what it collected. A switch that stops collecting and
-                // keeps the collection is not the switch anyone thought they turned off.
-                if (!value) {
-                    DataGraph.clipboard.deleteImages()
+            title = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD],
+            subtitle = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD_NOTE],
+            checked = preferences.clipboardSuggestion,
+        ) { value -> update { it.copy(clipboardSuggestion = value) } }
+
+        // Every hygiene policy in one fold. They are independent on purpose -- one withdraws
+        // the chip's offer, one empties the system clipboard, one removes the history row, one
+        // empties the history on close -- and each one's own doc in KeyboardPreferences says
+        // why it is not the one beside it.
+        AdvancedSection {
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE],
+                subtitle = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE_NOTE],
+                checked = preferences.clipboardSuggestionOnce,
+            ) { value -> update { it.copy(clipboardSuggestionOnce = value) } }
+            SwitchRow(
+                title = strings[Keys.CLIPBOARD_REMEMBER_IMAGES],
+                subtitle = strings[Keys.CLIPBOARD_REMEMBER_IMAGES_NOTE],
+                checked = preferences.clipboardImages,
+            ) { value ->
+                scope.launch {
+                    themes.updatePreferences { it.copy(clipboardImages = value) }
+                    // Turning it off forgets what it collected. A switch that stops collecting
+                    // and keeps the collection is not the switch anyone thought they turned off.
+                    if (!value) {
+                        DataGraph.clipboard.deleteImages()
+                    }
                 }
             }
+            SwitchRow(
+                title = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE],
+                subtitle = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE_NOTE],
+                checked = preferences.clearClipboardOnClose,
+            ) { value -> update { it.copy(clearClipboardOnClose = value) } }
+            SwitchRow(
+                title = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT],
+                subtitle = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT_NOTE],
+                checked = preferences.clearClipboardAfterInsert,
+            ) { value -> update { it.copy(clearClipboardAfterInsert = value) } }
+            SwitchRow(
+                title = strings[Keys.CLIPBOARD_DELETE_AFTER_USE],
+                subtitle = strings[Keys.CLIPBOARD_DELETE_AFTER_USE_NOTE],
+                checked = preferences.clipboardDeleteAfterUse,
+            ) { value -> update { it.copy(clipboardDeleteAfterUse = value) } }
         }
-
-        SwitchRow(
-            title = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE],
-            subtitle = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE_NOTE],
-            checked = preferences.clearClipboardOnClose,
-        ) { value -> update { it.copy(clearClipboardOnClose = value) } }
-
-        SwitchRow(
-            title = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT],
-            subtitle = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT_NOTE],
-            checked = preferences.clearClipboardAfterInsert,
-        ) { value -> update { it.copy(clearClipboardAfterInsert = value) } }
-
-        SwitchRow(
-            title = strings[Keys.CLIPBOARD_DELETE_AFTER_USE],
-            subtitle = strings[Keys.CLIPBOARD_DELETE_AFTER_USE_NOTE],
-            checked = preferences.clipboardDeleteAfterUse,
-        ) { value -> update { it.copy(clipboardDeleteAfterUse = value) } }
 
         SettingsSectionCard(strings[Keys.CLIPBOARD_RETENTION_TITLE]) {
             SectionHeader(strings[Keys.CLIPBOARD_HOW_MANY_ITEMS])
