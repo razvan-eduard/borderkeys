@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+#
+# Wörter, die die Tastatur weder vorschlägt noch vervollständigt noch lernt, solange
+# „Anstößige Wörter blockieren“ eingeschaltet ist. Buchstabe für Buchstabe getippt bleiben sie
+# unangetastet. Ein Wort pro Zeile; Groß-/Kleinschreibung und Akzente spielen keine Rolle (jeder
+# Eintrag und jeder Kandidat werden vor dem Vergleich auf dieselbe Form gebracht); eine Zeile,
+# die mit „#“ beginnt, ist ein Kommentar. Flexionsformen sind für den Motor eigene Wörter, daher
+# steht jede einzeln. ß und ss sind zwei Schreibweisen, daher beide.
+#
+# Nur Vulgärsprache und Schimpfwörter gegen Gruppen. Anatomie, Medizin und milde Wörter bleiben
+# absichtlich vorschlagbar.
+
+arsch
+ärsche
+arschficker
+arschgeige
+arschgesicht
+arschkriecher
+arschlecker
+arschloch
+arschlöcher
+bastard
+bastarde
+beschissen
+drecksack
+drecksau
+drecksäue
+dreckskerl
+fick
+ficken
+ficker
+fickerei
+fickfehler
+fickt
+flittchen
+fotze
+fotzen
+fresse
+gefickt
+gewichst
+hackfresse
+hure
+huren
+hurensohn
+hurensöhne
+kackbratze
+kanake
+kanaken
+missgeburt
+missgeburten
+mongo
+mongos
+neger
+negerin
+nigger
+nutte
+nutten
+pimmel
+pisser
+scheiss
+scheissdreck
+scheisse
+scheisser
+scheisskerl
+scheiß
+scheißdreck
+scheiße
+scheißer
+scheißkerl
+schlampe
+schlampen
+schwanzlutscher
+schwuchtel
+schwuchteln
+spast
+spasten
+spasti
+spastis
+titten
+tunte
+tunten
+verfickt
+verfickte
+verfickter
+verschissen
+wichse
+wichsen
+wichser
+wichst

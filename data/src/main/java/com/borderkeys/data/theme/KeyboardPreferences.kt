@@ -42,6 +42,15 @@ data class KeyboardPreferences(
     val learningEnabled: Boolean = true,
 
     /**
+     * Whether the built-in list of offensive words is kept out of suggestions, corrections and
+     * learning. Off by default: this keyboard does not decide for anyone what they may write,
+     * and a word typed letter by letter is never touched either way -- the switch only stops
+     * the keyboard from *offering* one. The lists are per language, in the keyboard's own
+     * assets, and follow the languages that are turned on.
+     */
+    val blockOffensiveWords: Boolean = false,
+
+    /**
      * How readily what you write starts to outrank what the dictionary says.
      *
      * One of the LEARNING_ constants below. It does not change *what* is recorded -- every

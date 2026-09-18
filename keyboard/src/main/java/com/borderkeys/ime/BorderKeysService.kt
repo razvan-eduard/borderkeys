@@ -46,6 +46,7 @@ import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.ime.fx.applyParticleLayer
 import com.borderkeys.predict.LearningBuffer
 import com.borderkeys.predict.PredictionEngine
+import com.borderkeys.predict.WordFold
 import com.borderkeys.theme.DynamicColors
 import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
@@ -186,6 +187,13 @@ class BorderKeysService :
      */
     @Volatile
     private var activeLanguageTags: List<String> = emptyList()
+
+    /**
+     * The offensive-word lists of the enabled packs, merged and folded -- see [OffensiveWords].
+     * Loaded with the packs whether or not the switch is on, so flipping it costs a refresh of
+     * the blocked set and the personal model, never a file read on the main thread.
+     */
+    private var offensiveWords: Set<String> = emptySet()
 
     /**
      * The language the engine currently considers the conversation written in, refreshed after
@@ -581,6 +589,7 @@ class BorderKeysService :
             accentOverlays = AccentOverlays.merge(enabled.map { AccentOverlays.load(assets, it.tag) })
             accentSignature = enabled.joinToString(",") { it.tag }
             activeLanguageTags = enabled.map { it.tag }
+            offensiveWords = OffensiveWords.merge(enabled.map { OffensiveWords.load(assets, it.tag) })
             withContext(Dispatchers.Main) { host?.let { showPage(page) } }
 
             // The final set reaches the engine before the files do, and again after. The engine
@@ -611,11 +620,24 @@ class BorderKeysService :
             engine.setActiveLanguages(tags, weights)
 
             val dictionary = DataGraph.dictionary
+            refreshBlockedWords(dictionary)
             loadPersonalModel(dictionary)
-            val blockedWords = dictionary.blockedWordSet()
-            engine.setBlockedWords(blockedWords)
-            learning.setBlockedWords(blockedWords)
         }
+    }
+
+    /**
+     * Pushes what must never be suggested or learned: the words the user refused, and the
+     * offensive-word list while its switch is on. One set, folded here ([WordFold]), handed to
+     * the engine's candidate filter and to the learning buffer alike.
+     */
+    private suspend fun refreshBlockedWords(dictionary: DictionaryRepository) {
+        val refused = HashSet<String>()
+        dictionary.blockedWordSet().mapTo(refused) { WordFold.fold(it) }
+        if (preferences.blockOffensiveWords) {
+            refused.addAll(offensiveWords)
+        }
+        engine.setBlockedWords(refused)
+        learning.setBlockedWords(refused)
     }
 
     /**
@@ -630,11 +652,29 @@ class BorderKeysService :
      */
     private suspend fun loadPersonalModel(dictionary: DictionaryRepository) {
         val now = System.currentTimeMillis()
-        engine.loadUserWords(dictionary.topWords().map { it.decayed(now) })
+        // With the offensive-word switch on, the personal model is loaded without those words,
+        // and without any pair or triple that touches one. Nothing is deleted: the rows stay in
+        // the database and are back the moment the switch is turned off. This is what keeps a
+        // word learned before the switch was on out of the strip -- and out of the two-word
+        // phrases the engine builds from the personal model alone, which the candidate filter
+        // could not see inside "holy shit". New ones the learning buffer refuses on its own.
+        val hidden = if (preferences.blockOffensiveWords) offensiveWords else emptySet()
+        fun shown(word: String) = hidden.isEmpty() || WordFold.fold(word) !in hidden
+        engine.loadUserWords(
+            dictionary.topWords().filter { shown(it.word) }.map { it.decayed(now) },
+        )
         // After the words, never before: a pair names two words, and the model resolves those
         // names against what it already holds.
-        engine.loadUserBigrams(dictionary.topBigrams().map { it.decayed(now) })
-        engine.loadUserTrigrams(dictionary.topTrigrams().map { it.decayed(now) })
+        engine.loadUserBigrams(
+            dictionary.topBigrams()
+                .filter { shown(it.previousWord) && shown(it.word) }
+                .map { it.decayed(now) },
+        )
+        engine.loadUserTrigrams(
+            dictionary.topTrigrams()
+                .filter { shown(it.previousWord2) && shown(it.previousWord1) && shown(it.word) }
+                .map { it.decayed(now) },
+        )
     }
 
     /**
@@ -712,8 +752,25 @@ class BorderKeysService :
                 theme = newTheme
                 lightTheme = newLightTheme
                 val wasForcingDebugRing = preferences.debugForceRadialRing
+                val offensiveSwitchFlipped =
+                    preferences.blockOffensiveWords != newPreferences.blockOffensiveWords
                 preferences = newPreferences
                 particleEffects = newParticleEffects
+                if (offensiveSwitchFlipped) {
+                    // The switch changes what the blocked set and the personal model hold, not
+                    // what is stored: both are rebuilt from the database, under the same lock
+                    // the start-up load takes, so a flip during that load queues behind it --
+                    // including the first emission here, which is what applies a stored "on"
+                    // after a load that ran on the defaults.
+                    scope.launch(Dispatchers.IO) {
+                        dictionaryLoad.withLock {
+                            val dictionary = DataGraph.dictionary
+                            refreshBlockedWords(dictionary)
+                            loadPersonalModel(dictionary)
+                        }
+                        withContext(Dispatchers.Main) { requestSuggestions() }
+                    }
+                }
                 val resolvedTheme = ThemeMode.resolve(
                     newTheme, newLightTheme, newPreferences, this@BorderKeysService,
                 )
@@ -3128,9 +3185,7 @@ class BorderKeysService :
                 dictionary.forget(personal.word)
             } else {
                 dictionary.block(word.lowercase())
-                val blockedWords = dictionary.blockedWordSet()
-                engine.setBlockedWords(blockedWords)
-                learning.setBlockedWords(blockedWords)
+                refreshBlockedWords(dictionary)
             }
             loadPersonalModel(dictionary)
             requestSuggestions()

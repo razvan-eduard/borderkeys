@@ -132,6 +132,15 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# Per-language lists of the words the "Block offensive words" switch keeps out of suggestions
+# and learning. Authored here -- the selection was checked against the LDNOOBW lists (CC BY 4.0)
+# for coverage, not copied from them -- and each file carries a header of its own as well.
+[[annotations]]
+path = "keyboard/src/main/assets/offensive/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 BorderKeys contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # Recorded swipe gestures used by tools/gesture_replay.py and the native tests (step 6.6).
 [[annotations]]
 path = "native-tests/data/**"

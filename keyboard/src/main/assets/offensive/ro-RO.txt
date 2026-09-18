@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+#
+# Cuvinte pe care tastatura nu le sugerează, nu le completează și nu le învață cât timp
+# „Blochează cuvintele vulgare” este pornit. Scrise literă cu literă, rămân neatinse. Un cuvânt
+# pe rând; majusculele și diacriticele nu contează (fiecare intrare și fiecare candidat sunt
+# reduse la aceeași formă înainte de comparație); o linie care începe cu „#” este comentariu.
+# Formele flexionate sunt cuvinte separate pentru motor, așa că fiecare este trecută.
+#
+# Doar vulgarități și insulte etnice sau homofobe. Anatomia, medicina și cuvintele blânde rămân
+# sugerabile dinadins.
+
+băga-mi-aș
+bozgor
+bozgori
+bozgoroaică
+bulangii
+bulangiu
+bulangiule
+căcăcioasă
+căcăcios
+căcănar
+căcănari
+căcănarule
+căcat
+căcatul
+căcaturi
+cioroaică
+cioroi
+coaie
+coaiele
+coaielor
+cur
+curu
+curul
+curvă
+curvar
+curvari
+curve
+curvei
+curvelor
+curvo
+fătălăi
+fătălău
+fut
+fută
+futai
+futaiuri
+futangiu
+fute
+futem
+futeți
+futu
+futu-i
+futu-ți
+futut
+fututa
+jidan
+jidancă
+jidance
+jidani
+labagii
+labagiu
+labagiule
+mă-ta
+mă-tii
+mongoloid
+mongoloizi
+muie
+muii
+muist
+muistă
+muiste
+muiști
+muistule
+pizdă
+pizde
+pizdei
+pizdii
+pizdo
+pizdulice
+poponar
+poponari
+poponarule
+pulă
+pule
+puli
+pulii
+retardat
+retardată
+retardate
+retardați
+sloboz
+târfă
+târfe
+târfei
+țâțe

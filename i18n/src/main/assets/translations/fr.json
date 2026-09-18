@@ -905,5 +905,7 @@
   "about_dictionary_sources": "Sources des dictionnaires",
   "about_dictionary_sources_note": "Les six dictionnaires fournis sont des fréquences de mots et de paires issues des corpus Wortschatz Leipzig (Universität Leipzig), publiées sous CC BY 4.0 et compilées dans ce dépôt. Rien n’est jamais téléchargé.",
   "about_open_dictionary_sources": "Ouvrir le site des corpus de Leipzig",
-  "about_version_unknown": "inconnue"
+  "about_version_unknown": "inconnue",
+  "corrections_block_offensive_words": "Bloquer les mots grossiers",
+  "corrections_block_offensive_words_note": "Jamais suggérés, jamais appliqués comme correction, jamais appris. Ce que vous tapez vous-même reste exactement tel quel ; un glissement qui tombe sur l'un d'eux affiche la proposition suivante."
 }

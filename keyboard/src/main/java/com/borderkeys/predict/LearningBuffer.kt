@@ -47,10 +47,18 @@ class LearningBuffer(
 
     fun isEmpty(): Boolean = pending.isEmpty()
 
-    /** Words the user has refused. Never learned, however often they are typed. */
+    /**
+     * Words that are never learned, however often they are typed: the ones the user refused,
+     * and the offensive-word list while its switch is on. Every entry arrives already folded
+     * ([WordFold]), and a candidate is folded the same way before it is looked up, so "Shit"
+     * at a sentence start is the same refusal as "shit".
+     */
     fun setBlockedWords(words: Set<String>) {
         blocked = words
     }
+
+    private fun refused(word: String): Boolean =
+        blocked.isNotEmpty() && WordFold.fold(word) in blocked
 
     /**
      * Records one confirmed word. Returns true if it was accepted.
@@ -73,7 +81,7 @@ class LearningBuffer(
         if (previousWord.length > MAX_WORD_LENGTH || word.length > MAX_WORD_LENGTH) {
             return false
         }
-        if (previousWord in blocked || word in blocked || previousWord == word) {
+        if (refused(previousWord) || refused(word) || previousWord == word) {
             return false
         }
         val key = PairKey(previousWord, word)
@@ -105,7 +113,7 @@ class LearningBuffer(
         ) {
             return false
         }
-        if (previousWord2 in blocked || previousWord1 in blocked || word in blocked) {
+        if (refused(previousWord2) || refused(previousWord1) || refused(word)) {
             return false
         }
         if (previousWord1 == word) {
@@ -129,7 +137,7 @@ class LearningBuffer(
         if (!enabled || word.isEmpty() || word.length > MAX_WORD_LENGTH) {
             return false
         }
-        if (word in blocked) {
+        if (refused(word)) {
             return false
         }
         if (pending.isEmpty()) {

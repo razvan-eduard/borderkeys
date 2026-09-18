@@ -905,5 +905,7 @@
   "about_dictionary_sources": "Fuentes de los diccionarios",
   "about_dictionary_sources_note": "Los seis diccionarios incluidos son frecuencias de palabras y pares de los corpus Wortschatz Leipzig (Universität Leipzig), publicadas bajo CC BY 4.0 y compiladas en este repositorio. Nunca se descarga nada.",
   "about_open_dictionary_sources": "Abrir el sitio de los corpus de Leipzig",
-  "about_version_unknown": "desconocida"
+  "about_version_unknown": "desconocida",
+  "corrections_block_offensive_words": "Bloquear palabras ofensivas",
+  "corrections_block_offensive_words_note": "Nunca se sugieren, nunca se aplican como corrección, nunca se aprenden. Lo que escribes tú queda exactamente como lo escribiste; un deslizamiento que cae en una muestra la siguiente propuesta."
 }

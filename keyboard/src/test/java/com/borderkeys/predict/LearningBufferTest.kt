@@ -96,6 +96,18 @@ class LearningBufferTest {
     }
 
     @Test
+    fun `a blocked word is refused in any case or spelling`() {
+        val buffer = LearningBuffer()
+        buffer.setBlockedWords(setOf(WordFold.fold("mașina")))
+        assertFalse(buffer.record("Mașina", "ro-RO", 1_000))
+        assertFalse(buffer.record("MASINA", "ro-RO", 1_000))
+        assertFalse("the cedilla spelling is the same word", buffer.record("maşina", "ro-RO", 1_000))
+        assertFalse(buffer.recordPair("vreau", "Mașina", 1_000))
+        assertFalse(buffer.recordTriple("Masina", "e", "gata", 1_000))
+        assertTrue(buffer.isEmpty())
+    }
+
+    @Test
     fun `absurdly long input is refused rather than stored`() {
         val buffer = LearningBuffer()
         assertFalse(buffer.record("a".repeat(65), "en-US", 1_000))
