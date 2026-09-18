@@ -380,36 +380,42 @@ class QuickActionsView(
     }
 
     private fun barThicknessPx(): Int {
-        val base = barBasePx()
-        // The label band is appended below the level's own icon band, not carved out of it: the
-        // icons stay the size and the centre the level alone gives them, and the bar grows by
-        // exactly what the tallest label needs -- so a bar with no labels is shorter.
-        val withLabels = if (labelsActive()) base + labelBandPx(base, measuredWidthHint) else base
-        return withLabels.toInt().coerceAtLeast(1)
+        // The bar wraps its content with a small even margin rather than reserving a tall band
+        // the icon floats in: a margin, the icon, and with labels a gap and the tallest label,
+        // then the same margin again. So the icon sits close to both edges instead of adrift in
+        // empty space, and a bar with no labels is markedly shorter.
+        val icon = barIconPx()
+        val margin = icon * EDGE_MARGIN_FRACTION
+        val h = if (labelsActive()) {
+            margin + icon + icon * ICON_LABEL_GAP_FRACTION + labelBandPx(measuredWidthHint) + margin
+        } else {
+            icon + 2f * margin
+        }
+        return h.toInt().coerceAtLeast(1)
     }
 
-    /** The icon band: the thickness the size level gives a bar with no labels. */
+    /** The nominal thickness the size level names, before margins -- the icon is a share of it. */
     private fun barBasePx(): Float {
         val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_THICKNESS_PX
         return row * BAR_HEIGHT_FRACTION * SIZE_THICKNESS_FRACTION[sizeLevel]
     }
 
+    /** The icon's own size, from the level -- unchanged by whether labels are shown. */
+    private fun barIconPx(): Float = barBasePx() * ICON_FRACTION
+
     /**
-     * The band a labelled bar adds below the icons: a gap, the tallest label once every label
-     * is wrapped to the slot the bar's [widthPx] gives it, and the same gap again. Leaves
-     * [labelLayouts] and [labelLayoutWidth] built for [layoutButtons] to draw from -- wrapped
-     * once per geometry, never on a draw. Two lines before an ellipsis: a slot too narrow even
-     * for "Copy line" is rarer than one word cut to three dots.
+     * The tallest label's height, once every label is wrapped to the slot the bar's [widthPx]
+     * gives it. Leaves [labelLayouts] and [labelLayoutWidth] built for [layoutButtons] to draw
+     * from -- wrapped once per geometry, never on a draw. Two lines before an ellipsis: a slot
+     * too narrow even for "Copy line" is rarer than one word cut to three dots.
      */
-    private fun labelBandPx(base: Float, widthPx: Int): Float {
+    private fun labelBandPx(widthPx: Int): Float {
         val shown = shownCount()
-        // Off the icon band, not the label's own: a text size tied to the band it sits in would
-        // shrink whenever that band is tightened, unrelated to legibility. Bold, because a
-        // caption this small reads better with more ink and is the one text competing with an
-        // icon rather than sitting on its own.
-        labelPaint.textSize = base * LABEL_TEXT_FRACTION
+        // Sized off the nominal thickness, not the label's own band, so it does not shrink as
+        // the bar tightens. Bold, because a caption this small reads better with more ink and
+        // is the one text in the bar competing with an icon.
+        labelPaint.textSize = barBasePx() * LABEL_TEXT_FRACTION
         labelPaint.typeface = Typeface.create(paints.labelSecondary.typeface, Typeface.BOLD)
-        val gapPx = base * ICON_LABEL_GAP_FRACTION
         val oneLine = labelPaint.fontMetrics.let { it.descent - it.ascent }
         var tallest = oneLine
         if (shown > 0 && widthPx > 0) {
@@ -428,7 +434,7 @@ class QuickActionsView(
                 tallest = max(tallest, labelLayouts[index]?.height?.toFloat() ?: oneLine)
             }
         }
-        return gapPx + tallest + gapPx
+        return tallest
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -447,17 +453,21 @@ class QuickActionsView(
         if (shown <= 0 || width == 0 || height == 0) {
             return
         }
-        val thickness = if (vertical) width else height
         val along = if (vertical) height else width
         val step = along.toFloat() / shown
         slotPx = step
-        // The icon band is the size level's own thickness; whatever the bar has beyond it is
-        // the label band, appended below. So the icon sits exactly where a label-less bar
-        // would put it -- centred in its band -- and only the bar grows for the labels.
-        val labelBand = if (labelsActive()) labelBandPx(barBasePx(), width) else 0f
-        val iconBand = (thickness - labelBand).coerceAtLeast(1f)
-        buttonSizePx = (iconBand * ICON_FRACTION).toInt().coerceAtLeast(1)
-        val iconCentre = iconBand / 2f
+        // A margin, the icon, then (with labels) a gap and the label, and the same margin
+        // again -- the icon centred a margin from the free edge, close to it rather than lost
+        // in a tall band. labelBandPx wrapped the layouts during measure; re-run here for the
+        // real width.
+        val icon = barIconPx()
+        buttonSizePx = icon.toInt().coerceAtLeast(1)
+        val margin = icon * EDGE_MARGIN_FRACTION
+        val gap = icon * ICON_LABEL_GAP_FRACTION
+        val iconCentre = margin + icon / 2f
+        if (labelsActive()) {
+            labelBandPx(width)
+        }
         labelBandBottomY = 0f
         for (index in 0 until shown) {
             val centre = step * index + step / 2f
@@ -470,8 +480,7 @@ class QuickActionsView(
             }
         }
         if (labelsActive()) {
-            // One gap below the icon; the layouts were wrapped by labelBandPx to this width.
-            labelTopY = iconCentre + buttonSizePx / 2f + barBasePx() * ICON_LABEL_GAP_FRACTION
+            labelTopY = iconCentre + buttonSizePx / 2f + gap
             for (index in 0 until shown) {
                 val layoutBottom = labelTopY + (labelLayouts[index]?.height ?: 0)
                 if (layoutBottom > labelBandBottomY) {
@@ -701,7 +710,11 @@ class QuickActionsView(
         /** The gap between the icon and its label, as a fraction of the bar's whole thickness --
          *  see [layoutButtons]'s own comment for why the icon+label group is centred as a unit
          *  rather than either one pinned to an edge. */
-        const val ICON_LABEL_GAP_FRACTION = 0.04f
+        const val ICON_LABEL_GAP_FRACTION = 0.12f
+
+        /** The margin the bar keeps around its content on the free edge and the attached one,
+         *  as a share of the icon -- small, so the bar wraps the icon and label tightly. */
+        const val EDGE_MARGIN_FRACTION = 0.24f
 
         /** The custom-action dot's radius, as a fraction of the icon's own size -- see
          *  ClipboardPanelView's PIN_RADIUS_FRACTION, the same idea at the same rough scale. */
