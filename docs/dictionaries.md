@@ -206,6 +206,67 @@ ordinary word of another's; and autocorrect lets a name correct only its own let
 "maria" to "Maria", "laurentiu" to "Laurențiu" -- never an ordinary word an edit or two away,
 so "everyone" cannot become "Everton" just because a football club is in the corpus.
 
+## Offensive words
+
+A corpus counted the way above contains whatever people wrote, profanity included, and a
+frequent swear word ranks exactly as high as any other frequent word. "Block offensive words",
+on the Typing and Suggestions screen and off by default, is the switch that keeps a curated set
+of them out of the suggestion strip, out of autocorrect and out of the personal dictionary.
+
+The lists are plain text, one per bundled language, in `keyboard/src/main/assets/offensive/`
+as `<tag>.txt` -- with the hyphen the tag actually has (`en-US.txt`), unlike `dictionaries/`,
+which uses `_` because the compiled pack is named after the file. One word per line, `#` for a
+comment. They are loaded for the languages that are turned on and merged, the same way the
+accent overlays in `assets/accents/` are, so turning Italian off takes its words out of the set
+with it.
+
+What the switch does *not* do is as much the point as what it does:
+
+- **It never touches what you type.** The words are removed from what the keyboard *offers*.
+  Typed letter by letter, a word on the list is committed exactly as typed: the typed word has
+  its own chip on the strip, always first, whether or not any candidate survived the filter, and
+  the "do the dictionaries spell this?" lookup that stops autocorrect from touching a real word
+  does not consult the list at all. So the failure everyone knows -- typing a swear word and
+  having the keyboard replace it with something else -- cannot happen here.
+- **It is whole words, never substrings.** The comparison is against a dictionary candidate, not
+  a search through the letters, so "assassin", "Scunthorpe" and "cockpit" are untouched. This is
+  the one design decision that makes a list like this safe at all.
+- **A swipe that decodes to one offers the next candidate instead.** The gesture results go
+  through the same filter as the typed ones. That is the same behaviour every other keyboard
+  with this switch has, and it is the price of the swipe path having no "but I meant it" signal
+  the way deliberate typing does.
+- **Nothing is deleted.** A word already in the personal dictionary is *hidden* while the switch
+  is on: the personal model is loaded without it, and without any pair or triple that names it,
+  which is also what keeps it out of the two-word phrase suggestions the engine builds from the
+  personal model alone -- a whole-word filter cannot see inside "holy shit". Turn the switch off
+  and every row is back, with its count intact.
+
+Both halves of the comparison are folded first -- lower case, accents stripped -- so a list needs
+one spelling of a word rather than every casing of it, and a Romanian entry written with its
+diacritics also matches the same word typed without them. `ñ` and `ß` are deliberately *not*
+folded away: `ñ` is a letter of its own and "cono" must not go with "coño". Inflections are
+different words to the engine and each one needs its own line; that is why the lists carry
+"fuck", "fucked", "fucking" and "fucker" separately rather than a stem.
+
+### Editing a list, or adding a language
+
+Add the line, keep the file sorted, and that is the whole procedure -- the lists are read at run
+time from the assets, so nothing is recompiled and no pack is rebuilt. A new language needs
+`<tag>.txt` next to the others and nothing else; a tag with no file simply contributes no words.
+`OffensiveWordsTest` reads all six out of the repository and fails on a multi-word entry (it
+could never match a single candidate), an upper-case one, or a word listed twice once folded.
+
+The selection is this project's own, and the policy behind it is narrower than it looks:
+**profanity and slurs, nothing else.** Anatomy, medicine and mild words stay suggestible on
+purpose -- a keyboard that will not complete "penis" or "breast" is broken for anyone writing
+about their own body, and that is a far more common need than the switch itself. The public
+lists that exist for this (the LDNOOBW set, and a Romanian fork of it) were read for coverage
+and not copied: they are content-moderation lists, built to answer "what should this platform
+not *show* people", which is a different question. They mark ordinary vocabulary -- "martillo"
+is a hammer, "pesce" is a fish, "negru" is the colour black -- and they carry multi-word phrases
+that can never match a candidate. Their licence (CC BY 4.0) and this difference are recorded in
+`docs/licensing.md` section 2.1.
+
 ## Shipping one with the application
 
 Drop the word list in `dictionaries/` as `<tag>.tsv` — with `_` where the tag has `-` — and the

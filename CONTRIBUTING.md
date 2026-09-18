@@ -101,6 +101,18 @@ reuse lint
 If you touched the gesture decoder, also run `tools/gesture_replay.py`. Top-1 accuracy must
 not fall below the value recorded in `docs/`; CI compares against it.
 
+## The offensive-word lists
+
+`keyboard/src/main/assets/offensive/<tag>.txt` is what the "Block offensive words" switch hides
+from the suggestion strip, from autocorrect and from the personal dictionary. Adding a word is a
+one-line change and needs no rebuild of anything, but the policy is narrow and worth reading
+before you touch one: **profanity and slurs only**, never anatomy, medicine or mild words, and
+never a multi-word phrase. `docs/dictionaries.md` has the reasoning and the mechanism; the test
+enforces the format.
+
+Nothing on that list is ever blocked from being *typed*. If a change to this area would stop
+someone writing a word they deliberately typed, it is wrong.
+
 ## Commit messages
 
 Present tense, and say why the change is correct rather than what it touched. The diff already
