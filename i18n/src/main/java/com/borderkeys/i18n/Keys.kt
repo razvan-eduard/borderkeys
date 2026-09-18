@@ -501,6 +501,7 @@ object Keys {
     const val LAYOUT_HAPTIC_STRENGTH = "layout_haptic_strength"
     const val LAYOUT_HAPTIC_STRENGTH_NOTE = "layout_haptic_strength_note"
     const val LAYOUT_HAPTIC_STRONG = "layout_haptic_strong"
+    const val LAYOUT_HAPTIC_SYSTEM = "layout_haptic_system"
     const val LAYOUT_KEY_POPUP = "layout_key_popup"
     const val LAYOUT_KEY_POPUP_NOTE = "layout_key_popup_note"
     const val LAYOUT_KEYBOARD = "layout_keyboard"

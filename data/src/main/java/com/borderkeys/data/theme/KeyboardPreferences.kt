@@ -76,14 +76,15 @@ data class KeyboardPreferences(
     val hapticFeedback: Boolean = true,
 
     /**
-     * How firm the keypress vibration is: [HAPTIC_LIGHT], [HAPTIC_MEDIUM] or [HAPTIC_STRONG].
+     * How firm the keypress vibration is: [HAPTIC_SYSTEM] (the phone's own keyboard tap, the
+     * default), [HAPTIC_LIGHT], [HAPTIC_MEDIUM] or [HAPTIC_STRONG].
      *
-     * Three of the platform's own feedback classes rather than three amplitudes: an amplitude
-     * needs the VIBRATE permission and this application asks for none, while
-     * `performHapticFeedback` needs nothing and the phone renders each class in its own
-     * calibrated way -- a faint tick, the keyboard tap, a firm buzz. Clamped on read.
+     * The platform's own feedback classes rather than amplitudes: an amplitude needs the
+     * VIBRATE permission and this application asks for none, while `performHapticFeedback`
+     * needs nothing and the phone renders each class in its own calibrated way -- the tap
+     * every keyboard gives, a faint tick, a medium click, a firm buzz. Clamped on read.
      */
-    val hapticStrength: Int = HAPTIC_MEDIUM,
+    val hapticStrength: Int = HAPTIC_SYSTEM,
 
     /**
      * Whether a keypress makes a sound.
@@ -827,7 +828,7 @@ data class KeyboardPreferences(
             .filter { seenTriggers.add(it.trigger.lowercase()) }
             .take(TextShortcut.MAX_SHORTCUTS)
         return copy(
-            hapticStrength = if (hapticStrength in HAPTIC_LIGHT..HAPTIC_STRONG) hapticStrength else HAPTIC_MEDIUM,
+            hapticStrength = if (hapticStrength in HAPTIC_LIGHT..HAPTIC_SYSTEM) hapticStrength else HAPTIC_SYSTEM,
             textShortcuts = sanitisedTextShortcuts,
         minCorrectionLength = minCorrectionLength.coerceIn(MIN_CORRECTION_LENGTH, MAX_CORRECTION_LENGTH),
         correctionStrictness = if (correctionStrictness > 0f) {
@@ -1164,10 +1165,12 @@ data class KeyboardPreferences(
 
         const val DEFAULT_LONG_PRESS_MILLIS = 380
 
-        /** The three keypress vibration classes -- see [hapticStrength]. */
+        /** The keypress vibration classes -- see [hapticStrength]. [HAPTIC_SYSTEM] is last in
+         *  the numbering only because the three explicit ones came first; it is the default. */
         const val HAPTIC_LIGHT = 0
         const val HAPTIC_MEDIUM = 1
         const val HAPTIC_STRONG = 2
+        const val HAPTIC_SYSTEM = 3
 
         /** Follow the field: its action, unless it flagged Enter to stay a newline regardless. */
         const val ENTER_KEY_AUTO = 0

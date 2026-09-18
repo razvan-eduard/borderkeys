@@ -242,10 +242,11 @@ class KeyboardPreferencesTest {
     }
 
     @Test
-    fun `the key popup defaults on and the vibration to medium`() {
+    fun `the key popup defaults on and the vibration to the system's own`() {
         assertTrue(KeyboardPreferences().keyPopup)
-        assertEquals(KeyboardPreferences.HAPTIC_MEDIUM, KeyboardPreferences().hapticStrength)
-        assertEquals(KeyboardPreferences.HAPTIC_MEDIUM, KeyboardPreferences(hapticStrength = 9).sanitised().hapticStrength)
+        assertEquals(KeyboardPreferences.HAPTIC_SYSTEM, KeyboardPreferences().hapticStrength)
+        assertEquals(KeyboardPreferences.HAPTIC_SYSTEM, KeyboardPreferences(hapticStrength = 9).sanitised().hapticStrength)
+        assertEquals(KeyboardPreferences.HAPTIC_STRONG, KeyboardPreferences(hapticStrength = 2).sanitised().hapticStrength)
     }
 
     @Test

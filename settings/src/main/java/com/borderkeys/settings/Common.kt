@@ -7,7 +7,6 @@ import com.borderkeys.i18n.Keys
 
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,7 +36,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
@@ -135,7 +133,6 @@ fun SettingRow(
 fun AdvancedSection(content: @Composable ColumnScope.() -> Unit) {
     val strings = LocalStrings.current
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "advanced")
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -149,11 +146,15 @@ fun AdvancedSection(content: @Composable ColumnScope.() -> Unit) {
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.weight(1f),
         )
-        Text(
-            "\u2304",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.rotate(rotation),
+        // One icon in one place, in two states -- a chevron down while closed, up while open --
+        // rather than a glyph rotated in place, which swung around its own centre.
+        Icon(
+            painter = painterResource(
+                if (expanded) com.borderkeys.keyboard.R.drawable.bk_chevron_up
+                else com.borderkeys.keyboard.R.drawable.bk_chevron_down,
+            ),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
         )
     }
     AnimatedVisibility(visible = expanded) {

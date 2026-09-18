@@ -11,6 +11,7 @@ import android.content.Intent
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -150,10 +151,15 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 }
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    PickerChip(
+                        strings[Keys.LAYOUT_HAPTIC_SYSTEM],
+                        preferences.hapticStrength == KeyboardPreferences.HAPTIC_SYSTEM,
+                    ) { update { it.copy(hapticStrength = KeyboardPreferences.HAPTIC_SYSTEM) } }
                     PickerChip(
                         strings[Keys.LAYOUT_HAPTIC_LIGHT],
                         preferences.hapticStrength == KeyboardPreferences.HAPTIC_LIGHT,
