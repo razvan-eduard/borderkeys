@@ -61,6 +61,14 @@ internal object AutoCorrection {
         if (editDistance(stripDiacritics(typed), stripDiacritics(suggestion)) > maxEdits) {
             return null
         }
+        // A name corrects only its own letters: "maria" may become "Maria" and "laurentiu"
+        // "Laurențiu", but "everyone" must never become "Everton" nor "thanks" "Hanks". A
+        // proper noun the dictionaries carry says nothing about what an ordinary word was meant
+        // to be, and a typo two edits from somebody's name is still a typo, not that person --
+        // the trade the dictionaries' own names list was never meant to make.
+        if (isProperNoun && !stripDiacritics(typed).equals(stripDiacritics(suggestion), ignoreCase = true)) {
+            return null
+        }
         // Cased once, up front, rather than compared raw and separately case-insensitively:
         // "would this actually change anything once matchCase has had its say" is the one
         // question both of the old separate checks (exact match, and match but for case) were

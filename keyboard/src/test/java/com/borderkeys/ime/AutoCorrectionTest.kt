@@ -99,6 +99,14 @@ class AutoCorrectionTest {
     }
 
     @Test
+    fun `a name only ever corrects its own letters`() {
+        assertNull(AutoCorrection.correctionFor("everyone", "Everton", "everyone", "", 3, isProperNoun = true, maxEdits = 2))
+        assertNull(AutoCorrection.correctionFor("thanks", "Hanks", "thanks", "", 3, isProperNoun = true, maxEdits = 2))
+        assertEquals("Maria", AutoCorrection.correctionFor("maria", "Maria", "maria", "maria", 3, isProperNoun = true))
+        assertEquals("Laurențiu", AutoCorrection.correctionFor("laurentiu", "Laurențiu", "laurentiu", "", 3, isProperNoun = true))
+    }
+
+    @Test
     fun `a word shorter than the minimum is never corrected`() {
         assertNull(
             AutoCorrection.correctionFor(

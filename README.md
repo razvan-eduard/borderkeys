@@ -53,10 +53,6 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   notices the flip and offers the affected word back (or fixes it automatically, your choice),
   landing on the field's own undo history like any other edit.
 
-<p align="center">
-  <img src="docs/images/language_switch.png" alt="The retroactive language-switch correction offer, in the suggestion strip's own slot" width="40%">
-</p>
-
 - **Autocorrect you can bound.** Off by default, and when on: the shortest word it may touch,
   how strict the engine's own ranking has to be, and how different a correction may be from what
   you typed — one letter, two only in long words, or two — are each a setting. A correct word the
