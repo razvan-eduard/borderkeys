@@ -94,11 +94,6 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     subtitle = strings[Keys.QUICK_LABELS_NOTE],
                     checked = preferences.quickActionsLabels,
                 ) { value -> update { it.copy(quickActionsLabels = value) } }
-                SwitchRow(
-                    title = strings[Keys.QUICK_OUTLINE_SHOW],
-                    subtitle = strings[Keys.QUICK_OUTLINE_NOTE],
-                    checked = preferences.quickActionsOutlined,
-                ) { value -> update { it.copy(quickActionsOutlined = value) } }
             }
 
             SettingsSectionCard(strings[Keys.QUICK_BAR_TITLE]) {

@@ -107,6 +107,15 @@ class KeyboardHostView(
             if (field != value) {
                 field = value
                 quickActions.vertical = value == PLACEMENT_LEFT || value == PLACEMENT_RIGHT
+                // The side of the bar that meets the keyboard, so its tabs are flat there: a
+                // bar above the keyboard is flat along its bottom, one below along its top, one
+                // down the left is flat on its right, one down the right on its left.
+                quickActions.attachedEdge = when (value) {
+                    PLACEMENT_BELOW_KEYS -> QuickActionsView.EDGE_TOP
+                    PLACEMENT_LEFT -> QuickActionsView.EDGE_RIGHT
+                    PLACEMENT_RIGHT -> QuickActionsView.EDGE_LEFT
+                    else -> QuickActionsView.EDGE_BOTTOM
+                }
                 requestLayout()
             }
         }

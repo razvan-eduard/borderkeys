@@ -242,11 +242,6 @@ class KeyboardPreferencesTest {
     }
 
     @Test
-    fun `quick action outlines default off`() {
-        assertFalse(KeyboardPreferences().quickActionsOutlined)
-    }
-
-    @Test
     fun `the key popup defaults on and the vibration to the system's own`() {
         assertTrue(KeyboardPreferences().keyPopup)
         assertEquals(KeyboardPreferences.HAPTIC_SYSTEM, KeyboardPreferences().hapticStrength)

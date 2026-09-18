@@ -640,8 +640,6 @@ object Keys {
     const val QUICK_MOVE_TOP = "quick_move_top"
     const val QUICK_MOVE_UP = "quick_move_up"
     const val QUICK_NONE = "quick_none"
-    const val QUICK_OUTLINE_NOTE = "quick_outline_note"
-    const val QUICK_OUTLINE_SHOW = "quick_outline_show"
     const val QUICK_PLACEMENT = "quick_placement"
     const val QUICK_PLACEMENT_ABOVE = "quick_placement_above"
     const val QUICK_PLACEMENT_BELOW = "quick_placement_below"

@@ -605,8 +605,6 @@
   "quick_custom_title": "Acciones personalizadas",
   "quick_labels_note": "Nombra cada botón con un texto pequeño debajo, a costa de una barra algo más alta. Una barra lateral no tiene sitio para ellas y se queda solo con iconos.",
   "quick_labels_show": "Mostrar una etiqueta bajo cada botón",
-  "quick_outline_note": "Una línea fina alrededor de cada botón y su etiqueta — los botones no son teclas, así que es independiente del contorno de teclas del tema.",
-  "quick_outline_show": "Contornear cada botón",
   "quick_mode": "Cómo aparece",
   "quick_mode_collapsed": "Un solo botón",
   "quick_mode_full": "Siempre abierta",

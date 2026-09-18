@@ -9,6 +9,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
+import kotlin.math.max
 import android.os.Trace
 import android.text.Layout
 import android.text.StaticLayout
@@ -74,20 +75,6 @@ class QuickActionsView(
                 // sizeLevel's setter, which this follows.
                 layoutButtons()
                 requestLayout()
-                invalidate()
-            }
-        }
-
-    /**
-     * Whether each button is traced with the keys' hairline -- around the icon and, when
-     * [showLabels] is on, its label with it, on the same rectangle a press lights. Its own
-     * switch ([com.borderkeys.data.theme.KeyboardPreferences.quickActionsOutlined]) rather than
-     * the theme's "outline the keys": the buttons are not keys.
-     */
-    var outlineButtons: Boolean = false
-        set(value) {
-            if (field != value) {
-                field = value
                 invalidate()
             }
         }
@@ -168,15 +155,32 @@ class QuickActionsView(
     private var labelLayoutWidth = 0
     private var labelTopY = 0f
 
-    /** Where the tallest label on the bar ends, so every button's rectangle reaches the same
-     *  bottom whether its own label took one line or two. Zero while labels are off. */
+    /** Where the tallest label on the bar ends -- the near edge of a bottom-attached tab, so
+     *  every button reaches the same point whether its own label took one line or two. */
     private var labelBandBottomY = 0f
 
-    /** Where the icon-and-label group starts, the other edge of the same rectangle. */
-    private var groupTopY = 0f
-
-    /** One slot's width along the bar, for the button rectangle's own width with labels on. */
+    /** One slot's width along the bar, the tab's own width. */
     private var slotPx = 0f
+
+    /**
+     * Which edge of the bar meets the keyboard: the side every button's tab is flat against,
+     * its other three corners rounded, so the buttons read as bookmarks growing out of the
+     * keyboard rather than boxes floating in a strip. Set from the bar's placement by the host.
+     */
+    var attachedEdge: Int = EDGE_BOTTOM
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
+    private val tabPath = android.graphics.Path()
+    private val tabRadii = FloatArray(8)
+
+    /** The width onMeasure was last given, so the label band can be measured against the slots
+     *  the labels will actually wrap in before the view has its final width. */
+    private var measuredWidthHint = 0
 
     /** Button centres, in view coordinates. Recomputed on layout, never per frame. */
     private val centreX = FloatArray(MAX_BUTTONS)
@@ -194,31 +198,50 @@ class QuickActionsView(
      *  highlight square [onDraw] paints under it -- see [pressedBounds]. */
     private val buttonElement = RoundedRectElement()
 
-    /** The one definition of a button's surface -- what a press lights, what [outlineButtons]
-     *  traces, and what [pressButton] hands particles. A square around the icon; with labels
-     *  on, most of the slot's width and down past the label band, so the label is inside the
-     *  rectangle rather than under its bottom edge. */
+    /**
+     * The one definition of a button's surface -- what a press lights, what the outline traces,
+     * and what [pressButton] hands particles: a tab. Most of the slot along the bar, flat
+     * against [attachedEdge] where it meets the keyboard, and a quarter of an icon past the
+     * icon (or the label, with labels on) on the free side. Its width does not change with
+     * labels -- only its height does, to take the label in.
+     */
     private fun pressedBounds(index: Int, out: android.graphics.RectF) {
-        val half = buttonSizePx / 2
-        val padding = (half + (half / 2)).toFloat()
-        if (labelsActive()) {
-            val halfWidth = slotPx * LABELLED_BUTTON_WIDTH_FRACTION / 2f
-            // The same room above the icon as below the label, and never more than half of
-            // what the bar actually has to spare on that side: the rectangle floats inside the
-            // bar rather than touching its bottom edge while a gap shows at the top, which is
-            // what a fixed inset clamped to the view's height used to do.
-            val pad = minOf(
-                buttonSizePx * LABEL_INSET_FRACTION,
-                groupTopY / 2f,
-                (height - labelBandBottomY) / 2f,
-            ).coerceAtLeast(0f)
-            out.set(
-                centreX[index] - halfWidth, groupTopY - pad,
-                centreX[index] + halfWidth, labelBandBottomY + pad,
-            )
-        } else {
-            out.set(centreX[index] - padding, centreY[index] - padding, centreX[index] + padding, centreY[index] + padding)
+        val half = buttonSizePx / 2f
+        val lift = buttonSizePx * TAB_LIFT_FRACTION
+        val alongHalf = slotPx * TAB_ALONG_FRACTION / 2f
+        val cx = centreX[index]
+        val cy = centreY[index]
+        when (attachedEdge) {
+            EDGE_TOP -> {
+                val far = (if (labelsActive()) labelBandBottomY else cy + half) + lift
+                out.set(cx - alongHalf, 0f, cx + alongHalf, far.coerceAtMost(height.toFloat()))
+            }
+            EDGE_LEFT -> out.set(0f, cy - alongHalf, (cx + half + lift).coerceAtMost(width.toFloat()), cy + alongHalf)
+            EDGE_RIGHT -> out.set((cx - half - lift).coerceAtLeast(0f), cy - alongHalf, width.toFloat(), cy + alongHalf)
+            else -> out.set(cx - alongHalf, (cy - half - lift).coerceAtLeast(0f), cx + alongHalf, height.toFloat())
         }
+    }
+
+    /**
+     * [rect] as a path with the keys' corner radius on the free corners and none on the two
+     * against [attachedEdge], so the tab is flat where it meets the keyboard. The radii array
+     * runs top-left, top-right, bottom-right, bottom-left, two floats each.
+     */
+    private fun tabPath(rect: android.graphics.RectF): android.graphics.Path {
+        val radius = paints.keyCornerRadiusPx.coerceAtMost(minOf(rect.width(), rect.height()) / 2f)
+        java.util.Arrays.fill(tabRadii, radius)
+        val square = when (attachedEdge) {
+            EDGE_TOP -> intArrayOf(0, 1, 2, 3)
+            EDGE_LEFT -> intArrayOf(0, 1, 6, 7)
+            EDGE_RIGHT -> intArrayOf(2, 3, 4, 5)
+            else -> intArrayOf(4, 5, 6, 7)
+        }
+        for (slot in square) {
+            tabRadii[slot] = 0f
+        }
+        tabPath.reset()
+        tabPath.addRoundRect(rect, tabRadii, android.graphics.Path.Direction.CW)
+        return tabPath
     }
 
     private val pressedBoundsScratch = android.graphics.RectF()
@@ -347,6 +370,7 @@ class QuickActionsView(
     var drawsBackground: Boolean = true
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        measuredWidthHint = MeasureSpec.getSize(widthMeasureSpec)
         val thickness = barThicknessPx()
         if (vertical) {
             setMeasuredDimension(thickness, MeasureSpec.getSize(heightMeasureSpec))
@@ -356,12 +380,55 @@ class QuickActionsView(
     }
 
     private fun barThicknessPx(): Int {
-        val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_THICKNESS_PX
-        val base = row * BAR_HEIGHT_FRACTION * SIZE_THICKNESS_FRACTION[sizeLevel]
-        // The label band is added on top of the level's own thickness rather than carved out
-        // of it, so turning labels on never shrinks the icons the level chose.
-        val withLabels = if (labelsActive()) base * LABELS_THICKNESS_FRACTION else base
+        val base = barBasePx()
+        // The label band is appended below the level's own icon band, not carved out of it: the
+        // icons stay the size and the centre the level alone gives them, and the bar grows by
+        // exactly what the tallest label needs -- so a bar with no labels is shorter.
+        val withLabels = if (labelsActive()) base + labelBandPx(base, measuredWidthHint) else base
         return withLabels.toInt().coerceAtLeast(1)
+    }
+
+    /** The icon band: the thickness the size level gives a bar with no labels. */
+    private fun barBasePx(): Float {
+        val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_THICKNESS_PX
+        return row * BAR_HEIGHT_FRACTION * SIZE_THICKNESS_FRACTION[sizeLevel]
+    }
+
+    /**
+     * The band a labelled bar adds below the icons: a gap, the tallest label once every label
+     * is wrapped to the slot the bar's [widthPx] gives it, and the same gap again. Leaves
+     * [labelLayouts] and [labelLayoutWidth] built for [layoutButtons] to draw from -- wrapped
+     * once per geometry, never on a draw. Two lines before an ellipsis: a slot too narrow even
+     * for "Copy line" is rarer than one word cut to three dots.
+     */
+    private fun labelBandPx(base: Float, widthPx: Int): Float {
+        val shown = shownCount()
+        // Off the icon band, not the label's own: a text size tied to the band it sits in would
+        // shrink whenever that band is tightened, unrelated to legibility. Bold, because a
+        // caption this small reads better with more ink and is the one text competing with an
+        // icon rather than sitting on its own.
+        labelPaint.textSize = base * LABEL_TEXT_FRACTION
+        labelPaint.typeface = Typeface.create(paints.labelSecondary.typeface, Typeface.BOLD)
+        val gapPx = base * ICON_LABEL_GAP_FRACTION
+        val oneLine = labelPaint.fontMetrics.let { it.descent - it.ascent }
+        var tallest = oneLine
+        if (shown > 0 && widthPx > 0) {
+            val step = widthPx.toFloat() / shown
+            labelLayoutWidth = (step * LABEL_WIDTH_FRACTION).toInt().coerceAtLeast(1)
+            for (index in 0 until shown) {
+                labelLayouts[index] = labels[index]?.let { text ->
+                    StaticLayout.Builder.obtain(text, 0, text.length, labelPaint, labelLayoutWidth)
+                        .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                        .setMaxLines(LABEL_MAX_LINES)
+                        .setEllipsize(TextUtils.TruncateAt.END)
+                        .setIncludePad(false)
+                        .setLineSpacing(0f, LABEL_LINE_SPACING_MULTIPLIER)
+                        .build()
+                }
+                tallest = max(tallest, labelLayouts[index]?.height?.toFloat() ?: oneLine)
+            }
+        }
+        return gapPx + tallest + gapPx
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -381,41 +448,16 @@ class QuickActionsView(
             return
         }
         val thickness = if (vertical) width else height
-        // With labels on, the icons keep to the band the size level alone would have given --
-        // the extra thickness is the text's, not theirs.
-        val iconBand = if (labelsActive()) thickness / LABELS_THICKNESS_FRACTION else thickness.toFloat()
-        buttonSizePx = (iconBand * ICON_FRACTION).toInt().coerceAtLeast(1)
-        val gapPx = thickness * ICON_LABEL_GAP_FRACTION
-        if (labelsActive()) {
-            // Off iconBand, not the label's own band below it -- the label band shrinks
-            // whenever LABELS_THICKNESS_FRACTION is tightened, and a text size tied to it would
-            // shrink right along, unrelated to whether the letters themselves still need to be
-            // legible. iconBand tracks the size level instead, the same as the icon's own size.
-            labelPaint.textSize = iconBand * LABEL_TEXT_FRACTION
-            // Bold, not the label colour's own regular weight -- a caption this small reads
-            // better with more ink per letter, and it is the one piece of text in the bar
-            // competing with an icon rather than sitting on its own.
-            labelPaint.typeface = Typeface.create(paints.labelSecondary.typeface, Typeface.BOLD)
-        }
-        // The icon and its label sit together as one tight group, one gap between them, centred
-        // as a *unit* in the middle of the bar -- equal slack above the icon and below the
-        // label, rather than either one pinned to an edge with all the slack pushed to the
-        // other side. The group's own height assumes one line of label text; a label that wraps
-        // to a second line grows down into the bottom margin instead of re-centring the icon,
-        // which is what keeps every icon in the row at the same height regardless of whose
-        // label needed the extra line.
-        val oneLineLabelHeightPx = if (labelsActive()) {
-            labelPaint.fontMetrics.let { it.descent - it.ascent }
-        } else {
-            0f
-        }
-        val groupHeightPx = if (labelsActive()) buttonSizePx + gapPx + oneLineLabelHeightPx else buttonSizePx.toFloat()
-        val groupTopPx = if (labelsActive()) ((thickness - groupHeightPx) / 2f).coerceAtLeast(0f) else 0f
-        groupTopY = groupTopPx
-        val iconCentreY = if (labelsActive()) groupTopPx + buttonSizePx / 2f else height / 2f
         val along = if (vertical) height else width
         val step = along.toFloat() / shown
         slotPx = step
+        // The icon band is the size level's own thickness; whatever the bar has beyond it is
+        // the label band, appended below. So the icon sits exactly where a label-less bar
+        // would put it -- centred in its band -- and only the bar grows for the labels.
+        val labelBand = if (labelsActive()) labelBandPx(barBasePx(), width) else 0f
+        val iconBand = (thickness - labelBand).coerceAtLeast(1f)
+        buttonSizePx = (iconBand * ICON_FRACTION).toInt().coerceAtLeast(1)
+        val iconCentre = iconBand / 2f
         labelBandBottomY = 0f
         for (index in 0 until shown) {
             val centre = step * index + step / 2f
@@ -424,29 +466,14 @@ class QuickActionsView(
                 centreY[index] = centre
             } else {
                 centreX[index] = centre
-                centreY[index] = iconCentreY
+                centreY[index] = iconCentre
             }
         }
         if (labelsActive()) {
-            // Right under the icon, not centred in the band below it -- see this function's own
-            // comment on why the group is centred as a whole instead.
-            labelTopY = groupTopPx + buttonSizePx + gapPx
-            // Wrapped here, once per geometry, not measured again on any draw. Two lines before
-            // an ellipsis, not one: a shortened label still overflowing a slot's width is rarer
-            // than a slot narrow enough that even "Copy line" doesn't fit it, and a second line
-            // reads better than three dots would for either case.
-            labelLayoutWidth = (step * LABEL_WIDTH_FRACTION).toInt().coerceAtLeast(1)
+            // One gap below the icon; the layouts were wrapped by labelBandPx to this width.
+            labelTopY = iconCentre + buttonSizePx / 2f + barBasePx() * ICON_LABEL_GAP_FRACTION
             for (index in 0 until shown) {
-                labelLayouts[index] = labels[index]?.let { text ->
-                    StaticLayout.Builder.obtain(text, 0, text.length, labelPaint, labelLayoutWidth)
-                        .setAlignment(Layout.Alignment.ALIGN_CENTER)
-                        .setMaxLines(LABEL_MAX_LINES)
-                        .setEllipsize(TextUtils.TruncateAt.END)
-                        .setIncludePad(false)
-                        .setLineSpacing(0f, LABEL_LINE_SPACING_MULTIPLIER)
-                        .build()
-                }
-                val layoutBottom = labelTopY + (labelLayouts[index]?.height ?: oneLineLabelHeightPx.toInt())
+                val layoutBottom = labelTopY + (labelLayouts[index]?.height ?: 0)
                 if (layoutBottom > labelBandBottomY) {
                     labelBandBottomY = layoutBottom
                 }
@@ -467,16 +494,13 @@ class QuickActionsView(
                 val cy = centreY[index].toInt()
                 if (index == pressedIndex) {
                     pressedBounds(index, pressedBoundsScratch)
-                    canvas.drawRect(pressedBoundsScratch, paints.keyPressedFill)
+                    canvas.drawPath(tabPath(pressedBoundsScratch), paints.keyPressedFill)
                 }
-                // Each button traced on the same rectangle its press lights, with the keys'
-                // own corner radius and hairline -- the bar's own switch, not the keys'.
-                if (outlineButtons) {
+                // Each button traced as a tab, flat against the keyboard, with the keys' own
+                // corner radius and hairline -- gated by the theme's own "outline the keys".
+                if (paints.showKeyBorders) {
                     pressedBounds(index, pressedBoundsScratch)
-                    canvas.drawRoundRect(
-                        pressedBoundsScratch, paints.keyCornerRadiusPx, paints.keyCornerRadiusPx,
-                        paints.keyStroke,
-                    )
+                    canvas.drawPath(tabPath(pressedBoundsScratch), paints.keyStroke)
                 }
                 val collapsedOpener = collapsible && !expanded
                 val icon = if (collapsedOpener) moreIcon else icons[index]
@@ -614,7 +638,7 @@ class QuickActionsView(
         particles.cancel()
     }
 
-    private companion object {
+    companion object {
         /** The format's own cap; the preferences clamp to the same number. */
         const val MAX_BUTTONS = 10
 
@@ -643,30 +667,28 @@ class QuickActionsView(
         /** How much of the bar's thickness an icon takes, leaving a touch margin around it. */
         const val ICON_FRACTION = 0.52f
 
-        /**
-         * How much thicker the bar grows when [showLabels] adds its band -- multiplied on top
-         * of [SIZE_THICKNESS_FRACTION], so every size level pays the same proportional price
-         * for its labels and the icons themselves never shrink to make room.
-         */
-        const val LABELS_THICKNESS_FRACTION = 1.16f
-
-        /** The label's text size, as a share of [iconBand][layoutButtons] -- the icon's own
-         *  band, not the label's, so the text stays the same size regardless of how tightly
-         *  [LABELS_THICKNESS_FRACTION] is tuned around it. */
+        /** The label's text size, as a share of the icon band -- the size level's own
+         *  thickness, not the label's own band, so the text does not shrink as the band does. */
         const val LABEL_TEXT_FRACTION = 0.19f
 
         /** How much of a slot's width a label may take before it wraps, and then ellipsises.
-         *  Inside [LABELLED_BUTTON_WIDTH_FRACTION] with room to spare on each side, so a label
-         *  that fills its width still sits clear of the button's own outline. */
+         *  Inside [TAB_ALONG_FRACTION] with room to spare, so a full label sits clear of the
+         *  tab's own outline. */
         const val LABEL_WIDTH_FRACTION = 0.84f
 
-        /** How much of a slot a labelled button's rectangle takes -- what a press lights and
-         *  [outlineButtons] traces -- leaving a gap between neighbours like the keys' own. */
-        const val LABELLED_BUTTON_WIDTH_FRACTION = 0.94f
+        /** How much of a slot a button's tab takes along the bar -- what a press lights and
+         *  the outline traces -- leaving a gap between neighbours like the keys' own. */
+        const val TAB_ALONG_FRACTION = 0.94f
 
-        /** The room a labelled button's rectangle keeps above its icon and below its label,
-         *  as a share of the icon's size -- at most; the bar's own slack caps it. */
-        const val LABEL_INSET_FRACTION = 0.22f
+        /** How far past the icon (or the label) the tab reaches on its free side, the corner
+         *  that is rounded, as a share of the icon's size. */
+        const val TAB_LIFT_FRACTION = 0.25f
+
+        /** Which edge of the bar meets the keyboard -- see [attachedEdge]. */
+        const val EDGE_TOP = 0
+        const val EDGE_BOTTOM = 1
+        const val EDGE_LEFT = 2
+        const val EDGE_RIGHT = 3
 
         /** A label wraps to a second line before it is ellipsised -- a short label cut to
          *  "Copy…" says less than the same word on two lines would. Never a third: past two
