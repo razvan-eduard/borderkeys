@@ -79,6 +79,20 @@ class QuickActionsView(
         }
 
     /**
+     * Whether each button is traced with the keys' hairline -- around the icon and, when
+     * [showLabels] is on, its label with it, on the same rectangle a press lights. Its own
+     * switch ([com.borderkeys.data.theme.KeyboardPreferences.quickActionsOutlined]) rather than
+     * the theme's "outline the keys": the buttons are not keys.
+     */
+    var outlineButtons: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
+    /**
      * Whether the bar shows as one button until it is opened.
      *
      * Held separately from [expanded] so that closing the bar after an action returns it to the
@@ -154,6 +168,13 @@ class QuickActionsView(
     private var labelLayoutWidth = 0
     private var labelTopY = 0f
 
+    /** Where the tallest label on the bar ends, so every button's rectangle reaches the same
+     *  bottom whether its own label took one line or two. Zero while labels are off. */
+    private var labelBandBottomY = 0f
+
+    /** One slot's width along the bar, for the button rectangle's own width with labels on. */
+    private var slotPx = 0f
+
     /** Button centres, in view coordinates. Recomputed on layout, never per frame. */
     private val centreX = FloatArray(MAX_BUTTONS)
     private val centreY = FloatArray(MAX_BUTTONS)
@@ -170,12 +191,23 @@ class QuickActionsView(
      *  highlight square [onDraw] paints under it -- see [pressedBounds]. */
     private val buttonElement = RoundedRectElement()
 
-    /** The one definition of a button's pressed surface, read by [onDraw] to paint it and by
-     *  [pressButton] to hand particles the same rectangle. */
+    /** The one definition of a button's surface -- what a press lights, what [outlineButtons]
+     *  traces, and what [pressButton] hands particles. A square around the icon; with labels
+     *  on, most of the slot's width and down past the label band, so the label is inside the
+     *  rectangle rather than under its bottom edge. */
     private fun pressedBounds(index: Int, out: android.graphics.RectF) {
         val half = buttonSizePx / 2
         val padding = (half + (half / 2)).toFloat()
-        out.set(centreX[index] - padding, centreY[index] - padding, centreX[index] + padding, centreY[index] + padding)
+        if (labelsActive()) {
+            val halfWidth = slotPx * LABELLED_BUTTON_WIDTH_FRACTION / 2f
+            val inset = buttonSizePx * LABEL_INSET_FRACTION
+            out.set(
+                centreX[index] - halfWidth, centreY[index] - padding,
+                centreX[index] + halfWidth, (labelBandBottomY + inset).coerceAtMost(height.toFloat()),
+            )
+        } else {
+            out.set(centreX[index] - padding, centreY[index] - padding, centreX[index] + padding, centreY[index] + padding)
+        }
     }
 
     private val pressedBoundsScratch = android.graphics.RectF()
@@ -363,6 +395,8 @@ class QuickActionsView(
         val iconCentreY = if (labelsActive()) groupTopPx + buttonSizePx / 2f else height / 2f
         val along = if (vertical) height else width
         val step = along.toFloat() / shown
+        slotPx = step
+        labelBandBottomY = 0f
         for (index in 0 until shown) {
             val centre = step * index + step / 2f
             if (vertical) {
@@ -392,6 +426,10 @@ class QuickActionsView(
                         .setLineSpacing(0f, LABEL_LINE_SPACING_MULTIPLIER)
                         .build()
                 }
+                val layoutBottom = labelTopY + (labelLayouts[index]?.height ?: oneLineLabelHeightPx.toInt())
+                if (layoutBottom > labelBandBottomY) {
+                    labelBandBottomY = layoutBottom
+                }
             }
         }
     }
@@ -411,10 +449,9 @@ class QuickActionsView(
                     pressedBounds(index, pressedBoundsScratch)
                     canvas.drawRect(pressedBoundsScratch, paints.keyPressedFill)
                 }
-                // The "outline the keys" setting: each button traced on the same rectangle
-                // its press lights, with the keys' own corner radius, so the bar reads as a
-                // row of keys when the keys themselves are outlined.
-                if (paints.showKeyBorders) {
+                // Each button traced on the same rectangle its press lights, with the keys'
+                // own corner radius and hairline -- the bar's own switch, not the keys'.
+                if (outlineButtons) {
                     pressedBounds(index, pressedBoundsScratch)
                     canvas.drawRoundRect(
                         pressedBoundsScratch, paints.keyCornerRadiusPx, paints.keyCornerRadiusPx,
@@ -598,8 +635,18 @@ class QuickActionsView(
          *  [LABELS_THICKNESS_FRACTION] is tuned around it. */
         const val LABEL_TEXT_FRACTION = 0.19f
 
-        /** How much of a slot's width a label may take before it wraps, and then ellipsises. */
-        const val LABEL_WIDTH_FRACTION = 0.94f
+        /** How much of a slot's width a label may take before it wraps, and then ellipsises.
+         *  Inside [LABELLED_BUTTON_WIDTH_FRACTION] with room to spare on each side, so a label
+         *  that fills its width still sits clear of the button's own outline. */
+        const val LABEL_WIDTH_FRACTION = 0.84f
+
+        /** How much of a slot a labelled button's rectangle takes -- what a press lights and
+         *  [outlineButtons] traces -- leaving a gap between neighbours like the keys' own. */
+        const val LABELLED_BUTTON_WIDTH_FRACTION = 0.94f
+
+        /** How far below the label band the button's rectangle reaches, as a share of the
+         *  icon's size, so the outline is not drawn through the descenders. */
+        const val LABEL_INSET_FRACTION = 0.14f
 
         /** A label wraps to a second line before it is ellipsised -- a short label cut to
          *  "Copy…" says less than the same word on two lines would. Never a third: past two

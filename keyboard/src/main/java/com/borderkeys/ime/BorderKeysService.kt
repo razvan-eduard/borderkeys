@@ -3741,6 +3741,7 @@ class BorderKeysService :
             preferences.quickActionsMode == KeyboardPreferences.QUICK_ACTIONS_COLLAPSED
         bar.sizeLevel = preferences.quickActionsSize
         bar.showLabels = preferences.quickActionsLabels
+        bar.outlineButtons = preferences.quickActionsOutlined
         view.quickActionsPlacement = preferences.quickActionsPlacement
     }
 

@@ -592,6 +592,8 @@
   "quick_custom_title": "Custom actions",
   "quick_labels_note": "Names each button in small text underneath, at the cost of a slightly taller bar. A bar down a side has no room for them and stays icons only.",
   "quick_labels_show": "Show a label under each button",
+  "quick_outline_note": "A hairline around each button and its label — the buttons are not keys, so this is separate from the theme's key outlines.",
+  "quick_outline_show": "Outline each button",
   "quick_mode": "How it appears",
   "quick_mode_collapsed": "One button",
   "quick_mode_full": "Always open",

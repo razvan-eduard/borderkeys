@@ -592,6 +592,8 @@
   "quick_custom_title": "Actions personnalisées",
   "quick_labels_note": "Nomme chaque bouton d’un petit texte en dessous, au prix d’une barre un peu plus haute. Une barre sur le côté n’a pas la place et garde les icônes seules.",
   "quick_labels_show": "Afficher un libellé sous chaque bouton",
+  "quick_outline_note": "Un trait fin autour de chaque bouton et de son libellé — les boutons ne sont pas des touches, ce réglage est donc distinct du contour des touches du thème.",
+  "quick_outline_show": "Entourer chaque bouton",
   "quick_mode": "Comment elle apparaît",
   "quick_mode_collapsed": "Un seul bouton",
   "quick_mode_full": "Toujours ouverte",

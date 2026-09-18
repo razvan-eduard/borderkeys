@@ -592,6 +592,8 @@
   "quick_custom_title": "Eigene Aktionen",
   "quick_labels_note": "Benennt jede Schaltfläche mit kleinem Text darunter, um den Preis einer etwas höheren Leiste. Eine Leiste an der Seite hat dafür keinen Platz und bleibt bei Symbolen.",
   "quick_labels_show": "Unter jeder Schaltfläche eine Beschriftung zeigen",
+  "quick_outline_note": "Eine haarfeine Linie um jede Schaltfläche und ihre Beschriftung — die Schaltflächen sind keine Tasten, daher getrennt von der Tastenumrandung des Themas.",
+  "quick_outline_show": "Jede Schaltfläche umranden",
   "quick_mode": "Wie sie erscheint",
   "quick_mode_collapsed": "Ein Knopf",
   "quick_mode_full": "Immer offen",

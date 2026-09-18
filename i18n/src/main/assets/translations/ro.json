@@ -592,6 +592,8 @@
   "quick_custom_title": "Acțiuni personalizate",
   "quick_labels_note": "Numește fiecare buton cu un text mic dedesubt, cu prețul unei bare puțin mai înalte. O bară pe laterală nu are loc pentru ele și rămâne doar cu pictograme.",
   "quick_labels_show": "Arată o etichetă sub fiecare buton",
+  "quick_outline_note": "Un contur de un fir de păr în jurul fiecărui buton și al etichetei lui — butoanele nu sunt taste, așa că este separat de conturul tastelor din temă.",
+  "quick_outline_show": "Conturează fiecare buton",
   "quick_mode": "Cum apare",
   "quick_mode_collapsed": "Un singur buton",
   "quick_mode_full": "Mereu deschisă",

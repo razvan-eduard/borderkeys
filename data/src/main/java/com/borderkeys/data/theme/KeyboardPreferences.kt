@@ -566,6 +566,14 @@ data class KeyboardPreferences(
     val quickActionsLabels: Boolean = false,
 
     /**
+     * Whether each button on the bar is traced with the keys' hairline, around its icon and
+     * its label together. Its own switch rather than the theme's "outline the keys": the
+     * buttons are not keys, and a bar that borrowed that setting outlined itself the moment
+     * the keys were, whether the bar wanted it or not.
+     */
+    val quickActionsOutlined: Boolean = false,
+
+    /**
      * A permanent row of digits above the letters.
      *
      * Off by default. It costs about a fifth of the keyboard's height, and on a touch surface

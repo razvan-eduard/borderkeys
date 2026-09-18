@@ -592,6 +592,8 @@
   "quick_custom_title": "Azioni personalizzate",
   "quick_labels_note": "Dà un nome a ogni pulsante con un piccolo testo sotto, al prezzo di una barra un po’ più alta. Una barra laterale non ha spazio e resta con le sole icone.",
   "quick_labels_show": "Mostra un’etichetta sotto ogni pulsante",
+  "quick_outline_note": "Una linea sottile attorno a ogni pulsante e alla sua etichetta — i pulsanti non sono tasti, quindi è separato dal contorno dei tasti del tema.",
+  "quick_outline_show": "Contorna ogni pulsante",
   "quick_mode": "Come appare",
   "quick_mode_collapsed": "Un solo pulsante",
   "quick_mode_full": "Sempre aperta",
