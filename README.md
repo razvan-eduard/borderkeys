@@ -83,6 +83,9 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 - **A personal dictionary you can see and edit.** Every learned word or phrase is listed with
   how often you used it, and a `Forget` (remove it) and a `Block` (never suggest it again) right
   beside it — not a black box. Holding a suggestion offers the same from the keyboard.
+- **Text shortcuts.** A word that stands for a longer text — "omw" for "on my way", an address, a
+  sign-off — expands when a space or a punctuation mark follows it, takes the capital you gave the
+  shortcut, and comes back with the backspace straight after, like any other correction.
 - **Private mode is automatic.** In a password field, or wherever an app asks for no personalised
   learning, there is no learning, no clipboard history, no swipe, no ring — and a password's text
   never reaches the prediction engine at all.

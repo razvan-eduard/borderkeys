@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.data.theme.TextShortcut
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PickerChip
@@ -150,6 +151,59 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 label = { Text(strings[Keys.DICTIONARY_SEARCH]) },
                 modifier = Modifier.fillMaxWidth().padding(20.dp),
             )
+        }
+        // Shortcuts beside the learned words: both are "what this keyboard knows that the
+        // dictionaries do not", one taught by typing and one written down on purpose.
+        SettingsSectionCard(strings[Keys.DICTIONARY_SHORTCUTS]) {
+            Explanation(strings[Keys.DICTIONARY_SHORTCUTS_NOTE])
+            if (preferences.textShortcuts.isEmpty()) {
+                SettingRow(title = strings[Keys.DICTIONARY_SHORTCUTS_NONE])
+            }
+            for (shortcut in preferences.textShortcuts) {
+                SettingRow(
+                    title = shortcut.trigger,
+                    subtitle = shortcut.expansion,
+                    trailing = {
+                        TextButton(onClick = {
+                            update { it.copy(textShortcuts = it.textShortcuts - shortcut) }
+                        }) { Text(strings[Keys.DICTIONARY_SHORTCUT_REMOVE]) }
+                    },
+                )
+            }
+            var trigger by remember { mutableStateOf("") }
+            var expansion by remember { mutableStateOf("") }
+            OutlinedTextField(
+                value = trigger,
+                onValueChange = { trigger = it },
+                label = { Text(strings[Keys.DICTIONARY_SHORTCUT_TRIGGER]) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            OutlinedTextField(
+                value = expansion,
+                onValueChange = { expansion = it },
+                label = { Text(strings[Keys.DICTIONARY_SHORTCUT_EXPANSION]) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            val addable = TextShortcut.isValidTrigger(trigger.trim()) && expansion.isNotBlank() &&
+                preferences.textShortcuts.size < TextShortcut.MAX_SHORTCUTS
+            TextButton(
+                enabled = addable,
+                onClick = {
+                    val added = TextShortcut(trigger.trim(), expansion.trim())
+                    // Replaces a shortcut with the same trigger rather than adding a second that
+                    // would never fire -- sanitised() keeps the first one it meets.
+                    update { current ->
+                        current.copy(
+                            textShortcuts = current.textShortcuts
+                                .filterNot { it.trigger.equals(added.trigger, ignoreCase = true) } + added,
+                        )
+                    }
+                    trigger = ""
+                    expansion = ""
+                },
+                modifier = Modifier.padding(horizontal = 12.dp),
+            ) { Text(strings[Keys.DICTIONARY_SHORTCUT_ADD]) }
         }
         SettingsSectionCard(strings.getString(Keys.DICTIONARY_LEARNED_WORDS, words.size)) {
             if (words.isEmpty()) {

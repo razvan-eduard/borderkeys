@@ -111,6 +111,11 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 checked = preferences.longPressHints,
             ) { value -> update { it.copy(longPressHints = value) } }
             SwitchRow(
+                title = strings[Keys.LAYOUT_KEY_POPUP],
+                subtitle = strings[Keys.LAYOUT_KEY_POPUP_NOTE],
+                checked = preferences.keyPopup,
+            ) { value -> update { it.copy(keyPopup = value) } }
+            SwitchRow(
                 title = strings[Keys.SIZE_EMOJI_KEY],
                 subtitle = strings[Keys.SIZE_EMOJI_KEY_NOTE],
                 checked = preferences.emojiKey,
@@ -137,6 +142,33 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.SOUND_HAPTIC_FEEDBACK_NOTE],
                 checked = preferences.hapticFeedback,
             ) { value -> update { it.copy(hapticFeedback = value) } }
+            // Nothing to choose while it is off.
+            if (preferences.hapticFeedback) {
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                    Text(
+                        strings[Keys.LAYOUT_HAPTIC_STRENGTH],
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PickerChip(
+                        strings[Keys.LAYOUT_HAPTIC_LIGHT],
+                        preferences.hapticStrength == KeyboardPreferences.HAPTIC_LIGHT,
+                    ) { update { it.copy(hapticStrength = KeyboardPreferences.HAPTIC_LIGHT) } }
+                    PickerChip(
+                        strings[Keys.LAYOUT_HAPTIC_MEDIUM],
+                        preferences.hapticStrength == KeyboardPreferences.HAPTIC_MEDIUM,
+                    ) { update { it.copy(hapticStrength = KeyboardPreferences.HAPTIC_MEDIUM) } }
+                    PickerChip(
+                        strings[Keys.LAYOUT_HAPTIC_STRONG],
+                        preferences.hapticStrength == KeyboardPreferences.HAPTIC_STRONG,
+                    ) { update { it.copy(hapticStrength = KeyboardPreferences.HAPTIC_STRONG) } }
+                }
+                Explanation(strings[Keys.LAYOUT_HAPTIC_STRENGTH_NOTE])
+            }
 
             // Set once and left: how long a hold is, and what the enter key does in a field
             // that has its own action -- the latter folded in from its own card, which was a

@@ -48,6 +48,9 @@ class SuggestionStripView(
      *  every key already gives, for picking, forgetting or pasting a chip instead of a letter. */
     var hapticEnabled: Boolean = true
 
+    /** The class the keys play -- see [HapticStrength] -- so a chip feels like a key. */
+    var hapticConstant: Int = HapticFeedbackConstants.KEYBOARD_TAP
+
     init {
         isHapticFeedbackEnabled = true
     }
@@ -56,7 +59,7 @@ class SuggestionStripView(
      *  the clipboard chip is as much a keystroke as any letter. */
     private fun tapHaptic() {
         if (hapticEnabled) {
-            performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            performHapticFeedback(hapticConstant)
         }
     }
 

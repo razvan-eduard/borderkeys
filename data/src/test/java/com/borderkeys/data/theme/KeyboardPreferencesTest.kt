@@ -242,6 +242,30 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `the key popup defaults on and the vibration to medium`() {
+        assertTrue(KeyboardPreferences().keyPopup)
+        assertEquals(KeyboardPreferences.HAPTIC_MEDIUM, KeyboardPreferences().hapticStrength)
+        assertEquals(KeyboardPreferences.HAPTIC_MEDIUM, KeyboardPreferences(hapticStrength = 9).sanitised().hapticStrength)
+    }
+
+    @Test
+    fun `text shortcuts are one word each, once per trigger`() {
+        val stored = KeyboardPreferences(
+            textShortcuts = listOf(
+                TextShortcut(" omw ", " on my way "),
+                TextShortcut("OMW", "second"),
+                TextShortcut("two words", "dropped"),
+                TextShortcut("blank", "   "),
+                TextShortcut("sig", "Best, R."),
+            ),
+        ).sanitised()
+        assertEquals(
+            listOf(TextShortcut("omw", "on my way"), TextShortcut("sig", "Best, R.")),
+            stored.textShortcuts,
+        )
+    }
+
+    @Test
     fun `the radial suggestion menu defaults off`() {
         assertFalse(KeyboardPreferences().radialMenuEnabled)
     }

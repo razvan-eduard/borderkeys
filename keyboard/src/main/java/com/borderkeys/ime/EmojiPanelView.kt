@@ -138,6 +138,9 @@ class EmojiPanelView(
         contentHeight = (rows * cellPx).toInt()
     }
 
+    /** The class the keys play -- see [HapticStrength] -- so an emoji feels like a key. */
+    var hapticConstant: Int = android.view.HapticFeedbackConstants.KEYBOARD_TAP
+
     override fun onDraw(canvas: Canvas) {
         Trace.beginSection("EmojiPanelView.onDraw")
         try {
@@ -278,7 +281,7 @@ class EmojiPanelView(
                 } else {
                     val index = cellAt(event.x, event.y)
                     if (index >= 0) {
-                        performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                        performHapticFeedback(hapticConstant)
                         listener?.onEmojiPicked(current[index])
                     }
                 }

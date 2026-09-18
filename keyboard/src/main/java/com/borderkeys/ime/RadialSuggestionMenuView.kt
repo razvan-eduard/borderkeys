@@ -196,6 +196,9 @@ class RadialSuggestionMenuView(
      *  actually receives itself (see this class's own doc for why). */
     var hapticEnabled: Boolean = true
 
+    /** The class the keys play -- see [HapticStrength] -- so a wedge feels like a key. */
+    var hapticConstant: Int = HapticFeedbackConstants.KEYBOARD_TAP
+
     /** Both particle layers for the ring: whichever wedge (or the centre button) the finger is
      *  currently over is *held* -- an ambient glow inside it, its own real outline traced -- and
      *  the wedge actually picked gets a bigger burst ([celebrate]). Exposed non-private so
@@ -288,10 +291,10 @@ class RadialSuggestionMenuView(
         if (hit != currentSelection) {
             currentSelection = hit
             if (hapticEnabled) {
-                // KEYBOARD_TAP, not CLOCK_TICK or CONTEXT_CLICK: the same click every key press
-                // on the keyboard underneath already gives, so a wedge feels like a key rather
-                // than announcing itself as a different kind of control.
-                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                // The same class every key press on the keyboard underneath already gives, so a
+                // wedge feels like a key rather than announcing itself as a different kind of
+                // control.
+                performHapticFeedback(hapticConstant)
             }
             // Whatever is highlighted is held: the engine fills its interior and traces its
             // outline from the one shape the element declares -- the wedge's own annular slice,

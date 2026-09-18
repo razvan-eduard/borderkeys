@@ -1043,6 +1043,8 @@ class KeyboardHostView(
         super.dispatchDraw(canvas)
         if (keyboard.alternativesVisible) {
             drawAlternativesPopup(canvas)
+        } else if (keyboard.keyPreviewVisible) {
+            drawKeyPreview(canvas)
         }
         if (!resizing) {
             return
@@ -1142,6 +1144,39 @@ class KeyboardHostView(
                 paints.label,
             )
         }
+        paints.label.textSize = base
+    }
+
+    /** Reused so the key preview allocates nothing on the draw path. */
+    private val previewLabel = CharArray(8)
+
+    /**
+     * The pressed key, enlarged above the finger -- drawn from up here for the same reason the
+     * alternatives popup is (see [drawAlternativesPopup]): the top row's preview reaches above
+     * the keyboard view's own bounds. The key's own fill and, with the setting on, its outline,
+     * so it reads as the key lifted rather than a different control.
+     */
+    private fun drawKeyPreview(canvas: android.graphics.Canvas) {
+        val length = keyboard.keyPreviewLabel(previewLabel)
+        if (length == 0) {
+            return
+        }
+        val left = keyboard.keyPreviewLeftPx + keyboard.left
+        val top = keyboard.keyPreviewTopPx + keyboard.top
+        val right = left + keyboard.keyPreviewWidthPx
+        val bottom = top + keyboard.keyPreviewHeightPx
+        val radius = paints.keyCornerRadiusPx
+        canvas.drawRoundRect(left, top, right, bottom, radius, radius, paints.keyFill)
+        if (paints.showKeyBorders) {
+            canvas.drawRoundRect(left, top, right, bottom, radius, radius, paints.keyStroke)
+        }
+        val base = paints.label.textSize
+        paints.label.textSize = keyboard.keyPreviewTextSizePx
+        // Centred on the box from the enlarged font's own metrics, not the key label's baseline
+        // offset, which was measured at the key's own size.
+        val metrics = paints.label.fontMetrics
+        val baseline = (top + bottom) / 2f - (metrics.ascent + metrics.descent) / 2f
+        canvas.drawText(previewLabel, 0, length, (left + right) / 2f, baseline, paints.label)
         paints.label.textSize = base
     }
 

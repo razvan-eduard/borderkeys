@@ -339,6 +339,9 @@ class BorderKeysService :
          *  it: that field moves on to the next word long before this correction is confirmed or
          *  reverted, so whichever spelling ends up learned needs its own copy of the answer. */
         val deliberateCapital: Boolean,
+        /** Whether surviving the next keystroke teaches the dictionary [corrected]. False for a
+         *  text shortcut's expansion, which is several words and the user's own already. */
+        val learn: Boolean = true,
     )
 
     private var pendingCorrection: PendingCorrection? = null
@@ -661,6 +664,11 @@ class BorderKeysService :
                     }
                     view.keyboard.hapticEnabled = newPreferences.hapticFeedback
                     view.keyboard.soundEnabled = newPreferences.keySound
+                    view.keyboard.hapticConstant = HapticStrength.constantFor(newPreferences.hapticStrength)
+                    view.keyboard.keyPopupEnabled = newPreferences.keyPopup
+                    view.suggestionStrip.hapticConstant = view.keyboard.hapticConstant
+                    view.radialSuggestionMenu.hapticConstant = view.keyboard.hapticConstant
+                    view.emojiPanel.hapticConstant = view.keyboard.hapticConstant
                     view.keyboard.spaceCursorEnabled = newPreferences.spaceCursorControl
                     view.keyboard.holdHintsEnabled = newPreferences.longPressHints
                     view.keyboard.longPressDelayMillis = newPreferences.longPressMillis.toLong()
@@ -845,6 +853,11 @@ class BorderKeysService :
         view.keyboard.hapticEnabled = preferences.hapticFeedback
         view.keyboard.swipeEnabled = preferences.swipeEnabled
         view.keyboard.soundEnabled = preferences.keySound
+        view.keyboard.hapticConstant = HapticStrength.constantFor(preferences.hapticStrength)
+        view.keyboard.keyPopupEnabled = preferences.keyPopup
+        view.suggestionStrip.hapticConstant = view.keyboard.hapticConstant
+        view.radialSuggestionMenu.hapticConstant = view.keyboard.hapticConstant
+        view.emojiPanel.hapticConstant = view.keyboard.hapticConstant
         view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
         view.keyboard.holdHintsEnabled = preferences.longPressHints
         view.keyboard.longPressDelayMillis = preferences.longPressMillis.toLong()
@@ -2016,7 +2029,12 @@ class BorderKeysService :
         // it is only defensible together with the revert below: the objection to autocorrect is
         // really an objection to a correction that costs more to undo than it saved.
         val typed = composing.toString()
-        val correction = correctionFor(typed)
+        // A shortcut is a correction the user wrote themselves: it takes the same path as one
+        // -- committed in place of the typed word, revertible with the backspace straight after
+        // -- and is never learned as a word. Never for a swiped word: "omw" has to be typed to
+        // mean the shortcut.
+        val shortcut = if (composingFromGesture) null else TextShortcuts.expansionFor(typed, preferences.textShortcuts)
+        val correction = shortcut ?: correctionFor(typed)
         // Captured before anything commits: finishComposing and the correction branch both
         // advance previousWord1 to the word being written now.
         val contextWord = previousWord1
@@ -2099,15 +2117,16 @@ class BorderKeysService :
 
         if (correction != null) {
             previousWord2 = previousWord1
-            previousWord1 = correction
+            // An expansion's last word is the context the next word follows.
+            previousWord1 = if (shortcut != null) correction.substringAfterLast(' ') else correction
             // Learning waits until the correction survives the next keystroke. Recording it
             // here would teach the personal dictionary a word the user is about to reject, and
             // the whole point of the revert is that rejecting it is expected.
             pendingCorrection = PendingCorrection(
                 typed, correction, delimiter, contextWord, grandContextWord,
-                composingCapitalisedByUser,
+                composingCapitalisedByUser, learn = shortcut == null,
             )
-            if (preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
+            if (shortcut == null && preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
                 recordLanguageSwitchFlag(connection, typed, correction, delimiter)
             }
         } else {
@@ -2303,6 +2322,9 @@ class BorderKeysService :
     private fun confirmPendingCorrection() {
         val pending = pendingCorrection ?: return
         pendingCorrection = null
+        if (!pending.learn) {
+            return
+        }
         recordLearned(
             pending.corrected, pending.contextWord, pending.grandContextWord,
             pending.deliberateCapital,
@@ -2341,10 +2363,12 @@ class BorderKeysService :
             // Backspace is an ordinary backspace, so this is the correction being accepted the
             // same way any other key would accept it. Dropping it unlearned instead would make
             // the setting quietly change what the dictionary remembers.
-            recordLearned(
-                pending.corrected, pending.contextWord, pending.grandContextWord,
-                pending.deliberateCapital,
-            )
+            if (pending.learn) {
+                recordLearned(
+                    pending.corrected, pending.contextWord, pending.grandContextWord,
+                    pending.deliberateCapital,
+                )
+            }
             return false
         }
         val committed = pending.corrected + pending.delimiter

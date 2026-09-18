@@ -132,6 +132,24 @@ class KeyboardCanvasView(
 
     var listener: Listener? = null
     var hapticEnabled: Boolean = true
+
+    /** Which [HapticFeedbackConstants] class a press plays -- see [HapticStrength]. */
+    var hapticConstant: Int = HapticFeedbackConstants.KEYBOARD_TAP
+
+    /**
+     * Mirrors [com.borderkeys.data.theme.KeyboardPreferences.keyPopup]: the pressed key shown
+     * enlarged above the finger while it is held. Drawn by [KeyboardHostView], like the
+     * alternatives popup and for the same reason -- see [keyPreviewVisible].
+     */
+    var keyPopupEnabled: Boolean = true
+        set(value) {
+            if (field != value) {
+                field = value
+                if (!value) {
+                    hidePreview()
+                }
+            }
+        }
     var swipeEnabled: Boolean = true
 
     /**
@@ -216,6 +234,8 @@ class KeyboardCanvasView(
 
     private fun beginGesture(fromKey: Int) {
         gestureActive = true
+        // A finger that is swiping is not pressing the key it started on.
+        hidePreview()
         // The key the finger started on is released without committing: the press became a
         // swipe, and a swipe must not also type its first letter.
         endPress(fromKey)
@@ -1044,6 +1064,106 @@ class KeyboardCanvasView(
         }
     }
 
+    // ---- the key preview, read by KeyboardHostView --------------------------------------------
+    //
+    // The pressed key enlarged above the finger for as long as it is held. Drawn by
+    // KeyboardHostView for the same reason the alternatives popup is: the top row's preview
+    // has to reach above this view's own bounds. Everything below is in this view's own local
+    // coordinates, offset by the host before drawing.
+
+    private var previewKey = NO_KEY
+    private var previewPointer = -1
+
+    /** Whether a key is being previewed. False while the alternatives popup owns the space. */
+    val keyPreviewVisible: Boolean get() = previewKey != NO_KEY
+
+    val keyPreviewWidthPx: Float
+        get() {
+            val index = previewKey
+            if (index == NO_KEY) return 0f
+            val keyWidth = geometry.keyRight[index] - geometry.keyLeft[index]
+            val keyHeight = geometry.keyBottom[index] - geometry.keyTop[index]
+            return max(keyWidth * KEY_PREVIEW_WIDTH_SCALE, keyHeight)
+        }
+
+    val keyPreviewHeightPx: Float
+        get() {
+            val index = previewKey
+            if (index == NO_KEY) return 0f
+            return (geometry.keyBottom[index] - geometry.keyTop[index]) * KEY_PREVIEW_HEIGHT_SCALE
+        }
+
+    val keyPreviewLeftPx: Float
+        get() {
+            val index = previewKey
+            if (index == NO_KEY) return 0f
+            val width = keyPreviewWidthPx
+            return (geometry.centerX[index] - width / 2f).coerceIn(0f, max(0f, this.width - width))
+        }
+
+    /** Above the key, or below it where even the host's space above this view runs out --
+     *  the same fallback the alternatives popup makes. */
+    val keyPreviewTopPx: Float
+        get() {
+            val index = previewKey
+            if (index == NO_KEY) return 0f
+            val keyHeight = geometry.keyBottom[index] - geometry.keyTop[index]
+            val gap = keyHeight * KEY_PREVIEW_GAP_FRACTION
+            val above = geometry.keyTop[index] - gap - keyPreviewHeightPx
+            return if (above + hostTopInsetPx >= 0f) above else geometry.keyBottom[index] + gap
+        }
+
+    /** The previewed key's label size, enlarged: big enough to read under a thumb. */
+    val keyPreviewTextSizePx: Float
+        get() = if (previewKey == NO_KEY) 0f else labelTextSize[previewKey] * KEY_PREVIEW_TEXT_SCALE
+
+    /** Fills [out] with the previewed key's label as the key itself shows it -- upper-cased
+     *  under shift the way [drawLabel] does -- and returns its length, 0 with nothing to show. */
+    fun keyPreviewLabel(out: CharArray): Int {
+        val index = previewKey
+        if (index == NO_KEY) return 0
+        val length = geometry.labelLength[index].coerceAtMost(out.size)
+        val offset = geometry.labelOffset[index]
+        for (position in 0 until length) {
+            out[position] = geometry.labelChars[offset + position]
+        }
+        if (shiftState != ShiftState.OFF && length == 1 && Character.isLowerCase(out[0])) {
+            out[0] = Character.toUpperCase(out[0])
+        }
+        return length
+    }
+
+    /** Letters, digits and symbols: a key whose face is what it types. Shift, backspace, the
+     *  space bar and enter say what they are by what happens, and a preview of "⇧" adds
+     *  nothing. */
+    private fun previewable(index: Int): Boolean {
+        val flags = geometry.keyFlags[index]
+        val code = geometry.keyCode[index]
+        return geometry.labelLength[index] > 0 &&
+            !KeyFlags.has(flags, KeyFlags.MODIFIER) &&
+            !KeyFlags.has(flags, KeyFlags.REPEATABLE) &&
+            code != KeyCodes.SPACE && code != KeyCodes.ENTER
+    }
+
+    private fun showPreview(index: Int, pointerId: Int) {
+        if (!keyPopupEnabled || !previewable(index)) {
+            hidePreview()
+            return
+        }
+        previewKey = index
+        previewPointer = pointerId
+        invalidateAlternatives()
+    }
+
+    private fun hidePreview() {
+        if (previewKey == NO_KEY) {
+            return
+        }
+        previewKey = NO_KEY
+        previewPointer = -1
+        invalidateAlternatives()
+    }
+
     // ---- touch ----------------------------------------------------------------------------------
 
     @SuppressLint("ClickableViewAccessibility")
@@ -1092,6 +1212,7 @@ class KeyboardCanvasView(
         pointerKey[pointerId] = index
         pointerDownAt[pointerId] = eventTime
         startPress(index)
+        showPreview(index, pointerId)
 
         // Every press on a letter is a gesture that has not started yet. Recording the origin
         // here costs two floats and means the slop test below needs no extra state.
@@ -1103,7 +1224,7 @@ class KeyboardCanvasView(
 
         if (hapticEnabled) {
             // Needs no VIBRATE permission, which is why the manifest has none.
-            performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            performHapticFeedback(hapticConstant)
         }
         if (soundEnabled) {
             // Honours the phone's own "touch sounds" setting on top of ours: playSoundEffect
@@ -1202,6 +1323,7 @@ class KeyboardCanvasView(
         cancelPendingCallbacks()
         pointerKey[pointerId] = index
         startPress(index)
+        showPreview(index, pointerId)
         run {
             longPressPointer = pointerId
             postDelayed(longPressRunnable, longPressDelayFor(index))
@@ -1211,6 +1333,9 @@ class KeyboardCanvasView(
     private fun onPointerUp(pointerId: Int, x: Float, y: Float) {
         if (pointerId >= MAX_POINTERS) {
             return
+        }
+        if (pointerId == previewPointer) {
+            hidePreview()
         }
         if (pointerId == longPressRepeatPointer) {
             // pointerKey[pointerId] was already cleared the moment the hold was consumed, so
@@ -1251,6 +1376,7 @@ class KeyboardCanvasView(
     }
 
     private fun cancelAllPointers() {
+        hidePreview()
         if (gestureActive) {
             abandonGesture()
         }
@@ -1299,6 +1425,7 @@ class KeyboardCanvasView(
             // type the key that was held.
             if (listener?.onKeyLongPress(geometry.keyCode[index], index) == true) {
                 endPress(index)
+                hidePreview()
                 pointerKey[pointerId] = NO_KEY
                 // The full reset, not just longPressPointer: a REPEATABLE key (backspace is the
                 // only one today) already has repeatRunnable armed from ACTION_DOWN, and
@@ -1319,6 +1446,9 @@ class KeyboardCanvasView(
             }
             return
         }
+        // The popup takes over from the preview: both sit above the same key, and the one that
+        // offers a choice is the one that matters once the hold has been recognised.
+        hidePreview()
         alternativesKey = index
         alternativesSelection = 0
 
@@ -1608,6 +1738,14 @@ class KeyboardCanvasView(
 
         /** A hint dot's radius, as a fraction of [ThemePaints.hint]'s own text size. */
         private const val HINT_DOT_RADIUS_FRACTION = 0.09f
+
+        /** The key preview against the key it enlarges: wider, a little taller, its label half
+         *  again as big, and a small gap so it reads as floating above rather than growing out
+         *  of the key. */
+        private const val KEY_PREVIEW_WIDTH_SCALE = 1.4f
+        private const val KEY_PREVIEW_HEIGHT_SCALE = 1.15f
+        private const val KEY_PREVIEW_TEXT_SCALE = 1.5f
+        private const val KEY_PREVIEW_GAP_FRACTION = 0.12f
 
         /** How far the three-dot cluster's centre sits above the hint box's baseline, as a
          *  fraction of [ThemePaints.hint]'s text size -- roughly a glyph's own vertical centre. */

@@ -76,6 +76,16 @@ data class KeyboardPreferences(
     val hapticFeedback: Boolean = true,
 
     /**
+     * How firm the keypress vibration is: [HAPTIC_LIGHT], [HAPTIC_MEDIUM] or [HAPTIC_STRONG].
+     *
+     * Three of the platform's own feedback classes rather than three amplitudes: an amplitude
+     * needs the VIBRATE permission and this application asks for none, while
+     * `performHapticFeedback` needs nothing and the phone renders each class in its own
+     * calibrated way -- a faint tick, the keyboard tap, a firm buzz. Clamped on read.
+     */
+    val hapticStrength: Int = HAPTIC_MEDIUM,
+
+    /**
      * Whether a keypress makes a sound.
      *
      * Off. The system has its own keypress sound setting and this respects it when both are
@@ -540,6 +550,13 @@ data class KeyboardPreferences(
      */
     val customQuickActions: List<CustomQuickAction> = emptyList(),
 
+    /**
+     * Words that expand into longer text when a delimiter follows them -- see [TextShortcut].
+     * Sanitised on read: a trigger with whitespace in it, an empty expansion, or a second
+     * shortcut for the same trigger (compared without case) is dropped.
+     */
+    val textShortcuts: List<TextShortcut> = emptyList(),
+
     /** Whether the bar starts open or as a single button that opens it. */
     val quickActionsMode: Int = QUICK_ACTIONS_COLLAPSED,
 
@@ -601,6 +618,14 @@ data class KeyboardPreferences(
 
     /** The small character drawn in a key's corner showing what its long press would type. */
     val longPressHints: Boolean = true,
+
+    /**
+     * Whether a pressed key shows itself enlarged above the finger for as long as it is held,
+     * the way most keyboards do. On: it is the one piece of feedback a finger covering the
+     * key cannot get any other way. Letters, digits and symbols only -- shift, backspace,
+     * space and enter say what they are by what happens.
+     */
+    val keyPopup: Boolean = true,
 
     /**
      * How long a key must be held before the long press fires, in milliseconds. Clamped to
@@ -793,7 +818,17 @@ data class KeyboardPreferences(
                     )
                 }
             }
+        // One shortcut per trigger, the first one wins, compared the way the keyboard matches
+        // them -- without case -- so "OMW" and "omw" cannot both be stored and only one fire.
+        val seenTriggers = HashSet<String>()
+        val sanitisedTextShortcuts = textShortcuts
+            .map { it.copy(trigger = it.trigger.trim(), expansion = it.expansion.trim().take(TextShortcut.MAX_EXPANSION_CHARS)) }
+            .filter { TextShortcut.isValidTrigger(it.trigger) && it.expansion.isNotEmpty() }
+            .filter { seenTriggers.add(it.trigger.lowercase()) }
+            .take(TextShortcut.MAX_SHORTCUTS)
         return copy(
+            hapticStrength = if (hapticStrength in HAPTIC_LIGHT..HAPTIC_STRONG) hapticStrength else HAPTIC_MEDIUM,
+            textShortcuts = sanitisedTextShortcuts,
         minCorrectionLength = minCorrectionLength.coerceIn(MIN_CORRECTION_LENGTH, MAX_CORRECTION_LENGTH),
         correctionStrictness = if (correctionStrictness > 0f) {
             correctionStrictness.coerceIn(MIN_CORRECTION_STRICTNESS, MAX_CORRECTION_STRICTNESS)
@@ -1128,6 +1163,11 @@ data class KeyboardPreferences(
         const val SYMBOLS_NUMBER_RIGHT = 2
 
         const val DEFAULT_LONG_PRESS_MILLIS = 380
+
+        /** The three keypress vibration classes -- see [hapticStrength]. */
+        const val HAPTIC_LIGHT = 0
+        const val HAPTIC_MEDIUM = 1
+        const val HAPTIC_STRONG = 2
 
         /** Follow the field: its action, unless it flagged Enter to stay a newline regardless. */
         const val ENTER_KEY_AUTO = 0
