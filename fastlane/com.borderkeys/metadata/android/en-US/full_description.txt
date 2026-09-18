@@ -26,8 +26,8 @@ database and are excluded from system backup and from device-to-device transfer.
   taps. Capitals off, on when the field asks, or on everywhere: one choice, since some apps
   forget to ask.
 * The pressed key shows itself enlarged above your finger while it is held, and the keypress
-  vibration comes in three strengths from the phone's own feedback classes — still with no
-  vibration permission.
+  vibration follows the phone's own setting or one of three strengths, from its own feedback
+  classes — still with no vibration permission.
 * Text shortcuts: a word that stands for a longer text expands when a space or a punctuation
   mark follows it, keeps the capital you gave it, and comes back with the backspace straight
   after.

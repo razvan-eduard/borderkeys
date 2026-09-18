@@ -88,9 +88,10 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   sign-off — expands when a space or a punctuation mark follows it, takes the capital you gave the
   shortcut, and comes back with the backspace straight after, like any other correction.
 - **Keys that answer back.** The pressed key shows itself enlarged above your finger while it is
-  held, the held key's alternates pop up in the same place, and the keypress vibration comes in
-  three strengths — from the phone's own feedback classes, so still without a vibration
-  permission. Long-press hints, the hold duration and what the enter key does are settings too.
+  held, the held key's alternates pop up in the same place, and the keypress vibration follows
+  the phone's own setting or one of three strengths — its own feedback classes, so still without
+  a vibration permission. Long-press hints, the hold duration and what the enter key does are
+  settings too.
 - **Settings that stay out of the way.** Every card leads with what changes how typing feels;
   the calibration values, the workarounds for particular apps and the choices made once fold
   under an "Advanced settings" line, closed until you open it.
