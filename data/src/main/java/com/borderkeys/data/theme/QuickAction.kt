@@ -81,6 +81,20 @@ enum class QuickAction(val id: Int) {
 
     /** Steps forward again after [UNDO], as far as the last step back came from. */
     REDO(17),
+
+    /**
+     * Flips the first letter of the word the cursor is in, or just after, between capital
+     * and lower case: "apple" becomes "Apple", and the next press "apple" again. The cursor
+     * stays where it was.
+     */
+    CAPITAL(18),
+
+    /**
+     * Capitalises the first letter of every sentence in the field -- the first word, and the
+     * first word after each full stop, question or exclamation mark, or line break -- and
+     * changes nothing else: "hello there. i am here" becomes "Hello there. I am here".
+     */
+    NORMALISE(19),
     ;
 
     /**

@@ -491,6 +491,8 @@ internal fun iconFor(action: QuickAction): Int = when (action) {
     QuickAction.UNDO -> R.drawable.bk_action_undo
     QuickAction.COMPOSE -> R.drawable.bk_action_compose
     QuickAction.REDO -> R.drawable.bk_action_redo
+    QuickAction.CAPITAL -> R.drawable.bk_action_capital
+    QuickAction.NORMALISE -> R.drawable.bk_action_normalise
 }
 
 internal fun labelFor(action: QuickAction): String = when (action) {
@@ -511,4 +513,6 @@ internal fun labelFor(action: QuickAction): String = when (action) {
     QuickAction.UNDO -> Keys.ACTION_UNDO
     QuickAction.COMPOSE -> Keys.ACTION_COMPOSE
     QuickAction.REDO -> Keys.ACTION_REDO
+    QuickAction.CAPITAL -> Keys.ACTION_CAPITAL
+    QuickAction.NORMALISE -> Keys.ACTION_NORMALISE
 }

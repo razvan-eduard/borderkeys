@@ -293,6 +293,8 @@ class QuickActionsView(
         QuickAction.UNDO -> Keys.ACTION_UNDO
         QuickAction.COMPOSE -> Keys.ACTION_COMPOSE
         QuickAction.REDO -> Keys.ACTION_REDO
+        QuickAction.CAPITAL -> Keys.ACTION_CAPITAL
+        QuickAction.NORMALISE -> Keys.ACTION_NORMALISE
     }
 
     /** Labels need a band under the icons; a vertical bar has nowhere to put one. */
@@ -316,6 +318,8 @@ class QuickActionsView(
         QuickAction.UNDO -> R.drawable.bk_action_undo
         QuickAction.COMPOSE -> R.drawable.bk_action_compose
         QuickAction.REDO -> R.drawable.bk_action_redo
+        QuickAction.CAPITAL -> R.drawable.bk_action_capital
+        QuickAction.NORMALISE -> R.drawable.bk_action_normalise
     }
 
     /**

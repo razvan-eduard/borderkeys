@@ -3844,6 +3844,8 @@ class BorderKeysService :
             }
             QuickAction.UNDO -> restoreFieldVersion(fieldHistory.back())
             QuickAction.REDO -> restoreFieldVersion(fieldHistory.forward())
+            QuickAction.CAPITAL -> toggleCapitalAtCursor(connection)
+            QuickAction.NORMALISE -> normaliseField(connection)
         }
         // No refresh here: onQuickAction does it once for the whole tap, per its own doc, and
         // a second (or, for a macro, an n-th) engine round trip per step bought nothing.
@@ -3864,6 +3866,74 @@ class BorderKeysService :
             start--
         }
         return before.substring(start, end)
+    }
+
+    /**
+     * Flips the first letter of the word at the cursor (see [SentenceCase.wordAt]) and puts
+     * the selection back exactly where it was, so pressing again flips it back.
+     *
+     * Read from the extracted text rather than the before/after windows: its selection
+     * offsets are the editor's own, which is what [InputConnection.setSelection] needs to
+     * land on one character in the middle of a word without disturbing the caret. The one
+     * character is replaced through a selection rather than a delete-and-commit, so an
+     * editor that watches its text sees a single character change and nothing move.
+     */
+    private fun toggleCapitalAtCursor(connection: InputConnection) {
+        val extracted = connection.getExtractedText(
+            ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
+            0,
+        ) ?: return
+        val text = extracted.text?.toString() ?: return
+        val base = extracted.startOffset
+        val range = SentenceCase.wordAt(text, extracted.selectionEnd, ::isWordCharacter) ?: return
+        val word = text.substring(range.first, range.last + 1)
+        val toggled = SentenceCase.toggleInitial(word)
+        if (toggled == word) {
+            return
+        }
+        connection.beginBatchEdit()
+        finishComposing(connection)
+        val first = base + range.first
+        connection.setSelection(first, first + 1)
+        connection.commitText(toggled.substring(0, 1), 1)
+        connection.setSelection(base + extracted.selectionStart, base + extracted.selectionEnd)
+        connection.endBatchEdit()
+        pendingCorrection = null
+        checkpointField()
+    }
+
+    /**
+     * Rewrites the field with every sentence capitalised ([SentenceCase.capitaliseSentences])
+     * and the selection where it was -- the rewrite never changes the length, so the same
+     * offsets still mean the same place. Only the span that actually differs is touched,
+     * the same way [restoreFieldVersion] applies a history step.
+     */
+    private fun normaliseField(connection: InputConnection) {
+        val extracted = connection.getExtractedText(
+            ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
+            0,
+        ) ?: return
+        val current = extracted.text?.toString() ?: return
+        val target = SentenceCase.capitaliseSentences(current)
+        if (target == current) {
+            return
+        }
+        val base = extracted.startOffset
+        val span = FieldRestore.diff(current, target)
+        connection.beginBatchEdit()
+        finishComposing(connection)
+        val boundary = base + span.deleteFrom + span.deleteCount
+        connection.setSelection(boundary, boundary)
+        if (span.deleteCount > 0) {
+            connection.deleteSurroundingText(span.deleteCount, 0)
+        }
+        if (span.insert.isNotEmpty()) {
+            connection.commitText(span.insert, 1)
+        }
+        connection.setSelection(base + extracted.selectionStart, base + extracted.selectionEnd)
+        connection.endBatchEdit()
+        pendingCorrection = null
+        checkpointField()
     }
 
     /** The line the cursor sits on, both sides of it. */
