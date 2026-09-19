@@ -75,7 +75,15 @@ class KeyboardLayout(
     fun withoutLanguageKey(): KeyboardLayout = without(KeyCodes.LANGUAGE, NO_LANGUAGE_SUFFIX)
 
     /**
-     * Drops every key with the given code and gives their width to the space bar.
+     * Drops every key with the given code and gives their width to one key in the same row.
+     *
+     * The space bar takes it, which is right nearly everywhere: it is the key that gave the
+     * width up when the optional one took it, and it has no column to hold. A row that needs
+     * one kept names its own absorber instead ([KeyFlags.ABSORBS_FREED_WIDTH]). The numpad
+     * symbol pages do: their `0` sits under the digits above it, and handing the width to the
+     * space bar slid every key on the space bar's side of the row -- on this layout, the `0`
+     * moved three and a half units away from the column it belongs to, and did so for anyone
+     * with the emoji key off or the globe key at its default of off.
      *
      * The id gains a suffix because the keyboard caches compiled geometry by it: two layouts
      * that differ by a key must not be able to answer to the same name.
@@ -92,10 +100,16 @@ class KeyboardLayout(
                 found = true
                 val width = row.keys.filter { it.code == code }
                     .sumOf { it.widthUnits.toDouble() }.toFloat()
+                val remaining = row.keys.filterNot { it.code == code }
+                // The row's own absorber if it named one, the space bar otherwise. Resolved
+                // per row: a layout only marks the row where the alignment matters.
+                val absorber = remaining.firstOrNull {
+                    KeyFlags.has(it.flags, KeyFlags.ABSORBS_FREED_WIDTH)
+                } ?: remaining.firstOrNull { it.code == ' '.code }
                 Row(
                     row.indent, row.heightScale,
-                    row.keys.filterNot { it.code == code }.map { key ->
-                        if (key.code == ' '.code) {
+                    remaining.map { key ->
+                        if (key === absorber) {
                             Key(key.code, key.label, key.alternatives,
                                 key.widthUnits + width, key.flags)
                         } else {

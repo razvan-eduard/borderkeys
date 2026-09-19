@@ -34,7 +34,7 @@
         { "code": "symbols", "label": "ABC", "w": 1.75 },
         { "code": "language", "w": 1.75 },
         { "code": "emoji", "w": 1.75 },
-        { "c": ",", "w": 1.75 }
+        { "c": ",", "w": 1.75, "absorb": true }
       ]
     }
   ]

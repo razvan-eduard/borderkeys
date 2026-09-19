@@ -104,6 +104,11 @@ object LayoutLoader {
         if (alternatives.isNotEmpty()) {
             flags = flags or KeyFlags.HAS_ALTERNATIVES
         }
+        // "absorb": this key, not the space bar, takes the width of an optional key the layout
+        // drops -- see KeyFlags.ABSORBS_FREED_WIDTH for why a numpad page needs that.
+        if (json.optBoolean("absorb", false)) {
+            flags = flags or KeyFlags.ABSORBS_FREED_WIDTH
+        }
         // Punctuation is a character but not a letter: a swipe should not pass through a comma.
         if (KeyCodes.isCharacter(code) && !Character.isLetter(code)) {
             flags = flags and KeyFlags.LETTER.inv()

@@ -70,5 +70,16 @@ object KeyFlags {
      *  letters the way a physical keyboard's function row is. */
     const val SECONDARY_ROW = 1 shl 5
 
+    /**
+     * Takes the width of an optional key the layout drops, instead of the space bar.
+     *
+     * Only the numpad symbol pages set it, and only on the key that sits between the space bar
+     * and the digits. Everywhere else the space bar absorbs, which is right: it is the key that
+     * gave the width up when the emoji or globe key took it, and it has no column to keep.
+     * A digit block does: the `0` is under the `1` only while nothing between them has moved,
+     * and giving the freed width to the space bar slid every key on its side of the row.
+     */
+    const val ABSORBS_FREED_WIDTH = 1 shl 6
+
     fun has(flags: Int, flag: Int): Boolean = (flags and flag) != 0
 }
