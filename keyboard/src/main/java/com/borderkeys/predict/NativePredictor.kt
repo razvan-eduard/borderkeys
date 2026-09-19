@@ -209,8 +209,18 @@ internal object NativePredictor {
      * The "experimental swipe model" preference. Off by default; a no-op in a `core` build. Safe
      * to call before [nativeLoadSwipeWeights] finishes -- tier B is only used once both this is
      * true and weights have loaded successfully.
+     *
+     * Turning it off **frees** the weights rather than only ignoring them, so turning it back on
+     * means loading them again. See Engine::setSwipeModelEnabled.
      */
     external fun nativeSetSwipeModelEnabled(handle: Long, enabled: Boolean)
+
+    /**
+     * Decodes one synthetic gesture through tier B and discards it, so the first swipe a person
+     * makes is not also the first pass through the network. False means there was nothing to
+     * warm: no weights, no layout pushed down yet, or a `core` build.
+     */
+    external fun nativeWarmSwipeModel(handle: Long): Boolean
 
     /**
      * How the dictionaries spell this word, or null when none of them has it.

@@ -223,4 +223,56 @@ void runTcnTests() {
                                      static_cast<int>(xs.size()), out2, 8);
         check(foundBeforeWeights == 0, "decoding before any weights are loaded returns nothing");
     }
+
+    section("tier B is built on demand and freed when switched off");
+    {
+        Engine engine;
+        check(engine.create(), "the engine is created");
+        struct stat info {};
+        stat(BORDERKEYS_TEST_PACK, &info);
+        const int fd = ::open(BORDERKEYS_TEST_PACK, O_RDONLY);
+        check(engine.loadLanguage("ro-RO", fd, 0, info.st_size, 1.0f) == kBkdOk, "pack loaded");
+        ::close(fd);
+        const char* tags[1] = {"ro-RO"};
+        const float packWeights[1] = {1.0f};
+        engine.setActiveLanguages(tags, packWeights, 1);
+        TestLayout layout;
+        engine.setKeyGeometry(layout.codes, layout.xs, layout.ys, layout.count, layout.keyWidth,
+                              layout.keyHeight);
+
+        // Nothing is built until something asks for it: a fresh engine costs none of the two and
+        // a half megabytes the decoder holds, whatever the preference ends up saying.
+        check(std::strcmp(engine.gestureDecoderName(), "SHARK2") == 0,
+              "a new engine decodes with tier A");
+        check(!engine.warmSwipeModel(), "warming with no weights loaded does nothing");
+
+        const std::vector<uint8_t> zeroed = zeroWeightsFile();
+        check(engine.loadSwipeWeights(zeroed.data(), zeroed.size()),
+              "loading weights builds the decoder that holds them");
+        check(engine.warmSwipeModel(), "warming runs once the weights and a layout are there");
+        engine.setSwipeModelEnabled(true);
+        check(std::strcmp(engine.gestureDecoderName(), "SHARK2") != 0,
+              "switched on with weights loaded, gestures go to tier B");
+
+        engine.setSwipeModelEnabled(false);
+        check(std::strcmp(engine.gestureDecoderName(), "SHARK2") == 0,
+              "switched off, gestures go back to tier A");
+        check(!engine.warmSwipeModel(),
+              "switching off freed the weights, so there is nothing left to warm");
+
+        // And it comes back: the preference turning on again reloads from the asset, which is
+        // the whole shape of the trade -- off costs nothing, on pays for itself once.
+        check(engine.loadSwipeWeights(zeroed.data(), zeroed.size()),
+              "the decoder is rebuilt by the next load");
+        engine.setSwipeModelEnabled(true);
+        check(std::strcmp(engine.gestureDecoderName(), "SHARK2") != 0, "tier B is back");
+
+        // A refused file leaves nothing behind rather than an empty decoder holding its weights.
+        std::vector<uint8_t> truncated = zeroWeightsFile();
+        truncated.resize(truncated.size() / 2);
+        check(!engine.loadSwipeWeights(truncated.data(), truncated.size()),
+              "a truncated weight file is refused");
+        check(std::strcmp(engine.gestureDecoderName(), "SHARK2") == 0,
+              "a refused load leaves tier A decoding");
+    }
 }

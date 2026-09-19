@@ -9,7 +9,9 @@ import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -36,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
@@ -178,6 +181,37 @@ fun SwitchRow(
         onClick = if (enabled) ({ onCheckedChange(!checked) }) else null,
         trailing = { Switch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange) },
     )
+}
+
+/**
+ * Dims [content] and swallows every touch inside it, for a control that is turned off rather
+ * than removed -- the setting it shows is still there and still stored, it simply cannot be
+ * reached right now.
+ *
+ * A transparent [clickable] laid over the top rather than an `enabled` flag threaded through
+ * whatever is inside: the theme screen's swatches and preset cards are drawn with plain
+ * `Modifier.clickable` blocks, none of which have an `enabled` parameter to thread one through,
+ * and one overlay is the same fix for all of them at once rather than a fix repeated at every
+ * call site. [SettingRow] has the same gap -- it expresses "not clickable" by taking a null
+ * `onClick` and dims nothing by itself.
+ */
+@Composable
+fun Disableable(disabled: Boolean, content: @Composable () -> Unit) {
+    Box {
+        Column(modifier = Modifier.alpha(if (disabled) 0.4f else 1f)) { content() }
+        if (disabled) {
+            // Compose's own single-argument Box, which draws nothing -- the point of this one
+            // is only ever to sit in front of everything else and take the touch.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {},
+            )
+        }
+    }
 }
 
 /**

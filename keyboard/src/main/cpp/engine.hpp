@@ -215,17 +215,36 @@ public:
     const char* gestureDecoderName() const;
 
     /**
-     * Loads tier B's trained weights. `plus`-only: a no-op that always returns false when this
-     * library was built without `BORDERKEYS_NEURAL_SWIPE`, so the JNI bridge and its method
-     * table can stay identical across flavors rather than forking on this one feature.
+     * Loads tier B's trained weights, building the decoder to hold them if it is not there yet.
+     * `plus`-only: a no-op that always returns false when this library was built without
+     * `BORDERKEYS_NEURAL_SWIPE`, so the JNI bridge and its method table can stay identical
+     * across flavors rather than forking on this one feature.
      */
     bool loadSwipeWeights(const uint8_t* data, size_t length);
 
     /**
      * Switches [decodeGesture] between tier A (always) and tier B (once weights are loaded and
-     * this is true). A no-op in a `core` build, for the same reason as [loadSwipeWeights].
+     * this is true), and **frees tier B outright when turned off** -- the decoder holds its
+     * weights by value, some two and a half megabytes of them, and the preference is off by
+     * default, so keeping it resident for a feature nobody asked for is the wrong trade. The
+     * next [loadSwipeWeights] builds it again. A no-op in a `core` build, for the same reason
+     * as [loadSwipeWeights].
      */
     void setSwipeModelEnabled(bool enabled);
+
+    /**
+     * Decodes one synthetic gesture through tier B and throws the answer away, so that the
+     * first gesture a person actually swipes is not also the first pass through the network.
+     *
+     * Goes straight to the decoder rather than through [decodeGesture]'s tier guard, so it does
+     * not depend on [setSwipeModelEnabled] having run yet: the caller loads, warms, and only
+     * then tells anyone the model is ready.
+     *
+     * Returns false, having done nothing, when there are no weights or no layout to trace a
+     * stroke across. Warming is an optimisation and never a precondition -- a decode that
+     * arrives first is correct either way, it just pays for the first run itself.
+     */
+    bool warmSwipeModel();
 
     // --- GestureScorer -------------------------------------------------------------------
     int packCount() const override { return kMaxPacks; }

@@ -308,6 +308,20 @@ data class KeyboardPreferences(
     val experimentalSwipeModelEnabled: Boolean = false,
 
     /**
+     * Set by the keyboard, never chosen by anyone: tier B's weights could not be read or were
+     * not valid, so the option above is disabled for good on this installation.
+     *
+     * Permanent on purpose. A `model.bkw` that does not parse is a property of the installed
+     * build, not of the moment -- retrying it on every keyboard start would re-read two and a
+     * half megabytes to fail again, and leaving the switch live would offer a feature that
+     * cannot work. What the user gets instead is a disabled row saying so and asking them to
+     * report it. Cleared by installing the application again, which is also the only thing that
+     * could plausibly fix the underlying file; the backup restore path clears it too, since a
+     * file copied from another phone says nothing about this build's assets.
+     */
+    val swipeModelFailed: Boolean = false,
+
+    /**
      * An alternative/addition to the suggestion strip for a swipe: pausing mid-gesture shows a
      * quick preview near the finger, and lifting turns it into a real menu -- a tap picks a
      * candidate, or the top one applies itself after [radialPickTimeoutMillis] if nothing is

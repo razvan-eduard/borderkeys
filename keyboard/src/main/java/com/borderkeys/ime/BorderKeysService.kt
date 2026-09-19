@@ -46,6 +46,7 @@ import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.ime.fx.applyParticleLayer
 import com.borderkeys.predict.LearningBuffer
 import com.borderkeys.predict.PredictionEngine
+import com.borderkeys.predict.SwipeModelLoad
 import com.borderkeys.predict.WordFold
 import com.borderkeys.theme.DynamicColors
 import com.borderkeys.theme.ThemeMode
@@ -194,6 +195,9 @@ class BorderKeysService :
      * the blocked set and the personal model, never a file read on the main thread.
      */
     private var offensiveWords: Set<String> = emptySet()
+
+    /** The in-flight tier B load, held so a quick off-on-off supersedes rather than races. */
+    private var swipeModelJob: kotlinx.coroutines.Job? = null
 
     /**
      * The language the engine currently considers the conversation written in, refreshed after
@@ -528,26 +532,83 @@ class BorderKeysService :
             // to open the database, and the whole input method died on start with it.
             runCatching { loadDictionaries() }
                 .onFailure { error -> degradeWithoutDictionaries(error) }
-            loadSwipeModel()
             File(filesDir, LEGACY_USER_MODEL_SNAPSHOT).delete()
         }
+        // Nothing of tier B is read here. The weights are loaded only once the preference asks
+        // for them -- see applySwipeModel, driven from observeSettings -- and this engine is new,
+        // so whatever a previous service instance had loaded is gone with it.
+        SwipeModelLoad.set(SwipeModelLoad.State.Off)
         observeSettings()
         observeLanguagePacks()
     }
 
     /**
-     * Reads tier B's trained weights out of assets and hands them to the engine, once, at start.
+     * Turns tier B on or off, which means loading or freeing two and a half megabytes of weights
+     * rather than only setting a flag -- see PredictionEngine.setSwipeModelEnabled.
      *
-     * `runCatching` rather than a flavor check: a `core` build simply has no `model.bkw` asset --
-     * `keyboard/src/plus/assets/` is not part of its source set at all -- so [AssetManager.open]
-     * throwing here is the expected, silent outcome there, not a failure worth logging. Loading
-     * succeeding does not turn tier B on by itself; [engine].setSwipeModelEnabled follows the
-     * "experimental swipe model" preference exactly like every other engine setting.
+     * Everything about the experimental swipe model is driven from here, from the one preference,
+     * rather than being pushed at every field the way the engine's other settings are. That is
+     * what makes the switch take effect on a keyboard that is already open: it used to be applied
+     * only in onStartInputView, so flipping it while the "Try it here" box had focus did nothing
+     * until the field was touched again.
+     *
+     * A failed load is permanent for this installation ([KeyboardPreferences.swipeModelFailed]).
+     * A `model.bkw` that will not parse is a property of the installed build, so retrying it on
+     * every start would re-read the whole file to fail again; the settings screen shows a
+     * disabled row asking the user to report it instead. A `core` build never reaches any of
+     * this, because the preference cannot be turned on there -- the row does not exist.
      */
-    private fun loadSwipeModel() {
-        runCatching {
-            val bytes = assets.open(SWIPE_MODEL_ASSET).use { it.readBytes() }
-            engine.loadSwipeWeights(bytes)
+    private fun applySwipeModel(enabled: Boolean) {
+        swipeModelJob?.cancel()
+        if (!enabled) {
+            engine.setSwipeModelEnabled(false)
+            SwipeModelLoad.set(SwipeModelLoad.State.Off)
+            return
+        }
+        if (preferences.swipeModelFailed) {
+            SwipeModelLoad.set(SwipeModelLoad.State.Failed)
+            return
+        }
+        SwipeModelLoad.set(SwipeModelLoad.State.Loading)
+        swipeModelJob = scope.launch(Dispatchers.IO) {
+            val bytes = runCatching {
+                assets.open(SWIPE_MODEL_ASSET).use { it.readBytes() }
+            }.getOrNull()
+            if (bytes == null) {
+                withContext(Dispatchers.Main) { failSwipeModel(null) }
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                engine.setSwipeModelEnabled(true)
+                // Answers once the weights are in and the model has been run once, so the
+                // screen stops showing a spinner only when the next swipe really is tier B's.
+                engine.loadSwipeWeights(bytes) { loaded ->
+                    if (loaded) {
+                        SwipeModelLoad.set(SwipeModelLoad.State.Ready)
+                    } else {
+                        failSwipeModel("the swipe model's weights are not valid")
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Writes off tier B for this installation: the engine is told to drop it, the switch is
+     * turned back off so the stored preference cannot disagree with what is running, and the
+     * fault is recorded so the settings screen can keep the option disabled after a restart.
+     */
+    private fun failSwipeModel(reason: String?) {
+        android.util.Log.w(
+            "BorderKeys",
+            reason ?: "the swipe model's weights could not be read",
+        )
+        engine.setSwipeModelEnabled(false)
+        SwipeModelLoad.set(SwipeModelLoad.State.Failed)
+        scope.launch {
+            DataGraph.themes.updatePreferences {
+                it.copy(swipeModelFailed = true, experimentalSwipeModelEnabled = false)
+            }
         }
     }
 
@@ -754,7 +815,16 @@ class BorderKeysService :
                 val wasForcingDebugRing = preferences.debugForceRadialRing
                 val offensiveSwitchFlipped =
                     preferences.blockOffensiveWords != newPreferences.blockOffensiveWords
+                // Same shape, and the same reason: the first emission counts as a flip when the
+                // stored value differs from the default this service seeded itself with, which
+                // is what loads tier B at start for someone who had already turned it on.
+                val swipeModelFlipped =
+                    preferences.experimentalSwipeModelEnabled !=
+                        newPreferences.experimentalSwipeModelEnabled
                 preferences = newPreferences
+                if (swipeModelFlipped) {
+                    applySwipeModel(newPreferences.experimentalSwipeModelEnabled)
+                }
                 particleEffects = newParticleEffects
                 if (offensiveSwitchFlipped) {
                     // The switch changes what the blocked set and the personal model hold, not
@@ -1044,7 +1114,10 @@ class BorderKeysService :
             KeyboardPreferences.languageLockStrict(preferences.languageLock),
         )
         engine.setPhraseSuggestions(preferences.phraseSuggestions)
-        engine.setSwipeModelEnabled(preferences.experimentalSwipeModelEnabled)
+        // The experimental swipe model is deliberately *not* re-pushed here the way the settings
+        // above are. It owns two and a half megabytes that are loaded and freed as the preference
+        // changes (applySwipeModel), so re-asserting "on" at every field would claim the model is
+        // active while the weights were freed and never reloaded. observeSettings owns it.
         if (privateMode) {
             learning.discard()
         }
@@ -1187,6 +1260,9 @@ class BorderKeysService :
         // be, that request went to a prediction thread that had already quit, one dead-thread
         // warning per destroy. Everything of ours comes after it.
         super.onDestroy()
+        // The engine goes below, and tier B's weights with it, so nothing is loaded any more
+        // whatever the preference says. A settings screen still open reads this.
+        SwipeModelLoad.set(SwipeModelLoad.State.Off)
         flushLearningBeforeDestroy()
         // Zeroes the handle under a lock before freeing, so a request already in flight
         // completes against a live engine and anything after it sees zero and returns.

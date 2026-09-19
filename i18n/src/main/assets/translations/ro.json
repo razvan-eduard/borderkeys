@@ -908,5 +908,8 @@
   "about_open_dictionary_sources": "Deschide site-ul corpusurilor Leipzig",
   "about_version_unknown": "necunoscută",
   "corrections_block_offensive_words": "Blochează cuvintele vulgare",
-  "corrections_block_offensive_words_note": "Nu sunt sugerate, nu sunt aplicate drept corecturi, nu sunt învățate. Ce scrii tu rămâne exact așa cum l-ai scris; o glisare care ajunge la unul arată în schimb următoarea propunere."
+  "corrections_block_offensive_words_note": "Nu sunt sugerate, nu sunt aplicate drept corecturi, nu sunt învățate. Ce scrii tu rămâne exact așa cum l-ai scris; o glisare care ajunge la unul arată în schimb următoarea propunere.",
+  "swipe_model_loading": "Se încarcă modelul, o clipă",
+  "swipe_model_failed": "Acest model nu a putut fi încărcat",
+  "swipe_model_failed_note": "Fișierul lui este deteriorat sau nu se potrivește cu această versiune, așa că opțiunea rămâne oprită până când BorderKeys este instalat din nou. Nimic altceva nu este afectat: glisarea funcționează mai departe cu decodorul geometric. Te rugăm să raportezi problema, ca să poată fi reparată pentru toată lumea."
 }

@@ -908,5 +908,8 @@
   "about_open_dictionary_sources": "Abrir el sitio de los corpus de Leipzig",
   "about_version_unknown": "desconocida",
   "corrections_block_offensive_words": "Bloquear palabras ofensivas",
-  "corrections_block_offensive_words_note": "Nunca se sugieren, nunca se aplican como corrección, nunca se aprenden. Lo que escribes tú queda exactamente como lo escribiste; un deslizamiento que cae en una muestra la siguiente propuesta."
+  "corrections_block_offensive_words_note": "Nunca se sugieren, nunca se aplican como corrección, nunca se aprenden. Lo que escribes tú queda exactamente como lo escribiste; un deslizamiento que cae en una muestra la siguiente propuesta.",
+  "swipe_model_loading": "Cargando el modelo, un momento",
+  "swipe_model_failed": "No se ha podido cargar este modelo",
+  "swipe_model_failed_note": "Su archivo está dañado o no corresponde a esta versión, así que la opción queda desactivada hasta que se vuelva a instalar BorderKeys. Nada más se ve afectado: el deslizamiento sigue funcionando con el decodificador geométrico. Comunícalo, por favor, para que pueda arreglarse para todo el mundo."
 }
