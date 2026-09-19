@@ -2289,10 +2289,22 @@ class BorderKeysService :
         // The space we just added ourselves, typed again out of habit. Swallowed once, kept
         // swallowing, or kept -- KeyboardPreferences.autoSpaceHabit's three answers -- and the
         // window for the two-spaces rule is not opened by it either.
-        if (shifted == ' '.code && typed.isEmpty() && pendingAutoSpace &&
-            preferences.autoSpaceHabit != KeyboardPreferences.AUTO_SPACE_KEEP
+        //
+        // Asked of the text and not only of pendingAutoSpace: the flag outlives whatever it was
+        // remembering, so a caret moved elsewhere, an emoji or a paste committed over the space,
+        // or a backspace that removed it all used to leave this eating a space the user really
+        // wanted. See HabitSpace, which is where the rule is tested.
+        if (shifted == ' '.code &&
+            HabitSpace.swallows(
+                composingEmpty = typed.isEmpty(),
+                pendingAutoSpace = pendingAutoSpace,
+                habit = preferences.autoSpaceHabit,
+                characterBeforeCursor = {
+                    connection.getTextBeforeCursor(1, 0)?.takeIf { it.isNotEmpty() }?.get(0)
+                },
+            )
         ) {
-            if (preferences.autoSpaceHabit == KeyboardPreferences.AUTO_SPACE_SWALLOW_FIRST) {
+            if (!HabitSpace.staysArmed(preferences.autoSpaceHabit)) {
                 pendingAutoSpace = false
             }
             // Nothing was committed, so no caret echo will re-derive shift for this keystroke:
@@ -3194,8 +3206,11 @@ class BorderKeysService :
         // picking a suggestion for a word the caret merely sits in, mid-sentence, would
         // otherwise leave "word  next" with two spaces. At the end of the field, or before
         // anything that is not whitespace, the space is what lets typing carry straight on.
+        // A *space*, not any whitespace: a line break after the caret is the end of the line,
+        // not a separator that is already there, and a word picked before one still needs its
+        // own space or the next letter runs into it.
         val nextChar = after?.getOrNull(tail)
-        val space = if (!preferences.spaceAfterSuggestion || (nextChar != null && nextChar.isWhitespace())) "" else " "
+        val space = if (!preferences.spaceAfterSuggestion || nextChar == ' ') "" else " "
         ownEditPending = true
         connection.commitText(word + space, 1)
         connection.endBatchEdit()
@@ -3471,6 +3486,10 @@ class BorderKeysService :
         composing.setLength(0)
         composingFromGesture = false
         swipeAutoSpaceInserted = false
+        // A space this keyboard added is only ever behind *this* caret, in *this* field. A new
+        // field, a cursor jump and a cancelled gesture all end that, so the habit-space rule
+        // stops applying with them -- the same reason the two flags above are cleared here.
+        pendingAutoSpace = false
         currentInputConnection?.finishComposingText()
         refreshContextFromEditor()
         host?.suggestionStrip?.clear()
