@@ -38,7 +38,10 @@ class OffensiveWordsTest {
             val file = File(directory, "$tag.txt")
             assertTrue("$tag has a list", file.isFile)
             val text = file.readText()
+            // REUSE-IgnoreStart -- the literal below is the tag this test looks for, not this
+            // file's own licence, and `reuse lint` reads every occurrence in the tree alike.
             assertTrue("$tag carries its licence header", text.startsWith("# SPDX-License-Identifier:"))
+            // REUSE-IgnoreEnd
             val entries = text.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }
             assertTrue("$tag lists at least forty words", entries.size >= 40)
             for (entry in entries) {
