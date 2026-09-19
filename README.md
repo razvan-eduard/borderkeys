@@ -130,7 +130,7 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   settings too.
 
 <p align="center">
-  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/9_layout_keys.jpg" alt="Layout & keys: the popup switch and the vibration strength" width="30%">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/9_layout_keys.jpg" alt="Layout & keys: the number row, the accents and the key popup" width="30%">
 </p>
 
 - **Settings that stay out of the way.** Every card leads with what changes how typing feels;
