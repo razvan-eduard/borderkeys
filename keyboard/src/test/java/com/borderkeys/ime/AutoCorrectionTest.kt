@@ -88,6 +88,35 @@ class AutoCorrectionTest {
     }
 
     @Test
+    fun `with the names setting off a name is cased like any other word`() {
+        // The capital is the only thing the preference governs. "maria" typed lower case stays
+        // lower case, and the dictionary's own spelling no longer forces one.
+        assertNull(
+            AutoCorrection.correctionFor(
+                "maria", "Maria", "maria", "maria", 3,
+                isProperNoun = true, capitaliseNames = false,
+            ),
+        )
+        // But the guard that keeps a name away from an ordinary word is not a preference: it
+        // still refuses, exactly as it does with the setting on.
+        assertNull(
+            AutoCorrection.correctionFor(
+                "everyone", "Everton", "everyone", "", 3,
+                isProperNoun = true, maxEdits = 2, capitaliseNames = false,
+            ),
+        )
+        // A name's own letters still correct -- what changes is only that the result is not
+        // capitalised for having been flagged.
+        assertEquals(
+            "laurențiu",
+            AutoCorrection.correctionFor(
+                "laurentiu", "Laurențiu", "laurentiu", "", 3,
+                isProperNoun = true, capitaliseNames = false,
+            ),
+        )
+    }
+
+    @Test
     fun `a correction capitalised for no reason the typed word gives is brought back down`() {
         // The personal dictionary keeps the literal case a word was last committed in (see
         // UserModel::learn), which can be capitalised from an unrelated earlier sentence start

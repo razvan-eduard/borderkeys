@@ -911,5 +911,7 @@
   "corrections_block_offensive_words_note": "Nunca se sugieren, nunca se aplican como corrección, nunca se aprenden. Lo que escribes tú queda exactamente como lo escribiste; un deslizamiento que cae en una muestra la siguiente propuesta.",
   "swipe_model_loading": "Cargando el modelo, un momento",
   "swipe_model_failed": "No se ha podido cargar este modelo",
-  "swipe_model_failed_note": "Su archivo está dañado o no corresponde a esta versión, así que la opción queda desactivada hasta que se vuelva a instalar BorderKeys. Nada más se ve afectado: el deslizamiento sigue funcionando con el decodificador geométrico. Comunícalo, por favor, para que pueda arreglarse para todo el mundo."
+  "swipe_model_failed_note": "Su archivo está dañado o no corresponde a esta versión, así que la opción queda desactivada hasta que se vuelva a instalar BorderKeys. Nada más se ve afectado: el deslizamiento sigue funcionando con el decodificador geométrico. Comunícalo, por favor, para que pueda arreglarse para todo el mundo.",
+  "corrections_capitalise_names": "Poner los nombres en mayúscula",
+  "corrections_capitalise_names_note": "Una palabra que los diccionarios reconocen como nombre se propone en mayúscula dondequiera que caiga, no solo después de un punto. Desactívalo si se equivocan demasiado a menudo: las palabras siguen en los diccionarios igualmente, y a ningún nombre se le ha permitido nunca corregir una palabra corriente."
 }

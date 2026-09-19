@@ -911,5 +911,7 @@
   "corrections_block_offensive_words_note": "Nu sunt sugerate, nu sunt aplicate drept corecturi, nu sunt învățate. Ce scrii tu rămâne exact așa cum l-ai scris; o glisare care ajunge la unul arată în schimb următoarea propunere.",
   "swipe_model_loading": "Se încarcă modelul, o clipă",
   "swipe_model_failed": "Acest model nu a putut fi încărcat",
-  "swipe_model_failed_note": "Fișierul lui este deteriorat sau nu se potrivește cu această versiune, așa că opțiunea rămâne oprită până când BorderKeys este instalat din nou. Nimic altceva nu este afectat: glisarea funcționează mai departe cu decodorul geometric. Te rugăm să raportezi problema, ca să poată fi reparată pentru toată lumea."
+  "swipe_model_failed_note": "Fișierul lui este deteriorat sau nu se potrivește cu această versiune, așa că opțiunea rămâne oprită până când BorderKeys este instalat din nou. Nimic altceva nu este afectat: glisarea funcționează mai departe cu decodorul geometric. Te rugăm să raportezi problema, ca să poată fi reparată pentru toată lumea.",
+  "corrections_capitalise_names": "Scrie numele cu majusculă",
+  "corrections_capitalise_names_note": "Un cuvânt pe care dicționarele îl știu ca nume este propus cu majusculă oriunde apare, nu doar după punct. Oprește-l dacă greșesc prea des: cuvintele rămân în dicționare oricum, iar unui nume nu i s-a permis niciodată să corecteze un cuvânt obișnuit."
 }

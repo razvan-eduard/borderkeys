@@ -130,6 +130,22 @@ data class KeyboardPreferences(
     val forceCapitaliseSentences: Boolean = false,
 
     /**
+     * Whether a word the dictionaries flag as a name is offered capitalised wherever it lands,
+     * rather than only at the start of a sentence or after a shift.
+     *
+     * On by default: a name written mid-sentence is a name, and having to shift for every
+     * "Maria" is the thing this exists to fix. Off for anyone who finds the dictionaries wrong
+     * about which words are names often enough to be worse than the problem -- Wikidata knows
+     * a person called almost anything, and the classifier that decides which of those may carry
+     * the flag (see docs/dictionaries.md) is judgement, not fact.
+     *
+     * It governs the *capital* and nothing else. A name stays a word the dictionaries know, is
+     * still suggested, and is still held to the rule that it may only ever correct its own
+     * letters -- "everyone" may not become "Everton" either way.
+     */
+    val capitaliseNames: Boolean = true,
+
+    /**
      * Whether two spaces become a full stop and a space.
      *
      * On, and undone by the backspace that follows it, like any other substitution this

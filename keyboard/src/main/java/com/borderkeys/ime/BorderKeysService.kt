@@ -1978,6 +1978,9 @@ class BorderKeysService :
      * to assume the decoder had already done that, and no swiped name was ever capitalised.
      */
     private fun caseSwipedWords(words: Array<String?>, count: Int, properNoun: BooleanArray) {
+        if (!preferences.capitaliseNames) {
+            return
+        }
         for (index in 0 until count) {
             if (properNoun[index]) {
                 words[index] = words[index]?.replaceFirstChar { it.uppercaseChar() }
@@ -2576,6 +2579,7 @@ class BorderKeysService :
             typed, topSuggestion, suggestionQuery, knownQuery, preferences.minCorrectionLength,
             topSuggestionIsProperNoun,
             maxEdits = AutoCorrection.maxEditsFor(typed.length, preferences.correctionDistance),
+            capitaliseNames = preferences.capitaliseNames,
         )
     }
 
@@ -3319,7 +3323,9 @@ class BorderKeysService :
         for (index in 0 until count) {
             words[index] = words[index]?.let { word ->
                 if (lastQuery.isNotEmpty()) {
-                    AutoCorrection.matchCase(lastQuery, word, properNoun[index])
+                    AutoCorrection.matchCase(
+                        lastQuery, word, properNoun[index] && preferences.capitaliseNames,
+                    )
                 } else {
                     // LOCKED wins over the proper-noun override for the same reason
                     // matchCase's own all-caps-typed check wins over it below: caps lock is a
@@ -3334,7 +3340,8 @@ class BorderKeysService :
                     // that has nothing to do with where the next word is about to land.
                     when {
                         shiftState == ShiftState.LOCKED -> word.uppercase()
-                        properNoun[index] -> word.replaceFirstChar { it.uppercaseChar() }
+                        properNoun[index] && preferences.capitaliseNames ->
+                            word.replaceFirstChar { it.uppercaseChar() }
                         shiftState == ShiftState.ON -> word.replaceFirstChar { it.uppercaseChar() }
                         else -> word.replaceFirstChar { it.lowercaseChar() }
                     }
