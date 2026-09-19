@@ -205,7 +205,15 @@ Builds:
       - plus
     ndk: 27.1.12297006
 
+  - versionName: 0.7.1
+    versionCode: 17
+    commit: v0.7.1
+    subdir: app
+    gradle:
+      - plus
+    ndk: 27.1.12297006
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
-CurrentVersion: 0.7.0
-CurrentVersionCode: 16
+CurrentVersion: 0.7.1
+CurrentVersionCode: 17
