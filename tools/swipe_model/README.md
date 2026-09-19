@@ -15,6 +15,14 @@ that a bespoke C++ decoder was worth writing instead.
 This directory is tracked in git, and the weights it exports ship as
 `keyboard/src/plus/assets/model.bkw` (the `plus` flavor only; `core` compiles the decoder out).
 
+The app reads that asset only while the "Experimental swipe model" preference is on, and frees
+the decoder holding it -- weights included, they live in it by value -- the moment the
+preference goes off. So a replacement checkpoint is picked up by turning the switch off and on
+again rather than only by restarting the keyboard, and a file that does not parse disables the
+option for that installation instead of failing quietly into the geometric decoder. After
+loading, one synthetic gesture is decoded and discarded to warm the model before the settings
+row reports it ready.
+
 ## What's here
 
 - `train.py` — training entry point. PyTorch, CTC loss + an emission-count regularizer, AdamW
