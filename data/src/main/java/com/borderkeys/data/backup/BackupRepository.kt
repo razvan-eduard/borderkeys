@@ -186,6 +186,11 @@ class BackupRepository(
                     incoming
                         .withPlacement(false) { current.placementFor(false) }
                         .withPlacement(true) { current.placementFor(true) }
+                        // Not carried across: swipeModelFailed records that *this* installation
+                        // could not read *its own* copy of the swipe model, which a file written
+                        // on another phone knows nothing about. Restoring it would disable the
+                        // option here for a fault that never happened here.
+                        .copy(swipeModelFailed = false)
                 }
             }
             applied = applied.copy(settings = payload.preferences != null)

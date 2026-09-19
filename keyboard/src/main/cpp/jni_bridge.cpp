@@ -599,9 +599,10 @@ jstring nativeDominantLanguageTag(JNIEnv* env, jobject /*thiz*/, jlong handle) {
 
 /**
  * Loads tier B's trained weights from a plain byte array, not an fd/offset/length window like a
- * language pack -- at ~2.5 MB this is small enough to read fully into memory once at startup, and
- * `TcnWeights::loadFromBytes` already takes a `(data, length)` pair, so there is nothing an mmap
- * would save. A no-op returning false in a `core` build (see Engine::loadSwipeWeights).
+ * language pack -- at ~2.5 MB this is small enough to read fully into memory when the preference
+ * asks for it, and `TcnWeights::loadFromBytes` already takes a `(data, length)` pair, so there is
+ * nothing an mmap would save. A no-op returning false in a `core` build (see
+ * Engine::loadSwipeWeights).
  */
 jboolean nativeLoadSwipeWeights(JNIEnv* env, jobject /*thiz*/, jlong handle, jbyteArray weights) {
     Engine* const engine = engineFrom(handle);
@@ -622,7 +623,12 @@ jboolean nativeLoadSwipeWeights(JNIEnv* env, jobject /*thiz*/, jlong handle, jby
     return loaded ? JNI_TRUE : JNI_FALSE;
 }
 
-/** The "experimental swipe model" preference, off by default. A no-op in a `core` build. */
+/**
+ * The "experimental swipe model" preference, off by default. A no-op in a `core` build.
+ *
+ * Turning it off frees tier B's weights, so this is not merely a flag -- see
+ * Engine::setSwipeModelEnabled.
+ */
 void nativeSetSwipeModelEnabled(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
                                 jboolean enabled) {
     Engine* const engine = engineFrom(handle);
@@ -630,6 +636,18 @@ void nativeSetSwipeModelEnabled(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
         return;
     }
     engine->setSwipeModelEnabled(enabled == JNI_TRUE);
+}
+
+/**
+ * Runs one throwaway decode through tier B so the first real swipe is not the first one. Safe to
+ * call at any time: false means there was nothing to warm (no weights, no layout, `core`).
+ */
+jboolean nativeWarmSwipeModel(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return JNI_FALSE;
+    }
+    return engine->warmSwipeModel() ? JNI_TRUE : JNI_FALSE;
 }
 
 void nativeSetLearningSpeed(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jfloat speed) {
@@ -919,6 +937,7 @@ const JNINativeMethod kMethods[] = {
     {"nativeLoadSwipeWeights", "(J[B)Z", reinterpret_cast<void*>(nativeLoadSwipeWeights)},
     {"nativeSetSwipeModelEnabled", "(JZ)V",
      reinterpret_cast<void*>(nativeSetSwipeModelEnabled)},
+    {"nativeWarmSwipeModel", "(J)Z", reinterpret_cast<void*>(nativeWarmSwipeModel)},
     {"nativeKnownSpelling", "(JLjava/lang/String;)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeKnownSpelling)},
     {"nativeLoadUserTrigrams",

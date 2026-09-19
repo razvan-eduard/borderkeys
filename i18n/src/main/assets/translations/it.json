@@ -908,5 +908,8 @@
   "about_open_dictionary_sources": "Apri il sito dei corpora di Lipsia",
   "about_version_unknown": "sconosciuta",
   "corrections_block_offensive_words": "Blocca le parole volgari",
-  "corrections_block_offensive_words_note": "Mai suggerite, mai applicate come correzione, mai imparate. Ciò che scrivi tu resta esattamente com'è; uno scorrimento che finisce su una mostra la proposta successiva."
+  "corrections_block_offensive_words_note": "Mai suggerite, mai applicate come correzione, mai imparate. Ciò che scrivi tu resta esattamente com'è; uno scorrimento che finisce su una mostra la proposta successiva.",
+  "swipe_model_loading": "Caricamento del modello, un attimo",
+  "swipe_model_failed": "Non è stato possibile caricare questo modello",
+  "swipe_model_failed_note": "Il suo file è danneggiato o non corrisponde a questa versione, quindi l'opzione resta disattivata finché BorderKeys non viene installato di nuovo. Nient'altro è interessato: lo scorrimento continua con il decodificatore geometrico. Segnalalo, per favore, così può essere risolto per tutti."
 }

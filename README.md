@@ -78,7 +78,9 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   doubled letter tells "hello" from "helo". Swiping switches itself off in password, e-mail,
   web-address and number fields. `plus` also carries an **experimental neural decoder** — a
   small TCN hand-written in C++ with no ML runtime, its weights trained in this repository on a
-  free corpus — as an opt-in switch, off by default; see [Flavors](#flavors).
+  free corpus — as an opt-in switch, off by default; see [Flavors](#flavors). Its weights are
+  read only while that switch is on, and freed the moment it goes off, so leaving it alone costs
+  nothing at all.
 - **An optional radial menu for swipe typing.** Pause mid-swipe, without lifting, to open a ring
   of alternatives around your finger — slide onto one to pick it, or onto the centre Cancel to
   discard the swipe, all in one continuous motion. Lifting elsewhere applies the top guess or

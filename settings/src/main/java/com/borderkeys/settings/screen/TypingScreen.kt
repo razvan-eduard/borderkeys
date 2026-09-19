@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,7 +31,10 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.predict.SwipeModelAvailability
+import com.borderkeys.predict.SwipeModelLoad
 import com.borderkeys.settings.CautionNote
+import com.borderkeys.settings.Disableable
+import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PickerChip
@@ -354,11 +359,53 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                     )
                     CautionNote(strings[Keys.SWIPE_A_PREVIEW_OF_WORK_STILL_IN_PROGRESS])
-                    SwitchRow(
-                        title = strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
-                        subtitle = strings[Keys.SWIPE_DECODES_GESTURES_WITH_A_TRAINED_NEURAL],
-                        checked = preferences.experimentalSwipeModelEnabled,
-                    ) { value -> update { it.copy(experimentalSwipeModelEnabled = value) } }
+                    // Turning this on is not a flag: it reads two and a half megabytes of
+                    // weights and runs the model once before the first real swipe can use it,
+                    // and turning it off frees them again. The row says which of those is
+                    // happening rather than pretending the switch settled instantly.
+                    val loadState by SwipeModelLoad.state.collectAsStateWithLifecycle()
+                    // The stored flag, not just the live one: a failure has to survive a restart,
+                    // and the keyboard that recorded it may be long gone by the time this screen
+                    // is opened again.
+                    val failed = preferences.swipeModelFailed ||
+                        loadState == SwipeModelLoad.State.Failed
+                    when {
+                        failed -> {
+                            Disableable(disabled = true) {
+                                SwitchRow(
+                                    title = strings[Keys.SWIPE_MODEL_FAILED],
+                                    subtitle = strings[Keys.SWIPE_DECODES_GESTURES_WITH_A_TRAINED_NEURAL],
+                                    checked = false,
+                                    enabled = false,
+                                ) { }
+                            }
+                            CautionNote(strings[Keys.SWIPE_MODEL_FAILED_NOTE])
+                        }
+
+                        loadState == SwipeModelLoad.State.Loading -> {
+                            // A spinner in the switch's own place, rather than the full-width
+                            // bar this module uses for an import: what is busy is this one
+                            // control, and it is busy for well under a second.
+                            Disableable(disabled = true) {
+                                SettingRow(
+                                    title = strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
+                                    subtitle = strings[Keys.SWIPE_MODEL_LOADING],
+                                    trailing = {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+
+                        else -> SwitchRow(
+                            title = strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
+                            subtitle = strings[Keys.SWIPE_DECODES_GESTURES_WITH_A_TRAINED_NEURAL],
+                            checked = preferences.experimentalSwipeModelEnabled,
+                        ) { value -> update { it.copy(experimentalSwipeModelEnabled = value) } }
+                    }
                 }
             }
         }

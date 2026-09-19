@@ -512,13 +512,12 @@ bool Engine::create() {
         return false;
     }
 
-#ifdef BORDERKEYS_NEURAL_SWIPE
-    // Constructed unconditionally in this build -- it does nothing until loadSwipeWeights()
-    // succeeds and setSwipeModelEnabled(true) is called, both driven by the "experimental swipe
-    // model" preference, off by default. A construction failure here is not fatal to the engine
-    // the way tier A's would be: tier A already exists and tier B is optional by design.
-    neuralDecoder_.reset(new (std::nothrow) TcnDecoder(*this));
-#endif
+    // Tier B is deliberately *not* built here. It holds its weights by value -- about two and a
+    // half megabytes -- and the "experimental swipe model" preference is off by default, so an
+    // engine that constructed it at startup spent that memory on a feature most people never
+    // turn on. loadSwipeWeights() builds it when the preference asks for it and
+    // setSwipeModelEnabled(false) frees it again; every read of neuralDecoder_ already null
+    // checks, so "not built yet" and "switched off" are the same state to the decode path.
 
     created_ = true;
     return true;
@@ -540,7 +539,26 @@ void Engine::destroy() {
 
 bool Engine::loadSwipeWeights(const uint8_t* data, size_t length) {
 #ifdef BORDERKEYS_NEURAL_SWIPE
-    return neuralDecoder_ && neuralDecoder_->loadWeights(data, length);
+    if (!created_) {
+        return false;
+    }
+    // Built on demand rather than at engine creation: this is the first moment anything is
+    // known to want tier B. A construction failure is not fatal -- tier A already exists and
+    // tier B is optional by design -- so it reports false and the geometric decoder carries on.
+    if (!neuralDecoder_) {
+        neuralDecoder_.reset(new (std::nothrow) TcnDecoder(*this));
+        if (!neuralDecoder_) {
+            return false;
+        }
+    }
+    if (!neuralDecoder_->loadWeights(data, length)) {
+        // Nothing half-loaded is worth keeping: TcnDecoder::loadWeights leaves the encoder
+        // without weights on failure, and holding the empty two and a half megabytes would be
+        // the cost of tier B with none of it.
+        neuralDecoder_.reset();
+        return false;
+    }
+    return true;
 #else
     (void)data;
     (void)length;
@@ -551,8 +569,58 @@ bool Engine::loadSwipeWeights(const uint8_t* data, size_t length) {
 void Engine::setSwipeModelEnabled(bool enabled) {
 #ifdef BORDERKEYS_NEURAL_SWIPE
     neuralEnabled_ = enabled;
+    if (!enabled) {
+        // The weights go with it. They are reloaded from the asset the next time the preference
+        // is turned back on, which is the whole point: off should cost nothing.
+        neuralDecoder_.reset();
+    }
 #else
     (void)enabled;
+#endif
+}
+
+bool Engine::warmSwipeModel() {
+#ifdef BORDERKEYS_NEURAL_SWIPE
+    // Two distinct keys or there is no stroke to trace: a layout with one key would collapse to
+    // a point, which exercises none of the path this is here to warm.
+    if (!created_ || !neuralDecoder_ || !neuralDecoder_->hasWeights() || !geometry_.isSet() ||
+        geometry_.keyCount() < 2) {
+        return false;
+    }
+    // A straight stroke between the first and last key of the current layout. What it spells is
+    // irrelevant -- the point is that every buffer the decoder allocates lazily, every page of
+    // the weights, and the whole forward pass have all been touched once before a finger is on
+    // the glass. Two keys far apart make the resampler and the key-sequence walk do real work
+    // rather than collapsing to a point.
+    float fromX = 0.0f;
+    float fromY = 0.0f;
+    float toX = 0.0f;
+    float toY = 0.0f;
+    if (!geometry_.centreOf(geometry_.codeAt(0), &fromX, &fromY) ||
+        !geometry_.centreOf(geometry_.codeAt(geometry_.keyCount() - 1), &toX, &toY)) {
+        return false;
+    }
+
+    constexpr int kWarmPoints = 32;
+    float xs[kWarmPoints];
+    float ys[kWarmPoints];
+    int64_t ts[kWarmPoints];
+    for (int i = 0; i < kWarmPoints; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(kWarmPoints - 1);
+        xs[i] = fromX + (toX - fromX) * t;
+        ys[i] = fromY + (toY - fromY) * t;
+        // Ten milliseconds a sample, the rate a real gesture arrives at.
+        ts[i] = static_cast<int64_t>(i) * 10;
+    }
+
+    // Straight to the decoder, not through decodeGesture: this must work before
+    // setSwipeModelEnabled(true) has been seen, and nothing here should reach the candidate
+    // heap or the context the next real request will set up for itself.
+    Candidate discarded[kMaxCandidates];
+    (void)neuralDecoder_->decode(xs, ys, ts, kWarmPoints, discarded, kMaxCandidates);
+    return true;
+#else
+    return false;
 #endif
 }
 

@@ -424,19 +424,42 @@ class PredictionEngine(
     }
 
     /**
-     * Loads tier B's trained weights once, at start. [bytes] is a `.bkw` file's full content --
-     * see NativePredictor.nativeLoadSwipeWeights for why this is a byte array, not a descriptor.
-     * A `core` build calling this is harmless: the native side is a no-op there.
+     * Loads tier B's trained weights, warms the model with them, and reports whether it worked.
+     *
+     * [bytes] is a `.bkw` file's full content -- see NativePredictor.nativeLoadSwipeWeights for
+     * why this is a byte array, not a descriptor. A `core` build calling this is harmless: the
+     * native side is a no-op there and [onResult] is called with false.
+     *
+     * Load and warm-up are one posted task on purpose. The caller's whole reason for wanting the
+     * answer is to tell the user the model is ready, and a model that has not run once yet is
+     * ready only in the sense that the first swipe will find out. [onResult] therefore arrives
+     * after both, on the main thread.
+     *
+     * The result used to be discarded at every layer, which is how a corrupt `model.bkw` could
+     * leave the preference reading "on" while the geometric decoder quietly did all the work.
      */
-    fun loadSwipeWeights(bytes: ByteArray) {
+    fun loadSwipeWeights(bytes: ByteArray, onResult: (Boolean) -> Unit) {
         worker.post {
-            withHandle(Unit) { current ->
-                NativePredictor.nativeLoadSwipeWeights(current, bytes)
+            val loaded = withHandle(false) { current ->
+                if (!NativePredictor.nativeLoadSwipeWeights(current, bytes)) {
+                    false
+                } else {
+                    // Best effort: false here only means there was no layout to trace a stroke
+                    // across yet, which costs the first swipe its warm-up and nothing else.
+                    NativePredictor.nativeWarmSwipeModel(current)
+                    true
+                }
             }
+            mainHandler.post { onResult(loaded) }
         }
     }
 
-    /** Applied whenever the "experimental swipe model" preference changes. See KeyboardPreferences. */
+    /**
+     * Applied whenever the "experimental swipe model" preference changes. See KeyboardPreferences.
+     *
+     * Turning it off frees the weights natively, so turning it back on means calling
+     * [loadSwipeWeights] again rather than only flipping this back.
+     */
     fun setSwipeModelEnabled(enabled: Boolean) {
         worker.post {
             withHandle(Unit) { current ->

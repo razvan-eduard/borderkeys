@@ -4,9 +4,15 @@
     SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
     The settings UI is the only launchable thing this app has. It runs in the main application
-    process, which is not the IME process: Compose can take as long as it likes to compose
-    here, because nothing on this side of the process boundary is between a finger and a
-    character appearing in a text field.
+    process, the same one the input method runs in: there is no android:process anywhere in this
+    application except on the text assistant's own service, which really is separate. What keeps
+    Compose away from the typing path is the module graph, not a process boundary. :keyboard
+    cannot see :settings at all and draws on a Canvas, so Compose can take as long as it likes
+    here without ever being between a finger and a character appearing in a text field.
+
+    Being one process is also load bearing, not incidental: the swipe model's load state
+    (com.borderkeys.predict.SwipeModelLoad) is read straight off the running input method by the
+    Typing screen, which is only possible because there is one of it.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 

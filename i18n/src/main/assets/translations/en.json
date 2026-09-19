@@ -908,5 +908,8 @@
   "about_open_dictionary_sources": "Open the Leipzig corpora site",
   "about_version_unknown": "unknown",
   "corrections_block_offensive_words": "Block offensive words",
-  "corrections_block_offensive_words_note": "Never suggested, never applied as a correction, never learned. What you type yourself is left exactly as you typed it; a swipe that lands on one shows the next guess instead."
+  "corrections_block_offensive_words_note": "Never suggested, never applied as a correction, never learned. What you type yourself is left exactly as you typed it; a swipe that lands on one shows the next guess instead.",
+  "swipe_model_loading": "Loading the model, a moment",
+  "swipe_model_failed": "This model could not be loaded",
+  "swipe_model_failed_note": "Its file is damaged or does not match this build, so the option stays off until BorderKeys is installed again. Nothing else is affected: swipe typing carries on with the geometric decoder. Please report it, so it can be fixed for everyone."
 }
