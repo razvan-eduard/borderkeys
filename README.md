@@ -75,8 +75,8 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 
 - **Swipe typing**, geometric (SHARK²) and deterministic in both flavors — no model, no training
   data, no accuracy number that depends on what you happened to type it on. A small loop at a
-  doubled letter tells "hello" from "helo". Swiping switches itself off in password, e-mail,
-  web-address and number fields. `plus` also carries an **experimental neural decoder** — a
+  doubled letter tells "hello" from "helo". Swiping works wherever suggestions do, and switches
+  itself off in exactly one place: a password field, whose text never reaches the engine at all. `plus` also carries an **experimental neural decoder** — a
   small TCN hand-written in C++ with no ML runtime, its weights trained in this repository on a
   free corpus — as an opt-in switch, off by default; see [Flavors](#flavors). Its weights are
   read only while that switch is on, and freed the moment it goes off, so leaving it alone costs

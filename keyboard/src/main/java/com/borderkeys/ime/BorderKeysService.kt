@@ -12,7 +12,6 @@ import android.content.IntentFilter
 import android.inputmethodservice.InputMethodService
 import android.graphics.Matrix
 import android.os.Bundle
-import android.text.InputType
 import android.util.Size
 import android.view.View
 import android.view.inputmethod.CursorAnchorInfo
@@ -128,11 +127,50 @@ class BorderKeysService :
     private var editorEmpty = true
 
     /** The field is a password box: its text is never sent to the engine (see
-     *  [requestSuggestions]), on top of everything [privateMode] already switches off. */
+     *  [dictionaryAllowed]), on top of everything [privateMode] already switches off. */
     private var passwordField = false
+
+    /**
+     * Whether words from the dictionaries may be offered in this field, and whether a gesture
+     * may compose one into it. **The single gate for the suggestion strip, for autocorrect, for
+     * swipe typing and for the ring a swipe opens** -- everything that puts a dictionary word in
+     * front of the person or into their text asks this one question and gets one answer.
+     *
+     * Only a password says no. Nothing typed into one reaches the engine at all, so there is
+     * nothing to suggest, nothing to correct and nothing a swipe could resolve against.
+     *
+     * Swipe used to answer it differently, with a longer list of its own -- e-mail, web address,
+     * number, phone, date -- and that could not survive being written down beside this one: the
+     * strip was already offering dictionary words in every one of those fields, because a
+     * password is the only thing that silences it. A browser's address bar is where the
+     * disagreement shows. It declares itself a URL field and is one, but it is also the search
+     * box people type sentences into, so the keyboard suggested words for a gesture it then
+     * refused to decode. Android gives a field no way to say "an address or a search", so the
+     * two decisions are one question rather than a guess.
+     *
+     * The keys type in every field regardless; this has only ever governed what the dictionaries
+     * are allowed to say. What is kept *about* the person -- learning, the clipboard, the
+     * personal dictionary behind a suggestion, the assistant -- is the other gate, [privateMode],
+     * which a field can ask for without being a password.
+     */
+    private val dictionaryAllowed: Boolean get() = !passwordField
     private var previousWord1: String? = null
     private var previousWord2: String? = null
 
+    /**
+     * Whether anything *about this person* may be read or written while this field is open: no
+     * learning, no clipboard history, no personal dictionary behind a suggestion, no assistant.
+     *
+     * The second of the two gates a field is put through, and the wider one -- an application
+     * asks for it with `IME_FLAG_NO_PERSONALIZED_LEARNING` without the field being a password,
+     * and a password field is always in it as well. It is a security requirement rather than a
+     * preference, so nothing can switch it off; see [PrivateMode].
+     *
+     * Deliberately *not* the same question as [dictionaryAllowed]. A field that asks to be
+     * forgotten still gets the dictionaries -- suggestions, autocorrect, swipe and the ring all
+     * work in it -- because what the shipped word lists know is not something about the person
+     * typing. Only a password closes both.
+     */
     private var privateMode = false
     private var preferences = KeyboardPreferences()
     private var particleEffects = ParticleEffectsSettings()
@@ -889,7 +927,7 @@ class BorderKeysService :
                         closeDebugRing()
                     }
                     syncDebugRing()
-                    view.keyboard.swipeEnabled = newPreferences.swipeEnabled && swipeAllowedIn(currentInputEditorInfo)
+                    view.keyboard.swipeEnabled = newPreferences.swipeEnabled && dictionaryAllowed
                     view.suggestionStripEnabled = newPreferences.showSuggestionStrip
                     // Auto-capitalise toggled while the keyboard is up takes effect now, not
                     // at the next caret move.
@@ -1127,7 +1165,7 @@ class BorderKeysService :
             view.suggestionStrip.clear()
             view.suggestionStrip.hapticEnabled = preferences.hapticFeedback
             view.keyboard.hapticEnabled = preferences.hapticFeedback
-            view.keyboard.swipeEnabled = preferences.swipeEnabled && swipeAllowedIn(info)
+            view.keyboard.swipeEnabled = preferences.swipeEnabled && dictionaryAllowed
             view.suggestionStripEnabled = preferences.showSuggestionStrip
             view.keyboard.soundEnabled = preferences.keySound
             view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
@@ -1415,7 +1453,7 @@ class BorderKeysService :
      * previous one composing would make the decoded word replace it.
      */
     override fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
-        if (!preferences.swipeEnabled || !swipeAllowedIn(currentInputEditorInfo)) {
+        if (!preferences.swipeEnabled || !dictionaryAllowed) {
             return
         }
         radialTopWord = null
@@ -1475,28 +1513,6 @@ class BorderKeysService :
     }
 
     /**
-     * Whether swiping (and the ring it can open) belongs in the field: a password box must not
-     * have dictionary words composed into it -- or shown in a ring over it -- an address or a
-     * URL is not made of words a swipe decodes to, and a number field would silently drop the
-     * letters. The keys still type in every one of them; only the gesture is off.
-     */
-    private fun swipeAllowedIn(info: EditorInfo?): Boolean {
-        val inputType = info?.inputType ?: return true
-        if (PrivateMode.isPasswordField(inputType)) {
-            return false
-        }
-        val variation = inputType and InputType.TYPE_MASK_VARIATION
-        return when (inputType and InputType.TYPE_MASK_CLASS) {
-            InputType.TYPE_CLASS_TEXT ->
-                variation != InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS &&
-                    variation != InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS &&
-                    variation != InputType.TYPE_TEXT_VARIATION_URI
-            InputType.TYPE_CLASS_NUMBER, InputType.TYPE_CLASS_PHONE, InputType.TYPE_CLASS_DATETIME -> false
-            else -> true
-        }
-    }
-
-    /**
      * The finger paused mid-swipe -- the one pause this gesture gets, and the trigger for the
      * only decode it gets too (see [RadialSuggestionMenuView]'s own doc for why the trajectory
      * is already frozen by the time this fires). No effect unless
@@ -1505,7 +1521,7 @@ class BorderKeysService :
      * `radialMenuEnabled` mirror of the same preference; this is the belt to that braces.
      */
     override fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
-        if (!preferences.radialMenuEnabled || !swipeAllowedIn(currentInputEditorInfo)) {
+        if (!preferences.radialMenuEnabled || !dictionaryAllowed) {
             host?.keyboard?.resumeGestureCapture()
             return
         }
@@ -3394,7 +3410,7 @@ class BorderKeysService :
         // nothing can be predicted, corrected or learned from it. The strip's own setting is
         // not a reason to skip the request -- autocorrect needs the answer whether or not a row
         // is drawn from it, and used to switch off silently with the strip.
-        if (passwordField) {
+        if (!dictionaryAllowed) {
             return
         }
         engine.requestSuggestions(lastQuery, previousWord1, previousWord2)
