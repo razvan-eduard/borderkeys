@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -459,9 +460,14 @@ private fun ButtonRow(
 
 @Composable
 private fun ChipRow(content: @Composable () -> Unit) {
-    Row(
+    // Wraps, like every other chip group in the settings. A row of translated chips is wider
+    // than the English one it was measured against -- "Predeterminado, Grande, Más grande,
+    // Enorme" against "Default, Large, Larger, Huge" -- and a chip that runs off the edge is a
+    // setting nobody knows exists, which the language lock already learned the hard way.
+    FlowRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) { content() }
 }
 
