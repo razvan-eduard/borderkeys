@@ -73,6 +73,10 @@ and never as a third-party AAR.
 4. **Prediction is deterministic.** The core is a compact trie plus n-grams, in C++. Neural
    models are permitted in exactly two optional places, both off the typing path and both
    entirely offline: the swipe decoder's tier B, and the text assistant in its own process.
+   An optional model costs nothing while it is switched off: the swipe decoder's weights are
+   read when its preference goes on and freed when it goes off, and the assistant's model
+   lives in a process that exits ninety seconds after the last request. A feature most people
+   never enable must not be resident for all of them.
 5. **Private mode is a security requirement.** In a password field, or when
    `IME_FLAG_NO_PERSONALIZED_LEARNING` is set: no learning, no clipboard history, no personal
    dictionary suggestions, no assistant.
