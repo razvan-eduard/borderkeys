@@ -310,6 +310,8 @@ object Keys {
     const val CORRECTIONS_CAPITALISE = "corrections_capitalise"
     const val CORRECTIONS_CAPITALISE_ALWAYS = "corrections_capitalise_always"
     const val CORRECTIONS_CAPITALISE_MODE_NOTE = "corrections_capitalise_mode_note"
+    const val CORRECTIONS_CAPITALISE_NAMES = "corrections_capitalise_names"
+    const val CORRECTIONS_CAPITALISE_NAMES_NOTE = "corrections_capitalise_names_note"
     const val CORRECTIONS_CAPITALISE_OFF = "corrections_capitalise_off"
     const val CORRECTIONS_CAPITALISE_WHEN_ASKED = "corrections_capitalise_when_asked"
     const val CORRECTIONS_CLIPBOARD_ONCE = "corrections_clipboard_once"

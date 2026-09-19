@@ -100,7 +100,10 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   "Andrei". Everyday words that happen to be somebody's name ("in", "will", "si", "cloud") stay
   lower-case: a word only earns the flag when enough real people carry it for how common the
   word is, never when the language's own treebank calls it an ordinary word, and never when
-  its spelling dictionary lists it as one unless the treebank knows better.
+  its spelling dictionary lists it as one unless the treebank knows better. Which words earn
+  the flag is judgement rather than fact, so the capital is a switch: turn "Capitalise names"
+  off and a flagged word is cased like any other, while still never being allowed to correct
+  an ordinary word.
 
 <p align="center">
   <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg" alt="Laurențiu and Maria capitalised on their own in the strip, and a held key's popup" width="30%">

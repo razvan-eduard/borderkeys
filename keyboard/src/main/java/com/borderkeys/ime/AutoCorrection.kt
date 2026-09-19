@@ -49,6 +49,7 @@ internal object AutoCorrection {
         minimumLength: Int,
         isProperNoun: Boolean = false,
         maxEdits: Int = Int.MAX_VALUE,
+        capitaliseNames: Boolean = true,
     ): String? {
         if (suggestion.isNullOrEmpty() || typed != suggestionQuery) {
             return null
@@ -76,7 +77,11 @@ internal object AutoCorrection {
         // was typed -- "ana" against the dictionary's own "ana" -- still become a correction
         // when isProperNoun says the only thing wrong with it is the case, instead of being
         // waved through as "identical" before matchCase ever got to capitalise it.
-        val cased = matchCase(typed, suggestion, isProperNoun)
+        // [capitaliseNames] gates only the capital, never the guard above: with the setting
+        // off a name is cased like any other word, but it still may not correct anything but
+        // its own letters. The two uses of the flag are separate questions, and only the first
+        // is a preference -- "everyone" must not become "Everton" whatever the user chose.
+        val cased = matchCase(typed, suggestion, isProperNoun && capitaliseNames)
         if (cased == typed) {
             return null
         }
@@ -88,7 +93,7 @@ internal object AutoCorrection {
         // equals typed at all (the dictionary is not offering a different word, only a
         // different case for the same one), and that must not be read as "nothing to do" the
         // way it is for every word that is not a name.
-        if (typed == knownWord && !isProperNoun) {
+        if (typed == knownWord && !(isProperNoun && capitaliseNames)) {
             return null
         }
         return cased
@@ -175,7 +180,9 @@ internal object AutoCorrection {
      * than only ever adding a capital never seen -- restoring one just as readily as removing one
      * a dictionary should not have offered.
      *
-     * [isProperNoun] means the dictionary flagged [correction] a name (see
+     * [isProperNoun] reaches here already combined with the "capitalise names" preference by
+     * every caller -- see correctionFor's own [capitaliseNames]. It means the dictionary flagged
+     * [correction] a name (see
      * PackedTrie::isProperNoun) -- capitalised regardless of what [typed] looked like, the one
      * override this function makes that is not about [typed] at all, because a name is not a
      * guess about which key the user meant to reach the way the rest of this function is. The

@@ -579,6 +579,7 @@ class KeyboardPreferencesTest {
     fun `typing helps are on and the sound is not`() {
         val defaults = KeyboardPreferences()
         assertTrue("capitalisation should be on", defaults.autoCapitalise)
+        assertTrue("names should capitalise themselves by default", defaults.capitaliseNames)
         assertTrue("two spaces should end a sentence", defaults.doubleSpacePeriod)
         assertTrue("the space bar should move the cursor", defaults.spaceCursorControl)
         assertFalse("a keypress should not make a sound unasked", defaults.keySound)

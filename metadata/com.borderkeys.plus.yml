@@ -66,7 +66,7 @@ Description: |-
       after.
     * A names dictionary built from Wikidata (CC0), so a name capitalises correctly
       mid-sentence instead of only at the start of one — while everyday words that happen to be
-      somebody's name stay lower-case.
+      somebody's name stay lower-case. One switch turns the capital off if you disagree with it.
     * Alternate physical layouts — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona —
       alongside QWERTY, for every bundled language.
     * A personal dictionary you can see and edit: every learned word has a Forget and a Block

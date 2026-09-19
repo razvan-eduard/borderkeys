@@ -911,5 +911,7 @@
   "corrections_block_offensive_words_note": "Nie vorgeschlagen, nie als Korrektur eingesetzt, nie gelernt. Was du selbst tippst, bleibt genau so; ein Wisch, der auf eines trifft, zeigt stattdessen den nächsten Vorschlag.",
   "swipe_model_loading": "Das Modell wird geladen, einen Moment",
   "swipe_model_failed": "Dieses Modell konnte nicht geladen werden",
-  "swipe_model_failed_note": "Ihre Datei ist beschädigt oder passt nicht zu dieser Version, daher bleibt die Option aus, bis BorderKeys neu installiert wird. Sonst ändert sich nichts: Wischen funktioniert weiter mit dem geometrischen Decoder. Bitte melde es, damit es für alle behoben werden kann."
+  "swipe_model_failed_note": "Ihre Datei ist beschädigt oder passt nicht zu dieser Version, daher bleibt die Option aus, bis BorderKeys neu installiert wird. Sonst ändert sich nichts: Wischen funktioniert weiter mit dem geometrischen Decoder. Bitte melde es, damit es für alle behoben werden kann.",
+  "corrections_capitalise_names": "Namen großschreiben",
+  "corrections_capitalise_names_note": "Ein Wort, das die Wörterbücher als Namen kennen, wird überall großgeschrieben vorgeschlagen, nicht nur nach einem Punkt. Schalte es aus, wenn sie sich zu oft irren: Die Wörter bleiben so oder so in den Wörterbüchern, und ein Name durfte noch nie ein gewöhnliches Wort korrigieren."
 }

@@ -911,5 +911,7 @@
   "corrections_block_offensive_words_note": "Jamais suggérés, jamais appliqués comme correction, jamais appris. Ce que vous tapez vous-même reste exactement tel quel ; un glissement qui tombe sur l'un d'eux affiche la proposition suivante.",
   "swipe_model_loading": "Chargement du modèle, un instant",
   "swipe_model_failed": "Ce modèle n'a pas pu être chargé",
-  "swipe_model_failed_note": "Son fichier est endommagé ou ne correspond pas à cette version : l'option reste désactivée jusqu'à une nouvelle installation de BorderKeys. Rien d'autre n'est touché, la saisie par glissement continue avec le décodeur géométrique. Merci de le signaler, pour que ce soit corrigé pour tout le monde."
+  "swipe_model_failed_note": "Son fichier est endommagé ou ne correspond pas à cette version : l'option reste désactivée jusqu'à une nouvelle installation de BorderKeys. Rien d'autre n'est touché, la saisie par glissement continue avec le décodeur géométrique. Merci de le signaler, pour que ce soit corrigé pour tout le monde.",
+  "corrections_capitalise_names": "Mettre les noms en majuscule",
+  "corrections_capitalise_names_note": "Un mot que les dictionnaires connaissent comme un nom est proposé avec une majuscule où qu'il tombe, pas seulement après un point. Désactivez-le s'ils se trompent trop souvent : les mots restent dans les dictionnaires dans tous les cas, et jamais un nom n'a eu le droit de corriger un mot ordinaire."
 }

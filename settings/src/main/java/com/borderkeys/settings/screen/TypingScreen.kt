@@ -144,6 +144,15 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 ) { update { it.copy(autoCapitalise = true, forceCapitaliseSentences = true) } }
             }
             Explanation(strings[Keys.CORRECTIONS_CAPITALISE_MODE_NOTE])
+            // Beside the sentence capitals rather than with the dictionaries: from where the
+            // user sits this is the same question -- "when does this keyboard put a capital in
+            // for me" -- and the fact that the answer comes from a flag in a language pack is
+            // an implementation detail they should not need to know to find the switch.
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_CAPITALISE_NAMES],
+                subtitle = strings[Keys.CORRECTIONS_CAPITALISE_NAMES_NOTE],
+                checked = preferences.capitaliseNames,
+            ) { value -> update { it.copy(capitaliseNames = value) } }
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_DOUBLE_SPACE],
                 subtitle = strings[Keys.CORRECTIONS_DOUBLE_SPACE_NOTE],
