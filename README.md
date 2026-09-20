@@ -42,10 +42,12 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   time — is consulted on every word; the one that actually recognises what you typed wins,
   without a manual switch. How quickly the
   keyboard commits to one language once it has seen enough — off, patient, balanced, quick or
-  strict — is a setting.
+  strict — is a setting. You can also mark one language **preferred**, and it answers first
+  until the words you type say otherwise: it decides where guessing starts, never what wins, so
+  a couple of words in another language still switch to it.
 
 <p align="center">
-  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/4_languages.jpg" alt="The Languages screen: installed packs, their weights, and the ones included with the app" width="30%">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/4_languages.jpg" alt="The Languages screen: choosing which language the app and the keyboard's own labels are written in" width="30%">
 </p>
 
 - **Retroactive correction when the conversation's language turns out to differ.** A correction

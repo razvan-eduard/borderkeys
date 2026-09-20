@@ -12,7 +12,7 @@ keyboard's suggestions is the quality of those counts.
 The six dictionaries that ship with the application (`en_US`, `ro_RO`, `de_DE`, `es_ES`, `fr_FR`,
 `it_IT`) are built from combined Wortschatz Leipzig corpora (wikipedia, news, and newscrawl
 together, not one genre alone -- a single-genre cut was found to be missing everyday words) via
-`tools/make_pack.py --corpus`, some 99,000 to 129,000 words each once the names are merged in.
+`tools/make_pack.py --corpus`, some 97,000 to 127,000 words each once the names are merged in.
 What each one actually used, and its
 licence, is recorded in `docs/licensing.md` section 2 rather than here, so there is one place to
 check rather than two that can disagree. This document is about replacing or adding to them, not
