@@ -103,14 +103,17 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 </p>
 
 - **A names dictionary** built from Wikidata (CC0), so a name capitalises correctly mid-sentence
-  instead of only at the start of one or after a shift — "Sadoveanu" and "Popescu" as much as
-  "Andrei". Everyday words that happen to be somebody's name ("in", "will", "si", "cloud") stay
+  instead of only at the start of one or after a shift — "Stevens" and "McConnell" as much as
+  "Steve". Everyday words that happen to be somebody's name ("in", "will", "cloud", "mark") stay
   lower-case: a word only earns the flag when enough real people carry it for how common the
-  word is, never when the language's own treebank calls it an ordinary word, and never when
-  its spelling dictionary lists it as one unless the treebank knows better. Which words earn
-  the flag is judgement rather than fact, so the capital is a switch: turn "Capitalise names"
-  off and a flagged word is cased like any other, while still never being allowed to correct
-  an ordinary word.
+  word is, never when the language's own treebank calls it an ordinary word, and never when any
+  of the shipped spelling dictionaries lists it in lower case unless the treebank knows better.
+  That last rule asks every language rather than only the one being built, because words travel
+  and a borrowed one rarely becomes a headword where it landed: "google" keeps its small g
+  because British English has it as a verb, even though American English lists only the company.
+  Which words earn the flag is judgement rather than fact, so the capital is a switch: turn
+  "Capitalise names" off and a flagged word is cased like any other, while still never being
+  allowed to correct an ordinary word.
 
 <p align="center">
   <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg" alt="Steve, Steven and Stevens offered capitalised from a lower-case stev, in the middle of a sentence" width="30%">
