@@ -105,6 +105,13 @@ import make_pack
 # gives English 30 and the extra four are noise.
 ALPHABET_SAMPLE = 5_000
 
+# Below this there is not enough word to judge. Two-letter tokens are overwhelmingly
+# abbreviations, particles and state codes -- the person list offers "wa", "ga" and "mi", each
+# of them somebody's name to Wikidata -- and a spell checker's verdict on them says more about
+# its own abbreviation list than about the language. Same floor and same reason as
+# flag_names.py's MIN_LENGTH and make_names.py's MIN_NAME_LENGTH.
+MIN_LENGTH = 3
+
 
 def read_rows(path: Path) -> list[tuple[str, str, bool]]:
     """Every line as (word, raw line, is already a name), order preserved."""
@@ -164,6 +171,12 @@ def main() -> int:
                              "one of them accepts in lower case is never flagged. Only the ones "
                              "tagged for --tag decide whether a word may be added -- see the "
                              "module doc for why the two questions differ.")
+    parser.add_argument("--flag-only", action="store_true",
+                        help="a name the corpus already has gains the flag; one it does not have "
+                             "is NOT added. This is what a person-name list wants -- make_pack.py "
+                             "keeps the same distinction as --names-flag-only, because a hundred "
+                             "thousand surnames at one flat frequency would outrank the corpus's "
+                             "own tail. Entity lists are small enough to add from.")
     parser.add_argument("--sample", type=int, default=25)
     parser.add_argument("--report", type=Path, default=None,
                         help="write the full before-and-after here, for review")
@@ -217,7 +230,7 @@ def main() -> int:
     flat: dict[str, int] = {}
     for name, frequency, uses in make_pack.read_names(arguments.names):
         key = name.lower()
-        if key in excluded or not set(key) <= letters:
+        if len(key) < MIN_LENGTH or key in excluded or not set(key) <= letters:
             continue
         candidates[key] = max(candidates.get(key, 0), uses)
         flat[key] = frequency
@@ -232,14 +245,16 @@ def main() -> int:
         if key in vocabulary:
             if key not in already and key not in ordinary_anywhere:
                 flag[key] = uses
-        elif uses >= make_pack.NAME_ADD_MIN_USES and key not in ordinary_here:
+        elif (not arguments.flag_only and uses >= make_pack.NAME_ADD_MIN_USES
+              and key not in ordinary_here):
             add[key] = uses
 
     print(f"{arguments.tag}: {len(candidates):,} candidates, {len(letters)}-letter alphabet, "
           f"{len(ordinary_anywhere):,} ordinary somewhere ({len(ordinary_here):,} here)")
     print(f"    {len(flag):,} rows the pack already has gain the flag")
     print(f"    {len(add):,} rows are added at the flat frequency "
-          f"({100.0 * len(add) / max(len(vocabulary), 1):.2f}% growth)")
+          f"({100.0 * len(add) / max(len(vocabulary), 1):.2f}% growth)"
+          + ("  [--flag-only: nothing is added]" if arguments.flag_only else ""))
     by_rank = sorted(flag, key=lambda w: ranks[w])
     for word in by_rank[:arguments.sample]:
         print(f"    flag {word:<24}{frequencies[word]:>9,} in corpus")

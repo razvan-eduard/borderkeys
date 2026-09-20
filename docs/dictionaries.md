@@ -184,8 +184,14 @@ A third thing, found on 2026-09-20 and worth knowing if you have an older fetch 
 Wikidata has moved language-neutral labels -- which is what a name usually is -- to the `mul`
 language code, so a query asking only for `LANG(?label) = "ro"` now misses most of the answer:
 given names went from 89,263 to 145,741 for English and from 36,077 to 92,555 for Romanian once
-`mul` was accepted alongside the language's own code. `make_names.py` asks for both. The
-bundled lists predate this, so they were built from roughly half of what the source holds.
+`mul` was accepted alongside the language's own code. `make_names.py` asks for both, and the
+bundled lists have been re-fetched with it: between 3,000 and 6,200 rows a language that were
+already in the corpus turned out to be somebody's name and had never been flagged.
+
+That merge is `--flag-only`, the same distinction `make_pack.py --names-flag-only` draws. A
+person-name list may flag a word the corpus already has but never add one it does not, because
+a hundred thousand surnames at one flat frequency would outrank the corpus's own tail. Entity
+lists are three orders of magnitude smaller and are added from.
 
 Coverage is genuinely uneven across languages -- Wikidata's own editor base skews toward
 English/German/French/Spanish, and Romanian will come back with fewer names than those do. That
