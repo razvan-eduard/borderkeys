@@ -336,6 +336,13 @@ gh attestation verify BorderKeys-v0.6.2-core.apk --repo razvan-eduard/borderkeys
   finger and a word: the suggestion and learning paths, why autocorrect and the suggestion strip
   rank separately, every scoring constant with the measurement behind it, the gates that stop a
   correction, language detection and revert, both swipe tiers, and the dictionary pipeline.
+- [`docs/privacy.md`](docs/privacy.md) — what the keyboard can and cannot know: the three things
+  that enforce zero permissions, how a private field is detected and what stops learning from it,
+  what encryption at rest does *not* buy, and a threat model with both columns filled in.
+- [`docs/layouts.md`](docs/layouts.md) — the layout asset format, key codes and flags, how JSON
+  becomes hit-testable pixels, and why accents follow your languages rather than your layout.
+- [`docs/testing.md`](docs/testing.md) — tests, build gates, sanitisers and fuzzing, the
+  measurements that are deliberately not tests, and what is not covered.
 - [`docs/licensing.md`](docs/licensing.md) — every dependency and asset, with its licence and
   a compatibility verdict, plus the reproducible-build settings and the F-Droid anti-feature
   checklist.
