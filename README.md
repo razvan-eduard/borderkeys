@@ -38,6 +38,11 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   n-grams have no evidence at all, a part-of-speech tag per word and a tag transition matrix
   break the tie; [`docs/pos-tagging.md`](docs/pos-tagging.md) records exactly how much that is
   worth, because the number is smaller than it looks.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/13_completions.jpg" alt="The suggestion strip carrying a half-typed word on to down, downtown, downs and downhill" width="30%">
+</p>
+
 - **Several languages active at once.** Every dictionary you have switched on — up to four at a
   time — is consulted on every word; the one that actually recognises what you typed wins,
   without a manual switch. How quickly the
@@ -108,7 +113,7 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   an ordinary word.
 
 <p align="center">
-  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg" alt="The suggestion strip completing a half-typed word, with the quick action bar above the keys" width="30%">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg" alt="Steve, Steven and Stevens offered capitalised from a lower-case stev, in the middle of a sentence" width="30%">
 </p>
 
 - **Alternate physical layouts** — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona — for
