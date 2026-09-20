@@ -80,8 +80,8 @@ class SwipeDataset(Dataset):
 
         # CTC needs a blank between two adjacent occurrences of the same symbol to tell them
         # apart from one extended emission of it, so a target with R adjacent-repeated letters
-        # needs len(target)+R timesteps at minimum -- CleverKeys' own from-scratch CTC audit
-        # flags exactly this (their fix #11): torch.nn.functional.ctc_loss's zero_infinity=True
+        # needs len(target)+R timesteps at minimum. This is a standing trap in CTC training,
+        # and it fails silently: torch.nn.functional.ctc_loss's zero_infinity=True
         # silently zeroes the loss/gradient for any example that doesn't fit, so every such
         # example was training on nothing, unnoticed, rather than erroring. Filtered here, up
         # front, rather than discovered downstream as a zeroed loss -- this dataset is also what

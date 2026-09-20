@@ -16,8 +16,8 @@ namespace borderkeys {
  * head (the paper's "DCT basis"), the CTC emission distribution it produces, and a lexicon-
  * constrained CTC prefix-beam search over a [PackedTrie] that turns 32 timesteps of per-key
  * probabilities into ranked words -- the same role [Shark2Decoder::walk] plays for the geometric
- * engine, in the same "constrained to what the trie actually holds" family CleverKeys' own
- * `CtcBeamDecoder` belongs to.
+ * engine, and in the usual "constrained to what the trie actually holds" family of CTC beam
+ * decoders.
  *
  * The spatial head is the entire reason one trained encoder works on every layout and every
  * screen size with no retraining: `Φ`, the per-key basis matrix, is rebuilt from [KeyGeometry] in
@@ -26,8 +26,8 @@ namespace borderkeys {
  * (`z_t = c_t · Φ^T`). Switching layouts changes `Φ`; it never touches the encoder.
  *
  * `Φ` itself is not the raw cosine basis any more: that basis has rank 23 of 26 at the canonical
- * QWERTY key centres (confirmed by SVD, and independently found by CleverKeys' own from-scratch
- * CTC recipe as their audit fix #2, "the rank defect"), so three emission directions were
+ * QWERTY key centres (confirmed by SVD here, and the same rank defect has been rediscovered
+ * independently elsewhere), so three emission directions were
  * structurally unreachable regardless of training. [setLayout] now runs each key's `(u,v)` plus
  * its 64 cosine features through a small trained MLP (`TcnWeights::keyEmbed*`) to re-spread them
  * into a full-rank 64-D row before caching it -- see `tools/swipe_model/model.py`'s

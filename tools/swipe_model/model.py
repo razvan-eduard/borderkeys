@@ -173,9 +173,9 @@ class KeyEmbedding(nn.Module):
     QWERTY key centres, `dct_basis`'s 8x8 matrix has **rank 23, not 26** (confirmed 2026-09-13 by
     SVD on this project's own layout) -- three emission directions are structurally unreachable
     regardless of training data, width, depth or epoch count, because a fixed *linear* basis can
-    never exceed the rank of its own input. CleverKeys' independent from-scratch CTC recipe found
-    and named the identical defect on their own basis (their audit fix #2, "the rank defect") and
-    fixed it exactly this way: keep the cosine features as an input, not the final answer, and
+    never exceed the rank of its own input. The same rank defect has been found and fixed the
+    same way independently, on a different basis, which is what says it is structural rather
+    than a quirk of this layout: keep the cosine features as an input, not the final answer, and
     let a nonlinearity between two learned layers re-spread them into a full-rank output. Adding
     more DCT frequencies would only push the same ceiling to a different key count.
 

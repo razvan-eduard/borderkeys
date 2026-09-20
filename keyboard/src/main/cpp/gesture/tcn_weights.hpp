@@ -74,7 +74,7 @@ public:
      * GELU -> `Linear(96,64)` -> the spatial-scoring vector `TcnCtcDecoder::keyLogProbsFor` uses
      * in place of the raw cosine basis. Exists because that raw basis, alone, has rank 23 of 26
      * at the canonical QWERTY key centres -- confirmed by SVD, and independently found and fixed
-     * the same way by CleverKeys' own from-scratch CTC recipe (their audit fix #2) -- so three
+     * the same way elsewhere, on a different basis -- so three
      * emission directions were structurally unreachable no matter how this was trained. See
      * `TcnCtcDecoder::setLayout`'s own comment for the inference code this feeds.
      */
