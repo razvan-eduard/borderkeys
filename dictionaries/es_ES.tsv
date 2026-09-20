@@ -1680,7 +1680,7 @@ productores	3819
 deberán	3818
 ubicada	3817
 cáncer	3813
-facebook	3809
+facebook	3809	name
 tránsito	3802
 javier	3801	name
 colores	3796
@@ -3049,7 +3049,7 @@ aérea	2045
 romero	2043
 rurales	2042
 pasaron	2041
-pfizer	2041
+pfizer	2041	name
 vial	2041
 gratuita	2040
 dólar	2039
@@ -3191,7 +3191,7 @@ manifestaciones	1936
 posesión	1935
 intensidad	1934
 antecedentes	1933
-astrazeneca	1933
+astrazeneca	1933	name
 escapar	1933
 creciente	1932
 observa	1932
@@ -3470,7 +3470,7 @@ registra	1754
 seguimos	1753
 recomendaciones	1752
 casco	1751
-paul	1751
+paul	1751	name
 top	1750
 camión	1749
 humor	1749
@@ -4410,7 +4410,7 @@ sentirse	1301
 claudia	1300
 referentes	1300
 legado	1299
-netflix	1299
+netflix	1299	name
 abandono	1298
 amazon	1298
 exigir	1298
@@ -6316,7 +6316,7 @@ ponga	847
 recuerdan	847
 recuperarse	847
 relatos	847
-scott	847
+scott	847	name
 distancias	846
 extraña	846
 feminista	846
@@ -6952,7 +6952,7 @@ curioso	751
 maneja	751
 reducida	751
 rápidos	751
-samsung	751
+samsung	751	name
 ómicron	751
 abundante	750
 aumentan	750
@@ -7215,7 +7215,7 @@ aplicó	716
 asociadas	716
 cerámica	716
 habilitado	716
-lanzarote	716
+lanzarote	716	name
 metió	716
 pj	716
 sugieren	716
@@ -7626,7 +7626,7 @@ cambiaron	665
 consentimiento	665
 controla	665
 cooperativas	665
-taiwán	665
+taiwán	665	name
 banquillo	664
 caravana	664
 enviada	664
@@ -8075,7 +8075,7 @@ poquito	620
 presume	620
 promocionar	620
 requerido	620
-sony	620
+sony	620	name
 sucediendo	620
 trío	620
 albert	619	name
@@ -8445,7 +8445,7 @@ estrenada	585
 guitarrista	585
 polideportivo	585
 procuraduría	585
-sinopharm	585
+sinopharm	585	name
 telefonía	585
 adhesión	584
 cuestionado	584
@@ -8482,7 +8482,7 @@ ponía	581
 protegidos	581
 quisieron	581
 acompañante	580
-chelsea	580
+chelsea	580	name
 clinton	580
 concretos	580
 gerencia	580
@@ -8606,7 +8606,7 @@ consola	567
 corazones	567
 estiman	567
 filtros	567
-juventus	567
+juventus	567	name
 saludo	567
 supervivientes	567
 cemento	566
@@ -8627,7 +8627,7 @@ descendientes	565
 dividida	565
 estrena	565
 flexible	565
-patagonia	565
+patagonia	565	name
 roles	565
 abandona	564
 armenia	564
@@ -8679,7 +8679,7 @@ necesitas	560
 nominación	560
 protagonizada	560
 rodeada	560
-toyota	560
+toyota	560	name
 vocales	560
 artísticos	559
 constitucionales	559
@@ -8850,7 +8850,7 @@ viceministro	546
 vistos	546
 convierta	545
 gustan	545
-nintendo	545
+nintendo	545	name
 pesados	545
 preguntar	545
 rostros	545
@@ -8873,7 +8873,7 @@ destruida	543
 dieciséis	543
 diplomática	543
 entertainment	543
-ferrari	543
+ferrari	543	name
 madrileña	543
 marinos	543
 nosocomio	543
@@ -9801,7 +9801,7 @@ hardware	474
 hospitalizado	474
 ibarra	474	name
 implicado	474
-ios	474
+ios	474	name
 kit	474
 monarquía	474
 procesados	474
@@ -9837,7 +9837,7 @@ matado	472
 miseria	472
 mueven	472
 prestado	472
-puig	472
+puig	472	name
 ten	472
 valenciano	472
 yolanda	472	name
@@ -9995,7 +9995,7 @@ teología	462
 tirado	462
 uniformes	462
 afip	461
-conmebol	461
+conmebol	461	name
 culminar	461
 embalse	461
 fincas	461
@@ -10126,7 +10126,7 @@ vientre	453
 antioquia	452
 apellidos	452
 calcular	452
-chevrolet	452
+chevrolet	452	name
 desigualdades	452
 elogios	452
 emitidos	452
@@ -10171,7 +10171,7 @@ gratuitas	450
 jugadora	450
 rafa	450
 re	450
-xbox	450
+xbox	450	name
 casilla	449
 checa	449
 colisión	449
@@ -10218,7 +10218,7 @@ promocional	447
 protestar	447
 serbia	447
 slam	447
-volkswagen	447
+volkswagen	447	name
 acoger	446
 agilizar	446
 capitalista	446
@@ -10233,7 +10233,7 @@ paola	446
 postre	446
 rick	446
 simultánea	446
-télam	446
+télam	446	name
 viabilidad	446
 contrarrestar	445
 diplomáticos	445
@@ -10496,7 +10496,7 @@ significar	432
 suplentes	432
 aconseja	431
 aseguraba	431
-camila	431
+camila	431	name
 causan	431
 diamante	431
 emprendió	431
@@ -10517,7 +10517,7 @@ apostando	430
 borja	430	name
 concede	430
 concluyeron	430
-huawei	430
+huawei	430	name
 justifica	430
 llamativo	430
 madonna	430
@@ -10650,7 +10650,7 @@ hierba	423
 invicto	423
 leopoldo	423	name
 ramiro	423	name
-reuters	423
+reuters	423	name
 sirva	423
 toluca	423
 amorosa	422
@@ -10805,7 +10805,7 @@ intentará	414
 islam	414
 masculinos	414
 minorías	414
-movistar	414
+movistar	414	name
 obtenida	414
 programadas	414
 rescatado	414
@@ -10832,7 +10832,7 @@ parón	413
 plomo	413
 precisar	413
 quedo	413
-saab	413
+saab	413	name
 sirvieron	413
 anécdotas	412
 atracciones	412
@@ -10969,7 +10969,7 @@ servía	406
 zapatillas	406
 afirmaba	405
 cacao	405
-concacaf	405
+concacaf	405	name
 consultadas	405
 dejaría	405
 encontrando	405
@@ -11195,7 +11195,7 @@ suero	394
 veredicto	394
 aceptable	393
 alquileres	393
-boris	393
+boris	393	name
 comprobado	393
 consulado	393
 designada	393
@@ -11534,7 +11534,7 @@ datan	377
 fragmento	377
 golden	377
 grieta	377
-howard	377
+howard	377	name
 justas	377
 milenio	377
 pastoral	377
@@ -11716,9 +11716,9 @@ reproducir	369
 suceden	369
 televisor	369
 tobillo	369
-uber	369
+uber	369	name
 ac	368
-angela	368
+angela	368	name
 asesinó	368
 caminata	368
 cimientos	368
@@ -12098,7 +12098,7 @@ extienden	351
 flash	351
 heroína	351
 indocumentados	351
-kansas	351
+kansas	351	name
 memes	351
 nulo	351
 patios	351
@@ -12164,7 +12164,7 @@ anaya	348
 atendidas	348
 autoriza	348
 baterista	348
-biontech	348
+biontech	348	name
 cabezazo	348
 decirles	348
 eclipse	348
@@ -12415,7 +12415,7 @@ artesanías	338
 atacan	338
 barack	338
 bloqueos	338
-brooklyn	338
+brooklyn	338	name
 calificada	338
 capturas	338
 celdas	338
@@ -12619,7 +12619,7 @@ pavimentación	331
 pirámide	331
 probables	331
 sobornos	331
-unicef	331
+unicef	331	name
 usarlo	331
 aduana	330
 afiliación	330
@@ -12636,7 +12636,7 @@ especificaciones	330
 jubilado	330
 modernidad	330
 munición	330
-nissan	330
+nissan	330	name
 periodístico	330
 sanos	330
 seleccionador	330
@@ -12875,7 +12875,7 @@ valledupar	321
 adelantaron	320
 andaluces	320
 aprendí	320
-bildu	320
+bildu	320	name
 ca	320
 confección	320
 definirá	320
@@ -12920,7 +12920,7 @@ nicole	319
 nodo	319
 ostenta	319
 pasé	319
-peugeot	319
+peugeot	319	name
 proporcionado	319
 prólogo	319
 radiales	319
@@ -13163,7 +13163,7 @@ portugueses	310
 saludar	310
 secuestró	310
 sexos	310
-stanley	310
+stanley	310	name
 vicepresidencia	310
 aterrizó	309
 ayudarán	309
@@ -13712,7 +13712,7 @@ suspendidas	293
 tensa	293
 traza	293
 ventilador	293
-xiaomi	293
+xiaomi	293	name
 abusar	292
 administradas	292
 administradores	292
@@ -14135,7 +14135,7 @@ conviven	280
 guinea	280
 impotencia	280
 impulsadas	280
-kent	280
+kent	280	name
 mecánicas	280
 planteamientos	280
 pnv	280
@@ -14304,7 +14304,7 @@ hacerlos	275
 impactar	275
 indultos	275
 jesuitas	275
-kiev	275
+kiev	275	name
 llantas	275
 mantenerlo	275
 medianos	275
@@ -14648,7 +14648,7 @@ conducida	265
 controversias	265
 dijera	265
 emitirá	265
-endesa	265
+endesa	265	name
 funcionado	265
 interesar	265
 lenin	265
@@ -15014,7 +15014,7 @@ reflejó	255
 silbato	255
 tacto	255
 tampa	255
-telecinco	255
+telecinco	255	name
 tomara	255
 tortuga	255
 usen	255
@@ -15140,7 +15140,7 @@ dispersas	251
 edwards	251
 enterrada	251
 estimar	251
-garay	251
+garay	251	name
 hidráulica	251
 holandesa	251
 hábitats	251
@@ -15166,7 +15166,7 @@ stewart	251
 tarragona	251
 transcripción	251
 verbo	251
-yuri	251
+yuri	251	name
 adaptados	250
 aguarda	250
 antesala	250
@@ -15239,7 +15239,7 @@ entrevistó	249
 escuche	249
 estipulado	249
 fomenta	249
-forbes	249
+forbes	249	name
 fundaciones	249
 huánuco	249
 ideológicas	249
@@ -15648,7 +15648,7 @@ recurre	240
 reed	240
 reguladores	240
 reservados	240
-roosevelt	240
+roosevelt	240	name
 timón	240
 tutiempo	240
 ucraniano	240
@@ -15902,7 +15902,7 @@ revisando	234
 riguroso	234
 semanalmente	234
 sorprendieron	234
-telemundo	234
+telemundo	234	name
 velásquez	234
 virtualidad	234
 woods	234
@@ -15910,7 +15910,7 @@ alegra	233
 armstrong	233
 auténticos	233
 bacteria	233
-caixabank	233
+caixabank	233	name
 calado	233
 catalanas	233
 celebrity	233
@@ -15946,7 +15946,7 @@ roberts	233
 rosarino	233
 sensibilización	233
 sofá	233
-spacex	233
+spacex	233	name
 tampico	233
 tuyo	233
 utensilios	233
@@ -15971,7 +15971,7 @@ galván	232
 gerard	232
 holmes	232
 hunter	232
-iberdrola	232
+iberdrola	232	name
 iberia	232
 imperativo	232
 impulsan	232
@@ -15991,7 +15991,7 @@ pere	232
 portadores	232
 púrpura	232
 recitales	232
-renfe	232
+renfe	232	name
 repitiendo	232
 repleto	232
 restitución	232
@@ -16108,7 +16108,7 @@ vigas	230
 actuará	229
 adoptando	229
 agropecuarios	229
-arnold	229
+arnold	229	name
 arrimadas	229
 ataúd	229
 calentar	229
@@ -16817,7 +16817,7 @@ insulto	215
 judías	215
 ko	215
 lanzadas	215
-lloyd	215
+lloyd	215	name
 mejoren	215
 monzón	215
 morro	215
@@ -17176,7 +17176,7 @@ java	208
 lauquen	208
 laurel	208
 licitaciones	208
-mclaren	208
+mclaren	208	name
 miente	208
 miraba	208
 montañosa	208
@@ -17319,7 +17319,7 @@ toxicidad	206
 vigésimo	206
 viviente	206
 víveres	206
-walmart	206
+walmart	206	name
 aconsejable	205
 adscrito	205
 alabama	205	name
@@ -17888,7 +17888,7 @@ galpón	196
 garra	196
 grau	196
 guionistas	196
-hamas	196
+hamas	196	name
 hirió	196
 iniciamos	196
 instalarán	196
@@ -17943,7 +17943,7 @@ incorrecta	195
 injustamente	195
 intermediario	195
 internadas	195
-kosovo	195
+kosovo	195	name
 lesbianas	195
 listados	195
 luciendo	195
@@ -18008,7 +18008,7 @@ fiables	194
 goleó	194
 hídrico	194
 impartido	194
-isis	194
+isis	194	name
 lg	194
 logan	194
 macrista	194
@@ -18143,7 +18143,7 @@ inmerso	192
 inning	192
 intente	192
 inviable	192
-janet	192
+janet	192	name
 lío	192
 maestre	192
 mostramos	192
@@ -18264,7 +18264,7 @@ húmedos	190
 infectada	190
 latinas	190
 mayer	190
-minsk	190
+minsk	190	name
 motociclistas	190
 multitudes	190
 munich	190
@@ -18346,7 +18346,7 @@ quemada	189
 represa	189
 reunía	189
 rumano	189
-suzuki	189
+suzuki	189	name
 sálvame	189
 tallas	189
 tamara	189
@@ -18409,13 +18409,13 @@ londinense	188
 maza	188
 molestar	188
 mori	188
-nike	188
+nike	188	name
 noelia	188	name
 obvia	188
 pantanos	188
 pavón	188
 placebo	188
-porsche	188
+porsche	188	name
 propicia	188
 recaudos	188
 reclusión	188
@@ -18695,7 +18695,7 @@ quesada	184
 rana	184
 recurrido	184
 rehén	184
-repsol	184
+repsol	184	name
 resentimiento	184
 romo	184
 sabina	184
@@ -18774,7 +18774,7 @@ recomiendo	183
 reduzca	183
 repartió	183
 respetuosa	183
-rumania	183
+rumania	183	name
 shaw	183
 sostén	183
 sp	183
@@ -19081,7 +19081,7 @@ insulina	178
 lira	178
 mall	178
 matadero	178
-menorca	178
+menorca	178	name
 mentiroso	178
 montículo	178
 mourinho	178
@@ -19221,7 +19221,7 @@ exceptuando	176
 faltaron	176
 gabilondo	176
 gestionando	176
-gibson	176
+gibson	176	name
 guardando	176
 iacute	176
 indebido	176
@@ -19292,7 +19292,7 @@ fitness	175
 gasoducto	175
 hacerte	175
 hacinamiento	175
-hamás	175
+hamás	175	name
 hospedaje	175
 indagar	175
 insecto	175
@@ -19384,7 +19384,7 @@ ticket	174
 torrente	174
 veda	174
 videollamada	174
-xinhua	174
+xinhua	174	name
 afiliadas	173
 agroindustria	173
 aguado	173
@@ -19395,7 +19395,7 @@ ardiente	173
 aston	173
 astrónomos	173
 autorizaciones	173
-bankia	173
+bankia	173	name
 beethoven	173
 brigadistas	173
 cacho	173
@@ -19422,7 +19422,7 @@ feliciano	173
 filosófica	173
 formen	173
 fueros	173
-fuerteventura	173
+fuerteventura	173	name
 habiéndose	173
 hughes	173
 importaba	173
@@ -19539,7 +19539,7 @@ tejas	172
 tinte	172
 tiraron	172
 topografía	172
-travis	172
+travis	172	name
 vanos	172
 afín	171
 agonía	171
@@ -20404,7 +20404,7 @@ cursan	160
 decoraciones	160
 denominador	160
 discordia	160
-edison	160
+edison	160	name
 electrificación	160
 encabezará	160
 eruditos	160
@@ -20724,7 +20724,7 @@ merienda	156
 mundialista	156
 naomi	156
 narrar	156
-noah	156
+noah	156	name
 pala	156
 partidarias	156
 paterno	156
@@ -20906,7 +20906,7 @@ sentirnos	154
 severidad	154
 talón	154
 tarapacá	154
-telefe	154
+telefe	154	name
 teleférico	154
 tomaran	154
 transcurrir	154
@@ -21045,7 +21045,7 @@ funcionen	152
 germain	152
 guerrillero	152
 homólogos	152
-hyundai	152
+hyundai	152	name
 ibagué	152
 informamos	152
 inherente	152
@@ -21441,7 +21441,7 @@ retomaron	148
 reunían	148
 reyna	148
 riberas	148
-riley	148
+riley	148	name
 rory	148
 rotas	148
 rt	148
@@ -21477,7 +21477,7 @@ canastas	147
 cardíacos	147
 colchones	147
 comisarios	147
-compromís	147
+compromís	147	name
 concejos	147
 conformarse	147
 convulsiones	147
@@ -21620,7 +21620,7 @@ tertulia	146
 tianguis	146
 tnt	146
 tridimensional	146
-univision	146
+univision	146	name
 valoradas	146
 vertido	146
 vido	146
@@ -21905,7 +21905,7 @@ asfaltado	142
 aumentarán	142
 balazo	142
 bucle	142
-caixa	142
+caixa	142	name
 camarero	142
 cao	142
 cn	142
@@ -22679,7 +22679,7 @@ admiro	134
 albarracín	134
 altísima	134
 anteojos	134
-avianca	134
+avianca	134	name
 banqueros	134
 boe	134
 briceño	134
@@ -22916,7 +22916,7 @@ fotovoltaica	132
 fotógrafa	132
 giles	132
 goldman	132
-gomez	132
+gomez	132	name
 griffin	132
 honorífico	132
 inclina	132
@@ -23934,7 +23934,7 @@ myers	123
 nara	123
 niñera	123
 nocivos	123
-nokia	123
+nokia	123	name
 nótese	123
 obsequios	123
 oca	123
@@ -24112,7 +24112,7 @@ acuarela	121
 agravios	121
 andrews	121
 ares	121
-armani	121
+armani	121	name
 asistidos	121
 atributo	121
 aztecas	121
@@ -24496,7 +24496,7 @@ vicepresidentes	119
 vidente	119
 villafañe	119
 vitrina	119
-wei	119
+wei	119	name
 absorbido	118
 afectiva	118
 alimentando	118
@@ -24562,7 +24562,7 @@ manipulado	118
 matrix	118
 meade	118
 mejorados	118
-mercadona	118
+mercadona	118	name
 minimalista	118
 mintiendo	118
 morados	118
@@ -24676,7 +24676,7 @@ inmersa	117
 intercultural	117
 invertida	117
 kayak	117
-legrand	117
+legrand	117	name
 martins	117
 matiz	117
 mel	117
@@ -24786,7 +24786,7 @@ gestionan	116
 gitano	116
 glamour	116
 golosinas	116
-guinness	116
+guinness	116	name
 iconografía	116
 ilesos	116
 incrementarse	116
@@ -24853,7 +24853,7 @@ accidentada	115
 acreditó	115
 administró	115
 adopte	115
-aena	115
+aena	115	name
 afganas	115
 almonte	115	name
 alzada	115
@@ -25001,7 +25001,7 @@ cardíacas	114
 caribeños	114
 catastrófica	114
 cerradura	114
-chrysler	114
+chrysler	114	name
 circunferencia	114
 coleman	114
 colocarán	114
@@ -25119,7 +25119,7 @@ verín	114
 vicegobernadora	114
 vivientes	114
 vote	114
-wikileaks	114
+wikileaks	114	name
 wilder	114
 zabala	114
 órbitas	114
@@ -25281,7 +25281,7 @@ animadas	112
 aparcar	112
 apelativo	112
 atrapó	112
-bangladesh	112
+bangladesh	112	name
 beneficiosos	112
 bonistas	112
 boutique	112
@@ -25336,7 +25336,7 @@ incorporarán	112
 influyeron	112
 ivermectina	112
 jalil	112
-kia	112
+kia	112	name
 klopp	112
 laico	112
 lavín	112
@@ -25351,7 +25351,7 @@ manufacturas	112
 maracay	112
 mejilla	112
 mercantiles	112
-michelin	112
+michelin	112	name
 multimillonarios	112
 métrica	112
 natividad	112
@@ -25492,7 +25492,7 @@ monoplaza	111
 motorizado	111
 motril	111	name
 mítines	111
-nasdaq	111
+nasdaq	111	name
 novedosos	111
 oceánica	111
 orinoco	111
@@ -26075,7 +26075,7 @@ mayúscula	107
 mezclados	107
 microcentro	107
 mitch	107
-mitsubishi	107
+mitsubishi	107	name
 montando	107
 morla	107
 movilizaban	107
@@ -26223,7 +26223,7 @@ lambán	106
 lanzaba	106
 lauren	106
 lcd	106
-lenovo	106
+lenovo	106	name
 let	106
 licenciados	106
 licenció	106
@@ -26269,7 +26269,7 @@ rodear	106
 rotor	106
 rotunda	106
 rozando	106
-sachs	106
+sachs	106	name
 sacude	106
 sacudida	106
 salsas	106
@@ -26665,7 +26665,7 @@ campestre	103
 carcelaria	103
 cartones	103
 caían	103
-cerdeña	103
+cerdeña	103	name
 cilíndrica	103
 cni	103
 cofre	103
@@ -27222,7 +27222,7 @@ our	100
 pastrana	100
 peluca	100
 pesimismo	100
-petrobras	100
+petrobras	100	name
 phoebe	100
 pipas	100
 plasmó	100
@@ -27303,7 +27303,7 @@ cumpliría	99
 cántabro	99
 damnificada	99
 damnificadas	99
-daniels	99
+daniels	99	name
 decirnos	99
 dedico	99
 desalentar	99
@@ -27385,7 +27385,7 @@ paralizadas	99
 patines	99
 perdomo	99
 perseguidores	99
-philips	99
+philips	99	name
 pilón	99
 pines	99
 piscis	99
@@ -27478,7 +27478,7 @@ confitería	98
 contendiente	98
 copiado	98
 coproducción	98
-cora	98
+cora	98	name
 correspondido	98
 corrige	98
 crecí	98
@@ -27620,7 +27620,7 @@ vergonzosa	98
 vibra	98
 vicentin	98
 virulencia	98
-vodafone	98
+vodafone	98	name
 wellington	98
 whitney	98
 zagreb	98
@@ -27695,7 +27695,7 @@ glen	97
 gogh	97
 gremialista	97
 guardaban	97
-gucci	97
+gucci	97	name
 hilario	97
 horda	97
 ilusionado	97
@@ -27730,7 +27730,7 @@ moribundo	97
 nino	97
 nipona	97
 nombran	97
-norton	97
+norton	97	name
 novo	97
 o'higgins	97
 obligue	97
@@ -27968,7 +27968,7 @@ anunciamos	95
 apunte	95
 asemejan	95
 aspas	95
-atresmedia	95
+atresmedia	95	name
 baldío	95
 barrett	95
 blanquear	95
@@ -27990,7 +27990,7 @@ carmelitas	95
 casete	95
 celebren	95
 ceremoniales	95
-chanel	95
+chanel	95	name
 circulen	95
 clérigo	95
 coeficientes	95
@@ -28075,7 +28075,7 @@ miserables	95
 mister	95
 modales	95
 mongoles	95
-nascar	95
+nascar	95	name
 notando	95
 notificadas	95
 ombligo	95
@@ -28258,7 +28258,7 @@ mandíbulas	94
 marley	94
 mates	94
 maverick	94
-mazda	94
+mazda	94	name
 mendy	94
 misteriosamente	94
 montones	94
@@ -28605,7 +28605,7 @@ minimiza	92
 minuciosa	92
 mordida	92
 moss	92
-motorola	92
+motorola	92	name
 nadadora	92
 obligaría	92
 oxigenación	92
@@ -28637,7 +28637,7 @@ restringidas	92
 roche	92
 rosenthal	92
 rubalcaba	92
-sammy	92
+sammy	92	name
 seduce	92
 servel	92
 simbólicos	92
@@ -28767,7 +28767,7 @@ inmensamente	91
 intersecciones	91
 invertirán	91
 it's	91
-kepler	91
+kepler	91	name
 libertario	91
 lilly	91
 lpf	91
@@ -28942,7 +28942,7 @@ huían	90
 ibi	90	name
 ignorantes	90
 inalámbricos	90
-inditex	90
+inditex	90	name
 inevitables	90
 informara	90
 inventada	90
@@ -28990,7 +28990,7 @@ reproducido	90
 richie	90
 robótico	90
 rompía	90
-ryanair	90
+ryanair	90	name
 rédito	90
 sap	90
 scully	90
@@ -29735,7 +29735,7 @@ molienda	86
 mordaza	86
 motrices	86
 nacion	86
-naturgy	86
+naturgy	86	name
 neurológicos	86
 novillo	86
 obtenerlo	86
@@ -29896,7 +29896,7 @@ mandamos	85
 manipula	85
 marcia	85
 mariguana	85
-mastercard	85
+mastercard	85	name
 michoacana	85
 microbios	85
 miguelito	85
@@ -29907,7 +29907,7 @@ nana	85
 ne	85
 necesitarían	85
 neira	85
-nestlé	85
+nestlé	85	name
 nicanor	85
 nogoyá	85
 o'brien	85
@@ -30101,7 +30101,7 @@ interpretarse	84
 interrogar	84
 irrumpe	84
 jaulas	84
-jedi	84
+jedi	84	name
 laica	84
 lambayeque	84
 lanzamos	84
@@ -30208,7 +30208,7 @@ acosado	83
 aduanero	83
 aee	83
 afilado	83
-airbnb	83
+airbnb	83	name
 ajustó	83
 alegaron	83
 alentando	83
@@ -30340,7 +30340,7 @@ mejorarán	83
 metan	83
 miniaturas	83
 mostradas	83
-navantia	83
+navantia	83	name
 negrita	83
 negándose	83
 neoyorquinos	83
@@ -30715,7 +30715,7 @@ disparados	81
 ejecutarán	81
 eliza	81
 emotivas	81
-enel	81
+enel	81	name
 escaladores	81
 esforzado	81
 espontaneidad	81
@@ -31079,7 +31079,7 @@ adenovirus	79
 agregamos	79
 aj	79
 alboroto	79
-alcoa	79
+alcoa	79	name
 alien	79
 amputación	79
 anclado	79
@@ -31198,8 +31198,8 @@ jerarcas	79
 jerarquías	79
 johannesburgo	79
 jubilar	79
-kara	79
-konami	79
+kara	79	name
+konami	79	name
 kuczynski	79
 lamentaba	79
 lanzara	79
@@ -31321,7 +31321,7 @@ aprietos	78
 aqueja	78
 arrasada	78
 arribará	78
-atari	78
+atari	78	name
 atmosféricos	78
 auguró	78
 autodenominado	78
@@ -31764,7 +31764,7 @@ suspenderse	77
 sustantivos	77
 tamil	77
 tato	77
-telemadrid	77
+telemadrid	77	name
 tláhuac	77
 tocamientos	77
 torsión	77
@@ -31826,7 +31826,7 @@ barbería	76
 barton	76
 bastaba	76
 beneficiaria	76
-bentley	76
+bentley	76	name
 berenice	76
 bicampeón	76
 boicotear	76
@@ -32219,7 +32219,7 @@ peinados	75
 percata	75
 perderlo	75
 pipo	75
-pixar	75
+pixar	75	name
 piñeiro	75
 pnud	75
 politraumatismos	75
@@ -32230,7 +32230,7 @@ presidía	75
 prolongadas	75
 promo	75
 provocándole	75
-qualcomm	75
+qualcomm	75	name
 rasante	75
 recaudaron	75
 recio	75
@@ -32327,7 +32327,7 @@ auxiliado	74
 aviar	74
 azucarero	74
 baena	74	name
-bali	74
+bali	74	name
 banana	74
 barandilla	74
 bendecida	74
@@ -32606,7 +32606,7 @@ chato	73
 chihuahuenses	73
 chinchilla	73
 chiqui	73
-christie	73
+christie	73	name
 clonación	73
 codos	73
 coincida	73
@@ -32779,7 +32779,7 @@ semillero	73
 serranas	73
 shcp	73
 shiva	73
-sid	73
+sid	73	name
 siniestralidad	73
 sobria	73
 soltura	73
@@ -32831,7 +32831,7 @@ agudizado	72
 aitana	72
 alabanzas	72
 albañilería	72
-alborán	72
+alborán	72	name
 alegado	72
 alibaba	72
 alineaciones	72
@@ -32857,7 +32857,7 @@ autocontrol	72
 avisando	72
 barboza	72
 barcelonesa	72
-barclays	72
+barclays	72	name
 bastidores	72
 bipartidismo	72
 bohemio	72
@@ -32869,7 +32869,7 @@ calcinados	72
 callejones	72
 canónigo	72
 capataz	72
-capcom	72
+capcom	72	name
 catastróficas	72
 catering	72
 cañería	72
@@ -33057,7 +33057,7 @@ sirvienta	72
 sobresalió	72
 sostenidas	72
 soñé	72
-starbucks	72
+starbucks	72	name
 stéfano	72
 subcampeona	72
 subcampeones	72
@@ -33742,7 +33742,7 @@ diminuto	69
 discriminatoria	69
 drenajes	69
 décimos	69
-ecopetrol	69
+ecopetrol	69	name
 efectuarán	69
 elaine	69
 embate	69
@@ -33808,7 +33808,7 @@ jericho	69
 karaoke	69
 kart	69
 knicks	69
-kurdistán	69
+kurdistán	69	name
 laborioso	69
 lancaster	69
 ledo	69
@@ -33934,7 +33934,7 @@ acomodo	68
 acosador	68
 activados	68
 adueñarse	68
-aeroméxico	68
+aeroméxico	68	name
 agudizó	68
 alambres	68
 alusivos	68
@@ -34203,7 +34203,7 @@ surfside	68
 surrealismo	68
 surtidores	68
 sustratos	68
-tasmania	68
+tasmania	68	name
 taxones	68
 tejera	68
 telemedicina	68
@@ -34348,7 +34348,7 @@ entretenimientos	67
 envoltorio	67
 erp	67
 erró	67
-ertzaintza	67
+ertzaintza	67	name
 escribirse	67
 esgrime	67
 especulan	67
@@ -34500,7 +34500,7 @@ sinceró	67
 sinembargo	67
 siniestrado	67
 sismológico	67
-subaru	67
+subaru	67	name
 subteniente	67
 sugería	67
 sustentado	67
@@ -34863,7 +34863,7 @@ cataclismo	65
 catapultó	65
 celestino	65
 cenicienta	65
-cessna	65
+cessna	65	name
 chao	65
 charros	65
 chocado	65
@@ -34914,7 +34914,7 @@ dobló	65
 dolía	65
 dorsey	65
 dynamite	65
-ebay	65
+ebay	65	name
 echegaray	65
 eleven	65
 elton	65
@@ -35032,10 +35032,10 @@ ofende	65
 ofertar	65
 olsen	65
 ondulado	65
-onlyfans	65
+onlyfans	65	name
 operadas	65
 optimizado	65
-oxfam	65
+oxfam	65	name
 pagarían	65
 palmo	65
 palomitas	65
@@ -35059,7 +35059,7 @@ ptolomeo	65
 publicitar	65
 pueblito	65
 radicarse	65
-realme	65
+realme	65	name
 reconducir	65
 recorrían	65
 regenerar	65
@@ -35082,7 +35082,7 @@ sepi	65
 sepulturas	65
 sesgos	65
 siembran	65
-slade	65
+slade	65	name
 solanas	65
 sucedidos	65
 sulfato	65
@@ -35225,7 +35225,7 @@ develar	64
 dificultado	64
 dificultando	64
 dimas	64
-directv	64
+directv	64	name
 disciplinado	64
 disparaban	64
 eba	64
@@ -35461,7 +35461,7 @@ ahogamiento	63
 airplay	63
 alcoholizado	63
 aleaciones	63
-aliexpress	63
+aliexpress	63	name
 alistó	63
 aliviado	63
 alusivo	63
@@ -35505,7 +35505,7 @@ cantv	63
 caputo	63
 carabanchel	63
 carismática	63
-casio	63
+casio	63	name
 cassidy	63
 cayeran	63
 cazando	63
@@ -35632,7 +35632,7 @@ kempes	63
 kgb	63
 lc	63
 leila	63
-lockheed	63
+lockheed	63	name
 locuras	63
 logremos	63
 longitudinales	63
@@ -35768,7 +35768,7 @@ abella	62
 absorbiendo	62
 actualizarse	62
 acuarios	62
-adecco	62
+adecco	62	name
 adecuaciones	62
 adjudicarse	62
 afectivos	62
@@ -35841,7 +35841,7 @@ cisnes	62
 cito	62
 clichés	62
 clics	62
-codelco	62
+codelco	62	name
 coincido	62
 cojedes	62
 colegiata	62
@@ -35950,7 +35950,7 @@ griffith	62
 guadiana	62
 guatemaltecas	62
 hambrientos	62
-hanson	62
+hanson	62	name
 hicks	62
 hiere	62
 histeria	62
@@ -35962,7 +35962,7 @@ inacabada	62
 inclinaciones	62
 inconclusa	62
 indigente	62
-ineos	62
+ineos	62	name
 insaciable	62
 inscriban	62
 intrigante	62
@@ -35976,7 +35976,7 @@ ktm	62
 lacayo	62
 leonas	62
 libertaria	62
-lidl	62
+lidl	62	name
 lindsey	62
 loable	62
 lolo	62
@@ -35992,7 +35992,7 @@ megavatio	62
 meningitis	62
 merecían	62
 meritorio	62
-metacritic	62
+metacritic	62	name
 metadatos	62
 mexicas	62
 microbiota	62
@@ -36261,7 +36261,7 @@ empírico	61
 encaminó	61
 enfocamos	61
 engañan	61
-enron	61
+enron	61	name
 envejece	61
 enviarla	61
 envié	61
@@ -36334,7 +36334,7 @@ keynes	61
 klm	61
 lacrimógeno	61
 lamar	61
-lamborghini	61
+lamborghini	61	name
 lanzarán	61
 latidos	61
 lgbtq	61
@@ -36404,7 +36404,7 @@ proporcionales	61
 proporcionarle	61
 proselitistas	61
 puna	61
-qanon	61
+qanon	61	name
 ralentizar	61
 rdif	61
 rechazara	61
@@ -36413,7 +36413,7 @@ recolectaron	61
 recompensar	61
 recopilando	61
 recordaban	61
-reddit	61
+reddit	61	name
 reduciéndose	61
 redunda	61
 reencarnación	61
@@ -36530,7 +36530,7 @@ bertín	60
 bmx	60
 caballa	60
 cabandié	60
-cadillac	60
+cadillac	60	name
 calificadora	60
 camareros	60
 canalizó	60
@@ -36852,7 +36852,7 @@ chronicle	59
 cimentación	59
 circus	59
 citaciones	59
-citgo	59
+citgo	59	name
 cm³	59
 cocidos	59
 comprará	59
@@ -36953,7 +36953,7 @@ gravísimas	59
 guaguas	59
 guardaron	59
 hermida	59
-hezbolá	59
+hezbolá	59	name
 hidratante	59
 imperioso	59
 imprevisible	59
@@ -37121,7 +37121,7 @@ vanguardistas	59
 varita	59
 vaselina	59
 vicejefe	59
-vieques	59
+vieques	59	name
 vivamos	59
 vuelacercas	59
 vítores	59
@@ -37291,7 +37291,7 @@ galego	58
 garantizarse	58
 garbiñe	58
 gestar	58
-glovo	58
+glovo	58	name
 golero	58
 gorros	58
 grabamos	58
@@ -37696,7 +37696,7 @@ invadiendo	57
 ipod	57
 irreconocible	57
 irún	57	name
-jameson	57
+jameson	57	name
 jeringa	57
 jodido	57
 ju	57
@@ -38104,7 +38104,7 @@ nhc	56
 nocivo	56
 noqueado	56
 norteños	56
-novavax	56
+novavax	56	name
 obsequió	56
 obtenerla	56
 obviando	56
@@ -38114,7 +38114,7 @@ ofrezco	56
 operen	56
 organizarnos	56
 organizarán	56
-oricon	56
+oricon	56	name
 oscurece	56
 otomanas	56
 otoñal	56
@@ -38198,7 +38198,7 @@ superponen	56
 supremos	56
 tallar	56
 tapados	56
-telesur	56
+telesur	56	name
 ternero	56
 testaferro	56
 toleran	56
@@ -38324,7 +38324,7 @@ contagiando	55
 contraataques	55
 convencerla	55
 conversatorios	55
-copacabana	55
+copacabana	55	name
 cordiales	55
 cordobesas	55
 coreanas	55
@@ -38456,7 +38456,7 @@ jornales	55
 josephine	55
 juntado	55
 kendrick	55
-kerala	55
+kerala	55	name
 kristalina	55
 ku	55
 kurdo	55
@@ -38598,7 +38598,7 @@ tokugawa	55
 tormento	55
 torreones	55
 tortosa	55	name
-transmilenio	55
+transmilenio	55	name
 transversalmente	55
 unicameral	55
 usda	55
@@ -38765,7 +38765,7 @@ dificultaba	54
 dimitido	54
 diresa	54
 dirijo	54
-disneyland	54
+disneyland	54	name
 disolvieron	54
 dlc	54
 doe	54
@@ -38843,7 +38843,7 @@ himmler	54
 hospedarse	54
 hua	54
 humanoides	54
-hutíes	54
+hutíes	54	name
 idealismo	54
 ilustradora	54
 imitador	54
@@ -38907,7 +38907,7 @@ mieles	54
 mirna	54
 momentáneo	54
 monitoreado	54
-monsanto	54
+monsanto	54	name
 monty	54
 mos	54
 mosconi	54
@@ -39421,7 +39421,7 @@ sustituta	53
 sutilmente	53
 sánscrito	53
 tails	53
-tavares	53
+tavares	53	name
 taveras	53
 teatre	53
 tecomán	53
@@ -39599,7 +39599,7 @@ detenerla	52
 dhl	52
 dilaciones	52
 diluido	52
-dimayor	52
+dimayor	52	name
 dirigirán	52
 discutimos	52
 discutirse	52
@@ -39697,7 +39697,7 @@ kung	52
 larios	52
 laudo	52
 leguía	52
-lexus	52
+lexus	52	name
 lgbtiq	52
 lie	52
 lindante	52
@@ -39755,7 +39755,7 @@ opere	52
 oralidad	52
 originados	52
 originar	52
-orson	52
+orson	52	name
 oscenses	52
 oyendo	52
 pacientemente	52
@@ -39971,7 +39971,7 @@ cibaeñas	51
 clavar	51
 clio	51
 clorhidrato	51
-cochrane	51
+cochrane	51	name
 coleccionar	51
 coliseum	51
 colocarlos	51
@@ -40119,7 +40119,7 @@ hiroshi	51
 honrados	51
 hortensia	51
 huapi	51
-hulu	51
+hulu	51	name
 idh	51
 iluminó	51
 imaginaron	51
@@ -40158,7 +40158,7 @@ korra	51
 ladislao	51
 lanzallamas	51
 lapadula	51
-lawson	51
+lawson	51	name
 leto	51
 levantaban	51
 ligando	51
@@ -40332,7 +40332,7 @@ tríada	51
 ulster	51
 unzué	51
 vacunarnos	51
-vader	51
+vader	51	name
 vance	51
 vencerá	51
 veneciano	51
@@ -40482,7 +40482,7 @@ dua	50
 duplicando	50
 débora	50
 elcano	50
-elia	50
+elia	50	name
 eliot	50
 elocuencia	50
 emboscadas	50
@@ -40552,7 +40552,7 @@ hispanidad	50
 holandesas	50
 hollow	50
 horrorizada	50
-hyatt	50
+hyatt	50	name
 hándicap	50
 iberá	50
 impartía	50
@@ -40617,7 +40617,7 @@ msn	50
 multar	50
 naciendo	50
 nadine	50
-nassau	50
+nassau	50	name
 neonatología	50
 neuquinos	50
 nieblas	50
@@ -40768,7 +40768,7 @@ tricolores	50
 tríptico	50
 tsja	50
 ubicaban	50
-ubisoft	50
+ubisoft	50	name
 ucranianas	50
 ugr	50
 valijas	50
@@ -40794,7 +40794,7 @@ abasolo	49
 abogadas	49
 abundado	49
 acostada	49
-activision	49
+activision	49	name
 adaptativo	49
 adeudados	49
 adornadas	49
@@ -40839,7 +40839,7 @@ asestó	49
 asfura	49
 asoló	49
 ateos	49
-atkins	49
+atkins	49	name
 auditoria	49
 avispa	49
 avivar	49
@@ -40977,7 +40977,7 @@ expresivas	49
 exprimir	49
 extremeños	49
 fedecámaras	49
-fedex	49
+fedex	49	name
 figurativo	49
 firmen	49
 fiscalizadores	49
@@ -41044,7 +41044,7 @@ jarrones	49
 jasper	49
 jenni	49
 juancho	49
-judd	49
+judd	49	name
 jurásico	49
 justificaron	49
 kathleen	49
@@ -41096,7 +41096,7 @@ nutren	49
 obtendrás	49
 oftalmólogo	49
 olaya	49
-oneplus	49
+oneplus	49	name
 opcionalmente	49
 ordoñez	49
 orgullosamente	49
@@ -41319,7 +41319,7 @@ bpd	48
 cabada	48
 cabalgatas	48
 caber	48
-cabify	48
+cabify	48	name
 calamares	48
 calculaba	48
 calculados	48
@@ -41515,7 +41515,7 @@ juramentó	48
 juzgadas	48
 juzgue	48
 kilométrico	48
-korn	48
+korn	48	name
 kuala	48
 laguneros	48
 lainez	48
@@ -42338,7 +42338,7 @@ bolitas	46
 botanic	46
 bradford	46
 bridget	46
-bugatti	46
+bugatti	46	name
 busti	46
 bíceps	46
 campoamor	46
@@ -42405,14 +42405,14 @@ cuidaron	46
 culinarios	46
 cupé	46
 curada	46
-curevac	46
+curevac	46	name
 debilitan	46
 decepticons	46
 declinaron	46
 degenerativa	46
 delega	46
 delirios	46
-deloitte	46
+deloitte	46	name
 demolidas	46
 demostraría	46
 dent	46
@@ -42430,7 +42430,7 @@ despreciar	46
 deterioraron	46
 dib	46
 dibujados	46
-didi	46
+didi	46	name
 diminutas	46
 dirijan	46
 discernimiento	46
@@ -42513,7 +42513,7 @@ hermanamiento	46
 hi	46
 hooker	46
 humphrey	46
-huáscar	46
+huáscar	46	name
 hípico	46
 ib	46
 icc	46
@@ -42545,7 +42545,7 @@ jáquez	46
 kingsley	46
 kiwi	46
 kubrick	46
-lacoste	46
+lacoste	46	name
 lavaderos	46
 lavan	46
 legendarias	46
@@ -42559,7 +42559,7 @@ litigante	46
 llagas	46
 loba	46
 lomita	46
-lucius	46
+lucius	46	name
 luzca	46
 lúgubre	46
 machaca	46
@@ -42673,7 +42673,7 @@ reclamarle	46
 reconstruyeron	46
 recorrimos	46
 recrean	46
-redmi	46
+redmi	46	name
 redobló	46
 reductor	46
 redundante	46
@@ -42859,7 +42859,7 @@ bigotes	45
 bilbaíno	45
 biocubafarma	45
 bioetanol	45
-blackrock	45
+blackrock	45	name
 bmg	45
 bmv	45
 bnp	45
@@ -43015,7 +43015,7 @@ gasoductos	45
 gerencial	45
 gire	45
 goddard	45
-gofundme	45
+gofundme	45	name
 gorbachov	45
 graciosos	45
 granda	45
@@ -43073,7 +43073,7 @@ invitarlos	45
 irracionales	45
 irrestricto	45
 irrumpido	45
-islay	45
+islay	45	name
 issa	45
 jaimes	45
 jennings	45
@@ -43147,7 +43147,7 @@ oppo	45
 opresor	45
 organicen	45
 originando	45
-packard	45
+packard	45	name
 papúa	45	name
 parando	45
 parla	45
@@ -43196,7 +43196,7 @@ radiadores	45
 radiología	45
 ramblas	45
 ranchería	45
-raoul	45
+raoul	45	name
 razona	45
 realce	45
 reavivó	45
@@ -43230,7 +43230,7 @@ rosenkrantz	45
 routers	45
 royo	45
 rutherford	45
-sacyr	45
+sacyr	45	name
 sagunto	45	name
 saludado	45
 santiagueña	45
@@ -43506,7 +43506,7 @@ enmascarar	44
 entablado	44
 entreguerras	44
 enérgicos	44
-ericsson	44
+ericsson	44	name
 eréctil	44
 escalofriantes	44
 escandón	44
@@ -43537,7 +43537,7 @@ fehacientemente	44
 felicia	44
 felicitarlo	44
 fidedigna	44
-filantropía	44
+filantropía	44	name
 fisioterapeutas	44
 fitosanitarios	44
 flautista	44
@@ -43606,7 +43606,7 @@ kazán	44
 lay	44
 lechos	44
 legarreta	44
-leonidas	44
+leonidas	44	name
 libios	44
 lidere	44
 lilita	44
@@ -43644,7 +43644,7 @@ musicalidad	44
 mwc	44
 mynor	44
 nailon	44
-namco	44
+namco	44	name
 natatorio	44
 navegan	44
 negarlo	44
@@ -43670,7 +43670,7 @@ otorgaría	44
 ovinos	44
 oxidativo	44
 o’brien	44
-pachakutik	44
+pachakutik	44	name
 pacifico	44
 pajaritos	44
 palmero	44
@@ -43784,7 +43784,7 @@ smartwatch	44
 soltaron	44
 solucionará	44
 sorprendería	44
-spector	44
+spector	44	name
 spp	44
 subestaciones	44
 subunidad	44
@@ -43923,7 +43923,7 @@ carignano	43
 cariz	43
 catatumbo	43
 celulitis	43
-cemex	43
+cemex	43	name
 chamanes	43
 chic	43
 chocante	43
@@ -44088,7 +44088,7 @@ graña	43
 gregoriano	43
 groove	43
 gta	43
-guadalcanal	43
+guadalcanal	43	name
 guarden	43
 guirnaldas	43
 güero	43
@@ -44307,7 +44307,7 @@ rust	43
 rímac	43
 sabático	43
 sampedro	43
-scotiabank	43
+scotiabank	43	name
 scream	43
 seleccione	43
 senté	43
@@ -44426,7 +44426,7 @@ allegro	42
 alpinistas	42
 amasar	42
 amin	42
-amon	42
+amon	42	name
 andanada	42
 anfitrionas	42
 ansa	42
@@ -44596,7 +44596,7 @@ dábamos	42
 dársela	42
 educadoras	42
 efectúe	42
-elis	42
+elis	42	name
 emergieron	42
 empobrecidos	42
 empática	42
@@ -44731,7 +44731,7 @@ magra	42
 maltés	42
 manchuria	42
 mancomunada	42
-manel	42
+manel	42	name
 manteles	42
 maridaje	42
 masterizado	42
@@ -44757,9 +44757,9 @@ multiplique	42
 médicamente	42
 nacerá	42
 nanopartículas	42
-narnia	42
+narnia	42	name
 narrados	42
-nazareth	42
+nazareth	42	name
 neutrinos	42
 nikolai	42
 ninel	42
@@ -44896,7 +44896,7 @@ taiana	42
 tale	42
 tamaña	42
 taurinas	42
-telmex	42
+telmex	42	name
 temblando	42
 temerosa	42
 temibles	42
@@ -44940,7 +44940,7 @@ veh铆culo	42
 vengó	42
 ventosa	42
 veteranas	42
-vickers	42
+vickers	42	name
 villanova	42
 vinieran	42
 visigodos	42
@@ -44990,7 +44990,7 @@ alopecia	41
 alpinista	41
 altere	41
 aludía	41
-amaral	41
+amaral	41	name
 ameal	41
 amplifica	41
 animé	41
@@ -45015,7 +45015,7 @@ asno	41
 aspen	41
 atente	41
 aterrizando	41
-athena	41
+athena	41	name
 atraiga	41
 atropellados	41
 augurio	41
@@ -45027,7 +45027,7 @@ avalaron	41
 azafrán	41
 añadidura	41
 bahréin	41
-banorte	41
+banorte	41	name
 barbacoas	41
 baste	41
 beligerantes	41
@@ -45056,7 +45056,7 @@ brittany	41
 bromeado	41
 bruma	41
 btt	41
-buick	41
+buick	41	name
 buitrago	41
 burt	41
 but	41
@@ -45096,7 +45096,7 @@ cleo	41
 clóset	41
 cocinaba	41
 cohep	41
-coldplay	41
+coldplay	41	name
 colla	41
 colo-colo	41
 colomer	41
@@ -45120,7 +45120,7 @@ contrastaba	41
 controlarla	41
 convexo	41
 convulsa	41
-copei	41
+copei	41	name
 corearon	41
 coronaron	41
 corpulento	41
@@ -45169,7 +45169,7 @@ disueltos	41
 divo	41
 dixie	41
 dusty	41
-dyson	41
+dyson	41	name
 eca	41
 elevándose	41
 elude	41
@@ -45234,7 +45234,7 @@ geek	41
 gemini	41
 geraldo	41
 girasoles	41
-goa	41
+goa	41	name
 graduándose	41
 granadilla	41
 guiará	41
@@ -45244,7 +45244,7 @@ habrás	41
 hacedores	41
 halley	41
 hambriento	41
-heineken	41
+heineken	41	name
 hemsworth	41
 hendidura	41
 hepburn	41
@@ -45395,7 +45395,7 @@ plantearán	41
 platónico	41
 poblete	41
 podas	41
-polaris	41
+polaris	41	name
 policíaco	41
 portoviejo	41
 practique	41
@@ -45764,7 +45764,7 @@ emprendedurismo	40
 empíricos	40
 encajados	40
 engloban	40
-enix	40
+enix	40	name
 entel	40
 entendidas	40
 entonó	40
@@ -45782,7 +45782,7 @@ estambres	40
 estancados	40
 etarra	40
 etiología	40
-evópoli	40
+evópoli	40	name
 excedan	40
 exconcejal	40
 excreción	40
@@ -45941,7 +45941,7 @@ mástiles	40
 nairo	40
 naturalezas	40
 negruzco	40
-nikita	40
+nikita	40	name
 nororiente	40
 notifique	40
 nucleótidos	40
@@ -46070,7 +46070,7 @@ saldaron	40
 salvio	40
 sandero	40
 sapos	40
-scania	40
+scania	40	name
 scar	40
 scherer	40
 secuestrando	40
@@ -46080,7 +46080,7 @@ separadamente	40
 sepulcros	40
 shapiro	40
 shelton	40
-sheppard	40
+sheppard	40	name
 silesia	40
 siprosa	40
 sisa	40
@@ -46089,7 +46089,7 @@ soltando	40
 sopesar	40
 soplan	40
 soro	40
-stellantis	40
+stellantis	40	name
 subo	40
 sumiso	40
 sunderland	40
@@ -46277,7 +46277,7 @@ ceñido	39
 chacal	39
 chancho	39
 chango	39
-chapecoense	39
+chapecoense	39	name
 checoslovaco	39
 chií	39
 christensen	39
@@ -46514,8 +46514,8 @@ josu	39
 juzgamiento	39
 juzgarlo	39
 kcal	39
-keane	39
-kickstarter	39
+keane	39	name
+kickstarter	39	name
 kidman	39
 kilovatios	39
 kinesiólogo	39
@@ -46624,7 +46624,7 @@ perdedora	39
 peregrinar	39
 perjudique	39
 petrogrado	39
-petroperú	39
+petroperú	39	name
 pew	39
 phuc	39
 piadosa	39
@@ -46735,7 +46735,7 @@ socorros	39
 sookie	39
 sospechando	39
 souto	39
-spartak	39
+spartak	39	name
 strickland	39
 suardi	39
 submarinas	39
@@ -46749,7 +46749,7 @@ sweeney	39
 takeshi	39
 tallin	39
 taquicardia	39
-techint	39
+techint	39	name
 tecnificación	39
 teide	39
 tejedores	39
@@ -46896,7 +46896,7 @@ belenes	38
 benicio	38
 bergantín	38
 bernasconi	38
-bertelsmann	38
+bertelsmann	38	name
 bidimensional	38
 biogás	38
 bisontes	38
@@ -46922,7 +46922,7 @@ cantora	38
 caravaggio	38
 carballiño	38
 cardiorrespiratoria	38
-cargill	38
+cargill	38	name
 carnets	38
 carrier	38
 carrizosa	38
@@ -46944,7 +46944,7 @@ champiñones	38
 chapadmalal	38
 chiíes	38
 cianobacterias	38
-cienciología	38
+cienciología	38	name
 cigüeñal	38
 cim	38
 cimiento	38
@@ -47047,7 +47047,7 @@ editando	38
 efímeras	38
 elise	38
 elvin	38
-embraer	38
+embraer	38	name
 eminentes	38
 empezarían	38
 enamorándose	38
@@ -47379,7 +47379,7 @@ riegos	38
 rivadeneira	38
 rió	38
 roció	38
-rooney	38
+rooney	38	name
 rosaleda	38
 roseta	38
 rothschild	38
@@ -47435,7 +47435,7 @@ teje	38
 telecomunicación	38
 telemáticamente	38
 temperamental	38
-tencent	38
+tencent	38	name
 tentadora	38
 teodora	38
 teológicas	38
@@ -47477,7 +47477,7 @@ velocistas	38
 vente	38
 verne	38
 vga	38
-viacom	38
+viacom	38	name
 vibras	38
 vigilará	38
 vigna	38
@@ -47569,7 +47569,7 @@ avancemos	37
 azuqueca	37	name
 añicos	37
 bajito	37
-bancolombia	37
+bancolombia	37	name
 bandada	37
 baremo	37
 barranquillero	37
@@ -47877,7 +47877,7 @@ invite	37
 involcan	37
 irremediable	37
 itaú	37
-iveco	37
+iveco	37	name
 jak	37
 jansen	37
 jia	37
@@ -47932,7 +47932,7 @@ masvidal	37
 matarme	37
 matienzo	37
 medusas	37
-merrill	37
+merrill	37	name
 mesina	37	name
 mesones	37
 metiera	37
@@ -48001,7 +48001,7 @@ pesquería	37
 petare	37
 peñalosa	37
 peñíscola	37
-piaggio	37
+piaggio	37	name
 pirro	37
 plasmaron	37
 platini	37
@@ -48183,7 +48183,7 @@ violados	37
 viole	37
 violentada	37
 volaban	37
-volaris	37
+volaris	37	name
 voltea	37
 votaran	37
 vámonos	37
@@ -48749,7 +48749,7 @@ petros	36
 peyorativo	36
 pezón	36
 pilla	36
-pirelli	36
+pirelli	36	name
 pisadas	36
 pitó	36
 piñones	36
@@ -48812,7 +48812,7 @@ refugiándose	36
 refundar	36
 region	36
 regulará	36
-reichstag	36
+reichstag	36	name
 reimpresiones	36
 relatora	36
 remando	36
@@ -48865,7 +48865,7 @@ servilletas	36
 sexys	36
 señalarse	36
 señalizados	36
-shogunato	36
+shogunato	36	name
 shrek	36
 siches	36
 signada	36
@@ -48946,7 +48946,7 @@ voldemort	36
 voltereta	36
 volverás	36
 vulva	36
-wenger	36
+wenger	36	name
 windsurf	36
 winehouse	36
 wizard	36
@@ -49091,7 +49091,7 @@ ciencia-ficción	35
 cifran	35
 cimarrones	35
 cinematógrafo	35
-cinépolis	35
+cinépolis	35	name
 clausuras	35
 clotilde	35
 co-escribió	35
@@ -49231,7 +49231,7 @@ estandarizados	35
 estrangulada	35
 estrene	35
 estresado	35
-euronews	35
+euronews	35	name
 evasivas	35
 evitarla	35
 exageraciones	35
@@ -49531,7 +49531,7 @@ quística	35
 racionalmente	35
 rahman	35
 ramificados	35
-randstad	35
+randstad	35	name
 raquetas	35
 rastreos	35
 reaccionaba	35
@@ -49594,7 +49594,7 @@ rowan	35
 rubiales	35
 ruin	35
 ryzen	35
-saba	35
+saba	35	name
 sacrificada	35
 sake	35
 salda	35
@@ -49780,7 +49780,7 @@ atrasar	34
 autoprotección	34
 autotransporte	34
 averiguó	34
-avia	34
+avia	34	name
 avidez	34
 azerbaiyano	34
 baladí	34
@@ -49797,7 +49797,7 @@ barceloneses	34
 barcelonismo	34
 baroja	34
 barty	34
-batasuna	34
+batasuna	34	name
 bautiza	34
 bedolla	34
 beneficiaban	34
@@ -49898,7 +49898,7 @@ contrarrevolucionarios	34
 contratas	34
 controlable	34
 conversaba	34
-conviasa	34
+conviasa	34	name
 convite	34
 convivencias	34
 coppel	34
@@ -50047,7 +50047,7 @@ fermentar	34
 fiduciaria	34
 flexiones	34
 fmc	34
-fokker	34
+fokker	34	name
 folículos	34
 fonatur	34
 fraccionar	34
@@ -50058,7 +50058,7 @@ fuman	34
 fundarse	34
 fía	34
 gadea	34
-garmin	34
+garmin	34	name
 garupá	34
 gastamos	34
 gasómetro	34
@@ -50153,7 +50153,7 @@ karzai	34
 kato	34
 kendra	34
 kily	34
-kodak	34
+kodak	34	name
 koh	34
 krisná	34
 laboristas	34
@@ -50192,7 +50192,7 @@ mansfield	34
 mariam	34
 mariquita	34
 marital	34
-maserati	34
+maserati	34	name
 matera	34
 matutinos	34
 maximus	34
@@ -50386,11 +50386,11 @@ retorcida	34
 retractarse	34
 retransmitirá	34
 revisora	34
-rif	34
+rif	34	name
 rindes	34
 risso	34
 rivalizar	34
-roatán	34
+roatán	34	name
 romerías	34
 roques	34
 roscas	34
@@ -50425,7 +50425,7 @@ sinagogas	34
 sinfónicas	34
 smithsonian	34
 snc	34
-sofi	34
+sofi	34	name
 sofocada	34
 soldar	34
 soltarse	34
@@ -50523,7 +50523,7 @@ zod	34
 écija	34	name
 érika	34
 ígneos	34
-abengoa	33
+abengoa	33	name
 aboca	33
 abominable	33
 abrazada	33
@@ -50843,7 +50843,7 @@ estuvieras	33
 etileno	33
 etimológico	33
 etiquetadas	33
-eurostat	33
+eurostat	33	name
 exacerbar	33
 exageradamente	33
 exagerando	33
@@ -50875,7 +50875,7 @@ fusilamientos	33
 fusionada	33
 gadget	33
 galmarini	33
-gamestop	33
+gamestop	33	name
 gargano	33
 gattás	33
 generaliza	33
@@ -50958,7 +50958,7 @@ instruyen	33
 insuficiencias	33
 interceptadas	33
 interdisciplinarios	33
-interjet	33
+interjet	33	name
 interpuestos	33
 intimidante	33
 intransigentes	33
@@ -51014,7 +51014,7 @@ lucrativas	33
 ludmila	33
 léase	33
 lúpulo	33
-macbeth	33
+macbeth	33	name
 machetazos	33
 maderables	33
 magalí	33
@@ -51088,7 +51088,7 @@ orgasmos	33
 oriundas	33
 oxitocina	33
 paddle	33
-panasonic	33
+panasonic	33	name
 paquito	33
 parqueos	33
 parquímetros	33
@@ -51243,7 +51243,7 @@ sabado	33
 sabah	33
 sabater	33
 sacuden	33
-salesforce	33
+salesforce	33	name
 sansón	33
 santero	33
 sarasate	33
@@ -51482,7 +51482,7 @@ bajarlo	32
 balbi	32
 balda	32
 balizamiento	32
-bankinter	32
+bankinter	32	name
 barea	32
 barrick	32
 bellotas	32
@@ -51494,7 +51494,7 @@ bianual	32
 biblias	32
 bienvenidas	32
 bilingüismo	32
-binance	32
+binance	32	name
 binomios	32
 bioquímicas	32
 blackout	32
@@ -51674,7 +51674,7 @@ donostiarras	32
 doroteo	32
 dudignac	32
 duffy	32
-dupont	32
+dupont	32	name
 durara	32
 echarlo	32
 ecolatina	32
@@ -51834,7 +51834,7 @@ institucionalizado	32
 insto	32
 intencionados	32
 intercalan	32
-interculturalidad	32
+interculturalidad	32	name
 internar	32
 intimación	32
 intimidó	32
@@ -51860,7 +51860,7 @@ kaine	32
 kashima	32
 kaufman	32
 ke	32
-kensington	32
+kensington	32	name
 khalil	32
 kimmel	32
 koldo	32
@@ -51894,7 +51894,7 @@ lucille	32
 lésbico	32
 madrid-barajas	32
 madridismo	32
-madsen	32
+madsen	32	name
 maeztu	32
 magallánico	32
 maguncia	32
@@ -51911,7 +51911,7 @@ markham	32
 massieu	32
 maximización	32
 mayta	32
-mcafee	32
+mcafee	32	name
 mckay	32
 mcpherson	32
 medimos	32
@@ -52004,13 +52004,13 @@ pilotando	32
 pináculo	32
 piparo	32
 pixeles	32
-planck	32
+planck	32	name
 planificadores	32
 plantearle	32
 playero	32
 polifacético	32
 polinomios	32
-pontiac	32
+pontiac	32	name
 popurrí	32
 portugalete	32	name
 poso	32
@@ -52099,7 +52099,7 @@ ritchie	32
 roadster	32
 rodantes	32
 ropajes	32
-roscosmos	32
+roscosmos	32	name
 rozado	32
 rubias	32
 réquiem	32
@@ -52114,7 +52114,7 @@ salobre	32
 salvamentos	32
 salvos	32
 salíamos	32
-samson	32
+samson	32	name
 samur	32
 sancha	32
 sancionan	32
@@ -52222,7 +52222,7 @@ voluminosa	32
 vtc	32
 vulneraciones	32
 walser	32
-warzone	32
+warzone	32	name
 weinberg	32
 wh	32
 winslet	32
@@ -52347,7 +52347,7 @@ becket	31
 beder	31
 beetle	31
 bento	31
-beretta	31
+beretta	31	name
 berizzo	31
 bernadette	31
 berra	31
@@ -52407,7 +52407,7 @@ changas	31
 chañar	31
 chepe	31
 chiita	31
-chilevisión	31
+chilevisión	31	name
 choel	31
 chromecast	31
 chus	31
@@ -52542,7 +52542,7 @@ dovelas	31
 dpz	31
 drosophila	31
 duerma	31
-dumont	31
+dumont	31	name
 dunbar	31
 duranguenses	31
 duster	31
@@ -52650,7 +52650,7 @@ ganges	31	name
 garnacha	31
 garnica	31
 garrafal	31
-gartner	31
+gartner	31	name
 gasly	31
 gaste	31
 gaélico	31
@@ -52781,7 +52781,7 @@ masculinidades	31
 massoni	31
 matizada	31
 matricularse	31
-mattel	31
+mattel	31	name
 matus	31
 mcbride	31
 meadow	31
@@ -52814,7 +52814,7 @@ molusco	31
 moma	31
 monitorean	31
 montecristo	31
-mooney	31
+mooney	31	name
 morcillo	31
 morelli	31
 motive	31
@@ -53087,7 +53087,7 @@ telde	31	name
 televidente	31
 tentados	31
 tenues	31
-teotihuacan	31
+teotihuacan	31	name
 terráqueo	31
 texana	31
 tisular	31
@@ -53099,7 +53099,7 @@ tomadores	31
 topos	31
 tornero	31
 torrijas	31
-toshiba	31
+toshiba	31	name
 totonicapán	31
 trabajaré	31
 trabajábamos	31
@@ -53339,7 +53339,7 @@ cd-rom	30
 cederle	30
 celada	30
 celíacos	30
-cencosud	30
+cencosud	30	name
 cerramientos	30
 chahuán	30
 chengdu	30
@@ -53544,7 +53544,7 @@ estropeado	30
 eureka	30
 euromillones	30
 evolutivas	30
-excalibur	30
+excalibur	30	name
 excelsior	30
 exempleado	30
 exhaustivamente	30
@@ -53615,7 +53615,7 @@ hadid	30
 halsey	30
 hangzhou	30
 harmon	30
-hasbro	30
+hasbro	30	name
 hedonismo	30
 heleno	30
 herederas	30
@@ -53699,7 +53699,7 @@ knuckles	30
 koji	30
 langreo	30	name
 lanzarían	30
-lasalle	30
+lasalle	30	name
 lastiman	30
 latigazo	30
 laure	30
@@ -53747,7 +53747,7 @@ materializan	30
 mati	30
 matsumoto	30
 mattos	30
-mckinsey	30
+mckinsey	30	name
 mclaughlin	30
 medibles	30
 medievo	30
@@ -53801,7 +53801,7 @@ nuclean	30
 nítidas	30
 obituario	30
 observen	30
-oceanográfico	30
+oceanográfico	30	name
 ocioso	30
 odiosa	30
 odontológico	30
@@ -53960,11 +53960,11 @@ románicos	30
 ronan	30
 rosalba	30	name
 rosatti	30
-rosneft	30
+rosneft	30	name
 rozamiento	30
 rubios	30
 rubricaron	30
-rufus	30
+rufus	30	name
 rítmicos	30
 sabotajes	30
 sabrosos	30
@@ -54002,8 +54002,8 @@ sicológica	30
 sifón	30
 silenciada	30
 sitcom	30
-skye	30
-sloan	30
+skye	30	name
+sloan	30	name
 soberanistas	30
 sobrecargos	30
 sofocaron	30
@@ -54327,7 +54327,7 @@ chirigota	29
 chupa	29
 cigüeñas	29
 cistercienses	29
-citibank	29
+citibank	29	name
 ciénagas	29
 claroscuros	29
 clementina	29
@@ -54449,7 +54449,7 @@ doctrinales	29
 domesticados	29
 dominguez	29
 donnie	29
-dreamworks	29
+dreamworks	29	name
 drogadictos	29
 dumbledore	29
 durando	29
@@ -54516,7 +54516,7 @@ estimándose	29
 estrellara	29
 etiquetó	29
 eucariotas	29
-euskaltel	29
+euskaltel	29	name
 evitara	29
 evitarían	29
 evitemos	29
@@ -54712,7 +54712,7 @@ lorna	29
 lowry	29
 lucharemos	29
 lucran	29
-luzón	29
+luzón	29	name
 lynx	29
 lésbica	29
 maestrazgo	29
@@ -55035,7 +55035,7 @@ sustentadas	29
 susurro	29
 sádico	29
 síndromes	29
-tama	29
+tama	29	name
 tca	29
 tecnócratas	29
 telediarios	29
@@ -55186,7 +55186,7 @@ alcoholizados	28
 alexandría	28
 alfonsina	28
 alimentadores	28
-allister	28
+allister	28	name
 alocado	28
 alquilaban	28
 alquiladas	28
@@ -55266,7 +55266,7 @@ barbanza	28
 bardenas	28
 basalto	28
 basquet	28
-bauhaus	28
+bauhaus	28	name
 beasley	28
 benzodiazepinas	28
 benín	28	name
@@ -55357,7 +55357,7 @@ colindres	28
 colonizada	28
 coloreada	28
 combinaban	28
-comcast	28
+comcast	28	name
 cometemos	28
 compaginando	28
 compartes	28
@@ -55425,7 +55425,7 @@ defrauda	28
 dejarás	28
 delictual	28
 delio	28
-deliveroo	28
+deliveroo	28	name
 dellepiane	28
 dely	28
 demarco	28
@@ -55610,7 +55610,7 @@ falsear	28
 famaillá	28
 familiarmente	28
 fascículos	28
-fatah	28
+fatah	28	name
 favre	28
 fenafuth	28
 fenecido	28
@@ -55760,7 +55760,7 @@ jambas	28
 janis	28
 jb	28
 jerárquicamente	28
-jetsmart	28
+jetsmart	28	name
 jigsaw	28
 jimi	28
 jirafas	28
@@ -56077,7 +56077,7 @@ robocop	28
 rociaron	28
 rockwell	28
 rojilla	28
-rolex	28
+rolex	28	name
 romario	28
 rompeolas	28
 romperlo	28
@@ -56658,7 +56658,7 @@ estribillos	27
 estupendas	27
 eucaliptus	27
 eun	27
-europol	27
+europol	27	name
 evitaremos	27
 exautoridad	27
 excavadoras	27
@@ -56690,7 +56690,7 @@ figuritas	27
 filogenético	27
 fiscalia	27
 flagelación	27
-flandria	27
+flandria	27	name
 floro	27
 fomentaba	27
 forajidos	27
@@ -56739,7 +56739,7 @@ hallen	27
 hashtags	27
 hearn	27
 hepáticos	27
-herbalife	27
+herbalife	27	name
 hermione	27
 hernandarias	27
 hevia	27
@@ -56816,7 +56816,7 @@ irritaciones	27
 irías	27
 isaza	27
 istúriz	27
-isuzu	27
+isuzu	27	name
 ivanka	27
 iwgp	27
 izumi	27
@@ -56939,7 +56939,7 @@ negociará	27
 nervaduras	27
 neurotransmisor	27
 nia	27
-nikon	27
+nikon	27	name
 ninis	27
 nombrarse	27
 nona	27
@@ -56970,7 +56970,7 @@ orla	27
 oroz	27
 osario	27
 oscilaron	27
-osella	27
+osella	27	name
 ovaladas	27
 oxida	27
 oxigenada	27
@@ -57078,12 +57078,12 @@ queroseno	27
 quiles	27
 quirón	27
 racer	27
-radiohead	27
+radiohead	27	name
 raikkonen	27
 ralentizó	27
 rallyes	27
 rancio	27
-rapear	27
+rapear	27	name
 rapunzel	27
 rayitas	27
 reaccionará	27
@@ -57168,7 +57168,7 @@ segmentado	27
 seminal	27
 seminci	27
 semiárido	27
-sener	27
+sener	27	name
 seto	27
 sexóloga	27
 seísmos	27
@@ -57252,7 +57252,7 @@ trituradora	27
 trizas	27
 troilo	27
 trombón	27
-tropicana	27
+tropicana	27	name
 truenos	27
 turbante	27
 turk	27
@@ -57279,7 +57279,7 @@ veganas	27
 veladero	27
 vendieran	27
 ventilada	27
-verizon	27
+verizon	27	name
 verídica	27
 vice-presidente	27
 vicenç	27
@@ -57304,7 +57304,7 @@ yaya	27
 yee	27
 zancudos	27
 zane	27
-zeiss	27
+zeiss	27	name
 zócalos	27
 ígor	27
 ñ	27
@@ -57319,7 +57319,7 @@ acara	26
 acarreaba	26
 acatan	26
 accelerator	26
-accenture	26
+accenture	26	name
 acertantes	26
 acertaron	26
 aclimatación	26
@@ -57504,7 +57504,7 @@ burlaron	26
 burofax	26
 busan	26
 butrón	26
-bytedance	26
+bytedance	26	name
 bávaros	26
 béticos	26
 caballitos	26
@@ -57539,7 +57539,7 @@ cauteruccio	26
 cautivas	26
 cbt	26
 cedh	26
-celine	26
+celine	26	name
 celosamente	26
 centenarias	26
 cerrajería	26
@@ -57567,7 +57567,7 @@ clavadas	26
 codazzi	26
 coescrito	26
 cogemos	26
-coinbase	26
+coinbase	26	name
 cojinetes	26
 colador	26
 colcha	26
@@ -58075,7 +58075,7 @@ nl	26
 nobiliarios	26
 norrie	26
 novata	26
-novell	26
+novell	26	name
 nublada	26
 nws	26
 nz	26
@@ -58114,7 +58114,7 @@ paltas	26
 panales	26
 panchito	26
 pappo	26
-paquetá	26
+paquetá	26	name
 paraguaná	26
 paralizan	26
 pararrayos	26
@@ -58713,7 +58713,7 @@ cimex	25
 cinegética	25
 circe	25
 climent	25
-cobreloa	25
+cobreloa	25	name
 cocinada	25
 codazos	25
 coke	25
@@ -58899,7 +58899,7 @@ ejercita	25
 electrificadas	25
 elgin	25
 elián	25
-elva	25
+elva	25	name
 emanación	25
 embotellamientos	25
 embrujo	25
@@ -58965,8 +58965,8 @@ estrecheces	25
 estremece	25
 etiquetada	25
 etérea	25
-eurogrupo	25
-eurosport	25
+eurogrupo	25	name
+eurosport	25	name
 evitaran	25
 examinarse	25
 exatlón	25
@@ -59024,7 +59024,7 @@ freidora	25
 frenen	25
 friki	25
 fructosa	25
-funko	25
+funko	25	name
 furch	25
 fw	25
 galgo	25
@@ -59034,7 +59034,7 @@ garfio	25
 garrincha	25
 genie	25
 ghanés	25
-gillette	25
+gillette	25	name
 gipsy	25
 girondins	25
 glorificación	25
@@ -59174,7 +59174,7 @@ kimball	25
 kj	25
 krasnodar	25
 kt	25
-kuomintang	25
+kuomintang	25	name
 laboraban	25
 labriegos	25
 laburando	25
@@ -59272,7 +59272,7 @@ modificaría	25
 mogollón	25
 moldura	25
 monopólicas	25
-monteverdi	25
+monteverdi	25	name
 moraga	25
 moratinos	25
 morelense	25
@@ -59549,7 +59549,7 @@ shibuya	25
 showman	25
 sideral	25
 significantes	25
-sij	25
+sij	25	name
 silverman	25
 simulados	25
 sinuosa	25
@@ -59613,7 +59613,7 @@ tepeyac	25
 terapista	25
 terminarla	25
 testero	25
-tet	25
+tet	25	name
 tex	25
 that's	25
 tibieza	25
@@ -59651,7 +59651,7 @@ trini	25
 tripero	25
 tritón	25
 trufas	25
-trumpismo	25
+trumpismo	25	name
 tuiteado	25
 tumaco	25
 tumbarse	25
@@ -59763,7 +59763,7 @@ almeja	24
 almánzar	24
 alp	24
 alpinismo	24
-alstom	24
+alstom	24	name
 alternadas	24
 aludida	24
 alumbró	24
@@ -59862,7 +59862,7 @@ batazos	24
 batgirl	24
 bañaba	24
 bcb	24
-belair	24
+belair	24	name
 beligerancia	24
 beltré	24
 benevolente	24
@@ -59953,7 +59953,7 @@ celades	24
 cele	24
 centla	24
 centroafricana	24
-ceos	24
+ceos	24	name
 cephaloleia	24
 ceti	24
 cgr	24
@@ -60285,7 +60285,7 @@ fuendetodos	24
 fundiciones	24
 funesto	24
 féretros	24
-gamespot	24
+gamespot	24	name
 gangrena	24
 garabatos	24
 garantizo	24
@@ -60309,8 +60309,8 @@ gánsteres	24
 habidas	24
 hacérselo	24
 hala	24
-hama	24
-harcourt	24
+hama	24	name
+harcourt	24	name
 harman	24
 hawaiano	24
 haydée	24
@@ -60476,7 +60476,7 @@ localizador	24
 lombana	24
 lose	24
 lovell	24
-lucasfilm	24
+lucasfilm	24	name
 lucecita	24
 luciani	24
 ludovica	24
@@ -60561,11 +60561,11 @@ naturalizar	24
 ncov	24
 negué	24
 nellie	24
-nespresso	24
+nespresso	24	name
 nidificación	24
 nini	24
 niñeras	24
-noam	24
+noam	24	name
 nobiliaria	24
 norcoreanas	24
 normalista	24
@@ -60798,7 +60798,7 @@ rondalla	24
 roraima	24
 rosé	24
 rotatoria	24
-routledge	24
+routledge	24	name
 rowland	24
 rugir	24
 rugosidad	24
@@ -60850,7 +60850,7 @@ sobrepasen	24
 sobrevivimos	24
 sobreviviría	24
 sodi	24
-sokol	24
+sokol	24	name
 solidariza	24
 solventó	24
 sometiera	24
@@ -60884,7 +60884,7 @@ tachas	24
 tagliani	24
 taguasco	24
 takumi	24
-talgo	24
+talgo	24	name
 talvi	24
 taparon	24
 taponamiento	24
@@ -60918,7 +60918,7 @@ trascendiera	24
 trasladas	24
 triatletas	24
 trilla	24
-tripadvisor	24
+tripadvisor	24	name
 trunco	24
 tsi	24
 tucumanas	24
@@ -60948,7 +60948,7 @@ vejámenes	24
 vencían	24
 vergeles	24
 verhoeven	24
-veritas	24
+veritas	24	name
 vertiginosamente	24
 vicki	24
 vigilancias	24
@@ -60968,10 +60968,10 @@ vivencial	24
 vivís	24
 vladislao	24
 voluntariedad	24
-voluntarismo	24
+voluntarismo	24	name
 vulgaridad	24
 wass	24
-wat	24
+wat	24	name
 wd	24
 wichita	24
 widgets	24
@@ -61046,7 +61046,7 @@ ajusticiados	23
 aku	23
 al-assad	23
 al-sadd	23
-albertina	23
+albertina	23	name
 albus	23
 alcanzaran	23
 alejaban	23
@@ -61140,7 +61140,7 @@ bandazos	23
 banega	23
 barnices	23
 barracuda	23
-barreiros	23
+barreiros	23	name
 barrichello	23
 barridos	23
 barrymore	23
@@ -61240,7 +61240,7 @@ cañonazo	23
 cbtis	23
 ccg	23
 cdf	23
-cebú	23
+cebú	23	name
 cegados	23
 celíaca	23
 cenit	23
@@ -61333,7 +61333,7 @@ cortadores	23
 corvina	23
 cosechadora	23
 cosmogonía	23
-costco	23
+costco	23	name
 coti	23
 creus	23
 cristalizó	23
@@ -61452,7 +61452,7 @@ eichmann	23
 ejercerse	23
 ejercidos	23
 ejerciera	23
-emae	23
+emae	23	name
 emo	23
 empatadas	23
 enanitos	23
@@ -61613,7 +61613,7 @@ half-life	23
 halls	23
 haras	23
 hebreas	23
-heimwehr	23
+heimwehr	23	name
 hela	23
 helenístico	23
 hemisférica	23
@@ -61705,7 +61705,7 @@ intrusiones	23
 inutilizado	23
 invictus	23
 invitarla	23
-irizar	23
+irizar	23	name
 ironiza	23
 irrealidad	23
 irrestricta	23
@@ -62161,7 +62161,7 @@ robóticas	23
 rodarse	23
 roddy	23
 roldan	23
-romang	23
+romang	23	name
 roncesvalles	23
 rondaban	23
 rondarán	23
@@ -62378,7 +62378,7 @@ voluble	23
 vulcanología	23
 véliz	23
 vívido	23
-warnermedia	23
+warnermedia	23	name
 waze	23
 wc	23
 whitehall	23
@@ -62444,8 +62444,8 @@ adoptamos	22
 adquisitiva	22
 adrienne	22
 aec	22
-aegon	22
-aeroflot	22
+aegon	22	name
+aeroflot	22	name
 aforismos	22
 afrontamiento	22
 afsca	22
@@ -62615,7 +62615,7 @@ bumblebee	22
 burbank	22
 buscadoras	22
 buscaré	22
-buzzfeed	22
+buzzfeed	22	name
 búlgaras	22
 caballar	22
 cabanas	22
@@ -62907,7 +62907,7 @@ empeine	22
 empezada	22
 emplazados	22
 empobrece	22
-enagás	22
+enagás	22	name
 enchufados	22
 encontrarles	22
 encurtidos	22
@@ -62982,7 +62982,7 @@ expresos	22
 expte	22
 extinguidos	22
 extremeñas	22
-exxonmobil	22
+exxonmobil	22	name
 fabia	22
 facetime	22
 facturados	22
@@ -63047,7 +63047,7 @@ goldsmith	22
 goleando	22
 golpismo	22
 gonzo	22
-gopro	22
+gopro	22	name
 goro	22
 gortázar	22
 goryeo	22
@@ -63208,7 +63208,7 @@ jemad	22
 jerárquicas	22
 jingles	22
 joh	22
-joon	22
+joon	22	name
 jordana	22
 josiah	22
 joss	22
@@ -63225,14 +63225,14 @@ kayaks	22
 kaye	22
 kc	22
 kevlar	22
-kika	22
+kika	22	name
 kirin	22
 koala	22
 kof	22
 kristian	22
 kumamoto	22
 kuo	22
-kwan	22
+kwan	22	name
 kyodo	22
 kyung	22
 labelo	22
@@ -63302,7 +63302,7 @@ manipularon	22
 manitas	22
 mansell	22
 maravedís	22
-marduk	22
+marduk	22	name
 marek	22
 margarina	22
 margas	22
@@ -63359,9 +63359,9 @@ morella	22
 morfológico	22
 moscatel	22
 mossack	22
-mossad	22
+mossad	22	name
 mostrándole	22
-motul	22
+motul	22	name
 movilice	22
 mpc	22
 ms-dos	22
@@ -63372,7 +63372,7 @@ mulligan	22
 multifacético	22
 multiplicaban	22
 mumalá	22
-muralismo	22
+muralismo	22	name
 murayama	22
 museografía	22
 mutan	22
@@ -63415,7 +63415,7 @@ oleiros	22	name
 olivieri	22
 ondear	22
 ondulados	22
-ons	22
+ons	22	name
 opds	22
 oratorios	22
 oren	22
@@ -63503,7 +63503,7 @@ posados	22
 pospusieron	22
 postureo	22
 posverdad	22
-powerball	22
+powerball	22	name
 pp-cs	22
 practicamos	22
 pradilla	22
@@ -63840,7 +63840,7 @@ vecinalistas	22
 velatorios	22
 venderles	22
 vendrell	22	name
-venevisión	22
+venevisión	22	name
 ventiladas	22
 ventisca	22
 venís	22
@@ -63883,7 +63883,7 @@ yuyo	22
 zapateros	22
 zapoteca	22
 zayed	22
-zeke	22
+zeke	22	name
 zephyr	22
 zerón	22
 zients	22
@@ -64066,7 +64066,7 @@ bailo	21
 balancán	21
 balcarceño	21
 baldizón	21
-balenciaga	21
+balenciaga	21	name
 ballenera	21
 bandolera	21
 bankai	21
@@ -64291,7 +64291,7 @@ cruzas	21
 cruze	21
 cuadriláteros	21
 cuatriciclo	21
-cubavisión	21
+cubavisión	21	name
 cuerva	21
 curaba	21
 curadores	21
@@ -64310,7 +64310,7 @@ decapita	21
 deckard	21
 declan	21
 dedicándole	21
-deezer	21
+deezer	21	name
 definirla	21
 dehesas	21
 deligne	21
@@ -64460,10 +64460,10 @@ envidiables	21
 envolviendo	21
 envolvieron	21
 equiparó	21
-eredivisie	21
+eredivisie	21	name
 erigidas	21
 erosionó	21
-eroski	21
+eroski	21	name
 escamoso	21
 escaneado	21
 escarpada	21
@@ -64499,7 +64499,7 @@ estúpidas	21
 eth	21
 etihad	21
 etimológica	21
-eton	21
+eton	21	name
 etxeberria	21
 evacuando	21
 evaluaba	21
@@ -64510,7 +64510,7 @@ evitarlas	21
 evolucionen	21
 exagera	21
 exhibicionismo	21
-exo	21
+exo	21	name
 expansionista	21
 exparlamentario	21
 expendedora	21
@@ -64599,7 +64599,7 @@ gelatinosa	21
 gelman	21
 generarle	21
 gifford	21
-gillan	21
+gillan	21	name
 gimmick	21
 ginsburg	21
 gisbert	21
@@ -64737,7 +64737,7 @@ invisibilizada	21
 inyectadas	21
 ipcva	21
 irc	21
-irgún	21
+irgún	21	name
 irons	21
 izzy	21
 iñiguez	21
@@ -65310,7 +65310,7 @@ sesal	21
 severiano	21
 señalarlo	21
 señera	21
-shein	21
+shein	21	name
 shinzo	21
 shiraz	21
 shogun	21
@@ -65319,7 +65319,7 @@ siderurgia	21
 signatura	21
 sileoni	21
 simoca	21
-sina	21
+sina	21	name
 sincroniza	21
 sinkiang	21
 sináptica	21
@@ -65407,7 +65407,7 @@ tibios	21
 ticona	21
 tijuanense	21
 tildan	21
-timbiriche	21
+timbiriche	21	name
 tires	21
 tirolina	21
 tirándose	21
@@ -65469,7 +65469,7 @@ ultimados	21
 umbra	21
 unicen	21
 unifican	21
-unilever	21
+unilever	21	name
 unodc	21
 unreal	21
 upch	21
@@ -65522,7 +65522,7 @@ wp	21
 xàtiva	21
 yaco	21
 yacían	21
-yandex	21
+yandex	21	name
 ybarra	21
 yerbas	21
 yugoslavas	21
@@ -65600,7 +65600,7 @@ ahijada	20
 ahoralas	20
 ahorapuerto	20
 ahorcada	20
-aiden	20
+aiden	20	name
 aimée	20
 ain't	20
 airosa	20
@@ -65642,7 +65642,7 @@ amotinamiento	20
 amplificado	20
 amueblada	20
 amígdala	20
-anadolu	20
+anadolu	20	name
 ancash	20
 andreis	20
 anecdotario	20
@@ -65875,7 +65875,7 @@ chantilly	20
 chapitel	20
 charli	20
 chaucer	20
-chedraui	20
+chedraui	20	name
 chequia	20	name
 cheung	20
 chilindrina	20
@@ -66078,7 +66078,7 @@ dolan	20
 dolarizados	20
 domesticado	20
 dominancia	20
-dominici	20
+dominici	20	name
 domótica	20
 dpec	20
 drs	20
@@ -66305,7 +66305,7 @@ goleadas	20
 golpeándola	20
 gomero	20
 gonçalo	20
-goodyear	20
+goodyear	20	name
 gorditas	20
 grabo	20
 graciana	20
@@ -66483,7 +66483,7 @@ kozak	20
 kravetz	20
 kremer	20
 krisna	20
-krupp	20
+krupp	20	name
 laboralista	20
 laceración	20
 lacerante	20
@@ -66512,7 +66512,7 @@ limpiamos	20
 limpiaparabrisas	20
 lindes	20
 lingard	20
-lipton	20
+lipton	20	name
 lissette	20
 lister	20
 literas	20
@@ -66525,7 +66525,7 @@ lnd	20
 lobera	20
 localizarlos	20
 loción	20
-logitech	20
+logitech	20	name
 longitarsus	20
 louisa	20
 lpl	20
@@ -66784,7 +66784,7 @@ poncio	20
 ponderan	20
 popeye	20
 porcel	20
-pornhub	20
+pornhub	20	name
 porros	20
 porzingis	20
 posarse	20
@@ -66862,7 +66862,7 @@ radioaficionados	20
 radioestadio	20
 radiofonía	20
 raider	20
-rakuten	20
+rakuten	20	name
 ralentizando	20
 ramada	20
 ramala	20
@@ -66884,7 +66884,7 @@ redding	20
 redescubierta	20
 redman	20
 reducirlos	20
-reebok	20
+reebok	20	name
 reelegir	20
 reembolsar	20
 reflexionemos	20
@@ -66894,7 +66894,7 @@ registrarlo	20
 regueiro	20
 regularicen	20
 rehabilitando	20
-reik	20
+reik	20	name
 reincorporar	20
 reingresar	20
 reinsertarse	20
@@ -67034,7 +67034,7 @@ springboks	20
 stadia	20
 stalingrado	20
 start-up	20
-starz	20
+starz	20	name
 ste	20
 stephane	20
 striptease	20
@@ -67084,7 +67084,7 @@ tecno	20
 tehuel	20
 teillier	20
 tejos	20
-telcel	20
+telcel	20	name
 telefilme	20
 telegrafía	20
 teletica	20
@@ -67254,7 +67254,7 @@ acarreos	19
 acatitla	19
 acaudalada	19
 accionaron	19
-accor	19
+accor	19	name
 aceitar	19
 aceiteros	19
 aceleraba	19
@@ -67338,7 +67338,7 @@ amills	19
 amontonan	19
 ampararse	19
 ampliaremos	19
-amtrak	19
+amtrak	19	name
 anaga	19
 analizarlas	19
 analizo	19
@@ -67461,7 +67461,7 @@ bengtson	19
 berri	19
 besteiro	19
 beti	19
-betsson	19
+betsson	19	name
 bichito	19
 bigelow	19
 biosíntesis	19
@@ -67478,7 +67478,7 @@ boniato	19
 boscán	19
 botiquines	19
 botó	19
-bougainville	19
+bougainville	19	name
 bowden	19
 boyante	19
 brentford	19
@@ -67676,7 +67676,7 @@ corroborando	19
 corrugado	19
 corsódromo	19
 cortarán	19
-cortegada	19
+cortegada	19	name
 cortezas	19
 cortéz	19
 corá	19
@@ -67925,7 +67925,7 @@ entrometerse	19
 epc	19
 epivaccorona	19
 epr	19
-epson	19
+epson	19	name
 erbol	19
 erradas	19
 errol	19
@@ -68117,12 +68117,12 @@ hallándose	19
 hammerstein	19
 handa	19
 hansel	19
-hapoel	19
+hapoel	19	name
 haquim	19
 hariri	19
 hartó	19
 haruhi	19
-havok	19
+havok	19	name
 hayashi	19
 hazme	19
 helenística	19
@@ -68266,7 +68266,7 @@ juste	19
 justificaría	19
 juticalpa	19
 júcar	19
-kalex	19
+kalex	19	name
 kaliningrado	19
 kanato	19
 kannada	19
@@ -68280,7 +68280,7 @@ kenta	19
 kienyke	19
 kilovatio	19
 kolbe	19
-kona	19
+kona	19	name
 konstantinov	19
 kontaveit	19
 koundé	19
@@ -68342,7 +68342,7 @@ llorosos	19
 lockwood	19
 lodazal	19
 loe	19
-loewe	19
+loewe	19	name
 lomba	19
 lombarda	19
 longueira	19
@@ -68427,7 +68427,7 @@ milciades	19
 milicianas	19
 milne	19
 mimí	19
-mindanao	19
+mindanao	19	name
 miner	19
 minibús	19
 minoru	19
@@ -68587,7 +68587,7 @@ persistirán	19
 persistía	19
 perteneciera	19
 perturban	19
-pescanova	19
+pescanova	19	name
 peticionarios	19
 pezuñas	19
 peñista	19
@@ -68669,7 +68669,7 @@ proxima	19
 prusianas	19
 pryor	19
 publicita	19
-puch	19
+puch	19	name
 pujantes	19
 pulpí	19
 pulsada	19
@@ -68692,7 +68692,7 @@ q’hubo	19
 racialmente	19
 radioemisora	19
 rafita	19
-ragnarok	19
+ragnarok	19	name
 rais	19
 randle	19
 rapallini	19
@@ -68848,7 +68848,7 @@ sexitano	19
 shangai	19
 shida	19
 shigeru	19
-shimano	19
+shimano	19	name
 shmuel	19
 shockwave	19
 showroom	19
@@ -69043,7 +69043,7 @@ virutas	19
 vitela	19
 vitola	19
 vj	19
-vostok	19
+vostok	19	name
 vulnerada	19
 véanse	19
 wainwright	19
@@ -69174,7 +69174,7 @@ alistado	18
 alistaron	18
 allin	18
 almacene	18
-alphatauri	18
+alphatauri	18	name
 alsasua	18
 altiva	18
 alzórriz	18
@@ -69334,7 +69334,7 @@ bombillos	18
 bonachón	18
 borlas	18
 bormann	18
-bovril	18
+bovril	18	name
 boyce	18
 boyero	18
 britten	18
@@ -69544,7 +69544,7 @@ corintio	18
 coromoto	18
 corpulencia	18
 cortical	18
-cortuluá	18
+cortuluá	18	name
 cortésmente	18
 cosep	18
 cosiendo	18
@@ -69722,7 +69722,7 @@ durbin	18
 duvalier	18
 dvi	18
 dársele	18
-easyjet	18
+easyjet	18	name
 ecclestone	18
 echarlos	18
 echarnos	18
@@ -69893,7 +69893,7 @@ filmaban	18
 filogenética	18
 filosa	18
 fiscaliza	18
-fitbit	18
+fitbit	18	name
 fittipaldi	18
 flacos	18
 flagrantemente	18
@@ -69932,7 +69932,7 @@ fsa	18
 fsc	18
 fuerzan	18
 fujimoto	18
-fujitsu	18
+fujitsu	18	name
 fulbright	18
 fullerton	18
 funcionariado	18
@@ -70322,7 +70322,7 @@ maximiano	18
 mayolo	18
 mazzoni	18
 mcnally	18
-mediatek	18
+mediatek	18	name
 mediato	18
 meditado	18
 meirelles	18
@@ -70437,7 +70437,7 @@ notificaba	18
 notificarlo	18
 notificarse	18
 noviazgos	18
-nox	18
+nox	18	name
 npc	18
 ntn	18
 nucleación	18
@@ -70475,7 +70475,7 @@ olavarrienses	18
 olfativa	18
 olleros	18
 olof	18
-ometepe	18
+ometepe	18	name
 omie	18
 omnipresencia	18
 omnium	18
@@ -70824,7 +70824,7 @@ seglar	18
 segregan	18
 seguirás	18
 seiji	18
-seiko	18
+seiko	18	name
 selfis	18
 sembramos	18
 seminales	18
@@ -70945,14 +70945,14 @@ telugu	18
 telómeros	18
 temblorosa	18
 temieron	18
-tenaris	18
+tenaris	18	name
 tendero	18
 tenochtitlán	18
 tep	18
 teselas	18
 testó	18
 tether	18
-texaco	18
+texaco	18	name
 thrall	18
 tilo	18
 tinacos	18
@@ -71042,7 +71042,7 @@ verduzco	18
 vericuetos	18
 vertebrales	18
 veréis	18
-vestas	18
+vestas	18	name
 veías	18
 vialey	18
 viarias	18
@@ -71076,7 +71076,7 @@ vulcanólogo	18
 víquez	18
 vórtices	18
 wah	18
-walgreens	18
+walgreens	18	name
 wheatley	18
 whitecaps	18
 wigan	18
@@ -71119,7 +71119,7 @@ abandoné	17
 abanicó	17
 abasíes	17
 abderramán	17
-abertis	17
+abertis	17	name
 abm	17
 abovedada	17
 abovedados	17
@@ -71381,7 +71381,7 @@ batirse	17
 bayly	17
 bañándose	17
 beban	17
-beechcraft	17
+beechcraft	17	name
 beitia	17
 belém	17
 bendecidas	17
@@ -71435,7 +71435,7 @@ bublé	17
 budge	17
 buglé	17
 bullicioso	17
-burberry	17
+burberry	17	name
 burgaleses	17
 burnout	17
 burriana	17	name
@@ -71550,7 +71550,7 @@ chp	17
 christie's	17
 chuleta	17
 cincel	17
-cinderella	17
+cinderella	17	name
 cinemas	17
 cipoleña	17
 circunscrito	17
@@ -71606,7 +71606,7 @@ comprarme	17
 comprimidas	17
 compulsivos	17
 computan	17
-comscore	17
+comscore	17	name
 comunicativos	17
 comunico	17
 conas	17
@@ -72104,7 +72104,7 @@ guiteras	17
 guiñol	17
 gustaria	17
 guíen	17
-gyllenhaal	17
+gyllenhaal	17	name
 gádor	17
 hacinadas	17
 haile	17
@@ -72243,7 +72243,7 @@ interesara	17
 interesaría	17
 interestelares	17
 interesándose	17
-interfax	17
+interfax	17	name
 intergaláctico	17
 interpretativos	17
 interrelacionados	17
@@ -72325,7 +72325,7 @@ kepa	17
 kerrigan	17
 keto	17
 kimchi	17
-kmart	17
+kmart	17	name
 koi	17
 kou	17
 krypto	17
@@ -72385,7 +72385,7 @@ llevasen	17
 lobuladas	17
 lociones	17
 locuaz	17
-lollapalooza	17
+lollapalooza	17	name
 longchamps	17
 lonjas	17
 lopilato	17
@@ -72394,7 +72394,7 @@ lumia	17
 lunfardo	17
 lxii	17
 lxv	17
-lyft	17
+lyft	17	name
 lyman	17
 léxicas	17
 lü	17
@@ -72500,7 +72500,7 @@ morgado	17
 morten	17
 mostrándonos	17
 mototaxis	17
-motown	17
+motown	17	name
 movible	17
 movilizamos	17
 muchedumbres	17
@@ -72584,7 +72584,7 @@ odom	17
 off-road	17
 ofician	17
 ofreces	17
-ogilvy	17
+ogilvy	17	name
 ojivales	17
 olave	17
 olinda	17
@@ -72623,10 +72623,10 @@ palada	17
 palangana	17
 palentino	17
 pan-prd	17
-panathinaikos	17
+panathinaikos	17	name
 pancracio	17
 pandereta	17
-pantone	17
+pantone	17	name
 papaloapan	17
 paparazzis	17
 papilas	17
@@ -73008,7 +73008,7 @@ simplificados	17
 sincerar	17
 sincronizarse	17
 sindicalización	17
-sinopec	17
+sinopec	17	name
 sintáctica	17
 sintácticas	17
 siva	17
@@ -73039,7 +73039,7 @@ sorbos	17
 sorokin	17
 sorpresivas	17
 sosegada	17
-spanair	17
+spanair	17	name
 spanic	17
 spb	17
 spinoza	17	name
@@ -73249,7 +73249,7 @@ virtuosas	17
 vischi	17
 vivirían	17
 viñuela	17
-vmware	17
+vmware	17	name
 volcamiento	17
 volvé	17
 vulture	17
@@ -73260,7 +73260,7 @@ waltz	17
 waterhouse	17
 weiner	17
 wi	17
-wimax	17
+wimax	17	name
 wiseman	17
 wray	17
 wrestle	17
@@ -73404,7 +73404,7 @@ alovera	16
 alternadamente	16
 alterne	16
 altice	16
-aluar	16
+aluar	16	name
 aludieron	16
 alzamos	16
 amadís	16
@@ -73514,7 +73514,7 @@ astados	16
 astronáutica	16
 asumible	16
 atacarán	16
-atala	16
+atala	16	name
 atando	16
 atasca	16
 aten	16
@@ -73628,7 +73628,7 @@ borbónica	16
 borbónico	16
 bordas	16
 borla	16
-borromeo	16
+borromeo	16	name
 botan	16
 bower	16
 braden	16
@@ -73661,7 +73661,7 @@ cabalgan	16
 cabecero	16
 cadavérico	16
 caduco	16
-caesars	16
+caesars	16	name
 cagan	16
 caigamos	16
 caixaforum	16
@@ -73769,7 +73769,7 @@ cillessen	16
 cimentado	16
 cincos	16
 cinegético	16
-cinemark	16
+cinemark	16	name
 cinthya	16
 circularidad	16
 ciruelo	16
@@ -74320,14 +74320,14 @@ geoingeniería	16
 germaine	16
 gestha	16
 geóloga	16
-gilera	16
+gilera	16	name
 gime	16
 gimenez	16
 girarse	16
 giráldez	16
 girán	16
 gisele	16
-github	16
+github	16	name
 giuffre	16
 giustozzi	16
 glabro	16
@@ -74335,7 +74335,7 @@ glabros	16
 glaciaciones	16
 glastonbury	16
 glazer	16
-glencore	16
+glencore	16	name
 glicerina	16
 glorietas	16
 gnomos	16
@@ -74350,7 +74350,7 @@ grandezas	16
 grandote	16
 granell	16
 grecochipriotas	16
-grifols	16
+grifols	16	name
 grima	16
 groening	16
 grosería	16
@@ -74373,7 +74373,7 @@ habilitamos	16
 habitáculos	16
 haider	16
 hailwood	16
-haim	16
+haim	16	name
 hajime	16
 halagüeñas	16
 hanseática	16
@@ -74403,7 +74403,7 @@ hobbie	16
 holoceno	16
 holtz	16
 homenajearon	16
-honeywell	16
+honeywell	16	name
 hoon	16
 horcajadas	16
 ht	16
@@ -74696,7 +74696,7 @@ manipule	16
 maratonista	16
 marcelina	16
 marchase	16
-marcopolo	16
+marcopolo	16	name
 mareco	16
 margarit	16
 marilú	16
@@ -74854,7 +74854,7 @@ novello	16
 novgorod	16
 novillada	16
 novohispano	16
-num	16
+num	16	name
 numerar	16
 nwsl	16
 nyt	16
@@ -74905,7 +74905,7 @@ orientadora	16
 orienten	16
 orm	16
 ormond	16
-ormuz	16
+ormuz	16	name
 ornitología	16
 ortelli	16
 oscureciendo	16
@@ -75050,7 +75050,7 @@ prevenga	16
 prevengan	16
 previeron	16
 previno	16
-primark	16
+primark	16	name
 primogenitura	16
 principesca	16
 pritchard	16
@@ -75091,7 +75091,7 @@ puntuado	16
 puntualizando	16
 puntúa	16
 puntúan	16
-punyab	16
+punyab	16	name
 purcell	16
 purificada	16
 putellas	16
@@ -75281,7 +75281,7 @@ sefiplan	16
 sefirot	16
 segregar	16
 seix	16
-sejm	16
+sejm	16	name
 semedo	16
 semiautomáticas	16
 semilleros	16
@@ -75342,7 +75342,7 @@ sociables	16
 socializado	16
 socimi	16
 sociopolíticos	16
-sofitel	16
+sofitel	16	name
 solariegas	16
 solicitaría	16
 solidifica	16
@@ -75462,7 +75462,7 @@ tetsu	16
 tex-mex	16
 thauvin	16
 tibú	16
-ticketmaster	16
+ticketmaster	16	name
 tierra-aire	16
 timbreo	16
 tinerfeños	16
@@ -75631,7 +75631,7 @@ wasap	16
 watanuki	16
 watchmen	16
 weller	16
-westjet	16
+westjet	16	name
 westview	16
 widget	16
 winifred	16
@@ -75744,7 +75744,7 @@ adú	15
 aegis	15
 aequo	15
 aerodom	15
-aerosmith	15
+aerosmith	15	name
 afectaran	15
 afijos	15
 afloró	15
@@ -75832,7 +75832,7 @@ alvia	15
 alzamientos	15
 alían	15
 amainó	15
-amaiur	15
+amaiur	15	name
 amapolas	15
 amargor	15
 amarillista	15
@@ -75890,7 +75890,7 @@ apilan	15
 apoderaba	15
 aposición	15
 apostillan	15
-appgallery	15
+appgallery	15	name
 applewhite	15
 apreciará	15
 aprehenderlo	15
@@ -75903,7 +75903,7 @@ apática	15
 apáticos	15
 aquiescencia	15
 arahal	15
-aralar	15
+aralar	15	name
 aramis	15
 arandelas	15
 arbeloa	15
@@ -75989,7 +75989,7 @@ avileño	15
 avisamos	15
 avistada	15
 avivamiento	15
-axios	15
+axios	15	name
 aylward	15
 ayo	15
 ayudándonos	15
@@ -76068,7 +76068,7 @@ blender	15
 bloqueara	15
 bloquearlo	15
 bme	15
-bmi	15
+bmi	15	name
 bobbio	15
 boluarte	15
 boludos	15
@@ -76078,14 +76078,14 @@ bonete	15
 bosón	15
 botando	15
 bovinas	15
-brabham	15
+brabham	15	name
 brahian	15
 brant	15
 breda	15
 breviario	15
 breñas	15
 briasco	15
-bridgestone	15
+bridgestone	15	name
 brillaban	15
 brindarnos	15
 brión	15
@@ -76151,7 +76151,7 @@ cashman	15
 casimir	15
 casquetes	15
 cassani	15
-cassius	15
+cassius	15	name
 castigara	15
 castrar	15
 castrejón	15
@@ -76755,7 +76755,7 @@ formulará	15
 fortalecemos	15
 fortalecerla	15
 forteza	15
-fortinet	15
+fortinet	15	name
 fortuitamente	15
 fortún	15
 forzarla	15
@@ -77081,7 +77081,7 @@ kaji	15
 kamchatka	15
 kaminski	15
 kankkunen	15
-kao	15
+kao	15	name
 kavanagh	15
 kcs	15
 kechichian	15
@@ -77099,7 +77099,7 @@ kirkpatrick	15
 kitt	15
 kizaru	15
 kl	15
-koenigsegg	15
+koenigsegg	15	name
 konoe	15
 konoha	15
 kripke	15
@@ -77131,7 +77131,7 @@ lavarla	15
 laxantes	15
 lazar	15
 leach	15
-learjet	15
+learjet	15	name
 lectivos	15
 lecumberri	15
 leech	15
@@ -77192,7 +77192,7 @@ magaluf	15
 magik	15
 maida	15
 maiko	15
-makro	15
+makro	15	name
 malabar	15
 malabaristas	15
 malandros	15
@@ -77317,7 +77317,7 @@ miya	15
 miyako	15
 mizrahi	15
 mmorpg	15
-mnet	15
+mnet	15	name
 moches	15
 modernizaciones	15
 modificables	15
@@ -77564,7 +77564,7 @@ personificar	15
 persuasivo	15
 perturbadoras	15
 pestalozzi	15
-petrocaribe	15
+petrocaribe	15	name
 peñistas	15
 pfc	15
 pharr	15
@@ -77672,7 +77672,7 @@ pronosticados	15
 pronostico	15
 propender	15
 proporcionándole	15
-prosegur	15
+prosegur	15	name
 prosiga	15
 protagonizaban	15
 protagonizara	15
@@ -77731,7 +77731,7 @@ raices	15
 ramanujan	15
 ramificadas	15
 ramillete	15
-rammstein	15
+rammstein	15	name
 ramonet	15
 rapada	15
 rapado	15
@@ -78004,7 +78004,7 @@ stanislav	15
 stanisław	15
 starkiller	15
 stavros	15
-steinberg	15
+steinberg	15	name
 stepan	15
 stiles	15
 stipe	15
@@ -78158,7 +78158,7 @@ trome	15
 tropel	15
 trujillanos	15
 tsáchilas	15
-tumblr	15
+tumblr	15	name
 turbos	15
 turena	15
 turku	15
@@ -78194,7 +78194,7 @@ urdir	15
 urich	15
 uruguayana	15
 urxencias	15
-ustacha	15
+ustacha	15	name
 usumacinta	15
 usurpada	15
 usurpadora	15
@@ -78242,7 +78242,7 @@ videocámaras	15
 vildoza	15
 villarrobledo	15	name
 vilá	15
-vimeo	15
+vimeo	15	name
 vinalopó	15
 vinnie	15
 violinistas	15
@@ -78290,7 +78290,7 @@ xing	15
 xor	15
 yaguarón	15
 yahveh	15
-yakutia	15
+yakutia	15	name
 yamazaki	15
 yangel	15
 yangón	15
@@ -78449,7 +78449,7 @@ albiac	14
 albistur	14
 alborotos	14
 alcantara	14
-alcatel	14
+alcatel	14	name
 alconchel	14
 alcores	14
 alcornoques	14
@@ -78509,7 +78509,7 @@ anestesiólogos	14
 angeloz	14
 anglo-sueca	14
 angloparlantes	14
-angra	14
+angra	14	name
 anhídrido	14
 anillado	14
 animarnos	14
@@ -78570,7 +78570,7 @@ aran	14
 araneda	14
 araoz	14
 arasa	14
-arashi	14
+arashi	14	name
 arbustiva	14
 arcillosa	14
 arequito	14
@@ -78647,7 +78647,7 @@ aukus	14
 aunó	14
 auspiciantes	14
 auspiciar	14
-autodesk	14
+autodesk	14	name
 autoproclama	14
 autorrealización	14
 autosómica	14
@@ -78692,7 +78692,7 @@ bananero	14
 bancarizados	14
 bancroft	14
 bandolero	14
-banesto	14
+banesto	14	name
 bannister	14
 banrural	14
 bantú	14
@@ -78778,7 +78778,7 @@ brooker	14
 brotado	14
 broughton	14
 brujita	14
-btv	14
+btv	14	name
 budweiser	14
 buesa	14
 buki	14
@@ -79084,7 +79084,7 @@ córtex	14
 cúbito	14
 d'artagnan	14
 daguerre	14
-daihatsu	14
+daihatsu	14	name
 dalái	14
 dammert	14
 danko	14
@@ -79717,7 +79717,7 @@ hdd	14
 heb	14
 heian	14
 hel	14
-helsing	14
+helsing	14	name
 hemorroides	14
 hermigua	14
 hernangómez	14
@@ -79732,7 +79732,7 @@ hipertrofia	14
 hipotecados	14
 hiriente	14
 hiroki	14
-hisense	14
+hisense	14	name
 histamina	14
 histológico	14
 hitsugaya	14
@@ -79834,7 +79834,7 @@ influidas	14
 influyan	14
 infodemia	14
 informaci贸n	14
-informalismo	14
+informalismo	14	name
 infuetur	14
 ingavi	14
 ingirió	14
@@ -79916,7 +79916,7 @@ jagüey	14
 jahan	14
 jaiba	14
 jaka	14
-jalalabad	14
+jalalabad	14	name
 jani	14
 jarabes	14
 jazmines	14
@@ -79966,7 +79966,7 @@ kinks	14
 kioskos	14
 kirsty	14
 kitchener	14
-kiva	14
+kiva	14	name
 kjaer	14
 klimt	14
 kluber	14
@@ -79979,7 +79979,7 @@ koster	14
 krajina	14
 krauss	14
 krejcikova	14
-kriegsmarine	14
+kriegsmarine	14	name
 kristy	14
 kueider	14
 kunduz	14
@@ -80016,7 +80016,7 @@ lavaban	14
 lavarlas	14
 lavarlos	14
 layún	14
-lazard	14
+lazard	14	name
 leary	14
 lecaros	14
 lechoso	14
@@ -80071,7 +80071,7 @@ lumínicos	14
 lunin	14
 luxaciones	14
 lxiv	14
-lycoming	14
+lycoming	14	name
 lésbicas	14
 mab	14
 macarrulla	14
@@ -80112,7 +80112,7 @@ manipulen	14
 maniqueísmo	14
 manotas	14
 manotazos	14
-manpowergroup	14
+manpowergroup	14	name
 manuelita	14
 manzurismo	14
 mapaches	14
@@ -80285,7 +80285,7 @@ nador	14
 nagai	14
 nakayama	14
 nanda	14
-napster	14
+napster	14	name
 narayan	14
 narcoactividad	14
 nardini	14
@@ -80368,7 +80368,7 @@ ondulantes	14
 one-shot	14
 ongarato	14
 ongi	14
-openai	14
+openai	14	name
 opengl	14
 opondría	14
 oprime	14
@@ -80424,7 +80424,7 @@ pasqual	14
 passaglia	14
 pastando	14
 pastorizzo	14
-pathé	14
+pathé	14	name
 patinetas	14
 paulsen	14
 pavimentó	14
@@ -80516,7 +80516,7 @@ polinesios	14
 politiqueros	14
 polluelo	14
 polvorienta	14
-polygram	14
+polygram	14	name
 pomos	14
 ponele	14
 ponsatí	14
@@ -80529,7 +80529,7 @@ porteras	14
 portobello	14
 portuondo	14
 poseerla	14
-postobón	14
+postobón	14	name
 potabilizadoras	14
 potables	14
 pote	14
@@ -80844,7 +80844,7 @@ secrecía	14
 secretada	14
 secretoras	14
 secuestrarla	14
-securitas	14
+securitas	14	name
 segar	14
 segurola	14
 sekai	14
@@ -80882,7 +80882,7 @@ shelly	14
 shenzhou	14
 shephard	14
 shinigamis	14
-shopify	14
+shopify	14	name
 siboldi	14
 siddeley	14
 sidor	14
@@ -80891,7 +80891,7 @@ sigali	14
 significarán	14
 signó	14
 silencia	14
-silverstein	14
+silverstein	14	name
 silveyra	14
 simbolizó	14
 simonetti	14
@@ -80937,7 +80937,7 @@ soliz	14
 solárium	14
 sombrerete	14
 sonadas	14
-sophos	14
+sophos	14	name
 soportal	14
 sorianos	14
 sorprendan	14
@@ -80961,7 +80961,7 @@ stoll	14
 stoneman	14
 stp	14
 stud	14
-styx	14
+styx	14	name
 suazilandia	14	name
 subalternas	14
 subcomisiones	14
@@ -80991,7 +80991,7 @@ sunarp	14
 superadoras	14
 superfinal	14
 superflua	14
-supersport	14
+supersport	14	name
 suplantado	14
 suplía	14
 supuse	14
@@ -81021,7 +81021,7 @@ taguchi	14
 taha	14
 tailandesas	14
 taka	14
-takeuchi	14
+takeuchi	14	name
 tamina	14
 tanahashi	14
 tanqueros	14
@@ -81046,7 +81046,7 @@ tecnólogo	14
 tej	14
 tejones	14
 tekis	14
-teledeporte	14
+teledeporte	14	name
 telef贸nica	14
 telegráficas	14
 telesistema	14
@@ -81215,7 +81215,7 @@ viciosa	14
 viciosos	14
 videoclub	14
 viesca	14
-viki	14
+viki	14	name
 villaseca	14
 visites	14
 vistan	14
@@ -81499,7 +81499,7 @@ anguilas	13
 anhelados	13
 anidamiento	13
 animarlos	13
-animax	13
+animax	13	name
 animus	13
 anochece	13
 anopheles	13
@@ -81722,7 +81722,7 @@ beale	13
 beatas	13
 bebedero	13
 beckman	13
-beko	13
+beko	13	name
 belicista	13
 belldandy	13
 bellerín	13
@@ -81757,7 +81757,7 @@ biombo	13
 biota	13
 bixby	13
 bizarra	13
-blackpink	13
+blackpink	13	name
 blanquecinos	13
 bledo	13
 bnt	13
@@ -81789,7 +81789,7 @@ branquial	13
 brazas	13
 brebaje	13
 bregó	13
-brembo	13
+brembo	13	name
 breno	13
 breslavia	13
 bribón	13
@@ -81896,7 +81896,7 @@ caricaturistas	13
 caride	13
 cariola	13
 caritativos	13
-carlsson	13
+carlsson	13	name
 carnavalesco	13
 carolingia	13
 carolingios	13
@@ -81970,7 +81970,7 @@ chayo	13
 checheno	13
 cheddar	13
 chele	13
-chetniks	13
+chetniks	13	name
 chichén	13
 chiflados	13
 chima	13
@@ -82227,7 +82227,7 @@ cyrano	13
 cálidamente	13
 cástines	13
 cátaros	13
-célebes	13
+célebes	13	name
 cóncavos	13
 cónclaves	13
 cúllar	13
@@ -82244,7 +82244,7 @@ daruma	13
 daszak	13
 daule	13
 dañarlos	13
-dba	13
+dba	13	name
 dcha	13
 debéis	13
 declararla	13
@@ -82398,7 +82398,7 @@ divulgue	13
 dnm	13
 domesday	13
 dominick	13
-dominus	13
+dominus	13	name
 doménech	13
 donara	13
 donaría	13
@@ -82409,7 +82409,7 @@ dou	13
 dragan	13
 driscoll	13
 droide	13
-dropbox	13
+dropbox	13	name
 dsa	13
 dtrh	13
 ductilidad	13
@@ -82455,7 +82455,7 @@ elijamos	13
 eliud	13
 ellery	13
 elly	13
-elmore	13
+elmore	13	name
 elogiadas	13
 embarba	13
 embarcaderos	13
@@ -82525,7 +82525,7 @@ envasadora	13
 enviarnos	13
 enviaré	13
 enya	13
-epcot	13
+epcot	13	name
 epigenética	13
 epitelial	13
 epre	13
@@ -82759,7 +82759,7 @@ gasolinazos	13
 gasteiz	13
 gatillero	13
 gatilleros	13
-geely	13
+geely	13	name
 geller	13
 genao	13
 generalato	13
@@ -82799,7 +82799,7 @@ goleadoras	13
 golpearle	13
 golpearme	13
 gomería	13
-gorillaz	13
+gorillaz	13	name
 gorostegui	13
 gorriarán	13
 grabarán	13
@@ -82878,7 +82878,7 @@ hellman	13
 helú	13
 heredades	13
 herold	13
-herschel	13
+herschel	13	name
 heston	13
 hibiki	13
 hidrogenación	13
@@ -82893,7 +82893,7 @@ hipocentro	13
 hisopó	13
 historicismo	13
 historiográficas	13
-hitomi	13
+hitomi	13	name
 hoang	13
 holgadas	13
 holter	13
@@ -83157,7 +83157,7 @@ kitsune	13
 kkk	13
 kks	13
 know-how	13
-knéset	13
+knéset	13	name
 kodiak	13
 kohei	13
 kohler	13
@@ -83370,7 +83370,7 @@ merodeaba	13
 mesodermo	13
 metamórficas	13
 meteogalicia	13
-metlife	13
+metlife	13	name
 metrovalencia	13
 mexicano-estadounidense	13
 mexía	13
@@ -83486,7 +83486,7 @@ negritos	13
 neolítica	13
 neoplasia	13
 neumotórax	13
-neuralink	13
+neuralink	13	name
 neurodegenerativa	13
 neuropatía	13
 neurótico	13
@@ -83508,7 +83508,7 @@ noes	13
 nombraban	13
 nombro	13
 nordisk	13
-nordstrom	13
+nordstrom	13	name
 normalizan	13
 normalizará	13
 norte-noroeste	13
@@ -83640,7 +83640,7 @@ paquidermos	13
 paracao	13
 paradón	13
 paralizara	13
-paramore	13
+paramore	13	name
 parapetos	13
 parasitarias	13
 parecerle	13
@@ -83703,7 +83703,7 @@ persuasiva	13
 pestillo	13
 petco	13
 petorca	13
-petronas	13
+petronas	13	name
 petti	13
 peybernes	13
 peyote	13
@@ -83878,7 +83878,7 @@ radiológicos	13
 radiólogo	13
 radić	13
 raffensperger	13
-rafi	13
+rafi	13	name
 rahmani	13
 rainey	13
 ralentizan	13
@@ -84053,7 +84053,7 @@ rondero	13
 ronderos	13
 rooster	13
 roscoe	13
-rossiya	13
+rossiya	13	name
 rotarán	13
 rotatorios	13
 rouse	13
@@ -84180,7 +84180,7 @@ silbar	13
 silbo	13
 silenciando	13
 silvera	13
-simca	13
+simca	13	name
 simoni	13
 simplifican	13
 simpáticas	13
@@ -84199,7 +84199,7 @@ sne	13
 snitch	13
 snob	13
 snvs	13
-soberanismo	13
+soberanismo	13	name
 soberanías	13
 sobrecosto	13
 sobrecupo	13
@@ -84248,14 +84248,14 @@ stardust	13
 starks	13
 steadman	13
 steak	13
-steppenwolf	13
+steppenwolf	13	name
 stig	13
 stmo	13
 storioni	13
 stravinsky	13
 stroheim	13
 strucker	13
-studebaker	13
+studebaker	13	name
 suabia	13
 suavizan	13
 subdivididas	13
@@ -84588,7 +84588,7 @@ whitfield	13
 wicca	13
 wifredo	13
 wiggum	13
-wilco	13
+wilco	13	name
 wildcat	13
 windham	13
 wooten	13
@@ -84614,7 +84614,7 @@ yg	13
 yllana	13
 yoh	13
 yohan	13
-yokosuka	13
+yokosuka	13	name
 yopal	13
 yoshiko	13
 you'll	13
@@ -84623,7 +84623,7 @@ yuridia	13
 yuriria	13
 yutaka	13
 yuto	13
-yutong	13
+yutong	13	name
 zahra	13
 zain	13
 zapateo	13
@@ -109599,3 +109599,339 @@ Zōng	40	name
 Шевчук	40	name
 ברל	40	name
 שלמה	40	name
+abwehr	40	name
+aespa	40	name
+airbaltic	40	name
+ajinomoto	40	name
+alauismo	40	name
+aldabra	40	name
+alderney	40	name
+aldi	40	name
+alitalia	40	name
+aliyah	40	name
+aliyá	40	name
+allsvenskan	40	name
+amorgós	40	name
+andros	40	name
+anglesey	40	name
+anjouan	40	name
+anonymous	40	name
+anthrax	40	name
+anthropic	40	name
+antinatalismo	40	name
+antroposofía	40	name
+antónov	40	name
+apocalyptica	40	name
+arran	40	name
+arxiv	40	name
+asquenazí	40	name
+assam	40	name
+ayurveda	40	name
+bahaísmo	40	name
+baidu	40	name
+bathory	40	name
+bayer	40	name
+bektashi	40	name
+biedermeier	40	name
+bihar	40	name
+bioko	40	name
+blogger	40	name
+blur	40	name
+bornholm	40	name
+borobudur	40	name
+bozcaada	40	name
+bulgari	40	name
+bulgaria	40	name
+bundesliga	40	name
+bundesrat	40	name
+bundestag	40	name
+bundeswehr	40	name
+bursaspor	40	name
+buru	40	name
+burundi	40	name
+burzum	40	name
+candies	40	name
+caodaísmo	40	name
+catanduanes	40	name
+catarismo	40	name
+cefalonia	40	name
+centralesupélec	40	name
+ceram	40	name
+charminar	40	name
+chhattisgarh	40	name
+citera	40	name
+citigroup	40	name
+clannad	40	name
+comecon	40	name
+coursera	40	name
+cres	40	name
+deepseek	40	name
+deftones	40	name
+deísmo	40	name
+disturbed	40	name
+donkervoort	40	name
+eagles	40	name
+ecofeminismo	40	name
+egyptair	40	name
+ekstraklasa	40	name
+eliteserien	40	name
+emirates	40	name
+erasure	40	name
+esciros	40	name
+estrómboli	40	name
+euroleague	40	name
+euromaidán	40	name
+europe	40	name
+evanescence	40	name
+evangelicalismo	40	name
+eysturoy	40	name
+falster	40	name
+filettino	40	name
+filioque	40	name
+finnair	40	name
+fionia	40	name
+fogo	40	name
+folketing	40	name
+fovismo	40	name
+foxconn	40	name
+funafuti	40	name
+fyn	40	name
+garbage	40	name
+gazprom	40	name
+germanwings	40	name
+ghana	40	name
+girondino	40	name
+guyarat	40	name
+hachemí	40	name
+haganá	40	name
+halmahera	40	name
+hanafí	40	name
+hanbalismo	40	name
+haryana	40	name
+helloween	40	name
+herm	40	name
+hezbollah	40	name
+hiiumaa	40	name
+hindutva	40	name
+hoggar	40	name
+honshu	40	name
+hvar	40	name
+hégira	40	name
+imbros	40	name
+iona	40	name
+isquia	40	name
+itzy	40	name
+jacobismo	40	name
+jainismo	40	name
+jeju	40	name
+jharkhand	40	name
+kadima	40	name
+karnataka	40	name
+kastelorizo	40	name
+kauai	40	name
+kavaratti	40	name
+kihnu	40	name
+kinó	40	name
+kiritimati	40	name
+kish	40	name
+komsomol	40	name
+kosrae	40	name
+kraftwerk	40	name
+krk	40	name
+kunashir	40	name
+kurdistan	40	name
+kárpatos	40	name
+ladakh	40	name
+lampedusa	40	name
+lanai	40	name
+lancia	40	name
+langeland	40	name
+laquedivas	40	name
+lemnos	40	name
+leyte	40	name
+liberland	40	name
+libertarismo	40	name
+liechtenstein	40	name
+likud	40	name
+lolland	40	name
+lombok	40	name
+lordi	40	name
+ludismo	40	name
+lufthansa	40	name
+luftwaffe	40	name
+lukoil	40	name
+léucade	40	name
+macartismo	40	name
+madagascar	40	name
+maharashtra	40	name
+mahé	40	name
+mali	40	name
+malikí	40	name
+maniema	40	name
+manipur	40	name
+manowar	40	name
+marajó	40	name
+maui	40	name
+mayhem	40	name
+megadeth	40	name
+meghalaya	40	name
+meteora	40	name
+miconos	40	name
+micronación	40	name
+mimamsá	40	name
+mindoro	40	name
+mitraísmo	40	name
+mizoram	40	name
+mljet	40	name
+mohéli	40	name
+moiras	40	name
+monero	40	name
+mormonism	40	name
+mosad	40	name
+mosfilm	40	name
+muhu	40	name
+murano	40	name
+myheritage	40	name
+nagaland	40	name
+nakba	40	name
+nantucket	40	name
+naqshbandiyya	40	name
+nauru	40	name
+naxos	40	name
+neoimpresionismo	40	name
+neopaganismo	40	name
+newfoundland	40	name
+niaiá	40	name
+nickelback	40	name
+nigeria	40	name
+nightwish	40	name
+niue	40	name
+nizaríes	40	name
+oahu	40	name
+oireachtas	40	name
+onerepublic	40	name
+opel	40	name
+opeth	40	name
+orange	40	name
+orissa	40	name
+pag	40	name
+panafricanismo	40	name
+panay	40	name
+patmos	40	name
+pentecostalismo	40	name
+pergamonmuseum	40	name
+permacultura	40	name
+peshmerga	40	name
+piastas	40	name
+posmodernismo	40	name
+pravda	40	name
+pricewaterhousecoopers	40	name
+pubchem	40	name
+puducherry	40	name
+puntillismo	40	name
+pándava	40	name
+qantas	40	name
+qeshm	40	name
+queen	40	name
+quora	40	name
+quraysh	40	name
+rai	40	name
+rajastán	40	name
+rarotonga	40	name
+reichenau	40	name
+reichswehr	40	name
+riigikogu	40	name
+rijksmuseum	40	name
+roxette	40	name
+ruhnu	40	name
+rusofobia	40	name
+rúrikovich	40	name
+saaremaa	40	name
+sabaton	40	name
+saipán	40	name
+sajalín	40	name
+salafismo	40	name
+salafiyya	40	name
+sanofi	40	name
+santorini	40	name
+sark	40	name
+sauber	40	name
+schiermonnikoog	40	name
+schutzstaffel	40	name
+scorpions	40	name
+sealand	40	name
+selandia	40	name
+serebro	40	name
+serifos	40	name
+shabak	40	name
+shikoku	40	name
+shinee	40	name
+shwedagon	40	name
+sikkim	40	name
+sintoísmo	40	name
+skylab	40	name
+skyteam	40	name
+socotra	40	name
+somalilandia	40	name
+soundgarden	40	name
+spitsbergen	40	name
+stasi	40	name
+stonehenge	40	name
+storting	40	name
+streymoy	40	name
+sturmabteilung	40	name
+subway	40	name
+sujói	40	name
+sulawesi	40	name
+sumba	40	name
+sumbawa	40	name
+suomenlinna	40	name
+supercell	40	name
+superligaen	40	name
+suprematismo	40	name
+surtsey	40	name
+sylt	40	name
+sámar	40	name
+tarawa	40	name
+tasos	40	name
+tawhid	40	name
+telangana	40	name
+tengrianismo	40	name
+teosofía	40	name
+terschelling	40	name
+tesco	40	name
+theotokos	40	name
+togg	40	name
+togo	40	name
+tongatapu	40	name
+tool	40	name
+totalenergies	40	name
+trabzonspor	40	name
+transhumanismo	40	name
+transnistria	40	name
+trascendentalismo	40	name
+tripura	40	name
+tsushima	40	name
+twice	40	name
+túpolev	40	name
+uchicago	40	name
+uniqlo	40	name
+upolu	40	name
+usedom	40	name
+uttarakhand	40	name
+vedismo	40	name
+vespa	40	name
+vlieland	40	name
+vágar	40	name
+wahabismo	40	name
+weezer	40	name
+wehrmacht	40	name
+westlife	40	name
+whig	40	name
+wikisource	40	name
+worldcat	40	name
+xvideos	40	name
+yakushima	40	name
+yazidíes	40	name
+zacinto	40	name
+ítaca	40	name

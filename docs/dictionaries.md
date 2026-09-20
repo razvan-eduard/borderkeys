@@ -180,6 +180,13 @@ four classes. And family names need a lower floor than the 50 the first lists us
 (`--min-family-uses 5`): "Sadoveanu" has nowhere near fifty Wikidata people, and neither does
 most of the country's surnames -- the tiers above are what keeps that low floor safe.
 
+A third thing, found on 2026-09-20 and worth knowing if you have an older fetch lying around.
+Wikidata has moved language-neutral labels -- which is what a name usually is -- to the `mul`
+language code, so a query asking only for `LANG(?label) = "ro"` now misses most of the answer:
+given names went from 89,263 to 145,741 for English and from 36,077 to 92,555 for Romanian once
+`mul` was accepted alongside the language's own code. `make_names.py` asks for both. The
+bundled lists predate this, so they were built from roughly half of what the source holds.
+
 Coverage is genuinely uneven across languages -- Wikidata's own editor base skews toward
 English/German/French/Spanish, and Romanian will come back with fewer names than those do. That
 is `make_names.py` reporting the real state of a free source, not a bug to chase; its own printed
@@ -198,6 +205,60 @@ python3 tools/make_pack.py --frequencies ro_words.txt --names-flag-only names_ro
     --grammar dictionaries/ro_RO.pos --names-ordinary dictionaries/ro_RO.names-ordinary \
     --names-exclude dictionaries/ro_RO.names-exclude --tag ro-RO --out ro_RO.bkd --keep-intermediate
 ```
+
+### Names that are not people's names
+
+Everything above asks Wikidata about persons, so companies, countries, islands and
+organisations were never candidates and `paribas`, `ubisoft` and `bytedance` sat in the ordinary
+vocabulary rows unflagged. `--kind entities` asks for those instead, counting how many
+Wikipedias carry an article rather than how many people share a name:
+
+```
+python3 tools/make_names.py --language en --kind entities \
+    --endpoint https://qlever.dev/api/wikidata --out entities_en.tsv
+python3 tools/merge_names.py --tag en_US --names entities_en.tsv \
+    --hunspell en_US=/path/en_US --hunspell en_US=/path/en_GB \
+    --hunspell de_DE=/path/de_DE_frami --hunspell es_ES=/path/es_ES \
+    --hunspell fr_FR=/path/fr --hunspell it_IT=/path/it_IT \
+    --hunspell ro_RO=/path/ro_RO --report review_en.txt --apply
+```
+
+`merge_names.py` edits `dictionaries/<tag>.tsv` in place rather than rebuilding a pack, because
+the corpora the lists were counted from are not in this repository and feeding a built list back
+through `make_pack.py --frequencies` would drop every proper-noun flag it already carries. It
+uses `make_pack.py`'s own guards, plus one of its own: **a word that is an ordinary lower-case
+word in any language the project ships is never flagged**, whatever Wikidata says. That rule is
+doing real work, because organisations are routinely named after ordinary words -- without it
+English flags `zero`, `joy`, `guard` and `blues`, and Romanian flags `carantină` and `taur`.
+
+Every language has to be asked, not just the list's own, and that is why the command above
+passes all seven dictionaries. Languages borrow, and a borrowed word arrives in lower case
+without becoming a headword in the borrower's dictionary: Romanian writes `live`, `punk` and
+`rap`, Italian writes `blogger` and `ceo`, French writes `arena`. Measured across the six
+bundled languages, 977 flagged words are ordinary *somewhere* -- 9% of English, 27% of German.
+Asking one language leaves those as a thousand-word list to curate by hand; asking all of them
+leaves two. German is the case that makes it necessary rather than merely tidy: it capitalises
+every noun, so its own checker refuses `panik` and `pilot` in lower case exactly as it refuses a
+name, and the other five are the only witnesses that still work there.
+
+The cost is named rather than hidden: a word that is both an ordinary word somewhere and a real
+name here is refused, so `amazon`, `intel`, `shell`, `orange`, `sky` and German `island`
+(Iceland) do not gain the flag. They keep their corpus row and stay uncapitalised, which is what
+they already did.
+
+**Adding asks a narrower question.** Only the list's own language vetoes a word the corpus never
+wrote down, because every-language would be wrong here: `chile` is a pepper in English,
+`argentina` is "silvery" in Italian, `ecuador` is the equator in Spanish. The strict rule costs
+16 of 25 country names, the narrow one costs none, and it costs nothing in safety -- a word the
+corpus does not contain is not one this language's users are currently having capitalised out
+from under them.
+
+Two things this deliberately does not do. Multi-word labels are refused rather than split into
+words: splitting reaches `paribas` in "BNP Paribas", but it also makes a candidate of every
+ordinary word inside an organisation's name, and measured that grew the packs by 140% while
+flagging `united`, `congress`, `museum` and Romanian `tău` ("your"). And an all-upper-case label
+is skipped, because the flag is one bit and the spelling beside it is lower-cased, so the most
+it can produce for `bbc` is "Bbc" -- a more visible kind of wrong than the uncapitalised word.
 
 The committed `dictionaries/*.tsv` are the result, and the keyboard's own rules for using the
 flag are two more checks: with several packs active, every pack that knows a word has to agree

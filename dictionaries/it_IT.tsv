@@ -2604,7 +2604,7 @@ riconosciuto	2257
 somma	2257
 federazione	2255
 ridotto	2255
-ferrari	2254
+ferrari	2254	name
 accertamenti	2253
 scrittore	2253
 dimostrare	2252
@@ -2973,7 +2973,7 @@ guidata	1951
 rappresentare	1951
 ali	1948
 cm	1948
-paul	1948
+paul	1948	name
 perfetta	1948
 val	1947
 certezza	1946
@@ -3428,7 +3428,7 @@ collo	1678
 arrivate	1677
 usati	1677
 esterni	1675
-maio	1675
+maio	1675	name
 periodi	1674
 sassuolo	1674	name
 originario	1673
@@ -3521,7 +3521,7 @@ professione	1631
 riportare	1631
 chiedendo	1630
 meccanismo	1630
-astrazeneca	1629
+astrazeneca	1629	name
 fornito	1629
 uccisi	1629
 giunti	1628
@@ -4136,7 +4136,7 @@ impegnata	1363
 qualora	1362
 rosse	1362
 anniversario	1361
-biden	1361
+biden	1361	name
 d'accordo	1361
 sapeva	1361
 assicura	1360
@@ -4523,7 +4523,7 @@ tennis	1238
 avvenne	1237
 denti	1237
 intesa	1237
-mediaset	1237
+mediaset	1237	name
 strategie	1237
 collaboratori	1236
 copertina	1236
@@ -4643,7 +4643,7 @@ periferia	1200
 segnare	1200
 trovò	1200
 coste	1199
-pfizer	1199
+pfizer	1199	name
 rumore	1198
 cattolici	1197
 dell'opera	1197
@@ -5001,7 +5001,7 @@ finiscono	1102
 giapponesi	1102
 indipendenti	1102
 l'auto	1102
-samsung	1102
+samsung	1102	name
 angeli	1101
 gola	1101
 house	1101
@@ -5048,7 +5048,7 @@ l'accusa	1092
 l’utilizzo	1092
 elettriche	1091
 lecco	1090
-netflix	1090
+netflix	1090	name
 risolto	1090
 parchi	1089
 fisicamente	1088
@@ -5133,7 +5133,7 @@ fiscali	1069
 infermieri	1069
 ricetta	1069
 cedere	1068
-chelsea	1068
+chelsea	1068	name
 curare	1068
 esposti	1068
 misterioso	1068
@@ -5590,7 +5590,7 @@ ascolti	969
 soldato	969
 spessore	969
 frontale	968
-microsoft	968
+microsoft	968	name
 pianura	968
 tagliare	968
 capodanno	967
@@ -5619,7 +5619,7 @@ vaccinare	965
 andarsene	964
 assente	964
 caserta	964	name
-ceo	964
+ceo	964	name
 efficaci	964
 indiscrezioni	964
 istruzione	964
@@ -5742,7 +5742,7 @@ chiavi	939
 disney	939
 italy	939
 teme	939
-chigi	938
+chigi	938	name
 consecutivo	938
 food	938
 miliardo	938
@@ -6126,7 +6126,7 @@ mara	865	name
 odierna	865
 presenterà	865
 ritrovano	865
-scott	865
+scott	865	name
 tasca	865
 trasferirsi	865
 agenzia	864
@@ -7450,7 +7450,7 @@ ordinanza	686
 orizzontale	686
 solita	686
 sollevato	686
-sony	686
+sony	686	name
 valutato	686
 confessato	685
 cuba	685
@@ -7792,7 +7792,7 @@ esistere	645
 fascismo	645
 madri	645
 mobilitazione	645
-morandi	645
+morandi	645	name
 paure	645
 prescrizione	645
 rinnovata	645
@@ -8252,7 +8252,7 @@ fornitori	598
 l’importante	598
 offerti	598
 volendo	598
-alitalia	597
+alitalia	597	name
 archeologici	597
 archivi	597
 commentare	597
@@ -9165,7 +9165,7 @@ irregolarità	524
 ispirata	524
 lopez	524
 miti	524
-nintendo	524
+nintendo	524	name
 piega	524
 saliti	524
 spunti	524
@@ -9569,7 +9569,7 @@ l’andamento	496
 proporzionale	496
 raccontando	496
 razze	496
-renault	496
+renault	496	name
 spogliatoio	496
 vorranno	496
 zelanda	496	name
@@ -9937,7 +9937,7 @@ assumendo	471
 autentico	471
 cubi	471
 dottorato	471
-enel	471
+enel	471	name
 intenzionato	471
 mancate	471
 pattuglie	471
@@ -9946,7 +9946,7 @@ rispondono	471
 riti	471
 start	471
 subìto	471
-volkswagen	471
+volkswagen	471	name
 beffa	470
 concittadini	470
 condivise	470
@@ -9962,7 +9962,7 @@ prevedibile	470
 pseudonimo	470
 rap	470
 scegliendo	470
-unicredit	470
+unicredit	470	name
 venier	470
 albert	469
 camper	469
@@ -10216,7 +10216,7 @@ gentiloni	453
 gravissimo	453
 hard	453
 imperiali	453
-kennedy	453
+kennedy	453	name
 numerica	453
 paradosso	453
 regolamenti	453
@@ -10304,7 +10304,7 @@ rifacimento	449
 sconfigge	449
 spaziali	449
 terrestri	449
-xbox	449
+xbox	449	name
 attualità	448
 circoli	448
 costituiti	448
@@ -10439,7 +10439,7 @@ corridoi	441
 daranno	441
 fiere	441
 giani	441
-huawei	441
+huawei	441	name
 lanciati	441
 nomine	441
 psicologica	441
@@ -11171,7 +11171,7 @@ attribuita	402
 cripta	402
 decollo	402
 discreta	402
-eni	402
+eni	402	name
 foce	402
 inaspettata	402
 jay	402
@@ -11264,7 +11264,7 @@ dell’infanzia	397
 impara	397
 impressione	397
 indirizzi	397
-lincoln	397
+lincoln	397	name
 l’industria	397
 peggior	397
 preferenza	397
@@ -11418,7 +11418,7 @@ egiziano	390
 emirati	390
 fidanzamento	390
 helen	390
-howard	390
+howard	390	name
 identifica	390
 mele	390
 piave	390	name
@@ -11643,7 +11643,7 @@ diaz	381
 diplomatici	381
 figurano	381
 fotografi	381
-hamas	381
+hamas	381	name
 installati	381
 manufatti	381
 maturazione	381
@@ -12015,7 +12015,7 @@ elaborazione	364
 emettere	364
 esaminato	364
 esaurimento	364
-gomez	364
+gomez	364	name
 l’inaugurazione	364
 missionario	364
 mostrò	364
@@ -12317,7 +12317,7 @@ sussidi	353
 un'età	353
 videro	353
 abitudine	352
-boeing	352
+boeing	352	name
 bolletta	352
 compromettere	352
 digimon	352
@@ -12362,7 +12362,7 @@ indirizzata	351
 installazioni	351
 ispirati	351
 l'assedio	351
-lamborghini	351
+lamborghini	351	name
 liquidazione	351
 l’attesa	351
 l’evoluzione	351
@@ -12417,7 +12417,7 @@ minacciando	349
 ministeriale	349
 pensò	349
 stabilizzazione	349
-toyota	349
+toyota	349	name
 vicolo	349
 vietata	349
 capitani	348
@@ -12586,7 +12586,7 @@ roy	342
 teheran	342	name
 telecom	342
 triplo	342
-xiaomi	342
+xiaomi	342	name
 aggredita	341
 allenata	341
 bucci	341
@@ -13288,7 +13288,7 @@ parlò	317
 partenze	317
 pendenza	317
 perdonare	317
-peugeot	317
+peugeot	317	name
 progettati	317
 programmata	317
 rendimenti	317
@@ -13366,7 +13366,7 @@ preceduta	315
 rallentamenti	315
 sacchetti	315
 trascorsa	315
-trenitalia	315
+trenitalia	315	name
 unesco	315
 warner	315
 all'insegna	314
@@ -13444,7 +13444,7 @@ l'acquisizione	312
 l’accaduto	312
 mercenari	312
 movente	312
-parisi	312
+parisi	312	name
 provate	312
 riunirsi	312
 sex	312
@@ -13912,7 +13912,7 @@ complete	296
 contiamo	296
 convinse	296
 criticata	296
-denis	296
+denis	296	name
 dettato	296
 dispiaciuto	296
 edilizio	296
@@ -14240,7 +14240,7 @@ soffriva	287
 squalo	287
 abbassa	286
 accrescere	286
-adams	286
+adams	286	name
 all'incontro	286
 ascoltati	286
 autovetture	286
@@ -14363,7 +14363,7 @@ lasso	283
 l’esterno	283
 modificati	283
 musulmano	283
-opel	283
+opel	283	name
 or	283
 perderà	283
 raffica	283
@@ -14379,7 +14379,7 @@ udienze	283
 umanitari	283
 un’importante	283
 vetrine	283
-vodafone	283
+vodafone	283	name
 affrontata	282
 alexis	282
 all'indomani	282
@@ -14611,7 +14611,7 @@ accorta	276
 affidabilità	276
 alicia	276
 alimentata	276
-arnold	276
+arnold	276	name
 casta	276
 cime	276
 contrarietà	276
@@ -14792,11 +14792,11 @@ l'assegnazione	272
 legislativa	272
 livio	272	name
 l’eliminazione	272
-noah	272
+noah	272	name
 orfano	272
 penalizzato	272
 plurale	272
-porsche	272
+porsche	272	name
 provino	272
 psicologa	272
 rafforzata	272
@@ -15181,7 +15181,7 @@ leghe	262
 marcata	262
 memoriale	262
 milizia	262
-nissan	262
+nissan	262	name
 osservatorio	262
 perle	262
 pogba	262
@@ -15222,7 +15222,7 @@ dall'estero	261
 denunciate	261
 estesi	261
 giudica	261
-gucci	261
+gucci	261	name
 hz	261
 indù	261
 inondazioni	261
@@ -15274,7 +15274,7 @@ idoneo	260
 inevitabili	260
 l'esecutivo	260
 maledetto	260
-mclaren	260
+mclaren	260	name
 monopoli	260
 paralisi	260
 raoul	260
@@ -15441,7 +15441,7 @@ riferiti	256
 rimosse	256
 ripropone	256
 ritorni	256
-ryanair	256
+ryanair	256	name
 sagrato	256
 sopporta	256
 sporca	256
@@ -15710,7 +15710,7 @@ nell'acqua	250
 orleans	250	name
 personalizzato	250
 piacimento	250
-pirelli	250
+pirelli	250	name
 pratici	250
 protettivo	250
 raccolse	250
@@ -17150,7 +17150,7 @@ terroristici	221
 tocchi	221
 trascurabile	221
 trasporta	221
-trenord	221
+trenord	221	name
 acquisì	220
 approdato	220
 calmo	220
@@ -17303,7 +17303,7 @@ tamburo	218
 tant'è	218
 trave	218
 traversata	218
-travis	218
+travis	218	name
 usarlo	218
 vige	218
 volato	218
@@ -17375,7 +17375,7 @@ all’assemblea	216
 all’associazione	216
 audizione	216
 avvertimento	216
-brooklyn	216
+brooklyn	216	name
 carboidrati	216
 concessionaria	216
 contabili	216
@@ -17407,7 +17407,7 @@ ruderi	216
 saldare	216
 sostituì	216
 sottrarsi	216
-stellantis	216
+stellantis	216	name
 ter	216
 trimestrale	216
 turche	216
@@ -17535,7 +17535,7 @@ fotovoltaico	213
 fughe	213
 giampiero	213	name
 giletti	213
-gonzaga	213
+gonzaga	213	name
 grimaldi	213
 guiderà	213
 idonee	213
@@ -17701,7 +17701,7 @@ tabloid	211
 tempistica	211
 tesoriere	211
 vivrà	211
-windsor	211
+windsor	211	name
 accertata	210
 accumulati	210
 all'azione	210
@@ -18147,17 +18147,17 @@ handanovic	203
 ictus	203
 ilicic	203
 intatto	203
-janet	203
+janet	203	name
 l'abito	203
 l'africa	203
 lamentarsi	203
-landini	203
+landini	203	name
 luminose	203
 lunghissimo	203
 l’album	203
 mescola	203
 mib	203
-oneplus	203
+oneplus	203	name
 percorrono	203
 perisic	203
 pink	203
@@ -18371,7 +18371,7 @@ argini	199
 atlantico	199
 befana	199
 bernardeschi	199
-bloomberg	199
+bloomberg	199	name
 bucarest	199	name
 capirà	199
 capitolina	199
@@ -18458,7 +18458,7 @@ infiniti	198
 interessarti	198
 jasmine	198
 jill	198
-kent	198
+kent	198	name
 l'esigenza	198
 l'ottavo	198
 limbo	198
@@ -18466,7 +18466,7 @@ lost	198
 l’infezione	198
 manualmente	198
 motorizzazione	198
-nasdaq	198
+nasdaq	198	name
 nell'ospedale	198
 palesemente	198
 populismo	198
@@ -18477,7 +18477,7 @@ ricoperti	198
 rimanente	198
 rinaldi	198
 ritirarono	198
-sanna	198
+sanna	198	name
 sant’antonio	198
 sbarca	198
 scettico	198
@@ -18725,7 +18725,7 @@ l'orientamento	194
 maurice	194
 pasquali	194
 piccini	194
-pyongyang	194
+pyongyang	194	name
 quotata	194
 ragion	194
 riconversione	194
@@ -18888,7 +18888,7 @@ un’epoca	192
 vittore	192	name
 aggrediti	191
 all’assessore	191
-armani	191
+armani	191	name
 armeno	191
 artù	191	name
 auspico	191
@@ -18923,7 +18923,7 @@ longitudinale	191
 lou	191
 materne	191
 metamorfosi	191
-michelin	191
+michelin	191	name
 monache	191
 morrison	191
 mutanti	191
@@ -18940,7 +18940,7 @@ rea	191
 regolamentare	191
 rialzato	191
 richiederà	191
-riley	191
+riley	191	name
 rinvii	191
 roccaforte	191
 shoah	191
@@ -19147,7 +19147,7 @@ stilistica	188
 teddy	188
 terziario	188
 tori	188
-uber	188
+uber	188	name
 viktor	188
 aborto	187
 accertate	187
@@ -19193,7 +19193,7 @@ montecchio	187
 nell'altro	187
 no-vax	187
 nobiliare	187
-nokia	187
+nokia	187	name
 offensivi	187
 palasport	187
 pedana	187
@@ -19536,12 +19536,12 @@ argentini	182
 bambole	182
 bloom	182
 bobina	182
-callejon	182
+callejon	182	name
 carina	182
 cliff	182
 coltivata	182
 cominciamo	182
-conad	182
+conad	182	name
 croniche	182
 d'armata	182
 disegna	182
@@ -19610,7 +19610,7 @@ d'attesa	181
 dell'anima	181
 donatello	181	name
 esteticamente	181
-fincantieri	181
+fincantieri	181	name
 fonde	181
 fruttato	181
 genti	181
@@ -19787,7 +19787,7 @@ ligt	179
 liz	179
 l’amicizia	179
 marisa	179	name
-maserati	179
+maserati	179	name
 mettete	179
 neuroni	179
 oggettiva	179
@@ -20242,7 +20242,7 @@ campate	172
 castellana	172
 cavalcata	172
 celesti	172
-chrysler	172
+chrysler	172	name
 consideri	172
 contrasta	172
 coperchio	172
@@ -20286,7 +20286,7 @@ predominante	172
 procedeva	172
 psicologicamente	172
 quest'area	172
-reuters	172
+reuters	172	name
 reynolds	172
 rivendicazione	172
 rivisitazione	172
@@ -20582,7 +20582,7 @@ garros	168
 gommone	168
 gotham	168
 guance	168
-hyundai	168
+hyundai	168	name
 impadronirsi	168
 imprevisto	168
 infettato	168
@@ -20657,7 +20657,7 @@ condizionamento	167
 confrontati	167
 corposo	167
 creerà	167
-dani	167
+dani	167	name
 delimitata	167
 dell'asl	167
 denominazioni	167
@@ -20757,7 +20757,7 @@ ereditò	166
 etnico	166
 ghz	166	name
 guanto	166
-ibiza	166
+ibiza	166	name
 innanzi	166
 jinping	166
 l'ideale	166
@@ -21121,7 +21121,7 @@ negro	162
 olivetti	162
 orfana	162
 perquisito	162
-piaggio	162
+piaggio	162	name
 primitivi	162
 priore	162
 rapinato	162
@@ -21436,7 +21436,7 @@ distrarre	158
 disturbare	158
 diversificazione	158
 dolorose	158
-ebay	158
+ebay	158	name
 esco	158
 esportare	158
 estense	158
@@ -21719,7 +21719,7 @@ inavvertitamente	155
 incinte	155
 influenzano	155
 inseguiti	155
-kara	155
+kara	155	name
 l'illuminazione	155
 licenziata	155
 lidia	155	name
@@ -21732,7 +21732,7 @@ mondello	155
 mostravano	155
 mutante	155
 naufrago	155
-nike	155
+nike	155	name
 operava	155
 orientamenti	155
 osta	155
@@ -21883,7 +21883,7 @@ addominale	153
 affollata	153
 agevolato	153
 aggravare	153
-airbnb	153
+airbnb	153	name
 all'agricoltura	153
 all'arte	153
 all'atto	153
@@ -22108,7 +22108,7 @@ barbera	151
 bucato	151
 carini	151
 castellani	151
-chanel	151
+chanel	151	name
 commissionata	151
 competitive	151
 costituirsi	151
@@ -22191,7 +22191,7 @@ travagliata	151
 umbra	151
 versate	151
 viadana	151
-yara	151
+yara	151	name
 all’attuale	150
 alter	150
 alternate	150
@@ -22357,7 +22357,7 @@ nell’inchiesta	149
 nuvolosità	149
 parlanti	149
 partigiana	149
-percy	149
+percy	149	name
 peschereccio	149
 piantato	149
 popstar	149
@@ -22499,7 +22499,7 @@ evidenziata	147
 ferraresi	147
 fior	147
 fogne	147
-forbes	147
+forbes	147	name
 gargano	147	name
 giustiziati	147
 godendo	147
@@ -22609,7 +22609,7 @@ dell'oggetto	146
 dell’avvocato	146
 diciannovesimo	146
 dimostrarlo	146
-edison	146
+edison	146	name
 espongono	146
 ferrante	146
 finitura	146
@@ -22625,7 +22625,7 @@ hiv	146
 ignari	146
 integrarsi	146
 integratori	146
-jedi	146
+jedi	146	name
 kay	146
 l'affluenza	146
 l'oms	146
@@ -22852,7 +22852,7 @@ retrocessioni	144
 risponderà	144
 robbie	144
 ruffini	144	name
-sachs	144
+sachs	144	name
 scartato	144
 sistemata	144
 sistemate	144
@@ -23292,7 +23292,7 @@ maledetta	140
 malga	140
 manfredonia	140	name
 massacrato	140
-mediobanca	140
+mediobanca	140	name
 muratori	140
 natalie	140
 neal	140
@@ -23516,7 +23516,7 @@ fritto	138
 fusa	138
 geo	138
 guadagnati	138
-henderson	138
+henderson	138	name
 hughes	138
 ignoranti	138
 incantevole	138
@@ -23855,7 +23855,7 @@ legarsi	135
 lesbica	135
 lottatore	135
 l’affare	135
-mazda	135
+mazda	135	name
 medicinale	135
 mel	135
 mentana	135
@@ -24001,7 +24001,7 @@ prevediamo	134
 primissima	134
 princess	134
 professionismo	134
-qualcomm	134
+qualcomm	134	name
 raikkonen	134
 reciproche	134
 ricordiamoci	134
@@ -24080,7 +24080,7 @@ joyce	133	name
 kentucky	133	name
 l'abside	133
 legava	133
-lenovo	133
+lenovo	133	name
 liechtenstein	133	name
 luiz	133
 l’esclusione	133
@@ -24299,7 +24299,7 @@ granada	131
 guadagnandosi	131
 infinity	131
 ironizza	131
-isis	131
+isis	131	name
 ispezione	131
 l'imminente	131
 latitudini	131
@@ -24463,7 +24463,7 @@ polenta	130
 porpora	130
 posticipare	130
 posticipata	130
-pravda	130
+pravda	130	name
 puntava	130
 qualificandosi	130
 rabbino	130
@@ -24964,7 +24964,7 @@ sfiorando	126
 sgradevole	126
 sidney	126	name
 sorsero	126
-spacex	126
+spacex	126	name
 spinato	126
 squadron	126
 stanziate	126
@@ -25163,7 +25163,7 @@ l’impasto	124
 manifestò	124
 marinella	124	name
 marzano	124	name
-memphis	124
+memphis	124	name
 mills	124
 mississippi	124	name
 modugno	124
@@ -25476,7 +25476,7 @@ retrocessa	122
 rilanciata	122
 risvegliato	122
 rulli	122
-santana	122
+santana	122	name
 sant’angelo	122
 schiarite	122
 scommesso	122
@@ -25742,7 +25742,7 @@ ronnie	120
 rosina	120	name
 rotture	120
 ruggiero	120
-sammy	120
+sammy	120	name
 sansone	120
 scartata	120
 scoraggiato	120
@@ -26007,7 +26007,7 @@ rialza	118
 ribadita	118
 ricostruiti	118
 ritratta	118
-ruben	118
+ruben	118	name
 saccheggi	118
 santini	118
 schiavone	118
@@ -26105,7 +26105,7 @@ frenetica	117
 funk	117
 golia	117	name
 guarisce	117
-guinness	117
+guinness	117	name
 iberica	117
 ignorano	117
 ignorante	117
@@ -26150,7 +26150,7 @@ raggiro	117
 ragionevoli	117
 ragionevolmente	117
 rane	117
-realme	117
+realme	117	name
 recrudescenza	117
 resterebbe	117
 ribadiscono	117
@@ -26307,7 +26307,7 @@ scolari	116
 scoparmi	116
 scortato	116
 sfoglia	116
-sid	116
+sid	116	name
 sleale	116
 sorso	116
 souvenir	116
@@ -26592,7 +26592,7 @@ ottocentesca	114
 paragonare	114
 parrucca	114
 pente	114
-philips	114
+philips	114	name
 piccinini	114
 piedistallo	114
 pinerolo	114	name
@@ -26674,7 +26674,7 @@ avverso	113
 benzema	113
 bilancino	113
 boomerang	113
-borgia	113
+borgia	113	name
 camminano	113
 candia	113
 capitava	113
@@ -26991,7 +26991,7 @@ concentrarci	111
 consapevolmente	111
 contrastato	111
 controvalore	111
-cora	111
+cora	111	name
 cotte	111
 cotti	111
 criscito	111
@@ -27238,7 +27238,7 @@ ripida	110
 riposta	110
 rivalsa	110
 rivendita	110
-rolex	110
+rolex	110	name
 rovente	110
 sanctis	110
 sanguinante	110
@@ -27318,7 +27318,7 @@ esercitano	109
 esplorazioni	109
 esteriore	109
 etruschi	109
-euronews	109
+euronews	109	name
 evolute	109
 eyes	109
 fertili	109
@@ -27580,7 +27580,7 @@ abbracciati	107
 abitativi	107
 acquedotti	107
 affiancherà	107
-alessi	107
+alessi	107	name
 all'avversario	107
 all'esperienza	107
 all'istante	107
@@ -27656,7 +27656,7 @@ innata	107
 innesto	107
 ionico	107
 jacqueline	107
-kia	107
+kia	107	name
 l'algoritmo	107
 l'apparizione	107
 liquore	107
@@ -27677,7 +27677,7 @@ modificazioni	107
 monodose	107
 narrati	107
 naturalistica	107
-nielsen	107
+nielsen	107	name
 nigel	107
 nordamericano	107
 nordcoreano	107
@@ -27902,7 +27902,7 @@ sciiti	106
 sciogliersi	106
 sconfiggono	106
 scontate	106
-shannon	106
+shannon	106	name
 sintetici	106
 siringhe	106
 sitcom	106
@@ -28679,7 +28679,7 @@ barattolo	101
 baschi	101
 basteranno	101
 benedire	101
-bertone	101
+bertone	101	name
 biologo	101
 biraghi	101
 bolton	101
@@ -28902,7 +28902,7 @@ giacinto	100
 gialloverde	100
 grandinate	100
 idoneità	100
-iliad	100
+iliad	100	name
 imbattono	100
 incontrollata	100
 indefinito	100
@@ -28936,8 +28936,8 @@ militi	100
 mondana	100
 montesilvano	100	name
 morena	100
-moritz	100
-motorola	100
+moritz	100	name
+motorola	100	name
 narrative	100
 nell'epoca	100
 odi	100
@@ -29005,7 +29005,7 @@ uniamo	100
 usuale	100
 villeneuve	100
 vin	100
-wei	100
+wei	100	name
 abbandoni	99
 acconsentì	99
 aderì	99
@@ -29250,7 +29250,7 @@ bandita	98
 bean	98
 bellucci	98
 benno	98
-bentley	98
+bentley	98	name
 bertolini	98
 bocelli	98
 bombardiere	98
@@ -29750,7 +29750,7 @@ lutti	96
 l’archivio	96
 malaysia	96	name
 metalmeccanici	96
-milanello	96
+milanello	96	name
 missionarie	96
 monografie	96
 motivate	96
@@ -29921,7 +29921,7 @@ l'umidità	95
 lavorata	95
 liv	95
 longevo	95
-lufthansa	95
+lufthansa	95	name
 luka	95
 macchinetta	95
 malese	95
@@ -30159,7 +30159,7 @@ selezionando	94
 semplifica	94
 sfigurato	94
 sinistre	94
-snam	94
+snam	94	name
 sontuoso	94
 spazzola	94
 spilla	94
@@ -30227,7 +30227,7 @@ bud	93
 buddy	93
 burattino	93
 calcolatore	93
-camila	93
+camila	93	name
 cape	93
 carraro	93
 casualità	93
@@ -30389,7 +30389,7 @@ timoniere	93
 torce	93
 tosto	93
 trascurati	93
-ubisoft	93
+ubisoft	93	name
 ugl	93
 umori	93
 un’aggressione	93
@@ -30436,7 +30436,7 @@ cbi	92
 celebrando	92
 centraline	92
 chiudeva	92
-christie	92
+christie	92	name
 complimento	92
 comprendevano	92
 comunicativa	92
@@ -30600,7 +30600,7 @@ un’esplosione	92
 un’istituzione	92
 vergogno	92
 whitney	92
-wikileaks	92
+wikileaks	92	name
 zoccoli	92
 zodiacali	92
 abside	91
@@ -30944,7 +30944,7 @@ manovrabilità	90
 marcati	90
 marvin	90
 marxista	90
-matty	90
+matty	90	name
 messinscena	90
 miley	90
 milwaukee	90
@@ -30992,7 +30992,7 @@ rise	90
 ritorsione	90
 rivalutare	90
 rotondi	90
-rufus	90
+rufus	90	name
 sancire	90
 sancita	90
 sawyer	90
@@ -31059,7 +31059,7 @@ avvolti	89
 azionato	89
 baciarsi	89
 ballato	89
-barilla	89
+barilla	89	name
 bartolo	89	name
 battibecco	89
 benassi	89
@@ -31534,7 +31534,7 @@ fermana	87
 festeggiata	87
 fidanzate	87
 fiduciosa	87
-fininvest	87
+fininvest	87	name
 fintanto	87
 focalizzarsi	87
 fondanti	87
@@ -31661,7 +31661,7 @@ scrupolosamente	87
 selvagge	87
 sepolte	87
 sessista	87
-seymour	87
+seymour	87	name
 simposio	87
 sintassi	87
 soffocata	87
@@ -31768,7 +31768,7 @@ enzima	86
 espedienti	86
 esplodono	86
 essermi	86
-eurostat	86
+eurostat	86	name
 evolverà	86
 falsamente	86
 fantini	86
@@ -31783,7 +31783,7 @@ funicolare	86
 gaspari	86
 gavino	86	name
 gerolamo	86	name
-getty	86
+getty	86	name
 giacobbe	86
 giovanissime	86
 graziosa	86
@@ -32349,7 +32349,7 @@ nell'azione	84
 nell'istituto	84
 nell’epoca	84
 nevose	84
-nikita	84
+nikita	84	name
 npl	84
 nuorese	84
 odissea	84
@@ -32572,7 +32572,7 @@ maneggiare	83
 mediolanum	83
 megafono	83
 megapixel	83
-mitsubishi	83
+mitsubishi	83	name
 molari	83
 moltiplica	83
 monastico	83
@@ -32958,7 +32958,7 @@ antologie	81
 appiattita	81
 aragona	81
 arbitrato	81
-arcelormittal	81
+arcelormittal	81	name
 artigiana	81
 asma	81
 attivismo	81
@@ -33187,7 +33187,7 @@ assorbenti	80
 assumeva	80
 astenuto	80
 astronavi	80
-atari	80
+atari	80	name
 attanasio	80
 autocarro	80
 avventurarsi	80
@@ -33572,7 +33572,7 @@ memory	79
 miceli	79
 michelotti	79
 migratorie	79
-morbidelli	79
+morbidelli	79	name
 nell'antico	79
 nell'aspetto	79
 nell'ue	79
@@ -33674,7 +33674,7 @@ accorato	78
 acquistabile	78
 adidas	78
 affliggono	78
-aiden	78
+aiden	78	name
 alfabeto	78
 algherese	78
 all'occhiello	78
@@ -33732,7 +33732,7 @@ culinario	78
 dall'articolo	78
 dall'opera	78
 dandosi	78
-daniels	78
+daniels	78	name
 decidano	78
 decorative	78
 delegare	78
@@ -33824,7 +33824,7 @@ mango	78
 manterranno	78
 matite	78
 matrici	78
-mediaworld	78
+mediaworld	78	name
 meritocrazia	78
 misurando	78
 mlb	78
@@ -33888,7 +33888,7 @@ ryder	78
 salpare	78
 salutari	78
 saraceni	78
-saturn	78
+saturn	78	name
 scattò	78
 scoiattolo	78
 scolo	78
@@ -33939,7 +33939,7 @@ accenni	77
 acconsentito	77
 accusatorio	77
 acquatiche	77
-actv	77
+actv	77	name
 addebito	77
 all'esilio	77
 allarmati	77
@@ -34035,7 +34035,7 @@ espositive	77
 estromesso	77
 eterni	77
 euforia	77
-eurosport	77
+eurosport	77	name
 evitò	77
 fabiano	77
 fidano	77
@@ -34264,14 +34264,14 @@ belmonte	76
 brevissima	76
 brindare	76
 cadetta	76
-campari	76
+campari	76	name
 canterbury	76	name
 caratterizzò	76
 caricatori	76
 carosello	76
 celtico	76
 cerri	76
-chevrolet	76
+chevrolet	76	name
 circolato	76
 circolavano	76
 circoscrivere	76
@@ -34440,7 +34440,7 @@ ripoli	76
 riprodotta	76
 rivisitata	76
 ronco	76	name
-rooney	76
+rooney	76	name
 rozzo	76
 salice	76
 sappi	76
@@ -34673,7 +34673,7 @@ moya	75
 nemesi	75
 neoplasie	75
 neurale	75
-niki	75
+niki	75	name
 normanno	75
 notificata	75
 officiata	75
@@ -35247,7 +35247,7 @@ lasciarle	73
 lasciasse	73
 legherà	73
 lettini	73
-lexus	73
+lexus	73	name
 lumache	73
 lussuosi	73
 l’ammissione	73
@@ -35347,7 +35347,7 @@ stilo	73
 stroncare	73
 supportando	73
 supposizioni	73
-tavares	73
+tavares	73	name
 terzultimo	73
 testacoda	73
 tout	73
@@ -35604,7 +35604,7 @@ seminando	72
 shine	72
 sicurezze	72
 skipass	72
-sloan	72
+sloan	72	name
 soffermarsi	72
 sommare	72
 sott’acqua	72
@@ -35661,7 +35661,7 @@ aprivano	71
 aranci	71
 arbitrariamente	71
 aspetterebbe	71
-astor	71
+astor	71	name
 atrio	71
 attribuì	71
 auricolare	71
@@ -35795,7 +35795,7 @@ intimidazione	71
 ipotizzati	71
 ipsos	71
 jungle	71
-konami	71
+konami	71	name
 kung	71
 kyenge	71
 l'affidabilità	71
@@ -35871,7 +35871,7 @@ querele	71
 radiatore	71
 radioattività	71
 rafforzò	71
-redmi	71
+redmi	71	name
 regolarizzazione	71
 replicò	71
 revisore	71
@@ -36089,7 +36089,7 @@ l'incasso	70
 lanzo	70
 lapadula	70
 lasciarmi	70
-lidl	70
+lidl	70	name
 lignei	70
 litoranea	70
 login	70
@@ -36099,7 +36099,7 @@ l’elevato	70
 madeline	70
 maggioni	70
 mallory	70
-marcegaglia	70
+marcegaglia	70	name
 marija	70
 materializza	70
 maturati	70
@@ -36204,7 +36204,7 @@ spartano	70
 spezzate	70
 squallido	70
 stratificazione	70
-subaru	70
+subaru	70	name
 sull'importanza	70
 sull’app	70
 sviluppava	70
@@ -36477,7 +36477,7 @@ priscilla	69
 proprietarie	69
 prostituirsi	69
 puffi	69
-punjab	69
+punjab	69	name
 quest'album	69
 racchetta	69
 raccomandati	69
@@ -36602,7 +36602,7 @@ balistici	68
 bancarella	68
 belloni	68
 bennato	68
-bentivoglio	68
+bentivoglio	68	name
 bistrot	68
 blasio	68
 botswana	68
@@ -37051,7 +37051,7 @@ jenner	67
 jordi	67
 ju	67
 kathy	67
-kerala	67
+kerala	67	name
 kessié	67
 l'andata	67
 l'eroina	67
@@ -37104,7 +37104,7 @@ odontoiatri	67
 oliverio	67
 oscillano	67
 oscillazione	67
-oxfam	67
+oxfam	67	name
 panaro	67
 pasqualino	67	name
 pastorino	67
@@ -37577,7 +37577,7 @@ viscere	66
 vitae	66
 vittoriana	66
 vocaboli	66
-warwick	66
+warwick	66	name
 acclamata	65
 accompagni	65
 accordano	65
@@ -37591,7 +37591,7 @@ allungarsi	65
 all’oratorio	65
 altavilla	65	name
 ammontavano	65
-amon	65
+amon	65	name
 amplificatori	65
 analitico	65
 annualità	65
@@ -37706,7 +37706,7 @@ fratoianni	65
 fraudolento	65
 fuggiaschi	65
 gallico	65
-gamestop	65
+gamestop	65	name
 gattino	65
 geologici	65
 geometri	65
@@ -37931,7 +37931,7 @@ armonizzare	64
 aru	64
 assegnerà	64
 assicurate	64
-athena	64
+athena	64	name
 aut	64
 autoctona	64
 avanguardie	64
@@ -38069,7 +38069,7 @@ iseo	64	name
 isolano	64
 isolotti	64
 johansson	64
-kensington	64
+kensington	64	name
 l'asfalto	64
 l'eruzione	64
 l'immaginazione	64
@@ -38347,10 +38347,10 @@ eindhoven	63
 eliminatorie	63
 ellenico	63
 entusiasmato	63
-ericsson	63
+ericsson	63	name
 erminio	63	name
 etnografico	63
-exor	63
+exor	63	name
 federfarma	63
 feltrino	63
 fiamminghi	63
@@ -38525,7 +38525,7 @@ rivenditore	63
 rocchetta	63
 rozzano	63	name
 saccheggiata	63
-saipem	63
+saipem	63	name
 saldati	63
 saloon	63
 salvia	63
@@ -38616,7 +38616,7 @@ vinicola	63
 visiera	63
 vivevo	63
 vocalist	63
-walton	63
+walton	63	name
 abolite	62
 accoppiato	62
 accorgi	62
@@ -38811,7 +38811,7 @@ incontrarla	62
 incontravano	62
 incoraggiando	62
 incorniciato	62
-ineos	62
+ineos	62	name
 infante	62
 infuriati	62
 ingaggiando	62
@@ -38887,7 +38887,7 @@ nenni	62
 nicoletti	62
 nidifica	62
 nikkei	62
-nile	62
+nile	62	name
 noli	62
 nordafrica	62
 normalizzare	62
@@ -39418,7 +39418,7 @@ vinco	61
 visori	61
 visualizza	61
 votarono	61
-warzone	61
+warzone	61	name
 webster	61
 yoshida	61
 zeppa	61
@@ -39469,7 +39469,7 @@ biossido	60
 birreria	60
 blinda	60
 brandt	60
-bugatti	60
+bugatti	60	name
 buonanotte	60
 buttando	60
 cabras	60
@@ -39633,7 +39633,7 @@ lavorerò	60
 lev	60
 levata	60
 lipidi	60
-lockheed	60
+lockheed	60	name
 losco	60
 lucchetto	60
 lucifer	60
@@ -39689,7 +39689,7 @@ perdurante	60
 pergine	60
 pesantissimi	60
 pestaggi	60
-petronas	60
+petronas	60	name
 philharmonic	60
 piombata	60
 pirro	60	name
@@ -39814,7 +39814,7 @@ un’onda	60
 vaghe	60
 vegani	60
 venosa	60
-veritas	60
+veritas	60	name
 videocassetta	60
 vigorito	60
 visualizzate	60
@@ -40245,7 +40245,7 @@ vibrare	59
 villorba	59	name
 volerci	59
 votando	59
-walther	59
+walther	59	name
 x-factor	59
 xenofobia	59
 yvonne	59
@@ -40377,8 +40377,8 @@ dominus	58
 dormiente	58
 duale	58
 d’asilo	58
-easyjet	58
-eataly	58
+easyjet	58	name
+eataly	58	name
 ecobonus	58
 edema	58
 edite	58
@@ -40450,7 +40450,7 @@ invitandolo	58
 iorio	58	name
 ipo	58
 ittici	58
-iveco	58
+iveco	58	name
 jackal	58
 kahn	58
 kv	58
@@ -40534,7 +40534,7 @@ pime	58
 pionieristico	58
 piovane	58
 pioverà	58
-pixar	58
+pixar	58	name
 plurimo	58
 polarità	58
 pop-up	58
@@ -40558,7 +40558,7 @@ rappresento	58
 rassegnare	58
 ravanusa	58	name
 recintata	58
-reddit	58
+reddit	58	name
 riavvicina	58
 ricamato	58
 ricollega	58
@@ -40811,7 +40811,7 @@ dustin	57
 d’intenti	57
 elmi	57
 emmett	57
-enix	57
+enix	57	name
 eritrei	57
 erotiche	57
 escogitato	57
@@ -40947,7 +40947,7 @@ ostuni	57
 pacini	57
 paolucci	57
 papero	57
-parmalat	57
+parmalat	57	name
 paroliere	57
 patita	57
 patta	57
@@ -41080,12 +41080,12 @@ witcher	57
 zamboni	57
 zanella	57
 zeppelin	57
-abarth	56
+abarth	56	name
 accarezzare	56
 accentra	56
 accosta	56
 accostamento	56
-activision	56
+activision	56	name
 adda	56	name
 addolora	56
 addolorati	56
@@ -41134,7 +41134,7 @@ ballard	56
 barman	56
 basterebbero	56
 beneficiarne	56
-benelli	56
+benelli	56	name
 bertini	56
 bhutan	56	name
 biodegradabili	56
@@ -41145,13 +41145,13 @@ bottura	56
 boyle	56
 bs	56
 bu	56
-cadillac	56
+cadillac	56	name
 cagionevole	56
 calenzano	56	name
 calpestare	56
 cammello	56
 cancellano	56
-capcom	56
+capcom	56	name
 capovolgere	56
 cappellani	56
 caratterizzerà	56
@@ -41313,7 +41313,7 @@ ispezionato	56
 johannesburg	56
 karabakh	56
 kebab	56
-knesset	56
+knesset	56	name
 knicks	56
 l'affondo	56
 l'alternanza	56
@@ -41442,7 +41442,7 @@ ritenendola	56
 romito	56
 rompersi	56
 rosarno	56
-rothschild	56
+rothschild	56	name
 salasso	56
 saturo	56
 scalatore	56
@@ -41533,7 +41533,7 @@ all'indipendenza	55
 all'influenza	55
 all'inps	55
 allattamento	55
-amal	55
+amal	55	name
 ammiro	55
 ammortizzatore	55
 amorosi	55
@@ -41731,7 +41731,7 @@ grigiastro	55
 gunn	55
 hester	55
 hoover	55
-ibanez	55
+ibanez	55	name
 ic	55
 illusorio	55
 imaging	55
@@ -41877,7 +41877,7 @@ qin	55
 raccogliamo	55
 rammarica	55
 rarissimo	55
-razer	55
+razer	55	name
 recatosi	55
 recentissima	55
 recepita	55
@@ -41927,7 +41927,7 @@ sona	55
 sordità	55
 sottofamiglia	55
 sottomettersi	55
-sovranismo	55
+sovranismo	55	name
 spaziosa	55
 sperimentati	55
 spettante	55
@@ -42126,7 +42126,7 @@ fanfara	54
 fantascientifico	54
 fastidiose	54
 fasulle	54
-fatah	54
+fatah	54	name
 fatalmente	54
 fazzi	54
 feldmaresciallo	54
@@ -42145,7 +42145,7 @@ futuristica	54
 gagliardini	54
 gangi	54
 gastrointestinali	54
-gazprom	54
+gazprom	54	name
 gervinho	54
 gestirla	54
 giovannino	54	name
@@ -42247,7 +42247,7 @@ mozziconi	54
 multilateralismo	54
 multisala	54
 mutilati	54
-mykonos	54
+mykonos	54	name
 n'era	54
 nappi	54
 nell’angolo	54
@@ -42257,7 +42257,7 @@ nuziali	54
 offrirono	54
 offro	54
 oman	54	name
-orson	54
+orson	54	name
 ortigia	54
 osservava	54
 palestro	54	name
@@ -42440,7 +42440,7 @@ antiquario	53
 appellarsi	53
 appenninici	53
 applicarlo	53
-arcigay	53
+arcigay	53	name
 aromatico	53
 asburgico	53
 asce	53
@@ -42522,7 +42522,7 @@ d'eccellenza	53
 d'energia	53
 d'uva	53
 dall’inchiesta	53
-danieli	53
+danieli	53	name
 dantesca	53
 danzatore	53
 decidi	53
@@ -42586,7 +42586,7 @@ foratura	53
 forlì-cesena	53
 fregia	53
 fulham	53
-gardaland	53
+gardaland	53	name
 gargamella	53
 gattatico	53	name
 giacenza	53
@@ -42655,7 +42655,7 @@ lolli	53
 lory	53
 lucini	53
 lumaca	53
-luxottica	53
+luxottica	53	name
 l’ats	53
 l’autenticità	53
 l’avana	53
@@ -42688,7 +42688,7 @@ nguyen	53
 nicolosi	53	name
 nobunaga	53
 nordamericana	53
-novavax	53
+novavax	53	name
 olmi	53
 omogeneità	53
 omologazione	53
@@ -43030,7 +43030,7 @@ dobbiaco	52	name
 dolcetto	52
 dorgali	52
 dunn	52
-dyson	52
+dyson	52	name
 d’attualità	52
 d’eusanio	52
 d’israele	52
@@ -43202,7 +43202,7 @@ pantaleo	52
 paperoni	52
 paratie	52
 pareggiata	52
-paribas	52
+paribas	52	name
 passeggiava	52
 patemi	52
 patologiche	52
@@ -43519,7 +43519,7 @@ dell’eventuale	51
 dell’iceberg	51
 dell’intesa	51
 dell’uno	51
-deloitte	51
+deloitte	51	name
 demografia	51
 demoscopica	51
 depressioni	51
@@ -44191,7 +44191,7 @@ marlon	50
 marmorei	50
 marrazzo	50
 massacrare	50
-masterplan	50
+masterplan	50	name
 mastino	50
 materialismo	50
 mazen	50
@@ -44577,7 +44577,7 @@ diritta	49
 disabitate	49
 disarmare	49
 discriminatoria	49
-disneyland	49
+disneyland	49	name
 disorientato	49
 dispendioso	49
 distinguendosi	49
@@ -44778,7 +44778,7 @@ perpendicolarmente	49
 perseo	49	name
 pianella	49
 pianoforti	49
-pininfarina	49
+pininfarina	49	name
 platani	49
 portaoggetti	49
 positano	49
@@ -44919,7 +44919,7 @@ tcl	49
 tentate	49
 tiara	49
 tiktoker	49
-tiscali	49
+tiscali	49	name
 tomi	49
 torregrossa	49
 torrisi	49
@@ -45026,7 +45026,7 @@ berlusconiano	48
 binaria	48
 biografi	48
 boccetta	48
-bonanno	48
+bonanno	48	name
 borradori	48
 bortoli	48
 boscosa	48
@@ -46070,7 +46070,7 @@ trattorie	47
 tremotino	47
 tronca	47
 truffare	47
-trussardi	47
+trussardi	47	name
 tulipani	47
 turandot	47
 tuteli	47
@@ -46350,7 +46350,7 @@ ftsemib	46
 fuffa	46
 garantiamo	46
 gareggerà	46
-garnier	46
+garnier	46	name
 gattina	46
 gentilizia	46
 gentiluomini	46
@@ -46415,7 +46415,7 @@ irrisolta	46
 irritare	46
 irritata	46
 jurgen	46
-keane	46
+keane	46	name
 korra	46
 l'accompagnamento	46
 l'alluvione	46
@@ -46465,7 +46465,7 @@ marmolada	46	name
 marsupio	46
 marti	46
 martoriato	46
-mastercard	46
+mastercard	46	name
 matic	46
 mattarello	46
 mauritania	46	name
@@ -46483,7 +46483,7 @@ mornasco	46	name
 morri	46
 mortem	46
 moschettieri	46
-mossad	46
+mossad	46	name
 mostreranno	46
 mummie	46
 munizionamento	46
@@ -46921,8 +46921,8 @@ falegnami	45
 fantomatica	45
 fenton	45
 ferendone	45
-fitbit	45
-foa	45
+fitbit	45	name
+foa	45	name
 forensi	45
 formosa	45
 fornirgli	45
@@ -46949,7 +46949,7 @@ giochetti	45
 giorgione	45
 giuseppi	45
 gliele	45
-goa	45
+goa	45	name
 gobetti	45
 goliardico	45
 guelfa	45
@@ -47042,7 +47042,7 @@ l’angoscia	45
 l’attrezzatura	45
 l’avanzare	45
 l’indebitamento	45
-maccabi	45
+maccabi	45	name
 mafalda	45	name
 maialino	45
 manganese	45
@@ -47176,7 +47176,7 @@ rubbettino	45
 salesiano	45
 saliceto	45
 salubre	45
-sanofi	45
+sanofi	45	name
 santoni	45
 sassaresi	45
 sbloccarsi	45
@@ -47288,7 +47288,7 @@ villoresi	45
 violentissima	45
 visionando	45
 vitagraph	45
-wenger	45
+wenger	45	name
 xia	45
 ye	45
 zago	45
@@ -47313,7 +47313,7 @@ agevoli	44
 aggirato	44
 aggravando	44
 aggrega	44
-agusta	44
+agusta	44	name
 akbar	44
 all'ente	44
 all'inchiesta	44
@@ -47373,7 +47373,7 @@ binate	44
 biochimica	44
 biografica	44
 bjorn	44
-blackrock	44
+blackrock	44	name
 boliviano	44
 bolli	44
 borneo	44	name
@@ -47513,7 +47513,7 @@ emre	44
 enpa	44
 entroterra	44
 epiche	44
-eredivisie	44
+eredivisie	44	name
 esaminano	44
 esaminerà	44
 esaudito	44
@@ -47633,7 +47633,7 @@ latteria	44
 lattuga	44
 laureate	44
 lauto	44
-lawson	44
+lawson	44	name
 legalizzare	44
 legatissimo	44
 legionario	44
@@ -47688,7 +47688,7 @@ muoveranno	44
 musicalità	44
 mutilazioni	44
 nascondevano	44
-naxos	44
+naxos	44	name
 nbl	44
 nebula	44
 nefasto	44
@@ -47854,7 +47854,7 @@ spor	44
 sputato	44
 stabilizzatore	44
 standardizzato	44
-starbucks	44
+starbucks	44	name
 stelline	44
 stiria	44
 stirling	44
@@ -48093,7 +48093,7 @@ decadente	43
 decathlon	43
 dedotto	43
 deformato	43
-deliveroo	43
+deliveroo	43	name
 dell'abito	43
 dell'addestramento	43
 dell'anniversario	43
@@ -48187,7 +48187,7 @@ goriziano	43
 governabilità	43
 grandangolare	43
 grandiosi	43
-greenwich	43
+greenwich	43	name
 gti	43
 gtt	43
 guarderà	43
@@ -48231,8 +48231,8 @@ inviolate	43
 invitandoli	43
 ipnotizzare	43
 ispettorato	43
-jameson	43
-judd	43
+jameson	43	name
+judd	43	name
 karel	43
 karsdorp	43
 kelvin	43
@@ -48355,7 +48355,7 @@ pachistana	43
 paesaggistiche	43
 paideia	43
 panamense	43
-panasonic	43
+panasonic	43	name
 pancino	43
 panoramici	43
 papiri	43
@@ -48467,7 +48467,7 @@ sforamento	43
 sforbiciata	43
 sfrattati	43
 sharpe	43
-sheppard	43
+sheppard	43	name
 sheva	43
 siciliascegli	43
 siffredi	43
@@ -48476,7 +48476,7 @@ sip	43
 sistemiche	43
 sistemici	43
 sketchtool	43
-slade	43
+slade	43	name
 slovene	43
 smania	43
 smorfia	43
@@ -48506,7 +48506,7 @@ sufi	43
 sull’aereo	43
 sull’aspetto	43
 sull’incidente	43
-superga	43
+superga	43	name
 supergigante	43
 suscitarono	43
 sussulti	43
@@ -49006,7 +49006,7 @@ nell’anticipo	42
 nell’impegno	42
 nell’indagine	42
 nell’offerta	42
-nestlé	42
+nestlé	42	name
 neutre	42
 niang	42
 nicoli	42
@@ -49298,7 +49298,7 @@ widmann	42
 wired	42
 xiao	42
 zarina	42
-zeke	42
+zeke	42	name
 zerg	42
 ziggler	42
 ziliani	42
@@ -49352,7 +49352,7 @@ annusare	41
 antibiotica	41
 antipasti	41
 antonacci	41
-anzani	41
+anzani	41	name
 aprisse	41
 aragon	41
 archetipi	41
@@ -49555,7 +49555,7 @@ d’agosto	41
 d’ascolto	41
 d’istinto	41
 d’occupazione	41
-ecclesia	41
+ecclesia	41	name
 egizie	41
 elba	41	name
 empatica	41
@@ -49604,7 +49604,7 @@ giovi	41
 giuoco	41
 giustificando	41
 giustiziata	41
-givova	41
+givova	41	name
 glassa	41
 gorica	41
 gozzo	41
@@ -49747,7 +49747,7 @@ nikon	41
 nitro	41
 nordamericane	41
 notarili	41
-novartis	41
+novartis	41	name
 n’erano	41
 observatory	41
 oceanico	41
@@ -50341,7 +50341,7 @@ kristian	40
 kruger	40
 kryptonite	40
 kulübü	40
-kyo	40
+kyo	40	name
 l'adrenalina	40
 l'affondamento	40
 l'aifa	40
@@ -50398,7 +50398,7 @@ marinette	40
 marmora	40
 maschiaccio	40
 masha	40
-mediatek	40
+mediatek	40	name
 medioriente	40
 melograno	40
 merlini	40
@@ -50486,7 +50486,7 @@ proponente	40
 provavo	40
 provedel	40
 provenzale	40
-prysmian	40
+prysmian	40	name
 qatariota	40
 quantificati	40
 quintino	40
@@ -50747,7 +50747,7 @@ ayatollah	39
 bagliori	39
 bandai	39
 barchino	39
-barclays	39
+barclays	39	name
 barretta	39
 bartlett	39
 baselli	39
@@ -50803,7 +50803,7 @@ centro-settentrionale	39
 chadwick	39
 chiamandola	39
 chini	39
-chloé	39
+chloé	39	name
 cialente	39
 cilindrici	39
 cimentò	39
@@ -50826,7 +50826,7 @@ confcooperative	39
 confinate	39
 conformemente	39
 conservo	39
-contarini	39
+contarini	39	name
 controproducenti	39
 controspionaggio	39
 convalescente	39
@@ -50916,7 +50916,7 @@ doherty	39
 dombrovskis	39
 domodossola	39	name
 donnino	39	name
-dupont	39
+dupont	39	name
 d’avventura	39
 d’esame	39
 ecchimosi	39
@@ -51392,7 +51392,7 @@ tanzi	39
 tappare	39
 tempest	39
 temporalesco	39
-tencent	39
+tencent	39	name
 tentatori	39
 tenteranno	39
 termoscanner	39
@@ -51705,7 +51705,7 @@ ecoregione	38
 educa	38
 educatrice	38
 edvige	38	name
-electrolux	38
+electrolux	38	name
 emanano	38
 emo	38
 endpoint	38
@@ -51720,7 +51720,7 @@ evaporare	38
 evitarla	38
 fabbricanti	38
 facilitarne	38
-falck	38
+falck	38	name
 falesie	38
 fanano	38
 fargliela	38
@@ -51728,7 +51728,7 @@ fasulli	38
 favre	38
 felsinei	38
 fenati	38
-feralpisalò	38
+feralpisalò	38	name
 feriscono	38
 fermenti	38
 ferroso	38
@@ -51738,7 +51738,7 @@ figurativi	38
 filatura	38
 finestrelle	38
 fioriti	38
-fokker	38
+fokker	38	name
 folate	38
 fonoassorbenti	38
 fortificare	38
@@ -51752,7 +51752,7 @@ fuoriuscito	38
 galatina	38	name
 gamberetti	38
 gambiano	38
-garmin	38
+garmin	38	name
 gaspar	38
 genzano	38
 gervasoni	38
@@ -51821,7 +51821,7 @@ isolana	38
 isolando	38
 ispirarono	38
 ispiratori	38
-italexit	38
+italexit	38	name
 jato	38
 jg	38
 karachi	38
@@ -51934,7 +51934,7 @@ nell'edilizia	38
 nell'educazione	38
 nell’episodio	38
 nen	38
-nexi	38
+nexi	38	name
 nichelino	38
 nickelodeon	38
 noleggiato	38
@@ -52019,7 +52019,7 @@ rabbioso	38
 raccordi	38
 rage	38
 raggruppare	38
-randstad	38
+randstad	38	name
 rappresentarono	38
 rarefatta	38
 rassicurano	38
@@ -52079,7 +52079,7 @@ sabella	38
 saldate	38
 salivano	38
 sampaoli	38
-samson	38
+samson	38	name
 santangelo	38
 satan	38
 sbalzata	38
@@ -52088,7 +52088,7 @@ scandagliare	38
 scarno	38
 scarseggiare	38
 scarta	38
-scautismo	38
+scautismo	38	name
 scherzosa	38
 schiaccianoci	38
 scioperare	38
@@ -52216,7 +52216,7 @@ vernacolo	38
 vicinissimi	38
 vilipendio	38
 visionari	38
-volotea	38
+volotea	38	name
 volpino	38
 vulnus	38
 waldo	38
@@ -52488,7 +52488,7 @@ ematoma	37
 emigrarono	37
 emisferi	37
 emotività	37
-endemol	37
+endemol	37	name
 erariali	37
 eremiti	37
 erg	37
@@ -52547,7 +52547,7 @@ guetta	37
 guggenheim	37
 halifax	37
 harden	37
-hasbro	37
+hasbro	37	name
 hayek	37
 henrique	37
 hess	37
@@ -52641,7 +52641,7 @@ lavata	37
 leganti	37
 leggevo	37
 leggio	37
-leitner	37
+leitner	37	name
 leno	37
 leucemie	37
 levatrice	37
@@ -52695,14 +52695,14 @@ metterebbero	37
 mettetevi	37
 mignon	37
 militarizzazione	37
-minardi	37
+minardi	37	name
 minigonne	37
 minimizzato	37
 moana	37
 modernista	37
 mol	37
 moltiplicata	37
-moncler	37
+moncler	37	name
 mondolfo	37
 montagnola	37
 moran	37
@@ -52774,7 +52774,7 @@ peyote	37
 piantate	37
 piazzaforte	37
 piazzali	37
-piccolomini	37
+piccolomini	37	name
 pignataro	37
 pizzicati	37
 polimerasi	37
@@ -53022,13 +53022,13 @@ vulcan	37
 walser	37
 wed	37
 wendell	37
-wessex	37
+wessex	37	name
 wilkins	37
 windsurf	37
 women’s	37
 xenofobo	37
 xinhua	37
-yazidi	37
+yazidi	37	name
 yunnan	37
 zanda	37
 zattere	37
@@ -53097,7 +53097,7 @@ ass	36
 assicuratore	36
 assicuri	36
 ate	36
-atlantis	36
+atlantis	36	name
 attaccarli	36
 attingono	36
 attonito	36
@@ -53188,7 +53188,7 @@ cinge	36
 cinquecenteschi	36
 circondarsi	36
 cisa	36
-citigroup	36
+citigroup	36	name
 coaguli	36
 coccio	36
 codroipo	36	name
@@ -53329,7 +53329,7 @@ elitaria	36
 elmetto	36
 eludendo	36
 emetteva	36
-emmaus	36
+emmaus	36	name
 equiparati	36
 equiparato	36
 ercolani	36
@@ -53401,7 +53401,7 @@ gulliver	36
 gustarsi	36
 gutierrez	36
 hailé	36
-hanson	36
+hanson	36	name
 hoepli	36
 horowitz	36
 hughie	36
@@ -53457,7 +53457,7 @@ ipotetiche	36
 irto	36
 isotta	36	name
 istruisce	36
-italcementi	36
+italcementi	36	name
 jewel	36
 josip	36
 kerrigan	36
@@ -53568,7 +53568,7 @@ narratrice	36
 neanderthal	36
 negoziatori	36
 negra	36
-negramaro	36
+negramaro	36	name
 nell'accampamento	36
 nell'adulto	36
 nell'aeroporto	36
@@ -53941,7 +53941,7 @@ assaporato	35
 assecondato	35
 assegnandogli	35
 asu	35
-auchan	35
+auchan	35	name
 automatismo	35
 autonomista	35
 autorete	35
@@ -54168,7 +54168,7 @@ esercitati	35
 esibirono	35
 esteriormente	35
 estingue	35
-euronext	35
+euronext	35	name
 exodus	35
 exynos	35
 facendomi	35
@@ -54205,7 +54205,7 @@ fotone	35
 frammentari	35
 francofona	35
 frazionato	35
-fremantle	35
+fremantle	35	name
 fumava	35
 fw	35
 gaal	35
@@ -54215,7 +54215,7 @@ gamble	35
 gardone	35
 gareggiando	35
 gastaldi	35
-gaumont	35
+gaumont	35	name
 gazette	35
 generalizzate	35
 gengive	35
@@ -54240,7 +54240,7 @@ guastatori	35
 haller	35
 handbike	35
 hilltop	35
-hitachi	35
+hitachi	35	name
 holloway	35
 hollywoodiana	35
 iacono	35
@@ -54397,10 +54397,10 @@ messale	35
 meticolosamente	35
 mezzofondo	35
 miccio	35
-migros	35
+migros	35	name
 milionarie	35
 mimma	35	name
-mindanao	35
+mindanao	35	name
 miocene	35
 miralem	35
 misericordie	35
@@ -54586,7 +54586,7 @@ rondini	35
 roses	35
 rotatorio	35
 sacerdotali	35
-sako	35
+sako	35	name
 sanciti	35
 sandri	35
 sant'alessandro	35
@@ -54603,7 +54603,7 @@ schienò	35
 schierandosi	35
 schifezza	35
 scicli	35
-scientology	35
+scientology	35	name
 sconfiggerla	35
 sconfinata	35
 sconvolgenti	35
@@ -54709,7 +54709,7 @@ trasgressore	35
 traslata	35
 traslato	35
 trepidante	35
-tripadvisor	35
+tripadvisor	35	name
 troina	35
 trovatore	35
 tuareg	35
@@ -54750,7 +54750,7 @@ vigorosamente	35
 violinisti	35
 visconteo	35
 volse	35
-wallis	35
+wallis	35	name
 warp	35
 wawrinka	35
 wearable	35
@@ -54878,7 +54878,7 @@ bassanese	34
 beaver	34
 beavis	34
 belpietro	34
-benz	34
+benz	34	name
 bevitori	34
 bidirezionale	34
 bilancini	34
@@ -54952,7 +54952,7 @@ cns	34
 coadiuvata	34
 coccolato	34
 codigoro	34	name
-coinbase	34
+coinbase	34	name
 collaboreranno	34
 coltivabili	34
 coltivavano	34
@@ -55015,7 +55015,7 @@ davi	34
 decenti	34
 decresce	34
 defilato	34
-delfi	34
+delfi	34	name
 dell'agro	34
 dell'alcool	34
 dell'algoritmo	34
@@ -55103,7 +55103,7 @@ festosa	34
 feticcio	34
 fg	34
 fiammella	34
-fieschi	34
+fieschi	34	name
 figuracce	34
 finanziò	34
 finimondo	34
@@ -55334,7 +55334,7 @@ muroni	34
 mutilazione	34
 narcotrafficanti	34
 nardini	34
-narnia	34
+narnia	34	name
 nazifascismo	34
 negoziabile	34
 nell'attentato	34
@@ -55362,7 +55362,7 @@ occorreranno	34
 omofobo	34
 oncologi	34
 onerosi	34
-onlyfans	34
+onlyfans	34	name
 onofrio	34
 orfane	34
 ortogonali	34
@@ -55658,7 +55658,7 @@ visiting	34
 vitis	34
 volermi	34
 voltata	34
-webuild	34
+webuild	34	name
 westbrook	34
 wizz	34
 xiang	34
@@ -55715,7 +55715,7 @@ all’iran	33
 all’opinione	33
 all’universo	33
 almaviva	33
-altan	33
+altan	33	name
 altomedievale	33
 alunna	33
 alyssa	33
@@ -55840,7 +55840,7 @@ cardona	33
 caritative	33
 carmelitani	33
 carole	33
-carracci	33
+carracci	33	name
 cartoleria	33
 castagneti	33
 castellabate	33
@@ -55865,7 +55865,7 @@ cibano	33
 ciminiere	33
 cini	33
 cipresso	33
-cochrane	33
+cochrane	33	name
 coincideva	33
 colbrelli	33
 collaboratrici	33
@@ -56022,7 +56022,7 @@ espandono	33
 esperanto	33
 espropriati	33
 estensibile	33
-europol	33
+europol	33	name
 evitabili	33
 evocati	33
 ex-moglie	33
@@ -56205,7 +56205,7 @@ leona	33
 levin	33
 liars	33
 ligio	33
-likud	33
+likud	33	name
 liotti	33
 lipa	33
 liston	33
@@ -56281,7 +56281,7 @@ minidotati	33
 minoli	33
 miravano	33
 mischiano	33
-missoni	33
+missoni	33	name
 modellati	33
 moghul	33
 moglia	33
@@ -56344,7 +56344,7 @@ orobici	33
 orzinuovi	33	name
 ossidativo	33
 ostetrica	33
-packard	33
+packard	33	name
 pagliarelli	33
 panizzi	33
 panneggio	33
@@ -56371,7 +56371,7 @@ permafrost	33
 perselli	33
 pertusella	33
 peruviani	33
-peruzzi	33
+peruzzi	33	name
 peró	33
 pescati	33
 peseranno	33
@@ -56416,7 +56416,7 @@ publiacqua	33
 punibilità	33
 punite	33
 punteruolo	33
-qanon	33
+qanon	33	name
 quaresimale	33
 quassù	33
 quell'età	33
@@ -56698,7 +56698,7 @@ adattarci	32
 adattarlo	32
 adattatori	32
 adunata	32
-aegon	32
+aegon	32	name
 affumicato	32
 afro-americani	32
 agganci	32
@@ -56811,7 +56811,7 @@ bresso	32	name
 brunastro	32
 buccheri	32
 buchanan	32
-buick	32
+buick	32	name
 cagli	32
 cagna	32
 calligaris	32
@@ -57247,7 +57247,7 @@ manovalanza	32
 mantovane	32
 mapelli	32
 marci	32
-marla	32
+marla	32	name
 marmotta	32
 martel	32
 martines	32
@@ -57541,7 +57541,7 @@ sgradito	32
 sguarnita	32
 shapiro	32
 shazam	32
-shein	32
+shein	32	name
 siberiana	32
 significasse	32
 simpaticamente	32
@@ -57602,7 +57602,7 @@ surroga	32
 suter	32
 svimez	32
 swann	32
-swisscom	32
+swisscom	32	name
 sync	32
 tagikistan	32	name
 tamagnini	32
@@ -57637,7 +57637,7 @@ trifase	32
 trino	32
 tripodi	32
 trivette	32
-trix	32
+trix	32	name
 tronchetto	32
 trucchetti	32
 tuniche	32
@@ -57818,7 +57818,7 @@ boldini	31
 bonisoli	31
 bormida	31	name
 bozzano	31
-brabham	31
+brabham	31	name
 brevettò	31
 bruciava	31
 bruttezza	31
@@ -57990,10 +57990,10 @@ egea	31
 elargiti	31
 emergano	31
 emiro	31
-engie	31
+engie	31	name
 enit	31
 eno	31
-epson	31
+epson	31	name
 eq	31
 erbosa	31
 erio	31
@@ -58038,7 +58038,7 @@ fondava	31
 foppolo	31	name
 fortuita	31
 fossalta	31
-foxconn	31
+foxconn	31	name
 fragore	31
 fraudolente	31
 frediano	31	name
@@ -58089,7 +58089,7 @@ hakim	31
 halliwell	31
 hare	31
 harem	31
-havok	31
+havok	31	name
 henley	31
 herb	31
 hi-fi	31
@@ -58124,7 +58124,7 @@ individuabili	31
 individuava	31
 indossabili	31
 indosseranno	31
-indra	31
+indra	31	name
 infamia	31
 infangare	31
 infatuato	31
@@ -58293,7 +58293,7 @@ montenero	31
 montereale	31	name
 montorio	31
 montuosi	31
-mooney	31
+mooney	31	name
 moriarty	31
 mormoni	31
 motoristica	31
@@ -58420,7 +58420,7 @@ reazionario	31
 recate	31
 reclutò	31
 reginaldo	31	name
-reichstag	31
+reichstag	31	name
 reintrodotta	31
 restituirla	31
 retribuite	31
@@ -58463,7 +58463,7 @@ rodata	31
 rodotà	31
 rollio	31
 roma-napoli	31
-romanov	31
+romanov	31	name
 roversi	31
 roxanne	31
 rpm	31
@@ -59222,7 +59222,7 @@ kaname	30
 kiko	30
 kite	30
 kobane	30
-kojima	30
+kojima	30	name
 kouame	30
 kronos	30
 kt	30
@@ -59270,7 +59270,7 @@ lincei	30
 linearmente	30
 lisandro	30
 lissa	30
-litfiba	30
+litfiba	30	name
 liturgie	30
 lla	30
 lloris	30
@@ -59457,7 +59457,7 @@ polipropilene	30
 politi	30
 pomo	30
 ponce	30
-pornhub	30
+pornhub	30	name
 posse	30
 pragmatici	30
 predizione	30
@@ -59807,7 +59807,7 @@ vitellio	30
 vivacemente	30
 vivida	30
 vm	30
-vmware	30
+vmware	30	name
 volerli	30
 vucinic	30
 v’è	30
@@ -59822,7 +59822,7 @@ zambuto	30
 zampieri	30
 zappalà	30
 zelena	30
-zeneca	30
+zeneca	30	name
 zequila	30
 zerbino	30
 zuko	30
@@ -59883,7 +59883,7 @@ all’eccellenza	29
 all’importanza	29
 all’infezione	29
 all’inglese	29
-althea	29
+althea	29	name
 amerà	29
 amministrava	29
 anali	29
@@ -59919,7 +59919,7 @@ assicurarono	29
 assidui	29
 astral	29
 astuccio	29
-atkins	29
+atkins	29	name
 attenderci	29
 attendibilità	29
 attirarono	29
@@ -59997,7 +59997,7 @@ casemiro	29
 castagnetti	29
 cazzago	29
 cazzate	29
-celine	29
+celine	29	name
 ceniccola	29
 centurioni	29
 cep	29
@@ -60273,10 +60273,10 @@ giudicarlo	29
 glaucoma	29
 globi	29
 goduria	29
-gofundme	29
+gofundme	29	name
 golose	29
 golosità	29
-gopro	29
+gopro	29	name
 governando	29
 governerà	29
 granello	29
@@ -60381,7 +60381,7 @@ kickboxing	29
 kilowatt	29
 king’s	29
 kirin	29
-kodak	29
+kodak	29	name
 kore	29
 krista	29
 l'acceleratore	29
@@ -60746,7 +60746,7 @@ sanaa	29
 sandrelli	29
 sanificati	29
 sant'antonino	29
-santorini	29
+santorini	29	name
 saperle	29
 sartor	29
 sass	29
@@ -60964,7 +60964,7 @@ vladimiro	29	name
 vociferava	29
 vorace	29
 vorrete	29
-vostok	29
+vostok	29	name
 votivo	29
 wafer	29
 wario	29
@@ -61007,7 +61007,7 @@ aiutami	28
 akane	28
 akito	28
 albon	28
-alcoa	28
+alcoa	28	name
 alimentò	28
 all'asl	28
 all'elaborazione	28
@@ -61125,7 +61125,7 @@ blanchard	28
 boiardo	28	name
 bolero	28
 bolliti	28
-bolloré	28
+bolloré	28	name
 bolscevico	28
 bolzonello	28
 bonaria	28
@@ -61587,7 +61587,7 @@ janis	28
 janša	28
 jpmorgan	28
 judas	28
-jurij	28
+jurij	28	name
 juvenes	28
 kaiba	28
 kallon	28
@@ -61716,9 +61716,9 @@ mascarpone	28
 masino	28
 massacranti	28
 massarosa	28	name
-mattel	28
+mattel	28	name
 mazzei	28
-mckinsey	28
+mckinsey	28	name
 mcnamara	28
 mediopadana	28
 meneghetti	28
@@ -61752,7 +61752,7 @@ mosti	28
 mostrarci	28
 movimentate	28
 movimentazioni	28
-mozilla	28
+mozilla	28	name
 mulan	28
 mulligan	28
 munster	28
@@ -61796,7 +61796,7 @@ oppressa	28
 oppressori	28
 orche	28
 origano	28
-orissa	28
+orissa	28	name
 ormond	28
 oronzo	28	name
 ortofrutta	28
@@ -61870,7 +61870,7 @@ polestar	28
 polinomio	28
 pompidou	28
 pontecorvo	28
-pontiac	28
+pontiac	28	name
 ponto	28
 ponzi	28
 portarti	28
@@ -62213,7 +62213,7 @@ veneri	28
 ventoso	28
 venzone	28	name
 vergognatevi	28
-verizon	28
+verizon	28	name
 vettovaglie	28
 vinicius	28
 viole	28
@@ -62240,7 +62240,7 @@ xenomorfi	28
 xxxi	28
 yahya	28
 zachary	28
-zegna	28
+zegna	28	name
 zendaya	28
 ziyech	28
 zootecnico	28
@@ -62860,7 +62860,7 @@ juliano	27
 kalidou	27
 karolina	27
 ketchup	27
-kickstarter	27
+kickstarter	27	name
 killian	27
 kobo	27
 kurtz	27
@@ -62888,7 +62888,7 @@ laglio	27	name
 lamar	27
 lampeggiante	27
 lapponia	27	name
-lascaris	27
+lascaris	27	name
 lasciandone	27
 latitano	27
 lazzeri	27
@@ -62961,7 +62961,7 @@ massaggiare	27
 materassino	27
 mayfair	27
 mayhem	27
-mccann	27
+mccann	27	name
 mediatrice	27
 mediceo	27
 medio-basso	27
@@ -63273,7 +63273,7 @@ saldature	27
 salmastre	27
 salso	27
 salvagni	27
-salvarani	27
+salvarani	27	name
 salvezze	27
 samaritani	27
 samo	27	name
@@ -63316,7 +63316,7 @@ seicenteschi	27
 selettive	27
 semidio	27
 sensibilizzato	27
-sevel	27
+sevel	27	name
 sfacelo	27
 sferrati	27
 sforare	27
@@ -63595,7 +63595,7 @@ annuvolamenti	26
 antagonismo	26
 antere	26
 antiuomo	26
-antonov	26
+antonov	26	name
 apertissima	26
 appagata	26
 appaiano	26
@@ -63738,7 +63738,7 @@ cavs	26
 ceceni	26
 cecoslovacchi	26
 cedu	26
-cefalonia	26
+cefalonia	26	name
 cementificio	26
 centa	26
 cerchioni	26
@@ -63767,7 +63767,7 @@ cloche	26
 coates	26
 cocciante	26
 coesi	26
-coldplay	26
+coldplay	26	name
 collaborazionista	26
 collabori	26
 collegialmente	26
@@ -63802,7 +63802,7 @@ controbatte	26
 controllarli	26
 convezione	26
 convivevano	26
-copacabana	26
+copacabana	26	name
 corbara	26
 cordino	26
 coriaceo	26
@@ -64058,7 +64058,7 @@ gelarda	26
 generalisti	26
 geppi	26
 gerola	26
-gfk	26
+gfk	26	name
 ghedi	26
 gherardi	26
 ghilardi	26
@@ -64091,7 +64091,7 @@ guidoni	26
 gunter	26
 harman	26
 hawke	26
-heineken	26
+heineken	26	name
 helios	26
 hickman	26
 hilde	26
@@ -64188,7 +64188,7 @@ kelsey	26
 keplero	26	name
 keystone	26
 khalil	26
-khorasan	26
+khorasan	26	name
 killua	26
 kissinger	26
 knockout	26
@@ -64310,7 +64310,7 @@ medicalmente	26
 medjugorje	26
 mehmed	26
 melrose	26
-melville	26
+melville	26	name
 mencarelli	26
 mendelssohn	26
 menelao	26	name
@@ -64321,7 +64321,7 @@ meritoria	26
 merlatura	26
 merlature	26
 mesotelioma	26
-metacritic	26
+metacritic	26	name
 metaforica	26
 metello	26
 meticcia	26
@@ -64752,7 +64752,7 @@ terlizzi	26
 termosifoni	26
 terraglio	26
 testoni	26
-thales	26
+thales	26	name
 theon	26
 thorpe	26
 timbra	26
@@ -64908,7 +64908,7 @@ agno	25
 ahl	25
 ahsoka	25
 aimone	25	name
-akai	25
+akai	25	name
 akhenaton	25
 albate	25
 alberelli	25
@@ -65038,7 +65038,7 @@ bayek	25
 bazaar	25
 bcg	25
 beatrix	25
-beaumont	25
+beaumont	25	name
 beduini	25
 belletti	25
 bentivegna	25
@@ -65073,7 +65073,7 @@ brancato	25
 brandolini	25
 brendon	25
 brignoli	25
-brioni	25
+brioni	25	name
 bronson	25
 bruciapelo	25
 bruciavano	25
@@ -65139,7 +65139,7 @@ cesur	25
 cfd	25
 chagall	25
 chamonix	25
-charlton	25
+charlton	25	name
 cheesecake	25
 chiacchierano	25
 chiamavamo	25
@@ -65208,7 +65208,7 @@ cucinata	25
 cuoricino	25
 curarli	25
 curativi	25
-curevac	25
+curevac	25	name
 d'addestramento	25
 d'elia	25
 d'enza	25
@@ -65474,7 +65474,7 @@ grattato	25
 grest	25
 gronchi	25
 grossolane	25
-guadalcanal	25
+guadalcanal	25	name
 guardandola	25
 guastare	25
 guastato	25
@@ -65495,7 +65495,7 @@ hewlett	25
 hk	25
 holbein	25
 hollywoodiane	25
-hulu	25
+hulu	25	name
 hutu	25
 hyrule	25
 igli	25
@@ -65595,7 +65595,7 @@ kos	25
 kostic	25
 kranjska	25
 krystle	25
-kuomintang	25
+kuomintang	25	name
 l'accusato	25
 l'alettone	25
 l'altoatesino	25
@@ -65647,7 +65647,7 @@ lipidico	25
 livonia	25
 locati	25
 loeb	25
-logitech	25
+logitech	25	name
 longa	25
 lossless	25
 lowell	25
@@ -65754,7 +65754,7 @@ morfologicamente	25
 morvillo	25
 moschino	25
 motonautica	25
-motown	25
+motown	25	name
 mozzie	25
 mughal	25
 municipalizzate	25
@@ -65832,9 +65832,9 @@ pakistane	25
 palafitte	25
 palestrati	25
 pallidi	25
-panhard	25
+panhard	25	name
 pantaleone	25
-pantone	25
+pantone	25	name
 paperinik	25
 paprika	25
 parafango	25
@@ -65866,7 +65866,7 @@ perfezionò	25
 perforata	25
 perforazioni	25
 permeato	25
-persefone	25
+persefone	25	name
 perseguite	25
 pertosse	25
 pesciolini	25
@@ -65988,7 +65988,7 @@ ridistribuire	25
 rielabora	25
 riempivano	25
 riesumazione	25
-rif	25
+rif	25	name
 riflettevano	25
 rigotti	25
 rigsby	25
@@ -66067,7 +66067,7 @@ scazzottata	25
 sceglievano	25
 scheckter	25
 schiavon	25
-schola	25
+schola	25	name
 scialbo	25
 scioperano	25
 scomunicato	25
@@ -66245,7 +66245,7 @@ un'incognita	25
 un'inedita	25
 un'infiammazione	25
 un'utenza	25
-unilever	25
+unilever	25	name
 un’impostazione	25
 urtata	25
 utilizzarne	25
@@ -66306,7 +66306,7 @@ ying	25
 yūsuf	25
 zaira	25	name
 zaky	25
-zalando	25
+zalando	25	name
 zanoni	25
 zeni	25
 zigomatiche	25
@@ -66338,7 +66338,7 @@ adagia	24
 addotta	24
 addotte	24
 adduce	24
-adecco	24
+adecco	24	name
 adesiva	24
 adorabili	24
 affacci	24
@@ -66397,7 +66397,7 @@ amandola	24
 ammicca	24
 amnesie	24
 amplifon	24
-anadolu	24
+anadolu	24	name
 anfibie	24
 anglo-americano	24
 angosciata	24
@@ -66523,7 +66523,7 @@ brunilde	24	name
 buchenwald	24
 buffonate	24
 buonafede	24
-burberry	24
+burberry	24	name
 busoni	24
 buti	24
 butters	24
@@ -66859,7 +66859,7 @@ esplicitare	24
 esplorerà	24
 estinguersi	24
 etereo	24
-etro	24
+etro	24	name
 evapora	24
 eversione	24
 evidenziarono	24
@@ -66987,7 +66987,7 @@ helvetia	24
 hertz	24
 hilbert	24	name
 horne	24
-husqvarna	24
+husqvarna	24	name
 huston	24
 hydra	24
 ibs	24
@@ -67350,7 +67350,7 @@ nutriamo	24
 obiang	24
 oc	24
 occhioni	24
-odin	24
+odin	24	name
 offerenti	24
 offida	24	name
 ogden	24
@@ -67379,7 +67379,7 @@ palatini	24
 palermitane	24
 palesata	24
 palleggiare	24
-palmerston	24
+palmerston	24	name
 paradisiaca	24
 paraguaiano	24
 parando	24
@@ -67498,7 +67498,7 @@ radicarsi	24
 radiologico	24
 radiotelevisiva	24
 ragazzone	24
-ragnarok	24
+ragnarok	24	name
 raimundo	24
 rallegrare	24
 rampolli	24
@@ -67758,7 +67758,7 @@ taoista	24
 tarata	24
 tarato	24
 tassotti	24
-taurus	24
+taurus	24	name
 teatini	24
 teleferica	24
 telefonano	24
@@ -67811,7 +67811,7 @@ trompia	24
 trottola	24
 truccatrice	24
 truce	24
-tupolev	24
+tupolev	24	name
 turbamenti	24
 tutt'italia	24
 twh	24
@@ -67862,7 +67862,7 @@ viceammiraglio	24
 vicus	24
 vieti	24
 vietnamite	24
-vignale	24
+vignale	24	name
 villiers	24
 villini	24
 viscoso	24
@@ -68030,14 +68030,14 @@ balata	23
 balboa	23
 balbuzie	23
 baldan	23
-balenciaga	23
+balenciaga	23	name
 barbarella	23
 barbarigo	23	name
 barnard	23
 baroncini	23
 barracelli	23
 bastino	23
-bauhaus	23
+bauhaus	23	name
 bazzani	23
 bbs	23
 bcs	23
@@ -68082,7 +68082,7 @@ burgraviato	23
 bushido	23
 buso	23
 bustocco	23
-buzzfeed	23
+buzzfeed	23	name
 bz	23
 cabassi	23
 cadauno	23
@@ -68237,7 +68237,7 @@ d'etiopia	23
 d'infarto	23
 d'iniziativa	23
 d'istituto	23
-daewoo	23
+daewoo	23	name
 dag	23
 dahlia	23
 dall'aggressione	23
@@ -68519,13 +68519,13 @@ guspini	23
 gustato	23
 hashimoto	23
 heathrow	23
-helsing	23
+helsing	23	name
 hen	23
 hinata	23
 howell	23
 hue	23
 hutton	23
-huxley	23
+huxley	23	name
 iddio	23	name
 idealismo	23
 ila	23
@@ -68585,7 +68585,7 @@ intentare	23
 inter-juve	23
 intercorrono	23
 interdire	23
-interfax	23
+interfax	23	name
 interparlamentare	23
 intestatario	23
 intrecciarsi	23
@@ -68769,7 +68769,7 @@ maximum	23
 mayu	23
 mcdormand	23
 mcgrath	23
-mcguire	23
+mcguire	23	name
 meditativo	23
 meetup	23
 mehta	23
@@ -68827,7 +68827,7 @@ muraglie	23
 murdock	23
 mutarono	23
 nagai	23
-namco	23
+namco	23	name
 nami	23
 nanotecnologia	23
 napalm	23
@@ -68835,7 +68835,7 @@ narsete	23
 nascondano	23
 nasconderci	23
 nascondiamo	23
-natsume	23
+natsume	23	name
 neghi	23
 nell'abisso	23
 nell'aiutare	23
@@ -68875,7 +68875,7 @@ numerato	23
 nyu	23
 obbligherà	23
 oblate	23
-oddi	23
+oddi	23	name
 oliveri	23
 olli	23
 on-demand	23
@@ -68918,7 +68918,7 @@ pasca	23
 passarla	23
 passassero	23
 passatempi	23
-pathé	23
+pathé	23	name
 paventa	23
 pecorella	23
 pedagogici	23
@@ -69242,7 +69242,7 @@ spalancano	23
 spanò	23
 spaventosamente	23
 specchiature	23
-spector	23
+spector	23	name
 spiaggetta	23
 spiati	23
 spiazzi	23
@@ -69278,7 +69278,7 @@ succhia	23
 succursali	23
 sudcoreane	23
 suk	23
-sulawesi	23
+sulawesi	23	name
 sull'account	23
 sull'alto	23
 sull'anello	23
@@ -69320,7 +69320,7 @@ telereggio	23
 teletrasportare	23
 temperanza	23
 templeton	23
-tenaris	23
+tenaris	23	name
 tendaggi	23
 tensore	23
 terenzio	23
@@ -69439,7 +69439,7 @@ zabaione	23
 zaccariotto	23
 zaccheroni	23
 zafferana	23
-zagato	23
+zagato	23	name
 zedong	23
 zf	23
 zita	23	name
@@ -69527,7 +69527,7 @@ all’intesa	22
 all’omonimo	22
 all’osteria	22
 alptransit	22
-alstom	22
+alstom	22	name
 alternerà	22
 altorilievo	22
 ambrì	22
@@ -69635,7 +69635,7 @@ batch	22
 battistelli	22
 baveno	22	name
 baz	22
-beaufort	22
+beaufort	22	name
 becao	22
 belforte	22
 belligeranti	22
@@ -69778,7 +69778,7 @@ coliseum	22
 collegialità	22
 collocarlo	22
 collocava	22
-colloredo	22
+colloredo	22	name
 collusioni	22
 colonizzata	22
 colpirmi	22
@@ -69786,7 +69786,7 @@ colà	22
 com'erano	22
 combacia	22
 combattività	22
-comcast	22
+comcast	22	name
 commensale	22
 commetta	22
 comparate	22
@@ -69838,7 +69838,7 @@ cornelis	22
 cosio	22
 cosmetics	22
 costruisci	22
-cosworth	22
+cosworth	22	name
 cottimo	22
 coulson	22
 covisoc	22
@@ -70071,7 +70071,7 @@ fasto	22
 fattosi	22
 fatwa	22
 favoriranno	22
-fedex	22
+fedex	22	name
 feige	22
 felsineo	22
 felton	22
@@ -70080,7 +70080,7 @@ fermino	22
 ferraioli	22
 ferran	22
 fff	22
-fidesz	22
+fidesz	22	name
 figlioletti	22
 fillea	22
 filodrammatica	22
@@ -70091,7 +70091,7 @@ firmacopie	22
 fiutare	22
 flanders	22
 flessori	22
-flixbus	22
+flixbus	22	name
 focalizzò	22
 foderata	22
 folcloristico	22
@@ -70120,7 +70120,7 @@ frequenterà	22
 fronteggiarsi	22
 frotte	22
 fucilare	22
-fujifilm	22
+fujifilm	22	name
 fumando	22
 fuoripista	22
 fusiforme	22
@@ -70133,7 +70133,7 @@ ganasce	22
 garantisti	22
 gargnano	22	name
 garrick	22
-gartner	22
+gartner	22	name
 gasparo	22
 geiger	22
 gelso	22
@@ -70171,8 +70171,8 @@ granger	22
 granite	22
 graticcio	22
 graziati	22
-greenwashing	22
-groupama	22
+greenwashing	22	name
+groupama	22	name
 guadagnavano	22
 guardiamarina	22
 guardini	22
@@ -70311,7 +70311,7 @@ keylor	22
 kimball	22
 kincaid	22
 klimt	22
-kone	22
+kone	22	name
 kraken	22
 l'abc	22
 l'acquario	22
@@ -70353,7 +70353,7 @@ laboratoriali	22
 labriola	22
 laffite	22
 laicali	22
-laika	22
+laika	22	name
 laird	22
 lamarmora	22
 lamellare	22
@@ -70384,7 +70384,7 @@ localita	22
 localizzano	22
 locate	22
 lon	22
-loredan	22
+loredan	22	name
 lotteranno	22
 lsu	22
 lungodegenti	22
@@ -70569,7 +70569,7 @@ nuraghi	22
 nurburgring	22
 nzz	22
 nürburgring	22
-oakley	22
+oakley	22	name
 obelix	22
 occipitale	22
 odono	22
@@ -70623,7 +70623,7 @@ pasticcieri	22
 pebble	22
 pecini	22
 pedalò	22
-pelikan	22
+pelikan	22	name
 pelose	22
 pemberton	22
 pennone	22
@@ -70638,7 +70638,7 @@ pertiche	22
 pescata	22
 pezzettini	22
 phobos	22	name
-phuket	22
+phuket	22	name
 piangersi	22
 picchiandolo	22
 pilastrini	22
@@ -70839,7 +70839,7 @@ sagacia	22
 saint-pierre	22
 salafiti	22
 salamandre	22
-salesforce	22
+salesforce	22	name
 salette	22
 salmastra	22
 salsi	22
@@ -71236,7 +71236,7 @@ albese	21
 albizzate	21	name
 aleggiare	21
 alfonsine	21	name
-aliexpress	21
+aliexpress	21	name
 alkmaar	21
 all'abbigliamento	21
 all'american	21
@@ -71428,7 +71428,7 @@ brissinese	21
 brixia	21
 bronco	21
 brontolone	21
-brulé	21
+brulé	21	name
 bruno-rossiccio	21
 bucata	21
 bucolico	21
@@ -71439,7 +71439,7 @@ buratti	21
 burrascosi	21
 busa	21
 bussò	21
-bytedance	21
+bytedance	21	name
 c'est	21
 cagliostro	21
 calcolò	21
@@ -71485,7 +71485,7 @@ carnosi	21
 casamicciola	21
 cascinale	21
 cascone	21
-cassius	21
+cassius	21	name
 cassolnovo	21	name
 castagnola	21
 castellamare	21
@@ -71821,7 +71821,7 @@ etr	21
 eucarioti	21
 evi	21
 evocative	21
-exxon	21
+exxon	21	name
 fabbrini	21
 fabula	21
 faccina	21
@@ -71893,7 +71893,7 @@ gasparotto	21
 gautier	21
 gavardo	21	name
 gazzaniga	21	name
-geely	21
+geely	21	name
 gemelline	21
 genealogie	21
 geng	21
@@ -71963,7 +71963,7 @@ idrolisi	21
 ieo	21
 iga	21
 igino	21	name
-ignis	21
+ignis	21	name
 ildebrando	21	name
 ilic	21
 illiberale	21
@@ -72049,7 +72049,7 @@ irrisorie	21
 irrispettosi	21
 irruzioni	21
 iscriviti	21
-ishtar	21
+ishtar	21	name
 ism	21
 ismaele	21	name
 ismea	21
@@ -72284,7 +72284,7 @@ mellon	21
 memori	21
 mentalista	21
 mentori	21
-merida	21
+merida	21	name
 merrick	21
 metereologiche	21
 metilazione	21
@@ -72364,7 +72364,7 @@ nell’interpretazione	21
 neoclassiche	21
 nepotismo	21
 nespolo	21
-nespresso	21
+nespresso	21	name
 neuronali	21
 neuville	21
 nevischio	21
@@ -72400,7 +72400,7 @@ omonimia	21
 onnisciente	21
 onofri	21
 opponibile	21
-orano	21
+orano	21	name
 ordinabile	21
 orecchino	21
 organizzarla	21
@@ -72443,7 +72443,7 @@ peaky	21
 pelagie	21
 pella	21
 pelvi	21
-pendragon	21
+pendragon	21	name
 penetrarmi	21
 penitenti	21
 pensieroso	21
@@ -72703,7 +72703,7 @@ scalpellino	21
 scambiamo	21
 scandalistica	21
 scandianese	21
-scania	21
+scania	21	name
 scappatoie	21
 scapperà	21
 scardinato	21
@@ -72981,7 +72981,7 @@ un’insufficienza	21
 un’oretta	21
 uomo-donna	21
 uras	21
-ursus	21
+ursus	21	name
 usandola	21
 usurpatore	21
 usurpazione	21
@@ -73070,7 +73070,7 @@ abram	20
 abusate	20
 accalcano	20
 accendo	20
-accenture	20
+accenture	20	name
 accentuò	20
 accettarsi	20
 acconti	20
@@ -73264,7 +73264,7 @@ baratheon	20
 baratti	20
 barberi	20
 barbiano	20
-barclay	20
+barclay	20	name
 barrie	20
 basista	20
 bastarono	20
@@ -73736,7 +73736,7 @@ elegantissima	20
 elettivi	20
 elfico	20
 eliminarono	20
-elis	20
+elis	20	name
 ellenistici	20
 emollienti	20
 emozionano	20
@@ -73790,7 +73790,7 @@ estrinseca	20
 etimologica	20
 etimologicamente	20
 eubel	20
-eurogruppo	20
+eurogruppo	20	name
 evenepoel	20
 everybody	20
 evgenij	20
@@ -73829,7 +73829,7 @@ filantropica	20
 filippone	20
 filmini	20
 finanziarsi	20
-finley	20
+finley	20	name
 firenzuola	20
 firmeranno	20
 firth	20
@@ -73930,14 +73930,14 @@ harmonia	20
 headliner	20
 hebei	20
 heinkel	20
-hennessy	20
+hennessy	20	name
 henson	20
 hevc	20
 hg	20
 highlander	20
 hollywoodiani	20
 holzmann	20
-hormuz	20
+hormuz	20	name
 hulkenberg	20
 hun	20
 huo	20
@@ -74098,8 +74098,8 @@ komsomol	20
 kondogbia	20
 kovacevic	20
 krauser	20
-krupp	20
-krystal	20
+krupp	20	name
+krystal	20	name
 krzysztof	20
 kuo	20
 kushner	20
@@ -74144,7 +74144,7 @@ l'uccellino	20
 l'union	20
 lacan	20
 lacazette	20
-lactalis	20
+lactalis	20	name
 laicato	20
 lampis	20
 lanaro	20
@@ -74233,7 +74233,7 @@ madrine	20
 maggiorenti	20
 maina	20
 mainframe	20
-maino	20
+maino	20	name
 majid	20
 malagoli	20
 malanno	20
@@ -74272,7 +74272,7 @@ matroneo	20
 maude	20
 mauriziano	20
 mazzarella	20
-mcafee	20
+mcafee	20	name
 mccool	20
 mcnally	20
 medagliati	20
@@ -74692,7 +74692,7 @@ rivendicavano	20
 rivolgano	20
 rivoltare	20
 rizoma	20
-robinhood	20
+robinhood	20	name
 roccadaspide	20	name
 rodiggio	20
 rolla	20
@@ -74733,7 +74733,7 @@ saprebbero	20
 sarca	20	name
 sarpi	20
 sartiglia	20
-sasanidi	20
+sasanidi	20	name
 sasi	20
 sassata	20
 sassetta	20	name
@@ -74943,7 +74943,7 @@ tandy	20
 tarek	20
 tariffazione	20
 tatami	20
-tatra	20
+tatra	20	name
 tazzine	20
 tdp	20
 telepatico	20
@@ -74968,7 +74968,7 @@ titini	20
 tl	20
 tls	20
 tod’s	20
-toho	20
+toho	20	name
 tommi	20
 torbide	20
 torbidi	20
@@ -75011,7 +75011,7 @@ tuffandosi	20
 turpin	20
 turrin	20
 tutoraggio	20
-tyrrell	20
+tyrrell	20	name
 uccidano	20
 uccido	20
 udirono	20
@@ -75100,7 +75100,7 @@ voterebbero	20
 vrenna	20
 vries	20
 vucic	20
-vueling	20
+vueling	20	name
 waffen-ss	20
 walace	20
 waltz	20
@@ -75172,7 +75172,7 @@ aggiudicare	19
 aggiungerebbe	19
 aggregando	19
 agguanta	19
-agip	19
+agip	19	name
 agrippa	19	name
 aicardi	19
 aimee	19
@@ -75401,7 +75401,7 @@ boboli	19
 bocchetti	19
 bogart	19
 boggio	19
-bohdan	19
+bohdan	19	name
 bolina	19
 bollare	19
 bolognari	19
@@ -75438,7 +75438,7 @@ budd	19
 bukhara	19
 bulla	19
 bulletto	19
-bunge	19
+bunge	19	name
 buonissime	19
 buren	19
 burgundi	19
@@ -75488,7 +75488,7 @@ carpignano	19
 carrabili	19
 carristi	19
 cartomante	19
-casalini	19
+casalini	19	name
 caseario	19
 castellucchio	19
 castiga	19
@@ -75826,7 +75826,7 @@ divit	19
 divulgatori	19
 dj-set	19
 djinn	19
-dnepr	19
+dnepr	19	name
 domizzi	19
 dondi	19
 donegal	19
@@ -75996,20 +75996,20 @@ genomico	19
 genshin	19
 gentileschi	19
 genuinamente	19
-geox	19
+geox	19	name
 geraint	19
 gershwin	19
 gesu	19
 ghepardo	19
 gheppio	19
-ghia	19
+ghia	19	name
 ghiaioso	19
 giacconi	19
 giallista	19
 gianrico	19	name
 giardinetta	19
 gibellina	19
-gilera	19
+gilera	19	name
 gilgamesh	19
 giliberti	19
 ginnasti	19
@@ -76153,7 +76153,7 @@ interdipendenza	19
 interdisciplinari	19
 internazionalizzare	19
 interpretarli	19
-interreg	19
+interreg	19	name
 intesasanpaolo	19
 intimidito	19
 intimissimi	19
@@ -76201,7 +76201,7 @@ kaye	19
 kip	19
 kitt	19
 kledi	19
-knorr	19
+knorr	19	name
 koda	19
 kohler	19
 koke	19
@@ -76301,7 +76301,7 @@ losche	19
 losone	19
 lozzo	19
 lubich	19
-lucasfilm	19
+lucasfilm	19	name
 lum	19
 lumino	19
 luo	19
@@ -76370,7 +76370,7 @@ mantella	19
 mappata	19
 marangon	19
 marcy	19
-marduk	19
+marduk	19	name
 maremmani	19
 marghine	19
 margie	19
@@ -76390,7 +76390,7 @@ massimizza	19
 massonico	19
 materializzano	19
 matheus	19
-mathis	19
+mathis	19	name
 matrone	19
 mays	19
 mazzara	19
@@ -76468,7 +76468,7 @@ muten	19
 mò	19
 nagorno-karabakh	19
 nala	19
-nanga	19
+nanga	19	name
 naoko	19
 napolano	19
 nascimento	19
@@ -76524,7 +76524,7 @@ nidificanti	19
 ninfee	19
 nit	19
 nitrico	19
-noam	19
+noam	19	name
 nobildonne	19
 nobis	19
 nogarin	19
@@ -76557,7 +76557,7 @@ oilers	19
 okay	19
 olfattive	19
 oltraggioso	19
-olympus	19
+olympus	19	name
 omaggiano	19
 ombelico	19
 omerico	19
@@ -76726,7 +76726,7 @@ proverebbe	19
 provocavano	19
 prozia	19
 prè	19
-psichedelia	19
+psichedelia	19	name
 psicodramma	19
 psicotico	19
 psionici	19
@@ -76864,7 +76864,7 @@ roanoke	19
 rompesse	19
 ronzulli	19
 rosenborg	19
-rosneft	19
+rosneft	19	name
 rossoverde	19
 rosà	19	name
 rote	19
@@ -77103,7 +77103,7 @@ stuprate	19
 succinti	19
 succulente	19
 succulenti	19
-sukhoi	19
+sukhoi	19	name
 sull'antico	19
 sull'arma	19
 sull'attaccante	19
@@ -77155,7 +77155,7 @@ tarzo	19	name
 tassinari	19
 tassonomico	19
 taumaturgo	19
-tavolara	19
+tavolara	19	name
 tcs	19
 teatrini	19
 temporalesca	19
@@ -77279,7 +77279,7 @@ ust	19
 uterino	19
 utica	19	name
 uto	19
-vader	19
+vader	19	name
 vagliata	19
 valbormida	19
 valenciennes	19
@@ -77615,7 +77615,7 @@ bicipiti	18
 bifida	18
 bigottismo	18
 billings	18
-binance	18
+binance	18	name
 biomedicale	18
 biometrico	18
 birichino	18
@@ -77640,7 +77640,7 @@ borea	18
 borgoforte	18	name
 borgomastro	18
 borromini	18
-bougainville	18
+bougainville	18	name
 boulogne	18
 bozzo	18
 brabante	18	name
@@ -77661,7 +77661,7 @@ bufere	18
 buffe	18
 bugiardino	18
 bugno	18
-buitoni	18
+buitoni	18	name
 bulma	18
 bulzoni	18
 bundu	18
@@ -77717,7 +77717,7 @@ carradori	18
 carraio	18
 cartonato	18
 casaletto	18	name
-casio	18
+casio	18	name
 casnigo	18	name
 cassel	18
 casteldaccia	18	name
@@ -78122,7 +78122,7 @@ etilene	18
 etnografici	18
 etra	18
 eulero	18	name
-euronics	18
+euronics	18	name
 evasiva	18
 evocazioni	18
 evoluzionista	18
@@ -78162,7 +78162,7 @@ fiabeschi	18
 fibbie	18
 figlioccio	18
 filanti	18
-filicudi	18
+filicudi	18	name
 filistei	18
 fillory	18
 film-documentario	18
@@ -78247,7 +78247,7 @@ giornalettismo	18
 giostrai	18
 giostrine	18
 girarono	18
-github	18
+github	18	name
 giudicarie	18	name
 giullari	18
 giungesse	18
@@ -78272,7 +78272,7 @@ gordiano	18
 gorgia	18
 gorka	18
 goryeo	18
-gottlieb	18
+gottlieb	18	name
 gramigna	18
 grammatiche	18
 grancia	18
@@ -78429,7 +78429,7 @@ istiga	18
 istitutivo	18
 istoreco	18
 istriana	18
-isuzu	18
+isuzu	18	name
 iti	18
 itil	18
 ivanovic	18
@@ -79002,7 +79002,7 @@ pulsano	18
 pulviscolo	18
 puškin	18
 pzl	18
-qantas	18
+qantas	18	name
 qian	18
 quai	18
 qual’è	18
@@ -79151,7 +79151,7 @@ s'incontra	18
 s'infuria	18
 sabitzer	18
 saccarosio	18
-sachsenring	18
+sachsenring	18	name
 sagomati	18
 salafita	18
 salami	18
@@ -79505,7 +79505,7 @@ vaiano	18	name
 vail	18
 valicato	18
 validata	18
-valois	18
+valois	18	name
 valtiberina	18
 valutarie	18
 vaporetti	18
@@ -79562,7 +79562,7 @@ volgograd	18
 volm	18
 volteggiare	18
 voss	18
-vought	18
+vought	18	name
 vulva	18
 vz	18
 vålerenga	18
@@ -79685,7 +79685,7 @@ aizzare	17
 akiko	17
 akiza	17
 alamein	17
-alcatel	17
+alcatel	17	name
 aldebaran	17
 alettone	17
 algerine	17
@@ -79808,7 +79808,7 @@ arrosti	17
 arru	17
 artifizi	17
 asahi	17
-asakura	17
+asakura	17	name
 ascensioni	17
 asceso	17
 ascot	17
@@ -80093,7 +80093,7 @@ collagna	17	name
 collanina	17
 collaudatori	17
 collegheranno	17
-collegium	17
+collegium	17	name
 collegò	17
 collirio	17
 colonizzati	17
@@ -80636,7 +80636,7 @@ genuine	17
 geografi	17
 georgi	17
 gerasimenko	17
-germanwings	17
+germanwings	17	name
 germinali	17
 geronzi	17
 gestisca	17
@@ -80663,14 +80663,14 @@ girovita	17
 glie	17
 glifi	17
 gliozzi	17
-glock	17
+glock	17	name
 goceano	17
 goi	17
 goldsmith	17
 golenale	17
 gomis	17
 gonçalves	17
-goodyear	17
+goodyear	17	name
 gorgona	17
 gorgone	17
 governatorati	17
@@ -80687,7 +80687,7 @@ grifis	17
 grigiastri	17
 grinch	17
 grotto	17
-grumman	17
+grumman	17	name
 gsi	17
 guardarle	17
 guardasse	17
@@ -80704,7 +80704,7 @@ gundogan	17
 gué	17
 haak	17
 haccp	17
-haim	17
+haim	17	name
 haines	17
 hangzhou	17
 harker	17
@@ -81011,7 +81011,7 @@ lucis	17
 lucknow	17
 luini	17
 lun	17
-lundy	17
+lundy	17	name
 lungofiume	17
 luparense	17
 lupari	17
@@ -81142,7 +81142,7 @@ mirka	17
 mirna	17	name
 missa	17
 missilistiche	17
-missio	17
+missio	17	name
 misuravano	17
 mitre	17
 mitri	17
@@ -81199,7 +81199,7 @@ nasir	17
 nassar	17
 nastasi	17
 nathaly	17
-natixis	17
+natixis	17	name
 natsu	17
 natsuki	17
 natta	17
@@ -81256,7 +81256,7 @@ novus	17
 nowak	17
 nullafacente	17
 nunes	17
-nutanix	17
+nutanix	17	name
 nutrì	17
 nwo	17
 nx	17
@@ -81324,7 +81324,7 @@ pallide	17
 pallio	17
 palpeggiamenti	17
 pampa	17
-pamphili	17
+pamphili	17	name
 pandemonio	17
 pangolino	17
 pannocchie	17
@@ -81404,7 +81404,7 @@ polverizzato	17
 pompeiano	17
 ponch	17
 poni	17
-poniatowski	17
+poniatowski	17	name
 ponta	17
 pontebba	17	name
 pontini	17
@@ -81519,7 +81519,7 @@ recupereranno	17
 reddington	17
 redime	17
 redona	17
-reebok	17
+reebok	17	name
 reece	17
 regionalismo	17
 regolarizzato	17
@@ -82063,7 +82063,7 @@ un'indole	17
 un'insegna	17
 un'élite	17
 uniformarsi	17
-uniqlo	17
+uniqlo	17	name
 unirmi	17
 unti	17
 un’amante	17
@@ -82243,7 +82243,7 @@ alcalina	16
 alcaline	16
 alcalini	16
 alchimisti	16
-aldobrandini	16
+aldobrandini	16	name
 alfreider	16
 algernon	16
 alienati	16
@@ -82401,7 +82401,7 @@ ascierto	16
 asco	16
 ascolana	16
 asha	16
-ashina	16
+ashina	16	name
 aspettavi	16
 aspirati	16
 aspiro	16
@@ -82451,7 +82451,7 @@ ayroldi	16
 azzardano	16
 azzerano	16
 azzolini	16
-azzoni	16
+azzoni	16	name
 azzoppato	16
 bacchettata	16
 badaracco	16
@@ -82880,7 +82880,7 @@ dall’una	16
 dalmasson	16
 dalmazzo	16
 danimarca-finlandia	16
-danone	16
+danone	16	name
 darglielo	16
 datacenter	16
 datevi	16
@@ -83141,7 +83141,7 @@ estorta	16
 estroso	16
 estrusione	16
 etnografia	16
-etoro	16
+etoro	16	name
 euphemia	16
 eurobasket	16
 eustachio	16	name
@@ -83344,7 +83344,7 @@ guardatevi	16
 guardiane	16
 guariniello	16
 guarisca	16
-guarneri	16
+guarneri	16	name
 guatemalteco	16
 guerritore	16
 guia	16
@@ -83538,7 +83538,7 @@ itmoda	16
 iulio	16
 jabba	16
 jacobacci	16
-jalalabad	16
+jalalabad	16	name
 janas	16
 jankovic	16
 janos	16
@@ -83562,7 +83562,7 @@ kamehameha	16
 kamil	16
 kana	16
 katowice	16
-katusha	16
+katusha	16	name
 kaylie	16
 kde	16
 kenai	16
@@ -83680,7 +83680,7 @@ leggeremo	16
 lemina	16
 leonina	16
 lepori	16
-lero	16
+lero	16	name
 lesbico	16
 lesivi	16
 lesnar	16
@@ -83715,7 +83715,7 @@ luglio-agosto	16
 lumumba	16
 lurida	16
 lussu	16
-luzon	16
+luzon	16	name
 l’acconto	16
 l’agnello	16
 l’agognato	16
@@ -83821,7 +83821,7 @@ medio-basse	16
 meditate	16
 mefistofele	16	name
 megaman	16
-megara	16
+megara	16	name
 meggiorini	16
 melassa	16
 melita	16
@@ -83837,7 +83837,7 @@ merton	16
 meschi	16
 mescita	16
 mescolini	16
-messerschmitt	16
+messerschmitt	16	name
 metalik	16
 metanizzazione	16
 metodio	16	name
@@ -83938,7 +83938,7 @@ neoministro	16
 neorinascimentale	16
 nepote	16
 nervosamente	16
-netgear	16
+netgear	16	name
 nettissimo	16
 nevo	16
 newcombe	16
@@ -83983,7 +83983,7 @@ odontoiatrica	16
 offrirmi	16
 offusca	16
 olav	16
-oldsmobile	16
+oldsmobile	16	name
 oleodotti	16
 oliena	16	name
 olle	16
@@ -84063,7 +84063,7 @@ pecorelle	16
 pedis	16
 peduncoli	16
 pellame	16
-pellestrina	16
+pellestrina	16	name
 pelliccioni	16
 peloro	16
 pennoni	16
@@ -84143,7 +84143,7 @@ portarselo	16
 porzia	16
 poso	16
 posologia	16
-postfinance	16
+postfinance	16	name
 posticcia	16
 posticipati	16
 poulenc	16
@@ -84245,13 +84245,13 @@ quinquennali	16
 quintultimo	16
 quirra	16
 quivi	16
-radiohead	16
+radiohead	16	name
 raffreddate	16
 rafinha	16
 ragatzu	16
 ragazzetto	16
 rajput	16
-rakuten	16
+rakuten	16	name
 ramificati	16
 rammento	16
 ranica	16	name
@@ -84286,7 +84286,7 @@ rendicontare	16
 repellenti	16
 replicate	16
 repubblichini	16
-republika	16
+republika	16	name
 requisite	16
 resegone	16
 retablo	16
@@ -84304,7 +84304,7 @@ riavrà	16
 ribaltabile	16
 ricalcolato	16
 ricambiarlo	16
-richemont	16
+richemont	16	name
 ricollegabili	16
 ricollocate	16
 ricominciata	16
@@ -84434,7 +84434,7 @@ sanfelice	16
 sanpietrini	16
 sant’erasmo	16
 saonara	16
-sapporo	16
+sapporo	16	name
 saracco	16
 sarcedo	16	name
 sargent	16
@@ -84781,7 +84781,7 @@ tingersi	16
 tione	16
 tiraggio	16
 tiritera	16
-tiromancino	16
+tiromancino	16	name
 tirozzi	16
 toccasse	16
 toei	16
@@ -84795,7 +84795,7 @@ tombstone	16
 tomie	16
 tomoyo	16
 tomsk	16
-tomtom	16
+tomtom	16	name
 tonici	16
 tonoli	16
 topologica	16
@@ -84803,7 +84803,7 @@ toraciche	16
 torrigiani	16
 torsioni	16
 tortello	16
-toshiba	16
+toshiba	16	name
 tota	16
 tournèe	16
 tov	16
@@ -84913,7 +84913,7 @@ valmarecchia	16
 valon	16
 valorizziamo	16
 valsabbia	16
-vanderbilt	16
+vanderbilt	16	name
 varando	16
 varcata	16
 vascellari	16
@@ -84975,7 +84975,7 @@ wec	16
 weiwei	16
 whedon	16
 winfield	16
-wolseley	16
+wolseley	16	name
 worldsbk	16
 wurstel	16
 wärtsilä	16
@@ -85351,7 +85351,7 @@ battermi	15
 battibaleno	15
 batticuore	15
 bauletto	15
-baur	15
+baur	15	name
 bcaa	15
 beasley	15
 beauregard	15
@@ -85367,7 +85367,7 @@ bennie	15
 benvolere	15
 benzoni	15
 bernabè	15
-bernadotte	15
+bernadotte	15	name
 bersagliere	15
 bertarelli	15
 berte	15
@@ -110696,3 +110696,390 @@ Zōng	40	name
 Шевчук	40	name
 ברל	40	name
 Ḥusayn	40	name
+abwehr	40	name
+aeroflot	40	name
+aerosmith	40	name
+aespa	40	name
+ahaggar	40	name
+ahmadiyya	40	name
+airbaltic	40	name
+ajinomoto	40	name
+alauiti	40	name
+aldabra	40	name
+alderney	40	name
+aldi	40	name
+aliyah	40	name
+allsvenskan	40	name
+alphabet	40	name
+althing	40	name
+ambon	40	name
+americaonline	40	name
+amorgos	40	name
+amtrak	40	name
+andro	40	name
+anglesey	40	name
+anjouan	40	name
+anonymous	40	name
+anthrax	40	name
+anthropic	40	name
+antigua	40	name
+antinatalismo	40	name
+apocalyptica	40	name
+arran	40	name
+arxiv	40	name
+aschenaziti	40	name
+assam	40	name
+avventismo	40	name
+ayurveda	40	name
+babismo	40	name
+baidu	40	name
+bangka	40	name
+barbados	40	name
+barbuda	40	name
+bathory	40	name
+battismo	40	name
+bayer	40	name
+bektashi	40	name
+belize	40	name
+biedermeier	40	name
+bihar	40	name
+blackpink	40	name
+blondie	40	name
+blur	40	name
+bolivia	40	name
+bornholm	40	name
+borobudur	40	name
+brazza	40	name
+bridgestone	40	name
+bundesliga	40	name
+bundesrat	40	name
+bundestag	40	name
+bundeswehr	40	name
+buru	40	name
+burundi	40	name
+burzum	40	name
+candies	40	name
+caodaismo	40	name
+capetingi	40	name
+caraimi	40	name
+carlsberg	40	name
+cassiti	40	name
+castelrosso	40	name
+centralesupélec	40	name
+ceram	40	name
+cerigo	40	name
+charminar	40	name
+chassidismo	40	name
+cherso	40	name
+chhattisgarh	40	name
+chiloé	40	name
+christiania	40	name
+clannad	40	name
+colombia	40	name
+comecon	40	name
+coursera	40	name
+cozumel	40	name
+cres	40	name
+curzola	40	name
+deepseek	40	name
+deftones	40	name
+disturbed	40	name
+dominica	40	name
+donatismo	40	name
+donkervoort	40	name
+dreamworks	40	name
+eagles	40	name
+ecofemminismo	40	name
+ecuador	40	name
+egina	40	name
+egyptair	40	name
+ekstraklasa	40	name
+elefantina	40	name
+embraer	40	name
+erasure	40	name
+ermitage	40	name
+eswatini	40	name
+eton	40	name
+eubea	40	name
+euromaidan	40	name
+europe	40	name
+evanescence	40	name
+evangelicalismo	40	name
+exo	40	name
+exxonmobil	40	name
+eysturoy	40	name
+falster	40	name
+fatimidi	40	name
+fauves	40	name
+filioque	40	name
+finnair	40	name
+fionia	40	name
+flores	40	name
+fogo	40	name
+folketing	40	name
+fuerteventura	40	name
+fujitsu	40	name
+funafuti	40	name
+fyn	40	name
+gabon	40	name
+garbage	40	name
+gerba	40	name
+ghuridi	40	name
+giacobitismo	40	name
+gibraltar	40	name
+glaxosmithkline	40	name
+gorillaz	40	name
+gorée	40	name
+gotland	40	name
+gozo	40	name
+grenada	40	name
+guam	40	name
+guatemala	40	name
+gujarat	40	name
+guyana	40	name
+haganah	40	name
+halmahera	40	name
+hanafismo	40	name
+hanbalismo	40	name
+haryana	40	name
+hashemiti	40	name
+hashima	40	name
+helloween	40	name
+herm	40	name
+hiiumaa	40	name
+hindutva	40	name
+hispaniola	40	name
+hohenstaufen	40	name
+hohenzollern	40	name
+honduras	40	name
+honshu	40	name
+hussiti	40	name
+huthi	40	name
+icaria	40	name
+imbro	40	name
+iona	40	name
+islay	40	name
+itzy	40	name
+jagelloni	40	name
+jharkhand	40	name
+jieitai	40	name
+kadima	40	name
+karnataka	40	name
+kauai	40	name
+kavaratti	40	name
+kharg	40	name
+kihnu	40	name
+kino	40	name
+kiribati	40	name
+kiritimati	40	name
+kish	40	name
+komodo	40	name
+korn	40	name
+kosrae	40	name
+kraftwerk	40	name
+krakatoa	40	name
+kriegsmarine	40	name
+krk	40	name
+kunashir	40	name
+laccadive	40	name
+lacoste	40	name
+ladakh	40	name
+lanai	40	name
+langeland	40	name
+lanzarote	40	name
+lemno	40	name
+leucade	40	name
+leyte	40	name
+liberia	40	name
+liberland	40	name
+lolland	40	name
+lombok	40	name
+lukoil	40	name
+madagascar	40	name
+madura	40	name
+maharashtra	40	name
+mahé	40	name
+malikiti	40	name
+manipur	40	name
+manowar	40	name
+maui	40	name
+megadeth	40	name
+meghalaya	40	name
+meleda	40	name
+memorial	40	name
+mennoniti	40	name
+mimamsa	40	name
+mindoro	40	name
+mizoram	40	name
+mljet	40	name
+mohéli	40	name
+mojang	40	name
+molokai	40	name
+monero	40	name
+monsanto	40	name
+montserrat	40	name
+mormonism	40	name
+mosfilm	40	name
+muhu	40	name
+mull	40	name
+myheritage	40	name
+nagaland	40	name
+nakba	40	name
+nantucket	40	name
+naqshbandiyya	40	name
+nasso	40	name
+nauru	40	name
+negros	40	name
+neuralink	40	name
+nevis	40	name
+newfoundland	40	name
+nias	40	name
+nicaragua	40	name
+nickelback	40	name
+niger	40	name
+nightwish	40	name
+niue	40	name
+oahu	40	name
+oireachtas	40	name
+omayyadi	40	name
+onerepublic	40	name
+openai	40	name
+opeth	40	name
+orange	40	name
+paleologi	40	name
+palmyra	40	name
+panay	40	name
+pandava	40	name
+paraguay	40	name
+paramore	40	name
+patmo	40	name
+pentecostalismo	40	name
+pepsico	40	name
+perejil	40	name
+pergamonmuseum	40	name
+permacultura	40	name
+petrobras	40	name
+pixies	40	name
+pondicherry	40	name
+pricewaterhousecoopers	40	name
+pubchem	40	name
+qeshm	40	name
+quora	40	name
+quraysh	40	name
+rajasthan	40	name
+rammstein	40	name
+ramones	40	name
+rarotonga	40	name
+rastafarianesimo	40	name
+redonda	40	name
+reichswehr	40	name
+renaissance	40	name
+riigikogu	40	name
+rijksmuseum	40	name
+roscosmos	40	name
+roxette	40	name
+ruhnu	40	name
+russofobia	40	name
+saab	40	name
+saaremaa	40	name
+sabaton	40	name
+sachalin	40	name
+sadducei	40	name
+safavidi	40	name
+saffaridi	40	name
+saipan	40	name
+salafismo	40	name
+salafiyya	40	name
+salamina	40	name
+samar	40	name
+samotracia	40	name
+santiago	40	name
+scarpanto	40	name
+schiermonnikoog	40	name
+sciafeismo	40	name
+sciro	40	name
+scorpions	40	name
+sejm	40	name
+sepultura	40	name
+serebro	40	name
+serifo	40	name
+shikoku	40	name
+shinee	40	name
+sikhismo	40	name
+sikkim	40	name
+skylab	40	name
+skyteam	40	name
+slipknot	40	name
+socotra	40	name
+somaliland	40	name
+soundgarden	40	name
+spitsbergen	40	name
+storting	40	name
+streymoy	40	name
+sturmabteilung	40	name
+subway	40	name
+sumbawa	40	name
+suomenlinna	40	name
+supercell	40	name
+superligaen	40	name
+surtsey	40	name
+sylt	40	name
+tahiridi	40	name
+tailandia	40	name
+tarawa	40	name
+tawhid	40	name
+telangana	40	name
+telefe	40	name
+telemundo	40	name
+televisa	40	name
+tenedo	40	name
+tenerife	40	name
+tengrismo	40	name
+teotihuacan	40	name
+terceira	40	name
+terschelling	40	name
+tesco	40	name
+togg	40	name
+togo	40	name
+tongatapu	40	name
+totalenergies	40	name
+transnistria	40	name
+transumanesimo	40	name
+trinidad	40	name
+tripura	40	name
+tsushima	40	name
+tumblr	40	name
+tuvalu	40	name
+twice	40	name
+uchicago	40	name
+upolu	40	name
+uruguay	40	name
+usedom	40	name
+ustascia	40	name
+uttarakhand	40	name
+vanuatu	40	name
+vedismo	40	name
+veganismo	40	name
+venezuela	40	name
+viacom	40	name
+vieques	40	name
+vimeo	40	name
+vlieland	40	name
+wahhabismo	40	name
+walmart	40	name
+warnermedia	40	name
+weezer	40	name
+westlife	40	name
+wicca	40	name
+wikisource	40	name
+wimax	40	name
+wittelsbach	40	name
+worldcat	40	name
+xerox	40	name
+xvideos	40	name
+yakushima	40	name
+yandex	40	name
+yes	40	name
+zambia	40	name
+zante	40	name
+zimbabwe	40	name

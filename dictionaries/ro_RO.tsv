@@ -3975,7 +3975,7 @@ clasament	1448
 douã	1448
 conducătorul	1447
 credință	1447
-digi	1447
+digi	1447	name
 lansare	1447
 cotroceni	1446	name
 structuri	1446
@@ -9701,7 +9701,7 @@ instabilitate	537
 reacţie	537
 altădată	536
 atracție	536
-chelsea	536
+chelsea	536	name
 complicate	536
 comunitară	536
 cor	536
@@ -12052,7 +12052,7 @@ geografic	408
 igiena	408
 jurnaliștii	408
 lactate	408
-lincoln	408
+lincoln	408	name
 londrei	408	name
 modeste	408
 moldovenești	408
@@ -12113,7 +12113,7 @@ servesc	406
 sângelui	406
 verdictul	406
 întinsă	406
-bechtel	405
+bechtel	405	name
 consumate	405
 cunoaştem	405
 domnie	405
@@ -13317,7 +13317,7 @@ dragon	356
 egiptul	356	name
 explicația	356
 feței	356
-huawei	356
+huawei	356	name
 importate	356
 liniştit	356
 platformele	356
@@ -13579,7 +13579,7 @@ creative	346
 dispariţia	346
 domnitorului	346
 drăgușanu	346	name
-enel	346
+enel	346	name
 ernest	346	name
 geamurile	346
 legislativului	346
@@ -14264,7 +14264,7 @@ instalație	324
 justificat	324
 mutate	324
 negocia	324
-netflix	324
+netflix	324	name
 performant	324
 planificare	324
 retragerii	324
@@ -14689,7 +14689,7 @@ consumator	311
 dializă	311
 estetică	311
 inflaţia	311
-kaufland	311
+kaufland	311	name
 maşinilor	311
 mitul	311
 mărită	311
@@ -16643,7 +16643,7 @@ renașterea	262
 smuls	262
 sociologie	262
 soldaţi	262
-transgaz	262
+transgaz	262	name
 veterani	262
 voluntarilor	262
 adunările	261
@@ -16909,7 +16909,7 @@ pompe	256
 preliminară	256
 proveneau	256
 purtătoare	256
-romgaz	256
+romgaz	256	name
 sacrificat	256
 sculptorul	256
 snagov	256	name
@@ -17082,7 +17082,7 @@ iluminatul	252
 infanteria	252
 iordan	252
 lichidat	252
-lidl	252
+lidl	252	name
 livra	252
 manevrele	252
 memorialul	252
@@ -17118,7 +17118,7 @@ digestiv	251
 diplomaţiei	251
 domnit	251
 eur	251
-eurostat	251
+eurostat	251	name
 imobilele	251
 instruirea	251
 interlopi	251
@@ -17885,7 +17885,7 @@ secţiuni	237
 sturdza	237
 vacant	237
 văzuți	237
-wikileaks	237
+wikileaks	237	name
 zidită	237
 înțelesul	237
 abatere	236
@@ -17981,7 +17981,7 @@ domni	235
 doritorii	235
 echilibrului	235
 einstein	235
-elba	235
+elba	235	name
 flexibil	235
 georges	235	name
 ivanov	235	name
@@ -19521,7 +19521,7 @@ asemănarea	209
 banului	209
 beckham	209	name
 bercea	209	name
-biontech	209
+biontech	209	name
 bombardat	209
 brute	209
 call	209
@@ -20437,7 +20437,7 @@ reacţiile	195
 recompensat	195
 redă	195
 ritualul	195
-savu	195
+savu	195	name
 scurge	195
 spion	195
 substanțelor	195
@@ -22389,7 +22389,7 @@ afișa	171
 aglomerată	171
 agresori	171
 anticipată	171
-astrazeneca	171
+astrazeneca	171	name
 atașată	171
 atitudinii	171
 atracția	171
@@ -23279,7 +23279,7 @@ tenul	162
 teribilă	162
 termenilor	162
 timpii	162
-transelectrica	162
+transelectrica	162	name
 trăgând	162
 undertaker	162
 usucă	162
@@ -23655,7 +23655,7 @@ hell	158
 imperativ	158
 incontestabil	158
 inexistente	158
-ios	158
+ios	158	name
 ironizeze	158
 kanal	158
 masacru	158
@@ -24431,7 +24431,7 @@ argilă	150
 arsenalul	150
 arătată	150
 asimilat	150
-auchan	150
+auchan	150	name
 baronii	150
 berca	150
 bosch	150	name
@@ -25172,7 +25172,7 @@ beijingul	143
 beyonce	143	name
 bila	143
 bitcoin	143
-brooklyn	143
+brooklyn	143	name
 bucuram	143
 burlacu	143
 cantat	143
@@ -25693,7 +25693,7 @@ moţilor	139
 munţilor	139
 naturiste	139
 nerecunoscut	139
-nike	139
+nike	139	name
 numerotate	139
 oficialităţile	139
 oneşti	139
@@ -25952,7 +25952,7 @@ maimuță	137
 manolache	137	name
 marquez	137	name
 meleşcanu	137
-mig	137
+mig	137	name
 mironescu	137
 miră	137
 motivaţi	137
@@ -26311,7 +26311,7 @@ lavă	134
 legalizarea	134
 lena	134
 livrată	134
-lukoil	134
+lukoil	134	name
 manifestanţii	134
 mesager	134
 michelangelo	134	name
@@ -27115,7 +27115,7 @@ frecvenţă	128
 furau	128
 fâșii	128
 gunoaielor	128
-hamas	128
+hamas	128	name
 hayssam	128
 idea	128
 ilia	128	name
@@ -27917,7 +27917,7 @@ aslan	122
 atributele	122
 auschwitz	122	name
 bailey	122
-bali	122
+bali	122	name
 baștină	122
 beneficiau	122
 biocide	122
@@ -27979,7 +27979,7 @@ judecății	122
 kilogramul	122
 legitime	122
 legitimeze	122
-leningrad	122
+leningrad	122	name
 lipsurile	122
 luminează	122
 lupului	122
@@ -28213,8 +28213,8 @@ tovarășii	121
 transfrontaliere	121
 trezirea	121
 triunghiular	121
-ubisoft	121
-unicredit	121
+ubisoft	121	name
+unicredit	121	name
 viceministru	121
 vicepreşedintelui	121
 violenţele	121
@@ -28232,7 +28232,7 @@ zăcăminte	121
 ședere	121
 abundent	120
 adâncul	120
-aerostar	120
+aerostar	120	name
 alteia	120
 altundeva	120
 anonimă	120
@@ -28457,7 +28457,7 @@ insuficienta	119
 ir	119
 iugoslave	119
 iul	119
-janet	119
+janet	119	name
 junimea	119
 jurnalistic	119
 kazan	119
@@ -28725,7 +28725,7 @@ comăneci	117	name
 conductei	117
 constrâns	117
 conversie	117
-cosmote	117
+cosmote	117	name
 cpt	117
 cunoştea	117
 curtis	117	name
@@ -29285,7 +29285,7 @@ searã	114
 sfeclă	114
 sinistraţii	114
 slujească	114
-spacex	114
+spacex	114	name
 spectrului	114
 standardului	114
 steril	114
@@ -29579,7 +29579,7 @@ logodnicul	112
 lojă	112
 luminate	112
 mat	112
-mclaren	112
+mclaren	112	name
 metaforă	112
 mirarea	112
 mobilierului	112
@@ -29971,7 +29971,7 @@ suspendaţi	110
 tabelele	110
 tate	110
 tismana	110	name
-uber	110
+uber	110	name
 unio	110
 urbea	110
 ușura	110
@@ -30031,7 +30031,7 @@ canon	109
 caricatură	109
 cavalerul	109
 centrarea	109
-chanel	109
+chanel	109	name
 cheltuiți	109
 chuck	109
 ciobani	109
@@ -30432,7 +30432,7 @@ graduală	107
 grajduri	107
 gsm	107
 gustare	107
-hezbollah	107
+hezbollah	107	name
 html	107
 ilegala	107
 ilegali	107
@@ -31215,13 +31215,13 @@ lanţuri	103
 limpezi	103
 lucioasă	103
 lucreția	103	name
-lufthansa	103
+lufthansa	103	name
 mall-ul	103
 malpraxis	103
 malu	103
 manifestată	103
 martha	103
-mechel	103
+mechel	103	name
 menajer	103
 mineral	103
 ministeriale	103
@@ -31411,7 +31411,7 @@ joacã	102
 jură	102
 kagome	102
 kitty	102
-kronospan	102
+kronospan	102	name
 lacune	102
 lars	102	name
 lesnar	102
@@ -31701,7 +31701,7 @@ cari	100
 cee	100
 cernobîl	100
 chineza	100
-christie	100
+christie	100	name
 cibernetice	100
 civilizaţiei	100
 clujeanul	100
@@ -31832,7 +31832,7 @@ sintetică	100
 sirenele	100
 sloganuri	100
 sms-uri	100
-sorbona	100
+sorbona	100	name
 sortare	100
 stampila	100
 sullivan	100	name
@@ -32300,7 +32300,7 @@ absenți	97
 acceptaţi	97
 accidentală	97
 actriţei	97
-adler	97
+adler	97	name
 agendei	97
 agită	97
 albaiulienii	97
@@ -32394,7 +32394,7 @@ loiale	97
 lucaci	97
 maeștrii	97
 manipuleze	97
-mastercard	97
+mastercard	97	name
 materna	97
 membra	97
 metropolă	97
@@ -32587,7 +32587,7 @@ investește	96
 invocată	96
 ionii	96
 it's	96
-jedi	96
+jedi	96	name
 juratul	96
 legionară	96
 lehliu	96	name
@@ -33258,7 +33258,7 @@ instructori	93
 intenţionăm	93
 invadată	93
 itunes	93
-kone	93
+kone	93	name
 konstantin	93
 lech	93	name
 legalităţii	93
@@ -34166,7 +34166,7 @@ eba	89
 echivala	89
 ecologica	89
 elastice	89
-electroputere	89
+electroputere	89	name
 epică	89
 episcopale	89
 escală	89
@@ -34279,7 +34279,7 @@ relaxezi	89
 reputatul	89
 retrageri	89
 rezolv	89
-romanov	89
+romanov	89	name
 răsunătoare	89
 sabotaj	89
 satan	89
@@ -34664,7 +34664,7 @@ luptã	87
 machete	87
 magistralei	87
 maladia	87
-mallorca	87
+mallorca	87	name
 malurilor	87
 managing	87
 mandolina	87
@@ -35540,7 +35540,7 @@ calculeze	83
 calităților	83
 cantitativă	83
 caraman	83
-cartagina	83
+cartagina	83	name
 cent	83
 centralizare	83
 cibernetic	83
@@ -35797,7 +35797,7 @@ aviaţie	82
 aşază	82
 barele	82
 barăci	82
-bentley	82
+bentley	82	name
 bf	82
 bibliografie	82
 birocrației	82
@@ -35925,7 +35925,7 @@ microbuzului	82
 micșorarea	82
 mirabela	82	name
 mizerabile	82
-moldcell	82
+moldcell	82	name
 monitorului	82
 morgenstern	82
 morman	82
@@ -36429,7 +36429,7 @@ dp	80
 dubă	80
 dulapul	80
 durea	80
-ebay	80
+ebay	80	name
 edo	80	name
 evidențiată	80
 exprimând	80
@@ -36446,7 +36446,7 @@ gravida	80
 grilei	80
 gropii	80
 grădinaru	80
-gucci	80
+gucci	80	name
 gînd	80
 găinile	80
 hegel	80	name
@@ -36769,7 +36769,7 @@ pesedistul	79
 pesemne	79
 pneumonia	79
 poirot	79
-polaris	79
+polaris	79	name
 politizarea	79
 populist	79
 portretizat	79
@@ -37097,7 +37097,7 @@ rândunică	78
 răspândeşte	78
 războinice	78
 sancționarea	78
-sanofi	78
+sanofi	78	name
 scandinave	78
 scutea	78
 scânteie	78
@@ -37198,7 +37198,7 @@ belarusul	77
 biciul	77
 bikini	77
 birocrația	77
-bitdefender	77
+bitdefender	77	name
 blatul	77
 bocșa	77
 bordeianu	77
@@ -37364,7 +37364,7 @@ podișului	77
 polară	77
 pomerania	77
 posedat	77
-pravda	77
+pravda	77	name
 prescripție	77
 prestabilit	77
 prevenite	77
@@ -37597,7 +37597,7 @@ inox	76
 insalubre	76
 integrității	76
 interceptate	76
-interfax	76
+interfax	76	name
 inversa	76
 investiţional	76
 irevocabilă	76
@@ -37819,7 +37819,7 @@ carnete	75
 casate	75
 cauzata	75
 ceahlău	75
-celine	75
+celine	75	name
 celălalte	75
 cetăților	75
 chestionarul	75
@@ -37883,7 +37883,7 @@ executant	75
 exigent	75
 expuneri	75
 faraonul	75
-fidesz	75
+fidesz	75	name
 fizicul	75
 fișierelor	75
 formidabil	75
@@ -38027,7 +38027,7 @@ saint-germain	75
 sally	75	name
 salman	75
 saloanelor	75
-samson	75
+samson	75	name
 savin	75	name
 scuarul	75
 sigiliu	75
@@ -38319,7 +38319,7 @@ reînnoită	74
 reîntâlnit	74
 riscam	74
 româneascã	74
-ryanair	74
+ryanair	74	name
 rîndurile	74
 rădescu	74	name
 răpiți	74
@@ -38619,7 +38619,7 @@ nereușită	73
 nerv	73
 nervuri	73
 nevoiaşi	73
-nile	73
+nile	73	name
 nimicuri	73
 nino	73	name
 nistrene	73
@@ -38701,7 +38701,7 @@ tinereţea	73
 tonitza	73
 transportat-o	73
 transpunerea	73
-travis	73
+travis	73	name
 trent	73	name
 tribunalele	73
 tristan	73
@@ -39204,7 +39204,7 @@ garnizoane	71
 grafia	71
 grandioase	71
 hadârcă	71
-ibiza	71
+ibiza	71	name
 ieri-dimineaţă	71
 ignoranta	71
 ignorați	71
@@ -39813,7 +39813,7 @@ aranjarea	69
 ardeii	69
 arhiereu	69
 arm	69
-armani	69
+armani	69	name
 artefact	69
 artificiali	69
 ascunşi	69
@@ -39867,7 +39867,7 @@ căruța	69
 căsătoriţi	69
 căutam	69
 dafora	69
-danone	69
+danone	69	name
 deaconu	69	name
 deluroasă	69
 democrata	69
@@ -40307,7 +40307,7 @@ jumătăţi	68
 juraților	68
 kb	68
 koljic	68
-lamborghini	68
+lamborghini	68	name
 legitimare	68
 legitimată	68
 legiune	68
@@ -40548,7 +40548,7 @@ candy	67
 canoanele	67
 canterbury	67	name
 caroseria	67
-carpatair	67
+carpatair	67	name
 carr	67
 cauciucurile	67
 cazarmă	67
@@ -40606,7 +40606,7 @@ desființează	67
 detașarea	67
 dinamism	67
 direcționați	67
-disneyland	67
+disneyland	67	name
 distingă	67
 divergențe	67
 divinități	67
@@ -40628,7 +40628,7 @@ elector	67
 electrecord	67	name
 epidemiile	67
 epurarea	67
-euronews	67
+euronews	67	name
 extractul	67
 faianță	67
 feedback-ul	67
@@ -41628,7 +41628,7 @@ botoşănean	64
 bras	64
 broșură	64
 budăi	64
-bugatti	64
+bugatti	64	name
 bulgarul	64
 buturile	64
 bâlci	64
@@ -41767,7 +41767,7 @@ invenţie	64
 investiţionale	64
 iresponsabile	64
 iresponsabilă	64
-kia	64
+kia	64	name
 kirby	64
 ku	64
 laureatul	64
@@ -42054,7 +42054,7 @@ d-aia	63
 daţi-mi	63
 dealeri	63
 deliei	63
-deloitte	63
+deloitte	63	name
 depresii	63
 descurajează	63
 descurci	63
@@ -42308,7 +42308,7 @@ unirist	63
 uraniului	63
 urle	63
 urmărești	63
-vader	63
+vader	63	name
 vinclu	63
 violetta	63
 viorii	63
@@ -42500,7 +42500,7 @@ jurnaltv	62
 jurămintele	62
 kamala	62
 karol	62
-kensington	62
+kensington	62	name
 kris	62
 langă	62
 ldl	62
@@ -43350,7 +43350,7 @@ perturbarea	60
 phillip	60
 picătura	60
 pigmenți	60
-pirelli	60
+pirelli	60	name
 pitice	60
 planificatorii	60
 plug	60
@@ -43472,7 +43472,7 @@ violate	60
 vizeazã	60
 vișan	60	name
 webber	60
-wei	60
+wei	60	name
 wilder	60
 xvi-a	60
 yorktown	60
@@ -43729,7 +43729,7 @@ ll	59
 logoul	59
 lopadea	59	name
 luându-se	59
-macbeth	59
+macbeth	59	name
 macedonski	59
 maltez	59
 maree	59
@@ -44347,7 +44347,7 @@ vizionări	58
 vocala	58
 vorbã	58
 vrednici	58
-yamaha	58
+yamaha	58	name
 zgârie	58
 zidar	58
 zmeul	58
@@ -44608,7 +44608,7 @@ mackenzie	57
 magnific	57
 mandinga	57
 maramureşului	57
-mavrocordat	57
+mavrocordat	57	name
 meadows	57
 membrului	57
 menajamente	57
@@ -44696,7 +44696,7 @@ revizii	57
 rezolvări	57
 rh	57
 rigole	57
-ringier	57
+ringier	57	name
 rivalului	57
 robbins	57	name
 rohan	57
@@ -45024,7 +45024,7 @@ gianina	56	name
 gospodăresc	56
 gramaticile	56
 grosolană	56
-guadalcanal	56
+guadalcanal	56	name
 guvernamentala	56
 habsburgii	56
 hari	56
@@ -45250,7 +45250,7 @@ swan	56
 sylvester	56
 săparea	56
 sătească	56
-tatra	56
+tatra	56	name
 teilor	56
 tenace	56
 tenacitate	56
@@ -46546,7 +46546,7 @@ lam	53
 lanțurilor	53
 legalității	53
 legare	53
-leonidas	53
+leonidas	53	name
 lester	53	name
 leton	53
 litvinenco	53
@@ -47178,7 +47178,7 @@ ritmice	52
 rockului	52
 rompuy	52
 roumaine	52
-routledge	52
+routledge	52	name
 roșiatice	52
 rucsacul	52
 rujeola	52
@@ -47223,7 +47223,7 @@ sufocare	52
 suie	52
 supranatural	52
 surprizã	52
-swarovski	52
+swarovski	52	name
 sălăjene	52
 săruta	52
 talentelor	52
@@ -47334,7 +47334,7 @@ armonică	51
 artificiile	51
 asistaţii	51
 asistați	51
-astaldi	51
+astaldi	51	name
 astronauții	51
 atacatorului	51
 atinsese	51
@@ -47870,7 +47870,7 @@ autentica	50
 autograf	50
 automatizarea	50
 autosesizeze	50
-avon	50
+avon	50	name
 aşezăm	50
 babel	50
 balcic	50
@@ -47957,7 +47957,7 @@ contracandidate	50
 conul	50
 conştientiza	50
 conştientizarea	50
-corfu	50
+corfu	50	name
 cosa	50
 craterele	50
 credinciosul	50
@@ -48485,7 +48485,7 @@ coordonatoarea	49
 copilotul	49
 corelarea	49
 corespondente	49
-coty	49
+coty	49	name
 couture	49
 cranii	49
 creierii	49
@@ -48760,7 +48760,7 @@ păcăliţi	49
 păstorul	49
 păsărică	49
 pătimit	49
-ramada	49
+ramada	49	name
 ramân	49
 rapidiştii	49
 raven	49
@@ -48791,10 +48791,10 @@ răbdători	49
 rădăcinii	49
 răstignirea	49
 sadea	49
-salomon	49
+salomon	49	name
 salutată	49
 salvamontiștii	49
-samos	49
+samos	49	name
 sancționează	49
 scalar	49
 scandinavă	49
@@ -48862,7 +48862,7 @@ uimiţi	49
 umărului	49
 ung	49
 ungurească	49
-unilever	49
+unilever	49	name
 urbanistică	49
 urcau	49
 utvin	49	name
@@ -49104,7 +49104,7 @@ eclozează	48
 ecuatoriale	48
 electrod	48
 eminesciene	48
-engie	48
+engie	48	name
 enoriaşi	48
 epa	48
 epidemice	48
@@ -49196,7 +49196,7 @@ jungle	48
 kaas	48
 kan	48
 kathleen	48	name
-knesset	48
+knesset	48	name
 korodi	48
 kramer	48
 kârgâzstan	48	name
@@ -49513,7 +49513,7 @@ adelin	47	name
 adoptat-o	47
 aduceți	47
 adăugare	47
-aerosmith	47
+aerosmith	47	name
 afirmării	47
 aglomerările	47
 agresiunilor	47
@@ -49717,7 +49717,7 @@ galilei	47	name
 gazette	47
 geamurilor	47
 generalul-maior	47
-gfk	47
+gfk	47	name
 ghenea	47
 gheţea	47
 ghețarilor	47
@@ -50325,7 +50325,7 @@ gîndi	46
 göteborg	46
 găești	46	name
 găgăuz	46
-haim	46
+haim	46	name
 haite	46
 hash	46
 hat	46
@@ -50616,7 +50616,7 @@ stelea	46
 stenograme	46
 stoia	46
 stoker	46
-strabag	46
+strabag	46	name
 stricăciuni	46
 strâmtoare	46
 străbunica	46
@@ -50941,7 +50941,7 @@ facturat	45
 facultativ	45
 fanatik	45
 fanfare	45
-fatah	45
+fatah	45	name
 fati	45
 feodor	45	name
 fierar	45
@@ -50983,7 +50983,7 @@ găneasa	45	name
 găselniţă	45
 halelor	45
 hamburger	45
-hapoel	45
+hapoel	45	name
 hathaway	45
 heineken	45	name
 hemodializă	45
@@ -51044,7 +51044,7 @@ jensen	45
 jihad	45
 jurchelaaccident	45
 kazahstanul	45
-keane	45
+keane	45	name
 klan	45
 klara	45
 kraft	45
@@ -51137,7 +51137,7 @@ nou-născutul	45
 numerotarea	45
 nup	45
 oficieze	45
-okinawa	45
+okinawa	45	name
 oligarhii	45
 olimpiadelor	45
 opiu	45
@@ -51345,7 +51345,7 @@ vorona	45	name
 vulturilor	45
 vâlcelele	45
 vârstnică	45
-wehrmacht	45
+wehrmacht	45	name
 welch	45
 wenger	45
 yan	45
@@ -51420,7 +51420,7 @@ apendicită	44
 apolitică	44
 aprofunda	44
 arbuşti	44
-arcelormittal	44
+arcelormittal	44	name
 archibald	44
 arcuit	44
 arhiepiscopie	44
@@ -51572,7 +51572,7 @@ dozatoare	44
 drajna	44	name
 dramatismul	44
 după-masa	44
-dyson	44
+dyson	44	name
 dăscălescu	44
 edictul	44
 eds	44
@@ -52005,7 +52005,7 @@ afinități	43
 africanii	43
 agassi	43
 agende	43
-ahab	43
+ahab	43	name
 ajuţi	43
 al-din	43
 alarmiste	43
@@ -52057,7 +52057,7 @@ barbados	43	name
 barje	43
 basorelief	43
 basoreliefuri	43
-bathory	43
+bathory	43	name
 bedford	43
 bernadotte	43
 bert	43
@@ -52644,7 +52644,7 @@ wheeler	43
 wiesel	43
 winchester	43
 wroclaw	43	name
-xiaomi	43
+xiaomi	43	name
 xl	43
 ypg	43
 zidăria	43
@@ -53047,7 +53047,7 @@ itinerariul	42
 izei	42	name
 jeturi	42
 jignești	42
-jobbik	42
+jobbik	42	name
 jurma	42
 klimenko	42
 kuciak	42
@@ -53330,7 +53330,7 @@ tovarăşii	42
 tracta	42
 traducători	42
 trainică	42
-transavia	42
+transavia	42	name
 transmisiunea	42
 transportatorul	42
 transversala	42
@@ -53651,7 +53651,7 @@ edificiile	41
 egor	41
 electrodul	41
 elf	41
-elis	41
+elis	41	name
 emigrant	41
 emigranții	41
 emigrației	41
@@ -53803,7 +53803,7 @@ markov	41
 meditațiile	41
 menopauza	41
 mercer	41
-metacritic	41
+metacritic	41	name
 miezului	41
 mikhail	41
 milionarii	41
@@ -54178,7 +54178,7 @@ ampoiului	40
 analfabeţi	40
 anestezia	40
 anexare	40
-angelos	40
+angelos	40	name
 animației	40
 antisovietice	40
 antonel	40
@@ -54342,7 +54342,7 @@ căsnicii	40
 cătina	40
 dae	40
 daneza	40
-daniels	40
+daniels	40	name
 danturii	40
 datorându-se	40
 debitorii	40
@@ -54461,7 +54461,7 @@ gulliver	40	name
 gyorfi	40
 gârcina	40	name
 gâtlejul	40
-hanson	40
+hanson	40	name
 helios	40	name
 heterosexuale	40
 hipermarketul	40
@@ -55202,7 +55202,7 @@ hatchback	39
 hatmanului	39
 hawkins	39
 hectolitri	39
-helsing	39
+helsing	39	name
 hidroelectrică	39
 himenal	39
 hindus	39
@@ -55333,7 +55333,7 @@ monstruoase	39
 montării	39
 morfologică	39
 moroianu	39
-motown	39
+motown	39	name
 multifuncțională	39
 municipalitățile	39
 mureşanu	39
@@ -55401,7 +55401,7 @@ pasivitatea	39
 patruleze	39
 patrupedele	39
 pašić	39
-pearson	39
+pearson	39	name
 peisagist	39
 peisagistice	39
 percheziționat	39
@@ -55727,7 +55727,7 @@ albit	38
 albăstrui	38
 algebra	38
 alora	38
-alstom	38
+alstom	38	name
 altai	38
 amantei	38
 amenajărilor	38
@@ -55838,7 +55838,7 @@ coapse	38
 codexul	38
 codifică	38
 coercitive	38
-coldplay	38
+coldplay	38	name
 colectivități	38
 colectă	38
 colegial	38
@@ -56226,7 +56226,7 @@ portabilă	38
 postei	38
 poznań	38
 poştaşii	38
-praktiker	38
+praktiker	38	name
 preconcepute	38
 precursorul	38
 prefigura	38
@@ -56884,7 +56884,7 @@ kaunas	37
 kaz	37
 krim	37
 labrador	37
-lactalis	37
+lactalis	37	name
 lazu	37
 legalizate	37
 legendarei	37
@@ -57095,7 +57095,7 @@ promovam	37
 propagandist	37
 propagandistică	37
 propulsor	37
-prosieben	37
+prosieben	37	name
 prostime	37
 protejau	37
 protestanților	37
@@ -57432,7 +57432,7 @@ britannia	36
 bronșic	36
 brun-roșcate	36
 bugeac	36
-buick	36
+buick	36	name
 bumerang	36
 buziaşului	36
 buzoieni	36
@@ -57739,7 +57739,7 @@ jurnaliste	36
 katarina	36
 kelvin	36
 koeman	36
-krupp	36
+krupp	36	name
 kvitova	36
 lasa-ne	36
 laureaţii	36
@@ -58670,7 +58670,7 @@ mareelor	35
 masonii	35
 maturizeze	35
 mavrodin	35	name
-mccann	35
+mccann	35	name
 meandre	35
 mediate	35
 medieşu	35
@@ -58797,7 +58797,7 @@ pieter	35	name
 piscinelor	35
 pistelor	35
 piteștiul	35
-pixar	35
+pixar	35	name
 player-ul	35
 pleava	35
 plenipotenţiar	35
@@ -59556,7 +59556,7 @@ irakienii	34
 iraționale	34
 iritații	34
 isaccea	34	name
-iveco	34
+iveco	34	name
 ivește	34
 ivireanul	34	name
 ivorianul	34
@@ -60525,7 +60525,7 @@ izbucnind	33
 jaco	33
 jagger	33
 jakab	33
-jameson	33
+jameson	33	name
 janice	33
 jenson	33
 jiang	33
@@ -60627,7 +60627,7 @@ mustrări	33
 mustul	33
 mutaţie	33
 mușcătura	33
-mykonos	33
+mykonos	33	name
 mâncam	33
 mâncărimi	33
 mânerele	33
@@ -61129,7 +61129,7 @@ amestecare	32
 amina	32
 amoroasa	32
 anaconda	32
-anadolu	32
+anadolu	32	name
 ancadramentele	32
 anemiei	32
 anestezie-terapie	32
@@ -61898,7 +61898,7 @@ refresh	32
 refugii	32
 reglementata	32
 reich-ului	32
-reichstag	32
+reichstag	32	name
 reintrodusă	32
 reloca	32
 remarul	32
@@ -62705,10 +62705,10 @@ korczak	31
 kruger	31
 krzysztof	31
 kunis	31
-lafarge	31
+lafarge	31	name
 lando	31
 lansați	31
-lawson	31
+lawson	31	name
 legia	31
 leona	31
 letone	31
@@ -63313,7 +63313,7 @@ agravante	30
 aic	30
 aievea	30
 airplay	30
-akcent	30
+akcent	30	name
 aki	30
 alcoolemia	30
 alcătuiți	30
@@ -63352,7 +63352,7 @@ antrax	30
 anuar	30
 apd	30
 apendicele	30
-apink	30
+apink	30	name
 aplaudate	30
 apostolice	30
 apăsați	30
@@ -63917,9 +63917,9 @@ lichefiate	30
 lichelele	30
 licita	30
 lieberman	30
-likud	30
+likud	30	name
 limbajelor	30
-lindemann	30
+lindemann	30	name
 lintea	30
 lissa	30
 litigiului	30
@@ -64204,7 +64204,7 @@ radiografiile	30
 radiolog	30
 rage	30
 ramadanului	30
-rammstein	30
+rammstein	30	name
 raportata	30
 ravene	30
 rcs-rds	30
@@ -64264,7 +64264,7 @@ sauvignon	30
 savurează	30
 scanat	30
 scandau	30
-scania	30
+scania	30	name
 schelă	30
 schimbã	30
 schipor	30
@@ -64618,7 +64618,7 @@ apropomagazin	29
 apucaţi	29
 apulia	29
 armageddon	29
-artis	29
+artis	29	name
 asasinează	29
 ascensorul	29
 ascunselea	29
@@ -64853,7 +64853,7 @@ cățărări	29
 daco-romană	29
 dak	29
 damascul	29
-danzig	29
+danzig	29	name
 datinile	29
 dawes	29
 dci	29
@@ -65274,7 +65274,7 @@ mărșăluiască	29
 măsliniu	29
 măsluite	29
 n-v	29
-naftogaz	29
+naftogaz	29	name
 naiva	29
 nariţa	29
 naspa	29
@@ -65387,7 +65387,7 @@ pernele	29
 perseverenta	29
 perversiuni	29
 petice	29
-piaget	29
+piaget	29	name
 picăturilor	29
 pidu	29
 pieile	29
@@ -65418,7 +65418,7 @@ pong	29
 pontificale	29
 pooling	29
 popularizată	29
-pornhub	29
+pornhub	29	name
 porte	29
 portofoliilor	29
 posteritatea	29
@@ -66264,7 +66264,7 @@ halda	28
 halen	28
 hallstatt	28
 halmeag	28
-hama	28
+hama	28	name
 hashim	28
 hb	28
 heidfeld	28
@@ -66955,7 +66955,7 @@ versat	28
 versatile	28
 versatilitate	28
 viceamiral	28
-vickers	28
+vickers	28	name
 violentã	28
 vivace	28
 vizantea	28	name
@@ -67362,7 +67362,7 @@ crenelat	27
 crepusculară	27
 creştin-democraţilor	27
 creştinesc	27
-crips	27
+crips	27	name
 cristalizare	27
 cristur	27	name
 criticaţi	27
@@ -67541,7 +67541,7 @@ filonul	27
 filtrată	27
 finalizam	27
 fleșeriu	27	name
-flixbus	27
+flixbus	27	name
 floristică	27
 fluviile	27
 foci	27
@@ -67754,7 +67754,7 @@ logici	27
 logodnic	27
 longus	27
 lotrului	27
-loverboy	27
+loverboy	27	name
 lozincă	27
 lua-o	27
 lucraseră	27
@@ -68266,7 +68266,7 @@ teleșcoala	27
 telul	27
 temișan	27
 templier	27
-tencent	27
+tencent	27	name
 terim	27
 terminaseră	27
 teropode	27
@@ -68699,7 +68699,7 @@ coagula	26
 coatele	26
 cocoană	26
 cocon	26
-coface	26
+coface	26	name
 cojocariu	26
 colaterală	26
 colhozului	26
@@ -68814,7 +68814,7 @@ destrămare	26
 desăvârşită	26
 detoneze	26
 deviant	26
-dexia	26
+dexia	26	name
 dezbatem	26
 dezinformat	26
 dezmintă	26
@@ -68888,7 +68888,7 @@ estimam	26
 eterogen	26
 eterul	26
 etnobotanicele	26
-eton	26
+eton	26	name
 euronest	26
 europenă	26
 evocări	26
@@ -69175,7 +69175,7 @@ mascata	26
 masterate	26
 matejko	26
 matildei	26	name
-maybach	26
+maybach	26	name
 mcsi	26
 mect	26
 medita	26
@@ -69269,11 +69269,11 @@ ness	26
 nestingheriți	26
 neta	26
 neutra	26
-newfoundland	26
+newfoundland	26	name
 neîndemânatic	26
 neînfricat	26
 niciunii	26
-nightwish	26
+nightwish	26	name
 nigra	26
 nikolaos	26
 nisipoasă	26
@@ -69680,7 +69680,7 @@ topică	26
 torei	26
 torturilor	26
 totaliza	26
-trabzonspor	26
+trabzonspor	26	name
 tragerilor	26
 trama	26
 transmisiunilor	26
@@ -69712,7 +69712,7 @@ ucigându-i	26
 uck	26
 ucrainian	26
 udată	26
-uipath	26
+uipath	26	name
 ulcerul	26
 untului	26
 urcării	26
@@ -69995,7 +69995,7 @@ bering	25	name
 bermudelor	25	name
 bertalan	25
 besson	25
-biedermeier	25
+biedermeier	25	name
 biete	25
 biled	25	name
 bilei	25
@@ -70307,7 +70307,7 @@ dãdea	25
 dănăilă	25
 dărmăneşti	25
 e-mailurile	25
-easyjet	25
+easyjet	25	name
 ebitda	25
 echipează	25
 echivalenta	25
@@ -70513,7 +70513,7 @@ hungaria	25
 hîncești	25
 i-iii	25
 iacoban	25
-iakovlev	25
+iakovlev	25	name
 iat	25
 icao	25
 icter	25
@@ -70542,7 +70542,7 @@ inculpaților	25
 indefinit	25
 indigenilor	25
 indisolubil	25
-inditex	25
+inditex	25	name
 indulgență	25
 industriașilor	25
 inexorabil	25
@@ -71048,7 +71048,7 @@ romburi	25
 ronda	25
 rosenborg	25
 rosteşte	25
-roton	25
+roton	25	name
 rotunjire	25
 rufelor	25
 rugãm	25
@@ -71065,7 +71065,7 @@ răsfățată	25
 răvășit	25
 războiu	25
 răzvrătiți	25
-saba	25
+saba	25	name
 sabotarea	25
 sadism	25
 salbă	25
@@ -71106,7 +71106,7 @@ sesile	25
 setată	25
 seviciu	25
 shhaideh	25
-shochiku	25
+shochiku	25	name
 sichitiu	25
 sifilisul	25
 silicoanele	25
@@ -71343,7 +71343,7 @@ walesa	25
 waltz	25
 wbo	25
 weasley	25
-westlife	25
+westlife	25	name
 whiskey	25
 wizard	25
 wonderland	25
@@ -71444,7 +71444,7 @@ adar	24
 adevãrate	24
 aducându-l	24
 adâncimile	24
-aeroflot	24
+aeroflot	24	name
 afectatã	24
 afectau	24
 afinitatea	24
@@ -71496,7 +71496,7 @@ ancher	24
 ancoraj	24
 andrey	24
 andrid	24	name
-andros	24
+andros	24	name
 anelka	24
 anglican	24
 angolei	24
@@ -71781,7 +71781,7 @@ creşa	24
 crimson	24
 crini	24
 criticã	24
-crunchyroll	24
+crunchyroll	24	name
 cruntã	24
 csiky	24
 cucoana	24
@@ -72229,7 +72229,7 @@ kolesnikova	24
 konstantinos	24
 kravitz	24
 kublai	24
-kurdistan	24
+kurdistan	24	name
 kwon	24
 laguta	24
 laminate	24
@@ -72251,7 +72251,7 @@ lecturarea	24
 lecturat	24
 legalizeze	24
 legiuitoare	24
-legrand	24
+legrand	24	name
 lentoarea	24
 lenți	24
 lepre	24
@@ -73104,7 +73104,7 @@ agrara	23
 agresata	23
 agroturismul	23
 ahei	23
-airbnb	23
+airbnb	23	name
 aiudul	23	name
 aiurelile	23
 akh	23
@@ -73589,7 +73589,7 @@ expulzeze	23
 extermine	23
 extracelular	23
 extremitate	23
-exxonmobil	23
+exxonmobil	23	name
 eșarfe	23
 eșuând	23
 fabricã	23
@@ -73711,7 +73711,7 @@ guwernul	23
 gândeşte-te	23
 gãzdui	23
 gălăţeană	23
-haganah	23
+haganah	23	name
 halbe	23
 halder	23
 halucelui	23
@@ -73910,7 +73910,7 @@ l’equipe	23
 macaz	23
 macroscopice	23
 maddox	23
-madsen	23
+madsen	23	name
 maga	23
 magicianului	23
 magneți	23
@@ -73984,7 +73984,7 @@ molipsitor	23
 moment-dat	23
 monograma	23
 monopost	23
-morgoth	23
+morgoth	23	name
 morricone	23
 moscovite	23
 motoscuter	23
@@ -74619,7 +74619,7 @@ troaca	23
 troll	23
 tund	23
 tunetul	23
-tupolev	23
+tupolev	23	name
 turte	23
 tzvi	23
 tâmplarul	23
@@ -75082,7 +75082,7 @@ ceadâr-lunga	22
 cearșafuri	22
 ceco	22
 cehoaica	22
-ceka	22
+ceka	22	name
 celestă	22
 celina	22
 celții	22
@@ -75395,7 +75395,7 @@ eudochia	22
 euforic	22
 eureka	22
 eurobasket	22
-eurocontrol	22
+eurocontrol	22	name
 eurodeputaţii	22
 euronymous	22
 evaluata	22
@@ -75505,7 +75505,7 @@ glicemie	22
 gloanțelor	22
 glorifică	22
 glosar	22
-glovo	22
+glovo	22	name
 glumea	22
 goalã	22
 goldoni	22
@@ -76149,7 +76149,7 @@ recuperata	22
 recâştige	22
 redacţii	22
 redacțional	22
-reddit	22
+reddit	22	name
 redescoperite	22
 redone	22
 refrenului	22
@@ -76176,7 +76176,7 @@ repopulat	22
 reprezentaţiei	22
 reprofilarea	22
 reprogrameze	22
-republika	22
+republika	22	name
 rescrisă	22
 restriște	22
 reverendul	22
@@ -76231,7 +76231,7 @@ salinger	22
 salutar	22
 salutare	22
 salvamontişti	22
-sammy	22
+sammy	22	name
 sangeacul	22
 sanguina	22
 satisfacere	22
@@ -76263,7 +76263,7 @@ scăunel	22
 se-ntâmplă	22
 secventa	22
 seecp	22
-seimas	22
+seimas	22	name
 seku	22
 selectivi	22
 semnalata	22
@@ -76694,7 +76694,7 @@ alfabetizării	21
 alianţelor	21
 aliata	21
 alim	21
-allsvenskan	21
+allsvenskan	21	name
 alternativi	21
 ambiţiilor	21
 amna	21
@@ -77231,7 +77231,7 @@ domle	21
 domna	21
 doreai	21
 dorobanților	21
-doubleday	21
+doubleday	21	name
 dracea	21	name
 drago	21
 dresează	21
@@ -77287,7 +77287,7 @@ est-germani	21
 estompeze	21
 etajat	21
 etna	21
-eurobarometru	21
+eurobarometru	21	name
 euroncap	21
 eurovisionul	21
 evadări	21
@@ -77416,7 +77416,7 @@ gaba	21
 gallus	21
 gambă	21
 gamele	21
-gamespot	21
+gamespot	21	name
 garland	21
 gata-gata	21
 gatu	21
@@ -77480,7 +77480,7 @@ hamilcar	21
 handicapuri	21
 harap-alb	21
 harbuz	21
-harpercollins	21
+harpercollins	21	name
 harşovschi	21
 hayabusa	21
 hazlie	21
@@ -77643,7 +77643,7 @@ kabuki	21
 kadare	21
 kama	21	name
 kaushal	21
-kenzo	21
+kenzo	21	name
 kerekes	21
 kerensky	21
 kerkhove	21
@@ -77732,7 +77732,7 @@ marcin	21
 mareele	21
 markó	21
 marsupial	21
-martell	21
+martell	21	name
 marwan	21
 marøi	21
 masculinitate	21
@@ -77860,7 +77860,7 @@ noptieră	21
 nord-atlantic	21
 norei	21
 nouri	21
-novartis	21
+novartis	21	name
 npc	21
 nucșoara	21
 nuferi	21
@@ -78363,7 +78363,7 @@ sufocante	21
 sufocarea	21
 suicide	21
 suișuri	21
-sulawesi	21
+sulawesi	21	name
 suliței	21
 sumeriene	21
 sunnită	21
@@ -78925,7 +78925,7 @@ bunicel	20
 bureților	20
 buteliei	20
 by-pass	20
-bytedance	20
+bytedance	20	name
 bâlbâială	20
 bãiatului	20
 bãtãlia	20
@@ -79444,7 +79444,7 @@ gangsterul	20
 gansu	20
 gardoș	20
 garoafa	20
-gaumont	20
+gaumont	20	name
 gavra	20
 gazoși	20
 gebauer	20
@@ -79536,7 +79536,7 @@ hmmm	20
 hobart	20
 hocheiul	20
 hoepner	20
-hohenstaufen	20
+hohenstaufen	20	name
 hoinărind	20
 holodomorul	20
 hooper	20
@@ -79774,7 +79774,7 @@ malic	20
 malița	20	name
 mallului	20
 malmo	20
-mamamoo	20
+mamamoo	20	name
 mameluce	20
 mandarine	20
 maneta	20
@@ -79834,7 +79834,7 @@ micologii	20
 microbiană	20
 microcip	20
 microprocesoare	20
-migos	20
+migos	20	name
 minkowski	20
 minoritarilor	20
 minuscula	20
@@ -79857,7 +79857,7 @@ mopul	20
 moralizator	20
 morei	20
 morena	20
-mossad	20
+mossad	20	name
 mostiștei	20
 motivației	20
 motocicliştilor	20
@@ -79999,7 +79999,7 @@ omenii	20
 omnivore	20
 omoram	20
 onciul	20
-oneworld	20
+oneworld	20	name
 onix	20
 onoda	20
 onorata	20
@@ -80120,7 +80120,7 @@ plusează	20
 poad	20
 pocăința	20
 pogonaru	20
-pokerstars	20
+pokerstars	20	name
 poliomielita	20
 polipi	20
 politicianist	20
@@ -80307,7 +80307,7 @@ rock'n'roll	20
 roda	20
 roddick	20
 rodnic	20
-rolex	20
+rolex	20	name
 romanizarea	20
 romanus	20
 romanţe	20
@@ -80463,7 +80463,7 @@ stingea	20
 stjepan	20
 strabismul	20
 strangulare	20
-stratfor	20
+stratfor	20	name
 strecurate	20
 stresate	20
 strigi	20
@@ -80566,7 +80566,7 @@ tindei	20
 tinerea	20
 tirpitz	20
 tiso	20
-tivoli	20
+tivoli	20	name
 tnrs	20
 toane	20
 tocală	20
@@ -81055,7 +81055,7 @@ bernardino	19
 berni	19
 bernoulli	19
 berzei	19
-betano	19
+betano	19	name
 beto	19
 bianual	19
 bibliotheca	19
@@ -81155,7 +81155,7 @@ capricioasa	19
 carani	19	name
 carbochim	19
 carenţele	19
-cargill	19
+cargill	19	name
 carles	19
 carnat	19
 carver	19
@@ -81725,7 +81725,7 @@ gropeni	19	name
 grosimii	19
 grosjean	19
 grotele	19
-groupama	19
+groupama	19	name
 grozavi	19
 grozăvești	19
 grupată	19
@@ -81796,7 +81796,7 @@ hristea	19
 hsdpa	19
 huai	19
 hulită	19
-hulu	19
+hulu	19	name
 huncă	19
 huza	19
 hădean	19
@@ -81947,7 +81947,7 @@ kit-ul	19
 kleist	19
 klemm	19
 knicks	19
-kodansha	19
+kodansha	19	name
 kronstadt	19
 krum	19
 kuki	19
@@ -82604,7 +82604,7 @@ sagna	19
 saint-pierre	19
 saito	19
 saiyan	19
-salamina	19
+salamina	19	name
 salarul	19
 salutară	19
 samsa	19
@@ -82613,7 +82613,7 @@ sancha	19
 sanchi	19
 sang-ok	19
 sanjuro	19
-sanrio	19
+sanrio	19	name
 sapientia	19
 sarrail	19
 sasar	19
@@ -82649,7 +82649,7 @@ sefard	19
 seidel	19
 seimul	19
 seine	19
-sejm	19
+sejm	19	name
 selecționarea	19
 selenar	19
 seleuș	19	name
@@ -82849,10 +82849,10 @@ teroristului	19
 terţi	19
 tessa	19
 testicul	19
-thelema	19
+thelema	19	name
 thriller-ul	19
 thule	19
-tiamat	19
+tiamat	19	name
 tiepolo	19
 tifoidă	19
 tigări	19
@@ -83030,7 +83030,7 @@ webrelease	19
 westinghouse	19
 whitfield	19
 whoopi	19
-wienerberger	19
+wienerberger	19	name
 wilma	19	name
 wpc	19
 xaver	19
@@ -83042,7 +83042,7 @@ yser	19
 zagros	19
 zaharie	19
 zakat	19
-zakynthos	19
+zakynthos	19	name
 zalmoxis	19
 zburde	19
 zeeland	19
@@ -83428,7 +83428,7 @@ boşneag	18
 braconierii	18
 bractee	18
 braganza	18
-brancovici	18
+brancovici	18	name
 branhiale	18
 branislav	18
 branșă	18
@@ -83837,7 +83837,7 @@ dopul	18
 dormitul	18
 dornier	18
 downes	18
-dreamworks	18
+dreamworks	18	name
 dreaq	18
 drenată	18
 drugtest	18
@@ -83857,7 +83857,7 @@ echivalentele	18
 economi	18
 economiştilor	18
 ecoterm	18
-edenred	18
+edenred	18	name
 edilitar	18
 edilului-şef	18
 eee	18
@@ -84059,7 +84059,7 @@ ghildei	18
 ghiorghe	18
 ghiozdanele	18
 gies	18
-gillette	18
+gillette	18	name
 gilliam	18
 gilmour	18
 gimme	18
@@ -84073,7 +84073,7 @@ glicerina	18
 glicherie	18
 glisante	18
 globalismului	18
-glock	18
+glock	18	name
 glumim	18
 godoroja	18
 gogule	18
@@ -84089,7 +84089,7 @@ gravidei	18
 greenberg	18
 grendel	18
 greșiți	18
-grumman	18
+grumman	18	name
 grund	18
 grzegorz	18
 grânele	18
@@ -84359,7 +84359,7 @@ legat-o	18
 legiferează	18
 legitimații	18
 lehel	18	name
-lehi	18
+lehi	18	name
 leko	18
 lenauheim	18	name
 leni	18
@@ -84445,7 +84445,7 @@ mateuți	18
 maury	18
 mayașă	18
 mayerling	18
-mcmurdo	18
+mcmurdo	18	name
 mcs	18
 mead	18
 medaliați	18
@@ -84718,7 +84718,7 @@ penar	18
 pendula	18
 penetrează	18
 penitenciarul-spital	18
-pepco	18
+pepco	18	name
 percheziția	18
 perfecţiunea	18
 perfecționată	18
@@ -84829,7 +84829,7 @@ prezervativele	18
 preø	18
 preţuit	18
 prețuia	18
-pricewaterhousecoopers	18
+pricewaterhousecoopers	18	name
 prichindeilor	18
 prigonirea	18
 primal	18
@@ -85008,7 +85008,7 @@ roswell	18
 rotoarelor	18
 rousettus	18
 router	18
-roxette	18
+roxette	18	name
 rozalie	18
 rp	18
 rri	18
@@ -85106,7 +85106,7 @@ sitka	18
 situaţi	18
 sixtus	18
 skelton	18
-skylab	18
+skylab	18	name
 slonim	18
 smyrna	18
 snafu	18
@@ -85191,7 +85191,7 @@ sud-americani	18
 sud-americanii	18
 suda	18
 sugrume	18
-suhoi	18
+suhoi	18	name
 sulfurat	18
 sully	18
 super-haios	18
@@ -86202,7 +86202,7 @@ degenerată	17
 dejunul	17
 delegării	17
 deleu	17
-delfi	17
+delfi	17	name
 deliciile	17
 delureni	17	name
 delăsare	17
@@ -86541,7 +86541,7 @@ galezi	17
 galkin	17
 garanției	17
 garbovita	17
-garmin	17
+garmin	17	name
 garniturii	17
 garnizoanelor	17
 garth	17
@@ -86642,7 +86642,7 @@ haynau	17
 haytham	17
 hein	17
 heleșteie	17
-hella	17
+hella	17	name
 henley	17
 henț	17
 heraldica	17
@@ -86843,7 +86843,7 @@ kolceak	17
 kong-ului	17
 kosovară	17
 kramarić	17
-kriegsmarine	17
+kriegsmarine	17	name
 kristine	17
 krøyer	17
 ks	17
@@ -86998,7 +86998,7 @@ menzies	17
 mercheasa	17
 merii	17
 merituoși	17
-messerschmitt	17
+messerschmitt	17	name
 mesteacănul	17
 meta-analiză	17
 metaforei	17
@@ -87148,7 +87148,7 @@ nimici	17
 nisan	17
 nitratul	17
 nitrox	17
-noam	17
+noam	17	name
 nobunaga	17
 noianul	17
 noima	17
@@ -87469,7 +87469,7 @@ racoviţa	17
 radieze	17
 radiusului	17
 radziwill	17
-rafi	17
+rafi	17	name
 rajk	17
 ral	17
 rambursată	17
@@ -87632,7 +87632,7 @@ salahor	17
 salariata	17
 samus	17
 sandler	17
-santorini	17
+santorini	17	name
 saphira	17
 sappho	17
 sarichioi	17	name
@@ -87722,7 +87722,7 @@ sluj	17
 slăbim	17
 slăbiți	17
 smaralde	17
-smokie	17
+smokie	17	name
 soborului	17
 social-democraţiei	17
 socialistului	17
@@ -87768,7 +87768,7 @@ stanislaus	17
 statala	17
 statisticienii	17
 statornici	17
-stavka	17
+stavka	17	name
 staționând	17
 steluţe	17
 steop	17
@@ -88261,7 +88261,7 @@ absențele	16
 acareturile	16
 acced	16
 acceleratul	16
-accor	16
+accor	16	name
 acetatul	16
 aceti	16
 aceștea	16
@@ -88519,7 +88519,7 @@ bergson	16	name
 berke	16
 bernadett	16
 beslan	16
-betar	16
+betar	16	name
 bethod	16
 bezmetic	16
 beznea	16	name
@@ -88961,7 +88961,7 @@ deflagraţie	16
 defăimarea	16
 degajează	16
 degerăturilor	16
-deichmann	16
+deichmann	16	name
 delfina	16
 demilitarizată	16
 demisa	16
@@ -89087,7 +89087,7 @@ drida	16
 drm	16
 drogaţi	16
 drummond	16
-druzi	16
+druzi	16	name
 drvar	16
 dth	16
 dual-core	16
@@ -89115,7 +89115,7 @@ d’arc	16
 e-distribuție	16
 ebner	16
 ecartamentul	16
-ecclesia	16
+ecclesia	16	name
 echilibrăm	16
 echipata	16
 echivalare	16
@@ -89164,7 +89164,7 @@ epoleți	16
 epurat	16
 erectilă	16
 ereditate	16
-eredivisie	16
+eredivisie	16	name
 eritreei	16
 eschil	16
 eschivează	16
@@ -89284,7 +89284,7 @@ foix	16
 folcloristul	16
 fonck	16
 fonem	16
-foodpanda	16
+foodpanda	16	name
 fora	16
 forintul	16
 formaldehidă	16
@@ -89311,7 +89311,7 @@ freyr	16
 frieser	16
 frige	16
 frivol	16
-frontex	16
+frontex	16	name
 frumoaselor	16
 frumuşele	16
 frumuşica	16
@@ -89583,7 +89583,7 @@ interogatoriul	16
 interogări	16
 interpretăm	16
 interscope	16
-intersport	16
+intersport	16	name
 interstatal	16
 interveneau	16
 interzisã	16
@@ -89610,7 +89610,7 @@ iphone-ul	16
 ipocrita	16
 ipotecat	16
 ireproşabil	16
-irgun	16
+irgun	16	name
 irosim	16
 irrd	16
 isadora	16
@@ -89639,7 +89639,7 @@ jeanette	16
 jeanine	16
 jenica	16	name
 jeolla	16
-jetix	16
+jetix	16	name
 jgheab	16
 jignirea	16
 jigău	16
@@ -89968,7 +89968,7 @@ naumescu	16
 navali	16
 navigatoare	16
 navigaţiei	16
-naxos	16
+naxos	16	name
 naya	16
 nazistul	16
 naşti	16
@@ -90529,7 +90529,7 @@ saturi	16
 saulea	16
 savoya	16
 sax	16
-sberbank	16
+sberbank	16	name
 scamatorii	16
 scaner	16
 scarface	16
@@ -90612,7 +90612,7 @@ sinulescu	16
 sire	16
 sirenei	16
 sistata	16
-sixt	16
+sixt	16	name
 sla	16
 slide	16
 slovacilor	16
@@ -90676,7 +90676,7 @@ stegarilor	16
 steliştilor	16
 steroid	16
 steroizii	16
-stihl	16
+stihl	16	name
 stimei	16
 stimulul	16
 stingi	16
@@ -90829,7 +90829,7 @@ terminala	16
 ternar	16
 terorizaţi	16
 tescan	16
-tesco	16
+tesco	16	name
 tet	16
 tetra	16
 tex	16
@@ -90895,7 +90895,7 @@ trichineloscopic	16
 tricourilor	16
 trimiteti-mi	16
 trio-ului	16
-tripadvisor	16
+tripadvisor	16	name
 trombon	16
 troncotă	16
 tronurile	16
@@ -90995,7 +90995,7 @@ viețuitori	16
 vigilenței	16
 vijeliile	16
 vikinge	16
-vimeo	16
+vimeo	16	name
 vincze	16
 vintilescu	16
 virajului	16
@@ -91315,7 +91315,7 @@ amofm	15
 amortizează	15
 amplasaţi	15
 amplitudini	15
-amstel	15
+amstel	15	name
 amun	15
 amuzanți	15
 analfabetule	15
@@ -91483,7 +91483,7 @@ barzani	15
 bass-ului	15
 bassenge	15
 batavia	15
-bauhaus	15
+bauhaus	15	name
 bayaz	15
 bazilescu	15
 bazându-ne	15
@@ -91610,7 +91610,7 @@ bunaziuabrasov	15
 burduşit	15
 burghele	15
 burlanele	15
-bursaspor	15
+bursaspor	15	name
 busculada	15
 businessurile	15
 busolei	15
@@ -91618,7 +91618,7 @@ bussines	15
 butoanelor	15
 buzoienii	15
 buș	15
-bwin	15
+bwin	15	name
 bâlbâiala	15
 bãietii	15
 bãtaia	15
@@ -91735,7 +91735,7 @@ circumscriu	15
 circumstanțial	15
 cireada	15
 cisternele	15
-citibank	15
+citibank	15	name
 cititoarele	15
 citypress	15
 city’us	15
@@ -92791,7 +92791,7 @@ kloss	15
 koca	15
 koga	15
 kollowrat	15
-kos	15
+kos	15	name
 kouta	15
 kozlov	15	name
 krech	15
@@ -92859,7 +92859,7 @@ liebknecht	15
 limbic	15
 limfocitelor	15
 lincu	15
-linderhof	15
+linderhof	15	name
 lindt	15
 linei	15
 lipovãt	15
@@ -92942,7 +92942,7 @@ marabuul	15
 marascu	15
 marathi	15
 marchiză	15
-marduk	15
+marduk	15	name
 markham	15
 marković	15
 martie-iunie	15
@@ -93044,7 +93044,7 @@ molovata	15
 mommsen	15
 monarhică	15
 monarhiilor	15
-moneygram	15
+moneygram	15	name
 monezile	15
 mongola	15
 monogatari	15
@@ -93233,7 +93233,7 @@ obişnuinţa	15
 obișnuiești	15
 obișnuita	15
 obligațiune	15
-obnovlenie	15
+obnovlenie	15	name
 oborului	15
 observau	15
 obsesive	15
@@ -93593,7 +93593,7 @@ rabinilor	15
 racovski	15
 radiantă	15
 radiaţia	15
-radiohead	15
+radiohead	15	name
 radionuclizi	15
 radomir	15	name
 radul	15
@@ -93809,7 +93809,7 @@ schingiuit	15
 schior	15
 schisme	15
 schleck	15
-schlumberger	15
+schlumberger	15	name
 sciatic	15
 sciți	15
 sciților	15
@@ -93870,7 +93870,7 @@ shazam	15
 shelly	15
 shingen	15
 shonen	15
-shueisha	15
+shueisha	15	name
 shōnen	15
 sibience	15
 sibutramina	15
@@ -93893,7 +93893,7 @@ sintetizatorul	15
 sionism	15
 sis-ului	15
 sistematizate	15
-skiathos	15
+skiathos	15	name
 slavistică	15
 sloboda	15
 sloganele	15
@@ -94149,7 +94149,7 @@ timpane	15
 tincturi	15
 tipografiile	15
 tiptil	15
-tissot	15
+tissot	15	name
 titchener	15
 toatea	15
 tobi	15
@@ -94409,7 +94409,7 @@ zorescu	15
 zoroastru	15
 zoșcenko	15
 zuzana	15
-zynga	15
+zynga	15	name
 áron	15
 îmbinată	15
 îmbinărilor	15
@@ -94615,7 +94615,7 @@ adwords	14
 adâncirii	14
 adãugãm	14
 adăugându-i	14
-aegon	14
+aegon	14	name
 aerodinamica	14
 aerodromuri	14
 aerodromurile	14
@@ -94838,7 +94838,7 @@ autobază	14
 autobusul	14
 autocritică	14
 autoironie	14
-autoliv	14
+autoliv	14	name
 automarfarului	14
 automatizării	14
 automobilismului	14
@@ -94876,7 +94876,7 @@ bactericide	14
 badacin	14
 badnjarevic	14
 bagajului	14
-bagration	14
+bagration	14	name
 bahna	14
 bahnea	14	name
 baikonur	14
@@ -94909,7 +94909,7 @@ bazaltice	14
 bačka	14
 başca	14
 beciu	14
-beko	14
+beko	14	name
 belarusa	14
 belaruși	14
 belșugul	14
@@ -94927,13 +94927,13 @@ berezovski	14
 berilă	14
 berk	14
 bernhardt	14
-bershka	14
+bershka	14	name
 berthe	14
 besancon	14
 besleaga	14	name
 betacaroten	14
 betelgeuse	14
-betfair	14
+betfair	14	name
 betivii	14
 biban	14
 bibanul	14
@@ -95003,7 +95003,7 @@ botsinkay	14
 bouhlel	14
 bourbonilor	14
 bourla	14
-boyzone	14
+boyzone	14	name
 bozdog	14
 boți	14
 bpm	14
@@ -95632,7 +95632,7 @@ duolingo	14
 dup-aia	14
 duplicitate	14
 duquesne	14
-durex	14
+durex	14	name
 durga	14
 durã	14
 dvd-r	14
@@ -95677,7 +95677,7 @@ encefalita	14
 endocrină	14
 englezeşti	14
 enigmei	14
-enix	14
+enix	14	name
 enjyu	14
 enka	14
 ens	14
@@ -95729,7 +95729,7 @@ euroregiunea	14
 evaluatorilor	14
 evangheliștii	14
 evghenia	14
-evia	14
+evia	14	name
 evidentelor	14
 ewl	14
 exaltat	14
@@ -95862,7 +95862,7 @@ fotografiata	14
 fotograme	14
 fotosensibile	14
 fouad	14
-foxconn	14
+foxconn	14	name
 fragmenta	14
 franøa	14
 frecvenţelor	14
@@ -95993,7 +95993,7 @@ gunoiule	14
 guraliuc	14
 guvernezi	14
 guvernoratul	14
-gyllenhaal	14
+gyllenhaal	14	name
 győri	14
 gãsiti	14
 görgey	14
@@ -96037,7 +96037,7 @@ haznaua	14
 hbk	14
 hebei	14
 heilongjiang	14
-heinkel	14
+heinkel	14	name
 helge	14
 hellfire	14
 helvig	14
@@ -96068,7 +96068,7 @@ hiperspațiu	14
 hipocrat	14
 hipotensiune	14
 hisham	14
-hitachi	14
+hitachi	14	name
 hitlerist	14
 hobana	14
 hoinari	14
@@ -96078,7 +96078,7 @@ homeopatia	14
 hominizi	14
 hon	14
 honigberger	14
-hornbach	14
+hornbach	14	name
 horne	14
 horodiște	14
 horthyste	14
@@ -96304,7 +96304,7 @@ katana	14
 katona	14
 kazahe	14
 kazanului	14
-kazmunaigaz	14
+kazmunaigaz	14	name
 kearney	14
 kempo	14
 kenshin	14
@@ -96346,7 +96346,7 @@ laborant	14
 laburiști	14
 lacrimale	14
 lacuna	14
-ladakh	14
+ladakh	14	name
 ladino	14
 laetitia	14
 lafaie	14
@@ -96384,7 +96384,7 @@ leumi	14
 levate	14
 levigat	14
 levigate	14
-leyte	14
+leyte	14	name
 libby	14
 liberal-democratul	14
 libertarian	14
@@ -96420,7 +96420,7 @@ londoneza	14
 longa	14
 longobard	14
 lotreanu	14
-lovejoy	14
+lovejoy	14	name
 lowrie	14
 loznica	14
 lsbf	14
@@ -96441,7 +96441,7 @@ lushnikov	14
 lusitanii	14
 lustraţia	14
 lutului	14
-luzon	14
+luzon	14	name
 lya	14
 lăcaşurilor	14
 lămuririle	14
@@ -96840,7 +96840,7 @@ ottmar	14
 outfituri	14
 ouălelor	14
 ovarelor	14
-oxfam	14
+oxfam	14	name
 oxidului	14
 oxidării	14
 oxigenat	14
@@ -97221,7 +97221,7 @@ redevenim	14
 redevin	14
 redirecționa	14
 redmond	14
-reebok	14
+reebok	14	name
 reediteze	14
 reevaluată	14
 refaci	14
@@ -97322,7 +97322,7 @@ rosenfeld	14
 roseti	14	name
 rosh	14
 rosita	14	name
-rosneft	14
+rosneft	14	name
 rostogoli	14
 rostogolirea	14
 rotavirus	14
@@ -97386,7 +97386,7 @@ sadoveac	14
 safina	14
 saint-cloud	14
 saint-michel	14
-saipan	14
+saipan	14	name
 salin	14
 salrom	14
 saltului	14
@@ -97395,7 +97395,7 @@ salvările	14
 sambo	14
 sameday	14
 sandache	14
-sandoz	14
+sandoz	14	name
 sangha	14
 sanscrit	14
 santajabil	14
@@ -97722,8 +97722,8 @@ telor	14
 temeinicie	14
 temeţi	14
 temătoare	14
-tenaris	14
-tendai	14
+tenaris	14	name
+tendai	14	name
 tendențială	14
 tendinţei	14
 tendoanelor	14
@@ -98310,7 +98310,7 @@ albes	13
 albușurile	13
 alcan	13
 alcoolemii	13
-alderney	13
+alderney	13	name
 alegându-l	13
 alergătură	13
 alertare	13
@@ -98327,7 +98327,7 @@ aliniaţi	13
 alireza	13
 allahu	13
 allview	13
-almere	13
+almere	13	name
 alocuţiunile	13
 alogene	13
 alogenii	13
@@ -98375,7 +98375,7 @@ anestezişti	13
 anexând	13
 angkor	13
 anihilatorul	13
-animax	13
+animax	13	name
 animaţii	13
 animozitatea	13
 aniței	13	name
@@ -98417,7 +98417,7 @@ aprofundării	13
 apropiase	13
 aprozar	13
 apta	13
-aptoide	13
+aptoide	13	name
 apãra	13
 apărarii	13
 apăru	13
@@ -98695,7 +98695,7 @@ brigadei	13
 brodoc	13	name
 browserelor	13
 broșurile	13
-bruegel	13
+bruegel	13	name
 brunie	13
 bruynseels	13
 brâie	13
@@ -99230,7 +99230,7 @@ decorata	13
 decorării	13
 decuparea	13
 definitivării	13
-deftones	13
+deftones	13	name
 defunct	13
 deghizeze	13
 deghizări	13
@@ -99638,7 +99638,7 @@ finanţaţi	13
 fiorilla	13
 firmanul	13
 fisurată	13
-fitbit	13
+fitbit	13	name
 flamel	13
 flammarion	13
 flavonoizi	13
@@ -99690,7 +99690,7 @@ frătilă	13
 frăţeşte	13
 ftc	13
 fujian	13
-fujikura	13
+fujikura	13	name
 fulminanta	13
 fumurile	13
 funcøie	13
@@ -99775,7 +99775,7 @@ giskard	13
 giuleşteană	13
 giurgiu-ruse	13
 giurumescu	13
-givenchy	13
+givenchy	13	name
 globulară	13
 globulelor	13
 glonass	13
@@ -99918,7 +99918,7 @@ homeopatie	13
 homerice	13
 homofobe	13
 honoriu	13
-honshu	13
+honshu	13	name
 honuit	13
 honţaru	13
 hooton	13
@@ -100120,7 +100120,7 @@ istoriografică	13
 istorisire	13
 istovitor	13
 it-iști	13
-itaca	13
+itaca	13	name
 itemi	13
 iuhas	13
 iula	13
@@ -100265,7 +100265,7 @@ liao	13
 liaoning	13
 liberalizează	13
 liberian	13
-liberland	13
+liberland	13	name
 libienii	13
 libretului	13
 lichidităţilor	13
@@ -100382,7 +100382,7 @@ manrho	13
 manșele	13
 marabu	13
 maramureşeană	13
-marcegaglia	13
+marcegaglia	13	name
 marchiş	13
 marcoci	13
 mareice	13
@@ -100418,7 +100418,7 @@ maximin	13
 mayași	13
 maşloc	13
 mbc	13
-mcafee	13
+mcafee	13	name
 mccullough	13
 mchale	13
 mdp	13
@@ -100831,8 +100831,8 @@ organizaseră	13
 orgolioasă	13
 orhideele	13
 orhideelor	13
-oricon	13
-oriflame	13
+oricon	13	name
+oriflame	13	name
 oriol	13
 orizontali	13
 orişice	13
@@ -101025,7 +101025,7 @@ poliå	13
 polonezului	13
 polskie	13
 ponderare	13
-poniatowski	13
+poniatowski	13	name
 ponorului	13
 pontecorvo	13
 pontic	13
@@ -101552,7 +101552,7 @@ sideral	13
 sifonare	13
 sigheteanul	13
 sigiliilor	13
-sikkim	13
+sikkim	13	name
 sil	13
 simbolizau	13
 simian	13
@@ -101644,7 +101644,7 @@ steguleţe	13
 stegulețe	13
 stelari	13
 stepelor	13
-steppenwolf	13
+steppenwolf	13	name
 sterili	13
 sterilizării	13
 sticluţe	13
@@ -101783,7 +101783,7 @@ tagore	13
 taifas	13
 taiji	13
 tailandei	13	name
-taimi	13
+taimi	13	name
 taker	13
 talamusului	13
 talere	13
@@ -102064,7 +102064,7 @@ vestiţi	13
 veszprém	13
 vezuviului	13
 veşmântul	13
-viacom	13
+viacom	13	name
 viber	13
 vibraţiile	13
 vicecampionii	13
@@ -102122,7 +102122,7 @@ vădana	13
 văleanu	13
 wakanda	13
 wanyūdō	13
-warnermedia	13
+warnermedia	13	name
 washizu	13
 washlet	13
 web-ul	13
@@ -102152,7 +102152,7 @@ xxii-lea	13
 xxviii-a	13
 yacoub	13
 yahweh	13
-yandex	13
+yandex	13	name
 yanez	13
 yannis	13	name
 yediot	13
@@ -102683,7 +102683,7 @@ autonet	12
 autosesiza	12
 autostradã	12
 auzindu-l	12
-avaaz	12
+avaaz	12	name
 avansări	12
 avatare	12
 avea-o	12
@@ -102812,8 +102812,8 @@ bituminos	12
 bitănescu	12
 bizo	12
 biților	12
-blackpink	12
-blackwater	12
+blackpink	12	name
+blackwater	12	name
 blamarea	12
 blamați	12
 blasfemii	12
@@ -103801,7 +103801,7 @@ euphorion	12
 eureko	12
 euroasiatică	12
 eurogamer	12
-eurojust	12
+eurojust	12	name
 evacuările	12
 evadatul	12
 evaluez	12
@@ -104319,7 +104319,7 @@ iezuită	12
 ige	12
 igienizări	12
 igloo	12
-ignis	12
+ignis	12	name
 ignorantei	12
 ignorantă	12
 igrasia	12
@@ -104373,7 +104373,7 @@ indolent	12
 inducem	12
 inductive	12
 inegalităţi	12
-ineos	12
+ineos	12	name
 inerțială	12
 inexistenţei	12
 infantei	12
@@ -104822,7 +104822,7 @@ mazovia	12
 mașinist	12
 mcadams	12
 mckinney	12
-mckinsey	12
+mckinsey	12	name
 mcrae	12
 mebrii	12
 mecanicilor	12
@@ -104913,7 +104913,7 @@ miseleste	12
 mistuitoare	12
 misăilă	12
 miticilor	12
-mitsui	12
+mitsui	12	name
 mitulețu-buică	12
 miuțescu	12
 mișa	12
@@ -105055,7 +105055,7 @@ nationum	12
 naturalistă	12
 nav	12
 navetiștilor	12
-nazareth	12
+nazareth	12	name
 nazuri	12
 neaccentuată	12
 neacceptate	12
@@ -105135,7 +105135,7 @@ nestăpânită	12
 nestăvilit	12
 nesuferit	12
 neubert	12
-neuralink	12
+neuralink	12	name
 neurotoxică	12
 nevoe	12
 nevolnic	12
@@ -105321,7 +105321,7 @@ pamfletar	12
 panglicile	12
 panorame	12
 panteră	12
-pantone	12
+pantone	12	name
 panzerkorps	12
 paparazzilor	12
 papen	12
@@ -105435,7 +105435,7 @@ pinyin	12
 pitcairn	12	name
 pitonii	12
 pivniţe	12
-pixabay	12
+pixabay	12	name
 pizzerii	12
 pișchia	12	name
 pița	12	name
@@ -105895,7 +105895,7 @@ richárd	12
 riddhima	12
 riesling	12
 riester	12
-riigikogu	12
+riigikogu	12	name
 rikers	12
 rinoplastie	12
 rinpoche	12
@@ -128428,3 +128428,306 @@ Zürn	40	name
 Матвей	40	name
 Шевчук	40	name
 ברל	40	name
+abasid	40	name
+abwehr	40	name
+accenture	40	name
+activision	40	name
+aespa	40	name
+ahaggar	40	name
+ahmadiyya	40	name
+airbaltic	40	name
+ajinomoto	40	name
+alawiți	40	name
+aldi	40	name
+alitalia	40	name
+aliyah	40	name
+althing	40	name
+amish	40	name
+amorgos	40	name
+amtrak	40	name
+anglesey	40	name
+anjouan	40	name
+anonymous	40	name
+anthropic	40	name
+antigua	40	name
+antinatalism	40	name
+antroposofie	40	name
+apocalyptica	40	name
+argentina	40	name
+aruba	40	name
+arxiv	40	name
+assam	40	name
+bahai	40	name
+baidu	40	name
+balenciaga	40	name
+barbuda	40	name
+barclays	40	name
+bayer	40	name
+bektașism	40	name
+belize	40	name
+bihar	40	name
+blackrock	40	name
+blondie	40	name
+blur	40	name
+boemianism	40	name
+bolivia	40	name
+bornholm	40	name
+borobudur	40	name
+bridgestone	40	name
+bundesliga	40	name
+bundestag	40	name
+bundeswehr	40	name
+burberry	40	name
+burundi	40	name
+burzum	40	name
+candies	40	name
+capcom	40	name
+carlsberg	40	name
+casio	40	name
+cefalonia	40	name
+ceram	40	name
+cercetașie	40	name
+chhattisgarh	40	name
+clannad	40	name
+comcast	40	name
+comecon	40	name
+comore	40	name
+comsomol	40	name
+coursera	40	name
+cozumel	40	name
+cres	40	name
+deepseek	40	name
+disturbed	40	name
+djerba	40	name
+djibouti	40	name
+donkervoort	40	name
+eagles	40	name
+ecuador	40	name
+egina	40	name
+egyptair	40	name
+ekstraklasa	40	name
+eliteserien	40	name
+embraer	40	name
+emirates	40	name
+erasure	40	name
+eswatini	40	name
+euroliga	40	name
+euromaidan	40	name
+europe	40	name
+evanescence	40	name
+exo	40	name
+eysturoy	40	name
+fauvism	40	name
+femen	40	name
+filettino	40	name
+finnair	40	name
+folketing	40	name
+fuerteventura	40	name
+funafuti	40	name
+funen	40	name
+fyn	40	name
+gabon	40	name
+garbage	40	name
+germanwings	40	name
+ghana	40	name
+github	40	name
+goa	40	name
+gorillaz	40	name
+gotland	40	name
+guatemala	40	name
+gujarat	40	name
+guyana	40	name
+hanafism	40	name
+hanbalism	40	name
+haryana	40	name
+hashimajima	40	name
+hașemiți	40	name
+helloween	40	name
+herm	40	name
+hiiumaa	40	name
+hindutva	40	name
+hispaniola	40	name
+honduras	40	name
+houthis	40	name
+hvar	40	name
+iacobitism	40	name
+illuminati	40	name
+imbros	40	name
+isuzu	40	name
+itzy	40	name
+jharkhand	40	name
+karnataka	40	name
+karpathos	40	name
+kasiți	40	name
+kauai	40	name
+kavaratti	40	name
+kerala	40	name
+kino	40	name
+kiritimati	40	name
+konami	40	name
+korn	40	name
+kosrae	40	name
+kraftwerk	40	name
+krakatau	40	name
+kristallnacht	40	name
+krk	40	name
+kuomintang	40	name
+kythira	40	name
+lacoste	40	name
+lakshadweep	40	name
+lampedusa	40	name
+lancia	40	name
+langeland	40	name
+lanzarote	40	name
+lefkada	40	name
+lesotho	40	name
+libertarianism	40	name
+lolland	40	name
+lordi	40	name
+lucasfilm	40	name
+madagascar	40	name
+madura	40	name
+maharashtra	40	name
+malawi	40	name
+mali	40	name
+malikism	40	name
+manipur	40	name
+manowar	40	name
+maroc	40	name
+mccarthism	40	name
+megadeth	40	name
+meghalaya	40	name
+menoniți	40	name
+menorca	40	name
+micronațiune	40	name
+micronezia	40	name
+mindanao	40	name
+mineirão	40	name
+mitraism	40	name
+mizoram	40	name
+mljet	40	name
+moirae	40	name
+mojang	40	name
+monsanto	40	name
+montserrat	40	name
+mosfilm	40	name
+myanmar	40	name
+myheritage	40	name
+nagaland	40	name
+nakba	40	name
+nakșibendism	40	name
+nantucket	40	name
+neopăgânism	40	name
+nestorianism	40	name
+nicaragua	40	name
+nickelback	40	name
+niger	40	name
+nigeria	40	name
+niue	40	name
+norwegian	40	name
+oahu	40	name
+odisha	40	name
+oireachtas	40	name
+omeiazi	40	name
+onerepublic	40	name
+onlyfans	40	name
+openai	40	name
+opeth	40	name
+paraguay	40	name
+paramore	40	name
+paros	40	name
+penticostalism	40	name
+pergamonmuseum	40	name
+permacultură	40	name
+petrobras	40	name
+pixies	40	name
+postimpresionism	40	name
+pubchem	40	name
+puducherry	40	name
+punjab	40	name
+rajasthan	40	name
+ramones	40	name
+rarotonga	40	name
+redonda	40	name
+reichswehr	40	name
+renaissance	40	name
+rijksmuseum	40	name
+ruhnu	40	name
+saaremaa	40	name
+sabaton	40	name
+safevizi	40	name
+salafism	40	name
+salafiyya	40	name
+samothraki	40	name
+sauber	40	name
+schiermonnikoog	40	name
+schutzstaffel	40	name
+sealand	40	name
+serebro	40	name
+serifos	40	name
+shikoku	40	name
+shinee	40	name
+sikhism	40	name
+skye	40	name
+skyros	40	name
+skyteam	40	name
+slipknot	40	name
+socotra	40	name
+somaliland	40	name
+soundgarden	40	name
+storting	40	name
+streymoy	40	name
+stromboli	40	name
+sturmabteilung	40	name
+subway	40	name
+suomenlinna	40	name
+surinam	40	name
+surtsey	40	name
+sylt	40	name
+tahiti	40	name
+taliban	40	name
+telangana	40	name
+telefe	40	name
+telemundo	40	name
+televisa	40	name
+tenedos	40	name
+tenerife	40	name
+tengriism	40	name
+terranova	40	name
+terschelling	40	name
+thasos	40	name
+theotokos	40	name
+togg	40	name
+tongatapu	40	name
+totalenergies	40	name
+transumanism	40	name
+tripura	40	name
+tumblr	40	name
+twice	40	name
+uchicago	40	name
+upolu	40	name
+uruguay	40	name
+usedom	40	name
+ustaše	40	name
+uttarakhand	40	name
+valdenzi	40	name
+veganism	40	name
+venezuela	40	name
+vespa	40	name
+vlieland	40	name
+vulcano	40	name
+walmart	40	name
+weezer	40	name
+wikisource	40	name
+wikisursă	40	name
+wimax	40	name
+worldcat	40	name
+xvideos	40	name
+yakushima	40	name
+yazidiți	40	name
+yes	40	name
+zambia	40	name
+zealand	40	name
+zelot	40	name
+zimbabwe	40	name
+șafiism	40	name
