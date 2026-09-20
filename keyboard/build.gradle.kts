@@ -90,6 +90,29 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            all {
+                // Lets a JVM test drive the shipping engine through the shipping JNI bridge.
+                // `System.loadLibrary("borderkeys")` in NativePredictor needs no change: the
+                // host build in native-tests produces a library of exactly that name, and this
+                // points the loader at it. Without it the pipeline test skips itself.
+                //
+                // What it buys is the half of the correction path suggest_eval cannot see.
+                // That tool reaches the engine and stops, so every decision AutoCorrection makes
+                // afterwards was either untested end to end or modelled a second time in C++ --
+                // and a second implementation is a thing that drifts. Here the Kotlin that ships
+                // is the Kotlin under test, against the packs the application ships.
+                it.systemProperty(
+                    "java.library.path",
+                    rootProject.layout.projectDirectory.dir("native-tests/build").asFile.path,
+                )
+                it.systemProperty(
+                    "borderkeys.packs",
+                    layout.buildDirectory.dir("generated/dictionaries/dict").get().asFile.path,
+                )
+                // nativeLoadLanguage takes a file descriptor, and on a JVM the only way to a raw
+                // one is FileDescriptor's private field. Opened for the tests alone.
+                it.jvmArgs("--add-opens", "java.base/java.io=ALL-UNNAMED")
+            }
         }
     }
 }

@@ -155,3 +155,43 @@ if(BORDERKEYS_FUZZ)
     )
     target_link_options(fuzz_pack PRIVATE -fsanitize=fuzzer,address,undefined)
 endif()
+
+# The engine as the JVM sees it: the same sources plus the JNI bridge, built as a shared library
+# named exactly what NativePredictor's `System.loadLibrary("borderkeys")` asks for, so a JVM test
+# with -Djava.library.path pointing here loads the real thing with no source change anywhere.
+#
+# This is what lets the *whole* correction path be measured off a device. `suggest_eval` reaches
+# the engine and stops there, so everything AutoCorrection decides -- the known-word guard, the
+# edit ceiling, the proper-noun rule, the situations -- was either untested or hand-modelled in
+# C++, which is a second implementation that can drift from the one that ships. Here the Kotlin
+# that ships is the Kotlin that runs.
+#
+# Optional: a machine with no JNI headers still builds and runs every other target.
+#
+# JAVA_HOME rather than find_package(JNI), which on macOS reports the stub framework and misses
+# a real JDK's headers even when JAVA_HOME points straight at one.
+if(NOT DEFINED ENV{JAVA_HOME})
+    execute_process(COMMAND /usr/libexec/java_home OUTPUT_VARIABLE JAVA_HOME_GUESS
+                    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+else()
+    set(JAVA_HOME_GUESS $ENV{JAVA_HOME})
+endif()
+if(EXISTS "${JAVA_HOME_GUESS}/include/jni.h")
+    set(JNI_FOUND TRUE)
+    set(JNI_DIRS "${JAVA_HOME_GUESS}/include")
+    foreach(platform darwin linux win32)
+        if(IS_DIRECTORY "${JAVA_HOME_GUESS}/include/${platform}")
+            list(APPEND JNI_DIRS "${JAVA_HOME_GUESS}/include/${platform}")
+        endif()
+    endforeach()
+endif()
+if(JNI_FOUND)
+    add_library(borderkeys SHARED ${ENGINE_SOURCES} ${ENGINE_DIR}/jni_bridge.cpp)
+    target_include_directories(borderkeys PUBLIC ${ENGINE_DIR} ${JNI_DIRS})
+    target_compile_definitions(borderkeys PUBLIC BORDERKEYS_NEURAL_SWIPE=1)
+    # No -fno-exceptions here: the bridge is compiled against the JDK's jni.h rather than the
+    # NDK's, and the desktop headers are not built for it.
+    target_compile_options(borderkeys PRIVATE -Wall -Wextra)
+else()
+    message(STATUS "JNI headers not found -- the host bridge will not be built")
+endif()

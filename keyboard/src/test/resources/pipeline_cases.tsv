@@ -1,0 +1,64 @@
+# What the space bar must do, end to end: the shipping engine, the shipping JNI bridge, the
+# shipping Kotlin, against the packs the application ships. Read by PipelineTest.
+#
+#   typed <TAB> committed <TAB> situation
+#
+# `committed` is "-" when the typed text must survive untouched, which is most of this file: a
+# keyboard that leaves a word alone is doing its job, and every line below that reads "-" is a
+# report from someone whose word was changed when it should not have been.
+#
+# `situation` is the reason, and it is here because an outcome without one can be right by
+# accident. A guard can stop working while another covers for it and the outcome stays the same
+# -- which is exactly what a chain of early returns used to hide.
+
+# --- a word still being typed is completed, not corrected -------------------------------------
+# "believ" committed "belief" on a device: 4.8 times rarer, and ranked seventh by the same
+# search that ranked "believe" second. Completions were barred from the corrections heap.
+believ	believe	Correctable
+peopl	people	Correctable
+becaus	because	Correctable
+throug	through	Correctable
+
+# --- a finished word with a slip in it is corrected -------------------------------------------
+# The thing autocorrect is actually for, and what every guard above must not cost.
+teh	the	Correctable
+wihch	which	Correctable
+aobut	about	Correctable
+
+# --- a mark the user typed is a decision, not a slip ------------------------------------------
+# "the workers' rights" became "the workers rights"; "'hello" became "hell" once the quote was
+# gone and the rest of the word was fair game. Nobody's finger lands on an apostrophe.
+dogs'	-	NothingOffered
+workers'	-	NothingOffered
+'hello	-	NothingOffered
+'quoted	-	NothingOffered
+quoted'	-	NothingOffered
+
+# --- a mark left out is a convention dropped, and is restored ---------------------------------
+# The opposite shape, and the one that must keep working: same character, other direction.
+# "dont" is not a word, so frequency gets to decide and it becomes "don't".
+dont	don't	Correctable
+# "cant" IS a word -- jargon, or a slope, 108 in the pack -- so the known-word guard refuses it
+# before frequency is consulted at all. kApostropheInsertCost's comment in engine.cpp claims
+# this pair resolves 3,713 against 108, which is true of the engine and not of the pipeline:
+# the guard above it never lets that comparison happen. Recorded as it behaves, not as the
+# comment says, because changing which one is right is a decision and not a test fixture.
+cant	-	KnownWord
+
+# --- a word the dictionaries spell is left alone ----------------------------------------------
+# "put" was committed as "out" on a device. Both are words; only one was typed.
+put	-	KnownWord
+out	-	KnownWord
+form	-	KnownWord
+# Refused for being too far before it is refused for being a word: the order of the situations
+# is load-bearing and this is what pins it. Both answers are "leave it alone".
+their	-	TooFar
+
+# --- an address or a filename is not a sentence -----------------------------------------------
+# RunningText's job: a digit anywhere means this is not running text at all.
+sha256	-	NothingOffered
+v2beta	-	NothingOffered
+
+# --- too short to guess about, unless an accent is being restored -----------------------------
+# "ab" is in the pack, but TooShort is reached first -- again the ordering, pinned.
+ab	-	TooShort
