@@ -43,16 +43,23 @@ internal class SuggestionRow {
     /**
      * Rearranges [words] in place and returns how many slots are now filled.
      *
-     * [correcting] is the caller's answer to "would a delimiter replace this word", which is
-     * [AutoCorrection]'s decision and not one to be guessed at from the candidates: it depends
-     * on a setting, on the word's length, and on whether the dictionaries spell it.
+     * [correction] is the exact text a delimiter would commit -- [AutoCorrection]'s own answer,
+     * already cased -- or null when nothing would be replaced. The word itself and not a flag,
+     * because the two cannot be derived from each other: autocorrect reads the corrections heap
+     * and this row is the ranked one, and a word can top either without appearing in the other
+     * at all. This took "putem" outlined on the row while the space bar committed "out", a word
+     * that was never on it -- the row promising one thing and the delimiter doing another.
+     *
+     * So the outlined chip is placed from this value rather than found by position, and is
+     * inserted when the row does not already carry it. Passing the word makes the two agree by
+     * construction; passing a boolean made them agree only by coincidence.
      */
     fun arrange(
         words: Array<String?>,
         count: Int,
         typed: String,
         limit: Int,
-        correcting: Boolean,
+        correction: String?,
     ): Int {
         typedIndex = -1
         appliedIndex = -1
@@ -89,21 +96,70 @@ internal class SuggestionRow {
         }
         typedIndex = 0
 
-        if (!correcting) {
+        if (correction == null) {
             // No correction, no outline. A delimiter commits what was typed letter for letter,
             // and the typed chip -- italic, first -- is the whole of what the row has to say.
             return shown
         }
-        // Correcting means the engine's best is not the typed word, so the move above put it in
-        // slot one. From there it goes to the middle -- unless the row is one slot wide, in
-        // which case the correction is simply not on the row and nothing is outlined.
-        val middle = (cap / 2).coerceAtMost(shown - 1)
+        // The middle, because the ends are the worst place for it: one is the typed word and the
+        // other is the slot nobody reads. A one-slot row has no middle, so the correction is
+        // simply not shown -- and nothing is outlined, rather than the wrong thing being.
+        val middle = (cap / 2).coerceAtMost(shown.coerceAtLeast(2) - 1)
         if (middle < 1) {
             return shown
         }
-        moveToBack(words, middle)
+        shown = placeCorrection(words, correction, middle, shown, cap)
         appliedIndex = middle
         return shown
+    }
+
+    /**
+     * Puts [correction] in [slot], and returns how many slots are filled afterwards.
+     *
+     * Moved when the row already carries it, inserted when it does not -- and it often does not,
+     * because the corrections heap is not this list. Inserting grows the row by one where there
+     * is room and otherwise drops whatever was last, which is the slot nobody reads.
+     */
+    private fun placeCorrection(
+        words: Array<String?>,
+        correction: String,
+        slot: Int,
+        shown: Int,
+        cap: Int,
+    ): Int {
+        var at = -1
+        for (index in 1 until shown) {
+            if (words[index] == correction) {
+                at = index
+                break
+            }
+        }
+        if (at == slot) {
+            return shown
+        }
+        if (at > 0) {
+            // Already on the row: close the gap it leaves behind and drop it into place. Only
+            // one of these two loops ever runs -- whichever way the word has to travel.
+            var index = at
+            while (index > slot) {
+                words[index] = words[index - 1]
+                index--
+            }
+            while (index < slot) {
+                words[index] = words[index + 1]
+                index++
+            }
+            words[slot] = correction
+            return shown
+        }
+        val grown = (shown + 1).coerceAtMost(cap)
+        var index = grown - 1
+        while (index > slot) {
+            words[index] = words[index - 1]
+            index--
+        }
+        words[slot] = correction
+        return grown
     }
 
     /** Moves the word at [from] to slot zero, shifting the ones before it along. */
@@ -117,14 +173,4 @@ internal class SuggestionRow {
         words[0] = moved
     }
 
-    /** Moves the word in slot one to [to], shifting the ones between it and there along. */
-    private fun moveToBack(words: Array<String?>, to: Int) {
-        val moved = words[1]
-        var index = 1
-        while (index < to) {
-            words[index] = words[index + 1]
-            index++
-        }
-        words[to] = moved
-    }
 }

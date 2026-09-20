@@ -26,7 +26,7 @@ class SuggestionRowTest {
     @Test
     fun `the typed word leads the row even when the engine did not offer it`() {
         val words = words("dacă", "daca ce", "dar")
-        val shown = row.arrange(words, 3, typed = "daca", limit = 3, correcting = true)
+        val shown = row.arrange(words, 3, typed = "daca", limit = 3, correction = "dacă")
 
         assertEquals(3, shown)
         assertEquals(0, row.typedIndex)
@@ -36,7 +36,7 @@ class SuggestionRowTest {
     @Test
     fun `the word a delimiter would apply sits in the middle`() {
         val words = words("dacă", "dar", "din")
-        val shown = row.arrange(words, 3, typed = "daca", limit = 3, correcting = true)
+        val shown = row.arrange(words, 3, typed = "daca", limit = 3, correction = "dacă")
 
         assertEquals(1, row.appliedIndex)
         assertEquals("dacă", words[row.appliedIndex])
@@ -44,10 +44,41 @@ class SuggestionRowTest {
         assertEquals(listOf("daca", "dacă", "dar"), shownWords(words, shown))
     }
 
+    /**
+     * The row is the ranked list and the correction comes from the corrections heap, so the word
+     * a delimiter will commit is often nowhere on the row. It still has to be the outlined one.
+     *
+     * Reported from a device: typing "put" outlined "putem" and the space bar committed "out" --
+     * a word that had never been on the row. Outlining by position rather than by value is what
+     * let the row say one thing while the delimiter did another.
+     */
+    @Test
+    fun `a correction the row does not carry is inserted rather than mis-outlined`() {
+        val words = words("puține", "putem", "puts")
+        val shown = row.arrange(words, 3, typed = "put", limit = 4, correction = "out")
+
+        assertEquals("the outlined chip is the word space will commit",
+            "out", words[row.appliedIndex])
+        assertEquals("put", words[row.typedIndex])
+        // The middle of a four-slot row is the third, and the candidate that had been last is
+        // what makes room -- the slot nobody reads paying for the one that has to be right.
+        assertEquals(listOf("put", "puține", "out", "putem"), shownWords(words, shown))
+    }
+
+    @Test
+    fun `a correction absent from a full row displaces the slot nobody reads`() {
+        val words = words("puține", "putem", "puts")
+        val shown = row.arrange(words, 3, typed = "put", limit = 3, correction = "out")
+
+        assertEquals(3, shown)
+        assertEquals("out", words[row.appliedIndex])
+        assertEquals(listOf("put", "out", "puține"), shownWords(words, shown))
+    }
+
     @Test
     fun `a typed word already among the candidates is moved rather than repeated`() {
         val words = words("dacă", "dar", "daca")
-        val shown = row.arrange(words, 3, typed = "daca", limit = 3, correcting = true)
+        val shown = row.arrange(words, 3, typed = "daca", limit = 3, correction = "dacă")
 
         assertEquals(3, shown)
         assertEquals(listOf("daca", "dacă", "dar"), shownWords(words, shown))
@@ -60,7 +91,7 @@ class SuggestionRowTest {
         // The typed word is italic and unmarked; there is no correction, so no chip is
         // outlined. Outlining the typed word would be pointing at what space already does.
         val words = words("carte", "cartea", "cărți")
-        row.arrange(words, 3, typed = "carte", limit = 3, correcting = false)
+        row.arrange(words, 3, typed = "carte", limit = 3, correction = null)
 
         assertEquals(0, row.typedIndex)
         assertEquals(-1, row.appliedIndex)
@@ -71,7 +102,7 @@ class SuggestionRowTest {
         // The engine returned two words where five slots were allowed. Marking slot two would
         // mark an empty one.
         val words = words("dacă", "dar")
-        val shown = row.arrange(words, 2, typed = "daca", limit = 5, correcting = true)
+        val shown = row.arrange(words, 2, typed = "daca", limit = 5, correction = "dacă")
 
         assertEquals(3, shown)
         assertEquals(2, row.appliedIndex)
@@ -83,7 +114,7 @@ class SuggestionRowTest {
         // Honest rather than convenient: the correction is not on the row, so nothing on the row
         // is outlined as the thing a space would do.
         val words = words("dacă")
-        val shown = row.arrange(words, 1, typed = "daca", limit = 1, correcting = true)
+        val shown = row.arrange(words, 1, typed = "daca", limit = 1, correction = "dacă")
 
         assertEquals(1, shown)
         assertEquals("daca", words[0])
@@ -95,7 +126,7 @@ class SuggestionRowTest {
     fun `nothing is marked when no word is being typed`() {
         // Predictions for the next word, not candidates for this one.
         val words = words("și", "de", "la")
-        val shown = row.arrange(words, 3, typed = "", limit = 3, correcting = false)
+        val shown = row.arrange(words, 3, typed = "", limit = 3, correction = null)
 
         assertEquals(3, shown)
         assertEquals(-1, row.typedIndex)
@@ -106,7 +137,7 @@ class SuggestionRowTest {
     @Test
     fun `the row never grows past the number of slots asked for`() {
         val words = words("dacă", "dar", "din")
-        val shown = row.arrange(words, 3, typed = "daca", limit = 2, correcting = true)
+        val shown = row.arrange(words, 3, typed = "daca", limit = 2, correction = "dacă")
 
         assertEquals(2, shown)
         assertEquals(listOf("daca", "dacă"), shownWords(words, shown))

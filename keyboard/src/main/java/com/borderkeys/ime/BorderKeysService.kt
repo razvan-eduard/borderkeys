@@ -3509,9 +3509,13 @@ class BorderKeysService :
         // Arranged for the slots that actually hold words: the clipboard chip takes one, and
         // the arrangement used to be told the full count, so the outlined correction could sit
         // in a slot the chip had pushed off screen while space still applied it.
+        // The word itself, not whether there is one: the row outlines what a delimiter will
+        // actually commit, and that comes from the corrections heap rather than from the ranked
+        // candidates this row is built from. Handing over a boolean left the row free to outline
+        // whatever happened to rank second while space committed something else entirely.
         val shown = suggestionRow.arrange(
             words, count, lastQuery, preferences.suggestionCount.coerceAtMost(strip.wordSlotLimit),
-            correcting = correctionFor(lastQuery) != null,
+            correction = correctionFor(lastQuery),
         )
         strip.setSuggestions(words, shown)
         strip.typedIndex = suggestionRow.typedIndex
