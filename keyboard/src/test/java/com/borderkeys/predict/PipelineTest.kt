@@ -74,11 +74,38 @@ class PipelineTest {
         )
     }
 
+    /** The same contract against the Romanian pack, which is where most of the reports came
+     *  from and which reaches a rule English never does: a missing accent may be restored below
+     *  the length at which guessing otherwise stops. */
+    @Test
+    fun `every Romanian case commits what it should, for the reason it should`() {
+        assumeTrue(Pipeline.available())
+        val romanian = Pipeline.open("ro-RO")
+        try {
+            val failures = readCases("pipeline_cases_ro.tsv").mapNotNull { case ->
+                val outcome = romanian.commit(case.typed)
+                when {
+                    outcome.committed != case.committed ->
+                        "  ${case.typed}: expected ${describe(case.committed)}, " +
+                            "committed ${describe(outcome.committed)}  [${outcome.situation}]"
+                    outcome.situation.name != case.situation ->
+                        "  ${case.typed}: right answer for the wrong reason -- expected " +
+                            "${case.situation}, was ${outcome.situation}"
+                    else -> null
+                }
+            }
+            assertTrue("${failures.size} failed:\n" + failures.joinToString("\n"),
+                       failures.isEmpty())
+        } finally {
+            romanian.close()
+        }
+    }
+
     private fun describe(text: String?) = text ?: "nothing"
 
-    private fun readCases(): List<Case> =
-        checkNotNull(javaClass.classLoader.getResourceAsStream("pipeline_cases.tsv")) {
-            "pipeline_cases.tsv is not on the test classpath"
+    private fun readCases(name: String = "pipeline_cases.tsv"): List<Case> =
+        checkNotNull(javaClass.classLoader.getResourceAsStream(name)) {
+            "$name is not on the test classpath"
         }.bufferedReader().readLines().mapNotNull { line ->
             if (line.isBlank() || line.startsWith("#")) {
                 return@mapNotNull null

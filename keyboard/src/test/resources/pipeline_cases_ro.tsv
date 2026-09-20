@@ -1,0 +1,37 @@
+# The same contract as pipeline_cases.tsv, against the Romanian pack.
+#
+# Its own file because the language is the fixture: a word is correct or not only with respect
+# to a dictionary, and "in" means opposite things in the two. Romanian is also where most of
+# this keyboard's reports come from.
+#
+#   typed <TAB> committed <TAB> situation
+#
+# Three lines below record a defect rather than a requirement, marked DEFECT and carrying what
+# is actually wrong. They are written as the pipeline behaves so the suite stays honest and
+# green; changing any of them is a change to the keyboard, and the line is what will fail when
+# someone makes it. A red suite that everyone has learned to ignore protects nothing.
+
+# --- a missing accent is restored -------------------------------------------------------------
+totusi	totuși	Correctable
+
+# DEFECT: "daca" should reach "dacă" (94,655) and instead the best correction offered is the
+# name "Dacia", which the proper-noun guard then refuses -- so nothing is committed and the
+# accent is never restored. The name entered the Romanian pack with the entity-name merge on
+# 2026-09-20; before it, this line read `daca<TAB>dacă<TAB>Correctable`. A name is outranking an
+# ordinary word by a factor of a hundred, which is the trade the names list was not meant to make.
+daca	-	NameMismatch
+
+# DEFECT: "in" should reach "în" (1,782,296) and does not. A diacritic-free spelling folds to
+# the accented one exactly, so it is reached at zero cost -- and the corrections heap admits only
+# endpoints reached by an edit. What is offered instead is "ins", a one-character completion,
+# which is refused for being too short and not an accent. Safe, and not the feature working.
+in	-	TooShort
+
+# --- a correct Romanian word is left alone ----------------------------------------------------
+snobul	-	TooFar
+
+# DEFECT: "cana" is in the word list at 76, and "cană" at 170. build_dict.py keeps one spelling
+# per folded key, so the compiled pack holds only "cană" -- and knownSpelling therefore answers
+# "cană" for "cana", which is not the typed word, so the known-word guard never fires and the
+# word is corrected to "canal". Every word whose accented twin outranks it is in this position.
+cana	canal	Correctable

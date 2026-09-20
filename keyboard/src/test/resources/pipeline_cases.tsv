@@ -62,3 +62,38 @@ v2beta	-	NothingOffered
 # --- too short to guess about, unless an accent is being restored -----------------------------
 # "ab" is in the pack, but TooShort is reached first -- again the ordering, pinned.
 ab	-	TooShort
+
+# --- the hyphen is the other half of the mark class -------------------------------------------
+# Added when kMarkDeleteCost generalised the rule away from the apostrophe, and untested until
+# this file was audited against the commits: the class was widened and only half of it covered.
+well-	-	NothingOffered
+year-	-	NothingOffered
+-well	-	NothingOffered
+
+# --- the first report of the whole apostrophe family ------------------------------------------
+# "put'" and a space: the mark went, and "put" was already a word underneath it.
+put'	-	NothingOffered
+
+# --- a name corrects only its own letters -----------------------------------------------------
+# "everyone" must never become "Everton" nor "thanks" "Hanks". The dictionaries carry both names.
+# The two are refused for different reasons, which is why the reason is asserted: for "everyone"
+# the best the engine can offer is the word itself, so casing settles it before the known-word
+# rule is reached; for "thanks" something else is offered and the rule does the work.
+everyone	-	NoChange
+thanks	-	KnownWord
+
+# --- a completion is not a correction ---------------------------------------------------------
+# "teh" must reach "the" and never "tehran", which is what reading the strip's first place did.
+tehran	-	TooFar
+
+# --- contractions the dictionaries already hold are left alone --------------------------------
+# NoChange rather than KnownWord: nothing better than the word itself was offered.
+it's	-	NoChange
+don't	-	NoChange
+
+# --- correct, and absent from the pack --------------------------------------------------------
+# Being correct is not the same as being in the dictionary. 6,910 ordinary English words are
+# missing from the pack and 31.5% of them are still overwritten; "snobul" was the report that
+# bought the maxEdits ceiling. Recorded as it behaves so the next attempt starts from a fact.
+snobul	-	TooFar
+abaft	-	TooFar
