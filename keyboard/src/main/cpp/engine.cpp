@@ -754,10 +754,7 @@ void Engine::setActiveLanguages(const char* const* tags, const float* weights, i
             }
         }
     }
-    if (tags == nullptr) {
-        return;
-    }
-    for (int i = 0; i < count; ++i) {
+    for (int i = 0; tags != nullptr && i < count; ++i) {
         const int slot = packIndexForTag(tags[i]);
         if (slot < 0) {
             continue;
@@ -770,6 +767,10 @@ void Engine::setActiveLanguages(const char* const* tags, const float* weights, i
         // argument against it.
         packs_[slot].adaptiveWeight = weight;
     }
+    // Slots have just been closed, opened and switched on or off, so whichever one the preferred
+    // tag named a moment ago is not necessarily the one it names now -- which is exactly why the
+    // preference is stored as a tag and resolved here rather than kept as an index.
+    resolvePreferredPack();
 }
 
 bool Engine::setKeyGeometry(const int32_t* codes, const float* centersX, const float* centersY,
@@ -806,6 +807,39 @@ void Engine::setLanguageLock(float minimumEvidence, bool strict) {
     if (minimumEvidence <= 0.0f) {
         dominantPack_ = -1;
     }
+}
+
+void Engine::resolvePreferredPack() {
+    preferredPack_ = -1;
+    if (preferredTag_[0] == '\0') {
+        return;
+    }
+    // packIndexForTag answers "open", which is not enough: a pack can be open and switched off,
+    // and restricting a search to one of those would return nothing at all.
+    const int index = packIndexForTag(preferredTag_);
+    if (index >= 0 && packs_[index].active) {
+        preferredPack_ = index;
+    }
+}
+
+void Engine::setPreferredLanguage(const char* tag) {
+    if (tag == nullptr || tag[0] == '\0') {
+        preferredTag_[0] = '\0';
+    } else {
+        std::strncpy(preferredTag_, tag, sizeof(preferredTag_) - 1);
+        preferredTag_[sizeof(preferredTag_) - 1] = '\0';
+    }
+    resolvePreferredPack();
+}
+
+void Engine::resetLanguageEvidence() {
+    for (int i = 0; i < kMaxPacks; ++i) {
+        languageEvidence_[i] = 0.0f;
+    }
+    dominantPack_ = -1;
+    // The de-duplication guard too: the first word of the new field must count, and it would be
+    // swallowed if it happened to hash to whatever the last field ended on.
+    lastObservedWord_ = 0;
 }
 
 int Engine::heaviestPack() const {
@@ -1986,11 +2020,22 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     // Undecided, and told never to guess: one dictionary rather than all of them. The heaviest
     // is the one the user weighted highest, which is the closest thing to "the language I
     // write" available before any evidence has arrived.
-    const int restrictTo =
-        (dominantPack_ >= 0) ? dominantPack_ : (strictLanguage_ ? heaviestPack() : -1);
+    // Three questions in order, and only the first two are about this request. What has the
+    // conversation been recognised as? Failing that, what did the user say to start from? Failing
+    // both, the old answer: one dictionary if they asked never to guess, otherwise all of them.
+    //
+    // The preferred pack sits *below* the detected one and not above it, which is the whole
+    // meaning of the word: it decides where to start, never what wins. A user who set Romanian
+    // and then wrote four English words gets English, because by then it is no longer a guess.
+    const int restrictTo = (dominantPack_ >= 0)  ? dominantPack_
+                           : (preferredPack_ >= 0) ? preferredPack_
+                                                   : (strictLanguage_ ? heaviestPack() : -1);
     searchPacks(folded, foldedLength, restrictTo, heap);
-    // A detected language that turns out to have nothing for this word must not leave the strip
-    // empty; the detector is a guess about the sentence, not a verdict on the next word.
+    // A language that turns out to have nothing for this word must not leave the strip empty --
+    // true of a detected one, where the detector is a guess about the sentence rather than a
+    // verdict on the next word, and true of a preferred one, where a preference that refused to
+    // yield for a word it does not hold would not be a preference. Strict is the one setting that
+    // asked for exactly that, and it is the reason this is still conditional.
     if (heap.size() == 0 && restrictTo >= 0 && !strictLanguage_) {
         searchPacks(folded, foldedLength, -1, heap);
     }

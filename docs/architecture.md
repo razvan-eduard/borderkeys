@@ -379,6 +379,37 @@ languages stop being searched. When a dominant pack turns out to have nothing fo
 word, the search **re-runs unrestricted** — the detector is a guess about the sentence, not a
 verdict on the next word.
 
+### Which pack a request is restricted to
+
+Three questions, in order, and only the first two are about this request:
+
+```cpp
+const int restrictTo = (dominantPack_ >= 0)   ? dominantPack_
+                     : (preferredPack_ >= 0)  ? preferredPack_
+                     : (strictLanguage_ ? heaviestPack() : -1);   // -1 = every pack
+```
+
+**The preferred pack sits below the detected one, never above it**, and that is the whole meaning
+of the word. `setPreferredLanguage(tag)` says where detection *starts*; it is outranked the moment
+the evidence decides otherwise, and a word it does not hold still falls through to every other
+pack via the empty-heap retry. Set Romanian and write four English words and you get English,
+because by then it is no longer a guess.
+
+It is **not** a term in the score, and nothing in the scoring path reads it. That distinction is
+the reason it exists: a pack's `weight` *is* a scoring term (`packWeightLog`), so using weight to
+say "start here" also biased every one of that language's words for ever, including after another
+language had become dominant. Weight is now only what it says it is.
+
+The preference is stored as a **tag** rather than a slot index, because `setActiveLanguages` opens
+and closes packs and an index does not survive that; `resolvePreferredPack()` re-resolves it there
+and requires the pack to be *active*, not merely open. An empty tag, or one naming a pack that is
+absent or switched off, resolves to −1 and behaves as no preference — which is the default, and
+restores exactly the behaviour that shipped before the setting existed.
+
+`resetLanguageEvidence()` forgets the verdict so a new field decides for itself; the service calls
+it on field start **only when a preferred language is set**, since without one, inheriting the
+previous field's verdict is what the keyboard has always done.
+
 ### Backward — `LanguageSwitchCorrector`
 
 The forward pass only ever runs forward: a run of Romanian evidence at the start of a message is

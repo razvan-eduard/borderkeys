@@ -478,6 +478,29 @@ class KeyboardPreferencesTest {
         assertTrue("patient should be the largest threshold", balanced < patient)
     }
 
+    /** No preferred language is the default, and it is a real choice rather than an unset one:
+     *  it is what restores consulting every dictionary until the evidence decides. */
+    @Test
+    fun `no preferred language by default`() {
+        assertEquals("", KeyboardPreferences().preferredLanguageTag)
+        assertEquals("", KeyboardPreferences().sanitised().preferredLanguageTag)
+    }
+
+    @Test
+    fun `a preferred language is kept, and bounded like any other tag`() {
+        assertEquals(
+            "ro-RO",
+            KeyboardPreferences(preferredLanguageTag = "ro-RO").sanitised().preferredLanguageTag,
+        )
+        // A corrupt file must not be able to carry an arbitrarily long string into the engine,
+        // which copies it into a fixed buffer.
+        val long = "x".repeat(KeyboardPreferences.MAX_LANGUAGE_TAG * 4)
+        assertEquals(
+            KeyboardPreferences.MAX_LANGUAGE_TAG,
+            KeyboardPreferences(preferredLanguageTag = long).sanitised().preferredLanguageTag.length,
+        )
+    }
+
     /** Strict is the only setting that stops consulting the others before it has decided. */
     @Test
     fun `only strict refuses to guess`() {

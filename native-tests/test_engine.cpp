@@ -433,6 +433,87 @@ void runEngineTests() {
               "before any word has been observed, no pack is dominant");
     }
 
+    section("a preferred language decides where an undecided search starts");
+    {
+        // Both slots hold the same vocabulary, so nothing here can be answered by looking at the
+        // words that come back -- which is the point. What is being pinned down is which slot the
+        // search was restricted to, and Candidate::packIndex is where that shows.
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads");
+        check(loaded.openSecondPack("en-US"), "a second pack loads under another tag");
+
+        // Every pack a request reached, as a bitmask over slots.
+        const auto packsReached = [&loaded](const char* composing) {
+            Candidate out[Engine::kMaxCandidates];
+            const int found = loaded.engine.suggest(composing, std::strlen(composing), nullptr, 0,
+                                                    nullptr, 0, out, Engine::kMaxCandidates);
+            int mask = 0;
+            for (int i = 0; i < found; ++i) {
+                if (out[i].packIndex >= 0) {
+                    mask |= 1 << out[i].packIndex;
+                }
+            }
+            return mask;
+        };
+
+        check(loaded.engine.dominantPack() == -1, "nothing has been recognised yet");
+
+        // What an unrestricted request looks like, measured rather than assumed: every later
+        // assertion is "the same as this" or "different from this", so a change in how duplicate
+        // words across packs are resolved moves the baseline instead of silently passing.
+        const int unrestricted = packsReached("keyboar");
+        check(unrestricted != 0, "with no preference the search answers from somewhere");
+
+        loaded.engine.setPreferredLanguage("en-US");
+        check(packsReached("keyboar") == 0b10,
+              "with a preference set and nothing recognised, only that pack answers");
+
+        loaded.engine.setPreferredLanguage("ro-RO");
+        check(packsReached("keyboar") == 0b01, "and naming the other one moves the search to it");
+
+        // The setting is optional, and turning it off has to restore exactly what the keyboard
+        // did before it existed rather than leaving the last choice standing.
+        loaded.engine.setPreferredLanguage("");
+        check(packsReached("keyboar") == unrestricted,
+              "cleared, the search is exactly what it was before a preference was ever set");
+
+        loaded.engine.setPreferredLanguage(nullptr);
+        check(packsReached("keyboar") == unrestricted,
+              "and null clears it the same way empty does");
+
+        // A tag for a language that is not loaded names no slot. It must read as "no preference"
+        // rather than as "restrict to nothing", which would empty the strip.
+        loaded.engine.setPreferredLanguage("de-DE");
+        check(packsReached("keyboar") == unrestricted,
+              "an unknown tag behaves as no preference, not as no dictionary at all");
+
+        // The preference is stored as a tag precisely so that it survives the slots moving.
+        loaded.engine.setPreferredLanguage("en-US");
+        const char* tags[2] = {"en-US", "ro-RO"};
+        const float weights[2] = {1.0f, 1.0f};
+        loaded.engine.setActiveLanguages(tags, weights, 2);
+        check(packsReached("keyboar") == 0b10,
+              "and it still names the same language after the active set is re-sent reordered");
+
+        // Switching the preferred language off entirely leaves a tag naming a pack that is no
+        // longer active; that is the same case as an unknown tag and must not empty the strip.
+        const char* onlyRo[1] = {"ro-RO"};
+        const float oneWeight[1] = {1.0f};
+        loaded.engine.setActiveLanguages(onlyRo, oneWeight, 1);
+        check(packsReached("keyboar") != 0,
+              "a preference naming a pack that has been switched off still suggests something");
+    }
+
+    section("forgetting the language verdict");
+    {
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads");
+        loaded.engine.resetLanguageEvidence();
+        check(loaded.engine.dominantPack() == -1, "after a reset no pack is dominant");
+        check(loaded.rankOf("keyboar", "keyboard") >= 0,
+              "and the engine still answers, so the reset clears evidence rather than state");
+    }
+
     section("personal dictionary");
     {
         LoadedEngine loaded;

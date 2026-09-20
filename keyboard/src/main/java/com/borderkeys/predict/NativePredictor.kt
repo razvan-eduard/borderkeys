@@ -196,6 +196,13 @@ internal object NativePredictor {
         strict: Boolean,
     )
 
+    /** The language consulted before anything has been recognised. Null or empty means none,
+     *  which is the default and restores the behaviour of searching every dictionary. */
+    external fun nativeSetPreferredLanguage(handle: Long, tag: String?)
+
+    /** Forgets which language the conversation is in. See Engine::resetLanguageEvidence. */
+    external fun nativeResetLanguageEvidence(handle: Long)
+
     /** Whether a suggestion may be two words. See KeyboardPreferences.phraseSuggestions. */
     external fun nativeSetPhraseSuggestions(handle: Long, enabled: Boolean)
 

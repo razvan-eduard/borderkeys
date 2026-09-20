@@ -730,6 +730,30 @@ void nativeSetLanguageLock(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jflo
     engine->setLanguageLock(static_cast<float>(minimum), strict == JNI_TRUE);
 }
 
+void nativeSetPreferredLanguage(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring tag) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return;
+    }
+    // A null tag is "no preference", which is the default and has to be reachable: it is how a
+    // user turns the setting back off.
+    if (tag == nullptr) {
+        engine->setPreferredLanguage(nullptr);
+        return;
+    }
+    char buffer[kStringBufferBytes];
+    const jsize length = copyString(env, tag, buffer, sizeof(buffer));
+    engine->setPreferredLanguage(length > 0 ? buffer : nullptr);
+}
+
+void nativeResetLanguageEvidence(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return;
+    }
+    engine->resetLanguageEvidence();
+}
+
 void nativeLoadUserBigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray previous,
                            jobjectArray next, jintArray counts) {
     Engine* const engine = engineFrom(handle);
@@ -986,6 +1010,10 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeSetCorrectionStrictness)},
     {"nativeSetLanguageLock", "(JFZ)V",
      reinterpret_cast<void*>(nativeSetLanguageLock)},
+    {"nativeSetPreferredLanguage", "(JLjava/lang/String;)V",
+     reinterpret_cast<void*>(nativeSetPreferredLanguage)},
+    {"nativeResetLanguageEvidence", "(J)V",
+     reinterpret_cast<void*>(nativeResetLanguageEvidence)},
     {"nativeSetPhraseSuggestions", "(JZ)V",
      reinterpret_cast<void*>(nativeSetPhraseSuggestions)},
     {"nativeLoadSwipeWeights", "(J[B)Z", reinterpret_cast<void*>(nativeLoadSwipeWeights)},

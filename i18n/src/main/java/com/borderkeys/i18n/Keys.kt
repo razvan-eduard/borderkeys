@@ -477,6 +477,8 @@ object Keys {
     const val LANGUAGES_NONE_YET = "languages_none_yet"
     const val LANGUAGES_NOT_RECORDED_SET_BY_WHOEVER_BUILT = "languages_not_recorded_set_by_whoever_built"
     const val LANGUAGES_NOTHING_IS_DOWNLOADED_EVER_ADD_ONE = "languages_nothing_is_downloaded_ever_add_one"
+    const val LANGUAGES_PREFERRED = "languages_preferred"
+    const val LANGUAGES_PREFERRED_NOTE = "languages_preferred_note"
     const val LANGUAGES_REFUSED = "languages_refused"
     const val LANGUAGES_REMOVE = "languages_remove"
     const val LANGUAGES_REMOVE_PACK_TITLE = "languages_remove_pack_title"

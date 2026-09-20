@@ -105,12 +105,28 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
                 )
             }
             for (pack in packs) {
-                PackRow(pack, repository, scope, canSwitchOn = !atLimit)
+                PackRow(
+                    pack,
+                    repository,
+                    scope,
+                    canSwitchOn = !atLimit,
+                    preferred = preferences.preferredLanguageTag.equals(pack.tag, ignoreCase = true),
+                ) { tag ->
+                    scope.launch {
+                        DataGraph.themes.updatePreferences { it.copy(preferredLanguageTag = tag) }
+                    }
+                }
             }
             if (atLimit) {
                 Explanation(
                     strings.getString(Keys.LANGUAGES_LIMIT_REACHED, LanguagePackRepository.MAX_ENABLED),
                 )
+            }
+            // Once, under the packs, rather than on each row: the chips above are one choice
+            // between them, and repeating the paragraph beside every pack would read as though
+            // each had its own setting.
+            if (packs.isNotEmpty()) {
+                Explanation(strings[Keys.LANGUAGES_PREFERRED_NOTE])
             }
             // How the packs are weighed against each other while writing: about the packs
             // above, and set once.
@@ -337,6 +353,10 @@ private fun switchedOffNote(strings: LanguageManager): String =
  * One installed pack. [canSwitchOn] is false once [LanguagePackRepository.MAX_ENABLED] packs are
  * on: a pack that is already on can always be switched off, one that is off cannot be switched
  * on until another goes.
+ *
+ * [preferred] is this pack's share of a single choice across all of them, so [onPreferred] is
+ * given the whole new value -- this pack's tag to select it, empty to go back to no preference.
+ * Tapping the chip that is already on is what clears it; there is no separate "none" to find.
  */
 @Composable
 private fun PackRow(
@@ -344,6 +364,8 @@ private fun PackRow(
     repository: com.borderkeys.data.LanguagePackRepository,
     scope: kotlinx.coroutines.CoroutineScope,
     canSwitchOn: Boolean,
+    preferred: Boolean,
+    onPreferred: (String) -> Unit,
 ) {
     val strings = LocalStrings.current
     Column(modifier = Modifier.padding(vertical = 4.dp)) {
@@ -370,6 +392,16 @@ private fun PackRow(
             range = 0.05f..4f,
             default = 1f,
         ) { value -> scope.launch { repository.setWeight(pack.id, value) } }
+        // Only for a pack that is on: preferring one that is switched off names no open
+        // dictionary, so the engine would read it as no preference at all and the chip would be
+        // a control that does nothing.
+        if (pack.enabled) {
+            Row(modifier = Modifier.padding(horizontal = 12.dp)) {
+                PickerChip(strings[Keys.LANGUAGES_PREFERRED], preferred) {
+                    onPreferred(if (preferred) "" else pack.tag)
+                }
+            }
+        }
         var confirmingRemove by remember { mutableStateOf(false) }
         TextButton(
             onClick = { confirmingRemove = true },

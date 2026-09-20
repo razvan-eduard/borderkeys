@@ -300,6 +300,25 @@ data class KeyboardPreferences(
     val languageLock: Int = LANGUAGE_LOCK_BALANCED,
 
     /**
+     * The language tag to start from before anything has been recognised, or empty for none.
+     *
+     * Empty by default, and staying empty is a real choice rather than an unfinished setup: with
+     * no preference every dictionary is offered until the evidence decides, which is what someone
+     * who writes two languages interchangeably wants and is exactly the behaviour that shipped
+     * before this existed.
+     *
+     * *Preferred*, not primary. It decides where detection starts and never what wins: the moment
+     * [languageLock]'s evidence names a language, that one answers instead, and a word the
+     * preferred dictionary does not hold still falls through to the others. It is also not a
+     * weight -- a pack's weight is a term in every candidate's score, so using it to say "start
+     * here" also biased every one of that language's words for ever, which is the confusion this
+     * setting exists to end.
+     *
+     * A tag naming a pack that has since been removed or switched off simply behaves as none.
+     */
+    val preferredLanguageTag: String = "",
+
+    /**
      * What happens to a correction already applied once [languageLock]'s own evidence decides
      * the conversation was actually in a different language all along.
      *
@@ -956,6 +975,10 @@ data class KeyboardPreferences(
         // A language code, not free text. Bounded so a corrupt file cannot carry an arbitrarily
         // long string into every lookup; an unknown code resolves to English anyway.
         uiLanguage = uiLanguage.take(MAX_LANGUAGE_TAG),
+        // Same reasoning as uiLanguage above: a language tag, not free text, bounded so a corrupt
+        // file cannot carry an arbitrarily long string into the engine. An unrecognised tag names
+        // no open pack and is treated as no preference at all.
+        preferredLanguageTag = preferredLanguageTag.take(MAX_LANGUAGE_TAG),
         languageLock = if (languageLock in LANGUAGE_LOCK_OFF..LANGUAGE_LOCK_STRICT) {
             languageLock
         } else {

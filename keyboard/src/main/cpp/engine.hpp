@@ -302,6 +302,36 @@ public:
      */
     void setLanguageLock(float minimumEvidence, bool strict);
 
+    /**
+     * Which language answers before anything has been recognised. Null or empty clears it.
+     *
+     * *Preferred*, deliberately, and not *primary*: it says where detection starts, never what
+     * wins. It is consulted only while [dominantPack] is undecided, it is outranked the moment
+     * the evidence decides otherwise, and a word it has nothing for still falls through to every
+     * other pack (see the empty-heap retry in suggest). A name implying a standing hierarchy
+     * would invite exactly the thing this must never become -- a term in the score. It is not
+     * one, and nothing in the scoring path reads it.
+     *
+     * This is what the pack *weight* used to have to stand in for, badly: weight is a scoring
+     * term added to every candidate, so raising one language's weight to make it answer first
+     * also biased every one of its words for ever, including after another language had become
+     * dominant. Weight is left to be only what it says it is.
+     *
+     * The tag is kept rather than the slot it resolves to, because [setActiveLanguages] opens
+     * and closes packs and a slot index does not survive that.
+     */
+    void setPreferredLanguage(const char* tag);
+
+    /**
+     * Forgets which language the conversation is in, as though nothing had been typed.
+     *
+     * Called when the field changes: a new field is a new conversation, which is the same stance
+     * `LanguageSwitchCorrector.reset` already takes about the offsets it tracks. Without this the
+     * verdict reached in one application is inherited by the next one opened, so a preferred
+     * language never gets a look in after the first field of a session.
+     */
+    void resetLanguageEvidence();
+
     /** Whether two-word suggestions are offered at all. Off unless the user asks for them. */
     void setPhraseSuggestions(bool enabled) { phraseSuggestions_ = enabled; }
 
@@ -496,6 +526,14 @@ private:
     float languageEvidence_[kMaxPacks] = {};
     int dominantPack_ = -1;
     uint32_t lastObservedWord_ = 0;
+
+    /** The preferred language as a tag, and the slot it currently resolves to (-1 for none).
+     *  See setPreferredLanguage for why the tag is what is stored. */
+    char preferredTag_[16] = {};
+    int preferredPack_ = -1;
+    /** Re-resolves [preferredPack_] from [preferredTag_]. Called whenever either the preference
+     *  or the set of open packs changes, and never on the typing path. */
+    void resolvePreferredPack();
 
     void resolveContext(const char* previous1, size_t previous1Length, const char* previous2,
                         size_t previous2Length);

@@ -1175,6 +1175,17 @@ class BorderKeysService :
             KeyboardPreferences.languageLockEvidence(preferences.languageLock),
             KeyboardPreferences.languageLockStrict(preferences.languageLock),
         )
+        engine.setPreferredLanguage(preferences.preferredLanguageTag)
+        // Only when there is a preference to give a look in. The verdict reached in the last
+        // field is otherwise inherited by this one, and a preferred language that never gets
+        // consulted after the first field of a session is not the setting anyone asked for.
+        //
+        // Deliberately conditional rather than unconditional: with no preferred language, keeping
+        // the verdict across fields is what the keyboard has always done, and changing that for
+        // everyone is not part of this setting.
+        if (preferences.preferredLanguageTag.isNotEmpty()) {
+            engine.resetLanguageEvidence()
+        }
         engine.setPhraseSuggestions(preferences.phraseSuggestions)
         // The experimental swipe model is deliberately *not* re-pushed here the way the settings
         // above are. It owns two and a half megabytes that are loaded and freed as the preference

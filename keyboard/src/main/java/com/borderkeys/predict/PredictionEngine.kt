@@ -376,6 +376,30 @@ class PredictionEngine(
     }
 
     /**
+     * Which language answers while the engine has not recognised one yet. Empty means none.
+     *
+     * Only ever consulted before the evidence decides, so it changes where detection starts and
+     * never what outranks what -- see `Engine::setPreferredLanguage`. Nothing here reaches the
+     * scoring path, which is what separates it from a pack's weight.
+     */
+    fun setPreferredLanguage(tag: String) {
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeSetPreferredLanguage(current, tag.ifEmpty { null })
+            }
+        }
+    }
+
+    /** Forgets the language verdict, so the next field decides for itself. */
+    fun resetLanguageEvidence() {
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeResetLanguageEvidence(current)
+            }
+        }
+    }
+
+    /**
      * The pack the conversation is currently considered written in, delivered on the UI thread
      * like every other answer from this class -- never read directly, since that would be a
      * blocking JNI call from the thread that must never make one. Posted once per completed
