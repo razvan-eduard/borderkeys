@@ -5,6 +5,7 @@ package com.borderkeys.predict
 
 import com.borderkeys.ime.AutoCorrection
 import com.borderkeys.ime.RunningText
+import org.junit.AssumptionViolatedException
 import java.io.File
 import java.io.FileDescriptor
 import java.io.FileInputStream
@@ -108,6 +109,33 @@ internal class Pipeline private constructor(private val handle: Long) {
          *  built (`cmake --build native-tests/build --target borderkeys`) and the packs
          *  compiled. Absent either, a caller skips rather than fails -- neither is produced by
          *  an ordinary `./gradlew test`. */
+        /**
+         * Skips on a machine that has not built the harness, and *fails* on one that has no
+         * excuse.
+         *
+         * Skipping is right for a developer who has not run cmake: a suite that fails on a
+         * checkout which simply has not built the bridge teaches people to ignore it. In CI it
+         * is the opposite -- it is how a suite protects nothing while reporting green, which is
+         * exactly what happened here. Every pipeline case skipped in CI from the day it was
+         * written, because the bridge and the packs were built later in the same job, and three
+         * known defects sat in the payload marked as requirements with nothing to catch them.
+         *
+         * So CI is told to build both before `./gradlew test`, and absence there is a failure
+         * rather than a shrug.
+         */
+        fun require() {
+            if (available()) {
+                return
+            }
+            val missing = "the pipeline harness needs the host bridge (cmake --build " +
+                "native-tests/build --target borderkeys) and compiled packs " +
+                "(gradlew :keyboard:buildDictionaries)"
+            if (System.getenv("CI") != null) {
+                throw AssertionError("$missing -- and CI is expected to have built both")
+            }
+            throw AssumptionViolatedException(missing)
+        }
+
         fun available(): Boolean {
             val packs = packDirectory() ?: return false
             if (packs.listFiles { f -> f.name.endsWith(".bkd") }.isNullOrEmpty()) {

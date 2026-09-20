@@ -6,32 +6,35 @@
 #
 #   typed <TAB> committed <TAB> situation
 #
-# Three lines below record a defect rather than a requirement, marked DEFECT and carrying what
-# is actually wrong. They are written as the pipeline behaves so the suite stays honest and
-# green; changing any of them is a change to the keyboard, and the line is what will fail when
-# someone makes it. A red suite that everyone has learned to ignore protects nothing.
+# Every line here is a requirement: what the keyboard must do, not what it currently does.
+#
+# Three of these once described a defect and were written green so the suite would pass. That
+# was a mistake worth naming, because it inverts what a suite is for: a passing line is
+# indistinguishable from a requirement, so CI went green *enforcing* the bug, and no change to
+# the keyboard was ever going to turn it red. A defect belongs in the tracker or in a red test,
+# never in a green one.
 
 # --- a missing accent is restored -------------------------------------------------------------
 totusi	totuși	Correctable
 
-# DEFECT: "daca" should reach "dacă" (94,655) and instead the best correction offered is the
-# name "Dacia", which the proper-noun guard then refuses -- so nothing is committed and the
-# accent is never restored. The name entered the Romanian pack with the entity-name merge on
-# 2026-09-20; before it, this line read `daca<TAB>dacă<TAB>Correctable`. A name is outranking an
-# ordinary word by a factor of a hundred, which is the trade the names list was not meant to make.
-daca	-	NameMismatch
+# "daca" must reach "dacă" (94,655). The name "Dacia" entered the pack with the entity-name
+# merge on 2026-09-20 and outranks it; the proper-noun guard then refuses the name, so nothing
+# is committed and the accent is never restored. A name outranking an ordinary word by a factor
+# of a hundred is the trade the names list was never meant to make.
+daca	dacă	Correctable
 
-# DEFECT: "in" should reach "în" (1,782,296) and does not. A diacritic-free spelling folds to
-# the accented one exactly, so it is reached at zero cost -- and the corrections heap admits only
-# endpoints reached by an edit. What is offered instead is "ins", a one-character completion,
-# which is refused for being too short and not an accent. Safe, and not the feature working.
-in	-	TooShort
+# "in" must reach "în" (1,782,296) -- the commonest word in the language, and the plainest case
+# the accent restoration exists for. The diacritic-free spelling folds onto the accented one
+# exactly, so it is reached at no cost at all, and a zero-cost endpoint is scored as merely
+# unpenalised rather than as the strong reading it is. "ins" (508) is offered instead.
+in	în	Correctable
 
 # --- a correct Romanian word is left alone ----------------------------------------------------
 snobul	-	TooFar
 
-# DEFECT: "cana" is in the word list at 76, and "cană" at 170. build_dict.py keeps one spelling
-# per folded key, so the compiled pack holds only "cană" -- and knownSpelling therefore answers
-# "cană" for "cana", which is not the typed word, so the known-word guard never fires and the
-# word is corrected to "canal". Every word whose accented twin outranks it is in this position.
-cana	canal	Correctable
+# "cana" must reach "cană" (170) and not "canal" (1,369). Both are reachable from the letters
+# typed: the first is the typed word with its diacritic restored, the second a different word
+# with a letter added. Ranked on frequency alone the commoner one wins -- which is the whole
+# defect, and why "totusi" -> "totuși" (9,779) has always worked while this never did. Not two
+# behaviours; one rule, decided by whichever side happens to be commoner.
+cana	cană	Correctable

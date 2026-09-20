@@ -6,7 +6,6 @@ package com.borderkeys.predict
 import com.borderkeys.ime.AutoCorrection
 import org.junit.AfterClass
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.BeforeClass
 import org.junit.Test
 
@@ -33,11 +32,7 @@ class PipelineTest {
 
     @Test
     fun `every case commits what it should, for the reason it should`() {
-        assumeTrue(
-            "needs the host bridge (cmake --build native-tests/build --target borderkeys) " +
-                "and compiled packs (gradlew :keyboard:buildDictionaries)",
-            Pipeline.available(),
-        )
+        Pipeline.require()
         val cases = readCases()
         assertTrue("no cases were read -- the payload is missing", cases.isNotEmpty())
 
@@ -64,7 +59,7 @@ class PipelineTest {
      *  n-grams are most of why a candidate wins, and "put" was committed as "out" mid-sentence. */
     @Test
     fun `a phrase leaves its correctly spelled words alone`() {
-        assumeTrue(Pipeline.available())
+        Pipeline.require()
         val outcomes = pipeline.commitPhrase("can we put the form in their folder")
         val changed = outcomes.filter { it.committed != null }
         assertTrue(
@@ -79,7 +74,7 @@ class PipelineTest {
      *  the length at which guessing otherwise stops. */
     @Test
     fun `every Romanian case commits what it should, for the reason it should`() {
-        assumeTrue(Pipeline.available())
+        Pipeline.require()
         val romanian = Pipeline.open("ro-RO")
         try {
             val failures = readCases("pipeline_cases_ro.tsv").mapNotNull { case ->

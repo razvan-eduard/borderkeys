@@ -8,8 +8,8 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -36,10 +36,7 @@ class LanguageSwitchPipelineTest {
 
     @Before
     fun open() {
-        assumeTrue(
-            "needs the host bridge and compiled packs -- see PipelineTest",
-            Pipeline.available(),
-        )
+        Pipeline.require()
         // Romanian first, so slot 0 is ro-RO and slot 1 en-US; the corrector deals in slots.
         pipeline = Pipeline.open("ro-RO", "en-US")
         corrector = LanguageSwitchCorrector()
@@ -145,13 +142,19 @@ class LanguageSwitchPipelineTest {
         pipeline.languageLock(BALANCED_EVIDENCE)
         pipeline.commitPhrase(ROMANIAN)
         val romanianPack = pipeline.dominantPack()
-        assumeTrue("Romanian has to be the verdict for this to mean anything", romanianPack >= 0)
+        assertEquals("Romanian has to be the verdict for this to mean anything",
+                     ROMANIAN_PACK, romanianPack)
 
         // What the service records the moment it applies a correction: what was typed, what
         // landed, and where. The offsets are the field's, and are not read back here -- the
         // service verifies the text is still there before any of this runs.
         val applied = pipeline.candidateForPack(romanianPack, "in")
-        assumeTrue("the Romanian pack has to offer something for \"in\"", applied != null)
+        assertNotNull(
+            "the Romanian pack must offer something for \"in\" -- this was an assumption, which " +
+                "meant the one test of the whole loop skipped itself rather than failed when " +
+                "the answer went away",
+            applied,
+        )
         corrector.recordCorrection(
             LanguageSwitchCorrector.Flag(typedText = "in", appliedText = applied!!,
                                          startOffset = 0, endOffset = applied.length),
@@ -160,7 +163,7 @@ class LanguageSwitchPipelineTest {
 
         pipeline.commitPhrase(ENGLISH)
         val englishPack = pipeline.dominantPack()
-        assumeTrue("the verdict has to move", englishPack >= 0 && englishPack != romanianPack)
+        assertEquals("the verdict has to move for any of this to fire", ENGLISH_PACK, englishPack)
 
         assertTrue("a flip is what arms the revisit", corrector.observeDominantPack(englishPack))
         val tracked = corrector.snapshot()

@@ -74,6 +74,26 @@ inline bool isMark(uint32_t folded) {
     return folded == kApostrophe || folded == kHyphen;
 }
 
+// Whether a stored spelling carries a mark the fold throws away -- a diacritic, in every
+// language this ships, since the fold maps each accented letter onto its plain ASCII twin and
+// every such letter is multi-byte in UTF-8 while its twin is not.
+//
+// Case is deliberately outside this class, and that is the whole of the distinction. A capital
+// is a key the writer either pressed or did not; a diacritic is a convention the layout makes
+// awkward, which is exactly why people leave them out and why restoring one is a service
+// rather than a contradiction. Without this line the respelling tier below also re-cased, and
+// "tehran" became "Tehran" -- with every English word that is also a name ("march", "may",
+// "polish") behind it, because the pack keeps one spelling per folded key and that spelling is
+// frequently the capitalised one.
+inline bool carriesFoldedMark(const char* text, uint32_t length) {
+    for (uint32_t i = 0; i < length; ++i) {
+        if (static_cast<unsigned char>(text[i]) >= 0x80u) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // What an edit costs is a question about its *shape*: which operation, on which class of
 // character. The two cells below are the same mark in opposite directions, and they are not
 // symmetric acts.
@@ -1578,6 +1598,38 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
             // typed letters this word goes, so the two cases are told apart by one comparison.
             const bool shortCompletion = endpoint.cost <= 0.0f && frame.depth > 0 &&
                                          frame.depth <= kMaxCorrectionCompletion;
+            // A word sitting exactly on the letters typed -- no edit, nothing added -- is not a
+            // proposal of a different word. It is *this* word, as the dictionary spells it. The
+            // fold washes out case and diacritics, so the only way it can differ from what was
+            // typed is in those, and that difference is the accent restoration itself. Whether
+            // it differs at all is AutoCorrection's question, not this one's: offering "car"
+            // for "car" costs nothing, because NoChange already names that outcome.
+            //
+            // Neither clause above admitted this. "cost > 0" is false by definition and
+            // shortCompletion demands depth > 0, so the one candidate that needs no guessing
+            // was the one candidate that could never be offered -- while "ins", a character
+            // added to "in", could. Every Romanian word whose accents were left out was in that
+            // position: "în" (1,782,296) unreachable, "dacă" (94,655) unreachable.
+            const bool respelling = endpoint.cost <= 0.0f && frame.depth == 0;
+            if (!fallbackPass_ && respelling) {
+                // Exempt from plausibleCorrectionTarget on purpose. That floor stops autocorrect
+                // proposing obscure words, and a respelling proposes nothing -- someone who
+                // typed the letters of "cană" (170) meant them, and refusing it on rarity left
+                // "canal" (1,369), a different word, to win on frequency alone.
+                uint32_t textLength = 0;
+                const char* const text = trie.wordText(static_cast<uint32_t>(wordIndex),
+                                                       &textLength);
+                if (text != nullptr && textLength != 0 && carriesFoldedMark(text, textLength)) {
+                    // Boosted the same way offerScoredWord would, so that choosing between two
+                    // packs' respellings weighs a personal word exactly as the strip does.
+                    const float boosted = score + userBoostFor(text, textLength);
+                    if (!hasBestRespelling_ || boosted > bestRespelling_.score) {
+                        bestRespelling_ =
+                            Candidate{packIndex, static_cast<int32_t>(wordIndex), boosted};
+                        hasBestRespelling_ = true;
+                    }
+                }
+            }
             if (!fallbackPass_ && (endpoint.cost > 0.0f || shortCompletion) &&
                 plausibleCorrectionTarget(pack, static_cast<uint32_t>(wordIndex))) {
                 offerScoredWord(correctionHeap_, trie, packIndex,
@@ -2103,6 +2155,7 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     // and neither may carry anything into the next.
     correctionHeap_.reset(correctionStorage_, kMaxCorrections);
     hasBestCorrection_ = false;
+    hasBestRespelling_ = false;
 
     editCostCeiling_ = maxEditCostFor(foldedLength);
     // Undecided, and told never to guess: one dictionary rather than all of them. The heaviest
@@ -2159,6 +2212,15 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     Candidate corrections[kMaxCorrections];
     if (correctionHeap_.drainSorted(corrections, kMaxCorrections) > 0) {
         bestCorrection_ = corrections[0];
+        hasBestCorrection_ = true;
+    }
+    // The dictionary's own spelling of the letters typed wins outright, whatever the heap
+    // found. Not a score comparison: a proposal has to be within kCorrectionFrequencyFloor of
+    // the commonest word to be admitted at all, while a respelling is exempt, so the two are
+    // not on one scale and the rarer answer is routinely the right one. "cana" scored 1.2
+    // below "canal" and is still the word that was typed.
+    if (hasBestRespelling_) {
+        bestCorrection_ = bestRespelling_;
         hasBestCorrection_ = true;
     }
 
@@ -2398,8 +2460,11 @@ bool Engine::explainScore(const char* typed, size_t typedLength, const char* can
         out->rank = i;
         out->total = results[i].score;
         out->packIndex = results[i].packIndex;
-        out->addedCharacters =
-            static_cast<int32_t>(candidateLength) - static_cast<int32_t>(typedLength);
+        // Set below, once both sides have been folded: these lengths are byte counts, and an
+        // accented letter is two bytes against its plain twin's one. Every Romanian
+        // restoration therefore reported "1 character added" while adding none, which is
+        // exactly the reading that sends someone looking in the wrong place.
+        out->addedCharacters = 0;
 
         // The context the request resolved is still standing, so the language-model term can be
         // asked for again rather than recomputed from a copy of the formula.
@@ -2423,6 +2488,9 @@ bool Engine::explainScore(const char* typed, size_t typedLength, const char* can
         out->editDistance = (typedCount <= 0 || wordCount <= 0)
             ? -1
             : reportedEditDistance(typedFolded, typedCount, wordFolded, wordCount);
+        if (typedCount > 0 && wordCount > 0) {
+            out->addedCharacters = wordCount - typedCount;
+        }
         return true;
     }
     return false;

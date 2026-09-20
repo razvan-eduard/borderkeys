@@ -610,6 +610,22 @@ private:
     Candidate bestCorrection_{};
     bool hasBestCorrection_ = false;
 
+    /**
+     * The dictionary's own spelling of exactly the letters typed, when it holds one.
+     *
+     * Kept apart from the heap above rather than scored into it, because it is not competing
+     * with those candidates -- it outranks all of them, and no score would say so reliably. A
+     * proposal is admitted only within kCorrectionFrequencyFloor of the commonest word, but a
+     * respelling is exempt (see collectWords), so the gap between the two is unbounded and any
+     * constant large enough to win today erodes the moment a rarer word needs restoring.
+     *
+     * A tier, then, not a bonus: if the dictionary spells the typed letters, that spelling is
+     * the answer, and whether it differs from what was typed at all is AutoCorrection's
+     * question rather than this one's.
+     */
+    Candidate bestRespelling_{};
+    bool hasBestRespelling_ = false;
+
     // Per-request context, resolved once per pack instead of once per candidate.
     /**
      * The context word's entry in the personal model, or -1.
