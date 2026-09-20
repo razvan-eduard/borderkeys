@@ -55,12 +55,55 @@ constexpr float kEditPenalty = 40.0f;
 // because a dropped or doubled letter is a more common slip than hitting the wrong key.
 constexpr float kInsertCost = 0.85f;
 
-// A missing apostrophe, which is a convention dropped rather than a key missed -- see the
-// insertion branch in the trie walk for the measurements behind this. Small and not zero: at
-// kEditPenalty 40 this is 0.8 points of score, enough that a word typed exactly as it is spelled
-// still outranks a contraction reached by inserting one, and little enough that a genuinely more
-// common contraction wins on its own frequency.
-constexpr float kApostropheInsertCost = 0.02f;
+/**
+ * The non-letters this keyboard composes into a word: a *mark*.
+ *
+ * One place the set lives, mirroring BorderKeysService.isWordCharacter, which is what decides
+ * whether a character joins the composing region at all. Everything else -- a full stop, a
+ * slash, a digit -- ended the word a keystroke earlier and never reaches the walk.
+ *
+ * A class rather than a check for one character, because every rule below is about what kind of
+ * thing is being edited, not about which character it happens to be. "Hardcode the apostrophe"
+ * is how the hyphen came to be handled nowhere despite 9,754 hyphenated words in the English
+ * pack -- "year-old", "long-term", "so-called" -- each of them a word someone can type.
+ */
+constexpr uint32_t kApostrophe = 0x27u;
+constexpr uint32_t kHyphen = 0x2Du;
+
+inline bool isMark(uint32_t folded) {
+    return folded == kApostrophe || folded == kHyphen;
+}
+
+// What an edit costs is a question about its *shape*: which operation, on which class of
+// character. The two cells below are the same mark in opposite directions, and they are not
+// symmetric acts.
+//
+// Leaving a mark out is how people type. "cant" for "can't", "dont" for "don't", "wellknown"
+// for "well-known" -- a convention dropped, not a key missed, and priced as an ordinary
+// insertion it could never be recovered: one edit is kEditPenalty (40) times kInsertCost, some
+// 34 points, while every word that merely continues the prefix costs nothing. Cheap rather than
+// free, so an exactly-typed spelling still wins a tie; frequency settles the rest, measured
+// across the 1,629 contractions that collide with a real word once their mark is dropped.
+constexpr float kMarkInsertCost = 0.02f;
+
+// Typing a mark is the opposite: nobody's finger lands on an apostrophe by accident. It is a
+// decision, and discarding it to reach a word the dictionary happens to hold is not a
+// correction but a contradiction -- "the workers' rights" becoming "the workers rights", or
+// "'hello" becoming "hell" once the quote is gone and the rest of the word is fair game.
+//
+// Dear rather than forbidden, matching how every other shape here is handled, and placed
+// against the two ceilings that already exist rather than picked for its size. Above
+// maxEditCostFor's largest value (2.5), so no ordinary search can reach a word by discarding a
+// mark; below kFallbackEditCost (4.2), so the wider pass that runs only when nothing was found
+// may still *offer* the stripped word as something to tap. Autocorrect cannot commit it either
+// way -- the fallback is kept out of the corrections heap -- so the gap between those two
+// numbers is exactly the room for "show it, never do it".
+//
+// Swept. Marks damaged, against the corpora, at 1.5 / 3.0 / 6.0 / 12.0: 72.5%, 12.9%, 12.9%,
+// 12.9% -- flat once past the ordinary ceiling, which is the shape the reasoning predicts. The
+// typo and mid-word corpora hold at 100.0% and 98.5% throughout.
+constexpr float kMarkDeleteCost = 3.0f;
+
 constexpr float kDeleteCost = 0.85f;
 // Transposition is one gesture gone out of order rather than two independent errors, so it
 // costs a little less than the insertion or deletion it would otherwise be decomposed into --
@@ -1388,9 +1431,12 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
         }
 
         // Deletion: a character was typed that the word does not have. Consume it, stay put.
-        if (frame.cost + kDeleteCost <= maxCost && stackSize < 512) {
+        // Priced by what is being discarded -- a letter is a slip, a mark is a decision. See
+        // kMarkDeleteCost.
+        const float deleteCost = isMark(folded[frame.inputPos]) ? kMarkDeleteCost : kDeleteCost;
+        if (frame.cost + deleteCost <= maxCost && stackSize < 512) {
             stack[stackSize++] = Frame{frame.node, static_cast<int16_t>(frame.inputPos + 1), 0,
-                                       frame.cost + kDeleteCost};
+                                       frame.cost + deleteCost};
         }
 
         // Insertion: a character of the word was missed. Advance the trie without consuming
@@ -1419,11 +1465,14 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
         // once its apostrophe is dropped: "cant" yields "can't" (3,713 against 108) and "dont"
         // yields "don't", while "its", "were", "well" and "ill" all stay the ordinary word they
         // already were. 1,629 such collisions exist and frequency settles them the right way.
-        if (frame.runAhead < kMaxRunAhead && frame.cost + kApostropheInsertCost <= maxCost) {
+        if (frame.runAhead < kMaxRunAhead && frame.cost + kMarkInsertCost <= maxCost) {
             const int alphabetSize = trie.alphabetSize();
-            const int apostrophe = trie.symbolFor(0x27u);
+            const int markSymbols[] = {trie.symbolFor(kApostrophe), trie.symbolFor(kHyphen)};
+            const auto isMarkSymbol = [&markSymbols](int symbol) {
+                return symbol == markSymbols[0] || symbol == markSymbols[1];
+            };
             for (int symbol = 1; symbol <= alphabetSize && stackSize < 512; ++symbol) {
-                if (symbol == apostrophe || frame.cost + kInsertCost > maxCost) {
+                if (isMarkSymbol(symbol) || frame.cost + kInsertCost > maxCost) {
                     continue;
                 }
                 const int32_t child = trie.walk(frame.node, symbol);
@@ -1433,18 +1482,21 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
                                                frame.cost + kInsertCost};
                 }
             }
-            // Pushed after the others so the stack pops it first. This walk is depth-first from
-            // the top of the stack and bounded by visitBudget_, so the apostrophe -- symbol 1,
-            // and therefore the first pushed and the last explored -- was being starved under
-            // any prefix with many completions. That alone was the difference between "dont"
-            // finding "don't" and "cant" never finding "can't": the cost was already right, the
-            // budget simply ran out before the branch was reached.
-            if (apostrophe > 0 && stackSize < 512) {
-                const int32_t child = trie.walk(frame.node, apostrophe);
+            // Pushed after the others so the stack pops them first. This walk is depth-first
+            // from the top of the stack and bounded by visitBudget_, so a mark -- the apostrophe
+            // is symbol 1, and therefore the first pushed and the last explored -- was being
+            // starved under any prefix with many completions. That alone was the difference
+            // between "dont" finding "don't" and "cant" never finding "can't": the cost was
+            // already right, the budget simply ran out before the branch was reached.
+            for (const int symbol : markSymbols) {
+                if (symbol <= 0 || stackSize >= 512) {
+                    continue;
+                }
+                const int32_t child = trie.walk(frame.node, symbol);
                 if (child >= 0) {
                     stack[stackSize++] = Frame{child, frame.inputPos,
                                                static_cast<int16_t>(frame.runAhead + 1),
-                                               frame.cost + kApostropheInsertCost};
+                                               frame.cost + kMarkInsertCost};
                 }
             }
         }
@@ -1526,7 +1578,7 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
             // typed letters this word goes, so the two cases are told apart by one comparison.
             const bool shortCompletion = endpoint.cost <= 0.0f && frame.depth > 0 &&
                                          frame.depth <= kMaxCorrectionCompletion;
-            if ((endpoint.cost > 0.0f || shortCompletion) &&
+            if (!fallbackPass_ && (endpoint.cost > 0.0f || shortCompletion) &&
                 plausibleCorrectionTarget(pack, static_cast<uint32_t>(wordIndex))) {
                 offerScoredWord(correctionHeap_, trie, packIndex,
                                 static_cast<uint32_t>(wordIndex), score);
@@ -2085,7 +2137,15 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
         // means this pass starts fresh for every pack too, without a separate reset here.
         if (heap.size() == 0) {
             editCostCeiling_ = kFallbackEditCost;
+            // Shown, never committed. This pass exists so the strip is not blank in front of
+            // someone who cannot tell whether the keyboard has no idea or has stopped working,
+            // and a candidate reached only by opening the ceiling to 4.2 is exactly that: a
+            // guess offered rather than an answer found. Letting it reach autocorrect turned
+            // "'hello" -- which the ordinary ceiling rightly finds nothing for, now that
+            // discarding a typed mark is dear -- into "i'll", four edits away.
+            fallbackPass_ = true;
             searchPacks(folded, foldedLength, -1, heap);
+            fallbackPass_ = false;
         }
     } else {
         // Nothing typed: this is the next-word case, and the phrases this person repeats are

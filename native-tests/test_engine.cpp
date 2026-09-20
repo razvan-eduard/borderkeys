@@ -504,6 +504,42 @@ void runEngineTests() {
               "a preference naming a pack that has been switched off still suggests something");
     }
 
+    section("a mark the user typed is not discarded to reach a word");
+    {
+        // The shape, not the vocabulary: whatever this pack holds, appending a mark to one of
+        // its words must not produce that word back. Discarding an apostrophe or a hyphen the
+        // user deliberately typed is what turned "the workers' rights" into "the workers
+        // rights" and "'hello" into "hell". See kMarkDeleteCost.
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads");
+
+        const auto committed = [&loaded](const char* composing) {
+            Candidate out[Engine::kMaxCandidates];
+            loaded.engine.suggest(composing, std::strlen(composing), nullptr, 0, nullptr, 0, out,
+                                  Engine::kMaxCandidates);
+            const Candidate* const best = loaded.engine.bestCorrection();
+            if (best == nullptr) {
+                return std::string();
+            }
+            uint32_t length = 0;
+            const char* const text = loaded.engine.candidateText(*best, &length);
+            return text == nullptr ? std::string() : std::string(text, length);
+        };
+
+        check(committed("keyboard'") != "keyboard",
+              "a trailing apostrophe is not thrown away to reach the word without it");
+        check(committed("keyboard-") != "keyboard",
+              "and neither is a trailing hyphen -- the rule is about the class, not the "
+              "character that happened to be reported");
+        check(committed("'keyboard") != "keyboard",
+              "nor a leading one, which is what let the rest of the word be rewritten too");
+
+        // The opposite shape still works: a mark left out is a convention dropped, and cheap.
+        // If this stops holding, the insertion branch has been broken by the deletion rule.
+        check(loaded.rankOf("keyboar", "keyboard") >= 0,
+              "a word one letter short of finished is still reached");
+    }
+
     section("forgetting the language verdict");
     {
         LoadedEngine loaded;

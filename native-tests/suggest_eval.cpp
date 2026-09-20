@@ -234,8 +234,19 @@ int main(int argc, char** argv) {
             Candidate scratch[Engine::kMaxCandidates];
             engine.suggest(item.typed.c_str(), item.typed.size(), nullptr, 0, nullptr, 0,
                            scratch, Engine::kMaxCandidates);
-            const Candidate* const best = engine.bestCorrection();
             std::string applied;
+            // The one guard from AutoCorrection.correctionFor that changes what this measures:
+            // a word the dictionaries already spell is never replaced, whatever the heap offers.
+            // Without it the harness reports "it's" corrected to "its" and would credit a fix
+            // for work the guard already does -- it would be measuring the engine's proposal
+            // rather than what reaches a field. Same call PredictionEngine makes for knownWord.
+            char spelling[128];
+            const int spelled = engine.knownSpelling(item.typed.c_str(), item.typed.size(),
+                                                     spelling, sizeof(spelling) - 1);
+            const bool alreadyAWord =
+                spelled > 0 && item.typed.size() == static_cast<size_t>(spelled) &&
+                std::memcmp(spelling, item.typed.c_str(), item.typed.size()) == 0;
+            const Candidate* const best = alreadyAWord ? nullptr : engine.bestCorrection();
             if (best != nullptr) {
                 uint32_t length = 0;
                 const char* const text = engine.candidateText(*best, &length);

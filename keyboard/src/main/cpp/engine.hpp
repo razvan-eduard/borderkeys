@@ -515,6 +515,11 @@ private:
     // because the fallback pass changes it between two runs over the same packs.
     float editCostCeiling_ = 0.0f;
 
+    /** Whether the wider second pass is running. Its candidates fill the strip so it is not
+     *  blank, and are kept out of the corrections heap: a word reachable only once the
+     *  ceiling is opened is a guess worth showing and never one worth committing. */
+    bool fallbackPass_ = false;
+
     /** The previous word's tag in each pack, resolved with contextWord1_. */
     uint32_t contextTag1_[kMaxPacks] = {};
 

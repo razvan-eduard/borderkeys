@@ -41,6 +41,99 @@ internal object AutoCorrection {
      *
      * Otherwise the correction, carrying the capitalisation of the word it replaces.
      */
+    /**
+     * What a word and the answer offered for it amount to. Exactly one holds, and only
+     * [Correctable] replaces anything.
+     *
+     * Named rather than left as a chain of early returns, because these are seven different
+     * questions and a chain says only "no". A case that has to be reasoned about -- and every
+     * one of these has been, at least once, from a report -- can be pointed at, tested by name,
+     * and given its reason in one place. Adding an eighth is a member and a clause, not another
+     * `return null` in the middle of six others.
+     */
+    enum class Situation {
+        /** Nothing was offered at all. */
+        NothingOffered,
+
+        /**
+         * The answer is about a different moment. The engine has one thread and answers by
+         * posting back, so a delimiter can be typed before the answer for the word just
+         * finished has arrived; applying it would correct the word being committed to a word
+         * never asked about. "tinde" reaching "idependent" was this -- no edit budget reaches
+         * one from the other, so it was never the answer to "tinde" at all.
+         */
+        StaleAnswer,
+
+        /**
+         * Further from what was typed than a slip could account for. A ceiling on top of the
+         * engine's ranking, which only ever decides *which* candidate comes first, never
+         * whether it is close enough to be a correction. A correct word the dictionaries do not
+         * know ("snobul") was being replaced by whatever ranked first, however far away
+         * ("noul", two edits on six letters).
+         */
+        TooFar,
+
+        /**
+         * A name, offered for a word that is not it. A name corrects only its own letters:
+         * "maria" may become "Maria" and "laurentiu" "Laurențiu", but "everyone" must never
+         * become "Everton" nor "thanks" "Hanks". A typo two edits from somebody's name is still
+         * a typo, not that person.
+         */
+        NameMismatch,
+
+        /** Once cased, the answer is what was typed. Nothing to do. */
+        NoChange,
+
+        /**
+         * Too short to guess about, and not an accent being restored. "in" reaching "în" is two
+         * real words that differ by an accent, not a coin toss, so it is not caught here.
+         */
+        TooShort,
+
+        /**
+         * The dictionaries spell it, so it is a word, and a keyboard does not correct words.
+         * Except for a name being recased: there `knownWord` equalling what was typed is the
+         * *reason* there is something to do -- the dictionary is offering the same word with a
+         * capital, not a different word.
+         */
+        KnownWord,
+
+        /** None of the above. */
+        Correctable,
+    }
+
+    /**
+     * Which [Situation] this is. [cased] is the answer with [matchCase] already applied, since
+     * two of the questions are about the text as it would actually land.
+     *
+     * The order is load-bearing and is the order the checks were written in: each later one
+     * assumes the earlier ones have been ruled out.
+     */
+    fun situationOf(
+        typed: String,
+        suggestion: String?,
+        suggestionQuery: String,
+        knownWord: String,
+        cased: String,
+        minimumLength: Int,
+        isProperNoun: Boolean = false,
+        maxEdits: Int = Int.MAX_VALUE,
+        capitaliseNames: Boolean = true,
+    ): Situation = when {
+        suggestion.isNullOrEmpty() -> Situation.NothingOffered
+        typed != suggestionQuery -> Situation.StaleAnswer
+        editDistance(stripDiacritics(typed), stripDiacritics(suggestion)) > maxEdits ->
+            Situation.TooFar
+        isProperNoun &&
+            !stripDiacritics(typed).equals(stripDiacritics(suggestion), ignoreCase = true) ->
+            Situation.NameMismatch
+        cased == typed -> Situation.NoChange
+        typed.length < minimumLength && !isDiacriticOnlyDifference(typed, suggestion) ->
+            Situation.TooShort
+        typed == knownWord && !(isProperNoun && capitaliseNames) -> Situation.KnownWord
+        else -> Situation.Correctable
+    }
+
     fun correctionFor(
         typed: String,
         suggestion: String?,
@@ -51,52 +144,21 @@ internal object AutoCorrection {
         maxEdits: Int = Int.MAX_VALUE,
         capitaliseNames: Boolean = true,
     ): String? {
-        if (suggestion.isNullOrEmpty() || typed != suggestionQuery) {
-            return null
-        }
-        // How far the candidate is from what was typed, once case and accents are set aside --
-        // a ceiling on top of the engine's own ranking, which only ever decides *which*
-        // candidate comes first, never whether it is close enough to be a correction at all. A
-        // correct word the dictionaries simply do not know ("snobul") used to be replaced by
-        // whatever ranked first, however far away ("noul", two edits on six letters).
-        if (editDistance(stripDiacritics(typed), stripDiacritics(suggestion)) > maxEdits) {
-            return null
-        }
-        // A name corrects only its own letters: "maria" may become "Maria" and "laurentiu"
-        // "Laurențiu", but "everyone" must never become "Everton" nor "thanks" "Hanks". A
-        // proper noun the dictionaries carry says nothing about what an ordinary word was meant
-        // to be, and a typo two edits from somebody's name is still a typo, not that person --
-        // the trade the dictionaries' own names list was never meant to make.
-        if (isProperNoun && !stripDiacritics(typed).equals(stripDiacritics(suggestion), ignoreCase = true)) {
-            return null
-        }
         // Cased once, up front, rather than compared raw and separately case-insensitively:
         // "would this actually change anything once matchCase has had its say" is the one
         // question both of the old separate checks (exact match, and match but for case) were
         // really asking, and asking it this way is also what lets a name exactly matching what
         // was typed -- "ana" against the dictionary's own "ana" -- still become a correction
-        // when isProperNoun says the only thing wrong with it is the case, instead of being
-        // waved through as "identical" before matchCase ever got to capitalise it.
-        // [capitaliseNames] gates only the capital, never the guard above: with the setting
-        // off a name is cased like any other word, but it still may not correct anything but
-        // its own letters. The two uses of the flag are separate questions, and only the first
-        // is a preference -- "everyone" must not become "Everton" whatever the user chose.
-        val cased = matchCase(typed, suggestion, isProperNoun && capitaliseNames)
-        if (cased == typed) {
-            return null
-        }
-        if (typed.length < minimumLength && !isDiacriticOnlyDifference(typed, suggestion)) {
-            return null
-        }
-        // Not for a name: "the dictionaries know this exact word" is the whole reason to leave
-        // an ordinary word alone, but for a name it is the opposite -- it is *why* knownWord
-        // equals typed at all (the dictionary is not offering a different word, only a
-        // different case for the same one), and that must not be read as "nothing to do" the
-        // way it is for every word that is not a name.
-        if (typed == knownWord && !(isProperNoun && capitaliseNames)) {
-            return null
-        }
-        return cased
+        // when isProperNoun says the only thing wrong with it is the case.
+        //
+        // [capitaliseNames] gates only the capital, never NameMismatch: with the setting off a
+        // name is cased like any other word, but it still may not correct anything but its own
+        // letters. The two uses of the flag are separate questions, and only the first is a
+        // preference -- "everyone" must not become "Everton" whatever the user chose.
+        val cased = matchCase(typed, suggestion.orEmpty(), isProperNoun && capitaliseNames)
+        val situation = situationOf(typed, suggestion, suggestionQuery, knownWord, cased,
+                                    minimumLength, isProperNoun, maxEdits, capitaliseNames)
+        return if (situation == Situation.Correctable) cased else null
     }
 
     /**
