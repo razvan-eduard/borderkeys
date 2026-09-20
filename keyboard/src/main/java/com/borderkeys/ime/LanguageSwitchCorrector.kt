@@ -92,16 +92,60 @@ class LanguageSwitchCorrector {
      * immediately before the edit itself: more time passes between [snapshot] and an edit landing
      * than between two calls in the same function. [suggestions] is the new dominant pack's
      * answer for each flag's [Flag.typedText], in the same order, null where it had nothing
-     * different to say.
+     * different to say -- in the dictionary's own spelling, which is lower case, and recased
+     * here before anything else sees it.
      */
     fun resolve(verifiedFlags: List<Flag>, suggestions: List<String?>): List<Replacement> =
         verifiedFlags.zip(suggestions).mapNotNull { (flag, suggestion) ->
-            if (suggestion == null || suggestion == flag.appliedText) {
+            // The bundled packs store lower-case spellings, so a pack asked for a candidate
+            // answers in lower case whatever the word on screen looks like. Without this, a
+            // sentence-opening "In" corrected to "În" came back as a lower-case "in": every
+            // other correction path in this package recases through this same helper, and this
+            // was the one that did not.
+            //
+            // The case is taken from [Flag.appliedText] rather than [Flag.typedText] because
+            // that is the word actually occupying the position -- the caller has just verified
+            // it is still there -- so a capital from a sentence start, or a shout, carries over
+            // to whatever replaces it. Recased before the comparison below as well: a pack that
+            // disagrees only about case is not a disagreement worth showing anyone.
+            val cased = suggestion?.let { AutoCorrection.matchCase(flag.appliedText, it) }
+            if (cased == null || cased == flag.appliedText) {
                 null
             } else {
-                Replacement(flag.startOffset, flag.endOffset, flag.appliedText, suggestion)
+                Replacement(flag.startOffset, flag.endOffset, flag.appliedText, cased)
             }
         }.sortedByDescending { it.startOffset }
+
+    /**
+     * Where a caret sitting at [caret] belongs once every replacement in [applied] has landed.
+     *
+     * This repairs text the user has already typed past, so the caret must not move to it. The
+     * InputConnection call that performs each edit leaves the caret at the end of whatever it
+     * just wrote, which drops the user back at a word several words behind the one they are
+     * writing -- so the caller restores the caret itself, and this is the arithmetic for it.
+     *
+     * [applied] is the subset of [resolve]'s output that actually reached the field, still in
+     * its right-to-left order, and every offset in it is in the text's *original* coordinates.
+     * That is exactly what makes right-to-left worth keeping: each edit only moves text to its
+     * own right, so comparing against the original [caret] stays correct all the way through
+     * while the running total accumulates.
+     *
+     * An edit wholly behind the caret shifts it by the length it gained or lost. One wholly
+     * ahead leaves it alone. A caret *inside* a replaced word has no position to preserve --
+     * the characters around it are gone -- so it lands at the end of the new spelling.
+     */
+    fun caretAfter(caret: Int, applied: List<Replacement>): Int {
+        var moved = caret
+        for (replacement in applied) {
+            moved = when {
+                replacement.endOffset <= caret ->
+                    moved + replacement.text.length - replacement.previousText.length
+                replacement.startOffset >= caret -> moved
+                else -> replacement.startOffset + replacement.text.length
+            }
+        }
+        return if (moved < 0) 0 else moved
+    }
 
     private companion object {
         /** Matches [Composer.MAX_VERSIONS] -- both are "how many recent steps are worth

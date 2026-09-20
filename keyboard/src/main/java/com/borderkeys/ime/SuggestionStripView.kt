@@ -617,7 +617,28 @@ class SuggestionStripView(
                 if (fitted != previousSize) {
                     paint.textSize = fitted
                 }
-                canvas.drawText(chars[index], 0, length, left + slotWidth / 2f, baseline, paint)
+                // Contained, because [measureSlots] stops shrinking at a floor and a word past
+                // it used to be drawn centred and overflowing -- spilling across both dividers
+                // and leaving three slots illegible rather than one. That floor is right: below
+                // it no text is readable anyway. What was wrong was letting the overflow land
+                // on the neighbours. One learned word is enough to cause it; "autocorrect" and
+                // a class name typed once are both 20-odd characters against a slot a quarter
+                // of the screen wide.
+                //
+                // Clipped to its own slot, and started from the left edge rather than centred,
+                // so what survives is the beginning of the word. That is the part a reader
+                // recognises a word by, and it is what a centred clip would have thrown away.
+                if (paint.measureText(chars[index], 0, length) > slotWidth) {
+                    val previousAlign = paint.textAlign
+                    canvas.save()
+                    canvas.clipRect(left, 0f, left + slotWidth, height.toFloat())
+                    paint.textAlign = android.graphics.Paint.Align.LEFT
+                    canvas.drawText(chars[index], 0, length, left, baseline, paint)
+                    paint.textAlign = previousAlign
+                    canvas.restore()
+                } else {
+                    canvas.drawText(chars[index], 0, length, left + slotWidth / 2f, baseline, paint)
+                }
                 if (fitted != previousSize) {
                     paint.textSize = previousSize
                 }

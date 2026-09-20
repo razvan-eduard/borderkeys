@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+#
+# What the strip should put first for an English word, one case per line: typed<TAB>expected.
+#
+# Read by native-tests/suggest_eval. Not a test and nothing here asserts: the number it prints is
+# a measurement that moves when a scoring constant moves, which is the only way to price a change
+# that helps one case and hurts another.
+#
+# Where the right answer is to leave the word alone, the expectation is the typed word itself.
+# "offers nothing better than what I wrote" is a result worth measuring, and it is the one the
+# guards in AutoCorrection exist to produce.
+
+# --- typos that should correct ------------------------------------------------------------
+# The case this file was created for. "the" is the commonest word in English and one
+# transposition away, and it currently ranks below "tehachapi" and "tehsildar".
+teh	the
+recieve	receive
+somethign	something
+seperate	separate
+definately	definitely
+wnat	want
+thsi	this
+hte	the
+adn	and
+
+# --- words that must be left exactly as written ---------------------------------------------
+# Each of these is a real word, and a keyboard that rewrites real words is the failure this
+# project was written against. They are the cost side of any change to the edit penalty: a
+# value low enough to fix the block above must not break this one.
+its	its
+were	were
+well	well
+ill	ill
+cant	can't
+wont	won't
+the	the
+and	and
+information	information
+immunizations	immunizations
+
+# --- a finished word must not lose to a longer one that starts with it ----------------------
+# Measured at the current constants: typing "car" offers "care", "cartea", "carol" and "carmen",
+# and "car" itself is nowhere in the sixteen kept -- though it is in both dictionaries. A
+# completion costs 0.12 per added character, which is not enough to beat being commoner, so the
+# word actually typed loses to words merely beginning with it. kCompletionPenalty governs this.
+car	car
+inform	inform
+care	care
+
+# --- half-typed words, where completing IS the right answer ---------------------------------
+# The cost side of kCompletionPenalty. Without these the corpus only rewards raising it, and a
+# value that makes a finished word win would quietly stop the keyboard finishing an unfinished
+# one -- which is most of what the strip is for while a word is still being typed.
+informati	information
+comput	computer
+keyboar	keyboard
+necess	necessary
+langua	language
+diction	dictionary
+
+# --- regressions named in the constants' own comments ---------------------------------------
+# kTransposeCost's comment: too cheap a transposition let "acm" reach "cam" and crowd every
+# insertion-based candidate out of the sixteen kept, including "acum" itself.
+acm	acum
+# The completion-past-a-correction comment: a frequent inflected relative of a corrected word
+# outscored the correction. Romanian, so it only measures with the ro-RO pack loaded.
+rasuns	răspuns
+saptea	șapte
+# "snobul" is deliberately absent from this file. It is AutoCorrection's case, not the engine's:
+# the word is in neither pack, so the engine cannot offer it and no ranking change can help. What
+# leaves it alone is the guard in correctionFor, which AutoCorrectionTest already covers.
+# The stale-answer case: no edit budget reaches "idependent" from "tinde", so it was never the
+# engine's answer for it.
+tinde	tinde

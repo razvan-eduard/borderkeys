@@ -94,6 +94,107 @@ class LanguageSwitchCorrectorTest {
         )
     }
 
+    /**
+     * The bug this recasing exists for. A pack answers in the spelling its dictionary stores,
+     * which is lower case, so the word that opened a sentence used to come back in lower case
+     * and the sentence lost its capital to a feature that was only meant to change its language.
+     */
+    @Test
+    fun `resolve gives the replacement the case of the word it replaces`() {
+        val flags = listOf(flag("In", "În", 0, 2))
+        val replacements = LanguageSwitchCorrector().resolve(flags, listOf("in"))
+        assertEquals(1, replacements.size)
+        assertEquals("In", replacements[0].text)
+    }
+
+    @Test
+    fun `resolve leaves a mid-sentence word lower case`() {
+        val flags = listOf(flag("in", "în", 10, 12))
+        val replacements = LanguageSwitchCorrector().resolve(flags, listOf("in"))
+        assertEquals("in", replacements.single().text)
+    }
+
+    @Test
+    fun `resolve keeps a shout shouting`() {
+        val flags = listOf(flag("SALUT", "SALUT", 0, 5))
+        val replacements = LanguageSwitchCorrector().resolve(flags, listOf("salute"))
+        assertEquals("SALUTE", replacements.single().text)
+    }
+
+    @Test
+    fun `resolve skips a pack that disagrees only about case`() {
+        // "În" recased against itself is "In", which is what is already on screen once the
+        // diacritic is the only real difference -- offering that back is offering nothing.
+        val flags = listOf(flag("In", "In", 0, 2))
+        val replacements = LanguageSwitchCorrector().resolve(flags, listOf("in"))
+        assertTrue(replacements.isEmpty())
+    }
+
+    private fun replacement(start: Int, end: Int, previous: String, text: String) =
+        LanguageSwitchCorrector.Replacement(start, end, previous, text)
+
+    /**
+     * The caret belongs where the user is writing. The edit itself leaves it at the end of the
+     * word it rewrote, several words behind, which is what this arithmetic undoes.
+     */
+    @Test
+    fun `a same-length repair behind the caret leaves the caret where it was`() {
+        val applied = listOf(replacement(0, 2, "În", "In"))
+        assertEquals(30, LanguageSwitchCorrector().caretAfter(30, applied))
+    }
+
+    @Test
+    fun `a repair behind the caret that grows moves the caret by what it gained`() {
+        val applied = listOf(replacement(0, 5, "salut", "salute"))
+        assertEquals(31, LanguageSwitchCorrector().caretAfter(30, applied))
+    }
+
+    @Test
+    fun `several repairs behind the caret accumulate`() {
+        // Right-to-left, the order resolve hands them over in. Both gain a letter, so the caret
+        // owes two, and the running total has to survive being compared against the original
+        // offsets rather than the ones the earlier edit already moved.
+        val applied = listOf(
+            replacement(20, 25, "salut", "salute"),
+            replacement(0, 5, "salut", "salute"),
+        )
+        assertEquals(32, LanguageSwitchCorrector().caretAfter(30, applied))
+    }
+
+    @Test
+    fun `a diacritic-only repair moves nothing, even alongside one that does`() {
+        val applied = listOf(
+            replacement(20, 24, "bună", "buna"),
+            replacement(0, 5, "salut", "salute"),
+        )
+        assertEquals(31, LanguageSwitchCorrector().caretAfter(30, applied))
+    }
+
+    @Test
+    fun `a repair ahead of the caret does not move it`() {
+        val applied = listOf(replacement(40, 45, "salut", "salute"))
+        assertEquals(30, LanguageSwitchCorrector().caretAfter(30, applied))
+    }
+
+    @Test
+    fun `a repair ending exactly at the caret still counts as behind it`() {
+        val applied = listOf(replacement(25, 30, "salut", "salute"))
+        assertEquals(31, LanguageSwitchCorrector().caretAfter(30, applied))
+    }
+
+    @Test
+    fun `a caret inside a replaced word lands at the end of the new spelling`() {
+        // The characters it was sitting between are gone, so there is no position to preserve.
+        val applied = listOf(replacement(28, 33, "salut", "salute"))
+        assertEquals(34, LanguageSwitchCorrector().caretAfter(30, applied))
+    }
+
+    @Test
+    fun `a repair that shrinks pulls the caret back by what it lost`() {
+        val applied = listOf(replacement(0, 6, "salute", "hi"))
+        assertEquals(26, LanguageSwitchCorrector().caretAfter(30, applied))
+    }
+
     @Test
     fun `resolve orders replacements right-to-left by offset`() {
         // Applying the leftmost edit first would shift every offset to its right by however much

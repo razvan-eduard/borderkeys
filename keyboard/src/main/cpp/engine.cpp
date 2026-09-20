@@ -54,6 +54,13 @@ constexpr float kEditPenalty = 40.0f;
 // Insertions and deletions in key-width units. Slightly below a full neighbour substitution,
 // because a dropped or doubled letter is a more common slip than hitting the wrong key.
 constexpr float kInsertCost = 0.85f;
+
+// A missing apostrophe, which is a convention dropped rather than a key missed -- see the
+// insertion branch in the trie walk for the measurements behind this. Small and not zero: at
+// kEditPenalty 40 this is 0.8 points of score, enough that a word typed exactly as it is spelled
+// still outranks a contraction reached by inserting one, and little enough that a genuinely more
+// common contraction wins on its own frequency.
+constexpr float kApostropheInsertCost = 0.02f;
 constexpr float kDeleteCost = 0.85f;
 // Transposition is one gesture gone out of order rather than two independent errors, so it
 // costs a little less than the insertion or deletion it would otherwise be decomposed into --
@@ -66,9 +73,39 @@ constexpr float kDeleteCost = 0.85f;
 // without letting that tie-break decide a candidate's fate on its own.
 constexpr float kTransposeCost = 0.80f;
 
-// Each character a completion adds beyond what was typed. Small: the unigram probability
-// already prefers common words, and this only breaks ties towards the shorter one.
-constexpr float kCompletionPenalty = 0.12f;
+// Each character a completion adds beyond what was typed.
+//
+// Was 0.12, on the reasoning that the unigram probability already prefers common words and this
+// only had to break ties towards the shorter one. It did not: at that price a longer, commoner
+// word beat the word actually typed, and the typed word was not merely outranked but pushed out
+// of the sixteen kept entirely. Typing "car" offered "care", "cartea", "carol" and "carmen"
+// with "car" nowhere in the list, though it is in both dictionaries; "inform" ranked sixth
+// behind its own continuations.
+//
+// 0.5 is measured rather than guessed. Against native-tests/data/suggest_en.tsv, first-place
+// accuracy goes from 61.5% to 68.8% and mean rank from 1.87 to 1.67, with no case regressing.
+// The ceiling is real and the corpus shows it: past about 1.0 the penalty starts costing the
+// half-typed words completion exists for, and "information" typed in full falls to third.
+constexpr float kCompletionPenalty = 0.5f;
+
+// How far below a language's commonest word a correction target may sit, in nats.
+//
+// Autocorrect replaces something a person wrote, so the word it replaces it with has to be one
+// they might plausibly have meant. Without a floor the corrections list will offer whatever it
+// reached: for "car" it proposes "cr", a deletion, which only the known-word guard then refuses.
+//
+// Nine nats is 3.9 on the Zipf scale, and measured against the English pack that separates the
+// two cleanly -- every real target sits above it ("occurred" is the lowest at 4.84, "receive"
+// 5.09, "the" 7.81) and the junk below ("cr" 3.78, "eh" 3.32). Expressed against the pack's own
+// commonest word rather than as an absolute, so a smaller corpus does not silently raise the bar
+// on itself.
+constexpr float kCorrectionFrequencyFloor = 9.0f;
+
+// How many continuations of what was typed may hold strip slots at once. See the filter at the
+// end of suggest() for why a cap and not a price: the continuations are correctly scored, there
+// are simply more of them than the strip has room for, and they arrive as a block that pushes
+// every correction out of sight.
+constexpr int kMaxShownCompletions = 4;
 
 // Stupid backoff, factor 0.4 as in the literature. Deterministic and needing no normalisation
 // at runtime, which is the whole reason it is used instead of a smoothed model.
@@ -142,6 +179,17 @@ static_assert(
 // language-scale value and adding the same bounded boost a known word would get keeps the two
 // sources comparable -- and keeps a word typed once from outranking the dictionary.
 constexpr float kUserOnlyLogProb = -8.0f;
+
+// How much evidence a learned word needs before it is offered at all, in effective counts (the
+// raw count times the learning speed). Two, so the balanced default asks for a second use.
+//
+// Not a fourth constant to tune against the other three: it is the same number the settings
+// screen already describes. At the cautious setting's 0.35 multiplier it is reached at six
+// repetitions, which is the "about six" that explanation has always claimed, and at the
+// immediate setting's 3.0 the very first use clears it, which is what "the first time counts"
+// means. The default sits between them at two, and the word is still learned and still listed
+// in the personal dictionary the whole time -- this governs only what reaches the strip.
+constexpr float kMinPersonalEvidence = 2.0f;
 
 /**
  * Smoothing for a personal pair, in observations.
@@ -261,6 +309,14 @@ constexpr float kFallbackEditCost = 4.2f;
 // Long enough not to swing on one borrowed noun, short enough that switching language mid
 // conversation is followed within a sentence.
 constexpr float kLanguageEvidenceDecay = 0.85f;
+
+// The gap in unigram log-probability that earns a word its full point of evidence: one order of
+// magnitude, in nats, because the packs store natural logs (see build_dict.py's
+// quantise_log_prob). A word ten times commoner in one language than in every other is as clear
+// a signal about what is being written as a word only that language has at all. Below that the
+// award is scaled down in proportion, and a word both languages know equally contributes
+// nothing, which is what the old exclusivity rule got right and is kept here.
+constexpr float kLanguageEvidenceFullGap = 2.302585f;
 
 // The share of the evidence one language must hold before it counts as the one being written.
 //
@@ -780,29 +836,65 @@ void Engine::observeContextLanguage(const uint32_t* folded, int length) {
     }
     lastObservedWord_ = hash;
 
-    // Only a word that exactly one active pack knows is evidence. This is the whole design:
-    // "la", "sa", "no", "mare", "information" sit in several dictionaries at once, and counting
-    // them raises every language equally, which is a slower way of learning nothing. What
-    // separates Romanian from English is "duc", "trebuie", "scoala" -- and one of those in a
-    // sentence is worth more than ten words the two languages share.
+    // How much better one pack knows this word than any other is the evidence. A word only one
+    // pack knows at all is the strongest case of that, not a separate rule.
     //
-    // A word no pack knows -- a name, a typo -- is not evidence either. Both cases still age
-    // the window, so a language that has stopped being written stops being detected.
-    int exclusive = -1;
+    // Demanding exclusivity was the original rule and it starves. Even a perfectly filtered
+    // list shares its short function words with its neighbours: "eu" and "ca" are both in the
+    // English dictionary, as the lower-cased EU and CA, so "eu credeam ca suntem" offered two
+    // countable words out of four and stalled at 1.72 against Balanced's 1.8 -- four
+    // unmistakably Romanian words that left the keyboard undecided and its strip half English.
+    //
+    // The ratio thrown away there is not marginal. "ca" is 2.52 orders of magnitude commoner in
+    // Romanian than in English and "eu" 0.83, and the old rule scored both as exactly zero
+    // because English happened to hold the string at all. Scoring the gap decides that sentence
+    // on its third word instead of never.
+    //
+    // A word no pack knows -- a name, a typo -- is still not evidence, and neither is one both
+    // know equally. Both cases age the window, so a language that has stopped being written
+    // stops being detected.
+    int owner = -1;
     int knowers = 0;
+    float ownerLogProb = 0.0f;
+    float rivalLogProb = 0.0f;
     for (int i = 0; i < kMaxPacks; ++i) {
-        if (packs_[i].isOpen() && packs_[i].active && contextWord1_[i] >= 0) {
-            ++knowers;
-            exclusive = i;
+        if (!packs_[i].isOpen() || !packs_[i].active || contextWord1_[i] < 0) {
+            continue;
+        }
+        const float logProb =
+            packs_[i].trie().unigramLogProb(static_cast<uint32_t>(contextWord1_[i]));
+        if (knowers == 0) {
+            owner = i;
+            ownerLogProb = logProb;
+        } else if (logProb > ownerLogProb) {
+            rivalLogProb = ownerLogProb;
+            owner = i;
+            ownerLogProb = logProb;
+        } else if (knowers == 1 || logProb > rivalLogProb) {
+            rivalLogProb = logProb;
+        }
+        ++knowers;
+    }
+
+    float award = 0.0f;
+    if (knowers == 1) {
+        award = 1.0f;
+    } else if (knowers > 1) {
+        award = (ownerLogProb - rivalLogProb) / kLanguageEvidenceFullGap;
+        if (award > 1.0f) {
+            award = 1.0f;
+        } else if (award < 0.0f) {
+            award = 0.0f;
         }
     }
+
     float total = 0.0f;
     float best = 0.0f;
     int bestIndex = -1;
     for (int i = 0; i < kMaxPacks; ++i) {
         languageEvidence_[i] *= kLanguageEvidenceDecay;
-        if (knowers == 1 && i == exclusive) {
-            languageEvidence_[i] += 1.0f;
+        if (i == owner) {
+            languageEvidence_[i] += award;
         }
         if (packs_[i].isOpen() && packs_[i].active) {
             total += languageEvidence_[i];
@@ -1248,14 +1340,46 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
         // symbol with no edge from this node is one array read, not a branch, so the symbols
         // that lead nowhere from here cost nothing and only the ones the trie actually has push
         // a frame.
-        if (frame.runAhead < kMaxRunAhead && frame.cost + kInsertCost <= maxCost) {
+        //
+        // The apostrophe is charged separately, and almost nothing, because leaving it out is
+        // not a slip of the finger -- it is how people type. Priced as an ordinary insertion it
+        // could never be recovered: one edit is kEditPenalty (40) times kInsertCost, some 34
+        // points of score, while every word that merely *continues* the prefix costs nothing.
+        // "cant" therefore reached "cantor", "canton" and "cantrell" and never "can't", and the
+        // same for "dont", "im", "thats" and the other 4,500 apostrophe words in the pack.
+        //
+        // Cheap rather than free, so an exactly-typed spelling still wins a tie and the budget
+        // check below still terminates. What decides instead is frequency, which was measured
+        // on the shipped English pack against every contraction that collides with a real word
+        // once its apostrophe is dropped: "cant" yields "can't" (3,713 against 108) and "dont"
+        // yields "don't", while "its", "were", "well" and "ill" all stay the ordinary word they
+        // already were. 1,629 such collisions exist and frequency settles them the right way.
+        if (frame.runAhead < kMaxRunAhead && frame.cost + kApostropheInsertCost <= maxCost) {
             const int alphabetSize = trie.alphabetSize();
+            const int apostrophe = trie.symbolFor(0x27u);
             for (int symbol = 1; symbol <= alphabetSize && stackSize < 512; ++symbol) {
+                if (symbol == apostrophe || frame.cost + kInsertCost > maxCost) {
+                    continue;
+                }
                 const int32_t child = trie.walk(frame.node, symbol);
                 if (child >= 0) {
                     stack[stackSize++] = Frame{child, frame.inputPos,
                                                static_cast<int16_t>(frame.runAhead + 1),
                                                frame.cost + kInsertCost};
+                }
+            }
+            // Pushed after the others so the stack pops it first. This walk is depth-first from
+            // the top of the stack and bounded by visitBudget_, so the apostrophe -- symbol 1,
+            // and therefore the first pushed and the last explored -- was being starved under
+            // any prefix with many completions. That alone was the difference between "dont"
+            // finding "don't" and "cant" never finding "can't": the cost was already right, the
+            // budget simply ran out before the branch was reached.
+            if (apostrophe > 0 && stackSize < 512) {
+                const int32_t child = trie.walk(frame.node, apostrophe);
+                if (child >= 0) {
+                    stack[stackSize++] = Frame{child, frame.inputPos,
+                                               static_cast<int16_t>(frame.runAhead + 1),
+                                               frame.cost + kApostropheInsertCost};
                 }
             }
         }
@@ -1327,6 +1451,16 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
                                                             static_cast<uint32_t>(wordIndex)) +
                                 editComponent - lengthPenalty;
             offerScoredWord(heap, trie, packIndex, static_cast<uint32_t>(wordIndex), score);
+            // And again, into the corrections-only heap, when this word was reached by an edit
+            // rather than by carrying the typed letters on. Same score, same moment, no second
+            // search -- the only thing being kept is the distinction the merged heap discards.
+            // Cheap because it is the minority branch and the heap holds four: a word every
+            // completion outranks can still be the best *correction*, which is the whole point.
+            if (endpoint.cost > 0.0f &&
+                plausibleCorrectionTarget(pack, static_cast<uint32_t>(wordIndex))) {
+                offerScoredWord(correctionHeap_, trie, packIndex,
+                                static_cast<uint32_t>(wordIndex), score);
+            }
         }
 
         // Enumerating children in a double array means probing every alphabet symbol. Forty-odd
@@ -1631,7 +1765,19 @@ void Engine::searchUserModel(const uint32_t* folded, int foldedLength, TopK<Cand
     const int found =
         userModel_.completions(folded, foldedLength, completions, kMaxUserCompletions);
     for (int i = 0; i < found; ++i) {
-        if (completions[i].count == 0) {
+        // Confirmed, not merely seen. A word written once is a word that might have been a
+        // name, a typo, or something quoted out of a message and never wanted again -- and
+        // until today it went straight into the strip and stayed there, because the anchor
+        // below is a fixed value that beats any dictionary word rarer than itself. Typing a
+        // class name once put it above every real word sharing its prefix.
+        //
+        // Measured against the *effective* count, which is the raw count times the learning
+        // speed, so this defers to the setting rather than overruling it: "the first time
+        // counts" (3x) still offers a word written once, the balanced default asks for a
+        // second, and the cautious setting needs about six -- which is what its own
+        // explanation in the settings screen has always promised and, for single words, did
+        // not previously deliver.
+        if (static_cast<float>(completions[i].count) * learningSpeed_ < kMinPersonalEvidence) {
             continue;
         }
         // Anchored to the language scale rather than to the user model's own totals, then given
@@ -1679,6 +1825,51 @@ void Engine::searchPacks(const uint32_t* folded, int foldedLength, int onlyPack,
             searchPack(i, folded, foldedLength, heap);
         }
     }
+}
+
+int Engine::possessiveFor(const char* word, size_t length, char* out, int outBytes) const {
+    if (!created_ || word == nullptr || out == nullptr || outBytes <= 0 || length < 3) {
+        return 0;
+    }
+    uint32_t folded[kMaxComposing];
+    const int foldedLength = foldUtf8(word, length, folded, kMaxComposing);
+    // Needs a trailing "s" and something in front of it worth owning anything.
+    if (foldedLength < 3 || folded[foldedLength - 1] != 's') {
+        return 0;
+    }
+    // A word the dictionaries already hold is not a possessive missing its apostrophe, whatever
+    // it looks like: "times", "ones" and "canvas" all end in s and all mean themselves.
+    for (int index = 0; index < kMaxPacks; ++index) {
+        const LanguagePack& pack = packs_[index];
+        if (pack.isOpen() && pack.active &&
+            pack.trie().lookupFolded(folded, foldedLength) >= 0) {
+            return 0;
+        }
+    }
+    // The stem has to be a *name*. That restriction is the whole safety of this: it is what
+    // keeps "cats" from becoming "cat's", and it is a flag the packs already carry rather than
+    // a judgement made here.
+    for (int index = 0; index < kMaxPacks; ++index) {
+        const LanguagePack& pack = packs_[index];
+        if (!pack.isOpen() || !pack.active) {
+            continue;
+        }
+        const int32_t stem = pack.trie().lookupFolded(folded, foldedLength - 1);
+        if (stem < 0 || !pack.trie().isProperNoun(static_cast<uint32_t>(stem))) {
+            continue;
+        }
+        uint32_t stemLength = 0;
+        const char* const text = pack.trie().wordText(static_cast<uint32_t>(stem), &stemLength);
+        if (text == nullptr || stemLength == 0 ||
+            static_cast<int>(stemLength) + 2 > outBytes) {
+            continue;
+        }
+        std::memcpy(out, text, stemLength);
+        out[stemLength] = '\'';
+        out[stemLength + 1] = 's';
+        return static_cast<int>(stemLength) + 2;
+    }
+    return 0;
 }
 
 int Engine::knownSpelling(const char* word, size_t length, char* out, int outBytes) const {
@@ -1786,6 +1977,10 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
 
     TopK<Candidate> heap;
     heap.reset(heapStorage_, kMaxCandidates);
+    // Reset beside the heap it shadows, and for the same reason: both hold one request's answers
+    // and neither may carry anything into the next.
+    correctionHeap_.reset(correctionStorage_, kMaxCorrections);
+    hasBestCorrection_ = false;
 
     editCostCeiling_ = maxEditCostFor(foldedLength);
     // Undecided, and told never to guess: one dictionary rather than all of them. The heaviest
@@ -1818,12 +2013,67 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
         searchUserPhrases(heap);
     }
 
+    // Drained before the main heap, into its own buffer, so autocorrect's answer is settled
+    // whatever the strip's filtering below decides to show.
+    Candidate corrections[kMaxCorrections];
+    if (correctionHeap_.drainSorted(corrections, kMaxCorrections) > 0) {
+        bestCorrection_ = corrections[0];
+        hasBestCorrection_ = true;
+    }
+
     const int drained = heap.drainSorted(drainBuffer_, kMaxCandidates);
-    const int written = (drained < maxOut) ? drained : maxOut;
-    for (int i = 0; i < written; ++i) {
-        out[i] = drainBuffer_[i];
+
+    // A word may be continued only so many times before the rest of the strip is worth more.
+    //
+    // Nothing here is mis-scored: every one of these earned its place. The trouble is that a
+    // short stem has a great many continuations and they arrive as a block, so a correction --
+    // which pays kEditPenalty and can never outbid a free continuation -- is pushed past the
+    // three or four slots anyone looks at. Typing "teh" offered tehran, Tehan, tehran's,
+    // Tehrani, tehsil, tehama, tehachapi, tehsildar and tehreek-e-insaf before "the", which is
+    // one transposition away and the commonest word in the language. Measured through
+    // explainScore: "the" is 7.8 points *better* on the language model and loses by 35 points
+    // of edit penalty, a constant floored at 15 by the static_assert above and so not
+    // adjustable. Taking slots back from the block is the move left.
+    //
+    // Applied after draining, never during the search: the cap decides how many continuations
+    // are *shown*, and the heap still ranks them all first, so the ones kept are the best of
+    // them rather than whichever the walk happened to reach.
+    //
+    // A continuation is recognised from the text rather than recorded on the candidate --
+    // [Candidate] is twelve bytes of plain data crossing JNI on a path that may not allocate,
+    // and this is the only place the distinction is wanted.
+    int written = 0;
+    int continuations = 0;
+    for (int i = 0; i < drained && written < maxOut; ++i) {
+        if (foldedLength > 0 && continuesTyped(drainBuffer_[i], folded, foldedLength)) {
+            if (continuations >= kMaxShownCompletions) {
+                continue;
+            }
+            ++continuations;
+        }
+        out[written++] = drainBuffer_[i];
     }
     return written;
+}
+
+bool Engine::continuesTyped(const Candidate& candidate, const uint32_t* folded,
+                            int foldedLength) const {
+    uint32_t length = 0;
+    const char* const text = candidateText(candidate, &length);
+    if (text == nullptr || length == 0) {
+        return false;
+    }
+    uint32_t wordFolded[kMaxComposing];
+    const int wordLength = foldUtf8(text, length, wordFolded, kMaxComposing);
+    if (wordLength <= foldedLength) {
+        return false;  // the same word, or shorter: nothing was guessed past what was typed
+    }
+    for (int i = 0; i < foldedLength; ++i) {
+        if (wordFolded[i] != folded[i]) {
+            return false;  // reached by an edit, not by carrying on
+        }
+    }
+    return true;
 }
 
 void Engine::learn(const char* word, size_t wordLength, const char* previous1,
@@ -1937,6 +2187,104 @@ const char* Engine::candidateText(const Candidate& candidate, uint32_t* lengthOu
         return nullptr;
     }
     return pack.trie().wordText(static_cast<uint32_t>(candidate.wordIndex), lengthOut);
+}
+
+namespace {
+
+/**
+ * Plain Levenshtein over folded code points, for reporting only.
+ *
+ * Not the engine's own notion of distance, which is a weighted cost over key geometry and is
+ * what the search actually spends -- this is the simple count a reader wants when asking "how
+ * far is this word from what I typed". Kept local to the explain path so nothing can mistake it
+ * for the real one.
+ */
+int reportedEditDistance(const uint32_t* a, int aLength, const uint32_t* b, int bLength) {
+    constexpr int kCap = 64;
+    if (aLength > kCap || bLength > kCap) {
+        return -1;
+    }
+    int previous[kCap + 1];
+    int current[kCap + 1];
+    for (int j = 0; j <= bLength; ++j) {
+        previous[j] = j;
+    }
+    for (int i = 1; i <= aLength; ++i) {
+        current[0] = i;
+        for (int j = 1; j <= bLength; ++j) {
+            const int substitution = previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1);
+            const int deletion = previous[j] + 1;
+            const int insertion = current[j - 1] + 1;
+            int best = substitution < deletion ? substitution : deletion;
+            current[j] = best < insertion ? best : insertion;
+        }
+        for (int j = 0; j <= bLength; ++j) {
+            previous[j] = current[j];
+        }
+    }
+    return previous[bLength];
+}
+
+}  // namespace
+
+bool Engine::plausibleCorrectionTarget(const LanguagePack& pack, uint32_t wordIndex) const {
+    // No frequent list means nothing to measure against, and refusing every correction would be
+    // a worse answer than allowing them -- the guards in AutoCorrection still stand behind this.
+    if (pack.frequentWordCount() <= 0) {
+        return true;
+    }
+    const float commonest =
+        pack.trie().unigramLogProb(static_cast<uint32_t>(pack.frequentWords()[0]));
+    return pack.trie().unigramLogProb(wordIndex) >= commonest - kCorrectionFrequencyFloor;
+}
+
+bool Engine::explainScore(const char* typed, size_t typedLength, const char* candidate,
+                          size_t candidateLength, ScoreParts* out) {
+    if (typed == nullptr || candidate == nullptr || out == nullptr) {
+        return false;
+    }
+    *out = ScoreParts{};
+
+    Candidate results[kMaxCandidates];
+    const int found = suggest(typed, typedLength, nullptr, 0, nullptr, 0, results, kMaxCandidates);
+    for (int i = 0; i < found; ++i) {
+        uint32_t length = 0;
+        const char* const text = candidateText(results[i], &length);
+        if (text == nullptr || length != candidateLength ||
+            std::memcmp(text, candidate, length) != 0) {
+            continue;
+        }
+        out->rank = i;
+        out->total = results[i].score;
+        out->packIndex = results[i].packIndex;
+        out->addedCharacters =
+            static_cast<int32_t>(candidateLength) - static_cast<int32_t>(typedLength);
+
+        // The context the request resolved is still standing, so the language-model term can be
+        // asked for again rather than recomputed from a copy of the formula.
+        if (results[i].packIndex >= 0 && results[i].packIndex < kMaxPacks) {
+            out->packWeight = packWeightLog(results[i].packIndex);
+            out->languageModel = contextLogProb(results[i].packIndex,
+                                                static_cast<uint32_t>(results[i].wordIndex));
+        } else if (results[i].packIndex == Candidate::kUserPack) {
+            out->personal = userBoostFor(candidate, static_cast<uint32_t>(candidateLength));
+            out->languageModel = kUserOnlyLogProb;
+        }
+
+        // Whatever the total is not explained by the above: the edit cost and the completion
+        // penalty, which the search applies and does not keep apart afterwards.
+        out->rest = out->total - out->packWeight - out->languageModel - out->personal;
+
+        uint32_t typedFolded[kMaxComposing];
+        uint32_t wordFolded[kMaxComposing];
+        const int typedCount = foldUtf8(typed, typedLength, typedFolded, kMaxComposing);
+        const int wordCount = foldUtf8(candidate, candidateLength, wordFolded, kMaxComposing);
+        out->editDistance = (typedCount <= 0 || wordCount <= 0)
+            ? -1
+            : reportedEditDistance(typedFolded, typedCount, wordFolded, wordCount);
+        return true;
+    }
+    return false;
 }
 
 bool Engine::packsAgreeProperNoun(const uint32_t* folded, int foldedLength) const {

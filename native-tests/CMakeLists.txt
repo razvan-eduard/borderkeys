@@ -107,6 +107,15 @@ add_executable(tcn_replay tcn_replay.cpp)
 target_link_libraries(tcn_replay borderkeys_engine)
 target_compile_options(tcn_replay PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
 
+# The same idea as the two above, for typed words rather than gestures: a corpus in, a
+# measurement out, no verdict. It exists because the scoring constants in engine.cpp pull against
+# each other -- the edit penalty that stops a frequent word replacing a rare real one is the same
+# one that buries "the" under "tehachapi" -- and no single example prices both sides. Needs real
+# packs, so it takes a directory rather than the small test pack the suites use.
+add_executable(suggest_eval suggest_eval.cpp)
+target_link_libraries(suggest_eval borderkeys_engine)
+target_compile_options(suggest_eval PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
+
 enable_testing()
 add_test(NAME engine COMMAND borderkeys_tests)
 

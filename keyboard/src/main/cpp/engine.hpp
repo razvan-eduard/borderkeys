@@ -178,6 +178,18 @@ public:
     int knownSpelling(const char* word, size_t length, char* out, int outBytes) const;
 
     /**
+     * "Maria's" for "marias", written into [out], or zero when the word is not that.
+     *
+     * The productive half of apostrophe restoration. The bundled maps carry the possessives a
+     * corpus happened to contain -- assassin's, germany's, valentine's -- and this covers the
+     * name that was never written with one. Three conditions, and the middle one is the safety:
+     * the word ends in s, no dictionary holds the word itself ("times" and "canvas" mean
+     * themselves), and the stem is flagged a *name* by a pack that holds it, which is what keeps
+     * "cats" from becoming "cat's".
+     */
+    int possessiveFor(const char* word, size_t length, char* out, int outBytes) const;
+
+    /**
      * What [packIndex] alone would spell [word] as, ignoring whichever pack the engine currently
      * considers dominant -- the one place a caller gets to name a pack explicitly instead of
      * accepting [dominantPack]'s own verdict. Exists for exactly one question: "does the language
@@ -314,6 +326,58 @@ public:
     // user model and stays valid until the pack is closed or the model is rewritten.
     const char* candidateText(const Candidate& candidate, uint32_t* lengthOut) const;
 
+    /**
+     * Where one candidate's score came from, for a reader rather than for the keyboard.
+     *
+     * A [Candidate] carries a single number, which is all the strip needs and all the ranking
+     * needs -- and it is why every question about *why* a word won has had to be answered by
+     * building a probe and reasoning backwards from a list. This says it directly.
+     *
+     * Deliberately outside the search. Nothing on the typing path calls it, no field is added to
+     * [Candidate] (12 bytes of plain data crossing JNI on a path that must not allocate), and no
+     * branch is added to the scoring loop. It re-runs a normal request and then decomposes the
+     * winner's score from terms that are still in hand afterwards, which is exactly as accurate
+     * as the loop and cannot drift from it, because it does not restate the formula.
+     *
+     * [ScoreParts::rest] is what remains once the language model and the pack weight are
+     * accounted for, which is the edit cost and the completion penalty together. They are not
+     * separated because the search does not keep them apart past the point where they are
+     * applied; [ScoreParts::editDistance] is reported beside it so the reader can tell which of
+     * the two is doing the work.
+     */
+    struct ScoreParts {
+        float total = 0.0f;
+        float packWeight = 0.0f;
+        float languageModel = 0.0f;
+        float personal = 0.0f;
+        float rest = 0.0f;
+        int32_t packIndex = -1;
+        int32_t rank = -1;
+        int32_t editDistance = 0;
+        int32_t addedCharacters = 0;
+    };
+
+    /** Fills [out] for [candidate] as an answer to [typed]. False when the search does not
+     *  offer that word at all, which is itself the answer to most questions asked of this. */
+    bool explainScore(const char* typed, size_t typedLength, const char* candidate,
+                      size_t candidateLength, ScoreParts* out);
+
+    /**
+     * The best word reached by an *edit* from the last [suggest] request, or null.
+     *
+     * What autocorrect should act on, and deliberately not the strip's first entry. A word that
+     * merely carries on from what was typed is not a candidate for "what did you mean", however
+     * well it ranks for "what are you writing" -- see [correctionHeap_] for why the two cannot
+     * share a ranking.
+     *
+     * Valid until the next request on this engine. Nothing is decided here: whether the word is
+     * applied is `AutoCorrection.correctionFor`'s to say, and it still applies every guard it
+     * applied before.
+     */
+    const Candidate* bestCorrection() const {
+        return hasBestCorrection_ ? &bestCorrection_ : nullptr;
+    }
+
     // Whether the candidate is a name -- always capitalise it, the same override
     // PackedTrie::isProperNoun documents. A pack candidate answers this directly, from its own
     // flag. A phrase or a user-model entry carries no flag of its own -- neither this build's
@@ -328,6 +392,15 @@ public:
      * candidateIsProperNoun for why a single pack's flag is not enough on its own.
      */
     bool packsAgreeProperNoun(const uint32_t* folded, int foldedLength) const;
+
+    /** Whether a word is common enough to be worth replacing someone's typing with -- the floor
+     *  on what may enter the corrections heap. See kCorrectionFrequencyFloor. */
+    bool plausibleCorrectionTarget(const LanguagePack& pack, uint32_t wordIndex) const;
+
+    /** Whether [candidate] is what was typed carried on further, rather than reached by an
+     *  edit -- the distinction the completion cap in suggest() is applied on. */
+    bool continuesTyped(const Candidate& candidate, const uint32_t* folded,
+                        int foldedLength) const;
 
     const KeyGeometry& geometry() const { return geometry_; }
 
@@ -466,6 +539,33 @@ private:
 
     Candidate heapStorage_[kMaxCandidates];
     Candidate drainBuffer_[kMaxCandidates];
+
+    /**
+     * The same walk's answers, kept a second time with the completions left out.
+     *
+     * Autocorrect and the suggestion strip are asking different questions, and until now both
+     * read the same answer. The strip asks "what are you writing", where a longer word carrying
+     * on from what has been typed is a fine reply. Autocorrect asks "what did you mean", at a
+     * point where the word is finished and a continuation of it is not a candidate at all.
+     *
+     * Ranking them together means pricing "a longer word starting with this" against "a
+     * different word one slip away", and there is no honest exchange rate between those -- the
+     * attempt to set one is why kEditPenalty is 40 and why a `static_assert` has to defend it.
+     * Typing "teh" the strip holds tehran, tehran's, Tehan, Tehrani and six more before "the",
+     * and since autocorrect read the first entry it applied none of them. Not two faults: the
+     * strip was reporting the ranking honestly, and the ranking was answering the wrong
+     * question.
+     *
+     * So corrections are collected again, alone, during the same walk and at the same moment --
+     * no second pass over any dictionary, and nothing here changes what the strip shows. Four
+     * entries because only the best is ever read; the rest are there so the best is the best of
+     * several rather than the first one reached.
+     */
+    static constexpr int kMaxCorrections = 4;
+    Candidate correctionStorage_[kMaxCorrections];
+    TopK<Candidate> correctionHeap_;
+    Candidate bestCorrection_{};
+    bool hasBestCorrection_ = false;
 
     // Per-request context, resolved once per pack instead of once per candidate.
     /**

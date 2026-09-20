@@ -72,6 +72,9 @@ class PredictionEngine(
             knownWord: String,
             query: String,
             properNoun: BooleanArray,
+            correction: String?,
+            correctionIsName: Boolean,
+            possessive: String?,
         )
 
         /**
@@ -101,6 +104,12 @@ class PredictionEngine(
 
     /** The last answered query when the dictionaries know it, else empty. Guarded by resultLock. */
     private var nativeKnownWord = ""
+
+    /** Autocorrect's own answer for the request being served -- see Engine::bestCorrection for
+     *  why it is not simply the first entry of the strip's own ranking. */
+    private var nativePossessive: String? = null
+    private var nativeCorrection: String? = null
+    private var nativeCorrectionIsName = false
 
     /** The composing text the current [nativeKnownWord]/[nativeCount] answer is about. */
     private var nativeQuery = ""
@@ -744,7 +753,30 @@ class PredictionEngine(
                     NativePredictor.nativeKnownSpelling(current, query)
                 }
             }
+            // Autocorrect's own answer, read here because it describes the request that just
+            // ran. Not words[0]: the strip is ranked for "what are you writing", where a longer
+            // word carrying on from these letters belongs, and autocorrect is asking "what did
+            // you mean", where it does not. See Engine::bestCorrection.
+            // The productive possessive, asked for beside the other two per-request answers.
+            val possessive = if (query.isEmpty()) {
+                null
+            } else {
+                withHandle<String?>(null) { current ->
+                    NativePredictor.nativePossessive(current, query)
+                }
+            }
+            val correctionName = BooleanArray(1)
+            val correction = if (query.isEmpty()) {
+                null
+            } else {
+                withHandle<String?>(null) { current ->
+                    NativePredictor.nativeBestCorrection(current, correctionName)
+                }
+            }
             synchronized(resultLock) {
+                nativePossessive = possessive
+                nativeCorrection = correction
+                nativeCorrectionIsName = correctionName[0]
                 nativeCount = count
                 nativeQuery = query
                 nativeKnownWord = if (spelling != null && spelling.equals(query, ignoreCase = true)) {
@@ -765,12 +797,19 @@ class PredictionEngine(
      */
     private fun publish() {
         val known: String
+        val correction: String?
+        val possessive: String?
+        val correctionIsName: Boolean
         val query: String
         synchronized(resultLock) {
             known = nativeKnownWord
+            correction = nativeCorrection
+            possessive = nativePossessive
+            correctionIsName = nativeCorrectionIsName
             query = nativeQuery
         }
-        listener?.onSuggestions(displayWords, copyAndFilterResults(), known, query, displayProperNoun)
+        listener?.onSuggestions(displayWords, copyAndFilterResults(), known, query,
+                                displayProperNoun, correction, correctionIsName, possessive)
     }
 
     /**

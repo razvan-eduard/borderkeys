@@ -230,6 +230,15 @@ internal object NativePredictor {
      * making, and "cana" answers "cana", which is a word to leave alone. One trie descent per
      * active language.
      */
+    /** The best word the last request reached by an edit, and whether it is a name in
+     *  [nameOut][0]. Autocorrect's answer, which is a different question from the strip's --
+     *  see Engine::bestCorrection. Valid only immediately after [nativeSuggest], same thread. */
+    external fun nativeBestCorrection(handle: Long, nameOut: BooleanArray): String?
+
+    /** "Maria's" for "marias", or null when the word is not a name missing its apostrophe.
+     *  See Engine::possessiveFor for the three conditions. */
+    external fun nativePossessive(handle: Long, word: String): String?
+
     external fun nativeKnownSpelling(handle: Long, word: String): String?
 
     /** Replaces the remembered three-word sequences. Called after the pairs, same reason. */

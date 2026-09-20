@@ -526,6 +526,60 @@ void nativeLoadUserTrigrams(JNIEnv* env, jobject /*thiz*/, jlong handle,
                              static_cast<int>(tripleCount));
 }
 
+/**
+ * The best word the last request reached by an *edit*, and whether it is a name.
+ *
+ * Read straight after nativeSuggest on the same thread, the way nativeKnownSpelling already is:
+ * it describes the request that just ran and nothing else keeps it alive. Separate from the
+ * suggestion arrays on purpose -- this is the answer to a different question than the strip's,
+ * and merging the two is what left autocorrect reading whichever completion happened to rank
+ * first.
+ */
+jstring nativeBestCorrection(JNIEnv* env, jobject /*thiz*/, jlong handle, jbooleanArray nameOut) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return nullptr;
+    }
+    const Candidate* const best = engine->bestCorrection();
+    if (best == nullptr) {
+        return nullptr;
+    }
+    uint32_t length = 0;
+    const char* const text = engine->candidateText(*best, &length);
+    if (text == nullptr || length == 0 || length >= kStringBufferBytes) {
+        return nullptr;
+    }
+    if (nameOut != nullptr && env->GetArrayLength(nameOut) > 0) {
+        jboolean isName = engine->candidateIsProperNoun(*best) ? JNI_TRUE : JNI_FALSE;
+        env->SetBooleanArrayRegion(nameOut, 0, 1, &isName);
+    }
+    char buffer[kStringBufferBytes];
+    std::memcpy(buffer, text, length);
+    buffer[length] = '\0';
+    return env->NewStringUTF(buffer);
+}
+
+/** "Maria's" for "marias", or null. See Engine::possessiveFor. */
+jstring nativePossessive(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || word == nullptr) {
+        return nullptr;
+    }
+    char buffer[kStringBufferBytes];
+    const jsize length = copyString(env, word, buffer, sizeof(buffer));
+    if (length <= 0) {
+        return nullptr;
+    }
+    char possessive[kStringBufferBytes];
+    const int written = engine->possessiveFor(buffer, static_cast<size_t>(length), possessive,
+                                              sizeof(possessive) - 1);
+    if (written <= 0) {
+        return nullptr;
+    }
+    possessive[written] = '\0';
+    return env->NewStringUTF(possessive);
+}
+
 jstring nativeKnownSpelling(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || word == nullptr) {
@@ -938,6 +992,10 @@ const JNINativeMethod kMethods[] = {
     {"nativeSetSwipeModelEnabled", "(JZ)V",
      reinterpret_cast<void*>(nativeSetSwipeModelEnabled)},
     {"nativeWarmSwipeModel", "(J)Z", reinterpret_cast<void*>(nativeWarmSwipeModel)},
+    {"nativeBestCorrection", "(J[Z)Ljava/lang/String;",
+     reinterpret_cast<void*>(nativeBestCorrection)},
+    {"nativePossessive", "(JLjava/lang/String;)Ljava/lang/String;",
+     reinterpret_cast<void*>(nativePossessive)},
     {"nativeKnownSpelling", "(JLjava/lang/String;)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeKnownSpelling)},
     {"nativeLoadUserTrigrams",

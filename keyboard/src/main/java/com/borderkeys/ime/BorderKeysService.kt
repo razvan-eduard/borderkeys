@@ -234,6 +234,10 @@ class BorderKeysService :
      */
     private var offensiveWords: Set<String> = emptySet()
 
+    /** Apostrophe spellings for the languages switched on -- see [Contractions]. Rebuilt with
+     *  the pack list, because which entries survive depends on which languages are enabled. */
+    private var contractions: Map<String, String> = emptyMap()
+
     /** The in-flight tier B load, held so a quick off-on-off supersedes rather than races. */
     private var swipeModelJob: kotlinx.coroutines.Job? = null
 
@@ -394,6 +398,9 @@ class BorderKeysService :
      *  that changes about how it gets capitalised. */
     private var topSuggestionIsProperNoun: Boolean = false
 
+    /** "Maria's" for the "marias" being typed, or null -- see Engine::possessiveFor. */
+    private var possessiveSuggestion: String? = null
+
     /**
      * The word [topSuggestion] is actually an answer about.
      *
@@ -445,6 +452,17 @@ class BorderKeysService :
     /** Which words look wrong once the conversation's language has moved on -- see its own doc.
      *  Scoped to the session the same way [fieldHistory] is, and reset alongside it. */
     private val languageSwitchCorrector = LanguageSwitchCorrector()
+
+    /**
+     * Whether the word being composed belongs to a sentence rather than to an address, a path
+     * or a name a machine will read -- see [RunningText].
+     *
+     * Decided once, as the word's first letter arrives, and then reused. The strip asks whether
+     * a correction exists on every keystroke, so deciding it there would put an editor round
+     * trip on the hot path; the character this depends on cannot change while the word is being
+     * typed anyway, since it sits in front of it.
+     */
+    private var composingIsRunningText = true
 
     /** Whether the radial ring is open right now -- see its own doc. Not reset per field the
      *  way [languageSwitchCorrector] is: it has no state that could survive a field switch
@@ -689,6 +707,12 @@ class BorderKeysService :
             accentSignature = enabled.joinToString(",") { it.tag }
             activeLanguageTags = enabled.map { it.tag }
             offensiveWords = OffensiveWords.merge(enabled.map { OffensiveWords.load(assets, it.tag) })
+            // Built from the same list, and against it: an entry is dropped when one of the
+            // languages that calls its typed spelling an ordinary word is also switched on.
+            contractions = Contractions.of(
+                enabled.map { Contractions.load(assets, it.tag) },
+                enabled.map { it.tag },
+            )
             withContext(Dispatchers.Main) { host?.let { showPage(page) } }
 
             // The final set reaches the engine before the files do, and again after. The engine
@@ -2213,7 +2237,18 @@ class BorderKeysService :
         } else {
             code
         }
-        val letter = isWordCharacter(shifted)
+        // A word *begins* with a letter. The apostrophe and the hyphen belong inside one --
+        // "don't", "aşa-zis" -- which is why [isWordCharacter] counts them, but a leading one is
+        // punctuation the user opened with, and on a phone an apostrophe is the quote mark most
+        // people reach for. Counting it as the first letter of a word pulled it into the
+        // composing region, and autocorrect then replaced the region wholesale: typing
+        // 'cuvant and pressing space committed cuvânt, with the opening quote silently gone.
+        // Treated as a delimiter instead, it commits on its own and the word starts after it.
+        val letter = if (composing.isEmpty()) {
+            Character.isLetter(shifted)
+        } else {
+            isWordCharacter(shifted)
+        }
         // A one-shot shift is spent by the letter it capitalised and by nothing else: shift,
         // space, letter is a capital, the way every keyboard does it. Spending it on the space
         // used to make the sequence unrecoverable -- and, combined with the swallowed
@@ -2228,6 +2263,10 @@ class BorderKeysService :
         val heldByUser = shiftHeldByUser
         if (composing.isEmpty() && letter) {
             composingCapitalisedByUser = heldByUser && Character.isUpperCase(shifted)
+            // One read, here, for the same reason the capital above is captured here: this is
+            // the only moment the answer is both knowable and stable for the whole word.
+            val ahead = connection.getTextBeforeCursor(1, 0)
+            composingIsRunningText = ahead.isNullOrEmpty() || !RunningText.isMark(ahead[0])
         }
         if (letter) {
             // The letter spent it. A delimiter leaves it standing, so the shift the user pressed
@@ -2279,7 +2318,29 @@ class BorderKeysService :
         // -- committed in place of the typed word, revertible with the backspace straight after
         // -- and is never learned as a word. Never for a swiped word: "omw" has to be typed to
         // mean the shortcut.
-        val shortcut = if (composingFromGesture) null else TextShortcuts.expansionFor(typed, preferences.textShortcuts)
+        val shortcut = if (composingFromGesture) {
+            null
+        } else {
+            // The user's own shortcut first: a bundled apostrophe mapping is a default, and a
+            // default never outranks something somebody wrote themselves.
+            //
+            // The mapping then answers to the same two gates a correction does, because that is
+            // what it is. Off when autocorrect is off -- somebody who turned that switch off
+            // asked for space to commit exactly the letters they typed, and this rewriting them
+            // anyway would be the same broken promise in a different coat. Off inside an address
+            // or a path too: "dont" is a mapping, but "user@dont" is a login.
+            TextShortcuts.expansionFor(typed, preferences.textShortcuts)
+                ?: if (preferences.autoCorrectOnSpace && composingIsRunningText) {
+                    // The bundled map first, then the productive possessive. The map holds what
+                    // a corpus actually wrote, and is the better evidence where it has an
+                    // answer; the possessive covers the name it never happened to write with an
+                    // apostrophe. Both answer to the same two gates as any other rewrite.
+                    Contractions.expansionFor(typed, contractions)
+                        ?: possessiveSuggestion?.takeIf { suggestionQuery == typed }
+                } else {
+                    null
+                }
+        }
         val correction = shortcut ?: correctionFor(typed)
         // Captured before anything commits: finishComposing and the correction branch both
         // advance previousWord1 to the word being written now.
@@ -2492,6 +2553,19 @@ class BorderKeysService :
         return text.subSequence(start, endExclusive).toString()
     }
 
+    /** Where the caret is, or what is selected, in the same offsets [textAt] and
+     *  [recordLanguageSwitchFlag] already speak -- null when the editor will not say, which is
+     *  a reason to leave the caret alone rather than to guess at one. */
+    private fun selectionOf(connection: InputConnection): Pair<Int, Int>? {
+        val extracted = connection.getExtractedText(
+            ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
+            0,
+        ) ?: return null
+        val start = extracted.selectionStart
+        val end = extracted.selectionEnd
+        return if (start < 0 || end < 0) null else Pair(start, end)
+    }
+
     /** `Ask` shows the revert panel; `Auto-apply` edits the field itself, right away. */
     private fun onLanguageSwitchReplacements(replacements: List<LanguageSwitchCorrector.Replacement>) {
         if (preferences.languageSwitchCorrectionMode == KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY) {
@@ -2548,13 +2622,16 @@ class BorderKeysService :
      */
     private fun applyLanguageSwitchReplacements(replacements: List<LanguageSwitchCorrector.Replacement>) {
         val connection = currentInputConnection ?: return
-        var changed = false
+        val applied = ArrayList<LanguageSwitchCorrector.Replacement>(replacements.size)
         connection.beginBatchEdit()
         // Flushed first, and only once: whatever the user is presently in the middle of typing
         // is not one of [replacements] (those are all already-committed words), but it does sit
         // in the one composing region InputConnection allows, which setComposingRegion below is
         // about to claim for an older word instead.
         finishComposing(connection)
+        // Read after that flush, so it is where the caret actually rests rather than where it
+        // was before the composing region was committed.
+        val caret = selectionOf(connection)
         for (replacement in replacements) {
             if (textAt(connection, replacement.startOffset, replacement.endOffset) !=
                 replacement.previousText
@@ -2564,9 +2641,20 @@ class BorderKeysService :
             connection.setComposingRegion(replacement.startOffset, replacement.endOffset)
             connection.setComposingText(replacement.text, 1)
             connection.finishComposingText()
-            changed = true
+            applied += replacement
+        }
+        // setComposingText leaves the caret at the end of the word it just wrote, which is a
+        // word the user typed past some time ago. Put it back where they are writing, moved
+        // only by however much the text before it grew or shrank.
+        if (applied.isNotEmpty() && caret != null) {
+            val (start, end) = caret
+            connection.setSelection(
+                languageSwitchCorrector.caretAfter(start, applied),
+                languageSwitchCorrector.caretAfter(end, applied),
+            )
         }
         connection.endBatchEdit()
+        val changed = applied.isNotEmpty()
         if (changed) {
             checkpointField()
             refreshContextFromEditor()
@@ -2601,6 +2689,15 @@ class BorderKeysService :
      */
     private fun correctionFor(typed: String): String? {
         if (!preferences.autoCorrectOnSpace) {
+            return null
+        }
+        // Settled once, as the word began. This function is also asked on every keystroke, to
+        // decide whether the strip should outline its correction, so reading the editor here
+        // would put a round trip on every key -- the mistake HabitSpace's own comment records.
+        if (!composingIsRunningText) {
+            return null
+        }
+        if (!RunningText.admits(typed) { null }) {
             return null
         }
         return AutoCorrection.correctionFor(
@@ -3309,6 +3406,9 @@ class BorderKeysService :
         knownWord: String,
         query: String,
         properNoun: BooleanArray,
+        correction: String?,
+        correctionIsName: Boolean,
+        possessive: String?,
     ) {
         // This answer was asked for on an earlier keystroke and lost the race against a later
         // one: the engine has one thread and posts its answer back rather than blocking, so an
@@ -3335,8 +3435,18 @@ class BorderKeysService :
         // stays the engine's own lower-case answer whatever the row ends up looking like:
         // AutoCorrection.correctionFor already applies matchCase to this on its own, and doing
         // it here first would just be the same rule read twice for one decision.
-        topSuggestion = if (count > 0) words[0] else null
-        topSuggestionIsProperNoun = count > 0 && properNoun[0]
+        // The engine's own answer to "what did you mean", not the strip's answer to "what are
+        // you writing". They used to be the same value, and that was the defect: a word merely
+        // carrying on from the typed letters -- "tehran" for "teh" -- would take first place and
+        // autocorrect, reading first place, would offer nothing at all. Both questions are
+        // answered by one search; only the ranking was ever shared. See Engine::bestCorrection.
+        topSuggestion = correction
+        topSuggestionIsProperNoun = correctionIsName
+        // "Maria's" for "marias" -- the possessive of a name the corpus never wrote with an
+        // apostrophe, which the bundled maps therefore cannot carry. Kept beside the correction
+        // rather than mixed into it: it is a rewrite of a different kind and the delimiter
+        // decides between them.
+        possessiveSuggestion = possessive
         suggestionQuery = query
         // The rest of the row is not a decision the way the one correction above is -- it is
         // what the strip shows, and showing "welcome" one slot over from a correction that
@@ -3484,6 +3594,9 @@ class BorderKeysService :
         suggestionQuery = ""
         knownQuery = ""
         composing.setLength(0)
+        // Back to ordinary writing until the next word says otherwise: whatever stood in front
+        // of the last one belongs to a field, or a caret position, that has been left behind.
+        composingIsRunningText = true
         composingFromGesture = false
         swipeAutoSpaceInserted = false
         // A space this keyboard added is only ever behind *this* caret, in *this* field. A new
@@ -3573,6 +3686,14 @@ class BorderKeysService :
         var start = before.length
         while (start > 0 && isWordCharacter(before[start - 1].code)) {
             start--
+        }
+        // ...and then forward off any apostrophe or hyphen the run opens with, because a word
+        // begins with a letter. Without this the two definitions disagree: handleCharacter
+        // refuses to start a word on a quote, so a caret placed after 'cuvant would adopt
+        // 'cuvant while typing the same characters composes cuvant, and the correction applied
+        // to the adopted region would eat the quote that typing had just been taught to keep.
+        while (start < before.length && !Character.isLetter(before[start].code)) {
+            start++
         }
         val partial = before.substring(start)
         val (context1, context2) = contextWordsBefore(before, start)
