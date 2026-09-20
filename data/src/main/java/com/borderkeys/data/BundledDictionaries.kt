@@ -50,15 +50,19 @@ object BundledDictionaries {
     )
 
     val ALL: List<Entry> = listOf(
-        // Recounted after the Latin Extended-A fold fix in tools/build_dict.py: a handful of
-        // capitalised spellings now fold onto the same key as their lower-case forms, so every
-        // list compiles to a few dozen fewer entries than before.
-        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 108_951, 15_960_543),
-        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 129_041, 21_845_323),
-        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 99_987, 15_668_071),
-        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 99_065, 15_904_810),
-        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 102_352, 21_290_496),
-        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 102_116, 15_990_044),
+        // Recounted after tools/drop_foreign.py removed each list's foreign vocabulary: between
+        // 4% and 6% of every pack was another language's words, counted as this one's because
+        // the corpus they came from quotes them (see docs/dictionaries.md). Nothing the language
+        // itself uses went with them -- loanwords like "mouse" and "weekend" stayed, and so did
+        // every name. The counts here are read from the compiled headers, not estimated; they
+        // have to match, because repairBundledPacks treats a pack whose recorded count or size
+        // differs as stale and re-copies it on every start.
+        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 105_802, 15_855_421),
+        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 127_139, 21_779_087),
+        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 96_699, 15_559_887),
+        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 96_604, 15_826_664),
+        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 99_862, 21_207_228),
+        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 99_086, 15_890_712),
     )
 
     /** Opens one for reading. The caller closes it; the install path copies and validates. */

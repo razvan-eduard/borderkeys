@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+#
+# Spellings removed from en_US.tsv because they are errors the corpus happened to contain, not
+# words. Read by tools/drop_misspellings.py via --remove-list, and only ever applied to words
+# that tool independently suspects, so a slip here cannot delete something it never flagged.
+#
+# Hand-checked, one at a time, and deliberately short. The detector finds 8,131 candidates and
+# most of them must not be deleted: at every threshold measured it also proposes British
+# spellings (collectables, hypothesised, practises), valid plurals (impedances, recognitions)
+# and, in quantity, surnames the names pipeline missed (fong, leong, keyes, handley, eason).
+# A rare surname and a typo are the same shape in this data -- a rare string one edit from a
+# common word that no spell checker knows -- so the list is reviewed rather than generated.
+#
+# Two were considered and rejected as too risky for the gain:
+#   calender   a real English word, a machine that presses paper. Hunspell does not hold it.
+#   grammer    a surname, and hunspell does not hold that either.
+
+teh          # the
+recieve      # receive
+seperate     # separate
+adn          # and
+thier        # their
+occured      # occurred
+beleive      # believe
+becuase      # because
+goverment    # government
+alot         # not a word in any reading; "a lot" is two
