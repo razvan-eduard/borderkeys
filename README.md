@@ -93,7 +93,7 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   default — the ordinary suggestion strip is unchanged either way.
 
 <p align="center">
-  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/5_radial_menu.jpg" alt="The ring of alternatives around the finger, with its particles" width="30%">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/5_radial_menu.jpg" alt="The ring of alternatives around a paused swipe, with Cancel at its centre" width="30%">
   <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/6_radial_settings.jpg" alt="The ring's settings, the detection dials folded away" width="30%">
 </p>
 
@@ -108,7 +108,7 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   an ordinary word.
 
 <p align="center">
-  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg" alt="Laurențiu and Maria capitalised on their own in the strip, and a held key's popup" width="30%">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg" alt="The suggestion strip completing a half-typed word, with the quick action bar above the keys" width="30%">
 </p>
 
 - **Alternate physical layouts** — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona — for
