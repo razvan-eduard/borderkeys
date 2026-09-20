@@ -332,6 +332,10 @@ gh attestation verify BorderKeys-v0.6.2-core.apk --repo razvan-eduard/borderkeys
 
 ## Documentation
 
+- [`docs/architecture.md`](docs/architecture.md) — what each module is and what happens between a
+  finger and a word: the suggestion and learning paths, why autocorrect and the suggestion strip
+  rank separately, every scoring constant with the measurement behind it, the gates that stop a
+  correction, language detection and revert, both swipe tiers, and the dictionary pipeline.
 - [`docs/licensing.md`](docs/licensing.md) — every dependency and asset, with its licence and
   a compatibility verdict, plus the reproducible-build settings and the F-Droid anti-feature
   checklist.
