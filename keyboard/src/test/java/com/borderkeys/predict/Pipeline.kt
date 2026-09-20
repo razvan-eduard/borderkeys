@@ -79,6 +79,20 @@ internal class Pipeline private constructor(private val handle: Long) {
         }
     }
 
+    /** The pack the conversation is currently taken to be in, or -1 while undecided. Moves only
+     *  as words are committed through [commit], which is what feeds `observeContextLanguage`. */
+    fun dominantPack(): Int = NativePredictor.nativeDominantPack(handle)
+
+    /** What one pack alone would spell [word] as -- the question the language-switch revert
+     *  asks once the conversation turns out to have been in a different language. */
+    fun candidateForPack(packIndex: Int, word: String): String? =
+        NativePredictor.nativeCandidateForPack(handle, packIndex, word)
+
+    /** Evidence thresholds, as the Languages screen sets them: how one-sided the words have to
+     *  be before a language is considered decided. */
+    fun languageLock(minimumEvidence: Float, strict: Boolean = false) =
+        NativePredictor.nativeSetLanguageLock(handle, minimumEvidence, strict)
+
     fun close() = NativePredictor.nativeDestroy(handle)
 
     companion object {

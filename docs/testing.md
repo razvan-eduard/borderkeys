@@ -28,7 +28,7 @@ with a green build and a keyboard that suggests the wrong word.
 
 ### JVM — `./gradlew test`
 
-**502 test functions across 49 files.** No device, no emulator, no Robolectric.
+**525 test functions across 53 files.** No device, no emulator, no Robolectric.
 
 That is possible because the logic is deliberately kept out of the Android classes. The policy
 objects in `ime/` hold no `InputConnection` and make no native calls — they take strings and
@@ -49,6 +49,50 @@ return decisions:
 `KeyboardGeometry` is the clearest case for why the split is worth it: a one-pixel gap between
 two keys is a touch that does nothing, and **neither a device nor a screenshot will show it**.
 Tested as arithmetic, it cannot hide.
+
+### The join — `PipelineTest`, `LanguageSwitchPipelineTest`
+
+The section above and the one below each test half of a decision. The native suite stops at the
+engine; the policy classes start after it, on values handed to them. Between the two sits the
+join, and every correction bug reported from a device lived exactly there — a word the engine
+offered and the guards were meant to refuse, or the reverse.
+
+`Pipeline` closes it. It drives the shipping engine through the shipping JNI bridge and then the
+shipping Kotlin, against the packs the application ships. Nothing in it is a model of the
+pipeline; it *is* the pipeline, with the editor and the touch surface left out. What still needs
+a device: the composing region, delimiter handling, field state, and what the service decides
+around all of it.
+
+| Payload | What it pins |
+|---|---|
+| `pipeline_cases.tsv` | 32 cases, `typed <TAB> committed <TAB> situation` |
+| `pipeline_cases_ro.tsv` | 5 Romanian cases, against the pack most reports come from |
+| `LanguageSwitchPipelineTest` | The backward correction, end to end over two packs |
+
+The **situation** is asserted beside the outcome because an outcome on its own can be right by
+accident: a guard can stop working while another covers for it, which is exactly what a chain of
+early returns used to hide. Adding a case costs a line, not a method, and every failure in a run
+is reported together rather than stopping at the first.
+
+Three lines in the Romanian file record a **defect** rather than a requirement. They are written
+as the keyboard actually behaves, marked `DEFECT`, and carry what is wrong and since when — so
+the suite stays green and honest at once. Changing one is a change to the keyboard, and the line
+is what fails when someone makes it. A red suite everybody has learned to ignore protects nothing.
+
+`LanguageSwitchPipelineTest` is the first test the language-switch revert has ever had; half of
+what it needs is a native answer, so it was previously reachable only by typing two languages
+into a phone. It pins the cost as well as the fact: **six English words to overturn a settled
+Romanian verdict**, against the twenty corrections `LanguageSwitchCorrector` keeps. If that count
+ever drifts past the window, the revert stops firing with nothing else failing.
+
+**These skip rather than fail** where the host bridge or the compiled packs are absent — neither
+is produced by an ordinary `./gradlew test`, and a suite that fails on a machine that simply has
+not built them teaches people to ignore it:
+
+```bash
+cmake --build native-tests/build --target borderkeys   # the host JNI bridge
+./gradlew :keyboard:buildDictionaries                  # the packs
+```
 
 ### Native — `ctest --test-dir native-tests/build`
 
@@ -208,6 +252,10 @@ Named rather than left to be discovered:
 ```bash
 # JVM tests, every module
 ./gradlew test
+
+# ...including the pipeline harness, which skips without these two
+cmake --build native-tests/build --target borderkeys
+./gradlew :keyboard:buildDictionaries :keyboard:test
 
 # Native tests
 cmake -S native-tests -B native-tests/build -DCMAKE_BUILD_TYPE=Debug
