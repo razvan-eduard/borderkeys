@@ -152,12 +152,6 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                     },
                 )
             }
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text(strings[Keys.DICTIONARY_SEARCH]) },
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
-            )
         }
         // Shortcuts beside the learned words: both are "what this keyboard knows that the
         // dictionaries do not", one taught by typing and one written down on purpose.
@@ -213,6 +207,16 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
             ) { Text(strings[Keys.DICTIONARY_SHORTCUT_ADD]) }
         }
         SettingsSectionCard(strings.getString(Keys.DICTIONARY_LEARNED_WORDS, words.size)) {
+            // At the top of the list it filters. It used to close the "how quickly it learns"
+            // card instead, two cards above this one and separated from it by the shortcuts --
+            // near nothing it affected, so the list it belongs to read as having no search at
+            // all, and the note under a long list telling you to use one pointed at thin air.
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text(strings[Keys.DICTIONARY_SEARCH]) },
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+            )
             if (words.isEmpty()) {
                 SettingRow(
                     title = if (query.isBlank()) strings[Keys.DICTIONARY_NOTHING_LEARNED_YET] else strings[Keys.DICTIONARY_NO_MATCH],

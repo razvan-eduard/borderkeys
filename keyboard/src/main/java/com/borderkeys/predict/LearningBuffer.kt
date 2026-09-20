@@ -134,7 +134,7 @@ class LearningBuffer(
     }
 
     fun record(word: String, locale: String, nowMillis: Long): Boolean {
-        if (!enabled || word.isEmpty() || word.length > MAX_WORD_LENGTH) {
+        if (!enabled || word.length < MIN_WORD_LENGTH || word.length > MAX_WORD_LENGTH) {
             return false
         }
         if (refused(word)) {
@@ -259,5 +259,17 @@ class LearningBuffer(
          *  way back out through an import, so raising or lowering what counts as a plausible
          *  word is one edit rather than two kept in sync by hand. */
         const val MAX_WORD_LENGTH = DictionaryCsv.MAX_WORD_LENGTH
+
+        /**
+         * Below this a word is not worth a row of its own.
+         *
+         * Every one-letter word anyone writes -- "a" and "I" in English, "a" and "o" in
+         * Romanian -- is already in the bundled dictionary, so learning it personally adds
+         * nothing and can only take a slot from something that is not. What it does instead is
+         * accumulate: a stray letter committed by a delimiter is indistinguishable here from a
+         * word, and the personal dictionary keeps whatever it is given for the life of the
+         * install.
+         */
+        const val MIN_WORD_LENGTH = 2
     }
 }

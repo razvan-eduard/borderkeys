@@ -92,10 +92,31 @@ class DictionaryRepository internal constructor(
      */
     suspend fun decayStaleEntries(now: Long = System.currentTimeMillis()) {
         val cutoff = now - PersonalWordDecay.HALF_LIFE_MILLIS
+        val unconfirmedCutoff = now - PersonalWordDecay.UNCONFIRMED_LIFE_MILLIS
         database.withTransaction {
             userWords.decayStale(cutoff, now)
             userBigrams.decayStale(cutoff, now)
             userTrigrams.decayStale(cutoff, now)
+            // And then the rows halving can never reach: written once, never again, and
+            // otherwise kept for the life of the install. Their phrases go with them for the
+            // reason [forget] gives -- a word predicted through a pair after the word itself
+            // is gone is the dictionary appearing not to work in the most alarming way.
+            for (word in userWords.unconfirmedBefore(unconfirmedCutoff)) {
+                userBigrams.deleteInvolving(word)
+                userTrigrams.deleteInvolving(word)
+            }
+            userWords.deleteUnconfirmedBefore(unconfirmedCutoff)
+
+            // And a ceiling, so the table cannot outgrow what the engine will ever read from it.
+            // [MAX_WORDS_IN_MEMORY] limits the query that loads the model, not the store behind
+            // it, so without this the rows past that limit are kept for the life of the install
+            // while being permanently invisible -- cost with no benefit. Keeping exactly what is
+            // loadable is what makes the two numbers one decision instead of two.
+            for (word in userWords.wordsBeyond(MAX_WORDS_IN_MEMORY)) {
+                userBigrams.deleteInvolving(word)
+                userTrigrams.deleteInvolving(word)
+                userWords.delete(word)
+            }
         }
     }
 

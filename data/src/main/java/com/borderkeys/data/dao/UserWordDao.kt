@@ -111,6 +111,50 @@ interface UserWordDao {
     )
     suspend fun decayStale(cutoff: Long, now: Long)
 
+    /**
+     * Drops words written exactly once and not written since.
+     *
+     * The one case [decayStale] above cannot reach, because it only touches rows with a count
+     * above one: a word seen a single time keeps that count for ever and its row is never
+     * removed by anything, so the table only grows. Most of them are not vocabulary at all --
+     * a name from one conversation, a code identifier pasted into a message, a typo that
+     * survived to a delimiter -- and a personal dictionary that keeps every one of them for
+     * the life of the install is a store nobody can curate by hand.
+     *
+     * Only count = 1, and only past the cutoff. Anything written twice has been confirmed by
+     * the person writing it and is dealt with by halving, never by deletion: forgetting a word
+     * somebody actually uses because they had a quiet season would be far worse than keeping
+     * one they do not.
+     */
+    @Query("DELETE FROM user_words WHERE count <= 1 AND lastUsedAt < :cutoff")
+    suspend fun deleteUnconfirmedBefore(cutoff: Long): Int
+
+    /** The words such a sweep would remove, read before the delete so the phrases naming them
+     *  can be cleared in the same transaction. */
+    @Query("SELECT word FROM user_words WHERE count <= 1 AND lastUsedAt < :cutoff")
+    suspend fun unconfirmedBefore(cutoff: Long): List<String>
+
+    /**
+     * The least valuable words past [keep], worst last, for a table that has outgrown its cap.
+     *
+     * Ordered the way the dictionary itself is: how often the word was confirmed first, and how
+     * recently it was written to break a tie. A word written twenty times two years ago
+     * therefore outranks one written twice last week, which is right -- twenty confirmations is
+     * evidence and the halving sweep is what deals with its age.
+     *
+     * `LIMIT -1 OFFSET :keep` is SQLite's way of saying "everything after the first :keep". A
+     * plain LIMIT cannot express it, and the alternative of reading every row into memory to
+     * slice it is the thing a cap exists to avoid.
+     */
+    @Query(
+        """
+        SELECT word FROM user_words
+        ORDER BY count DESC, lastUsedAt DESC
+        LIMIT -1 OFFSET :keep
+        """,
+    )
+    suspend fun wordsBeyond(keep: Int): List<String>
+
     @Query("DELETE FROM user_words WHERE word = :word")
     suspend fun delete(word: String)
 

@@ -36,6 +36,20 @@ object PersonalWordDecay {
     const val HALF_LIFE_MILLIS: Long = 90L * 24 * 60 * 60 * 1000
 
     /**
+     * How long a word written exactly once is kept before its row is dropped.
+     *
+     * Halving cannot deal with these: it floors at one, so a single sighting is stored for the
+     * life of the install and nothing ever removes it. Most are not vocabulary -- a name from
+     * one conversation, an identifier pasted into a message, a typo that reached a delimiter.
+     *
+     * Thirty days rather than the ninety above, because the evidence is so much thinner. A word
+     * used twice has been confirmed by the person writing it and is only ever halved; this is
+     * the one that was never confirmed at all, and a month of silence after a single use is a
+     * fair reading of "that was not a word I use".
+     */
+    const val UNCONFIRMED_LIFE_MILLIS: Long = 30L * 24 * 60 * 60 * 1000
+
+    /**
      * [count], decayed for the time between [lastUsedAt] and [now].
      *
      * Never negative and never larger than [count] itself -- decay only ever takes weight away.

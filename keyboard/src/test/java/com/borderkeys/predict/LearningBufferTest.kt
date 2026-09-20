@@ -173,4 +173,26 @@ class LearningBufferTest {
         buffer.discard()
         assertTrue(buffer.drainPairs().isEmpty())
     }
+
+    /**
+     * Every one-letter word anyone writes is already in the bundled dictionary -- "a" and "I"
+     * in English, "a" and "o" in Romanian -- so a personal row for one adds nothing and can
+     * only take a slot from a word that is not. What it does add is the stray letters a
+     * delimiter commits, which are indistinguishable from words here.
+     */
+    @Test
+    fun `a single letter is not worth a row of its own`() {
+        val buffer = LearningBuffer()
+        assertFalse(buffer.record("a", "ro-RO", 1_000))
+        assertFalse(buffer.record("I", "en-US", 1_000))
+        assertFalse(buffer.record("", "ro-RO", 1_000))
+        assertTrue("two is enough", buffer.record("la", "ro-RO", 1_000))
+    }
+
+    @Test
+    fun `a word longer than the ceiling is still refused`() {
+        val buffer = LearningBuffer()
+        val tooLong = "a".repeat(LearningBuffer.MAX_WORD_LENGTH + 1)
+        assertFalse(buffer.record(tooLong, "ro-RO", 1_000))
+    }
 }
