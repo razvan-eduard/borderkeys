@@ -24,8 +24,14 @@
  * "snobul" -- because "offers nothing better than what I wrote" is a result worth measuring,
  * and it is the result the guards in AutoCorrection exist to produce.
  *
+ * Two heaps, two questions, two corpus forms. The bare form asks where the *strip* ranks the
+ * right word; `--autocorrect` asks what the *space bar* commits, which is a different heap and
+ * can disagree completely -- "believ" ranked "believe" second and committed "belief", a word the
+ * same search put seventh. A measurement that only ever read the strip could not see that.
+ *
  * Usage:
  *     suggest_eval <dict dir> <corpus.tsv> [tag ...]
+ *     suggest_eval <dict dir> --autocorrect <corpus.tsv> [tag ...]
  *     suggest_eval <dict dir> --explain <typed> <candidate> [tag ...]
  *
  * with the packs named by tag (default en-US). The corpus form prints per-case ranks and then
@@ -119,15 +125,22 @@ int main(int argc, char** argv) {
         return 2;
     }
     const char* const directory = argv[1];
+    // `--autocorrect <corpus>` measures what the space bar commits; the bare corpus form
+    // measures where the strip ranks the right word. Both, because they are separate heaps.
+    const bool autocorrectMode = std::strcmp(argv[2], "--autocorrect") == 0;
+    if (autocorrectMode && argc < 4) {
+        std::printf("usage: suggest_eval <dict dir> --autocorrect <corpus.tsv> [tag ...]\n");
+        return 2;
+    }
     const bool explaining = std::strcmp(argv[2], "--explain") == 0;
     if (explaining && argc < 5) {
         std::printf("usage: suggest_eval <dict dir> --explain <typed> <candidate> [tag ...]\n");
         return 2;
     }
-    const char* const corpusPath = explaining ? nullptr : argv[2];
+    const char* const corpusPath = explaining ? nullptr : (autocorrectMode ? argv[3] : argv[2]);
 
     std::vector<std::string> tags;
-    for (int i = explaining ? 5 : 3; i < argc; ++i) {
+    for (int i = explaining ? 5 : (autocorrectMode ? 4 : 3); i < argc; ++i) {
         tags.emplace_back(argv[i]);
     }
     if (tags.empty()) {
@@ -206,6 +219,46 @@ int main(int argc, char** argv) {
     if (cases.empty()) {
         std::printf("no cases in %s\n", corpusPath);
         return 1;
+    }
+
+    // What the space bar would commit, rather than where the strip ranks a word. A different
+    // question and a different heap, and the two have disagreed badly enough in practice to be
+    // worth measuring apart: the strip ranked "believe" second for "believ" while autocorrect
+    // committed "belief", which the same strip ranked seventh and sixty points worse.
+    if (autocorrectMode) {
+        int right = 0;
+        int wrong = 0;
+        int none = 0;
+        std::printf("%-18s %-18s %s\n", "typed", "expected", "autocorrect commits");
+        for (const Case& item : cases) {
+            Candidate scratch[Engine::kMaxCandidates];
+            engine.suggest(item.typed.c_str(), item.typed.size(), nullptr, 0, nullptr, 0,
+                           scratch, Engine::kMaxCandidates);
+            const Candidate* const best = engine.bestCorrection();
+            std::string applied;
+            if (best != nullptr) {
+                uint32_t length = 0;
+                const char* const text = engine.candidateText(*best, &length);
+                if (text != nullptr) {
+                    applied.assign(text, length);
+                }
+            }
+            if (applied.empty()) {
+                ++none;
+            } else if (applied == item.expected) {
+                ++right;
+            } else {
+                ++wrong;
+            }
+            std::printf("%-18s %-18s %s\n", item.typed.c_str(), item.expected.c_str(),
+                        applied.empty() ? "(nothing)" : applied.c_str());
+        }
+        const double all = static_cast<double>(cases.size());
+        std::printf("\ncases            %zu\n", cases.size());
+        std::printf("commits expected %d  (%.1f%%)\n", right, 100.0 * right / all);
+        std::printf("commits other    %d  (%.1f%%)\n", wrong, 100.0 * wrong / all);
+        std::printf("commits nothing  %d  (%.1f%%)\n", none, 100.0 * none / all);
+        return 0;
     }
 
     int firstPlace = 0;

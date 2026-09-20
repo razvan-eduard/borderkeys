@@ -107,6 +107,37 @@ constexpr float kCorrectionFrequencyFloor = 9.0f;
 // every correction out of sight.
 constexpr int kMaxShownCompletions = 4;
 
+// How far past the typed letters a *completion* may go and still count as an answer to "what
+// did you mean", rather than only to "what are you writing".
+//
+// The corrections heap was built to hold nothing but edits, on the reasoning that a word merely
+// carrying on from the typed letters is not a guess at what was meant. That is true of "teh"
+// reaching "tehran" and false of "believ" reaching "believe", and the difference is length: one
+// is a different word, the other is the same word with its last letter not typed yet.
+//
+// Measured rather than argued, and swept rather than picked. Two corpora of 200 words each,
+// generated from the pack's own most frequent words so neither could be chosen to flatter the
+// answer -- `native-tests/data/autocorrect_{midword,typo}_en.tsv`, read by
+// `suggest_eval --autocorrect`, which asks what the space bar commits:
+//
+//               mid-word   typo      (mid-word = last letter not yet typed;
+//   excluded      12.0%    100.0%     typo = two middle letters transposed)
+//   depth <= 1    98.5%    100.0%
+//   depth <= 2    88.0%    100.0%
+//   depth <= 3    88.0%    100.0%
+//   depth <= 4    85.5%    100.0%
+//
+// One is the measured optimum and not a round number chosen for looking like one: past it the
+// longer continuations start outbidding the single missing letter, which is the same failure in
+// the other direction -- "believed" taking the place of "believe". The typo column is what the
+// exclusion existed to protect and it never moves, so the fix costs nothing it was buying.
+//
+// Before this, a word someone was in the middle of typing had a *different word* committed over
+// it two times in three. That is not an edge case, and it was reported from a device long before
+// this measurement existed: "believ" committed "belief", which the same search ranked seventh
+// and sixty points worse than "believe".
+constexpr int kMaxCorrectionCompletion = 1;
+
 // Stupid backoff, factor 0.4 as in the literature. Deterministic and needing no normalisation
 // at runtime, which is the whole reason it is used instead of a smoothed model.
 constexpr float kBackoffLogFactor = -0.9162907f;  // ln(0.4)
@@ -1490,7 +1521,12 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
             // search -- the only thing being kept is the distinction the merged heap discards.
             // Cheap because it is the minority branch and the heap holds four: a word every
             // completion outranks can still be the best *correction*, which is the whole point.
-            if (endpoint.cost > 0.0f &&
+            // A completion counts too when it adds barely anything -- see
+            // kMaxCorrectionCompletion. frame.depth is exactly how many characters past the
+            // typed letters this word goes, so the two cases are told apart by one comparison.
+            const bool shortCompletion = endpoint.cost <= 0.0f && frame.depth > 0 &&
+                                         frame.depth <= kMaxCorrectionCompletion;
+            if ((endpoint.cost > 0.0f || shortCompletion) &&
                 plausibleCorrectionTarget(pack, static_cast<uint32_t>(wordIndex))) {
                 offerScoredWord(correctionHeap_, trie, packIndex,
                                 static_cast<uint32_t>(wordIndex), score);
