@@ -103,6 +103,20 @@ jobs:
           fi
           echo "Release tag: $TAG"
 
+      # Same two prerequisites as CI, and for the same reason: the pipeline harness drives the
+      # real engine over JNI against the real packs, and neither is produced by `./gradlew
+      # test`. Absent them it used to skip itself silently, which is worst here of all places --
+      # BundledPackMetadataTest checks the recorded pack sizes against the compiled ones, and a
+      # release is exactly when a stale one ships to people. Pipeline.require() fails rather
+      # than skips when CI is set, so without this step the tests below would not merely skip,
+      # they would fail.
+      - name: Build what the pipeline harness needs
+        run: |
+          set -euo pipefail
+          cmake -S native-tests -B native-tests/build -DCMAKE_BUILD_TYPE=Debug
+          cmake --build native-tests/build --parallel --target borderkeys
+          ./gradlew :keyboard:buildDictionaries --no-daemon "$GRADLE_HEAP"
+
       - name: Unit tests
         run: ./gradlew test --no-daemon "$GRADLE_HEAP"
 
