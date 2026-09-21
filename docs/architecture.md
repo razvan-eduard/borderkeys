@@ -497,7 +497,7 @@ number tier B has to beat to justify its weights.
 ### Tier B — `TcnDecoder`
 
 `plus`-only, behind `BORDERKEYS_NEURAL_SWIPE`, and **on by default** since it was measured:
-**81.2% top-1, 90.0% top-3** on the same 500 traces, 25.8 points above tier A and ahead at every
+**90.6% top-1, 94.8% top-3** on the same 500 traces, 35.2 points above tier A and ahead at every
 word length. A `core` build compiles no tier B at all, so tier A is what that flavour swipes
 with. Three stages:
 
@@ -506,6 +506,13 @@ resampleUniformTime + buildTcnFeatures   raw touch samples → encoder input
 TcnEncoder                               → per-timestep intention/spectral output
 TcnCtcDecoder                            + the active lexicon → ranked words
 ```
+
+**Scoring.** A hypothesis' final score is
+`ctc / letters^kLengthNormalisation + kLengthBonus × letters + kFrequencyWeight × contextLogProb`,
+fitted against the replay corpus at γ 0, β 3.0, λ 0.5, beam 100. The beam and the scoring are
+not independent: at the unfitted scoring a wider beam bought nothing at top-1, and at the fitted
+scoring it is worth nine points, because a beam only helps once the ranking can tell its extra
+candidates apart.
 
 Smoothing and resampling belong to the decoder, not the caller, because both tiers want the same
 features and must not disagree about how they were produced.

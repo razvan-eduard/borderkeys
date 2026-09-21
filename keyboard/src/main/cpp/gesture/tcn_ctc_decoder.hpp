@@ -36,7 +36,7 @@ namespace borderkeys {
 class TcnCtcDecoder {
 public:
     static constexpr int kDctResolution = 8;  // the MLP's own input basis is an 8x8 2D cosine
-    static constexpr int kMaxBeamWidth = 24;
+    static constexpr int kMaxBeamWidth = 100;
     static constexpr int kMaxWordLetters = 24;  // == Shark2Decoder::kMaxWordLetters
 
     /** Rebuilds the per-layout basis matrix and the key-area extents [areaWidth]/[areaHeight]
@@ -64,6 +64,7 @@ private:
         int32_t lastSlot = -1;    // which geometry slot produced lastSymbol, for the repeat case
         float logProbBlank = 0.f;
         float logProbNonBlank = 0.f;  // -infinity until this prefix has emitted anything
+        int32_t letters = 0;          // characters emitted, for the length terms in the score
     };
 
     /** log(sigmoid(z_t[slot] for every geometry slot)) + log(intention_t), for one timestep --
@@ -71,7 +72,7 @@ private:
     void keyLogProbsFor(const float* spectralFrame, float intentionFrame, float* outLogProbs) const;
 
     int addOrMergeHypothesis(Hypothesis* hyps, int count, int32_t node, uint32_t lastSymbol,
-                             int32_t lastSlot, float blankContribution,
+                             int32_t lastSlot, int32_t letters, float blankContribution,
                              float nonBlankContribution) const;
     int pruneToBeamWidth(Hypothesis* hyps, int count) const;
 
