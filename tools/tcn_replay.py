@@ -17,8 +17,8 @@ recording looks like.
 Usage
 -----
     ./tcn_replay.py --binary native-tests/build/tcn_replay \\
-        --pack native-tests/build/test_pack.bkd --weights tools/swipe_model/model.bkw
-    ./tcn_replay.py --check-regression --weights tools/swipe_model/model.bkw \\
+        --pack native-tests/build/test_pack.bkd --weights keyboard/src/plus/assets/model.bkw
+    ./tcn_replay.py --check-regression --weights keyboard/src/plus/assets/model.bkw \\
         --pack native-tests/build/test_pack.bkd
 """
 

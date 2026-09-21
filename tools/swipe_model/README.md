@@ -58,6 +58,15 @@ row reports it ready.
 
 The shipped checkpoint is the one exported on 2026-09-16 (`model.bkw`, weight-file version 2,
 642,241 parameters, about 2.5 MB), trained under the fixed feature scaling -- the runtime
-scale-compensation shim an earlier checkpoint needed is gone. To replace it: train with
-`train.py`, evaluate with `eval_ctc.py`, export with `export_weights.py`, and let
-`tools/tcn_replay.py` compare the result against the baseline before committing it.
+scale-compensation shim an earlier checkpoint needed is gone. To replace it: train with `train.py`, evaluate with
+`eval_ctc.py`, export with `export_weights.py`, copy the result over
+`keyboard/src/plus/assets/model.bkw`, and let `tools/tcn_replay.py` compare it against the
+baseline before committing.
+
+`export_weights.py --out` defaults to this directory, which is gitignored: **the file that
+ships is `keyboard/src/plus/assets/model.bkw`**, and it is the one every tool and test should be
+pointed at. `native-tests` loads it directly (`BORDERKEYS_SWIPE_MODEL`) and fails if its header
+disagrees with `tcn_weights.hpp`, so a stale copy is caught rather than quietly evaluated.
+
+`export_weights.py --upgrade <file>` rewrites an older file's header for the current version,
+keeping its payload byte for byte. It needs neither a checkpoint nor torch.

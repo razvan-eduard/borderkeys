@@ -21,24 +21,13 @@ import math
 import torch
 from torch import nn
 
-INPUT_FEATURES = 8       # kTcnFeatureDim
-TIMESTEPS_IN = 64        # kTcnTimesteps
-TIMESTEPS_OUT = 32       # TcnEncoder::kOutputTimesteps
-TRUNK_CHANNELS = 128      # TcnEncoder::kTrunkChannels
-EXPANDED_CHANNELS = 512   # TcnEncoder::kExpandedChannels (pre-GLU, "expansion factor 4x")
-BLOCK_CHANNELS = 256      # TcnEncoder::kBlockChannels (post-GLU working width)
-KERNEL_SIZE = 7           # TcnEncoder::kKernelSize
-SE_REDUCED_CHANNELS = 32  # TcnEncoder::kSeReducedChannels
-NUM_BLOCKS = 5            # TcnEncoder::kNumBlocks
-DILATIONS = (1, 2, 3, 5, 8)
-ADAPTER_CHANNELS = 256    # TcnEncoder::kAdapterChannels
-ADAPTER_KERNEL = 2
-SPECTRAL_DIM = 64         # TcnEncoder::kSpectralDim, 8x8 2D DCT coefficients
-DCT_RESOLUTION = 8
-KEY_EMBED_HIDDEN = 96     # TcnWeights::kKeyEmbedHidden
-
-GRN_EPSILON = 1e-6
-BATCHNORM_EPSILON = 1e-5  # PyTorch's own default; export_weights.py folds it in at this value
+# The shape lives in architecture.py so that export_weights.py can read a .bkw header without
+# importing torch. Re-exported here because this module is what the rest of the pipeline imports.
+from architecture import (  # noqa: E402
+    ADAPTER_CHANNELS, ADAPTER_KERNEL, BATCHNORM_EPSILON, BLOCK_CHANNELS, DCT_RESOLUTION,
+    DILATIONS, EXPANDED_CHANNELS, GRN_EPSILON, INPUT_FEATURES, KERNEL_SIZE, KEY_EMBED_HIDDEN,
+    NUM_BLOCKS, SE_REDUCED_CHANNELS, SPECTRAL_DIM, TIMESTEPS_IN, TIMESTEPS_OUT, TRUNK_CHANNELS,
+)
 
 
 class GlobalResponseNorm(nn.Module):
