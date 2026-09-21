@@ -151,6 +151,7 @@ int main(int argc, char** argv) {
     Candidate out[Engine::kMaxCandidates];
     for (const Gesture& gesture : gestures) {
         int rank = -1;
+        std::string top = "-";
         if (gesture.xs.size() >= 2) {
             const int found = engine.decodeGesture(
                 gesture.xs.data(), gesture.ys.data(), gesture.times.data(),
@@ -165,8 +166,15 @@ int main(int argc, char** argv) {
                     break;
                 }
             }
+            if (found > 0) {
+                uint32_t length = 0;
+                const char* const text = engine.candidateText(out[0], &length);
+                if (text != nullptr && length != 0) {
+                    top.assign(text, length);
+                }
+            }
         }
-        std::printf("%s\t%d\n", gesture.word.c_str(), rank);
+        std::printf("%s\t%d\t%s\n", gesture.word.c_str(), rank, top.c_str());
     }
     engine.destroy();
     return 0;
