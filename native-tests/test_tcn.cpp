@@ -197,20 +197,25 @@ void runTcnTests() {
             !readWholeFile(BORDERKEYS_SWIPE_MODEL, &shipped)) {
             check(false, "the golden vector and the shipped model.bkw are readable");
         } else {
-            uint32_t header[6] = {};
+            uint32_t header[7] = {};
             const size_t features = kTcnTimesteps * kTcnFeatureDim;
             const size_t spectralCount =
                 TcnEncoder::kOutputTimesteps * TcnEncoder::kSpectralDim;
+            TestLayout layout;
+            const size_t embeddingCount =
+                static_cast<size_t>(layout.count) * TcnEncoder::kSpectralDim;
             const size_t expected = sizeof(header) +
-                sizeof(float) * (features + TcnEncoder::kOutputTimesteps + spectralCount);
+                sizeof(float) * (features + TcnEncoder::kOutputTimesteps + spectralCount +
+                                 embeddingCount);
             check(golden.size() == expected, "the golden vector is the size its shapes imply");
             std::memcpy(header, golden.data(), sizeof(header));
-            check(header[0] == 0x31474B42u && header[1] == 1u,
+            check(header[0] == 0x31474B42u && header[1] == 2u,
                   "the golden vector's magic and version are current");
             check(header[2] == kTcnTimesteps && header[3] == kTcnFeatureDim &&
                       header[4] == TcnEncoder::kOutputTimesteps &&
-                      header[5] == TcnEncoder::kSpectralDim,
-                  "and it was written for this architecture");
+                      header[5] == TcnEncoder::kSpectralDim &&
+                      header[6] == static_cast<uint32_t>(layout.count),
+                  "and it was written for this architecture and this keyboard");
 
             const float* const payload =
                 reinterpret_cast<const float*>(golden.data() + sizeof(header));
@@ -265,6 +270,52 @@ void runTcnTests() {
             }
             check(worstSwapped > 1e-3f,
                   "and two same-shaped arrays exchanged make it disagree");
+
+            // The encoder's forward pass never touches the key-embedding MLP, so nothing above
+            // reads those four arrays. TcnCtcDecoder::setLayout is what does, turning each key
+            // centre into the row of basis_ the beam search scores against.
+            auto fresh = std::make_unique<TcnWeights>();
+            check(fresh->loadFromBytes(shipped.data(), shipped.size()),
+                  "the shipped weights load again for the key embedding");
+            KeyGeometry geometry;
+            check(geometry.set(layout.codes, layout.xs, layout.ys, layout.count, layout.keyWidth,
+                               layout.keyHeight),
+                  "the golden vector's keyboard is a layout the decoder accepts");
+            TcnCtcDecoder decoder;
+            decoder.setLayout(geometry, *fresh);
+            check(decoder.keyCount() == layout.count, "and setLayout kept every key");
+
+            const float* const goldenEmbedding = goldenSpectral + spectralCount;
+            float worstEmbedding = 0.0f;
+            for (size_t i = 0; i < embeddingCount; ++i) {
+                worstEmbedding = std::fmax(worstEmbedding,
+                                           std::fabs(decoder.basis()[i] - goldenEmbedding[i]));
+            }
+            if (worstEmbedding > 1e-3f) {
+                std::printf("      worst key embedding %g\n",
+                            static_cast<double>(worstEmbedding));
+            }
+            check(worstEmbedding <= 1e-3f, "the key embedding matches model.py's");
+
+            // keyEmbedHiddenBias and keyEmbedOutputBias are both one row and different lengths,
+            // so the pair that a length check cannot separate is the two weight matrices:
+            // [(2 + spectralDim) * hidden] against [hidden * spectralDim], 6336 and 6144 floats.
+            // Reversing one matrix in place is the same shape of corruption at exactly its own
+            // size, which no header field sees.
+            std::vector<float> reversed(
+                fresh->keyEmbedOutputWeight,
+                fresh->keyEmbedOutputWeight + TcnWeights::kKeyEmbedHidden * TcnWeights::kSpectralDim);
+            for (size_t i = 0; i < reversed.size(); ++i) {
+                fresh->keyEmbedOutputWeight[i] = reversed[reversed.size() - 1 - i];
+            }
+            decoder.setLayout(geometry, *fresh);
+            float worstReversed = 0.0f;
+            for (size_t i = 0; i < embeddingCount; ++i) {
+                worstReversed = std::fmax(worstReversed,
+                                          std::fabs(decoder.basis()[i] - goldenEmbedding[i]));
+            }
+            check(worstReversed > 1e-3f,
+                  "and a key-embedding matrix reversed in place makes it disagree");
         }
     }
 

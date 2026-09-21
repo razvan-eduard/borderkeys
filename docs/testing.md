@@ -160,6 +160,13 @@ packager.
   version and every descriptor field; the test exchanges `seReduceWeight` and `seExpandWeight`
   itself and asserts the comparison then fails, so it cannot silently stop measuring anything.
 
+  The encoder's forward pass never calls the key-embedding MLP, so those four arrays — 12,640
+  floats, about 2% of the payload — need their own reference or the parity test steps over them.
+  The golden vector carries `KeyEmbedding`'s output for the key centres of `TestLayout`, and the
+  test compares it against what `TcnCtcDecoder::setLayout` builds, then reverses one of the two
+  weight matrices in place and requires that to fail too. Between the two halves every array in
+  the file is read by something that would notice it moving.
+
 ---
 
 ## Sanitisers and fuzzing
