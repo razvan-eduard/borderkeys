@@ -128,7 +128,8 @@ internal object AutoCorrection {
             !stripDiacritics(typed).equals(stripDiacritics(suggestion), ignoreCase = true) ->
             Situation.NameMismatch
         cased == typed -> Situation.NoChange
-        typed.length < minimumLength && !isDiacriticOnlyDifference(typed, suggestion) ->
+        typed.length < minimumLength &&
+            !(typed.length >= MIN_DIACRITIC_LENGTH && isDiacriticOnlyDifference(typed, suggestion)) ->
             Situation.TooShort
         typed == knownWord && !(isProperNoun && capitaliseNames) -> Situation.KnownWord
         else -> Situation.Correctable
@@ -218,6 +219,17 @@ internal object AutoCorrection {
 
     /** Mirrors `KeyboardPreferences.CORRECTION_DISTANCE_STRICT/LOOSE`; `:keyboard` cannot
      *  reference `:data`'s constants directly, the same reasoning `forSetting` gives elsewhere. */
+    /**
+     * The shortest word an accent may be restored on, below which [minimumLength] is not waived.
+     *
+     * Restoring one is exempt from that setting because the short words are exactly where it
+     * matters -- "sa" for "să", "in" for "în", "si" for "și" -- and a minimum of three would
+     * refuse every one of them. The exemption had no floor, so a single letter qualified too:
+     * typing "t" offered "ț", which is not a word in any language this ships. Two is the
+     * shortest that can be one.
+     */
+    const val MIN_DIACRITIC_LENGTH = 2
+
     const val DISTANCE_STRICT = 0
     const val DISTANCE_LOOSE = 2
 
