@@ -67,8 +67,6 @@ class PredictionEngine(
             candidates: List<Candidate>,
             knownWord: String,
             query: String,
-            correction: String?,
-            correctionIsName: Boolean,
             possessive: String?,
         )
 
@@ -822,20 +820,14 @@ class PredictionEngine(
      */
     private fun publish() {
         val known: String
-        val correction: String?
         val possessive: String?
-        val correctionIsName: Boolean
         val query: String
         synchronized(resultLock) {
             known = nativeKnownWord
-            correction = nativeCorrection
             possessive = nativePossessive
-            correctionIsName = nativeCorrectionIsName
             query = nativeQuery
         }
-        listener?.onSuggestions(
-            copyAndFilterResults(), known, query, correction, correctionIsName, possessive,
-        )
+        listener?.onSuggestions(copyAndFilterResults(), known, query, possessive)
     }
 
     /**
