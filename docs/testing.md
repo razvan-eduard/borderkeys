@@ -253,6 +253,36 @@ decode correct, and one gesture was 3.3 points. Neither the corpus nor the vocab
 what the keyboard does, and tier B had no gate at all — `tcn_replay.py` compared against a
 baseline file that had never been created.
 
+### Tier A on other keyboards — not gated
+
+`kTouchRadius` is fitted on English QWERTY, and it decides what the scorer is allowed to see, so
+it is the constant that would hurt most if it were overfitted. `futo_layout_corpus.py` builds a
+replay layout and a matching corpus for each of FUTO's other keyboards from the same `swipe-5`
+collection; on `qwerty` it reproduces the hand-written `qwerty_1080.layout` at 108x160 px, which
+is what says the coordinate spaces agree. Radius 0.0 is the nearest-key-only rule that preceded
+it.
+
+| radius | azerty | qwertz | dvorak | german | spanish | qwerty |
+|---|---|---|---|---|---|---|
+| 0.0 | 31.6% | 39.8% | 65.8% | 48.4% | 56.6% | 49.4% |
+| 0.9 | 36.6% | 48.6% | **68.2%** | 66.0% | 75.0% | 64.4% |
+| 1.1 | 36.2% | **50.4%** | 66.2% | 71.4% | 78.2% | **67.0%** |
+| 1.4 | 35.8% | 49.2% | 64.0% | **72.8%** | **79.2%** | 66.4% |
+
+English on azerty, qwertz, dvorak and qwerty; German and Spanish on their own packs and their own
+layouts. Every column improves, by between 2.4 and 24.4 points, so the rule is not a QWERTY
+artefact. The plateau is broad enough that 1.1 is within about two points of each keyboard's own
+best, except dvorak, which peaks at 0.9 and is nearly flat.
+
+German and Spanish keep climbing past 1.4, and German's layout is the one with eleven columns and
+therefore 97.9 px keys against everyone else's 108. A radius expressed in key widths shrinking as
+keys narrow is a plausible reason, but these corpora differ in language and word statistics too,
+and this data cannot separate the two.
+
+The levels are not comparable to the gated table above — the same decoder reads 67.0% here and
+77.0% there. Both are QWERTY and both drop taps and out-of-pack words; `swipe-5` is simply a
+harder collection than the held-out test split. Only the movement within a column means anything.
+
 ### Layout generalisation — not gated, and not the product number
 
 ```

@@ -499,6 +499,8 @@ when that key is the nearest one to some sample. Marking only the nearest key le
 500 words unreachable — never scored at any heap depth, which is why no weighting changed them —
 and widening it is worth 16.6 points of top-1 and 22.4 of top-3. It costs about 0.1 ms a
 gesture and does not approach `kVisitBudget`, which is inert over a 33-fold range either way.
+The radius is fitted on English QWERTY but is not particular to it: it gains between 2.4 and
+24.4 points on azerty, qwertz, dvorak, german and spanish as well (`docs/testing.md`).
 
 `kShapeWeight`, `kLocationWeight`, `kEndpointRadius` and `kTouchRadius` are fitted against that
 corpus. The two distance channels matter far less individually than their size relative to the
