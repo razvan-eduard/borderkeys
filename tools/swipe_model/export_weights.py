@@ -18,55 +18,45 @@ import argparse
 import struct
 from pathlib import Path
 
-import torch
+from architecture import BATCHNORM_EPSILON, DESCRIPTOR_FIELDS, expected_float_count
 
-from model import (
-    ADAPTER_CHANNELS, ADAPTER_KERNEL, BATCHNORM_EPSILON, BLOCK_CHANNELS, EXPANDED_CHANNELS,
-    INPUT_FEATURES, KERNEL_SIZE, KEY_EMBED_HIDDEN, NUM_BLOCKS, SE_REDUCED_CHANNELS, SPECTRAL_DIM,
-    TRUNK_CHANNELS, KeyEmbedding, TcnEncoder,
-)
+# torch and model are imported where they are used: --upgrade rewrites a file's header and needs
+# neither, so a .bkw can be brought to the current version without a training environment.
 
 MAGIC = 0x3157424B  # 'B' 'K' 'W' '1', little-endian -- must equal TcnWeights::kMagic
-VERSION = 2          # must equal TcnWeights::kVersion -- bumped for KeyEmbedding (see model.py)
+VERSION = 3          # must equal TcnWeights::kVersion -- bumped for the architecture descriptor
+RESERVED = 0
 
-# Computed the same way tcn_weights.hpp computes kTcnWeightsFloatCount (sizeof/sizeof(float)),
-# just added up by hand here since this script has no C++ struct to take sizeof of. If this
-# constant ever needs to change, kTcnWeightsFloatCount changed with it, and vice versa -- they are
-# two independent derivations of the same architecture that MUST agree, which is exactly what
-# --selftest checks on every run.
-_BLOCK_FLOATS = (
-    KERNEL_SIZE * TRUNK_CHANNELS + TRUNK_CHANNELS  # depthwise weight + bias
-    + TRUNK_CHANNELS + TRUNK_CHANNELS               # folded batchnorm scale + bias
-    + TRUNK_CHANNELS * EXPANDED_CHANNELS + EXPANDED_CHANNELS  # expand weight + bias
-    + BLOCK_CHANNELS + BLOCK_CHANNELS               # grn scale + bias
-    + BLOCK_CHANNELS * TRUNK_CHANNELS + TRUNK_CHANNELS  # project weight + bias
-    + TRUNK_CHANNELS * SE_REDUCED_CHANNELS + SE_REDUCED_CHANNELS  # se reduce weight + bias
-    + SE_REDUCED_CHANNELS * TRUNK_CHANNELS + TRUNK_CHANNELS  # se expand weight + bias
-)
-EXPECTED_FLOAT_COUNT = (
-    INPUT_FEATURES * TRUNK_CHANNELS + TRUNK_CHANNELS  # input embed
-    + NUM_BLOCKS * _BLOCK_FLOATS
-    + ADAPTER_KERNEL * TRUNK_CHANNELS * ADAPTER_CHANNELS + ADAPTER_CHANNELS  # adapter conv
-    + ADAPTER_CHANNELS + ADAPTER_CHANNELS  # folded adapter batchnorm
-    + ADAPTER_CHANNELS + 1  # intention head weight + bias
-    + ADAPTER_CHANNELS * SPECTRAL_DIM + SPECTRAL_DIM  # spectral head
-    + (2 + SPECTRAL_DIM) * KEY_EMBED_HIDDEN + KEY_EMBED_HIDDEN  # key-embedding hidden layer
-    + KEY_EMBED_HIDDEN * SPECTRAL_DIM + SPECTRAL_DIM  # key-embedding output layer
-)
+EXPECTED_FLOAT_COUNT = expected_float_count()
 
 
-def fold_batch_norm(bn: torch.nn.BatchNorm1d) -> tuple[torch.Tensor, torch.Tensor]:
+def header_bytes() -> bytes:
+    """Magic, version, the architecture descriptor, the payload's float count, one reserved word.
+
+    TcnWeights::describeMismatch checks every field against its own constant and names the first
+    that differs, so a model exported for another shape is refused by name rather than loading as
+    a different network.
+    """
+    words = [MAGIC, VERSION]
+    words += [value for _name, value in DESCRIPTOR_FIELDS]
+    words += [EXPECTED_FLOAT_COUNT, RESERVED]
+    return struct.pack(f"<{len(words)}I", *words)
+
+
+def fold_batch_norm(bn):  # torch.nn.BatchNorm1d -> (scale, bias)
     """An inference-only engine has no running mean/variance to track -- only the single affine
     transform they collapse into with the learned scale and shift, computed once, here."""
+    import torch  # noqa: PLC0415 -- see the import note at the top
+
     scale = bn.weight / torch.sqrt(bn.running_var + BATCHNORM_EPSILON)
     bias = bn.bias - bn.running_mean * scale
     return scale, bias
 
 
-def export_tensors(model: TcnEncoder, key_embedding: KeyEmbedding) -> list[torch.Tensor]:
+def export_tensors(model, key_embedding) -> list:
     """Every weight, in the exact order tcn_weights.hpp's TcnWeights declares them, each already
     reshaped/transposed/flattened into the row-major (input-major) layout the C++ side reads."""
-    tensors: list[torch.Tensor] = []
+    tensors = []
 
     tensors.append(model.input_embed.weight.t().reshape(-1))  # [128,8] -> [8,128]
     tensors.append(model.input_embed.bias)
@@ -110,7 +100,7 @@ def export_tensors(model: TcnEncoder, key_embedding: KeyEmbedding) -> list[torch
     return tensors
 
 
-def write_bkw(model: TcnEncoder, key_embedding: KeyEmbedding, out_path: Path) -> None:
+def write_bkw(model, key_embedding, out_path: Path) -> None:
     model.eval()
     key_embedding.eval()
     tensors = export_tensors(model, key_embedding)
@@ -121,7 +111,7 @@ def write_bkw(model: TcnEncoder, key_embedding: KeyEmbedding, out_path: Path) ->
             f"{EXPECTED_FLOAT_COUNT} -- model.py and tcn_weights.hpp have drifted apart",
         )
     with out_path.open("wb") as f:
-        f.write(struct.pack("<II", MAGIC, VERSION))
+        f.write(header_bytes())
         for tensor in tensors:
             f.write(tensor.detach().cpu().numpy().astype("<f4").tobytes())
 
@@ -132,10 +122,37 @@ def read_bkw(path: Path) -> tuple[int, int, int]:
     check tools/build_dict.py's PackReader performs for the dictionary format."""
     data = path.read_bytes()
     magic, version = struct.unpack_from("<II", data, 0)
-    remaining = len(data) - 8
+    remaining = len(data) - len(header_bytes())
     if remaining % 4 != 0:
         raise ValueError(f"{remaining} bytes after the header is not a whole number of floats")
     return magic, version, remaining // 4
+
+
+def upgrade(path: Path, out_path: Path) -> int:
+    """Rewrites an older file's header for the current version, keeping its payload byte for byte.
+
+    The payload has not changed shape since version 2, so the weights carry across untouched --
+    which is what makes this safe without the checkpoint that produced them, and why it needs
+    neither torch nor a training environment. A file whose float count does not match this
+    architecture is refused rather than relabelled.
+    """
+    data = path.read_bytes()
+    magic, version = struct.unpack_from("<II", data, 0)
+    if magic != MAGIC:
+        raise ValueError(f"{path} is not a .bkw file (magic {magic:#x})")
+    known_header = {2: 8, VERSION: len(header_bytes())}
+    if version not in known_header:
+        raise ValueError(f"{path} is version {version}; only {sorted(known_header)} are readable")
+    payload = data[known_header[version]:]
+    floats = len(payload) // 4
+    if len(payload) % 4 != 0 or floats != EXPECTED_FLOAT_COUNT:
+        raise ValueError(
+            f"{path} carries {floats} floats, not this architecture's {EXPECTED_FLOAT_COUNT}",
+        )
+    out_path.write_bytes(header_bytes() + payload)
+    print(f"upgraded {path} (v{version}) -> {out_path} (v{VERSION}), "
+          f"{floats:,} floats unchanged")
+    return 0
 
 
 def main() -> int:
@@ -143,10 +160,18 @@ def main() -> int:
     parser.add_argument("--checkpoint", type=Path, default=None,
                         help="A train.py checkpoint (state_dict). Omit with --selftest.")
     parser.add_argument("--out", type=Path, default=Path(__file__).parent / "model.bkw")
+    parser.add_argument("--upgrade", type=Path, default=None,
+                        help="Rewrite this .bkw file's header for the current version, keeping "
+                             "its weights. Needs no checkpoint and no torch.")
     parser.add_argument("--selftest", action="store_true",
                         help="Export a freshly initialised (untrained) model and verify it "
                              "round-trips, instead of exporting a real checkpoint.")
     arguments = parser.parse_args()
+
+    if arguments.upgrade is not None:
+        return upgrade(arguments.upgrade, arguments.out)
+
+    from model import KeyEmbedding, TcnEncoder  # noqa: PLC0415 -- see the import note above
 
     if arguments.selftest:
         model = TcnEncoder()

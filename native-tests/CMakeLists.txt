@@ -91,6 +91,10 @@ target_compile_definitions(borderkeys_tests PRIVATE
     BORDERKEYS_TEST_PACK="${TEST_PACK}"
     BORDERKEYS_TEST_FOLDS="${TEST_FOLDS}"
     BORDERKEYS_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
+    # The weights the `plus` flavor ships. Written by tools/swipe_model/export_weights.py and
+    # read by TcnWeights::loadFromBytes -- two implementations of one format, so the test that
+    # loads it is what proves they still agree.
+    BORDERKEYS_SWIPE_MODEL="${CMAKE_CURRENT_SOURCE_DIR}/../keyboard/src/plus/assets/model.bkw"
 )
 
 # The binary tools/gesture_replay.py drives. Separate from the test runner because its output is

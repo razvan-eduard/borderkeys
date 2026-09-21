@@ -88,15 +88,40 @@ public:
     // Bumped from 1: the key-embedding MLP above is a new, mandatory section, and a v1 file has
     // neither the bytes for it nor a model.py that could produce them -- rejecting it outright is
     // the same "wrong-shaped weight" case loadFromBytes's own comment already treats as fatal.
-    static constexpr uint32_t kVersion = 2u;
-    static constexpr size_t kHeaderBytes = sizeof(uint32_t) * 2;
+    // Bumped from 2: the header now carries the architecture it was exported for.
+    static constexpr uint32_t kVersion = 3u;
+
+    /** The architecture a file was exported for, written by `tools/swipe_model/export_weights.py`
+     *  from `architecture.py`, in this declaration order. Checked field by field at load. */
+    static constexpr int kDescriptorFields = 12;
+
+    /** Header: magic, version, the descriptor, the payload's float count, one reserved word. */
+    static constexpr size_t kHeaderBytes = sizeof(uint32_t) * (2 + kDescriptorFields + 2);
+
+    /**
+     * Why the header names the shape rather than the loader inferring it.
+     *
+     * The payload is read positionally -- one `memcpy` into this struct -- so a file whose arrays
+     * were reordered or reshaped at the same total size would load as a different model with no
+     * error. `seReduceWeight` is `[trunk * seReduced]` and `seExpandWeight` is
+     * `[seReduced * trunk]`: identical sizes, opposite meanings. A length check cannot tell them
+     * apart and a version number only catches the mismatches somebody remembered to bump it for.
+     *
+     * So the exporter states the shape and this checks it. What that does not cover is two
+     * same-shaped arrays swapped; `test_tcn.cpp`'s golden vector covers that.
+     */
+    static const char* describeMismatch(const uint8_t* data, size_t length);
+
+    /** Writes the header this architecture expects into [kHeaderBytes] of `out`. The exporter is
+     *  the only thing that writes a real file; this exists so a test can build a canonical one
+     *  and corrupt a single field of it. */
+    static void writeHeader(uint8_t* out);
 
     /**
      * Reads a whole `.bkw` file's bytes into this object.
      *
-     * Returns false for a wrong magic, a wrong version, or a length that is not exactly the
-     * header plus this architecture's weight count -- never a partial or best-effort load. A
-     * wrong-shaped weight is not "worse suggestions": every read of it downstream has to stay
+     * Returns false for anything [describeMismatch] names -- never a partial or best-effort load.
+     * A wrong-shaped weight is not "worse suggestions": every read of it downstream has to stay
      * either correct or bounds-safe, and rejecting anything but an exact match is the one check
      * that keeps that true, the same rule `bkd_format.hpp` states for the dictionary format.
      */

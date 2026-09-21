@@ -24,14 +24,30 @@ using namespace borderkeys_test;
 
 namespace {
 
+/** Whole file into `out`, or false. */
+bool readWholeFile(const char* path, std::vector<uint8_t>* out) {
+    std::FILE* const file = std::fopen(path, "rb");
+    if (file == nullptr) {
+        return false;
+    }
+    std::fseek(file, 0, SEEK_END);
+    const long size = std::ftell(file);
+    std::fseek(file, 0, SEEK_SET);
+    if (size <= 0) {
+        std::fclose(file);
+        return false;
+    }
+    out->resize(static_cast<size_t>(size));
+    const size_t read = std::fread(out->data(), 1, out->size(), file);
+    std::fclose(file);
+    return read == out->size();
+}
+
 /** A `.bkw` byte buffer with the right header and every weight zeroed -- the "inert" weights
  *  Phase 1's exit criterion is written against: not trained, but load-bearing and well-defined. */
 std::vector<uint8_t> zeroWeightsFile() {
     std::vector<uint8_t> bytes(TcnWeights::kHeaderBytes + kTcnWeightsFloatCount * sizeof(float), 0);
-    uint32_t magic = TcnWeights::kMagic;
-    uint32_t version = TcnWeights::kVersion;
-    std::memcpy(bytes.data(), &magic, sizeof(magic));
-    std::memcpy(bytes.data() + sizeof(magic), &version, sizeof(version));
+    TcnWeights::writeHeader(bytes.data());
     return bytes;
 }
 
@@ -126,6 +142,46 @@ void runTcnTests() {
         std::vector<uint8_t> truncated(good.begin(), good.end() - 4);
         check(!weights->loadFromBytes(truncated.data(), truncated.size()),
               "a truncated file is refused rather than read short");
+
+        check(TcnWeights::describeMismatch(good.data(), good.size()) == nullptr,
+              "a well-formed file names no mismatch");
+
+        // Every descriptor word, one at a time. The payload is read positionally, so a file
+        // exported for another shape would otherwise load as a different network.
+        for (int field = 0; field < TcnWeights::kDescriptorFields; ++field) {
+            std::vector<uint8_t> bent = good;
+            const size_t at = (2 + static_cast<size_t>(field)) * sizeof(uint32_t);
+            bent[at] = static_cast<uint8_t>(bent[at] + 1);
+            const char* const named = TcnWeights::describeMismatch(bent.data(), bent.size());
+            check(named != nullptr && !weights->loadFromBytes(bent.data(), bent.size()),
+                  "a descriptor word that disagrees is refused, by name");
+        }
+
+        std::vector<uint8_t> badCount = good;
+        const size_t countAt = (2 + TcnWeights::kDescriptorFields) * sizeof(uint32_t);
+        badCount[countAt] = static_cast<uint8_t>(badCount[countAt] + 1);
+        check(!weights->loadFromBytes(badCount.data(), badCount.size()),
+              "a float count that disagrees with the architecture is refused");
+    }
+
+    section("the shipped weights load");
+    {
+        // tools/swipe_model/export_weights.py writes this file and TcnWeights reads it: two
+        // implementations of one format, in two languages, agreeing only because both are
+        // written against the same architecture. This is what catches them drifting apart.
+        std::vector<uint8_t> shipped;
+        if (!readWholeFile(BORDERKEYS_SWIPE_MODEL, &shipped)) {
+            check(false, "the shipped model.bkw is readable");
+        } else {
+            const char* const named = TcnWeights::describeMismatch(shipped.data(), shipped.size());
+            if (named != nullptr) {
+                std::printf("      shipped model disagrees on: %s\n", named);
+            }
+            check(named == nullptr, "the shipped model.bkw matches this architecture");
+            auto weights = std::make_unique<TcnWeights>();
+            check(weights->loadFromBytes(shipped.data(), shipped.size()),
+                  "and it loads");
+        }
     }
 
     section("TCN encoder forward pass");
