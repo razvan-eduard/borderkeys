@@ -277,12 +277,22 @@ jobs:
       # Accuracy is the only thing that says whether a decoder change helped. Compared against
       # the number recorded in docs/gesture-accuracy.json, so a regression fails here rather
       # than being noticed on a device weeks later.
+      # Both tiers, against the real English pack and 500 recorded traces. The pack matters as
+      # much as the corpus: the 59-word test pack this used to gate against made almost any
+      # decode correct.
       - name: Swipe decoder accuracy
         run: |
           set -euo pipefail
           python3 tools/gesture_replay.py \
             --binary native-tests/build/gesture_replay \
-            --pack native-tests/build/test_pack.bkd \
+            --pack "$PWD/keyboard/build/generated/dictionaries/dict/en_US.bkd" \
+            --corpus "$PWD/native-tests/data/gestures_futo.csv" \
+            --check-regression
+          python3 tools/tcn_replay.py \
+            --binary native-tests/build/tcn_replay \
+            --pack "$PWD/keyboard/build/generated/dictionaries/dict/en_US.bkd" \
+            --weights "$PWD/keyboard/src/plus/assets/model.bkw" \
+            --corpus "$PWD/native-tests/data/gestures_futo.csv" \
             --check-regression
 
       - name: Publish reports

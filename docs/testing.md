@@ -197,13 +197,34 @@ passes. `borderkeys_tests` says whether the engine is correct; these say whether
 ### Swipe accuracy — the one that gates
 
 ```
-tools/gesture_replay.py --binary native-tests/build/gesture_replay \
-    --pack native-tests/build/test_pack.bkd --check-regression
+python3 tools/gesture_replay.py --binary native-tests/build/gesture_replay \
+    --pack "$PWD/keyboard/build/generated/dictionaries/dict/en_US.bkd" \
+    --corpus "$PWD/native-tests/data/gestures_futo.csv" --check-regression
+python3 tools/tcn_replay.py --binary native-tests/build/tcn_replay \
+    --pack "$PWD/keyboard/build/generated/dictionaries/dict/en_US.bkd" \
+    --weights "$PWD/keyboard/src/plus/assets/model.bkw" \
+    --corpus "$PWD/native-tests/data/gestures_futo.csv" --check-regression
 ```
 
-Compared against the number recorded in `docs/gesture-accuracy.json`, so a decoder regression
-fails **in CI** rather than being noticed on a device weeks later. Accuracy is the only thing
-that says whether a decoder change helped.
+Both tiers, against 500 recorded traces sampled with a fixed seed from FUTO's held-out split
+(`tools/swipe_model/futo_to_corpus.py`) and the **shipped English pack**. Compared against
+`docs/gesture-accuracy.json` and `docs/gesture-accuracy-tcn.json`, so a decoder regression fails
+in CI rather than being noticed on a device weeks later.
+
+| tier | top-1 | top-3 |
+|---|---|---|
+| A — `Shark2Decoder`, every build | **51.6%** | 61.4% |
+| B — `TcnDecoder`, `plus`, off by default | **76.2%** | 86.8% |
+
+13 of the 500 words are outside the pack, so 97.4% is the ceiling for both; the rest of the gap
+is decoding. On 2,000 traces rather than 500 the figures are 56.2% and 80.2% — the seeded
+sample runs a few points low, which is sampling, not a different decoder.
+
+What this replaced is worth stating, because it looked like a passing gate for months: 30
+gestures against the **59-word test pack**, scoring 96.67%. A tiny lexicon makes almost any
+decode correct, and one gesture was 3.3 points. Neither the corpus nor the vocabulary resembled
+what the keyboard does, and tier B had no gate at all — `tcn_replay.py` compared against a
+baseline file that had never been created.
 
 ### Suggestion quality — the one that does not
 
