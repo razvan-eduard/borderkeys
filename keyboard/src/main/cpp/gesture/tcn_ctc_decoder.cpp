@@ -13,6 +13,19 @@ namespace borderkeys {
 namespace {
 
 constexpr float kPi = 3.14159265358979323846f;
+
+// How the beam's path evidence, the word's length and its frequency combine into one score.
+//
+//   score = ctc / max(letters,1)^kLengthNormalisation
+//         + kLengthBonus * letters
+//         + kFrequencyWeight * contextLogProb
+//
+// A CTC path accumulates log-probability per character, so without the first term a long word
+// is penalised for being long. The third weighs how far the language model may override what
+// the finger drew.
+constexpr float kLengthNormalisation = 0.0f;
+constexpr float kLengthBonus = 3.0f;
+constexpr float kFrequencyWeight = 0.5f;
 constexpr float kNegInf = -std::numeric_limits<float>::infinity();
 
 float logSumExp(float a, float b) {
@@ -129,7 +142,7 @@ void TcnCtcDecoder::keyLogProbsFor(const float* spectralFrame, float intentionFr
 }
 
 int TcnCtcDecoder::addOrMergeHypothesis(Hypothesis* hyps, int count, int32_t node,
-                                        uint32_t lastSymbol, int32_t lastSlot,
+                                        uint32_t lastSymbol, int32_t lastSlot, int32_t letters,
                                         float blankContribution, float nonBlankContribution) const {
     for (int i = 0; i < count; ++i) {
         if (hyps[i].node == node && hyps[i].lastSymbol == lastSymbol) {
@@ -141,7 +154,8 @@ int TcnCtcDecoder::addOrMergeHypothesis(Hypothesis* hyps, int count, int32_t nod
     if (count >= kMaxBeamWidth * 4) {
         return count;  // dropped: the array is already carrying more than pruneToBeamWidth keeps
     }
-    hyps[count] = Hypothesis{node, lastSymbol, lastSlot, blankContribution, nonBlankContribution};
+    hyps[count] = Hypothesis{node,       lastSymbol,           lastSlot,
+                             blankContribution, nonBlankContribution, letters};
     return count + 1;
 }
 
@@ -191,13 +205,14 @@ int TcnCtcDecoder::decode(const float* intention, const float* spectral, const P
 
             // Stay via blank: the prefix is unchanged.
             nextCount = addOrMergeHypothesis(next, nextCount, h.node, h.lastSymbol, h.lastSlot,
-                                             /*blank=*/total + blankLogProb, kNegInf);
+                                             h.letters, /*blank=*/total + blankLogProb, kNegInf);
 
             // Repeat the last emitted symbol without a blank in between: CTC collapses this into
             // the SAME prefix, one instance of the letter, not two.
             if (h.lastSymbol != 0) {
                 nextCount = addOrMergeHypothesis(next, nextCount, h.node, h.lastSymbol, h.lastSlot,
-                                                 kNegInf, h.logProbNonBlank + keyLogProbs_[h.lastSlot]);
+                                                 h.letters, kNegInf,
+                                                 h.logProbNonBlank + keyLogProbs_[h.lastSlot]);
             }
 
             // Extend via every key the trie can actually follow from here.
@@ -216,11 +231,13 @@ int TcnCtcDecoder::decode(const float* intention, const float* spectral, const P
                     // The same letter again, but as a NEW instance: only reachable by having
                     // passed through a blank first, which is exactly what h.logProbBlank tracks.
                     nextCount = addOrMergeHypothesis(next, nextCount, child,
-                                                     static_cast<uint32_t>(symbol), slot, kNegInf,
+                                                     static_cast<uint32_t>(symbol), slot,
+                                                     h.letters + 1, kNegInf,
                                                      h.logProbBlank + charLogProb);
                 } else {
                     nextCount = addOrMergeHypothesis(next, nextCount, child,
-                                                     static_cast<uint32_t>(symbol), slot, kNegInf,
+                                                     static_cast<uint32_t>(symbol), slot,
+                                                     h.letters + 1, kNegInf,
                                                      total + charLogProb);
                 }
             }
@@ -248,8 +265,13 @@ int TcnCtcDecoder::decode(const float* intention, const float* spectral, const P
             continue;
         }
         const float ctcScore = logSumExp(current[i].logProbBlank, current[i].logProbNonBlank);
-        float score = ctcScore + scorer.packWeightLog(packIndex) +
-                      scorer.contextLogProb(packIndex, static_cast<uint32_t>(wordIndex)) +
+        const float letters = static_cast<float>(current[i].letters > 0 ? current[i].letters : 1);
+        const float normalised = (kLengthNormalisation > 0.0f)
+                                     ? ctcScore / std::pow(letters, kLengthNormalisation)
+                                     : ctcScore;
+        float score = normalised + kLengthBonus * letters + scorer.packWeightLog(packIndex) +
+                      kFrequencyWeight *
+                          scorer.contextLogProb(packIndex, static_cast<uint32_t>(wordIndex)) +
                       scorer.userBoost(text, textLength);
         heap.offer(Candidate{packIndex, wordIndex, score});
     }
