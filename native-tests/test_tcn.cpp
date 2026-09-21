@@ -184,6 +184,90 @@ void runTcnTests() {
         }
     }
 
+    section("the shipped weights compute what model.py computes");
+    {
+        // The payload is read positionally, so two same-shaped arrays written in the wrong order
+        // load at the same byte length and pass magic, version and every descriptor field.
+        // tools/swipe_model/export_weights.py --golden records model.py's output for a fixed
+        // input; this runs the C++ encoder on the same input with the same file. They agree only
+        // when each array is where both sides expect it.
+        std::vector<uint8_t> golden;
+        std::vector<uint8_t> shipped;
+        if (!readWholeFile(BORDERKEYS_TEST_DATA "/tcn_golden.bin", &golden) ||
+            !readWholeFile(BORDERKEYS_SWIPE_MODEL, &shipped)) {
+            check(false, "the golden vector and the shipped model.bkw are readable");
+        } else {
+            uint32_t header[6] = {};
+            const size_t features = kTcnTimesteps * kTcnFeatureDim;
+            const size_t spectralCount =
+                TcnEncoder::kOutputTimesteps * TcnEncoder::kSpectralDim;
+            const size_t expected = sizeof(header) +
+                sizeof(float) * (features + TcnEncoder::kOutputTimesteps + spectralCount);
+            check(golden.size() == expected, "the golden vector is the size its shapes imply");
+            std::memcpy(header, golden.data(), sizeof(header));
+            check(header[0] == 0x31474B42u && header[1] == 1u,
+                  "the golden vector's magic and version are current");
+            check(header[2] == kTcnTimesteps && header[3] == kTcnFeatureDim &&
+                      header[4] == TcnEncoder::kOutputTimesteps &&
+                      header[5] == TcnEncoder::kSpectralDim,
+                  "and it was written for this architecture");
+
+            const float* const payload =
+                reinterpret_cast<const float*>(golden.data() + sizeof(header));
+            auto weights = std::make_unique<TcnWeights>();
+            check(weights->loadFromBytes(shipped.data(), shipped.size()),
+                  "the shipped weights load for the comparison");
+
+            auto encoder = std::make_unique<TcnEncoder>();
+            encoder->setWeights(weights.get());
+            std::vector<float> intention(TcnEncoder::kOutputTimesteps);
+            std::vector<float> spectral(spectralCount);
+            encoder->forward(payload, intention.data(), spectral.data());
+
+            // Both tracks are compared absolutely: the intention head is a sigmoid, so it lives
+            // in [0,1], and the spectral track is a DCT over a normalised field. The bound is
+            // what float32 accumulated in a different order costs over five dilated blocks.
+            const float* const goldenIntention = payload + features;
+            const float* const goldenSpectral = goldenIntention + TcnEncoder::kOutputTimesteps;
+            float worstIntention = 0.0f;
+            float worstSpectral = 0.0f;
+            for (int i = 0; i < TcnEncoder::kOutputTimesteps; ++i) {
+                worstIntention = std::fmax(worstIntention,
+                                           std::fabs(intention[i] - goldenIntention[i]));
+            }
+            for (size_t i = 0; i < spectralCount; ++i) {
+                worstSpectral = std::fmax(worstSpectral,
+                                          std::fabs(spectral[i] - goldenSpectral[i]));
+            }
+            if (worstIntention > 1e-3f || worstSpectral > 1e-3f) {
+                std::printf("      worst intention %g, worst spectral %g\n",
+                            static_cast<double>(worstIntention),
+                            static_cast<double>(worstSpectral));
+            }
+            check(worstIntention <= 1e-3f, "the intention track matches model.py's");
+            check(worstSpectral <= 1e-3f, "the spectral track matches model.py's");
+
+            // The swap the descriptor cannot see, performed on purpose: seReduceWeight is
+            // [trunk * seReduced] and seExpandWeight is [seReduced * trunk], so exchanging them
+            // changes no length and no descriptor field. A comparison that still passed here
+            // would be measuring nothing.
+            std::vector<float> swapped(TcnWeights::kTrunk * TcnWeights::kSeReduced);
+            std::memcpy(swapped.data(), weights->blocks[0].seReduceWeight, sizeof(swapped[0]) * swapped.size());
+            std::memcpy(weights->blocks[0].seReduceWeight, weights->blocks[0].seExpandWeight,
+                        sizeof(swapped[0]) * swapped.size());
+            std::memcpy(weights->blocks[0].seExpandWeight, swapped.data(),
+                        sizeof(swapped[0]) * swapped.size());
+            encoder->forward(payload, intention.data(), spectral.data());
+            float worstSwapped = 0.0f;
+            for (size_t i = 0; i < spectralCount; ++i) {
+                worstSwapped = std::fmax(worstSwapped,
+                                         std::fabs(spectral[i] - goldenSpectral[i]));
+            }
+            check(worstSwapped > 1e-3f,
+                  "and two same-shaped arrays exchanged make it disagree");
+        }
+    }
+
     section("TCN encoder forward pass");
     {
         const std::vector<uint8_t> zeroed = zeroWeightsFile();

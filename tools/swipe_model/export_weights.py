@@ -18,7 +18,15 @@ import argparse
 import struct
 from pathlib import Path
 
-from architecture import BATCHNORM_EPSILON, DESCRIPTOR_FIELDS, expected_float_count
+from architecture import (
+    BATCHNORM_EPSILON,
+    DESCRIPTOR_FIELDS,
+    INPUT_FEATURES,
+    SPECTRAL_DIM,
+    TIMESTEPS_IN,
+    TIMESTEPS_OUT,
+    expected_float_count,
+)
 
 # torch and model are imported where they are used: --upgrade rewrites a file's header and needs
 # neither, so a .bkw can be brought to the current version without a training environment.
@@ -116,6 +124,56 @@ def write_bkw(model, key_embedding, out_path: Path) -> None:
             f.write(tensor.detach().cpu().numpy().astype("<f4").tobytes())
 
 
+GOLDEN_MAGIC = 0x31474B42  # 'B' 'K' 'G' '1', little-endian
+GOLDEN_VERSION = 1
+
+
+def golden_input():
+    """The fixed feature block both encoders are run on.
+
+    A smooth synthetic path through the key field, resampled and passed through the same
+    build_features the training and evaluation paths use, so every channel carries the scale it
+    carries at inference rather than an arbitrary one.
+    """
+    import numpy as np  # noqa: PLC0415 -- see the import note at the top
+    import torch  # noqa: PLC0415 -- see the import note at the top
+
+    from features_np import build_features, resample_uniform_time  # noqa: PLC0415
+
+    raw = np.arange(40, dtype=np.float64)
+    xs = (0.5 + 0.42 * np.sin(raw * 0.17)).astype(np.float32)
+    ys = (0.5 + 0.34 * np.sin(raw * 0.11 + 1.3)).astype(np.float32)
+    times = raw * 9.0
+    resampled = resample_uniform_time(xs, ys, times)
+    return torch.from_numpy(build_features(*resampled))
+
+
+def write_golden(model, key_embedding, out_path: Path) -> None:
+    """Writes the input above and this model's output for it, for native-tests/test_tcn.cpp.
+
+    Header: magic, version, and the four shapes the payload's lengths follow from. Then the
+    features, the intention track and the spectral track, each little-endian float32.
+
+    The payload of a `.bkw` is read positionally, so two same-shaped arrays written in the wrong
+    order load as a different network at the same byte length and pass every header check. This
+    is the one thing that separates them: the reference output comes from `model.py`, the
+    comparison from the C++ encoder, and only weights in the right places make the two agree.
+    """
+    import torch  # noqa: PLC0415 -- see the import note at the top
+
+    model.eval()
+    key_embedding.eval()
+    features = golden_input()
+    with torch.no_grad():
+        intention, spectral = model(features.unsqueeze(0))
+
+    with out_path.open("wb") as f:
+        f.write(struct.pack("<6I", GOLDEN_MAGIC, GOLDEN_VERSION,
+                            TIMESTEPS_IN, INPUT_FEATURES, TIMESTEPS_OUT, SPECTRAL_DIM))
+        for tensor in (features, intention[0], spectral[0]):
+            f.write(tensor.detach().cpu().numpy().astype("<f4").tobytes())
+
+
 def read_bkw(path: Path) -> tuple[int, int, int]:
     """A minimal reader for --selftest: returns (magic, version, float_count) without knowing
     anything about the architecture, the same "can a second implementation agree with the first"
@@ -166,11 +224,17 @@ def main() -> int:
     parser.add_argument("--selftest", action="store_true",
                         help="Export a freshly initialised (untrained) model and verify it "
                              "round-trips, instead of exporting a real checkpoint.")
+    parser.add_argument("--golden", type=Path, default=None,
+                        help="Also write this checkpoint's output for a fixed input, which "
+                             "native-tests/test_tcn.cpp compares the C++ encoder against. Write "
+                             "it from the same checkpoint as --out, or the two disagree by "
+                             "construction.")
     arguments = parser.parse_args()
 
     if arguments.upgrade is not None:
         return upgrade(arguments.upgrade, arguments.out)
 
+    import torch  # noqa: PLC0415 -- see the import note above
     from model import KeyEmbedding, TcnEncoder  # noqa: PLC0415 -- see the import note above
 
     if arguments.selftest:
@@ -196,6 +260,9 @@ def main() -> int:
     key_embedding.load_state_dict(state["key_embedding"])
     write_bkw(model, key_embedding, arguments.out)
     print(f"wrote {arguments.out} ({arguments.out.stat().st_size:,} bytes)")
+    if arguments.golden is not None:
+        write_golden(model, key_embedding, arguments.golden)
+        print(f"wrote {arguments.golden} ({arguments.golden.stat().st_size:,} bytes)")
     return 0
 
 
