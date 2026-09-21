@@ -30,7 +30,7 @@ daca	dacă	Correctable
 in	în	Correctable
 
 # --- a correct Romanian word is left alone ----------------------------------------------------
-snobul	-	TooFar
+snobul	-	NothingOffered
 
 # "cana" must reach "cană" (170) and not "canal" (1,369). Both are reachable from the letters
 # typed: the first is the typed word with its diacritic restored, the second a different word

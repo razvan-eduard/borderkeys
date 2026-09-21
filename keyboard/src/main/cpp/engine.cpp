@@ -124,7 +124,27 @@ constexpr float kMarkInsertCost = 0.02f;
 // typo and mid-word corpora hold at 100.0% and 98.5% throughout.
 constexpr float kMarkDeleteCost = 3.0f;
 
-constexpr float kDeleteCost = 0.85f;
+// Dearer than kInsertCost, and deliberately not its mirror.
+//
+// The two operations are not symmetric claims about what someone meant. Supplying a letter they
+// did not type is the ordinary lossiness of typing -- a key missed, or a word still being
+// written -- and it is most of what a keyboard is for. Discarding a letter they *did* type
+// throws away the only direct evidence of intent there is. kMarkDeleteCost already makes that
+// argument for apostrophes and hyphens; there is nothing about a mark that makes it true there
+// and false for letters, and holding the two costs equal was the assumption rather than the
+// finding.
+//
+// It is what overwrites words the pack has never heard of. 79% of those failures committed
+// something *shorter* than what was typed -- "bisection" as "section", "crewel" as "crew",
+// "garble" as "able" -- because two deletions cost 1.70 against a frequency gap worth far more.
+//
+// Swept against every corpus, with the deletion cost at 0.85 / 1.0 / 1.2 / 1.4 / 1.6 / 1.7 /
+// 2.0. Unknown words left alone: 66.0, 72.0, 72.5, 82.0, 85.5, 90.0, 91.0. The mid-word and
+// typo corpora never move at all -- 98.5% and 100.0% throughout -- which is the shape the
+// reasoning predicts, since those are insertions and transpositions and this prices neither.
+// The strip is what sets the ceiling: flat at 71.9% first and 81.2% top-three up to 1.6, then
+// 68.8% and 75.0% from 1.7 on. So 1.6, the last value the strip does not pay for.
+constexpr float kDeleteCost = 1.6f;
 // Transposition is one gesture gone out of order rather than two independent errors, so it
 // costs a little less than the insertion or deletion it would otherwise be decomposed into --
 // deliberately a little rather than a lot now that kEditPenalty is 40: at the old value (0.65,

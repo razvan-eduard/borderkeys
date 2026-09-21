@@ -84,16 +84,28 @@ thanks	-	KnownWord
 
 # --- a completion is not a correction ---------------------------------------------------------
 # "teh" must reach "the" and never "tehran", which is what reading the strip's first place did.
-tehran	-	TooFar
+# "tehran" itself is capitalised, which is the name feature rather than a correction: the pack
+# holds it only as a name, so matchCase recases it and the known-word rule's proper-noun
+# exception lets it through. It read "-" until kDeleteCost rose, not because anything protected
+# it but because a different, too-far candidate was winning -- right by accident. The class is
+# narrow: of "march", "may", "polish", "turkey", "china", "rose", "will" and "paris", none is
+# touched, because each also exists as an ordinary word and the known-word guard holds.
+tehran	Tehran	Correctable
 
 # --- contractions the dictionaries already hold are left alone --------------------------------
-# NoChange rather than KnownWord: nothing better than the word itself was offered.
-it's	-	NoChange
-don't	-	NoChange
+# TooFar rather than KnownWord: the ceiling is reached before the known-word rule. These read
+# NoChange until kDeleteCost rose, when the apostrophe stopped being cheap enough to discard and
+# what comes back is a further word. Both answers are "leave it alone"; the reason moved.
+it's	-	TooFar
+don't	-	TooFar
 
 # --- correct, and absent from the pack --------------------------------------------------------
 # Being correct is not the same as being in the dictionary. 6,910 ordinary English words are
 # missing from the pack and 31.5% of them are still overwritten; "snobul" was the report that
 # bought the maxEdits ceiling. Recorded as it behaves so the next attempt starts from a fact.
-snobul	-	TooFar
-abaft	-	TooFar
+# NothingOffered rather than TooFar since kDeleteCost rose: reaching a shorter word by
+# discarding letters now costs more than the ceiling allows, so nothing is proposed at all
+# rather than proposed and refused. This is the corpus behind it -- 66.0% of correct words the
+# pack lacks survived, now 85.5%.
+snobul	-	NothingOffered
+abaft	-	NothingOffered

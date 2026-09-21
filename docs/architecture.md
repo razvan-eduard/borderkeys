@@ -626,7 +626,7 @@ terms, which is the question every scoring change starts with and the one a rank
 answer.
 
 A harness that forgets `setKeyGeometry` measures prefix completion and reports it as the whole
-engine. Current baseline: **71.9% first, mean rank 1.39.**
+engine. Current baseline: **71.9% first, mean rank 1.43.**
 
 ---
 
