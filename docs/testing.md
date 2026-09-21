@@ -152,6 +152,13 @@ packager.
   be included before it fails here — which is exactly what happened once.
 - **Dictionary compiler round trip.** `build_dict.py --selftest` proves the Python still agrees
   with `bkd_format.hpp`, which is the authority on the format.
+- **Encoder parity, `test_tcn.cpp`.** `native-tests/data/tcn_golden.bin` carries `model.py`'s
+  output for one fixed input, written by `export_weights.py --golden` from the checkpoint the
+  shipped weights come from. The C++ encoder is run on the same input with the same `.bkw` and
+  has to agree within 1e-3 on both tracks. The `.bkw` payload is read positionally, so two
+  same-shaped arrays written in the wrong order load at the same byte length and pass magic,
+  version and every descriptor field; the test exchanges `seReduceWeight` and `seExpandWeight`
+  itself and asserts the comparison then fails, so it cannot silently stop measuring anything.
 
 ---
 
@@ -213,8 +220,17 @@ in CI rather than being noticed on a device weeks later.
 
 | tier | top-1 | top-3 |
 |---|---|---|
-| A — `Shark2Decoder`, every build | **60.4%** | 67.8% |
+| A — `Shark2Decoder`, every build | **77.0%** | 90.2% |
 | B — `TcnDecoder`, `plus`, on by default | **90.6%** | 94.8% |
+
+Tier A reads 77.0% rather than the 60.4% it held while only the five geometry constants had been
+fitted. The 159 words it missed then were never scored at all: widening the heap from 16 to 256
+moved none of them, so the loss was in the descent rather than in the ranking. A letter was
+reachable only when its key was the single nearest one to some resampled sample, so a key clipped
+at a corner pruned the word outright. `kTouchRadius` accepts any key the path passes within, and
+the scorer decides — worth 16.6 points of top-1. Weighting the language model against the two
+geometry channels was swept at the same time and peaks cleanly at 1.0, which is what it already
+was.
 
 The corpus is filtered twice, and both filters are about measuring the decoder rather than
 something else. Words the pack cannot produce are dropped, so the ceiling is 100% and a miss is
@@ -229,6 +245,35 @@ gestures against the **59-word test pack**, scoring 96.67%. A tiny lexicon makes
 decode correct, and one gesture was 3.3 points. Neither the corpus nor the vocabulary resembled
 what the keyboard does, and tier B had no gate at all — `tcn_replay.py` compared against a
 baseline file that had never been created.
+
+### Layout generalisation — not gated, and not the product number
+
+```
+tools/swipe_model/.venv/bin/python3 tools/swipe_model/eval_layouts.py \
+    --checkpoint checkpoint_combined.pt --limit 2000
+```
+
+Whether the encoder holds up on layouts it never trained on. `swipe-5` is FUTO's own multi-layout
+collection; training uses `qwerty` alone, so every other row is zero-shot.
+
+| layout | top-1 | |
+|---|---|---|
+| qwerty | 36.25% | in-domain |
+| azerty | 32.30% | zero-shot |
+| qwertz | 37.30% | zero-shot |
+| dvorak | 40.10% | zero-shot |
+| clearflow | 49.00% | zero-shot |
+| kasroz | 55.15% | zero-shot |
+| toki_pona | 61.04% | zero-shot |
+
+Two things this is not. It is not the shipped decoder: it greedy-decodes the encoder with no
+lexicon and no beam, which is why qwerty reads 36% here and 90.6% in the table above — the number
+is a floor on the encoder, not a product figure. And the rows are not comparable to each other,
+because each layout's slice carries its own vocabulary; `toki_pona` scores highest on about a
+hundred words. The comparison that holds is zero-shot against in-domain, and no layout falls
+below it.
+
+Requires torch and the FUTO dataset, which is why it is a manual run rather than a gate.
 
 ### Suggestion quality — the one that does not
 

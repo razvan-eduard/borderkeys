@@ -489,21 +489,28 @@ almost every word before measuring anything. Two channels, both needed:
 - **Location**, absolute pixels, no normalisation. Stops shape being fooled: `were` and `tie`
   trace nearly the same figure in nearly the same proportions, in different places.
 
-**60.4% top-1, 67.8% top-3** on 500 recorded traces from FUTO's held-out split, against the
+**77.0% top-1, 90.2% top-3** on 500 recorded traces from FUTO's held-out split, against the
 shipped English pack (`native-tests/data/gestures_futo.csv`, gated in CI). The SHARK² paper
 reports about 80% on English QWERTY; this is our implementation on real swipes, and it is the
 number tier B has to beat to justify its weights.
 
-`kShapeWeight`, `kLocationWeight` and `kEndpointRadius` are fitted against that corpus. What
-the fit says is that the two distance channels matter far less individually than their size
-relative to the language model: `kShapeWeight` is flat from 6 to 30, while `kLocationWeight`
-traces a clean peak at 8. `kMinLengthRatio` and `kMaxLengthRatio` are inert over any range worth
-trying and keep their original values.
+The descent reaches a letter when the path passes within `kTouchRadius` of its key, not only
+when that key is the nearest one to some sample. Marking only the nearest key left 159 of the
+500 words unreachable — never scored at any heap depth, which is why no weighting changed them —
+and widening it is worth 16.6 points of top-1 and 22.4 of top-3. It costs about 0.1 ms a
+gesture and does not approach `kVisitBudget`, which is inert over a 33-fold range either way.
+
+`kShapeWeight`, `kLocationWeight`, `kEndpointRadius` and `kTouchRadius` are fitted against that
+corpus. The two distance channels matter far less individually than their size relative to the
+language model: `kShapeWeight` is flat from 6 to 30, while `kLocationWeight` traces a clean peak
+at 8. Weighting the language model itself against them is a clean peak at 1.0, so it carries no
+constant. `kMinLengthRatio` and `kMaxLengthRatio` are inert over any range worth trying and keep
+their original values.
 
 ### Tier B — `TcnDecoder`
 
 `plus`-only, behind `BORDERKEYS_NEURAL_SWIPE`, and **on by default** since it was measured:
-**90.6% top-1, 94.8% top-3** on the same 500 traces, 30.2 points above tier A and ahead at every
+**90.6% top-1, 94.8% top-3** on the same 500 traces, 13.6 points above tier A and ahead at every
 word length. A `core` build compiles no tier B at all, so tier A is what that flavour swipes
 with. Three stages:
 
