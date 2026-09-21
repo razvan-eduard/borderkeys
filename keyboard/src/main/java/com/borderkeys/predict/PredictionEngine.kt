@@ -106,6 +106,9 @@ class PredictionEngine(
     private var nativeCorrection: String? = null
     private var nativeCorrectionIsName = false
 
+    /** [nativeCorrectionIndex]'s value for the answer being published, under resultLock. */
+    private var nativeCorrectionAt = -1
+
     /** The composing text the current [nativeKnownWord]/[nativeCount] answer is about. */
     private var nativeQuery = ""
 
@@ -116,6 +119,11 @@ class PredictionEngine(
     private val nativeWords = arrayOfNulls<String>(MAX_RESULTS)
     private val nativeScores = FloatArray(MAX_RESULTS)
     private val nativeProperNoun = BooleanArray(MAX_RESULTS)
+
+    /** Which entry of [nativeWords] the corrections heap settled on, or -1 when it settled on a
+     *  word the ranking does not carry. Filled by nativeSuggest, by pack and word index rather
+     *  than by comparing text. */
+    private val nativeCorrectionIndex = IntArray(1)
     private var nativeCount = 0
 
 
@@ -740,6 +748,7 @@ class PredictionEngine(
                             nativeWords,
                             nativeScores,
                             nativeProperNoun,
+                            nativeCorrectionIndex,
                         )
                     }
                 }
@@ -792,6 +801,7 @@ class PredictionEngine(
                 nativePossessive = possessive
                 nativeCorrection = correction
                 nativeCorrectionIsName = correctionName[0]
+                nativeCorrectionAt = nativeCorrectionIndex[0]
                 nativeCount = count
                 nativeQuery = query
                 nativeKnownWord = if (spelling != null && spelling.equals(query, ignoreCase = true)) {
@@ -841,12 +851,28 @@ class PredictionEngine(
      */
     private fun copyAndFilterResults(): List<Candidate> {
         val out = ArrayList<Candidate>(MAX_RESULTS)
+        var correction: Candidate? = null
         synchronized(resultLock) {
             for (index in 0 until nativeCount) {
                 val word = nativeWords[index] ?: continue
-                out.add(Candidate(word, nativeProperNoun[index]))
+                out.add(
+                    Candidate(
+                        word,
+                        nativeProperNoun[index],
+                        isCorrection = index == nativeCorrectionAt,
+                    ),
+                )
+            }
+            // The corrections heap settled on a word the ranking does not carry, which is the
+            // ordinary case: "teh" ranks tehran and nine more above "the". It joins the list so
+            // that the answer to "which of these would a delimiter commit" is always in the list
+            // rather than something the caller has to reconcile against it.
+            val text = nativeCorrection
+            if (nativeCorrectionAt < 0 && text != null) {
+                correction = Candidate(text, nativeCorrectionIsName, isCorrection = true)
             }
         }
+        correction?.let { out.add(it) }
         synchronized(blocked) {
             if (blocked.isNotEmpty()) {
                 out.removeAll { WordFold.fold(it.text) in blocked }

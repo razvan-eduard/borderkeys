@@ -48,7 +48,9 @@ internal class Pipeline private constructor(private val handle: Long) {
         val words = arrayOfNulls<String>(MAX_CANDIDATES)
         val scores = FloatArray(MAX_CANDIDATES)
         val properNoun = BooleanArray(MAX_CANDIDATES)
-        NativePredictor.nativeSuggest(handle, typed, previous, null, words, scores, properNoun)
+        NativePredictor.nativeSuggest(
+            handle, typed, previous, null, words, scores, properNoun, IntArray(1),
+        )
 
         val isName = BooleanArray(1)
         val correction = NativePredictor.nativeBestCorrection(handle, isName)
@@ -77,9 +79,33 @@ internal class Pipeline private constructor(private val handle: Long) {
         val words = arrayOfNulls<String>(MAX_CANDIDATES)
         val scores = FloatArray(MAX_CANDIDATES)
         val properNoun = BooleanArray(MAX_CANDIDATES)
-        val n = NativePredictor.nativeSuggest(handle, typed, previous, null, words, scores, properNoun)
+        val n = NativePredictor.nativeSuggest(
+            handle, typed, previous, null, words, scores, properNoun, IntArray(1),
+        )
         return (0 until n).mapNotNull { words[it] }
     }
+
+    /** The ranked words for [typed], and which of them the corrections heap settled on -- the
+     *  index nativeSuggest reports, or -1 when the correction is not among them. */
+    fun stripWithCorrection(typed: String, previous: String? = null): CorrectionView {
+        val words = arrayOfNulls<String>(MAX_CANDIDATES)
+        val scores = FloatArray(MAX_CANDIDATES)
+        val properNoun = BooleanArray(MAX_CANDIDATES)
+        val at = IntArray(1)
+        val n = NativePredictor.nativeSuggest(
+            handle, typed, previous, null, words, scores, properNoun, at,
+        )
+        val isName = BooleanArray(1)
+        return CorrectionView(
+            (0 until n).mapNotNull { words[it] },
+            at[0],
+            NativePredictor.nativeBestCorrection(handle, isName),
+        )
+    }
+
+    /** What the engine says about one word: its ranking, which entry the corrections heap chose,
+     *  and that heap's own answer by name. Before any Kotlin policy runs. */
+    data class CorrectionView(val ranked: List<String>, val correctionAt: Int, val correction: String?)
 
     /** Each word of [phrase] in turn, every one carrying the word before it as context. */
     fun commitPhrase(phrase: String): List<Outcome> {

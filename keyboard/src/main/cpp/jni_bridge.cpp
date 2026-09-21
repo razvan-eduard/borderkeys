@@ -242,7 +242,7 @@ void nativeSetKeyGeometry(JNIEnv* env, jobject /*thiz*/, jlong handle, jintArray
 
 jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing, jstring prev1,
                    jstring prev2, jobjectArray outWords, jfloatArray outScores,
-                   jbooleanArray outProperNoun) {
+                   jbooleanArray outProperNoun, jintArray outCorrectionIndex) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || outWords == nullptr || outScores == nullptr ||
         outProperNoun == nullptr) {
@@ -295,6 +295,8 @@ jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composin
 
     float scores[Engine::kMaxCandidates];
     jboolean properNoun[Engine::kMaxCandidates];
+    const Candidate* const correction = engine->bestCorrection();
+    jint correctionIndex = -1;
     int written = 0;
     char text[kStringBufferBytes];
     for (int i = 0; i < found; ++i) {
@@ -322,7 +324,22 @@ jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composin
         }
         scores[written] = candidates[i].score;
         properNoun[written] = engine->candidateIsProperNoun(candidates[i]) ? JNI_TRUE : JNI_FALSE;
+        // Which of these the corrections heap settled on, by pack and word rather than by text:
+        // the caller used to find it again by comparing strings, which is an identity the two
+        // heaps never actually shared. -1 when the correction is not among them at all, which is
+        // the ordinary case -- see correctionHeap_ in engine.hpp for why the two rankings differ.
+        if (correction != nullptr && candidates[i].packIndex == correction->packIndex &&
+            candidates[i].wordIndex == correction->wordIndex) {
+            correctionIndex = written;
+        }
         ++written;
+    }
+
+    if (outCorrectionIndex != nullptr && env->GetArrayLength(outCorrectionIndex) > 0) {
+        env->SetIntArrayRegion(outCorrectionIndex, 0, 1, &correctionIndex);
+        if (env->ExceptionCheck() == JNI_TRUE) {
+            env->ExceptionClear();
+        }
     }
 
     if (written > 0) {
@@ -996,7 +1013,7 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeSetActiveLanguages)},
     {"nativeSetKeyGeometry", "(J[I[F[FFF)V", reinterpret_cast<void*>(nativeSetKeyGeometry)},
     {"nativeSuggest",
-     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F[Z)I",
+     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F[Z[I)I",
      reinterpret_cast<void*>(nativeSuggest)},
     {"nativeLearn", "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V",
      reinterpret_cast<void*>(nativeLearn)},
