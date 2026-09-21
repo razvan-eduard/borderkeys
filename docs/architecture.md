@@ -139,11 +139,42 @@ second pass over any dictionary:
 | | `heap` | `correctionHeap_` |
 |---|---|---|
 | Holds | 16 candidates | 4 (`kMaxCorrections`) |
-| Admits | everything reached | only `endpoint.cost > 0` **and** `plausibleCorrectionTarget()` |
+| Admits | everything reached | `reachesCorrectionHeap()` **and** `plausibleCorrectionTarget()` |
 | Read by | the strip | `bestCorrection()` → `AutoCorrection` |
 
 Only the best correction is ever read; the other three exist so that the best is the best of
 several rather than the first one reached.
+
+### What decides which heap — `Reading`
+
+A candidate is classified from two numbers: what the walk paid in edits to reach the endpoint,
+and how many characters the word runs past the letters typed. `reading.hpp` names the five
+results, and the routing between them *is* the correction hierarchy:
+
+| reading | cost | depth | goes to | bound |
+|---|---|---|---|---|
+| `Exact` | 0 | 0 | strip | — |
+| `Respelling` | 0 | 0, carries a diacritic | its own tier, above the heap | no frequency floor |
+| `ShortCompletion` | 0 | 1 | strip + corrections | `kMaxCorrectionCompletion` |
+| `LongCompletion` | 0 | ≥ 2 | strip | `kMaxFreeCompletion` 12 |
+| `Correction` | > 0 | 0, or 1 when the edit landed on no word | strip + corrections | `kMaxCompletionAfterEdit` |
+
+Three consequences worth stating plainly, because each was a device report before it was a rule:
+
+- A one-character completion costs `kCompletionPenalty` 0.5 and an edit costs roughly 43, so
+  **a completion beats a correction by about 86 to 1**. Typing `believ` commits `believe`, not
+  `belief`. Correction-first was measured at 12.0% on mid-word typing against 98.5% for this.
+- A `LongCompletion` never reaches the corrections heap, which is why `teh` commits `the`
+  although `tehran` outranks it in the strip by 25.7 points.
+- A `Respelling` outranks the heap outright rather than competing in it, because the two are not
+  on one scale: a proposal must clear `kCorrectionFrequencyFloor` and a respelling is exempt.
+  `cană` (170 occurrences) beats `canal` (1,369).
+
+`Correction` may carry on one character past the endpoint **only when the edit landed on no
+word**. `sevrice` already spells `service` once the transposition is undone, so it stops there
+rather than gaining a letter and becoming `services`; `sevric` spells nothing and carries on.
+Without that condition the completion is free on top of an uncertain edit, and a frequent
+inflected form wins — the failure that kept this barred entirely until it was measured.
 
 `bestCorrection()` decides nothing. Whether the word is applied remains
 `AutoCorrection.correctionFor`'s to say, and it still applies every guard below.

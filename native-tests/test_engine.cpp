@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "engine.hpp"
+#include "reading.hpp"
 #include "proximity.hpp"
 #include "test_support.hpp"
 #include "topk.hpp"
@@ -247,8 +248,10 @@ void runEngineTests() {
         // The same shape in Romanian is "si" beating a correctly typed "stiu".
         check(loaded.rankOf("theme", "theme") == 0,
               "a correctly spelled rare word outranks a frequent correction of it");
-        check(loaded.rankOf("theme", "the") > 0,
-              "and the frequent correction is still offered, just not first");
+        // Reaching it discards two typed characters, which costs 2 x kDeleteCost -- past
+        // maxEditCostFor at this length, so it is not reached at all.
+        check(loaded.rankOf("theme", "the") < 0,
+              "and a correction two deletions away is beyond the ceiling");
         check(loaded.rankOf("timer", "timer") == 0,
               "which holds when the ratio is sixty to one");
         check(loaded.rankOf("masiv", "masiv") == 0,
@@ -264,8 +267,8 @@ void runEngineTests() {
         // non-exact corrections, ranked by which one is the smaller mistake.
         check(loaded.rankOf("thexx", "thex") == 0,
               "the one-edit correction outranks a much more frequent two-edit one");
-        check(loaded.rankOf("thexx", "the") > 0,
-              "and the frequent, farther correction is still offered, just not first");
+        check(loaded.rankOf("thexx", "the") < 0,
+              "and the two-deletion reading is beyond the ceiling too");
 
         // Insertion has to be able to reach any character, not just the ones near whatever key
         // comes next -- "kyboard" reaching "keyboard" needs an 'e' inserted before 'y', and 'e'
@@ -599,6 +602,32 @@ void runEngineTests() {
         }
     }
 
+    section("each reading is what its cost and depth say");
+    {
+        // readingOf is pure, so this needs no pack: the classification is the hierarchy, and
+        // these are the five cases the routing distinguishes.
+        check(readingOf(0.0f, 0, "car", 3) == Reading::Exact, "no edit, no depth, no mark");
+        check(readingOf(0.0f, 0, "can\u0103", 5) == Reading::Respelling, "a mark the fold drops");
+        check(readingOf(0.0f, 1, "cars", 4) == Reading::ShortCompletion, "one character past");
+        check(readingOf(0.0f, 2, "carts", 5) == Reading::LongCompletion, "two characters past");
+        check(readingOf(0.8f, 0, "the", 3) == Reading::Correction, "reached by an edit");
+
+        // Depth outranks the mark: a word carrying a diacritic is still a completion when it
+        // runs past the letters typed.
+        check(readingOf(0.0f, 1, "can\u0103", 5) == Reading::ShortCompletion,
+              "a mark does not make a completion a respelling");
+        // Cost outranks both.
+        check(readingOf(0.8f, 1, "can\u0103", 5) == Reading::Correction,
+              "an edit outranks depth and marks alike");
+
+        check(reachesCorrectionHeap(Reading::Correction), "corrections may be committed");
+        check(reachesCorrectionHeap(Reading::ShortCompletion), "and so may a short completion");
+        check(!reachesCorrectionHeap(Reading::LongCompletion), "a long completion may not");
+        check(!reachesCorrectionHeap(Reading::Exact), "nor the word already typed");
+        check(takesRespellingTier(Reading::Respelling), "a respelling takes its own tier");
+        check(!takesRespellingTier(Reading::Exact), "and nothing else does");
+    }
+
     section("autocorrect asks its own question");
     {
         // The defect this exists for: the strip is ranked for "what are you writing", where a
@@ -607,8 +636,8 @@ void runEngineTests() {
         // tehran's, Tehan and six more before "the", so autocorrect offered nothing at all.
         //
         // The fixture pack is small, so this checks the property rather than any particular
-        // word: whatever bestCorrection returns must have been reached by an edit, never by
-        // carrying the typed letters on.
+        // word: whatever bestCorrection returns may carry the typed letters on by at most
+        // kMaxCorrectionCompletion characters.
         LoadedEngine loaded;
         loaded.open();
 
@@ -619,8 +648,9 @@ void runEngineTests() {
             uint32_t length = 0;
             const char* const text = loaded.engine.candidateText(*best, &length);
             check(text != nullptr && length > 0, "a correction resolves to text");
-            const bool continues = length > 3 && std::memcmp(text, "car", 3) == 0;
-            check(!continues, "and it is never merely what was typed carried on further");
+            const bool continues = length > 3 + kMaxCorrectionCompletion &&
+                                   std::memcmp(text, "car", 3) == 0;
+            check(!continues, "and it carries the typed letters on no further than the cap");
         }
 
         // A word the dictionaries do not know at all has nothing to correct towards, and the

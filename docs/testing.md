@@ -109,6 +109,11 @@ Two registered tests:
   Source: `test_engine.cpp`, `test_fold.cpp`, `test_format.cpp`, `test_gesture.cpp`, `test_tcn.cpp`.
 - **`pack_corpus`** — the pack loader against a committed corpus of deliberately damaged files.
 
+A note on running them: **build every target before `ctest`.** `cmake --build … --target
+suggest_eval` leaves `borderkeys_tests` stale, and `ctest` will then report a pass against an
+engine from before your change. A `kDeleteCost` sweep was committed that way, with two engine
+assertions failing and nothing saying so.
+
 A note on writing engine tests: **`setKeyGeometry` is not optional.** Without it
 `KeyGeometry::isSet()` is false and the walk never leaves exact-match mode — no substitution,
 deletion, transposition or insertion at all. A test that forgets it measures prefix completion
