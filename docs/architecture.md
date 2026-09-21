@@ -489,13 +489,16 @@ almost every word before measuring anything. Two channels, both needed:
 - **Location**, absolute pixels, no normalisation. Stops shape being fooled: `were` and `tie`
   trace nearly the same figure in nearly the same proportions, in different places.
 
-About 80% top-1 on English QWERTY — the figure the literature reports, and the number tier B has
-to beat to justify its weights.
+**51.6% top-1, 61.4% top-3** on 500 recorded traces from FUTO's held-out split, against the
+shipped English pack (`native-tests/data/gestures_futo.csv`, gated in CI). The SHARK² paper
+reports about 80% on English QWERTY; this is our implementation on real swipes and a 127,255-word
+lexicon, and it is the number tier B has to beat to justify its weights.
 
 ### Tier B — `TcnDecoder`
 
 `plus`-only, behind `BORDERKEYS_NEURAL_SWIPE`, off by default, opt-in as "experimental swipe
-model". Three stages:
+model". **76.2% top-1, 86.8% top-3** on the same 500 traces — 24.6 points above tier A, which is
+what everyone gets today. Three stages:
 
 ```
 resampleUniformTime + buildTcnFeatures   raw touch samples → encoder input
