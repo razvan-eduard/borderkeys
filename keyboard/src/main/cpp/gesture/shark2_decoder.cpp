@@ -28,8 +28,8 @@ constexpr float kMaxLengthRatio = 2.60f;
 // location distance is in key widths and runs roughly 0 to 3. The weights put a plausible
 // mismatch on each channel at about one order of magnitude of probability, which is what makes
 // the geometry and the language model comparable rather than one of them decorative.
-constexpr float kShapeWeight = 11.0f;
-constexpr float kLocationWeight = 2.2f;
+constexpr float kShapeWeight = 16.0f;
+constexpr float kLocationWeight = 7.0f;
 
 // Trie nodes one gesture may visit. The budget, not a timer, is what holds the thirty
 // millisecond target: a wall-clock check would make the answer depend on how busy the device

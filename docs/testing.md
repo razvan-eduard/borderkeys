@@ -213,7 +213,7 @@ in CI rather than being noticed on a device weeks later.
 
 | tier | top-1 | top-3 |
 |---|---|---|
-| A — `Shark2Decoder`, every build | **55.4%** | 65.4% |
+| A — `Shark2Decoder`, every build | **60.2%** | 67.0% |
 | B — `TcnDecoder`, `plus`, on by default | **90.6%** | 94.8% |
 
 The corpus is filtered twice, and both filters are about measuring the decoder rather than
