@@ -15,7 +15,7 @@ namespace {
 // widths. This is the cheapest prune there is and it removes almost everything: a swipe that
 // starts on "t" is not the word "apple", and deciding that costs one distance comparison
 // instead of a trie walk.
-constexpr float kEndpointRadius = 1.35f;
+constexpr float kEndpointRadius = 1.7f;
 
 // The template's path length must be within this band of the gesture's. A word twice as long as
 // what the finger drew was not what the finger drew.
@@ -29,7 +29,7 @@ constexpr float kMaxLengthRatio = 2.60f;
 // mismatch on each channel at about one order of magnitude of probability, which is what makes
 // the geometry and the language model comparable rather than one of them decorative.
 constexpr float kShapeWeight = 16.0f;
-constexpr float kLocationWeight = 7.0f;
+constexpr float kLocationWeight = 8.0f;
 
 // Trie nodes one gesture may visit. The budget, not a timer, is what holds the thirty
 // millisecond target: a wall-clock check would make the answer depend on how busy the device

@@ -1,6 +1,6 @@
 {
   "corpus": "native-tests/data/gestures_futo.csv",
   "gestures": 500,
-  "top1": 60.2,
-  "top3": 67.0
+  "top1": 60.4,
+  "top3": 67.8
 }
