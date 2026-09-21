@@ -57,10 +57,10 @@ object BundledDictionaries {
         // every name. The counts here are read from the compiled headers, not estimated; they
         // have to match, because repairBundledPacks treats a pack whose recorded count or size
         // differs as stale and re-copies it on every start.
-        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 106_091, 15_869_887),
-        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 127_284, 21_785_905),
+        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 106_053, 15_868_403),
+        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 127_255, 21_785_047),
         Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 97_014, 15_576_293),
-        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 96_888, 15_840_808),
+        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 96_884, 15_840_656),
         Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 100_382, 21_237_764),
         Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 99_455, 15_909_114),
     )

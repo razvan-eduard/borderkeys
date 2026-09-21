@@ -232,9 +232,9 @@ stratification is the measurement rather than a detail: restoration never failed
 `totuși` (9,779) always worked and `cană` (170) never did, so a corpus drawn from the top of the
 word list would have reported near-perfect and hidden the defect completely.
 
-Current baseline: **86.3% restored**, 7.7% a different word, 6.0% left alone, 300 cases. It was
-**3.3%** before any of this: the respelling tier in the engine took it to 64.0%, and normalising
-the dictionary's diacritic encodings took it the rest of the way.
+Current baseline: **89.3% restored**, 300 cases. It was **3.3%** before any of this: the
+respelling tier in the engine took it to 64.0%, normalising the dictionary's diacritic
+encodings to 86.3%, and repairing its mojibake to 89.3%.
 
 That second half was the larger surprise. `ro_RO.tsv` spelled **8,822 words two or more ways** —
 cedilla `ş`/`ţ` against comma-below `ș`/`ț`, and `ã` (a Portuguese letter) standing in for `ă` —
@@ -251,9 +251,20 @@ and a few are drawn from the 136 remaining mojibake entries described below.
 
 Two things this deliberately did not do, both recorded rather than fixed:
 
-- **136 entries, 5,258 occurrences, are mojibake** — `ºi`, `pånă`, `decåt`, `romånia`: Latin-2
-  bytes read as Latin-1, which maps `ă`→`å`, `ş`→`º` and `ţ`→`þ`. Corrupt in any language, but
-  deleting dictionary entries is a separate decision from re-encoding them.
+- **Mojibake is repaired by `tools/drop_mojibake.py`**, across all six dictionaries. Two
+  accidents: a typographic apostrophe decoded as UTF-8-through-Latin-1 and then truncated, so
+  "it's" was counted as `itâ`, French `l'` as `lâ`, Italian `dell'` as `dellâ` — 68 entries,
+  4,664 occurrences, deleted, since `itâ` stands for `it'`, which is not a word either. And
+  Romanian letters through a legacy codepage (`ºi`, `pånă`, `decåt`) — 74 entries, 2,857
+  occurrences, repaired onto the spelling they meant.
+
+  The repair lists every letter a glyph might stand for and lets the dictionary pick, rather
+  than assuming a codepage. Assuming one got `å` wrong: taken for `ă` it turns `pånă` into
+  `pănă` rather than `până`, and the dictionary held that misspelling too, so the wrong answer
+  looked like confirmation. What is deliberately left alone is everything that reverses onto
+  nothing — `Bjørn`, `Bård`, `Bø` are Norwegian, `måneskin` is a band, and `º`/`nº` is the
+  masculine ordinal Spanish and Italian write "nº 5" with.
+
 - **22 words keep a cedilla or tilde on purpose**, because they are genuinely foreign and the
   mark is correct: Turkish `Ayşegül`, `Şükrü`, `Barış`; Portuguese `Conceição`, `Estêvão`. The
   script excuses a word only when a letter Romanian never uses survives the fold, which is why
@@ -319,8 +330,9 @@ ctest --test-dir native-tests/build --output-on-failure
 python3 tools/build_dict.py --selftest
 reuse lint
 
-# Dictionary hygiene (Romanian): folds cedilla/tilde spellings into the correct ones
+# Dictionary hygiene: encoding variants, then decoding accidents
 python3 tools/normalise_diacritics.py dictionaries/ro_RO.tsv --dry-run
+for d in dictionaries/*.tsv; do python3 tools/drop_mojibake.py "$d" --dry-run; done
 
 # Measurements
 native-tests/build/suggest_eval <dict dir> native-tests/data/suggest_en.tsv en-US
