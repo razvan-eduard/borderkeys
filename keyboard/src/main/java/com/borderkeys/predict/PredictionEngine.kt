@@ -80,8 +80,17 @@ class PredictionEngine(
         /**
          * A decoded swipe. Separate from [onSuggestions] because the service treats it
          * differently: the first candidate is committed immediately rather than offered.
+         *
+         * [shares] is each candidate's share of the decode, per mille and summing to 1000 --
+         * the softmax `Engine::normaliseGestureScores` leaves behind. Rank one holding more
+         * than half of it is what "the swipe was not a close call" means.
          */
-        fun onGestureCandidates(words: Array<String?>, count: Int, properNoun: BooleanArray)
+        fun onGestureCandidates(
+            words: Array<String?>,
+            count: Int,
+            properNoun: BooleanArray,
+            shares: FloatArray,
+        )
 
         /**
          * A decode of a swipe still in progress, from [decodeGesturePreview] -- see that method's
@@ -155,6 +164,10 @@ class PredictionEngine(
     private val gestureNativeScores = FloatArray(MAX_RESULTS)
     private val gestureNativeProperNoun = BooleanArray(MAX_RESULTS)
     private val gestureDisplayProperNoun = BooleanArray(MAX_RESULTS)
+
+    /** Each candidate's share of the decode, per mille, carried out of the worker beside the
+     *  words it belongs to. */
+    private val gestureDisplayShares = FloatArray(MAX_RESULTS)
     private var gestureNativeCount = 0
     private val gestureDisplayWords = arrayOfNulls<String>(MAX_RESULTS)
 
@@ -646,6 +659,7 @@ class PredictionEngine(
             for (index in 0 until count) {
                 gestureDisplayWords[index] = gestureNativeWords[index]
                 gestureDisplayProperNoun[index] = gestureNativeProperNoun[index]
+                gestureDisplayShares[index] = gestureNativeScores[index]
             }
         }
         var written = 0
@@ -654,6 +668,7 @@ class PredictionEngine(
                 val word = gestureDisplayWords[index] ?: continue
                 if (blocked.isEmpty() || WordFold.fold(word) !in blocked) {
                     gestureDisplayProperNoun[written] = gestureDisplayProperNoun[index]
+                    gestureDisplayShares[written] = gestureDisplayShares[index]
                     gestureDisplayWords[written++] = word
                 }
             }
@@ -661,8 +676,11 @@ class PredictionEngine(
         for (index in written until MAX_RESULTS) {
             gestureDisplayWords[index] = null
             gestureDisplayProperNoun[index] = false
+            gestureDisplayShares[index] = 0f
         }
-        listener?.onGestureCandidates(gestureDisplayWords, written, gestureDisplayProperNoun)
+        listener?.onGestureCandidates(
+            gestureDisplayWords, written, gestureDisplayProperNoun, gestureDisplayShares,
+        )
     }
 
     /**

@@ -441,6 +441,27 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `the trusted word goes in the ring by default and repairs an unknown value`() {
+        assertEquals(
+            KeyboardPreferences.RADIAL_TRUSTED_CHIP,
+            KeyboardPreferences().radialTrustedWord,
+        )
+        assertEquals(
+            KeyboardPreferences.RADIAL_TRUSTED_CHIP,
+            KeyboardPreferences(radialTrustedWord = 99).sanitised().radialTrustedWord,
+        )
+        assertEquals(
+            KeyboardPreferences.RADIAL_TRUSTED_CHIP,
+            KeyboardPreferences(radialTrustedWord = -1).sanitised().radialTrustedWord,
+        )
+        assertEquals(
+            KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY,
+            KeyboardPreferences(radialTrustedWord = KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY)
+                .sanitised().radialTrustedWord,
+        )
+    }
+
+    @Test
     fun `radialSizeScale maps each named size to a distinct multiplier`() {
         assertEquals(1f, KeyboardPreferences.radialSizeScale(KeyboardPreferences.RADIAL_SIZE_MEDIUM), 0f)
         assertTrue(
