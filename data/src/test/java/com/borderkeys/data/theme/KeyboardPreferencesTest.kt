@@ -226,9 +226,12 @@ class KeyboardPreferencesTest {
         assertFalse(defaults.blurBehindKeyboard)
         assertEquals(defaults, defaults.sanitised())
     }
+    /** Tier B decodes 76.2% of recorded traces against tier A's 51.6%, so it is what a `plus`
+     *  build swipes with unless someone turns it off. A `core` build compiles no tier B, and the
+     *  preference does nothing there. */
     @Test
-    fun `the experimental swipe model defaults off`() {
-        assertFalse(KeyboardPreferences().experimentalSwipeModelEnabled)
+    fun `the neural swipe model defaults on`() {
+        assertTrue(KeyboardPreferences().experimentalSwipeModelEnabled)
     }
 
     @Test

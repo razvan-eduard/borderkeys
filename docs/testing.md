@@ -213,12 +213,16 @@ in CI rather than being noticed on a device weeks later.
 
 | tier | top-1 | top-3 |
 |---|---|---|
-| A — `Shark2Decoder`, every build | **51.6%** | 61.4% |
-| B — `TcnDecoder`, `plus`, off by default | **76.2%** | 86.8% |
+| A — `Shark2Decoder`, every build | **55.4%** | 65.4% |
+| B — `TcnDecoder`, `plus`, on by default | **81.2%** | 90.0% |
 
-13 of the 500 words are outside the pack, so 97.4% is the ceiling for both; the rest of the gap
-is decoding. On 2,000 traces rather than 500 the figures are 56.2% and 80.2% — the seeded
-sample runs a few points low, which is sampling, not a different decoder.
+The corpus is filtered twice, and both filters are about measuring the decoder rather than
+something else. Words the pack cannot produce are dropped, so the ceiling is 100% and a miss is
+a decoding failure rather than a vocabulary gap. Traces shorter than a quarter of a key width
+are dropped too: a touch that never leaves the touch slop is a tap on this keyboard and is typed
+as one, so it never reaches the gesture decoder. In the held-out split those are all single
+letters, and keeping them measured a case that cannot happen — tier A scored 0 of 7 on them
+because a nearest-template search has no trajectory to match.
 
 What this replaced is worth stating, because it looked like a passing gate for months: 30
 gestures against the **59-word test pack**, scoring 96.67%. A tiny lexicon makes almost any
