@@ -171,8 +171,9 @@ def write_corpus(path: Path, gestures: list[Gesture]) -> None:
 def replay(binary: Path, pack: Path, layout: Path, corpus: Path) -> dict:
     """Runs the native harness and parses its verdict per gesture.
 
-    The binary is expected to print one `word<TAB>rank` line per gesture, where rank is the
-    zero-based position of the expected word among the candidates, or -1 for a miss.
+    The binary is expected to print one `word<TAB>rank<TAB>top` line per gesture, where rank is
+    the zero-based position of the expected word among the candidates, or -1 for a miss, and top
+    is the candidate it ranked first.
     """
     result = subprocess.run(
         [str(binary), str(pack), str(layout), str(corpus)],
@@ -188,9 +189,12 @@ def replay(binary: Path, pack: Path, layout: Path, corpus: Path) -> dict:
     for line in result.stdout.splitlines():
         if "\t" not in line:
             continue
-        word, _, rank_text = line.partition("\t")
+        fields = line.split("\t")
+        if len(fields) < 2:
+            continue
+        word = fields[0]
         try:
-            rank = int(rank_text.strip())
+            rank = int(fields[1].strip())
         except ValueError:
             continue
         total += 1
@@ -199,7 +203,7 @@ def replay(binary: Path, pack: Path, layout: Path, corpus: Path) -> dict:
         if 0 <= rank < 3:
             top3 += 1
         else:
-            misses.append(word)
+            misses.append(f"{word}->{fields[2]}" if len(fields) > 2 else word)
     if total == 0:
         raise SystemExit(f"{binary} reported no gestures")
     return {

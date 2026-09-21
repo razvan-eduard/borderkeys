@@ -17,6 +17,10 @@ namespace {
 // instead of a trie walk.
 constexpr float kEndpointRadius = 1.7f;
 
+// How close the path must come to a key's centre, in key widths, for a word using that key to
+// stay reachable in the trie descent.
+constexpr float kTouchRadius = 1.1f;
+
 // The template's path length must be within this band of the gesture's. A word twice as long as
 // what the finger drew was not what the finger drew.
 constexpr float kMinLengthRatio = 0.35f;
@@ -52,6 +56,9 @@ void Shark2Decoder::buildTouchSequence() {
         touchedSlot_[i] = static_cast<int8_t>(geometry_->nearestSlot(pathX_[i], pathY_[i]));
     }
 
+    const float radius = kTouchRadius * geometry_->keyWidth();
+    const float radiusSquared = radius * radius;
+
     // Built backwards in one pass: the answer for position i is either "here" or the answer for
     // i + 1. Quadratic in the obvious formulation, linear in this one.
     for (int slot = 0; slot < KeyGeometry::kMaxKeys; ++slot) {
@@ -63,6 +70,24 @@ void Shark2Decoder::buildTouchSequence() {
         const int slot = touchedSlot_[position];
         if (slot >= 0 && slot < slots) {
             nextOccurrence_[position][slot] = static_cast<int8_t>(position);
+        }
+        // Every key the finger passes within [kTouchRadius] of, not only the nearest one. A key
+        // clipped at a corner or crossed between two samples is never nearest at any of them,
+        // and a letter the descent cannot reach is a word that is never scored at all.
+        for (int other = 0; other < slots; ++other) {
+            if (other == slot) {
+                continue;
+            }
+            float centreX = 0.f;
+            float centreY = 0.f;
+            if (!geometry_->centreOf(geometry_->codeAt(other), &centreX, &centreY)) {
+                continue;
+            }
+            const float dx = centreX - pathX_[position];
+            const float dy = centreY - pathY_[position];
+            if (dx * dx + dy * dy <= radiusSquared) {
+                nextOccurrence_[position][other] = static_cast<int8_t>(position);
+            }
         }
     }
 }
