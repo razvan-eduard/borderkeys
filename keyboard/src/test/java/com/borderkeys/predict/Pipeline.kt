@@ -72,6 +72,15 @@ internal class Pipeline private constructor(private val handle: Long) {
         return Outcome(typed, committed, situation)
     }
 
+    /** What the suggestion strip would show for [typed], in order. */
+    fun strip(typed: String, previous: String? = null): List<String> {
+        val words = arrayOfNulls<String>(MAX_CANDIDATES)
+        val scores = FloatArray(MAX_CANDIDATES)
+        val properNoun = BooleanArray(MAX_CANDIDATES)
+        val n = NativePredictor.nativeSuggest(handle, typed, previous, null, words, scores, properNoun)
+        return (0 until n).mapNotNull { words[it] }
+    }
+
     /** Each word of [phrase] in turn, every one carrying the word before it as context. */
     fun commitPhrase(phrase: String): List<Outcome> {
         var previous: String? = null

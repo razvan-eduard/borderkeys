@@ -3,6 +3,8 @@
 
 #include "engine.hpp"
 
+#include "reading.hpp"
+
 #include "gesture/shark2_decoder.hpp"
 #ifdef BORDERKEYS_NEURAL_SWIPE
 #include "gesture/tcn_decoder.hpp"
@@ -74,25 +76,7 @@ inline bool isMark(uint32_t folded) {
     return folded == kApostrophe || folded == kHyphen;
 }
 
-// Whether a stored spelling carries a mark the fold throws away -- a diacritic, in every
-// language this ships, since the fold maps each accented letter onto its plain ASCII twin and
-// every such letter is multi-byte in UTF-8 while its twin is not.
-//
-// Case is deliberately outside this class, and that is the whole of the distinction. A capital
-// is a key the writer either pressed or did not; a diacritic is a convention the layout makes
-// awkward, which is exactly why people leave them out and why restoring one is a service
-// rather than a contradiction. Without this line the respelling tier below also re-cased, and
-// "tehran" became "Tehran" -- with every English word that is also a name ("march", "may",
-// "polish") behind it, because the pack keeps one spelling per folded key and that spelling is
-// frequently the capitalised one.
-inline bool carriesFoldedMark(const char* text, uint32_t length) {
-    for (uint32_t i = 0; i < length; ++i) {
-        if (static_cast<unsigned char>(text[i]) >= 0x80u) {
-            return true;
-        }
-    }
-    return false;
-}
+// carriesFoldedMark, kMaxCorrectionCompletion and Reading are in reading.hpp.
 
 // What an edit costs is a question about its *shape*: which operation, on which class of
 // character. The two cells below are the same mark in opposite directions, and they are not
@@ -193,33 +177,7 @@ constexpr int kMaxShownCompletions = 4;
 // How far past the typed letters a *completion* may go and still count as an answer to "what
 // did you mean", rather than only to "what are you writing".
 //
-// The corrections heap was built to hold nothing but edits, on the reasoning that a word merely
-// carrying on from the typed letters is not a guess at what was meant. That is true of "teh"
-// reaching "tehran" and false of "believ" reaching "believe", and the difference is length: one
-// is a different word, the other is the same word with its last letter not typed yet.
-//
-// Measured rather than argued, and swept rather than picked. Two corpora of 200 words each,
-// generated from the pack's own most frequent words so neither could be chosen to flatter the
-// answer -- `native-tests/data/autocorrect_{midword,typo}_en.tsv`, read by
-// `suggest_eval --autocorrect`, which asks what the space bar commits:
-//
-//               mid-word   typo      (mid-word = last letter not yet typed;
-//   excluded      12.0%    100.0%     typo = two middle letters transposed)
-//   depth <= 1    98.5%    100.0%
-//   depth <= 2    88.0%    100.0%
-//   depth <= 3    88.0%    100.0%
-//   depth <= 4    85.5%    100.0%
-//
-// One is the measured optimum and not a round number chosen for looking like one: past it the
-// longer continuations start outbidding the single missing letter, which is the same failure in
-// the other direction -- "believed" taking the place of "believe". The typo column is what the
-// exclusion existed to protect and it never moves, so the fix costs nothing it was buying.
-//
-// Before this, a word someone was in the middle of typing had a *different word* committed over
-// it two times in three. That is not an edge case, and it was reported from a device long before
-// this measurement existed: "believ" committed "belief", which the same search ranked seventh
-// and sixty points worse than "believe".
-constexpr int kMaxCorrectionCompletion = 1;
+// kMaxCorrectionCompletion is in reading.hpp.
 
 // Stupid backoff, factor 0.4 as in the literature. Deterministic and needing no normalisation
 // at runtime, which is the whole reason it is used instead of a smoothed model.
@@ -1608,49 +1566,30 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
                                                             static_cast<uint32_t>(wordIndex)) +
                                 editComponent - lengthPenalty;
             offerScoredWord(heap, trie, packIndex, static_cast<uint32_t>(wordIndex), score);
-            // And again, into the corrections-only heap, when this word was reached by an edit
-            // rather than by carrying the typed letters on. Same score, same moment, no second
-            // search -- the only thing being kept is the distinction the merged heap discards.
-            // Cheap because it is the minority branch and the heap holds four: a word every
-            // completion outranks can still be the best *correction*, which is the whole point.
-            // A completion counts too when it adds barely anything -- see
-            // kMaxCorrectionCompletion. frame.depth is exactly how many characters past the
-            // typed letters this word goes, so the two cases are told apart by one comparison.
-            const bool shortCompletion = endpoint.cost <= 0.0f && frame.depth > 0 &&
-                                         frame.depth <= kMaxCorrectionCompletion;
-            // A word sitting exactly on the letters typed -- no edit, nothing added -- is not a
-            // proposal of a different word. It is *this* word, as the dictionary spells it. The
-            // fold washes out case and diacritics, so the only way it can differ from what was
-            // typed is in those, and that difference is the accent restoration itself. Whether
-            // it differs at all is AutoCorrection's question, not this one's: offering "car"
-            // for "car" costs nothing, because NoChange already names that outcome.
+
+            // Everything reaches the strip; the routing below decides the rest, and a pass
+            // that does not commit is barred from both destinations.
             //
-            // Neither clause above admitted this. "cost > 0" is false by definition and
-            // shortCompletion demands depth > 0, so the one candidate that needs no guessing
-            // was the one candidate that could never be offered -- while "ins", a character
-            // added to "in", could. Every Romanian word whose accents were left out was in that
-            // position: "în" (1,782,296) unreachable, "dacă" (94,655) unreachable.
-            const bool respelling = endpoint.cost <= 0.0f && frame.depth == 0;
-            if (!fallbackPass_ && respelling) {
-                // Exempt from plausibleCorrectionTarget on purpose. That floor stops autocorrect
-                // proposing obscure words, and a respelling proposes nothing -- someone who
-                // typed the letters of "cană" (170) meant them, and refusing it on rarity left
-                // "canal" (1,369), a different word, to win on frequency alone.
-                uint32_t textLength = 0;
-                const char* const text = trie.wordText(static_cast<uint32_t>(wordIndex),
-                                                       &textLength);
-                if (text != nullptr && textLength != 0 && carriesFoldedMark(text, textLength)) {
-                    // Boosted the same way offerScoredWord would, so that choosing between two
-                    // packs' respellings weighs a personal word exactly as the strip does.
-                    const float boosted = score + userBoostFor(text, textLength);
-                    if (!hasBestRespelling_ || boosted > bestRespelling_.score) {
-                        bestRespelling_ =
-                            Candidate{packIndex, static_cast<int32_t>(wordIndex), boosted};
-                        hasBestRespelling_ = true;
-                    }
+            // text is read only where Exact and Respelling have to be told apart.
+            uint32_t textLength = 0;
+            const char* text = nullptr;
+            if (endpoint.cost <= 0.0f && frame.depth == 0) {
+                text = trie.wordText(static_cast<uint32_t>(wordIndex), &textLength);
+            }
+            const Reading reading = readingOf(endpoint.cost, frame.depth, text, textLength);
+
+            if (commits(currentPass_) && takesRespellingTier(reading) && text != nullptr &&
+                textLength != 0) {
+                // Boosted as offerScoredWord would, so two packs' respellings compare on the
+                // same scale. No frequency floor is applied.
+                const float boosted = score + userBoostFor(text, textLength);
+                if (!hasBestRespelling_ || boosted > bestRespelling_.score) {
+                    bestRespelling_ =
+                        Candidate{packIndex, static_cast<int32_t>(wordIndex), boosted};
+                    hasBestRespelling_ = true;
                 }
             }
-            if (!fallbackPass_ && (endpoint.cost > 0.0f || shortCompletion) &&
+            if (commits(currentPass_) && reachesCorrectionHeap(reading) &&
                 plausibleCorrectionTarget(pack, static_cast<uint32_t>(wordIndex))) {
                 offerScoredWord(correctionHeap_, trie, packIndex,
                                 static_cast<uint32_t>(wordIndex), score);
@@ -2191,38 +2130,30 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     const int restrictTo = (dominantPack_ >= 0)  ? dominantPack_
                            : (preferredPack_ >= 0) ? preferredPack_
                                                    : (strictLanguage_ ? heaviestPack() : -1);
-    searchPacks(folded, foldedLength, restrictTo, heap);
-    // A language that turns out to have nothing for this word must not leave the strip empty --
-    // true of a detected one, where the detector is a guess about the sentence rather than a
-    // verdict on the next word, and true of a preferred one, where a preference that refused to
-    // yield for a word it does not hold would not be a preference. Strict is the one setting that
-    // asked for exactly that, and it is the reason this is still conditional.
+    {
+        PassScope pass(*this, Pass::Primary);
+        searchPacks(folded, foldedLength, restrictTo, heap);
+    }
+    // A pack that holds nothing for this word must not leave the strip empty. Strict is the one
+    // setting that asks for exactly that.
     if (heap.size() == 0 && restrictTo >= 0 && !strictLanguage_) {
+        PassScope pass(*this, Pass::AllPacks);
         searchPacks(folded, foldedLength, -1, heap);
     }
     if (foldedLength > 0) {
-        searchUserModel(folded, foldedLength, heap);
-        // Nothing at all, for a word someone is in the middle of writing. That happens when the
-        // word is further from every entry than the ordinary ceiling allows -- which is the
-        // case where an empty strip is least useful, because the writer cannot tell whether the
-        // keyboard has no idea or has stopped working. One wider pass, on the requests that
-        // would otherwise show nothing -- the per-pack budget searchPacks resets internally
-        // means this pass starts fresh for every pack too, without a separate reset here.
+        {
+            PassScope pass(*this, Pass::UserModel);
+            searchUserModel(folded, foldedLength, heap);
+        }
+        // Nothing found within the ordinary ceiling. One wider pass so the strip is not blank;
+        // its candidates are shown and never committed.
         if (heap.size() == 0) {
             editCostCeiling_ = kFallbackEditCost;
-            // Shown, never committed. This pass exists so the strip is not blank in front of
-            // someone who cannot tell whether the keyboard has no idea or has stopped working,
-            // and a candidate reached only by opening the ceiling to 4.2 is exactly that: a
-            // guess offered rather than an answer found. Letting it reach autocorrect turned
-            // "'hello" -- which the ordinary ceiling rightly finds nothing for, now that
-            // discarding a typed mark is dear -- into "i'll", four edits away.
-            fallbackPass_ = true;
+            PassScope pass(*this, Pass::Wide);
             searchPacks(folded, foldedLength, -1, heap);
-            fallbackPass_ = false;
         }
     } else {
-        // Nothing typed: this is the next-word case, and the phrases this person repeats are
-        // the best evidence there is about what follows the word they just wrote.
+        PassScope pass(*this, Pass::NextWord);
         searchUserSuccessors(heap);
         searchUserPhrases(heap);
     }

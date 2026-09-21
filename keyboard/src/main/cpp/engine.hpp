@@ -515,10 +515,41 @@ private:
     // because the fallback pass changes it between two runs over the same packs.
     float editCostCeiling_ = 0.0f;
 
-    /** Whether the wider second pass is running. Its candidates fill the strip so it is not
-     *  blank, and are kept out of the corrections heap: a word reachable only once the
-     *  ceiling is opened is a guess worth showing and never one worth committing. */
-    bool fallbackPass_ = false;
+    /** The searches one request runs, in order. */
+    enum class Pass : uint8_t {
+        /** The packs `restrictTo` names. */
+        Primary,
+        /** Every pack, when Primary found nothing and the language is not locked. */
+        AllPacks,
+        /** The personal dictionary. */
+        UserModel,
+        /** Every pack again at kFallbackEditCost, when nothing else found anything. */
+        Wide,
+        /** Successors and phrases, when nothing has been typed. */
+        NextWord,
+    };
+
+    /** Whether a pass's candidates may be committed. Wide fills the strip only. */
+    static constexpr bool commits(Pass pass) { return pass != Pass::Wide; }
+
+    /** The pass running now. Read by collectWords to route candidates. */
+    Pass currentPass_ = Pass::Primary;
+
+    /** Sets currentPass_ for one search and restores it on the way out. */
+    class PassScope {
+    public:
+        PassScope(Engine& engine, Pass pass)
+            : engine_(engine), previous_(engine.currentPass_) {
+            engine_.currentPass_ = pass;
+        }
+        ~PassScope() { engine_.currentPass_ = previous_; }
+        PassScope(const PassScope&) = delete;
+        PassScope& operator=(const PassScope&) = delete;
+
+    private:
+        Engine& engine_;
+        Pass previous_;
+    };
 
     /** The previous word's tag in each pack, resolved with contextWord1_. */
     uint32_t contextTag1_[kMaxPacks] = {};
