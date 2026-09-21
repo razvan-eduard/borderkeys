@@ -3477,8 +3477,6 @@ class BorderKeysService :
         candidates: List<Candidate>,
         knownWord: String,
         query: String,
-        correction: String?,
-        correctionIsName: Boolean,
         possessive: String?,
     ) {
         // This answer was asked for on an earlier keystroke and lost the race against a later
@@ -3511,8 +3509,11 @@ class BorderKeysService :
         // carrying on from the typed letters -- "tehran" for "teh" -- would take first place and
         // autocorrect, reading first place, would offer nothing at all. Both questions are
         // answered by one search; only the ranking was ever shared. See Engine::bestCorrection.
-        topSuggestion = correction
-        topSuggestionIsProperNoun = correctionIsName
+        // The word a delimiter would commit, asked of the result rather than reconstructed from
+        // it: the engine marked which candidate its corrections heap settled on.
+        val marked = candidates.firstOrNull { it.isCorrection }
+        topSuggestion = marked?.text
+        topSuggestionIsProperNoun = marked?.isProperNoun == true
         // "Maria's" for "marias" -- the possessive of a name the corpus never wrote with an
         // apostrophe, which the bundled maps therefore cannot carry. Kept beside the correction
         // rather than mixed into it: it is a rewrite of a different kind and the delimiter

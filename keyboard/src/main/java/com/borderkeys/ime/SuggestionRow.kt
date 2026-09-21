@@ -109,27 +109,28 @@ internal class SuggestionRow {
     }
 
     /**
-     * Puts [correction] in [slot].
+     * Puts the correction in [slot], carrying [text] -- what a delimiter will actually commit.
      *
-     * Moved when the row already carries it, inserted when it does not -- and it often does not,
-     * because the corrections heap is not this list. Inserting grows the row by one where there
-     * is room and otherwise drops whatever was last, which is the slot nobody reads.
+     * Found by [Candidate.isCorrection], which the engine set, rather than by looking for [text]
+     * among the words: the row is cased for display and the two rankings behind it do not share
+     * an identity, so a word could match by meaning and not by letters. Moved when the row
+     * already carries it and inserted when it does not -- and it often does not, because the
+     * corrections heap is not this list. Inserting grows the row by one where there is room and
+     * otherwise drops whatever was last, which is the slot nobody reads.
      */
     private fun placeCorrection(
         row: ArrayList<Candidate>,
-        correction: String,
+        text: String,
         slot: Int,
         cap: Int,
     ) {
-        val at = row.drop(1).indexOfFirst { it.text == correction }.let { if (it < 0) -1 else it + 1 }
-        if (at == slot) {
-            return
-        }
+        val at = row.indexOfFirst { it.isCorrection }
         if (at > 0) {
-            row.add(slot, row.removeAt(at))
+            val marked = row.removeAt(at)
+            row.add(slot, marked.copy(text = text))
             return
         }
-        row.add(slot, Candidate(correction))
+        row.add(slot, Candidate(text, isCorrection = true))
         while (row.size > cap) {
             row.removeAt(row.size - 1)
         }

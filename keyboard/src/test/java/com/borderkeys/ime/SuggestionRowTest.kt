@@ -20,9 +20,14 @@ class SuggestionRowTest {
 
     private fun words(vararg items: String): List<Candidate> = items.map { Candidate(it) }
 
+    /** What the engine does before the row ever sees the list: marks the candidate its
+     *  corrections heap settled on. The row finds it by that mark, not by its letters. */
+    private fun List<Candidate>.marking(correction: String): List<Candidate> =
+        map { if (it.text == correction) it.copy(isCorrection = true) else it }
+
     @Test
     fun `the typed word leads the row even when the engine did not offer it`() {
-        val words = words("dacă", "daca ce", "dar")
+        val words = words("dacă", "daca ce", "dar").marking("dacă")
         val shown = row.arrange(words, typed = "daca", limit = 3, correction = "dacă")
 
         assertEquals(3, shown.size)
@@ -32,7 +37,7 @@ class SuggestionRowTest {
 
     @Test
     fun `the word a delimiter would apply sits in the middle`() {
-        val words = words("dacă", "dar", "din")
+        val words = words("dacă", "dar", "din").marking("dacă")
         val shown = row.arrange(words, typed = "daca", limit = 3, correction = "dacă")
 
         assertEquals(1, row.appliedIndex)
@@ -74,7 +79,7 @@ class SuggestionRowTest {
 
     @Test
     fun `a typed word already among the candidates is moved rather than repeated`() {
-        val words = words("dacă", "dar", "daca")
+        val words = words("dacă", "dar", "daca").marking("dacă")
         val shown = row.arrange(words, typed = "daca", limit = 3, correction = "dacă")
 
         assertEquals(3, shown.size)
@@ -98,7 +103,7 @@ class SuggestionRowTest {
     fun `the middle is the middle of the row that is drawn, not of the setting`() {
         // The engine returned two words where five slots were allowed. Marking slot two would
         // mark an empty one.
-        val words = words("dacă", "dar")
+        val words = words("dacă", "dar").marking("dacă")
         val shown = row.arrange(words, typed = "daca", limit = 5, correction = "dacă")
 
         assertEquals(3, shown.size)
@@ -110,7 +115,7 @@ class SuggestionRowTest {
     fun `a one-slot row shows what was typed and marks no correction`() {
         // Honest rather than convenient: the correction is not on the row, so nothing on the row
         // is outlined as the thing a space would do.
-        val words = words("dacă")
+        val words = words("dacă").marking("dacă")
         val shown = row.arrange(words, typed = "daca", limit = 1, correction = "dacă")
 
         assertEquals(1, shown.size)
@@ -133,7 +138,7 @@ class SuggestionRowTest {
 
     @Test
     fun `the row never grows past the number of slots asked for`() {
-        val words = words("dacă", "dar", "din")
+        val words = words("dacă", "dar", "din").marking("dacă")
         val shown = row.arrange(words, typed = "daca", limit = 2, correction = "dacă")
 
         assertEquals(2, shown.size)
