@@ -151,6 +151,13 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# Corpus payloads read by the JVM tests: tab-separated cases with no header of their own.
+[[annotations]]
+path = "keyboard/src/test/resources/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 BorderKeys contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # Recorded swipe gestures used by tools/gesture_replay.py and the native tests (step 6.6).
 [[annotations]]
 path = "native-tests/data/**"
