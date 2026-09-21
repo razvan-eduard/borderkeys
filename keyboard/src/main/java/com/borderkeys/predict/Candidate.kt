@@ -33,4 +33,18 @@ data class Candidate(
      * Zero for typed suggestions, which are ranked but never normalised into a distribution.
      */
     val share: Float = 0f,
+
+    /**
+     * The word autocorrect would put in place of what was typed, if a delimiter were pressed.
+     *
+     * Set by [PredictionEngine], which is the only thing that knows the engine keeps a second,
+     * separate ranking for "what did you mean" beside the one for "what are you writing" (see
+     * `correctionHeap_` in engine.hpp). A consumer asks the list which word this is; it never
+     * re-derives the answer by comparing text, which is an identity the two rankings do not
+     * share -- the same word can reach them cased differently.
+     *
+     * At most one candidate in a result carries it, and it may be a word the ranking would not
+     * otherwise have offered at all.
+     */
+    val isCorrection: Boolean = false,
 )

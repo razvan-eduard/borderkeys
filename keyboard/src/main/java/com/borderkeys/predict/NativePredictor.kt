@@ -117,6 +117,7 @@ internal object NativePredictor {
         outWords: Array<String?>,
         outScores: FloatArray,
         outProperNoun: BooleanArray,
+        outCorrectionIndex: IntArray,
     ): Int
 
     /**
