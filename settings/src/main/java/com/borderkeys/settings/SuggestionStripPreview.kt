@@ -4,6 +4,7 @@
 package com.borderkeys.settings
 
 import com.borderkeys.i18n.Keys
+import com.borderkeys.predict.Candidate
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,7 +54,7 @@ fun SuggestionStripPreview(
     val (theme, lightTheme, preferences) = appearance
     // Resolved into the array the view reads, once per language rather than once per frame.
     val sample = remember(strings) {
-        Array<String?>(SAMPLE_KEYS.size) { strings[SAMPLE_KEYS[it]] }
+        SAMPLE_KEYS.map { Candidate(strings[it]) }
     }
 
     Box(modifier = modifier.fillMaxWidth()) {
@@ -65,7 +66,7 @@ fun SuggestionStripPreview(
                 val effectiveTheme = ThemeMode.effective(theme, lightTheme, preferences, context)
                 paints.update(effectiveTheme, context.resources.displayMetrics, preferences.heightScale, context)
                 view.visibleLimit = preferences.suggestionCount
-                view.setSuggestions(sample, sample.size)
+                view.setSuggestions(sample)
                 // Marked the way the real row marks: the first chip is what was typed, and one
                 // in the middle is what a delimiter would put in its place. A preview that
                 // showed neither would be a preview of a row nobody sees.

@@ -16,6 +16,7 @@ import com.borderkeys.ime.fx.RoundedRectElement
 import com.borderkeys.theme.ThemePaints
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.predict.Candidate
 
 /**
  * The band above the keys: three candidates, or a note that nothing is being learned here.
@@ -285,10 +286,7 @@ class SuggestionStripView(
      * Copies rather than retaining the array it is given: the caller reuses that array for the
      * next request, and holding it would mean the strip and the engine race over the same slots.
      */
-    fun setSuggestions(source: Array<String?>, sourceCount: Int) {
-        if (!actionMode && source === words) {
-            return
-        }
+    fun setSuggestions(source: List<Candidate>) {
         // A fresh row of words is never the "forget this word?" question, and carries none of
         // the previous row's marks: the question used to survive an ordinary push, so a later
         // tap on a word could forget a different one or blank the row, and the italic/outline
@@ -297,18 +295,10 @@ class SuggestionStripView(
         actionMode = false
         typedIndex = -1
         appliedIndex = -1
-        val newCount = sourceCount.coerceIn(0, MAX_SUGGESTIONS)
+        val newCount = source.size.coerceIn(0, MAX_SUGGESTIONS)
         var changed = wasActionMode || newCount != count
         for (index in 0 until newCount) {
-            val word = source[index]
-            if (word == null) {
-                if (words[index] != null) {
-                    changed = true
-                }
-                charCount[index] = 0
-                words[index] = null
-                continue
-            }
+            val word = source[index].text
             if (words[index] != word) {
                 changed = true
             }
@@ -435,8 +425,8 @@ class SuggestionStripView(
     }
 
     /** Switches the strip to the assistant's actions for the current selection. */
-    fun setActions(labels: Array<String?>, count: Int) {
-        setSuggestions(labels, count)
+    fun setActions(labels: List<Candidate>) {
+        setSuggestions(labels)
         actionMode = true
         invalidate()
     }
