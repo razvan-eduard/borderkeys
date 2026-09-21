@@ -496,6 +496,39 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     subtitle = strings[Keys.RADIAL_LIFT_KEEPS_OPEN_NOTE],
                     checked = preferences.radialLiftKeepsOpen,
                 ) { value -> update { it.copy(radialLiftKeepsOpen = value) } }
+                // Sits under the switch above because the two decide the same thing between
+                // them: whether a swipe that needed no pause shows a ring at all, and what is
+                // in it. "Keep it and close" has nothing to act on while that switch is off.
+                Text(
+                    strings[Keys.RADIAL_TRUSTED_WORD],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PickerChip(
+                        strings[Keys.RADIAL_TRUSTED_CHIP],
+                        preferences.radialTrustedWord == KeyboardPreferences.RADIAL_TRUSTED_CHIP,
+                    ) {
+                        update { it.copy(radialTrustedWord = KeyboardPreferences.RADIAL_TRUSTED_CHIP) }
+                    }
+                    PickerChip(
+                        strings[Keys.RADIAL_TRUSTED_AUTO_APPLY],
+                        preferences.radialTrustedWord == KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY,
+                    ) {
+                        update {
+                            it.copy(radialTrustedWord = KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY)
+                        }
+                    }
+                }
+                Text(
+                    strings[Keys.RADIAL_TRUSTED_NOTE],
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
                 Text(
                     strings[Keys.RADIAL_POSITION],
                     style = MaterialTheme.typography.bodyLarge,

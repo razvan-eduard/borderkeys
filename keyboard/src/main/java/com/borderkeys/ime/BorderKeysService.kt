@@ -489,6 +489,43 @@ class BorderKeysService :
     private var radialTopWord: String? = null
 
     /**
+     * As much of a decode as the ring has room for, empty when no ring is warranted.
+     *
+     * The strip is handed the same `words` and `count` untouched, so both surfaces show one
+     * ranking in one order and neither sorts anything of its own -- which is why a wedge index
+     * and a strip index name the same word, and [resolveRadialSelection] can hand one straight
+     * to [onSuggestionPicked]. The only difference is how many fit and how they are painted.
+     *
+     * A list because that is what the ring's own API takes; this is the single place the decode
+     * changes shape. Rank one leads it because that is the word already composing in the field,
+     * and a ring without it is a set of choices that cannot include keeping what you have -- the
+     * centre X discards it, and only a tap outside keeps it. A decode of one offers nothing to
+     * choose between and opens no ring at all; the empty list is what onRingOpened refuses on.
+     */
+    private fun ringWedges(words: Array<String?>, count: Int): List<String> =
+        if (count < 2) {
+            emptyList()
+        } else {
+            words.take(count.coerceAtMost(preferences.radialSuggestionCount)).filterNotNull()
+        }
+
+    /** Which wedge carries the word already in the field. Rank one leads every ring this class
+     *  opens, so the strip's outlined chip and the ring's outlined wedge are the same word. */
+    private val trustedWedgeIndex = 0
+
+    /**
+     * Whether the decode settled the word rather than leaving a choice.
+     *
+     * `Engine::normaliseGestureScores` softmaxes the candidates into shares per mille that sum
+     * to 1000, so rank one clearing [DECISIVE_SHARE_PER_MILLE] means the decoder found it more
+     * likely than every alternative put together. That, not merely ranking first -- which a
+     * sorted list makes true by construction -- is what a swipe with nothing left to ask about
+     * looks like.
+     */
+    private fun decodeWasDecisive(shares: FloatArray, count: Int): Boolean =
+        count < 2 || (shares.isNotEmpty() && shares[0] >= DECISIVE_SHARE_PER_MILLE)
+
+    /**
      * Resolves the ring directly, unconditionally -- a real lift is the only thing that ever
      * gets to consider [KeyboardPreferences.radialLiftKeepsOpen] (see [resolveRadialRing]'s own
      * doc); nothing else does, on purpose. Applies or cancels, never merely waits again -- the
@@ -1768,8 +1805,7 @@ class BorderKeysService :
         // Cased and separated exactly as a confident swipe's own candidates are in
         // onGestureCandidates -- one word, whichever way it arrived.
         caseSwipedWords(words, count, properNoun)
-        val candidates = words.take(count).filterNotNull()
-        val best = candidates.first()
+        val best = words[0]!!
         radialTopWord = best
         connection.beginBatchEdit()
         spaceBeforeSwipedWord(connection)
@@ -1785,7 +1821,9 @@ class BorderKeysService :
         topSuggestion = best
         topSuggestionIsProperNoun = properNoun[0]
 
-        val wedgeWords = candidates.drop(1).take(preferences.radialSuggestionCount)
+        // A pause is a deliberate request for the ring, so it opens whatever the trusted-word
+        // setting says -- that setting only decides whether rank one is one of the wedges.
+        val wedgeWords = ringWedges(words, count)
         if (!swipeRadialController.onRingOpened(wedgeWords)) {
             // Too few alternatives to make a ring worth showing. The top candidate is composing
             // above as a live preview, and the stroke goes back to plain capture: if the finger
@@ -1798,7 +1836,7 @@ class BorderKeysService :
             return
         }
         val (anchorX, anchorY) = radialAnchor(view)
-        view.radialSuggestionMenu.show(anchorX, anchorY, wedgeWords)
+        view.radialSuggestionMenu.show(anchorX, anchorY, wedgeWords, trustedWedgeIndex)
         view.setRadialMenuVisible(true)
         watchEditorWhileRingOpen(true)
         refreshTouchableArea()
@@ -1889,15 +1927,22 @@ class BorderKeysService :
      */
     private fun resolveRadialSelection(selection: RadialSuggestionMenuView.Selection) {
         when (selection) {
-            is RadialSuggestionMenuView.Selection.Word ->
-                onSuggestionPicked(selection.index + 1, selection.word)
+            is RadialSuggestionMenuView.Selection.Word -> {
+                onSuggestionPicked(selection.index, selection.word)
+                host?.acceptedWord?.play(selection.word)
+            }
             RadialSuggestionMenuView.Selection.Cancel -> cancelRadialGesture()
             RadialSuggestionMenuView.Selection.None -> {
                 if (preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) {
                     cancelRadialGesture()
                 } else {
                     val word = radialTopWord
-                    if (word != null) onSuggestionPicked(0, word) else cancelRadialGesture()
+                    if (word != null) {
+                        onSuggestionPicked(0, word)
+                        host?.acceptedWord?.play(word)
+                    } else {
+                        cancelRadialGesture()
+                    }
                 }
             }
         }
@@ -2087,7 +2132,12 @@ class BorderKeysService :
      * lift, but that setting means offering the alternatives without a clock attached whenever
      * there is any way to, not only after a pause.
      */
-    override fun onGestureCandidates(words: Array<String?>, count: Int, properNoun: BooleanArray) {
+    override fun onGestureCandidates(
+        words: Array<String?>,
+        count: Int,
+        properNoun: BooleanArray,
+        shares: FloatArray,
+    ) {
         host?.removeCallbacks(gestureDecodingRunnable)
         val view = host
         view?.suggestionStrip?.decoding = false
@@ -2124,6 +2174,8 @@ class BorderKeysService :
         knownQuery = best
         topSuggestion = best
         topSuggestionIsProperNoun = properNoun[0]
+        // One ranking, both surfaces: the strip shows as much of it as it has slots for and the
+        // ring as much as it has wedges for, and neither reorders anything.
         view?.suggestionStrip?.let { strip ->
             strip.typedIndex = -1
             strip.appliedIndex = -1
@@ -2132,11 +2184,20 @@ class BorderKeysService :
 
         if (view != null && preferences.radialMenuEnabled && preferences.radialLiftKeepsOpen) {
             radialTopWord = best
-            val wedgeWords = words.take(count).drop(1).filterNotNull()
-                .take(preferences.radialSuggestionCount)
+            // A swipe rank one wins outright is not a question worth asking: the word is already
+            // written, and every wedge would be a word the decode put well behind it.
+            // RADIAL_TRUSTED_AUTO_APPLY keeps it and says so instead of opening that ring. A
+            // close decode is still a question, and still gets its ring.
+            if (preferences.radialTrustedWord == KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY &&
+                decodeWasDecisive(shares, count)
+            ) {
+                view.acceptedWord.play(best)
+                return
+            }
+            val wedgeWords = ringWedges(words, count)
             if (swipeRadialController.onRingOpened(wedgeWords)) {
                 val (anchorX, anchorY) = radialAnchor(view)
-                view.radialSuggestionMenu.show(anchorX, anchorY, wedgeWords)
+                view.radialSuggestionMenu.show(anchorX, anchorY, wedgeWords, trustedWedgeIndex)
                 view.radialSuggestionMenu.acceptsOwnTouches = true
                 view.setRadialMenuVisible(true)
                 watchEditorWhileRingOpen(true)
@@ -4988,6 +5049,10 @@ class BorderKeysService :
         const val MIN_LEARNED_LENGTH = 2
 
         const val GESTURE_DECODING_NOTICE_MILLIS = 50L
+
+        /** The share of a decode rank one has to hold for [decodeWasDecisive] to call it
+         *  settled: more than half of a distribution summing to 1000. */
+        const val DECISIVE_SHARE_PER_MILLE = 500f
 
         /** How far the text field must move on screen, in pixels, before that reads as the page
          *  scrolling under an open ring rather than a layout settling by a pixel. */

@@ -435,6 +435,18 @@ data class KeyboardPreferences(
     val radialTimeoutDefault: Int = RADIAL_TIMEOUT_APPLY_TOP,
 
     /**
+     * What the ring does with rank #1, which is already composing in the field and is never one
+     * of the wedges.
+     *
+     * [RADIAL_TRUSTED_CHIP] (default) gives it a wedge of its own, outlined the way the strip
+     * outlines the chip that would act on its own, so keeping the decoded word is a tap like any
+     * other choice. [RADIAL_TRUSTED_AUTO_APPLY] closes the ring instead and keeps that word,
+     * leaving the alternatives to the strip. Clamped to a valid value on read; an unrecognised
+     * value falls back to [RADIAL_TRUSTED_CHIP].
+     */
+    val radialTrustedWord: Int = RADIAL_TRUSTED_CHIP,
+
+    /**
      * How a completed swipe offers its alternatives when nothing is deliberately chosen at lift.
      *
      * Off (default): resolves immediately. A paused gesture lifted in the dead zone applies
@@ -965,6 +977,13 @@ data class KeyboardPreferences(
         } else {
             RADIAL_TIMEOUT_APPLY_TOP
         },
+        radialTrustedWord = if (radialTrustedWord in
+            RADIAL_TRUSTED_CHIP..RADIAL_TRUSTED_AUTO_APPLY
+        ) {
+            radialTrustedWord
+        } else {
+            RADIAL_TRUSTED_CHIP
+        },
         learningSpeed = if (learningSpeed in LEARNING_CAUTIOUS..LEARNING_IMMEDIATE) {
             learningSpeed
         } else {
@@ -1386,6 +1405,10 @@ data class KeyboardPreferences(
 
         const val RADIAL_TIMEOUT_APPLY_TOP = 0
         const val RADIAL_TIMEOUT_CANCEL = 1
+
+        /** [radialTrustedWord] values. */
+        const val RADIAL_TRUSTED_CHIP = 0
+        const val RADIAL_TRUSTED_AUTO_APPLY = 1
 
         /** The range [minCorrectionLength] is clamped to. */
         const val MIN_CORRECTION_LENGTH = 1

@@ -59,6 +59,10 @@ class KeyboardHostView(
      *  the keys rather than under them. */
     val radialSuggestionMenu = RadialSuggestionMenuView(context, paints)
 
+    /** The word a swipe settled on, rising and fading over the keys. Added after the ring so a
+     *  ring closing into an acceptance does not paint over the animation it triggered. */
+    val acceptedWord = AcceptedWordView(context, paints)
+
     /** Whether [setRadialMenuVisible] blurs [keyboard] behind the ring, on API 31+. Mirrors
      *  [com.borderkeys.data.theme.KeyboardPreferences.radialBlurBackground]; on by default,
      *  unlike [com.borderkeys.data.theme.KeyboardPreferences.blurBehindKeyboard] -- that one
@@ -466,6 +470,8 @@ class KeyboardHostView(
         // ends up on top of the keys it overlays -- see the view's own doc for why it needs to.
         addView(radialSuggestionMenu)
         radialSuggestionMenu.visibility = GONE
+        addView(acceptedWord)
+        acceptedWord.visibility = GONE
         inlineSuggestions.visibility = GONE
         quickSettings.visibility = GONE
 
@@ -773,6 +779,10 @@ class KeyboardHostView(
             MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(totalHeight, MeasureSpec.EXACTLY),
         )
+        acceptedWord.measure(
+            MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(totalHeight, MeasureSpec.EXACTLY),
+        )
 
         // The window is always full width; the keys are narrower and offset inside it. That
         // keeps the touchable region and the insets the system computes correct in every mode.
@@ -849,6 +859,13 @@ class KeyboardHostView(
         // anchor said to, off the edge of the screen included.
         radialSuggestionMenu.topInset = keyboardAreaTop.toFloat()
         radialSuggestionMenu.layout(0, 0, width, b - t)
+        // Laid out over the same rect for the same reason, and given the key area's own top and
+        // bottom so the rise is measured against the keys rather than the whole window.
+        acceptedWord.keyAreaLeft = keyboard.left.toFloat()
+        acceptedWord.keyAreaRight = keyboard.right.toFloat()
+        acceptedWord.keyAreaTop = keyboard.top.toFloat()
+        acceptedWord.keyAreaBottom = keyboard.bottom.toFloat()
+        acceptedWord.layout(0, 0, width, b - t)
         // A ring opens before the room above the keys is reserved (the reservation is what its
         // opening asks for), so it was anchored to keys that have since moved down by exactly
         // this much; and it is still showing when the room goes again on the way out.

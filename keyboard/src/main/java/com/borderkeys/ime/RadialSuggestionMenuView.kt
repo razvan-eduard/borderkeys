@@ -77,6 +77,10 @@ class RadialSuggestionMenuView(
 
     private var words: List<String> = emptyList()
 
+    /** The wedge holding the word already composing in the field, or -1 when the ring carries
+     *  only alternatives. Outlined the way the strip outlines the chip that acts on its own. */
+    private var trustedIndex: Int = -1
+
     /**
      * [words] as the [Selection.Word] each wedge resolves to, built once in [show]: [hitTest]
      * runs on every steer and [drawWedges] on every frame, and both used to allocate a fresh
@@ -138,8 +142,9 @@ class RadialSuggestionMenuView(
      *  phase any more, see this class's own doc for why. [words] beyond [MAX_WEDGES] are
      *  dropped; the setting that bounds `radialSuggestionCount` already keeps this from
      *  happening in practice. */
-    fun show(anchorX: Float, anchorY: Float, words: List<String>) {
+    fun show(anchorX: Float, anchorY: Float, words: List<String>, trustedIndex: Int = -1) {
         this.words = words.take(MAX_WEDGES)
+        this.trustedIndex = if (trustedIndex in this.words.indices) trustedIndex else -1
         wordSelections = this.words.mapIndexed { index, word -> Selection.Word(index, word) }
         currentSelection = Selection.None
         recomputeWedgeBoundaries()
@@ -484,6 +489,12 @@ class RadialSuggestionMenuView(
             wedgePath.arcTo(wedgeInnerBounds, start + sweep, -sweep, false)
             wedgePath.close()
             canvas.drawPath(wedgePath, fill)
+            // The word already in the field, marked the way the strip marks the chip that would
+            // act without being touched -- the same paint, so a theme that fills rather than
+            // outlines fills here too.
+            if (index == trustedIndex) {
+                canvas.drawPath(wedgePath, paints.appliedHighlight)
+            }
             val midAngleRad = Math.toRadians(wedgeCentreDegrees(index, words.size).toDouble())
             val textX = anchorX + (midRadius * cos(midAngleRad)).toFloat()
             val textY = anchorY + (midRadius * sin(midAngleRad)).toFloat() +
