@@ -3,6 +3,8 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.predict.Candidate
+
 /**
  * Where each word sits on the suggestion strip, and which two of them are marked.
  *
@@ -41,7 +43,8 @@ internal class SuggestionRow {
         private set
 
     /**
-     * Rearranges [words] in place and returns how many slots are now filled.
+     * The row as it should be drawn: the typed word first, the correction outlined in the
+     * middle, and the engine's own order behind them.
      *
      * [correction] is the exact text a delimiter would commit -- [AutoCorrection]'s own answer,
      * already cased -- or null when nothing would be replaced. The word itself and not a flag,
@@ -55,122 +58,81 @@ internal class SuggestionRow {
      * construction; passing a boolean made them agree only by coincidence.
      */
     fun arrange(
-        words: Array<String?>,
-        count: Int,
+        candidates: List<Candidate>,
         typed: String,
         limit: Int,
         correction: String?,
-    ): Int {
+    ): List<Candidate> {
         typedIndex = -1
         appliedIndex = -1
-        val cap = limit.coerceAtMost(words.size)
+        // A list has no capacity to bound against the way the reused array did; the caller's
+        // limit is already the smaller of the setting and the slots the strip can draw.
+        val cap = limit
         if (cap <= 0) {
-            return 0
+            return emptyList()
         }
         if (typed.isEmpty()) {
             // Predictions for what comes next rather than candidates for a word in progress:
             // nothing was typed, so nothing is marked and the engine's order stands.
-            return count.coerceAtMost(cap)
+            return candidates.take(cap)
         }
 
-        var shown = count.coerceAtMost(cap)
-        var at = -1
-        for (index in 0 until shown) {
-            if (words[index] == typed) {
-                at = index
-                break
-            }
-        }
+        val row = ArrayList(candidates.take(cap))
+        val at = row.indexOfFirst { it.text == typed }
         if (at >= 0) {
-            moveToFront(words, at)
+            row.add(0, row.removeAt(at))
         } else {
             // Not offered, so it is added, pushing the rest along and dropping whatever falls
             // off the end. The engine's best is never what falls off: it moves to slot one.
-            shown = (count + 1).coerceAtMost(cap)
-            var index = shown - 1
-            while (index > 0) {
-                words[index] = words[index - 1]
-                index--
+            row.add(0, Candidate(typed))
+            while (row.size > cap) {
+                row.removeAt(row.size - 1)
             }
-            words[0] = typed
         }
         typedIndex = 0
 
         if (correction == null) {
             // No correction, no outline. A delimiter commits what was typed letter for letter,
             // and the typed chip -- italic, first -- is the whole of what the row has to say.
-            return shown
+            return row
         }
         // The middle, because the ends are the worst place for it: one is the typed word and the
         // other is the slot nobody reads. A one-slot row has no middle, so the correction is
         // simply not shown -- and nothing is outlined, rather than the wrong thing being.
-        val middle = (cap / 2).coerceAtMost(shown.coerceAtLeast(2) - 1)
+        val middle = (cap / 2).coerceAtMost(row.size.coerceAtLeast(2) - 1)
         if (middle < 1) {
-            return shown
+            return row
         }
-        shown = placeCorrection(words, correction, middle, shown, cap)
+        placeCorrection(row, correction, middle, cap)
         appliedIndex = middle
-        return shown
+        return row
     }
 
     /**
-     * Puts [correction] in [slot], and returns how many slots are filled afterwards.
+     * Puts [correction] in [slot].
      *
      * Moved when the row already carries it, inserted when it does not -- and it often does not,
      * because the corrections heap is not this list. Inserting grows the row by one where there
      * is room and otherwise drops whatever was last, which is the slot nobody reads.
      */
     private fun placeCorrection(
-        words: Array<String?>,
+        row: ArrayList<Candidate>,
         correction: String,
         slot: Int,
-        shown: Int,
         cap: Int,
-    ): Int {
-        var at = -1
-        for (index in 1 until shown) {
-            if (words[index] == correction) {
-                at = index
-                break
-            }
-        }
+    ) {
+        val at = row.drop(1).indexOfFirst { it.text == correction }.let { if (it < 0) -1 else it + 1 }
         if (at == slot) {
-            return shown
+            return
         }
         if (at > 0) {
-            // Already on the row: close the gap it leaves behind and drop it into place. Only
-            // one of these two loops ever runs -- whichever way the word has to travel.
-            var index = at
-            while (index > slot) {
-                words[index] = words[index - 1]
-                index--
-            }
-            while (index < slot) {
-                words[index] = words[index + 1]
-                index++
-            }
-            words[slot] = correction
-            return shown
+            row.add(slot, row.removeAt(at))
+            return
         }
-        val grown = (shown + 1).coerceAtMost(cap)
-        var index = grown - 1
-        while (index > slot) {
-            words[index] = words[index - 1]
-            index--
+        row.add(slot, Candidate(correction))
+        while (row.size > cap) {
+            row.removeAt(row.size - 1)
         }
-        words[slot] = correction
-        return grown
-    }
-
-    /** Moves the word at [from] to slot zero, shifting the ones before it along. */
-    private fun moveToFront(words: Array<String?>, from: Int) {
-        val moved = words[from]
-        var index = from
-        while (index > 0) {
-            words[index] = words[index - 1]
-            index--
-        }
-        words[0] = moved
     }
 
 }

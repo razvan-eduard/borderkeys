@@ -50,19 +50,15 @@ class StripAgreementTest {
                     val committed = pipeline.commit(typed).committed ?: continue
                     checked++
 
-                    val shown = pipeline.strip(typed)
-                    val words = arrayOfNulls<String>(SLOTS)
-                    val count = minOf(shown.size, SLOTS)
-                    for (index in 0 until count) {
-                        words[index] = shown[index]
-                    }
+                    val shown = pipeline.strip(typed).take(SLOTS).map { Candidate(it) }
                     val row = SuggestionRow()
-                    val filled = row.arrange(words, count, typed, SLOTS, committed)
+                    val filled = row.arrange(shown, typed, SLOTS, committed)
 
-                    val outlined = row.appliedIndex.takeIf { it in 0 until filled }?.let { words[it] }
+                    val outlined = row.appliedIndex.takeIf { it in filled.indices }
+                        ?.let { filled[it].text }
                     if (outlined == null || !outlined.equals(committed, ignoreCase = true)) {
                         failures += "  $name: \"$typed\" commits \"$committed\", row outlines " +
-                            "\"${outlined ?: "nothing"}\" of ${words.take(filled)}"
+                            "\"${outlined ?: "nothing"}\" of ${filled.map { it.text }}"
                     }
                 }
             } finally {

@@ -43,6 +43,7 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.ime.fx.applyParticleLayer
+import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.LearningBuffer
 import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.predict.SwipeModelLoad
@@ -502,11 +503,11 @@ class BorderKeysService :
      * centre X discards it, and only a tap outside keeps it. A decode of one offers nothing to
      * choose between and opens no ring at all; the empty list is what onRingOpened refuses on.
      */
-    private fun ringWedges(words: Array<String?>, count: Int): List<String> =
-        if (count < 2) {
+    private fun ringWedges(candidates: List<Candidate>): List<String> =
+        if (candidates.size < 2) {
             emptyList()
         } else {
-            words.take(count.coerceAtMost(preferences.radialSuggestionCount)).filterNotNull()
+            candidates.take(preferences.radialSuggestionCount).map { it.text }
         }
 
     /** Which wedge carries the word already in the field. Rank one leads every ring this class
@@ -522,8 +523,8 @@ class BorderKeysService :
      * sorted list makes true by construction -- is what a swipe with nothing left to ask about
      * looks like.
      */
-    private fun decodeWasDecisive(shares: FloatArray, count: Int): Boolean =
-        count < 2 || (shares.isNotEmpty() && shares[0] >= DECISIVE_SHARE_PER_MILLE)
+    private fun decodeWasDecisive(candidates: List<Candidate>): Boolean =
+        candidates.size < 2 || candidates.first().share >= DECISIVE_SHARE_PER_MILLE
 
     /**
      * Resolves the ring directly, unconditionally -- a real lift is the only thing that ever
@@ -1789,14 +1790,10 @@ class BorderKeysService :
      * already what composing, or the pick-timeout, or a release in the dead zone all agree on --
      * see [resolveRadialRing].
      */
-    override fun onGesturePreviewCandidates(
-        words: Array<String?>,
-        count: Int,
-        properNoun: BooleanArray,
-    ) {
+    override fun onGesturePreviewCandidates(candidates: List<Candidate>) {
         val view = host ?: return
         val connection = currentInputConnection ?: return
-        if (count == 0 || words[0] == null) {
+        if (candidates.isEmpty()) {
             // Nothing to show: the stroke goes back to plain capture, so its lift decodes the
             // whole gesture instead of resolving a ring that never existed.
             view.keyboard.resumeGestureCapture()
@@ -1804,8 +1801,8 @@ class BorderKeysService :
         }
         // Cased and separated exactly as a confident swipe's own candidates are in
         // onGestureCandidates -- one word, whichever way it arrived.
-        caseSwipedWords(words, count, properNoun)
-        val best = words[0]!!
+        val cased = caseSwipedWords(candidates)
+        val best = cased.first().text
         radialTopWord = best
         connection.beginBatchEdit()
         spaceBeforeSwipedWord(connection)
@@ -1819,11 +1816,11 @@ class BorderKeysService :
         suggestionQuery = best
         knownQuery = best
         topSuggestion = best
-        topSuggestionIsProperNoun = properNoun[0]
+        topSuggestionIsProperNoun = cased.first().isProperNoun
 
         // A pause is a deliberate request for the ring, so it opens whatever the trusted-word
         // setting says -- that setting only decides whether rank one is one of the wedges.
-        val wedgeWords = ringWedges(words, count)
+        val wedgeWords = ringWedges(cased)
         if (!swipeRadialController.onRingOpened(wedgeWords)) {
             // Too few alternatives to make a ring worth showing. The top candidate is composing
             // above as a live preview, and the stroke goes back to plain capture: if the finger
@@ -2073,21 +2070,27 @@ class BorderKeysService :
      * typed path receives it -- so it is capitalised here, before shift is considered. This used
      * to assume the decoder had already done that, and no swiped name was ever capitalised.
      */
-    private fun caseSwipedWords(words: Array<String?>, count: Int, properNoun: BooleanArray) {
+    private fun caseSwipedWords(candidates: List<Candidate>): List<Candidate> {
         if (!preferences.capitaliseNames) {
-            return
+            return candidates
         }
-        for (index in 0 until count) {
-            if (properNoun[index]) {
-                words[index] = words[index]?.replaceFirstChar { it.uppercaseChar() }
+        var cased = candidates.map { candidate ->
+            if (candidate.isProperNoun) {
+                candidate.copy(text = candidate.text.replaceFirstChar { it.uppercaseChar() })
+            } else {
+                candidate
             }
         }
         val state = shiftState
         if (state != ShiftState.OFF) {
-            for (index in 0 until count) {
-                words[index] = words[index]?.let { word ->
-                    if (state == ShiftState.LOCKED) word.uppercase() else word.replaceFirstChar { it.uppercaseChar() }
-                }
+            cased = cased.map { candidate ->
+                candidate.copy(
+                    text = if (state == ShiftState.LOCKED) {
+                        candidate.text.uppercase()
+                    } else {
+                        candidate.text.replaceFirstChar { it.uppercaseChar() }
+                    },
+                )
             }
         }
         composingCapitalisedByUser = shiftHeldByUser && state != ShiftState.OFF
@@ -2096,6 +2099,7 @@ class BorderKeysService :
             host?.keyboard?.shiftState = shiftState
         }
         shiftHeldByUser = false
+        return cased
     }
 
     /**
@@ -2132,16 +2136,11 @@ class BorderKeysService :
      * lift, but that setting means offering the alternatives without a clock attached whenever
      * there is any way to, not only after a pause.
      */
-    override fun onGestureCandidates(
-        words: Array<String?>,
-        count: Int,
-        properNoun: BooleanArray,
-        shares: FloatArray,
-    ) {
+    override fun onGestureCandidates(candidates: List<Candidate>) {
         host?.removeCallbacks(gestureDecodingRunnable)
         val view = host
         view?.suggestionStrip?.decoding = false
-        if (count == 0) {
+        if (candidates.isEmpty()) {
             // Nothing decoded: the row goes back to predictions for whatever is before the
             // caret, not to a blank it would otherwise sit in until the next keystroke.
             view?.suggestionStrip?.clear()
@@ -2149,14 +2148,11 @@ class BorderKeysService :
             return
         }
         val connection = currentInputConnection ?: return
-        if (words[0] == null) {
-            return
-        }
         // Every candidate follows shift exactly as typed letters would -- a swipe at a sentence
         // start is capitalised, one under caps lock is shouted -- and the swipe then spends a
         // one-shot shift the way a first letter does. See caseSwipedWords.
-        caseSwipedWords(words, count, properNoun)
-        val best = words[0]!!
+        val cased = caseSwipedWords(candidates)
+        val best = cased.first().text
 
         connection.beginBatchEdit()
         spaceBeforeSwipedWord(connection)
@@ -2173,13 +2169,13 @@ class BorderKeysService :
         suggestionQuery = best
         knownQuery = best
         topSuggestion = best
-        topSuggestionIsProperNoun = properNoun[0]
+        topSuggestionIsProperNoun = cased.first().isProperNoun
         // One ranking, both surfaces: the strip shows as much of it as it has slots for and the
         // ring as much as it has wedges for, and neither reorders anything.
         view?.suggestionStrip?.let { strip ->
             strip.typedIndex = -1
             strip.appliedIndex = -1
-            strip.setSuggestions(words, count)
+            strip.setSuggestions(cased)
         }
 
         if (view != null && preferences.radialMenuEnabled && preferences.radialLiftKeepsOpen) {
@@ -2189,12 +2185,12 @@ class BorderKeysService :
             // RADIAL_TRUSTED_AUTO_APPLY keeps it and says so instead of opening that ring. A
             // close decode is still a question, and still gets its ring.
             if (preferences.radialTrustedWord == KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY &&
-                decodeWasDecisive(shares, count)
+                decodeWasDecisive(cased)
             ) {
                 view.acceptedWord.play(best)
                 return
             }
-            val wedgeWords = ringWedges(words, count)
+            val wedgeWords = ringWedges(cased)
             if (swipeRadialController.onRingOpened(wedgeWords)) {
                 val (anchorX, anchorY) = radialAnchor(view)
                 view.radialSuggestionMenu.show(anchorX, anchorY, wedgeWords, trustedWedgeIndex)
@@ -3436,7 +3432,12 @@ class BorderKeysService :
             return
         }
         pendingForget = word
-        host?.suggestionStrip?.setActions(arrayOf(strings.getString(Keys.ASSISTANT_FORGET, word), strings[Keys.ASSISTANT_CANCEL]), 2)
+        host?.suggestionStrip?.setActions(
+            listOf(
+                Candidate(strings.getString(Keys.ASSISTANT_FORGET, word)),
+                Candidate(strings[Keys.ASSISTANT_CANCEL]),
+            ),
+        )
     }
 
     /**
@@ -3473,11 +3474,9 @@ class BorderKeysService :
     }
 
     override fun onSuggestions(
-        words: Array<String?>,
-        count: Int,
+        candidates: List<Candidate>,
         knownWord: String,
         query: String,
-        properNoun: BooleanArray,
         correction: String?,
         correctionIsName: Boolean,
         possessive: String?,
@@ -3533,11 +3532,12 @@ class BorderKeysService :
         // there is no prefix to match, so these are the keyboard's own next-word predictions,
         // and what they should look like is exactly what shiftState says the next letter typed
         // right now would come out as.
-        for (index in 0 until count) {
-            words[index] = words[index]?.let { word ->
-                if (lastQuery.isNotEmpty()) {
+        val cased = candidates.map { candidate ->
+            val word = candidate.text
+            candidate.copy(
+                text = if (lastQuery.isNotEmpty()) {
                     AutoCorrection.matchCase(
-                        lastQuery, word, properNoun[index] && preferences.capitaliseNames,
+                        lastQuery, word, candidate.isProperNoun && preferences.capitaliseNames,
                     )
                 } else {
                     // LOCKED wins over the proper-noun override for the same reason
@@ -3553,13 +3553,13 @@ class BorderKeysService :
                     // that has nothing to do with where the next word is about to land.
                     when {
                         shiftState == ShiftState.LOCKED -> word.uppercase()
-                        properNoun[index] && preferences.capitaliseNames ->
+                        candidate.isProperNoun && preferences.capitaliseNames ->
                             word.replaceFirstChar { it.uppercaseChar() }
                         shiftState == ShiftState.ON -> word.replaceFirstChar { it.uppercaseChar() }
                         else -> word.replaceFirstChar { it.lowercaseChar() }
                     }
-                }
-            }
+                },
+            )
         }
         // With the strip off there is no row to arrange: the answer above (topSuggestion,
         // knownQuery) is all autocorrect needs, and it was recorded before this point.
@@ -3574,11 +3574,11 @@ class BorderKeysService :
         // actually commit, and that comes from the corrections heap rather than from the ranked
         // candidates this row is built from. Handing over a boolean left the row free to outline
         // whatever happened to rank second while space committed something else entirely.
-        val shown = suggestionRow.arrange(
-            words, count, lastQuery, preferences.suggestionCount.coerceAtMost(strip.wordSlotLimit),
+        val row = suggestionRow.arrange(
+            cased, lastQuery, preferences.suggestionCount.coerceAtMost(strip.wordSlotLimit),
             correction = correctionFor(lastQuery),
         )
-        strip.setSuggestions(words, shown)
+        strip.setSuggestions(row)
         strip.typedIndex = suggestionRow.typedIndex
         strip.appliedIndex = suggestionRow.appliedIndex
     }

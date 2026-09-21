@@ -61,43 +61,29 @@ class PredictionEngine(
          * It travels with the answer because the engine has one thread, and a delimiter is not
          * a moment to be blocking on it.
          *
-         * [properNoun] is parallel to [words]: true at an index means that candidate is a name
-         * from the dictionary and should always render capitalised, overriding the usual
-         * typed-case/shift-state rule rather than being combined with it -- see
-         * NativePredictor.nativeSuggest's own doc for where the bit comes from.
+         * Each candidate carries its own proper-noun bit -- see [Candidate].
          */
         fun onSuggestions(
-            words: Array<String?>,
-            count: Int,
+            candidates: List<Candidate>,
             knownWord: String,
             query: String,
-            properNoun: BooleanArray,
             correction: String?,
             correctionIsName: Boolean,
             possessive: String?,
         )
 
         /**
-         * A decoded swipe. Separate from [onSuggestions] because the service treats it
-         * differently: the first candidate is committed immediately rather than offered.
-         *
-         * [shares] is each candidate's share of the decode, per mille and summing to 1000 --
-         * the softmax `Engine::normaliseGestureScores` leaves behind. Rank one holding more
-         * than half of it is what "the swipe was not a close call" means.
+         * A decoded swipe, best first. Separate from [onSuggestions] because the service treats
+         * it differently: the first candidate is committed immediately rather than offered.
          */
-        fun onGestureCandidates(
-            words: Array<String?>,
-            count: Int,
-            properNoun: BooleanArray,
-            shares: FloatArray,
-        )
+        fun onGestureCandidates(candidates: List<Candidate>)
 
         /**
          * A decode of a swipe still in progress, from [decodeGesturePreview] -- see that method's
          * own doc for why it is a fully separate path from [onGestureCandidates] rather than a
          * reuse of it.
          */
-        fun onGesturePreviewCandidates(words: Array<String?>, count: Int, properNoun: BooleanArray)
+        fun onGesturePreviewCandidates(candidates: List<Candidate>)
     }
 
     var listener: ResultListener? = null
@@ -132,9 +118,6 @@ class PredictionEngine(
     private val nativeProperNoun = BooleanArray(MAX_RESULTS)
     private var nativeCount = 0
 
-    private val displayWords = arrayOfNulls<String>(MAX_RESULTS)
-    private val displayProperNoun = BooleanArray(MAX_RESULTS)
-    private var displayCount = 0
 
     private val blocked = HashSet<String>()
 
@@ -163,13 +146,8 @@ class PredictionEngine(
     private val gestureNativeWords = arrayOfNulls<String>(MAX_RESULTS)
     private val gestureNativeScores = FloatArray(MAX_RESULTS)
     private val gestureNativeProperNoun = BooleanArray(MAX_RESULTS)
-    private val gestureDisplayProperNoun = BooleanArray(MAX_RESULTS)
 
-    /** Each candidate's share of the decode, per mille, carried out of the worker beside the
-     *  words it belongs to. */
-    private val gestureDisplayShares = FloatArray(MAX_RESULTS)
     private var gestureNativeCount = 0
-    private val gestureDisplayWords = arrayOfNulls<String>(MAX_RESULTS)
 
     /** Same rule and same thread as [previewGeneration]: a decode that answers after the field
      *  changed, or after the service cancelled, is dropped rather than composed into the new
@@ -196,9 +174,7 @@ class PredictionEngine(
      *  candidate composes into the field at pause time exactly as a final decode's does, so it
      *  needs the flag for the same reason -- a swiped name is capitalised from it. */
     private val previewNativeProperNoun = BooleanArray(MAX_RESULTS)
-    private val previewDisplayProperNoun = BooleanArray(MAX_RESULTS)
     private var previewNativeCount = 0
-    private val previewDisplayWords = arrayOfNulls<String>(MAX_RESULTS)
 
     /**
      * Touched only from the UI thread -- every call site ([decodeGesturePreview],
@@ -653,34 +629,32 @@ class PredictionEngine(
     /** Copies the swipe's answer out under its own lock and drops refused words, the same
      *  filter [copyAndFilterResults] applies to typed suggestions. */
     private fun publishGestureResult() {
-        val count: Int
+        listener?.onGestureCandidates(copyAndFilterGesture())
+    }
+
+    /**
+     * The swipe's answer, copied out under its own lock and with refused words dropped -- the
+     * same filter [copyAndFilterResults] applies to typed suggestions.
+     *
+     * Each word leaves with its own flags attached rather than as one of three arrays a caller
+     * has to keep aligned by hand; see [Candidate].
+     */
+    private fun copyAndFilterGesture(): List<Candidate> {
+        val out = ArrayList<Candidate>(MAX_RESULTS)
         synchronized(gestureResultLock) {
-            count = gestureNativeCount
-            for (index in 0 until count) {
-                gestureDisplayWords[index] = gestureNativeWords[index]
-                gestureDisplayProperNoun[index] = gestureNativeProperNoun[index]
-                gestureDisplayShares[index] = gestureNativeScores[index]
+            for (index in 0 until gestureNativeCount) {
+                val word = gestureNativeWords[index] ?: continue
+                out.add(
+                    Candidate(word, gestureNativeProperNoun[index], gestureNativeScores[index]),
+                )
             }
         }
-        var written = 0
         synchronized(blocked) {
-            for (index in 0 until count) {
-                val word = gestureDisplayWords[index] ?: continue
-                if (blocked.isEmpty() || WordFold.fold(word) !in blocked) {
-                    gestureDisplayProperNoun[written] = gestureDisplayProperNoun[index]
-                    gestureDisplayShares[written] = gestureDisplayShares[index]
-                    gestureDisplayWords[written++] = word
-                }
+            if (blocked.isNotEmpty()) {
+                out.removeAll { WordFold.fold(it.text) in blocked }
             }
         }
-        for (index in written until MAX_RESULTS) {
-            gestureDisplayWords[index] = null
-            gestureDisplayProperNoun[index] = false
-            gestureDisplayShares[index] = 0f
-        }
-        listener?.onGestureCandidates(
-            gestureDisplayWords, written, gestureDisplayProperNoun, gestureDisplayShares,
-        )
+        return out
     }
 
     /**
@@ -741,15 +715,14 @@ class PredictionEngine(
     }
 
     private fun publishGesturePreviewResult() {
-        val count: Int
+        val out = ArrayList<Candidate>(MAX_RESULTS)
         synchronized(previewResultLock) {
-            count = previewNativeCount
-            for (index in 0 until count) {
-                previewDisplayWords[index] = previewNativeWords[index]
-                previewDisplayProperNoun[index] = previewNativeProperNoun[index]
+            for (index in 0 until previewNativeCount) {
+                val word = previewNativeWords[index] ?: continue
+                out.add(Candidate(word, previewNativeProperNoun[index], previewNativeScores[index]))
             }
         }
-        listener?.onGesturePreviewCandidates(previewDisplayWords, count, previewDisplayProperNoun)
+        listener?.onGesturePreviewCandidates(out)
     }
 
     private fun serveRequests() {
@@ -850,8 +823,9 @@ class PredictionEngine(
             correctionIsName = nativeCorrectionIsName
             query = nativeQuery
         }
-        listener?.onSuggestions(displayWords, copyAndFilterResults(), known, query,
-                                displayProperNoun, correction, correctionIsName, possessive)
+        listener?.onSuggestions(
+            copyAndFilterResults(), known, query, correction, correctionIsName, possessive,
+        )
     }
 
     /**
@@ -865,31 +839,20 @@ class PredictionEngine(
      * plain spellings; the fold hands a plain lower-case word straight back, which is nearly
      * every candidate, so the common case still allocates nothing.
      */
-    private fun copyAndFilterResults(): Int {
-        var count: Int
+    private fun copyAndFilterResults(): List<Candidate> {
+        val out = ArrayList<Candidate>(MAX_RESULTS)
         synchronized(resultLock) {
-            count = nativeCount
-            for (index in 0 until count) {
-                displayWords[index] = nativeWords[index]
-                displayProperNoun[index] = nativeProperNoun[index]
+            for (index in 0 until nativeCount) {
+                val word = nativeWords[index] ?: continue
+                out.add(Candidate(word, nativeProperNoun[index]))
             }
         }
-        var written = 0
         synchronized(blocked) {
-            for (index in 0 until count) {
-                val word = displayWords[index] ?: continue
-                if (blocked.isEmpty() || WordFold.fold(word) !in blocked) {
-                    displayWords[written] = word
-                    displayProperNoun[written] = displayProperNoun[index]
-                    written++
-                }
+            if (blocked.isNotEmpty()) {
+                out.removeAll { WordFold.fold(it.text) in blocked }
             }
         }
-        for (index in written until MAX_RESULTS) {
-            displayWords[index] = null
-        }
-        displayCount = written
-        return written
+        return out
     }
 
     companion object {
