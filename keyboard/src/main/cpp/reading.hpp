@@ -25,6 +25,14 @@ enum class Reading : uint8_t {
 /** Greatest depth at which a completion still counts as a correction rather than a new word. */
 constexpr int kMaxCorrectionCompletion = 1;
 
+/** Greatest depth the walk carries past an endpoint reached without edits. Past this a
+ *  continuation is noise. */
+constexpr int kMaxFreeCompletion = 12;
+
+/** How far the walk may carry on past an endpoint reached by an edit. Zero stops at the word
+ *  the edit reached; one also admits that word with its last character supplied. */
+constexpr int kMaxCompletionAfterEdit = 1;
+
 /** Whether `text` contains a byte the fold maps to a plain ASCII letter -- a diacritic. Case is
  *  not such a mark: it folds without changing byte width. */
 inline bool carriesFoldedMark(const char* text, uint32_t length) {

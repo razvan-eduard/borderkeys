@@ -107,7 +107,11 @@ internal class Pipeline private constructor(private val handle: Long) {
 
     companion object {
         private const val MAX_CANDIDATES = 16
-        private const val DEFAULT_DISTANCE = 0
+
+        /** KeyboardPreferences.CORRECTION_DISTANCE_NORMAL, the shipped default: one edit, or
+         *  two in a word of eight letters or more. Zero here is STRICT, a setting the keyboard
+         *  does not ship with. */
+        private const val DEFAULT_DISTANCE = 1
 
         /** Where the compiled packs are, or null when they have not been built. The same files
          *  the application ships, produced by the `buildDictionaries` Gradle task. */

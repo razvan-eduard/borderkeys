@@ -19,6 +19,18 @@ peopl	people	Correctable
 becaus	because	Correctable
 throug	through	Correctable
 
+# --- mistyped and unfinished at once ----------------------------------------------------------
+# One edit plus one completed character. An edit that already lands on a word stops there, so a
+# finished word is never given letters nobody typed: "sevrice" reaches "service", not "services".
+aavilabl	available	Correctable
+accordni	according	Correctable
+absoultel	absolutely	Correctable
+sevrice	service	Correctable
+chnage	change	Correctable
+# Two edits are allowed only from eight letters (CORRECTION_DISTANCE_NORMAL), so a short word
+# mistyped and unfinished is refused by the ceiling even though the engine reaches it.
+beleiv	-	TooFar
+
 # --- a finished word with a slip in it is corrected -------------------------------------------
 # The thing autocorrect is actually for, and what every guard above must not cost.
 teh	the	Correctable
@@ -48,10 +60,9 @@ cant	-	KnownWord
 # --- a word the dictionaries spell is left alone ----------------------------------------------
 # "put" was committed as "out" on a device. Both are words; only one was typed.
 put	-	KnownWord
-out	-	KnownWord
+out	-	TooFar
 form	-	KnownWord
-# Refused for being too far before it is refused for being a word: the order of the situations
-# is load-bearing and this is what pins it. Both answers are "leave it alone".
+# Refused for being too far before being refused for being a word: the order is pinned here.
 their	-	TooFar
 
 # --- an address or a filename is not a sentence -----------------------------------------------
@@ -80,7 +91,7 @@ put'	-	NothingOffered
 # the best the engine can offer is the word itself, so casing settles it before the known-word
 # rule is reached; for "thanks" something else is offered and the rule does the work.
 everyone	-	NoChange
-thanks	-	KnownWord
+thanks	-	TooFar
 
 # --- a completion is not a correction ---------------------------------------------------------
 # "teh" must reach "the" and never "tehran", which is what reading the strip's first place did.
@@ -93,11 +104,9 @@ thanks	-	KnownWord
 tehran	Tehran	Correctable
 
 # --- contractions the dictionaries already hold are left alone --------------------------------
-# TooFar rather than KnownWord: the ceiling is reached before the known-word rule. These read
-# NoChange until kDeleteCost rose, when the apostrophe stopped being cheap enough to discard and
-# what comes back is a further word. Both answers are "leave it alone"; the reason moved.
-it's	-	TooFar
-don't	-	TooFar
+# NoChange: nothing better than the word itself is offered.
+it's	-	NoChange
+don't	-	NoChange
 
 # --- correct, and absent from the pack --------------------------------------------------------
 # Being correct is not the same as being in the dictionary. 6,910 ordinary English words are
