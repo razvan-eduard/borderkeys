@@ -170,6 +170,27 @@ class AutoCorrectionTest {
     }
 
     @Test
+    fun `a single letter is not corrected into an accented one`() {
+        // Reported from a device: typing "t" outlined "ț" as the word space would commit. The
+        // diacritic exemption waives the minimum because short words are where restoring an
+        // accent matters, and it had no floor -- so one letter qualified. No one-letter word in
+        // any language here needs one: "a", "o", "e" and "i" are words, "ă", "î", "ț" and "ș"
+        // are not.
+        assertNull(
+            AutoCorrection.correctionFor(
+                typed = "t", suggestion = "ț",
+                suggestionQuery = "t", knownWord = "", minimumLength = minimum,
+            ),
+        )
+        assertNull(
+            AutoCorrection.correctionFor(
+                typed = "s", suggestion = "ș",
+                suggestionQuery = "s", knownWord = "", minimumLength = minimum,
+            ),
+        )
+    }
+
+    @Test
     fun `a short word that is not a diacritic match still needs the minimum`() {
         assertNull(
             AutoCorrection.correctionFor(
