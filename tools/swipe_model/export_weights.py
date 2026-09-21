@@ -125,7 +125,27 @@ def write_bkw(model, key_embedding, out_path: Path) -> None:
 
 
 GOLDEN_MAGIC = 0x31474B42  # 'B' 'K' 'G' '1', little-endian
-GOLDEN_VERSION = 1
+GOLDEN_VERSION = 2
+
+
+def golden_layout():
+    """The key centres of native-tests/test_support.hpp's TestLayout, normalised as
+    TcnCtcDecoder::setLayout normalises them: divided by the key area's extent, which is the
+    largest centre plus half a key on each axis.
+
+    Both sides have to build the same keyboard for the embedding comparison to mean anything.
+    The count travels in the golden header and the test checks it, so the two going out of step
+    fails rather than passes quietly.
+    """
+    rows = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
+    indents = (0.0, 0.5, 1.5)
+    key_width, key_height = 108.0, 160.0
+    centres = [((indents[row] + column + 0.5) * key_width, (row + 0.5) * key_height)
+               for row, letters in enumerate(rows)
+               for column, _ in enumerate(letters)]
+    area_width = max(x for x, _ in centres) + key_width / 2
+    area_height = max(y for _, y in centres) + key_height / 2
+    return [[x / area_width, y / area_height] for x, y in centres]
 
 
 def golden_input():
@@ -158,19 +178,26 @@ def write_golden(model, key_embedding, out_path: Path) -> None:
     order load as a different network at the same byte length and pass every header check. This
     is the one thing that separates them: the reference output comes from `model.py`, the
     comparison from the C++ encoder, and only weights in the right places make the two agree.
+
+    The key-embedding MLP is a separate module the encoder's forward pass never calls, so its
+    four arrays -- about 2% of the payload -- need their own reference output or nothing covers
+    them. That is the fourth block written here.
     """
     import torch  # noqa: PLC0415 -- see the import note at the top
 
     model.eval()
     key_embedding.eval()
     features = golden_input()
+    keys = torch.tensor(golden_layout(), dtype=torch.float32)
     with torch.no_grad():
         intention, spectral = model(features.unsqueeze(0))
+        embedding = key_embedding(keys)
 
     with out_path.open("wb") as f:
-        f.write(struct.pack("<6I", GOLDEN_MAGIC, GOLDEN_VERSION,
-                            TIMESTEPS_IN, INPUT_FEATURES, TIMESTEPS_OUT, SPECTRAL_DIM))
-        for tensor in (features, intention[0], spectral[0]):
+        f.write(struct.pack("<7I", GOLDEN_MAGIC, GOLDEN_VERSION,
+                            TIMESTEPS_IN, INPUT_FEATURES, TIMESTEPS_OUT, SPECTRAL_DIM,
+                            keys.shape[0]))
+        for tensor in (features, intention[0], spectral[0], embedding):
             f.write(tensor.detach().cpu().numpy().astype("<f4").tobytes())
 
 

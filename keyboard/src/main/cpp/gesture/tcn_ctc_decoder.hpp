@@ -49,6 +49,10 @@ public:
     float areaWidth() const { return areaWidth_; }
     float areaHeight() const { return areaHeight_; }
 
+    /** The basis [setLayout] built: [keyCount] rows of [TcnEncoder::kSpectralDim] floats. */
+    const float* basis() const { return basis_; }
+    int keyCount() const { return keyCount_; }
+
     /**
      * Decodes 32 timesteps of intention gates and 64-D spectral coefficients (as [TcnEncoder]
      * produces) into ranked candidates, walking [packIndex]'s trie and asking [scorer] for the
