@@ -489,20 +489,21 @@ almost every word before measuring anything. Two channels, both needed:
 - **Location**, absolute pixels, no normalisation. Stops shape being fooled: `were` and `tie`
   trace nearly the same figure in nearly the same proportions, in different places.
 
-**60.2% top-1, 67.0% top-3** on 500 recorded traces from FUTO's held-out split, against the
+**60.4% top-1, 67.8% top-3** on 500 recorded traces from FUTO's held-out split, against the
 shipped English pack (`native-tests/data/gestures_futo.csv`, gated in CI). The SHARK² paper
 reports about 80% on English QWERTY; this is our implementation on real swipes, and it is the
 number tier B has to beat to justify its weights.
 
-`kShapeWeight` and `kLocationWeight` are fitted against that corpus. What the fit says is that
-the two channels matter far less individually than their size relative to the language model:
-at a fixed total, moving the balance between shape and location moves top-1 by about a point,
-while the total itself moves it by five.
+`kShapeWeight`, `kLocationWeight` and `kEndpointRadius` are fitted against that corpus. What
+the fit says is that the two distance channels matter far less individually than their size
+relative to the language model: `kShapeWeight` is flat from 6 to 30, while `kLocationWeight`
+traces a clean peak at 8. `kMinLengthRatio` and `kMaxLengthRatio` are inert over any range worth
+trying and keep their original values.
 
 ### Tier B — `TcnDecoder`
 
 `plus`-only, behind `BORDERKEYS_NEURAL_SWIPE`, and **on by default** since it was measured:
-**90.6% top-1, 94.8% top-3** on the same 500 traces, 30.4 points above tier A and ahead at every
+**90.6% top-1, 94.8% top-3** on the same 500 traces, 30.2 points above tier A and ahead at every
 word length. A `core` build compiles no tier B at all, so tier A is what that flavour swipes
 with. Three stages:
 
