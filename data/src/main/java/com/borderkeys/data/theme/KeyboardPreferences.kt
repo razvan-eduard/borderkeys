@@ -335,12 +335,13 @@ data class KeyboardPreferences(
      * geometric one (tier A) that always ships. `plus`-only in effect -- a `core` build has no
      * tier B compiled in at all, so this setting does nothing there.
      *
-     * Off by default, and "experimental" is not a formality: the shipped checkpoint measures
-     * well on real gesture data through the actual decode path, but it has had far less time in
-     * live typing than the geometric decoder it sits beside. This is genuinely a preview of work
-     * still in progress, not a finished feature quietly defaulting on.
+     * On by default in `plus`. Measured against 500 recorded traces and the shipped English
+     * pack, tier B reaches 76.2% top-1 where tier A reaches 51.6%, and it is ahead at every word
+     * length -- including one-letter gestures, which tier A cannot decode at all. The name keeps
+     * "experimental" because the stored preference key does; renaming it would discard the
+     * choice of anyone who has already set it.
      */
-    val experimentalSwipeModelEnabled: Boolean = false,
+    val experimentalSwipeModelEnabled: Boolean = true,
 
     /**
      * Set by the keyboard, never chosen by anyone: tier B's weights could not be read or were

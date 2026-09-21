@@ -2,6 +2,6 @@
   "corpus": "native-tests/data/gestures_futo.csv",
   "weights": "keyboard/src/plus/assets/model.bkw",
   "gestures": 500,
-  "top1": 76.2,
-  "top3": 86.8
+  "top1": 81.2,
+  "top3": 90.0
 }

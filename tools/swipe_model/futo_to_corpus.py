@@ -26,9 +26,19 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
 import random
 import sys
 from pathlib import Path
+
+
+def layout_key_width(path: Path) -> float:
+    """The key width in pixels, which is the unit --min-travel is expressed in."""
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and len(line.split()) == 2:
+            return float(line.split()[0])
+    raise SystemExit(f"{path}: no key size found")
 
 
 def layout_extent(path: Path) -> tuple[float, float]:
@@ -56,6 +66,12 @@ def main() -> int:
     parser.add_argument("split", type=Path, help="a data/*.jsonl split")
     parser.add_argument("--layout", type=Path, required=True)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--min-travel", type=float, default=0.25,
+                        help="drop traces whose path is shorter than this many key widths. A "
+                             "touch that never leaves the touch slop is a tap on this keyboard "
+                             "and is typed as one, so it never reaches the gesture decoder: "
+                             "keeping it measures a case that cannot happen. In FUTO's held-out "
+                             "split these are all single letters.")
     parser.add_argument("--seed", type=int, default=None,
                         help="sample --limit gestures at random rather than taking the first "
                              "ones. The split is in collection order, so a head slice is not "
@@ -71,6 +87,7 @@ def main() -> int:
     arguments = parser.parse_args()
 
     width, height = layout_extent(arguments.layout)
+    key_width = layout_key_width(arguments.layout)
 
     packed = None
     if arguments.dictionary is not None:
@@ -87,12 +104,21 @@ def main() -> int:
 
     rows = []
     unreachable = 0
+    stationary = 0
     with arguments.split.open(encoding="utf-8") as handle:
         for line in handle:
             row = json.loads(line)
             word = row["word"]
             if not word.isascii() or (arguments.lowercase_only and not word.isalpha()):
                 continue
+            if arguments.min_travel > 0.0:
+                xs, ys = row["xs"], row["ys"]
+                travel = sum(math.dist((xs[i] * width, ys[i] * height),
+                                       (xs[i + 1] * width, ys[i + 1] * height))
+                             for i in range(len(xs) - 1))
+                if travel < arguments.min_travel * key_width:
+                    stationary += 1
+                    continue
             if packed is not None:
                 candidate = word.lower() if arguments.lowercase_only else word
                 if build_dict.fold_word(candidate) not in packed:
@@ -115,7 +141,8 @@ def main() -> int:
         for x, y, t in zip(row["xs"], row["ys"], row["ts"]):
             print(f"{identifier},{word},{x * width:.1f},{y * height:.1f},{int(t - start)}")
         kept += 1
-    print(f"{kept} gestures, {skipped} outside the dictionary", file=sys.stderr)
+    print(f"{kept} gestures, {skipped} outside the dictionary, "
+          f"{stationary} too short to be a gesture", file=sys.stderr)
     return 0
 
 
