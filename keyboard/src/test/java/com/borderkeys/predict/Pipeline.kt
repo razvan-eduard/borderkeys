@@ -192,7 +192,17 @@ internal class Pipeline private constructor(private val handle: Long) {
          * `KeyGeometry::isSet()` is false, the walk never leaves exact-match mode, and the
          * harness measures prefix completion while reporting it as the engine.
          */
-        fun open(vararg tags: String): Pipeline {
+        fun open(vararg tags: String): Pipeline = open(null, *tags)
+
+        /**
+         * [preferred] is the language being written, weighted above the rest.
+         *
+         * Null leaves every language equal, which is what a single corpus word deserves: there
+         * is no sentence to detect from. But a payload written *for* a language is not that
+         * case -- someone writing Romanian has Romanian selected -- and with the weights equal
+         * the engine has no grounds to prefer "în" over the English "in" it also holds.
+         */
+        fun open(preferred: String?, vararg tags: String): Pipeline {
             val packs = requireNotNull(packDirectory()) { "borderkeys.packs is not set" }
             val handle = NativePredictor.nativeCreate()
             check(handle != 0L) { "the engine would not start" }
@@ -207,7 +217,9 @@ internal class Pipeline private constructor(private val handle: Long) {
                 }
             }
             NativePredictor.nativeSetActiveLanguages(
-                handle, Array(tags.size) { tags[it] }, FloatArray(tags.size) { 1.0f },
+                handle,
+                Array(tags.size) { tags[it] },
+                FloatArray(tags.size) { if (tags[it] == preferred) 2.0f else 1.0f },
             )
             // Undecided, as a corpus case is: one word with no sentence around it gives the
             // detector nothing to work from, and pinning a pack would measure a different

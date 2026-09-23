@@ -37,4 +37,16 @@ snobul	-	NothingOffered
 # with a letter added. Ranked on frequency alone the commoner one wins -- which is the whole
 # defect, and why "totusi" -> "totuși" (9,779) has always worked while this never did. Not two
 # behaviours; one rule, decided by whichever side happens to be commoner.
-cana	cană	Correctable
+cana	-	NoChange
+
+# Capitalised, because the first letter of a field arrives capitalised and nothing else here
+# does. The engine matched a spelling against the letters typed byte for byte, so every one of
+# these was corrected away on a phone while the lower-case row beside it passed.
+Ca	-	NoChange
+Sau	-	NoChange
+Fata	-	NoChange
+Soarta	-	NoChange
+Piatra	-	NoChange
+Prefera	-	NoChange
+Studenta	-	NoChange
+Asa	Așa	Correctable

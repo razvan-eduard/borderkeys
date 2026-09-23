@@ -44,13 +44,13 @@ from pathlib import Path
 # --------------------------------------------------------------------------------------
 
 MAGIC = 0x31444B42  # 'B' 'K' 'D' '1' little endian
-VERSION = 3
-# 336 rather than 320: version 3 added the word-flags section (kSectionWordFlags), one more
-# 16-byte descriptor in the section table, for the same reason 320 was 256 plus the two
-# part-of-speech descriptors before it.
+VERSION = 4
+# Still 336: version 4 added the word-run section (kSectionWordRun), and its 16-byte descriptor
+# came out of the reserved words rather than off the end of the header. 336 itself was 320 plus
+# version 3's word-flags descriptor, and 320 was 256 plus version 2's two part-of-speech ones.
 HEADER_BYTES = 336
-# Where the section descriptors begin: the fixed fields are 76 bytes and 52 are reserved.
-SECTION_TABLE_OFFSET = 128
+# Where the section descriptors begin: the fixed fields are 76 bytes and 36 are reserved.
+SECTION_TABLE_OFFSET = 112
 MAX_PACK_BYTES = 64 * 1024 * 1024
 MAX_WORDS = 4_000_000
 MAX_NODES = 32_000_000
@@ -58,6 +58,9 @@ MAX_ALPHABET = 1024
 MAX_NGRAM_CAPACITY = 1 << 26
 # A tag index is one byte, so the matrix a pack may declare is bounded by what a byte can reach.
 MAX_POS_TAGS = 256
+# Spellings kept per folded key, capped by the byte a run length is stored in. The rest are
+# dropped most-infrequent first.
+MAX_SPELLINGS = 255
 
 # The marker tools/make_pack.py writes for "a sentence began here", and the index it becomes.
 # Reserved rather than allocated: it must not collide with a word, and the engine looks it up
@@ -74,7 +77,7 @@ FLAG_CONTENT_CRC = 1 << 1
 # version bump.
 WORD_FLAG_PROPER_NOUN = 1 << 0
 
-SECTION_COUNT = 13
+SECTION_COUNT = 14
 (
     S_ALPHABET,
     S_TRIE_BASE,
@@ -89,6 +92,7 @@ SECTION_COUNT = 13
     S_WORD_TAGS,
     S_POS_TRANSITIONS,
     S_WORD_FLAGS,
+    S_WORD_RUN,
 ) = range(SECTION_COUNT)
 
 # Quantisation scale for log-probabilities: q = round(-logProb * SCALE), saturating at 255,
@@ -286,7 +290,8 @@ class DoubleArrayBuilder:
         return placed
 
 
-def build_double_array(words_folded: list[tuple[int, ...]], symbol_of: dict[int, int]):
+def build_double_array(words_folded: list[tuple[int, ...]], symbol_of: dict[int, int],
+                       values: list[int] | None = None):
     """Returns (base, check) with terminals encoding -(wordIndex + 1) in base."""
     # Plain trie first, as nested dicts. Memory-hungry but simple, and this is a build tool.
     root: dict = {}
@@ -295,7 +300,8 @@ def build_double_array(words_folded: list[tuple[int, ...]], symbol_of: dict[int,
         for code_point in folded:
             symbol = symbol_of[code_point]
             node = node.setdefault(symbol, {})
-        node[TERMINAL_SYMBOL] = word_index  # int payload rather than a dict marks a terminal
+        # int payload rather than a dict marks a terminal
+        node[TERMINAL_SYMBOL] = word_index if values is None else values[word_index]
 
     builder = DoubleArrayBuilder()
     queue: list[tuple[dict, int]] = [(root, 0)]
@@ -412,41 +418,44 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
         key=lambda item: (item[0], item[1]),
     )
 
-    # A folded key that two different spellings share keeps the more frequent spelling as its
-    # display form -- the other would be unreachable anyway, since the trie is keyed on the fold
-    # -- but the frequency is the *sum* of every colliding row, not just the winner's own.
+    # A folded key keeps *every* spelling that reaches it, each with its own frequency and its
+    # own proper-noun bit -- "ca" beside "că", "sau" beside "său", "e" beside "è".
     #
-    # This was the winner's frequency alone until a Romanian-specific audit found it silently
-    # discarding real signal: "așa"/"aşa"/"asa" (comma-below, cedilla, and no diacritic at all --
-    # three spellings of one word, all present in a real corpus) folded to one trie key and only
-    # the most frequent variant's own count survived, throwing the other two away rather than
-    # merging them in. For Romanian specifically, whose corpus carries three ways to spell the
-    # same accented letter, this discarded close to a tenth of the language's total frequency
-    # mass and meant a folded word's effective frequency -- the one kEditPenalty's whole
-    # calibration argument depends on being a fair signal -- could be roughly a third to half of
-    # its true combined usage. Summing is what "the same word, spelled three ways in the source
-    # text" should have meant from the start: one word, one true frequency, one trie entry.
-    # The proper-noun bit is OR'd across every colliding spelling, same reasoning as summing
-    # their frequencies below: "Ana"/"ana" fold to one trie key, and whichever spelling wins as
-    # the display form must still carry the flag if *either* input row was flagged as a name --
-    # otherwise the bit silently depends on which spelling happened to have the higher frequency.
-    deduped: dict[tuple[int, ...], list] = {}
+    # Spellings that differ only by case are merged into the most frequent of them, frequencies
+    # summed and the proper-noun bit OR'd: "Ana" and "ana" are one word written twice, and the
+    # keyboard decides case for itself from the flag and the shift state.
+    grouped: dict[tuple[int, ...], dict[str, list]] = {}
     for folded, word, frequency, is_proper_noun in prepared:
-        existing = deduped.get(folded)
+        members = grouped.setdefault(folded, {})
+        existing = members.get(word.casefold())
         if existing is None:
-            deduped[folded] = [word, frequency, frequency, is_proper_noun]
+            members[word.casefold()] = [word, frequency, is_proper_noun]
         else:
             if frequency > existing[1]:
                 existing[0] = word
-                existing[1] = frequency
-            existing[2] += frequency
-            existing[3] = existing[3] or is_proper_noun
-    keys = sorted(deduped.keys())
+            existing[1] += frequency
+            existing[2] = existing[2] or is_proper_noun
+    keys = sorted(grouped.keys())
 
+    # One trie terminal per folded key, carrying the first word index of that key's run; the
+    # per-word arrays hold every spelling. Most frequent first, so anything reading only the
+    # first index of a run reads what version 3 would have stored there.
     words_folded = keys
-    display = [deduped[key][0] for key in keys]
-    frequencies = [deduped[key][2] for key in keys]
-    proper_noun_flags = [deduped[key][3] for key in keys]
+    display: list[str] = []
+    frequencies: list[int] = []
+    proper_noun_flags: list[bool] = []
+    runs: list[int] = []
+    first_of_key: list[int] = []
+    for key in keys:
+        members = sorted(grouped[key].values(), key=lambda m: (-m[1], m[0]))[:MAX_SPELLINGS]
+        first_of_key.append(len(display))
+        # Spellings remaining from each index onwards, so a run is walkable from any member and
+        # not only from its start.
+        runs.extend(range(len(members), 0, -1))
+        for word, frequency, is_proper_noun in members:
+            display.append(word)
+            frequencies.append(frequency)
+            proper_noun_flags.append(is_proper_noun)
     word_index_of = {word: index for index, word in enumerate(display)}
 
     alphabet = sorted({code_point for folded in words_folded for code_point in folded})
@@ -456,7 +465,7 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
         raise SystemExit(f"{len(alphabet)} distinct characters exceeds the cap of {MAX_ALPHABET}")
     symbol_of = {code_point: index + 1 for index, code_point in enumerate(alphabet)}
 
-    base, check = build_double_array(words_folded, symbol_of)
+    base, check = build_double_array(words_folded, symbol_of, first_of_key)
     if len(base) > MAX_NODES:
         raise SystemExit(f"{len(base)} nodes exceeds the format cap of {MAX_NODES}")
 
@@ -542,6 +551,7 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
         S_WORD_TAGS: (word_tags, 1),
         S_POS_TRANSITIONS: (pos_transitions, 1),
         S_WORD_FLAGS: (word_flags, 1),
+        S_WORD_RUN: (bytes(runs), 1),
     }
 
     body = bytearray()
@@ -564,7 +574,7 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
 
     def pack_header(header_crc: int) -> bytes:
         blob = struct.pack(
-            "<IIII Q II 16s IIIIII I 13I",
+            "<IIII Q II 16s IIIIII I 9I",
             MAGIC,
             VERSION,
             HEADER_BYTES,
@@ -580,7 +590,7 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
             trigram_capacity,
             LOG_PROB_SCALE,
             pos_tag_count,
-            *([0] * 13),
+            *([0] * 9),
         )
         for index in range(SECTION_COUNT):
             data, _ = payloads[index]

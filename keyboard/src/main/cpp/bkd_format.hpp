@@ -41,7 +41,11 @@ inline constexpr uint32_t kBkdMagic = 0x31444B42u;
 // from 320 to 336 bytes, for the same reason 1 -> 2 grew it from 256 to 320 -- every section
 // offset in an older file was computed against a shorter header, so nothing downstream of it can
 // be trusted either.
-inline constexpr uint32_t kBkdVersion = 3u;
+// 4 added kSectionWordRun and changed what a trie terminal holds. A folded key used to carry one
+// word index; it now carries the first index of a run of words that share that folded key, and
+// kSectionWordRun gives the run's length. Every per-word section is therefore longer than the
+// number of trie terminals, which is what a version 3 reader would assume they matched.
+inline constexpr uint32_t kBkdVersion = 4u;
 
 // Caps, checked before a single byte is mapped.
 //
@@ -74,6 +78,7 @@ enum BkdSectionIndex : uint32_t {
     kSectionWordTags,         // uint8_t[wordCount], part-of-speech tag index per word
     kSectionPosTransitions,   // uint8_t[posTagCount * posTagCount], quantised -log P(t|prev)
     kSectionWordFlags,        // uint8_t[wordCount], kWordFlag* bits per word
+    kSectionWordRun,          // uint8_t[wordCount], spellings sharing this word's folded key
     kSectionCount
 };
 
@@ -118,7 +123,9 @@ struct BkdHeader {
     // the term, exactly as it did before.
     uint32_t posTagCount;
 
-    uint32_t reserved[13];
+    // Four words shorter than in version 3, which is where kSectionWordRun's descriptor came
+    // from: the header stays 336 bytes and every section offset keeps its meaning.
+    uint32_t reserved[9];
 
     BkdSection sections[kSectionCount];
 };
@@ -298,6 +305,7 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
          header.wordCount == 0 ? 0u : static_cast<uint64_t>(header.wordCount) + 1u},
         {kSectionWordFreq, sizeof(uint8_t), alignof(uint8_t), header.wordCount},
         {kSectionWordFlags, sizeof(uint8_t), alignof(uint8_t), header.wordCount},
+        {kSectionWordRun, sizeof(uint8_t), alignof(uint8_t), header.wordCount},
         {kSectionBigramKeys, sizeof(uint64_t), alignof(uint64_t), bigramCap},
         {kSectionBigramValues, sizeof(uint8_t), alignof(uint8_t), bigramCap},
         {kSectionTrigramKeys, sizeof(uint32_t), alignof(uint32_t),

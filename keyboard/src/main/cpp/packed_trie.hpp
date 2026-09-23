@@ -117,6 +117,16 @@ public:
     // shift-state accident. False (rather than out-of-bounds being an error) for the same reason
     // wordFreqQuantised degrades gracefully: a caller asking about an index it should not have
     // gets the safe default, not a crash.
+    /** How many spellings share this word's folded key, counting from this one onwards. */
+    uint32_t spellingsFrom(uint32_t wordIndex) const {
+        if (wordIndex >= wordCount_ || wordRun_ == nullptr || wordRun_[wordIndex] == 0u) {
+            return 1;
+        }
+        const uint32_t remaining = wordCount_ - wordIndex;
+        const uint32_t run = wordRun_[wordIndex];
+        return run < remaining ? run : remaining;
+    }
+
     bool isProperNoun(uint32_t wordIndex) const {
         return wordIndex < wordCount_ && wordFlags_ != nullptr &&
                (wordFlags_[wordIndex] & kWordFlagProperNoun) != 0u;
@@ -136,6 +146,7 @@ private:
     const uint32_t* wordOffsets_ = nullptr;
     const uint8_t* wordFreq_ = nullptr;
     const uint8_t* wordFlags_ = nullptr;
+    const uint8_t* wordRun_ = nullptr;
     const char* wordText_ = nullptr;
     uint32_t wordTextBytes_ = 0;
     uint32_t wordCount_ = 0;
