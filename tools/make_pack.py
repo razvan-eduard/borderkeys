@@ -61,6 +61,35 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
+
+class Alphabet:
+    """What the keyboard for one language can type, and which bare letters are words there.
+
+    Read from tools/drop_unreachable.py, which builds it from the long-press overlay the keys
+    themselves are drawn from, so the corpus and the keyboard cannot disagree about which
+    letters a language has.
+    """
+
+    def __init__(self, tag: str, rules, build_dict):
+        self.fold = build_dict.fold_word
+        self.folded = rules.alphabet_of(tag, build_dict.fold_code_point)
+        self.single_letters = set(rules.SINGLE_LETTER_WORDS[tag])
+
+
+def alphabet_for(tag: str) -> Alphabet | None:
+    """The alphabet for a BCP-47 tag, or None where this project has declared none."""
+    import importlib.util  # noqa: PLC0415 -- one tool reaching for another, not a dependency
+
+    spec = importlib.util.spec_from_file_location("drop_unreachable",
+                                                  HERE / "drop_unreachable.py")
+    rules = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rules)
+    key = tag.replace("-", "_")
+    if key not in rules.SINGLE_LETTER_WORDS:
+        return None
+    return Alphabet(key, rules, rules.load_build_dict())
+
+
 # A word is letters, plus the marks that belong to them, plus the apostrophes and hyphens that
 # appear inside words. Deliberately not \w: that admits digits and underscores, and a dictionary
 # full of "covid19" and "foo_bar" predicts nothing anyone types.
@@ -74,13 +103,32 @@ WORD = re.compile(r"[^\W\d_]+(?:['’-][^\W\d_]+)*", re.UNICODE)
 MOJIBAKE = re.compile(r"[ÂÃÄÅ][\u0080-\u00bf\u0192\u2020-\u203a]")
 
 
-def tokenise(line: str) -> list[str]:
+def admits(word: str, alphabet: Alphabet | None) -> bool:
+    """Whether [word] is a word of the language [alphabet] describes.
+
+    [WORD] matches letters of any script and matches a single one of them, because a regular
+    expression is the wrong place to know which letters a language has. That belongs to the
+    keyboard, which is the thing that has to be able to type the word: see
+    drop_unreachable.alphabet_of, reading the same long-press overlay the keys are drawn from.
+    Without an alphabet -- a tag this project ships no overlay decision for -- every token is
+    admitted, which is what this did for every corpus counted before now.
+    """
+    if alphabet is None:
+        return True
+    if any(folded not in alphabet.folded for folded in alphabet.fold(word)):
+        return False
+    return len(word) != 1 or word in alphabet.single_letters
+
+
+def tokenise(line: str, alphabet: Alphabet | None = None) -> list[str]:
     """Lower-cases and splits a line into words, keeping the accents."""
     normalised = unicodedata.normalize("NFC", line)
     return [
-        m.group(0).lower()
+        lowered
         for m in WORD.finditer(normalised)
         if not MOJIBAKE.search(m.group(0))
+        for lowered in (m.group(0).lower(),)
+        if admits(lowered, alphabet)
     ]
 
 
@@ -89,7 +137,8 @@ def tokenise(line: str) -> list[str]:
 SENTENCE_START = "\x02start"
 
 
-def count_corpus(paths: list[Path], order: int) -> tuple[Counter, Counter, Counter]:
+def count_corpus(paths: list[Path], order: int,
+                 alphabet: Alphabet | None = None) -> tuple[Counter, Counter, Counter]:
     """Counts words, pairs and triples from plain text, in one pass, without holding the text."""
     words: Counter = Counter()
     bigrams: Counter = Counter()
@@ -100,7 +149,7 @@ def count_corpus(paths: list[Path], order: int) -> tuple[Counter, Counter, Count
             previous2: str | None = None
             for line in handle:
                 first = True
-                for token in tokenise(line):
+                for token in tokenise(line, alphabet):
                     words[token] += 1
                     if first:
                         # What a sentence opens with, counted as a pair with a marker that is
@@ -407,8 +456,15 @@ def main() -> int:
     bigrams: Counter = Counter()
     trigrams: Counter = Counter()
 
+    # What this language's keyboard can type, which is what its dictionary may hold. None for a
+    # tag with no declared alphabet, and then every token is counted as it always was.
+    alphabet = alphabet_for(arguments.tag)
+    if alphabet is None:
+        print(f"no alphabet declared for {arguments.tag}: counting every script the corpus "
+              f"quotes, which is how Devanagari and Greek became English words", file=sys.stderr)
+
     if arguments.corpus:
-        words, bigrams, trigrams = count_corpus(arguments.corpus, arguments.order)
+        words, bigrams, trigrams = count_corpus(arguments.corpus, arguments.order, alphabet)
     if arguments.frequencies:
         words.update(read_frequencies(arguments.frequencies))
     if arguments.ngram_counts:

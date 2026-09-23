@@ -87,6 +87,35 @@ unmunch ro_RO.dic ro_RO.aff > ro_words.txt
 python3 tools/make_pack.py --wordlist ro_words.txt --tag ro-RO --out ro_RO.bkd
 ```
 
+## The alphabet a language is allowed
+
+A word is kept only when every character **folds into that language's own alphabet**: `a`–`z`,
+the letters its long-press overlay offers (`keyboard/src/main/assets/accents/<tag>.json`), and
+the apostrophes and hyphen that live inside words. The keyboard is the thing that has to be able
+to type the word, so the keyboard's own overlay is where the alphabet comes from; there is no
+second list to drift.
+
+Folded, not literal. `naïve` is an English word and no English overlay carries `ï`, but it folds
+to `i` and is typed that way — as are `Bjørn` (`ø`→`o`) and `François` (`ç`→`c`). What is refused
+is a character that folds to *itself* and is on no overlay: Greek `α`, Devanagari `ख`, the unit
+superscript in `km²`, the ordinals `º` and `ª`, mojibake `ðÿ`, and Romanian written with the
+wrong mark — `ȋn`, `sǎ` — which look right and are not.
+
+A **bare letter** is kept only when it is a word of that language. One letter is a complete match
+for the tokeniser, so every initial, list marker and table cell in the corpus became an entry.
+The real ones are named in `tools/drop_unreachable.py`; nothing decides it automatically, since
+Hunspell lists letters as headwords for spell-checking and the frequencies overlap.
+
+Both rules run in `make_pack.py` as the corpus is counted, and
+`tools/drop_unreachable.py <tsv>` applies them to a list that already exists. Removing 331 bare
+letters and ~730 unreachable rows took **4.75 MB** off the six bundled packs — almost all of it
+German, which had 73 folded code points in its alphabet and now has 30. A pack is indexed by its
+own alphabet, so the words are not what cost the space.
+
+`tools/drop_unreachable.py --selftest` fails if an overlay edit changes which letters a language
+admits. Only `ß`, `æ` and `œ` can: every other accented letter folds to an unaccented twin, so
+taking it off an overlay changes nothing.
+
 ## Size
 
 `--max-words` defaults to 120,000 and `--min-count` to 3. A 120,000-word pack with 200,000

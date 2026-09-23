@@ -69,19 +69,38 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--words", required=True, help="a dictionaries/*.tsv word list")
-    parser.add_argument("--reference", required=True,
+    parser.add_argument("--reference", required=False,
                         help="a real wordlist (one word per line) to check a no-diacritic "
                              "spelling against, e.g. a Hunspell dictionary's own unmunch output")
+    parser.add_argument("--nonwords",
+                        help="a file of spellings that are not words of this language, one per "
+                             "line, '#' comments ignored. Listed words are folded into their "
+                             "accented sibling whatever the reference says. Given alone, only "
+                             "the listed words are folded and nothing else is touched.")
     parser.add_argument("--out", required=True)
     arguments = parser.parse_args()
 
+    if arguments.reference is None and arguments.nonwords is None:
+        print("nothing to do: this needs --reference, --nonwords, or both", file=sys.stderr)
+        return 2
+
+    nonwords: set[str] = set()
+    if arguments.nonwords is not None:
+        with open(arguments.nonwords, encoding="utf-8") as handle:
+            for line in handle:
+                word = line.split("#", 1)[0].strip()
+                if word:
+                    nonwords.add(word.lower())
+        print(f"non-words: {len(nonwords)} listed", file=sys.stderr)
+
     reference: set[str] = set()
-    with open(arguments.reference, encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            word = line.strip()
-            if word:
-                reference.add(word.lower())
-    print(f"reference wordlist: {len(reference)} words", file=sys.stderr)
+    if arguments.reference is not None:
+        with open(arguments.reference, encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                word = line.strip()
+                if word:
+                    reference.add(word.lower())
+        print(f"reference wordlist: {len(reference)} words", file=sys.stderr)
 
     rows = read_rows(arguments.words)
     by_word = {word: (freq, is_name) for word, freq, is_name in rows}
@@ -112,7 +131,11 @@ def main() -> int:
         candidates = siblings.get(word)
         if not candidates:
             continue  # no accented sibling in this corpus at all
-        if word.lower() in reference:
+        if word.lower() in nonwords:
+            pass  # declared not a word of this language; fold it whatever the reference says
+        elif arguments.reference is None:
+            continue  # no evidence either way, and a list on its own speaks only for itself
+        elif word.lower() in reference:
             kept_as_real_word += 1
             continue  # a real word in its own right -- leave it alone
         target = max(candidates, key=lambda w: by_word[w][0])
