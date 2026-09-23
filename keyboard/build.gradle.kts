@@ -132,6 +132,7 @@ dependencies {
     implementation(libs.androidx.autofill)
     implementation(project(":data"))
     implementation(project(":i18n"))
+    implementation(project(":effects"))
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

@@ -124,10 +124,22 @@ internal class SuggestionRow {
         slot: Int,
         cap: Int,
     ) {
-        val at = row.indexOfFirst { it.isCorrection }
+        // By the engine's mark first, and by the letters second. The two rankings do not share
+        // an identity, so the engine can leave nothing marked -- its choice need not be in the
+        // strip's own sixteen -- while the row already carries that very word from the other
+        // heap. Inserting then drew the same word twice, one chip outlined and one not.
+        var at = row.indexOfFirst { it.isCorrection }
+        if (at < 0) {
+            at = row.indexOfFirst { it.text == text }
+        }
         if (at > 0) {
             val marked = row.removeAt(at)
-            row.add(slot, marked.copy(text = text))
+            row.add(slot, marked.copy(text = text, isCorrection = true))
+            return
+        }
+        if (at == 0) {
+            // The typed chip is itself what a delimiter commits, so there is nothing to outline
+            // elsewhere and nothing to add: a second chip here would repeat slot zero.
             return
         }
         row.add(slot, Candidate(text, isCorrection = true))

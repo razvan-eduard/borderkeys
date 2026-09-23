@@ -105,6 +105,7 @@ dependencies {
 
     implementation(project(":data"))
     implementation(project(":i18n"))
+    implementation(project(":effects"))
     // One direction only. The theme editor embeds the real KeyboardCanvasView in an
     // AndroidView so that the preview and the keyboard cannot diverge; the keyboard never
     // learns that this module exists.

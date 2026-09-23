@@ -164,6 +164,12 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 checked = preferences.spaceAfterPunctuation,
             ) { value -> update { it.copy(spaceAfterPunctuation = value) } }
             SwitchRow(
+                title = strings[Keys.CORRECTIONS_SPACE_IN_NUMBERS],
+                subtitle = strings[Keys.CORRECTIONS_SPACE_IN_NUMBERS_NOTE],
+                checked = preferences.spaceInsideNumbers,
+                enabled = preferences.spaceAfterPunctuation,
+            ) { value -> update { it.copy(spaceInsideNumbers = value) } }
+            SwitchRow(
                 title = strings[Keys.CORRECTIONS_SPACE_AFTER_PICK],
                 subtitle = strings[Keys.CORRECTIONS_SPACE_AFTER_PICK_NOTE],
                 checked = preferences.spaceAfterSuggestion,
@@ -696,6 +702,7 @@ private fun resetCorrectionDefaults(preferences: KeyboardPreferences): KeyboardP
         forceCapitaliseSentences = defaults.forceCapitaliseSentences,
         doubleSpacePeriod = defaults.doubleSpacePeriod,
         spaceAfterPunctuation = defaults.spaceAfterPunctuation,
+        spaceInsideNumbers = defaults.spaceInsideNumbers,
         removeSpaceBeforePunctuation = defaults.removeSpaceBeforePunctuation,
         autoCorrectOnSpace = defaults.autoCorrectOnSpace,
         correctionStrictness = defaults.correctionStrictness,
