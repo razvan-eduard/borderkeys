@@ -163,6 +163,28 @@ data class KeyboardPreferences(
     val spaceAfterPunctuation: Boolean = true,
 
     /**
+     * Whether that space is added when the mark follows a digit.
+     *
+     * Off. Every mark the setting above spaces is also one numbers are written with, so a space
+     * there splits "12.55" into "12. 55" and "10:30" into "10: 30". A sentence that ends in a
+     * number costs one space typed by hand; a decimal is broken every time it is written. Here
+     * rather than assumed because a list of figures is a real way to write, and someone who
+     * wants the space everywhere should be able to say so.
+     */
+    val spaceInsideNumbers: Boolean = false,
+
+    /**
+     * What the keyboard shows when it has news -- a word learned, a correction applied.
+     *
+     * Here rather than in its own store because it is behaviour the user chose, the same as
+     * everything else on this class, and it reaches the IME on the flow that already carries
+     * them. A field added to a serialized class reads back as its default from a file written
+     * before it existed, so an upgrade keeps the one effect that already shipped and adds no
+     * others.
+     */
+    val effects: EffectsSettings = EffectsSettings(),
+
+    /**
      * Whether picking a suggestion from the strip also puts a space after the word, so typing
      * carries straight on. On, as every keyboard does it; off for someone who picks a word and
      * then wants to type the punctuation or suffix that follows it themselves. Never a second

@@ -65,6 +65,7 @@ import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SuggestionStripPreview
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberParticleEffectsUpdater
+import com.borderkeys.settings.rememberPreferencesUpdater
 import com.borderkeys.settings.rememberThemeUpdater
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -95,6 +96,7 @@ fun EffectsScreen(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val updateTheme = rememberThemeUpdater()
     val updateParticleEffects = rememberParticleEffectsUpdater()
+    val updatePreferences = rememberPreferencesUpdater()
     val appearance by repository.appearance
         .collectAsStateWithLifecycle(initialValue = remember { repository.currentAppearance() })
     val (theme, _, _, particleEffects) = appearance
@@ -141,6 +143,16 @@ fun EffectsScreen(modifier: Modifier = Modifier) {
     )
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        // Above the particle cards: an effect answers an event, a particle decorates a surface,
+        // and the first is the smaller idea to meet first.
+        EventEffectsSection(
+            effects = appearance.preferences.effects,
+            customColours = theme.customColours,
+            onCustomColoursChange = onCustomColoursChange,
+            onChange = { change ->
+                updatePreferences { it.copy(effects = change(it.effects)) }
+            },
+        )
         MyPresetsCard(
             particleEffects = particleEffects,
             baseline = baseline,
@@ -374,6 +386,7 @@ private fun MyPresetsCard(
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = presetActions.onSave) { Text(strings[Keys.PARTICLE_EFFECTS_SAVE_PRESET]) }
             if (active != null) {
@@ -381,6 +394,18 @@ private fun MyPresetsCard(
                 TextButton(onClick = { presetActions.onDelete(active) }) {
                     Text(strings[Keys.THEME_DELETE], color = MaterialTheme.colorScheme.error)
                 }
+            }
+            // Beside the button it is asking to be pressed, not under it: the notice and the
+            // action it wants are one thought, and a line of its own read as a separate remark.
+            if (!baseline.matches(particleEffects)) {
+                val name = when (baseline) {
+                    is Baseline.BuiltIn -> strings[builtInPresetNameKey(baseline.preset.id)]
+                    is Baseline.Saved -> baseline.entry.name
+                }
+                PulsingUnsavedText(
+                    strings.getString(Keys.PARTICLE_EFFECTS_UNSAVED_CHANGES, name),
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
 
@@ -391,15 +416,6 @@ private fun MyPresetsCard(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
         }
-        // Anything at all changed since the preset was applied -- a colour, a speed, a region
-        // switched on -- is the one thing "custom" means here, and the moment a save makes sense.
-        if (!baseline.matches(particleEffects)) {
-            val name = when (baseline) {
-                is Baseline.BuiltIn -> strings[builtInPresetNameKey(baseline.preset.id)]
-                is Baseline.Saved -> baseline.entry.name
-            }
-            PulsingUnsavedText(strings.getString(Keys.PARTICLE_EFFECTS_UNSAVED_CHANGES, name))
-        }
     }
 }
 
@@ -407,7 +423,7 @@ private fun MyPresetsCard(
  *  to be noticed once and then acted on (save, or pick a different preset), not read as a static
  *  label the way everything else on this card is. */
 @Composable
-private fun PulsingUnsavedText(text: String) {
+private fun PulsingUnsavedText(text: String, modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition()
     val alpha by transition.animateFloat(
         initialValue = 1f,
@@ -421,7 +437,7 @@ private fun PulsingUnsavedText(text: String) {
         text,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.error.copy(alpha = alpha),
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+        modifier = modifier,
     )
 }
 
@@ -496,24 +512,43 @@ private fun RegionCardContent(
             checked = region.enabled,
         ) { value -> onRegionChange { it.copy(enabled = value) } }
 
-        preview?.invoke()
+        // Everything under the switch is about how this region looks when it is on, so it dims
+        // and stops taking input when it is off -- the same treatment a locked card gets, for
+        // the same reason. The switch itself stays live, because it is the way back.
+        Box {
+            Box(modifier = Modifier.alpha(if (region.enabled) 1f else LOCKED_ALPHA)) {
+                Column {
+                    preview?.invoke()
 
-        OutlineLayerSection(
-            layer = region.outline,
-            custom = outlineCustom,
-            regionKey = regionKey,
-            customColours = customColours,
-            onCustomColoursChange = onCustomColoursChange,
-            onChange = { change -> onRegionChange { it.copy(outline = change(it.outline)) } },
-        )
-        FillLayerSection(
-            layer = region.fill,
-            custom = fillCustom,
-            regionKey = regionKey,
-            customColours = customColours,
-            onCustomColoursChange = onCustomColoursChange,
-            onChange = { change -> onRegionChange { it.copy(fill = change(it.fill)) } },
-        )
+                    OutlineLayerSection(
+                        layer = region.outline,
+                        custom = outlineCustom,
+                        regionKey = regionKey,
+                        customColours = customColours,
+                        onCustomColoursChange = onCustomColoursChange,
+                        onChange = { change -> onRegionChange { it.copy(outline = change(it.outline)) } },
+                    )
+                    FillLayerSection(
+                        layer = region.fill,
+                        custom = fillCustom,
+                        regionKey = regionKey,
+                        customColours = customColours,
+                        onCustomColoursChange = onCustomColoursChange,
+                        onChange = { change -> onRegionChange { it.copy(fill = change(it.fill)) } },
+                    )
+                }
+            }
+            if (!region.enabled) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) {},
+                )
+            }
+        }
     }
 }
 

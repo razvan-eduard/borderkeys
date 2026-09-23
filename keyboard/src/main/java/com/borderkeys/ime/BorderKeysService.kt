@@ -35,6 +35,9 @@ import com.borderkeys.data.entity.LanguagePackEntry
 import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.draft.DraftProtocol
+import com.borderkeys.data.theme.EffectEvent
+import com.borderkeys.data.theme.EffectFrequency
+import com.borderkeys.effects.EffectStyle
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.QuickActionBar
 import com.borderkeys.data.theme.QuickActionBarItem
@@ -1926,7 +1929,7 @@ class BorderKeysService :
         when (selection) {
             is RadialSuggestionMenuView.Selection.Word -> {
                 onSuggestionPicked(selection.index, selection.word)
-                host?.acceptedWord?.play(selection.word)
+                playEffect(EffectEvent.SwipeAccepted, selection.word)
             }
             RadialSuggestionMenuView.Selection.Cancel -> cancelRadialGesture()
             RadialSuggestionMenuView.Selection.None -> {
@@ -1936,7 +1939,7 @@ class BorderKeysService :
                     val word = radialTopWord
                     if (word != null) {
                         onSuggestionPicked(0, word)
-                        host?.acceptedWord?.play(word)
+                        playEffect(EffectEvent.SwipeAccepted, word)
                     } else {
                         cancelRadialGesture()
                     }
@@ -2030,13 +2033,23 @@ class BorderKeysService :
      * the gesture had never happened. [InputConnection.finishComposingText] alone would not do
      * this: it turns composing text into permanent committed text, which is the opposite of a
      * cancel -- the composing region has to be emptied first.
+     *
+     * The X is a decision, so it deletes the word whether or not the word is still composing.
+     * A caret change the editor reported while the ring was open ends the composing region and
+     * hands the word back as ordinary committed text ([adoptWordAtCaret]); with nothing left to
+     * un-compose, the word is deleted from the field directly -- see [deleteWordBeforeCaret].
      */
     private fun cancelRadialGesture() {
         val connection = currentInputConnection
-        if (connection != null && composing.isNotEmpty()) {
+        if (connection != null) {
             connection.beginBatchEdit()
-            connection.setComposingText("", 1)
-            connection.finishComposingText()
+            if (composing.isNotEmpty()) {
+                connection.setComposingText("", 1)
+                connection.finishComposingText()
+            } else {
+                connection.finishComposingText()
+                deleteWordBeforeCaret(connection)
+            }
             // The space this class put in front of the swiped word goes with it -- see
             // swipeAutoSpaceInserted's own doc. Checked against the text rather than trusted
             // blindly, the same way every other deletion here is.
@@ -2057,6 +2070,26 @@ class BorderKeysService :
         // start it was capitalising is a sentence start again.
         applyAutoShift()
         requestSuggestions()
+    }
+
+    /**
+     * Deletes the run of word characters touching the caret, by the same definition of "word
+     * character" a composing word is built from ([isWordCharacter]) and [adoptWordAtCaret] reads
+     * a word back with -- so the run deleted is exactly the region a still-composing word would
+     * have covered. A caret with no word in front of it deletes nothing.
+     */
+    private fun deleteWordBeforeCaret(connection: InputConnection) {
+        val before = connection.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
+        if (before.isNullOrEmpty()) {
+            return
+        }
+        var length = 0
+        while (length < before.length && isWordCharacter(before[before.length - 1 - length].code)) {
+            length++
+        }
+        if (length > 0) {
+            connection.deleteSurroundingText(length, 0)
+        }
     }
 
     /**
@@ -2099,7 +2132,13 @@ class BorderKeysService :
             host?.keyboard?.shiftState = shiftState
         }
         shiftHeldByUser = false
-        return cased
+        // Casing is what makes two candidates one word, so it is what has to notice. The engine
+        // already refuses a word it has (Engine::offerCandidate compares the text, which is how
+        // it catches the same word reaching it from two languages), but it compares what the
+        // packs hold: "Lennox" and "lennox" fold to one key, each pack keeps whichever spelling
+        // was commoner in its own corpus, and both carry the name flag. Two different words
+        // arrive, the capital goes on both, and the ring drew "Lennox" twice.
+        return cased.distinctBy { it.text }
     }
 
     /**
@@ -2187,7 +2226,7 @@ class BorderKeysService :
             if (preferences.radialTrustedWord == KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY &&
                 decodeWasDecisive(cased)
             ) {
-                view.acceptedWord.play(best)
+                playEffect(EffectEvent.SwipeAccepted, best)
                 return
             }
             val wedgeWords = ringWedges(cased)
@@ -2496,6 +2535,7 @@ class BorderKeysService :
             // which is what the first version of this did.
             composing.setLength(0)
             connection.commitText(correction + delimiter, 1)
+            playEffect(EffectEvent.AutocorrectApplied, correction)
         } else {
             finishComposing(connection)
             connection.commitText(delimiter, 1)
@@ -2827,6 +2867,7 @@ class BorderKeysService :
         // not have been. Harmless when the word came from the language pack instead: there is
         // then nothing personal to forget, and the pack is not touched.
         forgetWord(pending.corrected)
+        playEffect(EffectEvent.CorrectionReverted, pending.typed)
         refreshContextFromEditor()
         return true
     }
@@ -3326,6 +3367,12 @@ class BorderKeysService :
 
     override fun onSuggestionPicked(index: Int, word: String) {
         val connection = currentInputConnection ?: return
+        // A ring waiting for a tap is about the word this pick has just settled by other means,
+        // so it goes with it. Without this the ring stayed open over a word that was already
+        // committed and no longer composing, and its X -- which discards the composing word --
+        // found nothing to discard and silently did nothing.
+        dismissRadialMenu()
+        playEffect(EffectEvent.SuggestionPicked, word)
         // Tapping a suggestion is one of the "every other key settles it" cases onKey's own
         // comment describes -- it just does not arrive through onKey. A correction left pending
         // past this point would still be sitting there for a later, unrelated backspace to find
@@ -3860,16 +3907,48 @@ class BorderKeysService :
     private fun isSentenceEndingPunctuation(code: Int): Boolean =
         code == '.'.code || code == '!'.code || code == '?'.code
 
-    /** The space that follows a sentence mark, or nothing at all. */
-    private fun spaceAfter(code: Int): String {
-        if (!preferences.spaceAfterPunctuation || !isTightPunctuation(code)) {
-            return ""
+    // Which words each event has already shown an effect for, so "first time" means the first
+    // time. Per run rather than stored: the setting is about not repeating the same flourish
+    // while someone is writing, not a record of what they have ever typed -- and a set that
+    // outlived the session would be one more thing remembering their words for no reason.
+    private val effectsShown = HashMap<EffectEvent, MutableSet<String>>()
+
+    /**
+     * Plays [event]'s effect for [word], if the user asked for one.
+     *
+     * Every decision the settings express is taken here rather than at each call site: whether
+     * effects are on at all, whether this event has a style, how often it repeats, and what
+     * colour it is. A caller only has to say what happened.
+     */
+    private fun playEffect(event: EffectEvent, word: String) {
+        val settings = preferences.effects
+        if (!settings.enabled || word.isEmpty()) {
+            return
         }
-        // Not before something that is already a space, and not at the very end of a field the
-        // user may be about to leave -- an editor that trims trailing whitespace would then
-        // show the cursor jumping back on its own.
-        val after = currentInputConnection?.getTextAfterCursor(1, 0)
-        return if (after != null && after.isNotEmpty() && after[0] == ' ') "" else " "
+        val setting = settings.forEvent(event)
+        // An unknown name is a style this build no longer has: nothing plays, rather than the
+        // wrong thing playing -- see EffectSetting.style for why the name is stored and not the
+        // enum.
+        val style = EffectStyle.entries.firstOrNull { it.name == setting.style } ?: return
+        if (setting.frequency == EffectFrequency.FirstTime &&
+            !effectsShown.getOrPut(event) { HashSet() }.add(word.lowercase())
+        ) {
+            return
+        }
+        host?.effects?.playWord(word, style, setting.colour.takeIf { it != 0 })
+    }
+
+    /** The space that follows a sentence mark, or nothing at all -- see [PunctuationSpace]. */
+    private fun spaceAfter(code: Int): String {
+        val connection = currentInputConnection
+        val follows = PunctuationSpace.follows(
+            enabled = preferences.spaceAfterPunctuation,
+            insideNumbers = preferences.spaceInsideNumbers,
+            tightPunctuation = isTightPunctuation(code),
+            before = { connection?.getTextBeforeCursor(1, 0)?.firstOrNull() },
+            after = { connection?.getTextAfterCursor(1, 0)?.firstOrNull() },
+        )
+        return if (follows) " " else ""
     }
 
     /** Re-derives shift after a delimiter, unless caps lock is on or the user pressed shift
@@ -4014,6 +4093,7 @@ class BorderKeysService :
             learning.recordTriple(grandContextWord, contextWord, word, now)
         }
         if (learning.record(word, locale, now)) {
+            playEffect(EffectEvent.LearnedWord, word)
             engine.learn(
                 listOf(
                     com.borderkeys.data.dao.LearnedWord(word, locale, 1, now, deliberateCapital),

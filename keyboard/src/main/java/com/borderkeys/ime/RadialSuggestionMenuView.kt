@@ -129,6 +129,10 @@ class RadialSuggestionMenuView(
     private val wedgeOuterBounds = RectF()
     private val wedgePath = Path()
 
+    /** The trusted wedge's own path, kept from the loop that builds it so it can be stroked
+     *  after the seams. Reused, so the draw path allocates nothing. */
+    private val trustedPath = Path()
+
     /** Multiplies [OUTER_RADIUS_ROWS] -- set from [com.borderkeys.data.theme.KeyboardPreferences
      *  .radialMenuSize] via [com.borderkeys.data.theme.KeyboardPreferences.radialSizeScale]. */
     var sizeScale: Float = 1f
@@ -489,11 +493,12 @@ class RadialSuggestionMenuView(
             wedgePath.arcTo(wedgeInnerBounds, start + sweep, -sweep, false)
             wedgePath.close()
             canvas.drawPath(wedgePath, fill)
-            // The word already in the field, marked the way the strip marks the chip that would
-            // act without being touched -- the same paint, so a theme that fills rather than
-            // outlines fills here too.
             if (index == trustedIndex) {
-                canvas.drawPath(wedgePath, paints.appliedHighlight)
+                // Kept for after the separators below: this is the wedge's own boundary drawn
+                // heavier, and a separator drawn over it would cut it back to the weight of
+                // every other seam.
+                trustedPath.reset()
+                trustedPath.addPath(wedgePath)
             }
             val midAngleRad = Math.toRadians(wedgeCentreDegrees(index, words.size).toDouble())
             val textX = anchorX + (midRadius * cos(midAngleRad)).toFloat()
@@ -517,6 +522,16 @@ class RadialSuggestionMenuView(
                 val outerEdgeY = anchorY + (outer * sin(angleRad)).toFloat()
                 canvas.drawLine(edgeX, edgeY, outerEdgeX, outerEdgeY, paints.keyStroke)
             }
+        }
+        // The word already in the field: its own slice, outlined more than the others. Last, so
+        // the seams the loop above draws do not cut it back to their own weight, and on the
+        // wedge's real boundary rather than a shape floating inside it -- the ring is already
+        // made of outlines, and one more outline that follows nothing reads as a mistake.
+        if (trustedIndex >= 0) {
+            val previousWidth = paints.appliedHighlight.strokeWidth
+            paints.appliedHighlight.strokeWidth = previousWidth * TRUSTED_STROKE_SCALE
+            canvas.drawPath(trustedPath, paints.appliedHighlight)
+            paints.appliedHighlight.strokeWidth = previousWidth
         }
     }
 
@@ -545,6 +560,11 @@ class RadialSuggestionMenuView(
          *  runs on -- matches [com.borderkeys.data.theme.KeyboardPreferences.MAX_RADIAL_SUGGESTIONS],
          *  kept here too only as this view's own defensive ceiling. */
         const val MAX_WEDGES = 6
+
+        /** How much heavier the trusted word's slice is outlined than every other seam. The
+         *  strip marks a chip the size of a word with one pixel; a wedge needs more to read as
+         *  deliberately drawn rather than as the same line twice. */
+        const val TRUSTED_STROKE_SCALE = 3f
 
         const val DEFAULT_ROW_PX = 150f
 
