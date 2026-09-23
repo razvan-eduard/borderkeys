@@ -196,6 +196,12 @@ jobs:
       - name: Dictionary compiler round trip
         run: python3 tools/build_dict.py --selftest
 
+      # Which letters a language admits is read off its long-press overlay, so an overlay edited
+      # for the sake of the keys can silently decide what the dictionary may hold. Only a letter
+      # with no unaccented twin can do that -- "ß", "æ", "œ" -- and this is what says one left.
+      - name: Language alphabets are what the dictionaries were built against
+        run: python3 tools/drop_unreachable.py --selftest
+
       # Runs from step 8 onward, when native-tests/ exists. Guarded rather than omitted so the
       # step is already wired and cannot be forgotten later; it prints what it skipped, because
       # a silently absent check reads exactly like a passing one.
@@ -225,6 +231,36 @@ jobs:
           cmake -S native-tests -B native-tests/build -DCMAKE_BUILD_TYPE=Debug
           cmake --build native-tests/build --parallel
           ctest --test-dir native-tests/build --output-on-failure
+
+      # ctest runs entirely against test_pack.bkd, a 3 KB pack built by build_dict.py --selftest,
+      # so until this step nothing in CI ever queried a shipped dictionary -- the packs were
+      # compiled above and never asked a question. This asks the only one that has to hold: a
+      # word compiled into a pack must come back out of it.
+      #
+      # Case is not part of it: a pack keeps one casing of "Warren"/"warren" and the keyboard
+      # capitalises for itself, so the other casing is reachable. The budgets are defect counts,
+      # not properties of the languages, and they may only ever
+      # be lowered. What remains is two things: a spelling merged into another that differs from
+      # it only by case, which the keyboard re-cases for itself, and a short fragment the corpus
+      # carries that no longer ranks once real words compete with it -- "th", "pr", "inc".
+      - name: Every word in a pack is reachable from it
+        run: |
+          set -euo pipefail
+          packs=keyboard/build/generated/dictionaries/dict
+          status=0
+          while read -r tag budget; do
+            file=${tag//-/_}
+            ./native-tests/build/suggest_eval "$packs" --reachable \
+              "dictionaries/$file.tsv" "$tag" "$budget" || status=1
+          done <<'BUDGETS'
+          en-US 611
+          ro-RO 402
+          de-DE 183
+          es-ES 315
+          fr-FR 334
+          it-IT 246
+          BUDGETS
+          exit $status
 
       # The same loader, under the sanitisers, with the checksums repaired after each mutation
       # so the mutation reaches the section-bounds and traversal checks rather than being

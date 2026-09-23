@@ -98,6 +98,87 @@ class PipelineTest {
 
     private fun describe(text: String?) = text ?: "nothing"
 
+    /**
+     * The length guard, asserted at a setting where it can fire.
+     *
+     * At the default minimum of three the engine proposes nothing at all for a two-character
+     * word -- its own edit-cost ceiling is tighter than the guard is -- so TooShort is
+     * unreachable through the whole path and a case claiming it passes for the wrong reason.
+     * Raised to five, the very words the default corrects are refused on length instead, which
+     * is the rule this covers. Measured: at three, "tge", "hte", "teh" and "adn" all commit
+     * "the" or "and" as Correctable.
+     */
+    @Test
+    fun `a word below the minimum length is refused on length, not corrected`() {
+        Pipeline.require()
+        val failures = listOf("tge", "hte", "teh", "adn").mapNotNull { typed ->
+            val outcome = pipeline.commit(typed, minimumLength = 5)
+            when {
+                outcome.committed != null ->
+                    "  $typed: committed ${outcome.committed}  [${outcome.situation}]"
+                outcome.situation != AutoCorrection.Situation.TooShort ->
+                    "  $typed: expected TooShort, was ${outcome.situation}"
+                else -> null
+            }
+        }
+        assertTrue(
+            "${failures.size} of 4 failed:\n" + failures.joinToString("\n"),
+            failures.isEmpty(),
+        )
+    }
+
+    /**
+     * Every case again, with the first letter capitalised.
+     *
+     * The first letter of a field arrives capitalised and nothing in these payloads did, so a
+     * rule that compared a spelling against the letters typed byte for byte passed the whole
+     * suite and failed on every word on a phone. Capitalising is not a separate feature to be
+     * covered separately: it is the ordinary state of the first word of anything anyone writes.
+     *
+     * The outcome must match the lower-case run with its own first letter capitalised. A case
+     * whose committed word differs in any other way is a real difference and belongs in the
+     * payload as its own row.
+     */
+    @Test
+    fun `every case behaves the same when the first letter is capitalised`() {
+        Pipeline.require()
+        val romanian = Pipeline.open("ro-RO")
+        val failures = try {
+            // Each payload against the engine it was written for. Reading the Romanian rows
+            // into the English pipeline is not a stricter test, it is a different one: every
+            // Romanian word is then an unknown word and the answers mean nothing.
+            val runs = readCases().map { it to pipeline } +
+                readCases("pipeline_cases_ro.tsv").map { it to romanian }
+            runs.mapNotNull { (case, engine) ->
+                if (case.typed.isEmpty() || !case.typed[0].isLowerCase()) {
+                    return@mapNotNull null
+                }
+                val capitalised = case.typed.replaceFirstChar { it.uppercaseChar() }
+                val expected = case.committed?.replaceFirstChar { it.uppercaseChar() }
+                // A name whose only correction was its capital has nothing left to do once the
+                // capital is typed: "tehran" commits "Tehran", "Tehran" commits nothing, and
+                // both leave the same text on screen.
+                if (expected == capitalised) {
+                    return@mapNotNull null
+                }
+                val outcome = engine.commit(capitalised)
+                if (outcome.committed != expected) {
+                    "  $capitalised: expected ${describe(expected)}, " +
+                        "committed ${describe(outcome.committed)}  [${outcome.situation}]"
+                } else {
+                    null
+                }
+            }
+        } finally {
+            romanian.close()
+        }
+        assertTrue(
+            "${failures.size} capitalised cases behave differently:\n" +
+                failures.joinToString("\n"),
+            failures.isEmpty(),
+        )
+    }
+
     private fun readCases(name: String = "pipeline_cases.tsv"): List<Case> =
         checkNotNull(javaClass.classLoader.getResourceAsStream(name)) {
             "$name is not on the test classpath"

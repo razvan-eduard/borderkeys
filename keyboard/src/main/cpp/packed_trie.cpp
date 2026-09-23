@@ -21,6 +21,7 @@ bool PackedTrie::bind(const uint8_t* base, uint64_t mappedBytes, const BkdHeader
     const BkdSection& offsetsSection = header.sections[kSectionWordOffsets];
     const BkdSection& freqSection = header.sections[kSectionWordFreq];
     const BkdSection& flagsSection = header.sections[kSectionWordFlags];
+    const BkdSection& runSection = header.sections[kSectionWordRun];
     const BkdSection& textSection = header.sections[kSectionWordText];
 
     nodeCount_ = header.nodeCount;
@@ -38,6 +39,8 @@ bool PackedTrie::bind(const uint8_t* base, uint64_t mappedBytes, const BkdHeader
         (wordCount_ == 0) ? nullptr : reinterpret_cast<const uint8_t*>(base + freqSection.offset);
     wordFlags_ =
         (wordCount_ == 0) ? nullptr : reinterpret_cast<const uint8_t*>(base + flagsSection.offset);
+    wordRun_ =
+        (wordCount_ == 0) ? nullptr : reinterpret_cast<const uint8_t*>(base + runSection.offset);
     wordText_ = reinterpret_cast<const char*>(base + textSection.offset);
     wordTextBytes_ = static_cast<uint32_t>(textSection.length);
 

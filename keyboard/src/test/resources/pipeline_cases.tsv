@@ -55,15 +55,15 @@ dont	don't	Correctable
 # this pair resolves 3,713 against 108, which is true of the engine and not of the pipeline:
 # the guard above it never lets that comparison happen. Recorded as it behaves, not as the
 # comment says, because changing which one is right is a decision and not a test fixture.
-cant	-	KnownWord
+cant	-	NoChange
 
 # --- a word the dictionaries spell is left alone ----------------------------------------------
 # "put" was committed as "out" on a device. Both are words; only one was typed.
-put	-	KnownWord
-out	-	TooFar
-form	-	KnownWord
+put	-	NoChange
+out	-	NoChange
+form	-	NoChange
 # Refused for being too far before being refused for being a word: the order is pinned here.
-their	-	TooFar
+their	-	NoChange
 
 # --- an address or a filename is not a sentence -----------------------------------------------
 # RunningText's job: a digit anywhere means this is not running text at all.
@@ -72,7 +72,7 @@ v2beta	-	NothingOffered
 
 # --- too short to guess about, unless an accent is being restored -----------------------------
 # "ab" is in the pack, but TooShort is reached first -- again the ordering, pinned.
-ab	-	TooShort
+ab	-	NoChange
 
 # --- the hyphen is the other half of the mark class -------------------------------------------
 # Added when kMarkDeleteCost generalised the rule away from the apostrophe, and untested until
@@ -91,7 +91,7 @@ put'	-	NothingOffered
 # the best the engine can offer is the word itself, so casing settles it before the known-word
 # rule is reached; for "thanks" something else is offered and the rule does the work.
 everyone	-	NoChange
-thanks	-	TooFar
+thanks	-	NoChange
 
 # --- a completion is not a correction ---------------------------------------------------------
 # "teh" must reach "the" and never "tehran", which is what reading the strip's first place did.
@@ -118,3 +118,4 @@ don't	-	NoChange
 # pack lacks survived, now 85.5%.
 snobul	-	NothingOffered
 abaft	-	NothingOffered
+

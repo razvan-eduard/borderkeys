@@ -33,6 +33,17 @@
  *     suggest_eval <dict dir> <corpus.tsv> [tag ...]
  *     suggest_eval <dict dir> --autocorrect <corpus.tsv> [tag ...]
  *     suggest_eval <dict dir> --explain <typed> <candidate> [tag ...]
+ *     suggest_eval <dict dir> --reachable <dictionary.tsv> <tag> [budget]
+ *
+ * `--reachable` asks the one question the rest of the suite never asks: every word compiled into
+ * a shipped pack must be retrievable from that pack as itself. It reads the source `.tsv` and
+ * queries the real pack built from it, so it measures the shipped vocabulary rather than a
+ * synthetic fixture.
+ *
+ * `budget` is the number of unreachable rows tolerated, and exit status is non-zero above it.
+ * It is a defect count on its way to zero, not a property of the language: a folded trie key
+ * holds one spelling, so a language whose words differ only by diacritic loses every spelling
+ * but the most frequent one. Omit it to require zero.
  *
  * with the packs named by tag (default en-US). The corpus form prints per-case ranks and then
  * rank-1 accuracy, top-3 accuracy, and the mean rank of the cases it found at all. The explain
@@ -137,10 +148,19 @@ int main(int argc, char** argv) {
         std::printf("usage: suggest_eval <dict dir> --explain <typed> <candidate> [tag ...]\n");
         return 2;
     }
-    const char* const corpusPath = explaining ? nullptr : (autocorrectMode ? argv[3] : argv[2]);
+    const bool reachability = std::strcmp(argv[2], "--reachable") == 0;
+    if (reachability && argc < 5) {
+        std::printf("usage: suggest_eval <dict dir> --reachable <dictionary.tsv> <tag>\n");
+        return 2;
+    }
+    const char* const corpusPath =
+        explaining ? nullptr : ((autocorrectMode || reachability) ? argv[3] : argv[2]);
 
     std::vector<std::string> tags;
-    for (int i = explaining ? 5 : (autocorrectMode ? 4 : 3); i < argc; ++i) {
+    // One pack for --reachable: the question is about one dictionary and the pack built from it,
+    // and argv[5] there is the budget rather than a second tag.
+    const int tagEnd = reachability ? (argc < 5 ? argc : 5) : argc;
+    for (int i = explaining ? 5 : ((autocorrectMode || reachability) ? 4 : 3); i < tagEnd; ++i) {
         tags.emplace_back(argv[i]);
     }
     if (tags.empty()) {
@@ -180,6 +200,73 @@ int main(int argc, char** argv) {
                                layout.keyHeight)) {
         std::printf("the test layout was refused\n");
         return 1;
+    }
+
+    if (reachability) {
+        const std::vector<Case> rows = readCorpus(corpusPath);
+        if (rows.empty()) {
+            std::printf("no rows read from %s\n", corpusPath);
+            return 1;
+        }
+        // Case is not part of the question. A pack keeps one spelling of "Warren"/"warren" and
+        // the keyboard capitalises for itself from the proper-noun flag and the shift state, so
+        // a row that comes back in the other casing is reachable. Only the ASCII letters are
+        // lowered, which is every row this applies to; a word the pack holds under a different
+        // *spelling* is what this is meant to catch.
+        std::vector<std::string> unreachable;
+        for (const Case& row : rows) {
+            Engine::ScoreParts parts;
+            if (engine.explainScore(row.typed.c_str(), row.typed.size(), row.typed.c_str(),
+                                    row.typed.size(), &parts)) {
+                continue;
+            }
+            // Which casing the pack kept depends on which was the more frequent, so the row may
+            // be lower where the pack is capitalised as easily as the other way round. Only the
+            // leading byte is touched when it is ASCII, so a multi-byte first character is left
+            // alone rather than cut in half.
+            std::string lowered = row.typed;
+            for (char& c : lowered) {
+                if (c >= 'A' && c <= 'Z') {
+                    c = static_cast<char>(c - 'A' + 'a');
+                }
+            }
+            std::string capitalised = lowered;
+            if (!capitalised.empty() && capitalised[0] >= 'a' && capitalised[0] <= 'z') {
+                capitalised[0] = static_cast<char>(capitalised[0] - 'a' + 'A');
+            }
+            bool reachable = false;
+            for (const std::string& variant : {lowered, capitalised}) {
+                if (variant == row.typed) {
+                    continue;
+                }
+                if (engine.explainScore(row.typed.c_str(), row.typed.size(), variant.c_str(),
+                                        variant.size(), &parts)) {
+                    reachable = true;
+                    break;
+                }
+            }
+            if (!reachable) {
+                unreachable.push_back(row.typed);
+            }
+        }
+        std::printf("\n%s: %zu rows, %zu unreachable (%.2f%%)\n", tags.front().c_str(),
+                    rows.size(), unreachable.size(),
+                    100.0 * static_cast<double>(unreachable.size()) /
+                        static_cast<double>(rows.size()));
+        const size_t shown = unreachable.size() < 20 ? unreachable.size() : 20;
+        for (size_t i = 0; i < shown; ++i) {
+            std::printf("  %s\n", unreachable[i].c_str());
+        }
+        if (unreachable.size() > shown) {
+            std::printf("  ... and %zu more\n", unreachable.size() - shown);
+        }
+        const size_t budget = (argc > 5) ? std::strtoul(argv[5], nullptr, 10) : 0;
+        if (unreachable.size() > budget) {
+            std::printf("  budget is %zu; %zu more words became unreachable\n", budget,
+                        unreachable.size() - budget);
+            return 1;
+        }
+        return 0;
     }
 
     if (explaining) {

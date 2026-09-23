@@ -177,6 +177,12 @@ public:
      */
     int knownSpelling(const char* word, size_t length, char* out, int outBytes) const;
 
+    /** The one language weighted above every other, or -1 when none is. */
+    int preferredPack() const;
+
+    /** Locates a spelling the dictionaries hold that differs from `word` only by case. */
+    bool exactSpelling(const char* word, size_t length, int* packOut, uint32_t* wordOut) const;
+
     /**
      * "Maria's" for "marias", written into [out], or zero when the word is not that.
      *

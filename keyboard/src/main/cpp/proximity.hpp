@@ -35,6 +35,12 @@ int utf8Encode(uint32_t codePoint, char* out);
 // folding a script we do not understand would merge words that are genuinely distinct.
 uint32_t foldCodePoint(uint32_t codePoint);
 
+/** Lowercases without touching diacritics -- foldCodePoint's case half on its own. */
+uint32_t lowerCodePoint(uint32_t codePoint);
+
+/** Whether two UTF-8 spellings differ only by case. */
+bool sameSpellingIgnoringCase(const char* a, size_t aLength, const char* b, size_t bLength);
+
 // Folds a UTF-8 string into code points. Returns the number written, or -1 if the input is
 // malformed or longer than `maxOut`. Writes nothing on failure.
 int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut);

@@ -57,12 +57,23 @@ object BundledDictionaries {
         // every name. The counts here are read from the compiled headers, not estimated; they
         // have to match, because repairBundledPacks treats a pack whose recorded count or size
         // differs as stale and re-copies it on every start.
-        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 106_053, 15_868_403),
-        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 127_255, 21_785_047),
-        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 97_014, 15_576_293),
-        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 96_884, 15_840_656),
-        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 100_382, 21_237_764),
-        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 99_455, 15_909_114),
+        // Recounted again after tools/drop_unreachable.py removed what no keystroke can produce
+        // and the bare letters that are not words. German lost 4.7 MB of the 4.75 MB total, and
+        // not because it lost words -- it lost 65. A pack is indexed by its own alphabet, and
+        // German's held 73 folded code points: fifteen Greek letters, six Cyrillic, three
+        // Hebrew, six Vietnamese, the unit superscripts and "µ ½ ¼ æ ð œ ə ʿ". Thirty remain,
+        // and the double-array shrank with them.
+        // Recounted again for format version 4, where a folded key carries every spelling that
+        // reaches it instead of only the most frequent. The counts rise by what used to be
+        // discarded -- Romanian by 6,306, "ca" beside "că" and "sau" beside "său". German's
+        // 4.8 MB is not text: its bigram table crossed a power of two, because bigrams whose
+        // words the pack did not hold were being dropped and now resolve.
+        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 112_224, 16_068_753),
+        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 128_217, 21_919_316),
+        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 99_859, 15_711_394),
+        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 100_782, 15_995_810),
+        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 101_673, 21_356_131),
+        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 100_884, 16_027_312),
     )
 
     /** Opens one for reading. The caller closes it; the install path copies and validates. */

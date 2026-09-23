@@ -1554,40 +1554,47 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
         const Frame frame = stack[--stackSize];
         --visitBudget_;
 
-        const int32_t wordIndex = trie.terminalWordIndex(frame.node);
-        if (wordIndex >= 0) {
+        // A terminal carries the first word index of its folded key's run, and every spelling in
+        // that run is a separate candidate scored on its own frequency and context. That is what
+        // lets "ca" and "că" -- one folded key, two words -- both be offered, with readingOf
+        // below telling the typed spelling from the respelled one.
+        const int32_t firstIndex = trie.terminalWordIndex(frame.node);
+        if (firstIndex >= 0) {
             const float lengthPenalty = kCompletionPenalty * static_cast<float>(frame.depth);
-            const float score = weightLog + contextLogProb(packIndex,
-                                                            static_cast<uint32_t>(wordIndex)) +
-                                editComponent - lengthPenalty;
-            offerScoredWord(heap, trie, packIndex, static_cast<uint32_t>(wordIndex), score);
+            const uint32_t spellings = trie.spellingsFrom(static_cast<uint32_t>(firstIndex));
 
-            // Everything reaches the strip; the routing below decides the rest, and a pass
-            // that does not commit is barred from both destinations.
-            //
-            // text is read only where Exact and Respelling have to be told apart.
-            uint32_t textLength = 0;
-            const char* text = nullptr;
-            if (endpoint.cost <= 0.0f && frame.depth == 0) {
-                text = trie.wordText(static_cast<uint32_t>(wordIndex), &textLength);
-            }
-            const Reading reading = readingOf(endpoint.cost, frame.depth, text, textLength);
+            for (uint32_t offset = 0; offset < spellings; ++offset) {
+                const uint32_t wordIndex = static_cast<uint32_t>(firstIndex) + offset;
+                const float score = weightLog + contextLogProb(packIndex, wordIndex) +
+                                    editComponent - lengthPenalty;
+                offerScoredWord(heap, trie, packIndex, wordIndex, score);
 
-            if (commits(currentPass_) && takesRespellingTier(reading) && text != nullptr &&
-                textLength != 0) {
-                // Boosted as offerScoredWord would, so two packs' respellings compare on the
-                // same scale. No frequency floor is applied.
-                const float boosted = score + userBoostFor(text, textLength);
-                if (!hasBestRespelling_ || boosted > bestRespelling_.score) {
-                    bestRespelling_ =
-                        Candidate{packIndex, static_cast<int32_t>(wordIndex), boosted};
-                    hasBestRespelling_ = true;
+                // Everything reaches the strip; the routing below decides the rest, and a pass
+                // that does not commit is barred from both destinations.
+                //
+                // text is read only where Exact and Respelling have to be told apart.
+                uint32_t textLength = 0;
+                const char* text = nullptr;
+                if (endpoint.cost <= 0.0f && frame.depth == 0) {
+                    text = trie.wordText(wordIndex, &textLength);
                 }
-            }
-            if (commits(currentPass_) && reachesCorrectionHeap(reading) &&
-                plausibleCorrectionTarget(pack, static_cast<uint32_t>(wordIndex))) {
-                offerScoredWord(correctionHeap_, trie, packIndex,
-                                static_cast<uint32_t>(wordIndex), score);
+                const Reading reading = readingOf(endpoint.cost, frame.depth, text, textLength);
+
+                if (commits(currentPass_) && takesRespellingTier(reading) && text != nullptr &&
+                    textLength != 0) {
+                    // Boosted as offerScoredWord would, so two packs' respellings compare on the
+                    // same scale. No frequency floor is applied.
+                    const float boosted = score + userBoostFor(text, textLength);
+                    if (!hasBestRespelling_ || boosted > bestRespelling_.score) {
+                        bestRespelling_ =
+                            Candidate{packIndex, static_cast<int32_t>(wordIndex), boosted};
+                        hasBestRespelling_ = true;
+                    }
+                }
+                if (commits(currentPass_) && reachesCorrectionHeap(reading) &&
+                    plausibleCorrectionTarget(pack, wordIndex)) {
+                    offerScoredWord(correctionHeap_, trie, packIndex, wordIndex, score);
+                }
             }
         }
 
@@ -1597,7 +1604,7 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
         // rather than by the size of the subtree.
         // A corrected endpoint that already lands on a word is answered. Carrying on from it
         // would supply letters nobody typed to a word that already matches what they did.
-        if (endpoint.cost > 0.0f && wordIndex >= 0) {
+        if (endpoint.cost > 0.0f && firstIndex >= 0) {
             continue;
         }
         if (frame.depth >= completionLimit) {
@@ -2005,9 +2012,122 @@ int Engine::possessiveFor(const char* word, size_t length, char* out, int outByt
     return 0;
 }
 
+// How much evidence has to have accumulated before one language answers alone.
+//
+// Evidence decays at kLanguageEvidenceDecay per word, so it settles near 1/(1-0.85) = 6.7 for
+// text entirely in one language. Three is reached after a handful of words and never by one.
+constexpr float kPreferredEvidenceMinimum = 3.0f;
+
+// The language being *written*, not the one configured highest.
+//
+// languageEvidence_, because that is what observeContextLanguage actually moves -- adaptiveWeight
+// is the learning path's and configuredWeight is a static setting, and a user with Romanian and
+// English both enabled has them configured equally. Only the text says which they are in.
+//
+// Deliberately not dominantPack_, which answers a different question: that one is gated behind
+// the user's language-lock setting, and it is about whether to *restrict the strip* to one
+// language. This is about whether a word another language happens to hold may veto a correction
+// -- "daca" is in the English pack as the lowercased acronym DACA, and it stopped "daca" ever
+// becoming "dacă" for someone writing Romanian with English also enabled. Someone who turned the
+// lock off did not thereby ask English to overrule their Romanian.
+//
+// No clear leader means no preference, and every language answers, which is the right answer for
+// a field nobody has typed in yet.
+int Engine::preferredPack() const {
+    int active = -1;
+    int activeCount = 0;
+    float total = 0.0f;
+    float best = 0.0f;
+    int bestIndex = -1;
+    for (int i = 0; i < kMaxPacks; ++i) {
+        if (!packs_[i].isOpen() || !packs_[i].active) {
+            continue;
+        }
+        active = i;
+        ++activeCount;
+        total += languageEvidence_[i];
+        if (languageEvidence_[i] > best) {
+            best = languageEvidence_[i];
+            bestIndex = i;
+        }
+    }
+    // One language open answers for itself, with no evidence needed: there is nothing to prefer
+    // it over.
+    if (activeCount == 1) {
+        return active;
+    }
+    if (bestIndex < 0 || total < kPreferredEvidenceMinimum) {
+        return -1;
+    }
+    return (best >= total * kLanguageDominanceShare) ? bestIndex : -1;
+}
+
+bool Engine::exactSpelling(const char* word, size_t length, int* packOut,
+                           uint32_t* wordOut) const {
+    if (!created_ || word == nullptr || length == 0) {
+        return false;
+    }
+    uint32_t folded[kMaxComposing];
+    const int foldedLength = foldUtf8(word, length, folded, kMaxComposing);
+    if (foldedLength <= 0) {
+        return false;
+    }
+    // Only the preferred language may answer, when there is one. A word this keyboard also
+    // knows in another language is no evidence about what was meant in this one: English "in"
+    // was refusing to let Romanian "in" become "în", and English "daca" was refusing "dacă".
+    // With no preferred language every pack answers, because none of them outranks the others.
+    const int preferred = preferredPack();
+    for (int index = 0; index < kMaxPacks; ++index) {
+        if (preferred >= 0 && index != preferred) {
+            continue;
+        }
+        const LanguagePack& pack = packs_[index];
+        if (!pack.isOpen() || !pack.active) {
+            continue;
+        }
+        const int32_t firstIndex = pack.trie().lookupFolded(folded, foldedLength);
+        if (firstIndex < 0) {
+            continue;
+        }
+        const uint32_t spellings = pack.trie().spellingsFrom(static_cast<uint32_t>(firstIndex));
+        for (uint32_t offset = 0; offset < spellings; ++offset) {
+            const uint32_t wordIndex = static_cast<uint32_t>(firstIndex) + offset;
+            uint32_t candidateLength = 0;
+            const char* const candidate = pack.trie().wordText(wordIndex, &candidateLength);
+            if (candidate == nullptr ||
+                !sameSpellingIgnoringCase(candidate, candidateLength, word, length)) {
+                continue;
+            }
+            if (packOut != nullptr) {
+                *packOut = index;
+            }
+            if (wordOut != nullptr) {
+                *wordOut = wordIndex;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 int Engine::knownSpelling(const char* word, size_t length, char* out, int outBytes) const {
     if (!created_ || word == nullptr || out == nullptr || outBytes <= 0 || length == 0) {
         return 0;
+    }
+    // The dictionaries' own spelling of these letters is these letters, when they hold them.
+    // The caller compares what comes back against what was typed to decide whether the word
+    // needs correcting at all, so answering with a different spelling of the same folded key --
+    // "că" for "ca" -- reads to it as a word the dictionaries do not have.
+    int exactPack = -1;
+    uint32_t exactWord = 0;
+    if (exactSpelling(word, length, &exactPack, &exactWord)) {
+        uint32_t exactLength = 0;
+        const char* const exact = packs_[exactPack].trie().wordText(exactWord, &exactLength);
+        if (exact != nullptr && exactLength != 0 &&
+            exactLength <= static_cast<uint32_t>(outBytes)) {
+            std::memcpy(out, exact, exactLength);
+            return static_cast<int>(exactLength);
+        }
     }
     uint32_t folded[kMaxComposing];
     const int foldedLength = foldUtf8(word, length, folded, kMaxComposing);
@@ -2019,12 +2139,12 @@ int Engine::knownSpelling(const char* word, size_t length, char* out, int outByt
         if (!pack.isOpen() || !pack.active) {
             continue;
         }
-        const int32_t wordIndex = pack.trie().lookupFolded(folded, foldedLength);
-        if (wordIndex < 0) {
+        const int32_t firstIndex = pack.trie().lookupFolded(folded, foldedLength);
+        if (firstIndex < 0) {
             continue;
         }
         uint32_t textLength = 0;
-        const char* const text = pack.trie().wordText(static_cast<uint32_t>(wordIndex),
+        const char* const text = pack.trie().wordText(static_cast<uint32_t>(firstIndex),
                                                       &textLength);
         if (text == nullptr || textLength == 0 || textLength > static_cast<uint32_t>(outBytes)) {
             continue;
@@ -2172,6 +2292,19 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     // below "canal" and is still the word that was typed.
     if (hasBestRespelling_) {
         bestCorrection_ = bestRespelling_;
+        hasBestCorrection_ = true;
+    }
+
+    // A spelling the dictionaries hold, matching the letters typed byte for byte, is the answer
+    // outright. Ranking chooses between spellings of one folded key; it does not get to choose
+    // whether to keep the word someone actually wrote. "ca", "sau", "soarta" and "piatra" are
+    // Romanian words, and each of them used to be replaced by an accented word with a different
+    // meaning. Placed after the respelling override so it wins over it.
+    int typedPack = -1;
+    uint32_t typedWord = 0;
+    if (composing != nullptr && composingLength > 0 &&
+        exactSpelling(composing, composingLength, &typedPack, &typedWord)) {
+        bestCorrection_ = Candidate{typedPack, static_cast<int32_t>(typedWord), 0.0f};
         hasBestCorrection_ = true;
     }
 

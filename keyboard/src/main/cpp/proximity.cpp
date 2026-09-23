@@ -102,6 +102,46 @@ static bool latinExtendedAUpper(uint32_t codePoint) {
     return (evenCapital && (codePoint & 1u) == 0u) || (oddCapital && (codePoint & 1u) == 1u);
 }
 
+// Case, and nothing else: the same lowering foldCodePoint does before its diacritic table,
+// stopping there. Comparing two spellings of one folded key is a question about the diacritics,
+// so it cannot use a fold that removes them -- and it cannot use raw bytes either, because the
+// first letter of a field arrives capitalised.
+uint32_t lowerCodePoint(uint32_t codePoint) {
+    if (codePoint < 128u) {
+        return (codePoint >= 'A' && codePoint <= 'Z') ? codePoint + 32u : codePoint;
+    }
+    if (codePoint >= 0xC0u && codePoint <= 0xDEu && codePoint != 0xD7u) {
+        return codePoint + 0x20u;
+    }
+    if (codePoint >= 0x100u && codePoint <= 0x17Fu && latinExtendedAUpper(codePoint)) {
+        return codePoint + 1u;
+    }
+    return codePoint;
+}
+
+/** Whether two UTF-8 spellings are the same but for case. Diacritics still have to match. */
+bool sameSpellingIgnoringCase(const char* a, size_t aLength, const char* b, size_t bLength) {
+    const char* p = a;
+    const char* q = b;
+    const char* const aEnd = a + aLength;
+    const char* const bEnd = b + bLength;
+    while (p < aEnd && q < bEnd) {
+        uint32_t left = 0;
+        uint32_t right = 0;
+        const char* const nextLeft = utf8Decode(p, aEnd, &left);
+        const char* const nextRight = utf8Decode(q, bEnd, &right);
+        if (nextLeft == nullptr || nextRight == nullptr) {
+            return false;
+        }
+        if (lowerCodePoint(left) != lowerCodePoint(right)) {
+            return false;
+        }
+        p = nextLeft;
+        q = nextRight;
+    }
+    return p == aEnd && q == bEnd;
+}
+
 uint32_t foldCodePoint(uint32_t codePoint) {
     if (codePoint < 128u) {
         if (codePoint >= 'A' && codePoint <= 'Z') {
