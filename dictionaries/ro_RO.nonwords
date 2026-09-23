@@ -1,0 +1,16 @@
+# Spellings that are not words of Romanian, folded into their accented sibling by
+# tools/fold_diacritic_noise.py --nonwords whatever the reference wordlist says.
+#
+# Needed because no reference can decide this for Romanian. The LibreOffice ro_RO dictionary
+# carries both spellings of a pair on purpose -- 92,092 of its 181,358 stems have diacritics,
+# the rest are diacritic-free variants -- so it accepts "asa" exactly as it accepts "asa"'s
+# accented form.
+#
+# Frequency cannot decide it either. A feminine noun takes its definite article by turning "ă"
+# into "a", so "studentă"/"studenta", "gravidă"/"gravida" and "piatră"/"piatra" are regular
+# grammatical pairs that differ by one diacritic and nothing else. Any rule that folds the plain
+# spelling away deletes half the language's noun inflection.
+#
+# So this file is named, per word, and stays short. Add a spelling only when it is not a word of
+# Romanian in any form -- not merely rarer than its accented sibling.
+asa
