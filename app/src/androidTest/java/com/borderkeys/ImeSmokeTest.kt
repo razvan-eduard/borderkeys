@@ -3,6 +3,7 @@
 
 package com.borderkeys
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.view.KeyEvent
@@ -42,7 +43,7 @@ class ImeSmokeTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val device: UiDevice = UiDevice.getInstance(instrumentation)
     private val context: Context = instrumentation.targetContext
-    private val imeId = "${context.packageName}/com.borderkeys.ime.BorderKeysService"
+    private val imeId = ComponentName(context.packageName, "com.borderkeys.ime.BorderKeysService").flattenToShortString()
 
     @Before
     fun prepare() {
