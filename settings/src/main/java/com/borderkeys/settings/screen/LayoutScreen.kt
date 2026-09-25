@@ -87,7 +87,7 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 checked = preferences.modifierRow,
             ) { value -> update { it.copy(modifierRow = value) } }
             Explanation(strings[Keys.LAYOUT_MODIFIER_ROW_POSITION])
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -108,7 +108,7 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
             ) { value -> update { it.copy(numericKeypad = value) } }
             AdvancedSection {
                 Explanation(strings[Keys.LAYOUT_WHERE_THE_DIGITS_SIT])
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {

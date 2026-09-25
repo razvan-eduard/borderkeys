@@ -148,14 +148,20 @@ class EmojiPanelView(
         setMeasuredDimension(
             MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.getSize(heightMeasureSpec),
         )
-        measureContent()
+        measureContent(MeasureSpec.getSize(widthMeasureSpec))
     }
 
-    private fun measureContent() {
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        measureContent(w)
+    }
+
+    /** Lays the grid out for [widthPx]: the columns that fit, and the height the rows need. */
+    private fun measureContent(widthPx: Int = width) {
         val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else ThemePaints.DEFAULT_ROW_HEIGHT_PX
         tabHeightPx = row * TAB_HEIGHT_ROWS
         cellPx = row * CELL_ROWS
-        columns = if (width > 0) (width / cellPx).toInt().coerceAtLeast(1) else 1
+        columns = if (widthPx > 0) (widthPx / cellPx).toInt().coerceAtLeast(1) else 1
         val rows = if (current.isEmpty()) 0 else (current.size + columns - 1) / columns
         contentHeight = (rows * cellPx).toInt()
     }

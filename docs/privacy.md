@@ -82,6 +82,11 @@ This is a security requirement rather than a preference, and the code is shaped 
 a **pure function of the `EditorInfo`** the framework hands over. No setting switches it off, and
 the test suite can enumerate every input type the platform defines.
 
+The strip has one thing to offer in such a field: a Show button that draws the field's text on
+the strip until Hide is tapped or the field changes. The text is read from the editor through the
+same connection every keystroke uses and goes nowhere else; it is not learned, not searched, not
+kept.
+
 ### Two independent triggers
 
 **A password field, in all four of its spellings:**

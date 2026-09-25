@@ -21,7 +21,8 @@ database and are excluded from system backup and from device-to-device transfer.
   anywhere outside it closes it and keeps the swiped word. Off by default.
 * Autocorrect you can bound: off by default, and when on, the shortest word it may touch and
   how different a correction may be from what you typed are settings. A correct word the
-  dictionaries do not know is left alone, and backspace puts back exactly what you typed.
+  dictionaries do not know is left alone, a regular form of a word they do know is never
+  corrected away, and backspace or a tap on the strip puts back exactly what you typed.
 * Block offensive words, if you want to: one switch keeps a per-language list of profanity
   and slurs out of suggestions, corrections and learning. What you type yourself is never
   touched.
@@ -38,7 +39,15 @@ database and are excluded from system backup and from device-to-device transfer.
   mid-sentence instead of only at the start of one — while everyday words that happen to be
   somebody's name stay lower-case. One switch turns the capital off if you disagree with it.
 * Alternate physical layouts — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona —
-  alongside QWERTY, for every bundled language.
+  alongside QWERTY, for every bundled language, and a symbols page with the digits in a 3×3
+  block beside the symbols, at the right or the left, on near-square keys.
+* An optional modifier row for terminals and editors: Esc, Tab, Ctrl, Alt and the arrows,
+  with Home, End, Page up, Page down, forward Delete and Insert on offer, in the order you
+  choose, above the letters or below the keyboard, each sent as the hardware key it names.
+  Ctrl and Alt apply to the next key; with shift held, the arrows select.
+* Panels that search by the word under the caret: open the emoji panel over "cake" and the
+  cakes come first; open the clipboard over "invoice" and the clips containing it come first.
+  A long press on a clip pins, edits or deletes it.
 * A personal dictionary you can see and edit: every learned word has a Forget and a Block
   right beside it, not a black box.
 * A row of quick actions — copy, paste, cut, select, delete a word, move the cursor, undo
@@ -46,7 +55,10 @@ database and are excluded from system backup and from device-to-device transfer.
   your own macros; above the suggestions, below the keys or down a side, in four sizes, with
   optional labels and outlines.
 * Every settings card leads with what changes how typing feels; the calibration values and
-  the choices made once fold under an "Advanced settings" line.
+  the choices made once fold under an "Advanced settings" line. A tour after setup shows
+  every feature with a preview, its default and where to switch it on.
+* Debug stats, one line above the settings' own typing box: the keyboard's latency, swipe
+  and memory figures, rated against a baseline and shareable as text.
 * Built-in themes, full manual colour control, and a library to save, import and share
   your own.
 * Particle effects on the keys, the ring, the strip and the bars: an outline layer that
@@ -57,7 +69,7 @@ database and are excluded from system backup and from device-to-device transfer.
   Nothing syncs anywhere on its own.
 * Private mode is automatic in password fields and whenever an app sets
   IME_FLAG_NO_PERSONALIZED_LEARNING: no learning, no clipboard history, no personal
-  dictionary.
+  dictionary. A Show button on the strip reveals what the field holds, and hides it again.
 * Works with any installed password manager through the platform's inline autofill
   suggestions. The keyboard cannot read their contents — the platform guarantees that —
   and never sees your password.

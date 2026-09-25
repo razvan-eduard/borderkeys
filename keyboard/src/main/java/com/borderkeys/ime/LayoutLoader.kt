@@ -109,6 +109,11 @@ object LayoutLoader {
         if (json.optBoolean("absorb", false)) {
             flags = flags or KeyFlags.ABSORBS_FREED_WIDTH
         }
+        // "secondary": drawn in the modifier fill, so a digit block reads as one against the
+        // symbols around it.
+        if (json.optBoolean("secondary", false)) {
+            flags = flags or KeyFlags.SECONDARY_ROW
+        }
         // Punctuation is a character but not a letter: a swipe should not pass through a comma.
         if (KeyCodes.isCharacter(code) && !Character.isLetter(code)) {
             flags = flags and KeyFlags.LETTER.inv()

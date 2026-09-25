@@ -364,7 +364,8 @@ class SuggestionStripView(
      * settings screen is there to show before it is chosen.
      */
     private fun measureSlots() {
-        val base = paints.label.textSize
+        val label = paints.label.textSize
+        val base = label * SLOT_TEXT_SCALE
         val shown = shownCount()
         if (shown <= 0 || width == 0) {
             for (index in 0 until MAX_SUGGESTIONS) {
@@ -373,7 +374,7 @@ class SuggestionStripView(
             return
         }
         val available = (width.toFloat() / shown) * SLOT_TEXT_FRACTION
-        chipTextSize = base * CHIP_TEXT_SCALE
+        chipTextSize = label * CHIP_TEXT_SCALE
         layoutChipText()
         for (index in 0 until MAX_SUGGESTIONS) {
             val length = charCount[index]
@@ -383,7 +384,7 @@ class SuggestionStripView(
             }
             slotTextSize[index] = fitted(chars[index], length, base, available)
         }
-        paints.label.textSize = base
+        paints.label.textSize = label
     }
 
     /**
@@ -540,7 +541,6 @@ class SuggestionStripView(
 
             val shown = shownCount()
             val slotWidth = width.toFloat() / shown
-            val baseline = height / 2f + paints.labelBaselineOffsetPx
             var appliedRectDrawnThisFrame = false
 
             if (chipOffset == 1) {
@@ -643,6 +643,8 @@ class SuggestionStripView(
                 if (fitted != previousSize) {
                     paint.textSize = fitted
                 }
+                // Centred on the strip at the size this word is drawn at.
+                val wordBaseline = height / 2f - (paint.ascent() + paint.descent()) / 2f
                 // Contained, because [measureSlots] stops shrinking at a floor and a word past
                 // it used to be drawn centred and overflowing -- spilling across both dividers
                 // and leaving three slots illegible rather than one. That floor is right: below
@@ -659,11 +661,11 @@ class SuggestionStripView(
                     canvas.save()
                     canvas.clipRect(left, 0f, left + slotWidth, height.toFloat())
                     paint.textAlign = android.graphics.Paint.Align.LEFT
-                    canvas.drawText(chars[index], 0, length, left, baseline, paint)
+                    canvas.drawText(chars[index], 0, length, left, wordBaseline, paint)
                     paint.textAlign = previousAlign
                     canvas.restore()
                 } else {
-                    canvas.drawText(chars[index], 0, length, left + slotWidth / 2f, baseline, paint)
+                    canvas.drawText(chars[index], 0, length, left + slotWidth / 2f, wordBaseline, paint)
                 }
                 if (fitted != previousSize) {
                     paint.textSize = previousSize
@@ -923,6 +925,9 @@ class SuggestionStripView(
 
         /** How much of a slot a word may occupy before it is shrunk, leaving room for a gap. */
         private const val SLOT_TEXT_FRACTION = 0.80f
+
+        /** A word on the strip, relative to the theme's key label size. */
+        private const val SLOT_TEXT_SCALE = 1.2f
 
         /** Past this the text is too small to read, so the word is allowed to overflow instead. */
         private const val MIN_TEXT_SCALE = 0.62f

@@ -717,12 +717,12 @@ data class KeyboardPreferences(
     /**
      * Where the digits sit on the number-and-symbols page.
      *
-     * [SYMBOLS_NUMBER_TOP] is a row above the symbols, the arrangement a physical keyboard
-     * uses. The two number-pad choices move them into a 3x3 block down one side, within a
-     * thumb's arc, at the cost of the symbols packing tighter. One of [SYMBOLS_NUMBER_TOP],
-     * [SYMBOLS_NUMBER_LEFT], [SYMBOLS_NUMBER_RIGHT].
+     * [SYMBOLS_NUMBER_RIGHT] and [SYMBOLS_NUMBER_LEFT] put the digits in a 3x3 block with the
+     * symbols beside it, nine near-square keys a row, backspace and enter down the right edge,
+     * on whichever side a thumb prefers. [SYMBOLS_NUMBER_TOP] is a row above the symbols, the
+     * arrangement a physical keyboard uses. One of the three.
      */
-    val symbolsNumberPosition: Int = SYMBOLS_NUMBER_TOP,
+    val symbolsNumberPosition: Int = SYMBOLS_NUMBER_RIGHT,
 
     /**
      * The diacritics merged onto the letter keys' long press, taken from the enabled language
@@ -974,7 +974,7 @@ data class KeyboardPreferences(
         symbolsNumberPosition = if (symbolsNumberPosition in SYMBOLS_NUMBER_TOP..SYMBOLS_NUMBER_RIGHT) {
             symbolsNumberPosition
         } else {
-            SYMBOLS_NUMBER_TOP
+            SYMBOLS_NUMBER_RIGHT
         },
         longPressMillis = longPressMillis.coerceIn(MIN_LONG_PRESS_MILLIS, MAX_LONG_PRESS_MILLIS),
         enterKeyBehavior = if (enterKeyBehavior in ENTER_KEY_AUTO..ENTER_KEY_FORCE_NEWLINE) {

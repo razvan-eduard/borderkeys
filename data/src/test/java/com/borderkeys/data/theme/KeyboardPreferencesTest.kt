@@ -700,15 +700,20 @@ class KeyboardPreferencesTest {
     @Test
     fun `the layout and keys settings default sensibly and are repaired on read`() {
         val fresh = KeyboardPreferences()
-        assertEquals(KeyboardPreferences.SYMBOLS_NUMBER_TOP, fresh.symbolsNumberPosition)
+        assertEquals(KeyboardPreferences.SYMBOLS_NUMBER_RIGHT, fresh.symbolsNumberPosition)
         assertEquals(true, fresh.accentedCharacters)
         assertEquals(true, fresh.longPressHints)
         assertEquals(KeyboardPreferences.DEFAULT_LONG_PRESS_MILLIS, fresh.longPressMillis)
 
         // An out-of-range digit position is not a fourth arrangement.
         assertEquals(
-            KeyboardPreferences.SYMBOLS_NUMBER_TOP,
+            KeyboardPreferences.SYMBOLS_NUMBER_RIGHT,
             KeyboardPreferences(symbolsNumberPosition = 9).sanitised().symbolsNumberPosition,
+        )
+        assertEquals(
+            KeyboardPreferences.SYMBOLS_NUMBER_TOP,
+            KeyboardPreferences(symbolsNumberPosition = KeyboardPreferences.SYMBOLS_NUMBER_TOP)
+                .sanitised().symbolsNumberPosition,
         )
         assertEquals(
             KeyboardPreferences.SYMBOLS_NUMBER_RIGHT,
