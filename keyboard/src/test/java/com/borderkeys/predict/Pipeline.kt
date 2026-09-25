@@ -3,8 +3,9 @@
 
 package com.borderkeys.predict
 
-import com.borderkeys.ime.AutoCorrection
-import com.borderkeys.ime.RunningText
+import com.borderkeys.ime.Contractions
+import com.borderkeys.ime.WordCommit
+import com.borderkeys.ime.WordStems
 import org.junit.AssumptionViolatedException
 import java.io.File
 import java.io.FileDescriptor
@@ -21,16 +22,25 @@ import java.io.FileInputStream
  *
  * So this drives the shipping engine through the shipping JNI bridge and then the shipping
  * Kotlin, against the packs the application ships. Nothing here is a model of the pipeline; it
- * is the pipeline, with the editor and the touch surface left out.
+ * is the pipeline, with the editor and the touch surface left out. The whole commit layer runs
+ * -- the apostrophe map for the languages opened, the productive possessive, the capital a
+ * language always writes, then autocorrect -- through the same [WordCommit] the service asks,
+ * with corrections and auto-capitalise on and no shortcuts of the user's own.
  *
  * What is *not* covered, and would need a device: the composing region, delimiter handling,
  * field state, and everything [com.borderkeys.ime.BorderKeysService] decides around this.
  */
-internal class Pipeline private constructor(private val handle: Long) {
+internal class Pipeline private constructor(
+    private val handle: Long,
+    private val contractions: Map<String, String>,
+    private val languages: List<String>,
+) {
 
     /** What a word would become, and why -- the reason being the point. An outcome without one
-     *  can be right by accident, and a guard can stop working while another covers for it. */
-    internal data class Outcome(val typed: String, val committed: String?, val situation: AutoCorrection.Situation)
+     *  can be right by accident, and a guard can stop working while another covers for it.
+     *  [reason] is [WordCommit.Outcome.reason]: the rewrite that claimed the word, or
+     *  autocorrect's own situation. */
+    internal data class Outcome(val typed: String, val committed: String?, val reason: String)
 
     /**
      * Runs one word exactly as a delimiter would.
@@ -56,22 +66,44 @@ internal class Pipeline private constructor(private val handle: Long) {
         val correction = NativePredictor.nativeBestCorrection(handle, isName)
         val spelling = NativePredictor.nativeKnownSpelling(handle, typed)
         val knownWord = if (spelling != null && spelling.equals(typed, ignoreCase = true)) typed else ""
+        val possessive = NativePredictor.nativePossessive(handle, typed)
+        val inflection = correction != null &&
+            WordStems.shields(typed, correction, knownStems(typed), languages)
 
-        // The service asks this before it asks anything else: an address or a filename is not a
-        // sentence, and correcting inside one is the failure the whole guard exists for.
-        if (!RunningText.admits(typed) { null }) {
-            return Outcome(typed, null, AutoCorrection.Situation.NothingOffered)
+        val outcome = WordCommit.decide(
+            typed = typed,
+            fromGesture = false,
+            // The service settles this from the character in front of the word; a corpus word
+            // stands alone, so only the word's own letters can refuse it here.
+            runningText = true,
+            shortcuts = emptyList(),
+            contractions = contractions,
+            possessive = possessive,
+            suggestion = correction,
+            suggestionQuery = typed,
+            knownWord = knownWord,
+            isProperNoun = isName[0],
+            inflection = inflection,
+            settings = WordCommit.Settings(
+                autoCorrectOnSpace = true,
+                autoCapitalise = true,
+                minimumLength = minimumLength,
+                correctionDistance = correctionDistance,
+                capitaliseNames = capitaliseNames,
+            ),
+        )
+        return Outcome(typed, outcome.text, outcome.reason)
+    }
+
+    /** The stems of [typed] the engine holds, as the prediction worker asks for them. */
+    private fun knownStems(typed: String): Set<String> {
+        val stems = WordStems.candidates(typed, languages).take(NativePredictor.MAX_STEMS_QUERY)
+        if (stems.isEmpty()) {
+            return emptySet()
         }
-        val cased = AutoCorrection.matchCase(typed, correction.orEmpty(), isName[0] && capitaliseNames)
-        val situation = AutoCorrection.situationOf(
-            typed, correction, typed, knownWord, cased, minimumLength, isName[0],
-            AutoCorrection.maxEditsFor(typed.length, correctionDistance), capitaliseNames,
-        )
-        val committed = AutoCorrection.correctionFor(
-            typed, correction, typed, knownWord, minimumLength, isName[0],
-            AutoCorrection.maxEditsFor(typed.length, correctionDistance), capitaliseNames,
-        )
-        return Outcome(typed, committed, situation)
+        val known = BooleanArray(stems.size)
+        NativePredictor.nativeKnownStems(handle, stems.toTypedArray(), known)
+        return stems.filterIndexed { index, _ -> known[index] }.toSet()
     }
 
     /** What the suggestion strip would show for [typed], in order. */
@@ -129,10 +161,23 @@ internal class Pipeline private constructor(private val handle: Long) {
     fun languageLock(minimumEvidence: Float, strict: Boolean = false) =
         NativePredictor.nativeSetLanguageLock(handle, minimumEvidence, strict)
 
+    /**
+     * Records [word] in the personal dictionary the way the service does. [asserted] is a tap
+     * on the strip or a reverted correction; anything else is a delimiter typed past the word.
+     */
+    fun learn(word: String, asserted: Boolean = false, times: Int = 1) {
+        repeat(times) {
+            NativePredictor.nativeLearn(handle, word, null, null, false, asserted)
+        }
+    }
+
     fun close() = NativePredictor.nativeDestroy(handle)
 
     companion object {
         private const val MAX_CANDIDATES = 16
+
+        /** The shipped apostrophe maps, relative to the module the tests run in. */
+        private const val CONTRACTIONS_DIRECTORY = "src/main/assets/contractions"
 
         /** KeyboardPreferences.CORRECTION_DISTANCE_NORMAL, the shipped default: one edit, or
          *  two in a word of eight letters or more. Zero here is STRICT, a setting the keyboard
@@ -226,7 +271,17 @@ internal class Pipeline private constructor(private val handle: Long) {
             // engine than the one someone types their first word into.
             NativePredictor.nativeSetLanguageLock(handle, 0.0f, false)
             qwerty(handle)
-            return Pipeline(handle)
+            // The apostrophe maps the application ships for exactly these languages, built
+            // against the same list so an entry another opened language objects to is dropped
+            // here as it is on a phone. A tag with no map contributes nothing.
+            val contractions = Contractions.of(
+                tags.map { tag ->
+                    val file = File(CONTRACTIONS_DIRECTORY, "$tag.txt")
+                    if (file.isFile) Contractions.parse(file.readText()) else emptyList()
+                },
+                tags.toList(),
+            )
+            return Pipeline(handle, contractions, tags.toList())
         }
 
         /** The JVM has no public way to a raw file descriptor, and nativeLoadLanguage takes one.

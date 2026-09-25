@@ -98,7 +98,7 @@ object LayoutLoader {
         // only arms itself when this flag is set; without it a held backspace stops after
         // exactly one word, which is the bug it exists to fix. See onKeyLongPress's
         // KeyCodes.DELETE branch and onLongPressElapsed's REPEATABLE check.
-        if (code == KeyCodes.DELETE) {
+        if (code == KeyCodes.DELETE || KeyCodes.repeatsOnModifierRow(code)) {
             flags = flags or KeyFlags.REPEATABLE
         }
         if (alternatives.isNotEmpty()) {
@@ -131,6 +131,6 @@ object LayoutLoader {
         KeyCodes.LANGUAGE -> "🌐"
         KeyCodes.EMOJI -> "☺"
         KeyCodes.SETTINGS -> "⚙"
-        else -> ""
+        else -> KeyboardLayout.modifierCap(code) ?: ""
     }
 }

@@ -5,6 +5,7 @@ package com.borderkeys.data
 
 import com.borderkeys.data.entity.UserWord
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,6 +24,30 @@ class DictionaryCsvTest {
         assertEquals(words.map { it.word }, decoded.map { it.word })
         assertEquals(words.map { it.count }, decoded.map { it.delta })
         assertEquals(words.map { it.lastUsedAt }, decoded.map { it.lastUsedAt })
+    }
+
+    @Test
+    fun `the two counts survive a round trip, and every imported row is asserted`() {
+        val words = listOf(
+            UserWord("emanuel", "ro-RO", 3, 1000, deliberateCapitals = 2, asserted = 0),
+            UserWord("plain", "en-US", 1, 4000),
+        )
+        val decoded = DictionaryCsv.decode(DictionaryCsv.encode(words), now = 0)
+        assertEquals(2, decoded.size)
+        assertTrue(decoded[0].deliberateCapital)
+        assertFalse(decoded[1].deliberateCapital)
+        assertTrue(decoded.all { it.asserted })
+    }
+
+    @Test
+    fun `a file from before the two counts still imports`() {
+        val decoded = DictionaryCsv.decode(
+            "word,locale,count,lastUsedAt\nalpha,en-US,4,77\n", now = 0,
+        )
+        assertEquals(1, decoded.size)
+        assertEquals(77L, decoded[0].lastUsedAt)
+        assertFalse(decoded[0].deliberateCapital)
+        assertTrue(decoded[0].asserted)
     }
 
     @Test

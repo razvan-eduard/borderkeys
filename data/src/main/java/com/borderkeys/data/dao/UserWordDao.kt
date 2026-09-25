@@ -50,19 +50,21 @@ interface UserWordDao {
      * settings screen is open, and a read-modify-write between them loses whichever update
      * finished second.
      *
-     * [deliberateCapitalDelta] is 0 or 1 -- see [UserWord.deliberateCapitals] for what it means.
-     * A plain addition on both branches, the same shape as [delta] itself: there is no revoke
-     * path, so nothing here ever needs to read the existing value to decide what to write.
+     * [deliberateCapitalDelta] and [assertedDelta] are each 0 or 1 -- see
+     * [UserWord.deliberateCapitals] and [UserWord.asserted] for what they mean. A plain
+     * addition on both branches, the same shape as [delta] itself: there is no revoke path, so
+     * nothing here ever needs to read the existing value to decide what to write.
      */
     @Query(
         """
-        INSERT INTO user_words (word, locale, count, lastUsedAt, deliberateCapitals)
-        VALUES (:word, :locale, :delta, :lastUsedAt, :deliberateCapitalDelta)
+        INSERT INTO user_words (word, locale, count, lastUsedAt, deliberateCapitals, asserted)
+        VALUES (:word, :locale, :delta, :lastUsedAt, :deliberateCapitalDelta, :assertedDelta)
         ON CONFLICT(word) DO UPDATE SET
             count = count + :delta,
             lastUsedAt = :lastUsedAt,
             locale = :locale,
-            deliberateCapitals = deliberateCapitals + :deliberateCapitalDelta
+            deliberateCapitals = deliberateCapitals + :deliberateCapitalDelta,
+            asserted = asserted + :assertedDelta
         """,
     )
     suspend fun increment(
@@ -71,6 +73,7 @@ interface UserWordDao {
         delta: Int,
         lastUsedAt: Long,
         deliberateCapitalDelta: Int,
+        assertedDelta: Int,
     )
 
     @Transaction
@@ -79,6 +82,7 @@ interface UserWordDao {
             increment(
                 entry.word, entry.locale, entry.delta, entry.lastUsedAt,
                 if (entry.deliberateCapital) 1 else 0,
+                if (entry.asserted) 1 else 0,
             )
         }
     }
@@ -90,6 +94,10 @@ interface UserWordDao {
      */
     @Query("UPDATE user_words SET deliberateCapitals = MAX(deliberateCapitals, :count) WHERE word = :word")
     suspend fun raiseDeliberateCapitals(word: String, count: Int)
+
+    /** The same for the asserted count -- see [raiseDeliberateCapitals]. */
+    @Query("UPDATE user_words SET asserted = MAX(asserted, :count) WHERE word = :word")
+    suspend fun raiseAsserted(word: String, count: Int)
 
     /**
      * Halves the count of anything not used since [cutoff], and nothing else.
@@ -173,4 +181,6 @@ data class LearnedWord(
     val lastUsedAt: Long,
     /** See [UserWord.deliberateCapitals]. */
     val deliberateCapital: Boolean = false,
+    /** See [UserWord.asserted]: the word was chosen on purpose, not merely written. */
+    val asserted: Boolean = false,
 )

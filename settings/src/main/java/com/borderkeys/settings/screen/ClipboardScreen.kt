@@ -17,18 +17,23 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.borderkeys.data.ClipSearch
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.entity.ClipEntry
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
@@ -48,7 +53,7 @@ import kotlinx.coroutines.launch
  * than a filter, and there is a button here that empties it now.
  */
 @Composable
-fun ClipboardScreen(modifier: Modifier = Modifier) {
+fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
     val strings = LocalStrings.current
     val repository = remember { DataGraph.clipboard }
     val themes = remember { DataGraph.themes }
@@ -58,6 +63,22 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
     val preferences by themes.preferences
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
     var confirmingDeleteAll by remember { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+
+    // The entry whose text is open in the edit dialog, and the text as edited so far.
+    var editing by remember { mutableStateOf<ClipEntry?>(null) }
+    var draft by rememberSaveable { mutableStateOf("") }
+    // The keyboard's own "Edit" arrives as an id; opened once the history has loaded, once.
+    var openedRequestedEdit by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(editClipId, entries) {
+        if (editClipId == null || openedRequestedEdit || entries.isEmpty()) {
+            return@LaunchedEffect
+        }
+        openedRequestedEdit = true
+        val entry = entries.firstOrNull { it.id == editClipId && !it.isImage } ?: return@LaunchedEffect
+        draft = entry.content
+        editing = entry
+    }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SwitchRow(
@@ -139,8 +160,16 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
         SettingsSectionCard(strings.getString(Keys.CLIPBOARD_HISTORY, entries.size)) {
             if (entries.isEmpty()) {
                 SettingRow(title = strings[Keys.CLIPBOARD_EMPTY])
+            } else {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text(strings[Keys.CLIPBOARD_SEARCH]) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                )
             }
-            for (entry in entries) {
+            for (entry in ClipSearch.filter(entries, query)) {
                 SettingRow(
                     title = entry.content.take(80).replace('\n', ' '),
                     subtitle = if (entry.isPinned) strings[Keys.CLIPBOARD_PINNED_NEVER_EXPIRES] else strings[Keys.CLIPBOARD_EXPIRES_ON_THE_TIMER],
@@ -151,6 +180,11 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
                                     scope.launch { repository.setPinned(entry.id, !entry.isPinned) }
                                 },
                             ) { Text(if (entry.isPinned) strings[Keys.CLIPBOARD_UNPIN] else strings[Keys.CLIPBOARD_PIN]) }
+                            if (!entry.isImage) {
+                                TextButton(onClick = { draft = entry.content; editing = entry }) {
+                                    Text(strings[Keys.CLIPBOARD_EDIT])
+                                }
+                            }
                             TextButton(onClick = { scope.launch { repository.delete(entry.id) } }) {
                                 Text(strings[Keys.CLIPBOARD_DELETE])
                             }
@@ -163,6 +197,34 @@ fun ClipboardScreen(modifier: Modifier = Modifier) {
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             ) { Text(strings[Keys.CLIPBOARD_DELETE_EVERYTHING_INCLUDING_PINNED]) }
         }
+    }
+
+    val edited = editing
+    if (edited != null) {
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text(strings[Keys.CLIPBOARD_EDIT_TITLE]) },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = draft.isNotBlank() && draft != edited.content,
+                    onClick = {
+                        editing = null
+                        scope.launch { repository.update(edited.id, draft) }
+                    },
+                ) { Text(strings[Keys.CLIPBOARD_SAVE]) }
+            },
+            dismissButton = {
+                TextButton(onClick = { editing = null }) { Text(strings[Keys.THEME_CANCEL]) }
+            },
+        )
     }
 
     // Asked first: pinned entries are the ones somebody chose to keep, and this is the one

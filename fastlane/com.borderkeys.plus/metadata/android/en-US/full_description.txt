@@ -69,11 +69,11 @@ Markdown, and long drafts scroll inside it. With a model installed, what is in t
 corrected, translated, re-toned, shortened, or changed by an instruction you write
 yourself, and every version is kept so you can walk back to what you started with.
 
-This build also carries an experimental neural swipe decoder — a small network hand-written
-in C++ with no machine-learning runtime, its weights trained on a free corpus — as a switch
-that is off by default; the geometric decoder stays the one in use until you turn it on.
-Its weights are read only while that switch is on and freed again the moment you turn it
-off, so leaving it alone costs no memory at all.
+This build also carries a neural swipe decoder — a small network hand-written in C++ with
+no machine-learning runtime, its weights trained on a free corpus — and uses it by default:
+on 500 recorded swipes it reads 91 in 100 correctly where the geometric decoder reads 77. A
+switch turns it off, and its weights are freed the moment it goes off, so with the switch off
+this build costs no more memory than the free one.
 
 * No model is bundled and none can be downloaded automatically — there is still no
   INTERNET permission anywhere in the app. A model arrives only when you pick a GGUF file

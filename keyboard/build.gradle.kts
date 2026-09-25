@@ -26,6 +26,10 @@ android {
             // 32-bit x86 emulator images are not worth the build time; every shipping
             // device is one of these two.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            // `-Pborderkeys.extraAbis=x86_64` adds the ABI an emulator on a CI runner has.
+            providers.gradleProperty("borderkeys.extraAbis").orNull
+                ?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
+                ?.let { abiFilters += it }
         }
         externalNativeBuild {
             cmake {

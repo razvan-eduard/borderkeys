@@ -37,6 +37,14 @@ import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.borderkeys.data.theme.ModifierRowKeys
+import com.borderkeys.settings.ReorderRow
+import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.move
 import com.borderkeys.settings.rememberPreferencesUpdater
 
 /**
@@ -73,6 +81,26 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.SIZE_COSTS_ABOUT_A_FIFTH_OF_THE],
                 checked = preferences.numberRow,
             ) { value -> update { it.copy(numberRow = value) } }
+            SwitchRow(
+                title = strings[Keys.LAYOUT_MODIFIER_ROW],
+                subtitle = strings[Keys.LAYOUT_MODIFIER_ROW_NOTE],
+                checked = preferences.modifierRow,
+            ) { value -> update { it.copy(modifierRow = value) } }
+            Explanation(strings[Keys.LAYOUT_MODIFIER_ROW_POSITION])
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PickerChip(
+                    strings[Keys.LAYOUT_MODIFIER_ROW_ABOVE],
+                    preferences.modifierRowPosition == KeyboardPreferences.MODIFIER_ROW_ABOVE,
+                ) { update { it.copy(modifierRowPosition = KeyboardPreferences.MODIFIER_ROW_ABOVE) } }
+                PickerChip(
+                    strings[Keys.LAYOUT_MODIFIER_ROW_BELOW],
+                    preferences.modifierRowPosition == KeyboardPreferences.MODIFIER_ROW_BELOW,
+                ) { update { it.copy(modifierRowPosition = KeyboardPreferences.MODIFIER_ROW_BELOW) } }
+            }
+            ModifierRowKeysEditor(preferences.modifierRowKeys, update)
             SwitchRow(
                 title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
                 subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
@@ -255,4 +283,80 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
             Explanation(strings[Keys.LAYOUT_THE_GLOBE_KEY_CYCLES_BETWEEN_THE])
         }
     }
+}
+
+/**
+ * The modifier row's keys, in order, each with the controls that move it up or take it off,
+ * a reset once the list has left the default, and the keys not yet on it to add. The same
+ * list editing the quick actions bar uses, on key names instead of action ids.
+ */
+@Composable
+private fun ModifierRowKeysEditor(
+    stored: List<String>,
+    update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit,
+) {
+    val strings = LocalStrings.current
+    val chosen = ModifierRowKeys.sanitised(stored)
+    var picking by remember { mutableStateOf(false) }
+    SectionHeader(strings[Keys.LAYOUT_MODIFIER_ROW_KEYS])
+    chosen.forEachIndexed { index, name ->
+        ReorderRow(
+            label = strings[modifierKeyLabel(name)],
+            index = index,
+            onMoveTop = { update { it.copy(modifierRowKeys = move(chosen, index, 0)) } },
+            onMoveUp = { update { it.copy(modifierRowKeys = move(chosen, index, index - 1)) } },
+            onRemove = { update { it.copy(modifierRowKeys = chosen.filterNot { key -> key == name }) } },
+        )
+    }
+    if (chosen != ModifierRowKeys.DEFAULT) {
+        TextButton(
+            onClick = { update { it.copy(modifierRowKeys = ModifierRowKeys.DEFAULT) } },
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULT]) }
+    }
+    Explanation(strings[Keys.LAYOUT_MODIFIER_ROW_KEYS_NOTE])
+    val addable = ModifierRowKeys.ALL.filterNot { it in chosen }
+    if (chosen.size < ModifierRowKeys.MAX && addable.isNotEmpty()) {
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .clickable { picking = !picking }
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+        ) {
+            Text(
+                strings[Keys.LAYOUT_MODIFIER_ROW_ADD],
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        if (picking) {
+            for (name in addable) {
+                ReorderRow(
+                    label = strings[modifierKeyLabel(name)],
+                    index = -1,
+                    onAdd = {
+                        update { it.copy(modifierRowKeys = chosen + name) }
+                        picking = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** The catalogue key naming a modifier-row key, the same name its accessibility node carries. */
+private fun modifierKeyLabel(name: String): String = when (name) {
+    ModifierRowKeys.ESCAPE -> Keys.KEY_ESCAPE
+    ModifierRowKeys.TAB -> Keys.KEY_TAB
+    ModifierRowKeys.CONTROL -> Keys.KEY_CONTROL
+    ModifierRowKeys.ALT -> Keys.KEY_ALT
+    ModifierRowKeys.LEFT -> Keys.KEY_ARROW_LEFT
+    ModifierRowKeys.DOWN -> Keys.KEY_ARROW_DOWN
+    ModifierRowKeys.UP -> Keys.KEY_ARROW_UP
+    ModifierRowKeys.RIGHT -> Keys.KEY_ARROW_RIGHT
+    ModifierRowKeys.HOME -> Keys.KEY_HOME
+    ModifierRowKeys.END -> Keys.KEY_END
+    ModifierRowKeys.PAGE_UP -> Keys.KEY_PAGE_UP
+    ModifierRowKeys.PAGE_DOWN -> Keys.KEY_PAGE_DOWN
+    ModifierRowKeys.FORWARD_DELETE -> Keys.KEY_FORWARD_DELETE
+    else -> Keys.KEY_INSERT
 }

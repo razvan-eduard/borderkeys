@@ -49,6 +49,7 @@ import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.move
+import com.borderkeys.settings.ReorderRow
 import com.borderkeys.settings.rememberPreferencesUpdater
 
 /**
@@ -414,48 +415,15 @@ private fun ButtonRow(
         is QuickActionBarItem.Builtin -> strings[labelFor(item.action)]
         is QuickActionBarItem.Custom -> item.action.name
     }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onAdd != null) Modifier.clickable(onClick = onAdd) else Modifier)
-            .padding(horizontal = 20.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp),
-        )
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f).padding(start = 16.dp),
-        )
-        if (onAdd == null) {
-            IconButton(onClick = onMoveTop, enabled = index > 0, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    painter = painterResource(R.drawable.bk_reorder_top),
-                    contentDescription = strings[Keys.QUICK_MOVE_TOP],
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            IconButton(onClick = onMoveUp, enabled = index > 0, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    painter = painterResource(R.drawable.bk_reorder_up),
-                    contentDescription = strings[Keys.QUICK_MOVE_UP],
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    painter = painterResource(R.drawable.bk_reorder_remove),
-                    contentDescription = strings[Keys.QUICK_REMOVE],
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        }
-    }
+    ReorderRow(
+        label = label,
+        index = index,
+        icon = icon,
+        onMoveTop = onMoveTop,
+        onMoveUp = onMoveUp,
+        onRemove = onRemove,
+        onAdd = onAdd,
+    )
 }
 
 @Composable

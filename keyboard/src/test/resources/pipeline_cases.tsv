@@ -1,15 +1,16 @@
 # What the space bar must do, end to end: the shipping engine, the shipping JNI bridge, the
 # shipping Kotlin, against the packs the application ships. Read by PipelineTest.
 #
-#   typed <TAB> committed <TAB> situation
+#   typed <TAB> committed <TAB> reason
 #
 # `committed` is "-" when the typed text must survive untouched, which is most of this file: a
 # keyboard that leaves a word alone is doing its job, and every line below that reads "-" is a
 # report from someone whose word was changed when it should not have been.
 #
-# `situation` is the reason, and it is here because an outcome without one can be right by
-# accident. A guard can stop working while another covers for it and the outcome stays the same
-# -- which is exactly what a chain of early returns used to hide.
+# `reason` is which claim on the word won, asserted so that an outcome cannot be right by
+# accident while a guard stands in for another. It is a rewrite's kind (Shortcut, Contraction,
+# Possessive, Capital), one of autocorrect's situations, or the name of the gate that kept
+# autocorrect from being asked (NotProse) -- see WordCommit.
 
 # --- a word still being typed is completed, not corrected -------------------------------------
 # "believ" committed "belief" on a device: 4.8 times rarer, and ranked seventh by the same
@@ -47,15 +48,35 @@ workers'	-	NothingOffered
 quoted'	-	NothingOffered
 
 # --- a mark left out is a convention dropped, and is restored ---------------------------------
-# The opposite shape, and the one that must keep working: same character, other direction.
-# "dont" is not a word, so frequency gets to decide and it becomes "don't".
-dont	don't	Correctable
-# "cant" IS a word -- jargon, or a slope, 108 in the pack -- so the known-word guard refuses it
-# before frequency is consulted at all. kApostropheInsertCost's comment in engine.cpp claims
-# this pair resolves 3,713 against 108, which is true of the engine and not of the pipeline:
-# the guard above it never lets that comparison happen. Recorded as it behaves, not as the
-# comment says, because changing which one is right is a decision and not a test fixture.
-cant	-	NoChange
+# The opposite shape: same character, other direction. The apostrophe map claims these before
+# autocorrect is asked (WordCommit). "cant" is itself a word of the pack, so only the map can
+# restore it; the known-word guard alone would leave it.
+dont	don't	Contraction
+cant	can't	Contraction
+im	I'm	Contraction
+
+# --- a capital the language always writes -----------------------------------------------------
+# Not a correction: it follows the auto-capitalise switch, so it holds with corrections off.
+i	I	Capital
+
+# --- a name's possessive the corpus never wrote -----------------------------------------------
+# "laura" is a flagged name and "lauras" is no word of the pack: the productive possessive
+# supplies the apostrophe -- see Engine::possessiveFor's three conditions.
+lauras	Laura's	Possessive
+
+# --- a regular inflection of a word the dictionaries hold -------------------------------------
+# The stem is the dictionaries' and the ending is the language's, so the word is the user's
+# whatever ranks first -- see WordStems.
+smooths	-	Inflection
+testings	-	Inflection
+spatting	-	Inflection
+jumpy	-	Inflection
+# A misspelt inflection is still corrected when the answer is built on the same stem.
+stoped	stopped	Correctable
+occured	occurred	Correctable
+truely	truly	Correctable
+# A doubled final letter is a slip, not an ending.
+thiss	this	Correctable
 
 # --- a word the dictionaries spell is left alone ----------------------------------------------
 # "put" was committed as "out" on a device. Both are words; only one was typed.
@@ -66,9 +87,10 @@ form	-	NoChange
 their	-	NoChange
 
 # --- an address or a filename is not a sentence -----------------------------------------------
-# RunningText's job: a digit anywhere means this is not running text at all.
-sha256	-	NothingOffered
-v2beta	-	NothingOffered
+# RunningText's job: a digit anywhere means this is not running text at all, and autocorrect is
+# never asked. NotProse is that guard's own answer, asserted rather than the engine's silence.
+sha256	-	NotProse
+v2beta	-	NotProse
 
 # --- too short to guess about, unless an accent is being restored -----------------------------
 # "ab" is in the pack, but TooShort is reached first -- again the ordering, pinned.

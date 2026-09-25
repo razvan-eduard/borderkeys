@@ -209,6 +209,19 @@ same layout with ten digits added above it. Two details are deliberate:
   a digit is never a substitution target when correcting a typo. `SECONDARY_ROW` also sets the
   row apart visually, the way it is set apart on a hardware keyboard.
 
+The modifier row is the same kind of transform. `KeyboardLayout.withModifierRow()` puts escape,
+tab, control, alt and the four arrows above the letters -- above the number row when both are
+shown -- or, with `atBottom`, under the space row (`modifierRowPosition`). Which keys, and in what
+order, is `modifierRowKeys`: any of escape, tab, control, alt, the four arrows, home, end, page
+up, page down, forward delete and insert, up to twelve, sharing the row's ten units; each is
+`MODIFIER`, and the arrows and forward delete are `REPEATABLE` like backspace. Every key
+on it reaches the application as a hardware key event through the input connection: control and
+alt are armed by a tap and go out with the next key (a letter under them is sent as the key that
+carries it, so control with `a` is the application's select-all), and a shift the user holds puts
+the shift bits on the arrows, which is how they select. Off by default (`modifierRow`), for
+terminals and editors. Layout assets can place the same keys themselves with the codes `escape`,
+`tab`, `control`, `alt`, `left`, `right`, `up` and `down`.
+
 `LANGUAGE` (−5) cycles enabled layouts — the same thing the globe key and the `SWITCH_LAYOUT`
 [quick action](architecture.md#quick-actions) do.
 

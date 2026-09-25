@@ -65,15 +65,15 @@ object BundledDictionaries {
         // and the double-array shrank with them.
         // Recounted again for format version 4, where a folded key carries every spelling that
         // reaches it instead of only the most frequent. The counts rise by what used to be
-        // discarded -- Romanian by 6,306, "ca" beside "că" and "sau" beside "său". German's
-        // 4.8 MB is not text: its bigram table crossed a power of two, because bigrams whose
-        // words the pack did not hold were being dropped and now resolve.
-        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 112_224, 16_068_753),
-        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 128_217, 21_919_316),
-        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 99_859, 15_711_394),
-        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 100_782, 15_995_810),
-        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 101_673, 21_356_131),
-        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 100_884, 16_027_312),
+        // discarded -- Romanian by 6,306, "ca" beside "că" and "sau" beside "său".
+        // Sizes from format version 5, which stores the pairs as a successor index in place
+        // of a hash table.
+        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 112_224, 13_206_989),
+        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 128_217, 14_620_796),
+        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 99_859, 12_734_618),
+        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 100_782, 13_069_466),
+        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 101_673, 13_916_383),
+        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 100_884, 13_245_360),
     )
 
     /** Opens one for reading. The caller closes it; the install path copies and validates. */

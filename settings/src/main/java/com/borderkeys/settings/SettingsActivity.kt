@@ -29,6 +29,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -51,6 +52,7 @@ import com.borderkeys.settings.screen.ClipboardScreen
 import com.borderkeys.settings.screen.ComposerScreen
 import com.borderkeys.settings.screen.DictionaryScreen
 import com.borderkeys.settings.screen.EffectsScreen
+import com.borderkeys.settings.screen.FeaturesScreen
 import com.borderkeys.settings.screen.HomeScreen
 import com.borderkeys.settings.screen.LanguagesScreen
 import com.borderkeys.settings.screen.LayoutScreen
@@ -76,6 +78,14 @@ import com.borderkeys.settings.screen.ThemeScreen
  * which is the correct thing for it to look like.
  */
 class SettingsActivity : ComponentActivity() {
+
+    companion object {
+        /** A [Screen] name to open on, above Home. The keyboard sends it by string. */
+        const val EXTRA_SCREEN = "com.borderkeys.settings.SCREEN"
+
+        /** The clipboard entry the Clipboard screen opens for editing. */
+        const val EXTRA_CLIP_ID = "com.borderkeys.settings.CLIP_ID"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -162,7 +172,11 @@ class SettingsActivity : ComponentActivity() {
                         // somebody's dictionary should not be half hidden behind the clock.
                         TransferScreen(asking, Modifier.safeDrawingPadding())
                     } else {
-                        SettingsApp()
+                        SettingsApp(
+                            openTo = intent.getStringExtra(EXTRA_SCREEN)
+                                ?.let { name -> Screen.entries.firstOrNull { it.name == name } },
+                            editClipId = intent.getLongExtra(EXTRA_CLIP_ID, -1L).takeIf { it >= 0L },
+                        )
                     }
                 }
             }
@@ -209,9 +223,13 @@ class SettingsActivity : ComponentActivity() {
  *  "Try it here" probe below them is left out -- see the bottom bar in [SettingsApp]. */
 private val SCREENS_WITH_KEYBOARD_PREVIEW = setOf(Screen.Theme, Screen.Size, Screen.QuickActions)
 
+/**
+ * The settings, opened on Home or Setup, or on [openTo] above Home when the intent named a
+ * screen; [editClipId] is the clipboard entry that screen opens for editing.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsApp() {
+private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
     val strings = LocalStrings.current
     val context = LocalContext.current
     // Read once, at launch, purely to pick the first screen below -- unlike isDefault further
@@ -236,7 +254,12 @@ private fun SettingsApp() {
     // the same condition Home's own banner already reacts to, just met on the first frame
     // instead of after noticing a card and tapping it.
     val stack = remember {
-        mutableStateListOf<Screen>(if (isDefaultAtLaunch) Screen.Home else Screen.Setup)
+        val first = if (isDefaultAtLaunch) Screen.Home else Screen.Setup
+        mutableStateListOf<Screen>(first).apply {
+            if (openTo != null && openTo != first) {
+                add(openTo)
+            }
+        }
     }
     val current = stack.last()
 
@@ -270,10 +293,17 @@ private fun SettingsApp() {
             stack.forEach { screenStates.removeState(it.name) }
             stack.clear()
             stack.add(Screen.Home)
+            // Setup just finished: the tour of what the keyboard can do, until it is dismissed
+            // for good.
+            if (!DataGraph.themes.currentPreferences().featuresTourSeen) {
+                stack.add(Screen.Features)
+            }
         }
     }
 
     androidx.activity.compose.BackHandler(enabled = stack.size > 1) { pop() }
+    var statsExpanded by rememberSaveable { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = statsExpanded) { statsExpanded = false }
 
     // Global rather than Typing's own: whatever screen a setting was just changed on -- a theme
     // colour, a key size, the swipe trail width -- this is the one place to feel the result
@@ -286,7 +316,7 @@ private fun SettingsApp() {
             // Not under a screen that already shows the keyboard drawn live at the top -- Theme,
             // Size and position, Quick actions: there the result is already on screen, and a
             // second keyboard popping up over the preview only hides half of it.
-            if (current in SCREENS_WITH_KEYBOARD_PREVIEW) {
+            if (current in SCREENS_WITH_KEYBOARD_PREVIEW || current == Screen.Features) {
                 return@Scaffold
             }
             // Deliberately not a full SettingsSectionCard: this rides along on every screen, so
@@ -323,6 +353,7 @@ private fun SettingsApp() {
                 colors = CardDefaults.elevatedCardColors(),
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
             ) {
+                DebugStatsLine(statsExpanded) { statsExpanded = !statsExpanded }
                 OutlinedTextField(
                     value = probe,
                     onValueChange = { probe = it },
@@ -367,10 +398,17 @@ private fun SettingsApp() {
     ) { insets ->
         val open: (Screen) -> Unit = { stack.add(it) }
         val modifier = Modifier.padding(insets)
+        // Opened, the panel stands in for the screen: an opaque surface the size of the
+        // content, so the figures are read against nothing else.
+        if (statsExpanded) {
+            DebugStatsPanel(modifier)
+            return@Scaffold
+        }
         screenStates.SaveableStateProvider(current.name) {
             when (current) {
                 Screen.Home -> HomeScreen(modifier, open)
                 Screen.Setup -> SetupScreen(modifier, open)
+                Screen.Features -> FeaturesScreen(modifier, hasAssistant, open, onDone = pop)
                 Screen.Languages -> LanguagesScreen(modifier)
                 Screen.Layout -> LayoutScreen(modifier)
                 Screen.Theme -> ThemeScreen(modifier)
@@ -378,7 +416,7 @@ private fun SettingsApp() {
                 Screen.Effects -> EffectsScreen(modifier)
                 Screen.Typing -> TypingScreen(modifier)
                 Screen.Dictionary -> DictionaryScreen(modifier)
-                Screen.Clipboard -> ClipboardScreen(modifier)
+                Screen.Clipboard -> ClipboardScreen(modifier, editClipId)
                 Screen.QuickActions -> QuickActionsScreen(modifier)
                 Screen.Composer -> ComposerScreen(modifier)
                 Screen.Backup -> BackupScreen(modifier)

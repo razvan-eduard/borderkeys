@@ -150,6 +150,7 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
         }
 
         SettingsSectionCard(strings[Keys.HOME_ABOUT]) {
+            SettingRow(strings[Keys.FEATURES_TOUR], strings[Keys.FEATURES_TOUR_NOTE]) { open(Screen.Features) }
             SettingRow(strings[Keys.HOME_PRIVACY], strings[Keys.HOME_WHAT_IS_STORED_WHERE_AND_WHAT]) { open(Screen.Privacy) }
             SettingRow(strings[Keys.HOME_ABOUT_BORDERKEYS], strings[Keys.HOME_VERSION_SOURCE_CODE_AND_LICENCE]) { open(Screen.About) }
             Explanation(

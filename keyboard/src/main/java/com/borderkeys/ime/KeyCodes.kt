@@ -25,9 +25,40 @@ object KeyCodes {
     const val SETTINGS = -7
     /** The second symbols page: the one behind "=\\<". */
     const val SYMBOLS_SHIFT = -8
+
+    /** The modifier row: each sends the application a hardware key rather than a character. */
+    const val ESCAPE = -9
+    const val TAB = -10
+    /** Held for the next key, like [ALT]: the next character or arrow goes out with it set. */
+    const val CONTROL = -11
+    const val ALT = -12
+    const val ARROW_LEFT = -13
+    const val ARROW_RIGHT = -14
+    const val ARROW_UP = -15
+    const val ARROW_DOWN = -16
+    const val HOME = -17
+    const val END = -18
+    const val PAGE_UP = -19
+    const val PAGE_DOWN = -20
+    /** Deletes the character after the caret, as the hardware key does. */
+    const val FORWARD_DELETE = -21
+    const val INSERT = -22
     const val NONE = -100
 
     fun isCharacter(code: Int): Boolean = code > 0
+
+    fun isArrow(code: Int): Boolean =
+        code == ARROW_LEFT || code == ARROW_RIGHT || code == ARROW_UP || code == ARROW_DOWN
+
+    /** A key that moves the caret: an arrow, home, end, page up or page down. */
+    fun isNavigation(code: Int): Boolean =
+        isArrow(code) || code == HOME || code == END || code == PAGE_UP || code == PAGE_DOWN
+
+    /** A key that repeats while held on the modifier row: the arrows and forward delete. */
+    fun repeatsOnModifierRow(code: Int): Boolean = isArrow(code) || code == FORWARD_DELETE
+
+    /** [CONTROL] or [ALT]: a key that arms itself for the next key instead of typing. */
+    fun isHeldModifier(code: Int): Boolean = code == CONTROL || code == ALT
 
     /** Maps the names used in the layout assets. Returns [NONE] for anything unrecognised. */
     fun named(name: String): Int = when (name) {
@@ -40,6 +71,20 @@ object KeyCodes {
         "emoji" -> EMOJI
         "settings" -> SETTINGS
         "symbols_shift" -> SYMBOLS_SHIFT
+        "escape" -> ESCAPE
+        "tab" -> TAB
+        "control" -> CONTROL
+        "alt" -> ALT
+        "left" -> ARROW_LEFT
+        "right" -> ARROW_RIGHT
+        "up" -> ARROW_UP
+        "down" -> ARROW_DOWN
+        "home" -> HOME
+        "end" -> END
+        "page_up" -> PAGE_UP
+        "page_down" -> PAGE_DOWN
+        "forward_delete" -> FORWARD_DELETE
+        "insert" -> INSERT
         else -> NONE
     }
 }
@@ -54,7 +99,7 @@ object KeyFlags {
     /** Drawn in the modifier colour: shift, delete, symbols, enter. */
     const val MODIFIER = 1 shl 0
 
-    /** Repeats while held. Delete, and the arrow keys if they ever exist. */
+    /** Repeats while held: delete and the arrow keys. */
     const val REPEATABLE = 1 shl 1
 
     /** Participates in swipe typing. Letters only: a gesture across shift means nothing. */

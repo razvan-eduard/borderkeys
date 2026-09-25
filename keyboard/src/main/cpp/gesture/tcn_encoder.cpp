@@ -44,11 +44,14 @@ void TcnEncoder::forward(const float* features, float* outIntention, float* outS
 
         float* const spectralOut = outSpectral + t * kSpectralDim;
         for (int s = 0; s < kSpectralDim; ++s) {
-            float acc = w.spectralBias[s];
-            for (int c = 0; c < kAdapterChannels; ++c) {
-                acc += a[c] * w.spectralWeight[c * kSpectralDim + s];
+            spectralOut[s] = w.spectralBias[s];
+        }
+        for (int c = 0; c < kAdapterChannels; ++c) {
+            const float ac = a[c];
+            const float* const row = w.spectralWeight + c * kSpectralDim;
+            for (int s = 0; s < kSpectralDim; ++s) {
+                spectralOut[s] += ac * row[s];
             }
-            spectralOut[s] = acc;
         }
     }
 }
@@ -62,19 +65,26 @@ void TcnEncoder::runBlock(int blockIndex, float* trunk) {
     // has its own kKernelSize taps, independent of every other channel -- the "depthwise" half of
     // a depthwise-separable convolution, matching the ConvNeXt block this is patterned on.
     for (int t = 0; t < kTcnTimesteps; ++t) {
+        float* const out = depthwiseOut_ + t * kTrunkChannels;
         for (int c = 0; c < kTrunkChannels; ++c) {
-            float acc = block.depthwiseBias[c];
-            for (int k = 0; k < kKernelSize; ++k) {
-                const int sourceT = t + (k - kHalfKernel) * dilation;
-                if (sourceT < 0 || sourceT >= kTcnTimesteps) {
-                    continue;  // zero-padded: contributes nothing
-                }
-                acc += trunk[sourceT * kTrunkChannels + c] * block.depthwiseWeight[k * kTrunkChannels + c];
+            out[c] = block.depthwiseBias[c];
+        }
+        for (int k = 0; k < kKernelSize; ++k) {
+            const int sourceT = t + (k - kHalfKernel) * dilation;
+            if (sourceT < 0 || sourceT >= kTcnTimesteps) {
+                continue;  // zero-padded: contributes nothing
             }
-            // Batch normalisation folded to a single affine transform: this is an inference-only
-            // engine, so there is no running mean/variance to track, only the scale and bias
-            // tools/swipe_model/export_weights.py folds them into at export time.
-            depthwiseOut_[t * kTrunkChannels + c] = acc * block.bnScale[c] + block.bnBias[c];
+            const float* const source = trunk + sourceT * kTrunkChannels;
+            const float* const taps = block.depthwiseWeight + k * kTrunkChannels;
+            for (int c = 0; c < kTrunkChannels; ++c) {
+                out[c] += source[c] * taps[c];
+            }
+        }
+        // Batch normalisation folded to a single affine transform: this is an inference-only
+        // engine, so there is no running mean/variance to track, only the scale and bias
+        // tools/swipe_model/export_weights.py folds them into at export time.
+        for (int c = 0; c < kTrunkChannels; ++c) {
+            out[c] = out[c] * block.bnScale[c] + block.bnBias[c];
         }
     }
 
@@ -85,11 +95,14 @@ void TcnEncoder::runBlock(int blockIndex, float* trunk) {
         const float* const in = depthwiseOut_ + t * kTrunkChannels;
         float* const expanded = expanded_ + t * kExpandedChannels;
         for (int e = 0; e < kExpandedChannels; ++e) {
-            float acc = block.expandBias[e];
-            for (int c = 0; c < kTrunkChannels; ++c) {
-                acc += in[c] * block.expandWeight[c * kExpandedChannels + e];
+            expanded[e] = block.expandBias[e];
+        }
+        for (int c = 0; c < kTrunkChannels; ++c) {
+            const float ic = in[c];
+            const float* const row = block.expandWeight + c * kExpandedChannels;
+            for (int e = 0; e < kExpandedChannels; ++e) {
+                expanded[e] += ic * row[e];
             }
-            expanded[e] = acc;
         }
         float* const gated = gated_ + t * kBlockChannels;
         for (int g = 0; g < kBlockChannels; ++g) {
@@ -103,14 +116,18 @@ void TcnEncoder::runBlock(int blockIndex, float* trunk) {
     // swipe is amplified, one that is unusually quiet is damped, both relative to its peers
     // rather than to a fixed running statistic.
     float channelNorm[kBlockChannels];
+    for (int g = 0; g < kBlockChannels; ++g) {
+        channelNorm[g] = 0.f;
+    }
+    for (int t = 0; t < kTcnTimesteps; ++t) {
+        const float* const row = gated_ + t * kBlockChannels;
+        for (int g = 0; g < kBlockChannels; ++g) {
+            channelNorm[g] += row[g] * row[g];
+        }
+    }
     float normSum = 0.f;
     for (int g = 0; g < kBlockChannels; ++g) {
-        float sumSquares = 0.f;
-        for (int t = 0; t < kTcnTimesteps; ++t) {
-            const float v = gated_[t * kBlockChannels + g];
-            sumSquares += v * v;
-        }
-        channelNorm[g] = std::sqrt(sumSquares);
+        channelNorm[g] = std::sqrt(channelNorm[g]);
         normSum += channelNorm[g];
     }
     const float meanNorm = normSum / static_cast<float>(kBlockChannels);
@@ -128,11 +145,14 @@ void TcnEncoder::runBlock(int blockIndex, float* trunk) {
         const float* const in = gated_ + t * kBlockChannels;
         float* const out = projected_ + t * kTrunkChannels;
         for (int c = 0; c < kTrunkChannels; ++c) {
-            float acc = block.projectBias[c];
-            for (int g = 0; g < kBlockChannels; ++g) {
-                acc += in[g] * block.projectWeight[g * kTrunkChannels + c];
+            out[c] = block.projectBias[c];
+        }
+        for (int g = 0; g < kBlockChannels; ++g) {
+            const float ig = in[g];
+            const float* const row = block.projectWeight + g * kTrunkChannels;
+            for (int c = 0; c < kTrunkChannels; ++c) {
+                out[c] += ig * row[c];
             }
-            out[c] = acc;
         }
     }
 
@@ -142,26 +162,43 @@ void TcnEncoder::runBlock(int blockIndex, float* trunk) {
     // quarter of the trunk width.
     float pooled[kTrunkChannels];
     for (int c = 0; c < kTrunkChannels; ++c) {
-        float sum = 0.f;
-        for (int t = 0; t < kTcnTimesteps; ++t) {
-            sum += projected_[t * kTrunkChannels + c];
+        pooled[c] = 0.f;
+    }
+    for (int t = 0; t < kTcnTimesteps; ++t) {
+        const float* const row = projected_ + t * kTrunkChannels;
+        for (int c = 0; c < kTrunkChannels; ++c) {
+            pooled[c] += row[c];
         }
-        pooled[c] = sum / static_cast<float>(kTcnTimesteps);
+    }
+    for (int c = 0; c < kTrunkChannels; ++c) {
+        pooled[c] /= static_cast<float>(kTcnTimesteps);
     }
     float reduced[kSeReducedChannels];
     for (int r = 0; r < kSeReducedChannels; ++r) {
-        float acc = block.seReduceBias[r];
-        for (int c = 0; c < kTrunkChannels; ++c) {
-            acc += pooled[c] * block.seReduceWeight[c * kSeReducedChannels + r];
-        }
-        reduced[r] = acc > 0.f ? acc : 0.f;  // ReLU
+        reduced[r] = block.seReduceBias[r];
     }
     for (int c = 0; c < kTrunkChannels; ++c) {
-        float acc = block.seExpandBias[c];
+        const float pc = pooled[c];
+        const float* const row = block.seReduceWeight + c * kSeReducedChannels;
         for (int r = 0; r < kSeReducedChannels; ++r) {
-            acc += reduced[r] * block.seExpandWeight[r * kTrunkChannels + c];
+            reduced[r] += pc * row[r];
         }
-        seScratch_[c] = sigmoid(acc);
+    }
+    for (int r = 0; r < kSeReducedChannels; ++r) {
+        reduced[r] = reduced[r] > 0.f ? reduced[r] : 0.f;  // ReLU
+    }
+    for (int c = 0; c < kTrunkChannels; ++c) {
+        seScratch_[c] = block.seExpandBias[c];
+    }
+    for (int r = 0; r < kSeReducedChannels; ++r) {
+        const float rr = reduced[r];
+        const float* const row = block.seExpandWeight + r * kTrunkChannels;
+        for (int c = 0; c < kTrunkChannels; ++c) {
+            seScratch_[c] += rr * row[c];
+        }
+    }
+    for (int c = 0; c < kTrunkChannels; ++c) {
+        seScratch_[c] = sigmoid(seScratch_[c]);
     }
 
     // Residual sum: the block's own contribution is the SE-gated projection, added onto the
@@ -182,15 +219,21 @@ void TcnEncoder::runAdapter(const float* trunk, float* outAdapted) {
     for (int t = 0; t < kOutputTimesteps; ++t) {
         float* const out = outAdapted + t * kAdapterChannels;
         for (int a = 0; a < kAdapterChannels; ++a) {
-            float acc = w.adapterBias[a];
-            for (int k = 0; k < kKernel; ++k) {
-                const int sourceT = t * kStride + k;
-                const float* const in = trunk + sourceT * kTrunkChannels;
-                for (int c = 0; c < kTrunkChannels; ++c) {
-                    acc += in[c] * w.adapterWeight[(k * kTrunkChannels + c) * kAdapterChannels + a];
+            out[a] = w.adapterBias[a];
+        }
+        for (int k = 0; k < kKernel; ++k) {
+            const int sourceT = t * kStride + k;
+            const float* const in = trunk + sourceT * kTrunkChannels;
+            for (int c = 0; c < kTrunkChannels; ++c) {
+                const float ic = in[c];
+                const float* const row = w.adapterWeight + (k * kTrunkChannels + c) * kAdapterChannels;
+                for (int a = 0; a < kAdapterChannels; ++a) {
+                    out[a] += ic * row[a];
                 }
             }
-            out[a] = acc * w.adapterBnScale[a] + w.adapterBnBias[a];
+        }
+        for (int a = 0; a < kAdapterChannels; ++a) {
+            out[a] = out[a] * w.adapterBnScale[a] + w.adapterBnBias[a];
         }
     }
 }

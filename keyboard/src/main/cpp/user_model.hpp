@@ -15,10 +15,10 @@ namespace borderkeys {
 // rebuilt from them at every start.
 //
 // This is the whole of "personalisation" in BorderKeys. There is no model being fine-tuned and
-// no gradient anywhere: a count goes up when the user picks a word that was not the top
-// suggestion, and that is the entire learning rule. It is also the reason the keyboard does not
-// get worse over time the way a model trained on its own output does -- a count cannot learn a
-// typo unless the user deliberately chose the typo.
+// no gradient anywhere: a count goes up every time the user commits a word, and that is the
+// entire learning rule. Each entry carries a second count, how often the word was chosen on
+// purpose; a word no dictionary holds is offered, and shields itself from correction, only once
+// established (Engine::personalWordEstablished).
 //
 // A mutable double array would have to be rebuilt on nearly every insertion, so the structure
 // here is an ordinary node-per-character trie with a sorted child list per node. Insertion is
@@ -62,13 +62,14 @@ public:
 
     // Replaces everything with the given words. Used once at service start, from the Room
     // table, so that native and database agree before the first keystroke. `deliberateCapitals`
-    // is a parallel array, one count per word, or null when the caller has none to give (every
-    // entry then starts at zero) -- see [learn]'s own doc for what the count means.
+    // and `asserted` are parallel arrays, one count per word, or null when the caller has none
+    // to give (every entry then starts at zero) -- see [learn]'s own doc for what each means.
     void bulkLoad(const char* const* words, const size_t* lengths, const int32_t* counts,
-                  int count, const int32_t* deliberateCapitals = nullptr);
+                  int count, const int32_t* deliberateCapitals = nullptr,
+                  const int32_t* asserted = nullptr);
 
     /**
-     * Records that the user chose this word. Adds it if it is new. Returns its entry index.
+     * Records that the user committed this word. Adds it if it is new. Returns its entry index.
      *
      * [deliberateCapital] is whether the word's first letter was upper case *because the user
      * pressed shift for it themselves* -- never because auto-capitalise decided a sentence- or
@@ -76,8 +77,12 @@ public:
      * one to the entry's own [deliberateCapitals] count, which never goes back down: this is a
      * classification (is this plausibly a name), not a frequency, and one lower-case commit
      * later does not make the earlier deliberate capital any less real.
+     *
+     * [asserted] is whether the word was chosen on purpose rather than typed past: picked from
+     * the strip, or put back after a correction took it away. Never decremented either.
      */
-    int32_t learn(const char* word, size_t length, bool deliberateCapital = false);
+    int32_t learn(const char* word, size_t length, bool deliberateCapital = false,
+                  bool asserted = false);
 
     /**
      * Records that `next` followed `previous`.
@@ -148,6 +153,9 @@ public:
      *  see [learn]. Zero means either never, or the plain word the entry itself defaults to. */
     uint32_t deliberateCapitals(uint32_t entryIndex) const;
 
+    /** How many times this entry was chosen on purpose -- see [learn]. */
+    uint32_t asserted(uint32_t entryIndex) const;
+
     // Words starting with an already folded prefix, in no particular order, up to `maxOut`.
     // Exact prefix only: a typo in a user word is still corrected, but through the language
     // pack, because that is where the geometry-aware walk lives. Duplicating the fuzzy search
@@ -166,6 +174,7 @@ private:
         std::string text;
         uint32_t count = 0;
         uint32_t deliberateCapitals = 0;
+        uint32_t asserted = 0;
     };
 
     int32_t childOf(int32_t node, uint32_t folded) const;

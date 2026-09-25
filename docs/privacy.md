@@ -131,7 +131,9 @@ Worth stating plainly, because "the keyboard learns from you" is the sentence pe
 be suspicious of.
 
 **It holds counts of words, pairs and triples. There is no model being fine-tuned and no gradient
-anywhere.** A count goes up when the user picks a word that was not the top suggestion. See
+anywhere.** Every word committed raises its count. A word chosen on purpose — tapped on the
+strip, or put back after a correction — raises a second count. A word no dictionary holds is
+offered, and left alone by autocorrect, only once it has been chosen or written three times. See
 [`architecture.md`](architecture.md#the-learning-path).
 
 What is never recorded:
@@ -179,7 +181,9 @@ read-check-generate-write of the passphrase runs behind a `FileLock` on a marker
 ## The clipboard
 
 Clipboard history is stored in the same encrypted database and is subject to the same private
-mode rule: nothing is captured while a private field is focused.
+mode rule: nothing is captured while a private field is focused. A clip the copying app marks
+sensitive — a credential copied out of a password manager, on Android 13 and later — is neither
+recorded nor offered on the strip, whatever field is focused.
 
 The keyboard holds no clipboard listener that runs when it is not the active input method — it
 has no permission that would let it, and on modern Android an IME cannot read the clipboard while
@@ -213,6 +217,7 @@ useful.
 | A password entering the personal dictionary | `PrivateMode`, enforced twice, on a pure function of `EditorInfo` |
 | An app asking not to be remembered and being remembered anyway | `IME_FLAG_NO_PERSONALIZED_LEARNING` honoured |
 | The database being read after being copied off the device | SQLCipher + Keystore-held key |
+| A copied password landing in the history or on the strip | The platform's sensitive-content flag honoured; private fields capture nothing |
 | The free build quietly containing the assistant | dex grep in CI |
 | A dependency introducing network access | Build gate on sources, CI gate on the artefact |
 
@@ -220,6 +225,10 @@ useful.
 
 - **Code running as this app on an unlocked device.** It can use the Keystore key. See
   [above](#encryption-at-rest-and-its-limits).
+- **The lock screen after a reboot.** The keyboard is not direct-boot aware: its database key
+  lives in the Keystore and is unreadable before the first unlock, so an alphanumeric device
+  password is typed on the system's own keyboard until then. Below Android 13 the platform has
+  no sensitive-content flag, so a copied password is recorded there like any other clip.
 - **A compromised or malicious Android build.** An IME is handed keystrokes by the platform; if
   the platform is hostile, nothing here helps.
 - **Screen capture, or another app with accessibility access.** Outside this app entirely.

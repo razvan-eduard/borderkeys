@@ -35,6 +35,16 @@ int32_t openFromBytes(const std::string& bytes, LanguagePack* pack) {
     return status;
 }
 
+/** The index of an ASCII word in the pack, or -1. */
+int32_t lookupAscii(const LanguagePack& pack, const char* word) {
+    uint32_t folded[32];
+    size_t length = 0;
+    for (; word[length] != '\0' && length < 32; ++length) {
+        folded[length] = static_cast<uint32_t>(word[length]);
+    }
+    return pack.trie().lookupFolded(folded, static_cast<int>(length));
+}
+
 /** Rewrites both checksums so a mutated pack is judged on its structure, not on its CRC. */
 void repairChecksums(std::string& bytes) {
     if (bytes.size() < sizeof(BkdHeader)) {
@@ -83,24 +93,88 @@ void runFormatTests() {
         LanguagePack pack;
         check(openFromBytes(good, &pack) == kBkdOk, "the test pack opens for the proper-noun check");
 
-        auto lookupAscii = [&pack](const char* word) -> int32_t {
-            uint32_t folded[32];
-            size_t length = 0;
-            for (; word[length] != '\0' && length < 32; ++length) {
-                folded[length] = static_cast<uint32_t>(word[length]);
-            }
-            return pack.trie().lookupFolded(folded, static_cast<int>(length));
-        };
-
-        const int32_t properIndex = lookupAscii("border");
+        const int32_t properIndex = lookupAscii(pack, "border");
         check(properIndex >= 0, "\"border\", the sample pack's flagged proper noun, is found");
         check(properIndex >= 0 && pack.trie().isProperNoun(static_cast<uint32_t>(properIndex)),
               "and its proper-noun bit is set");
 
-        const int32_t plainIndex = lookupAscii("mare");
+        const int32_t plainIndex = lookupAscii(pack, "mare");
         check(plainIndex >= 0, "an ordinary sample word is found");
         check(plainIndex >= 0 && !pack.trie().isProperNoun(static_cast<uint32_t>(plainIndex)),
               "and its proper-noun bit is not set");
+    }
+
+    section("the successor index");
+
+    {
+        // The sample pairs build_dict.py's --selftest writes: "the" is followed by "time" and
+        // "keyboard", and sentences open with "the".
+        LanguagePack pack;
+        check(openFromBytes(good, &pack) == kBkdOk, "the test pack opens for the successor check");
+        check(pack.ngrams().hasBigrams(), "and carries pairs");
+        const int32_t the = lookupAscii(pack, "the");
+        const int32_t time = lookupAscii(pack, "time");
+        const int32_t keyboard = lookupAscii(pack, "keyboard");
+        const int32_t mare = lookupAscii(pack, "mare");
+        check(the >= 0 && time >= 0 && keyboard >= 0 && mare >= 0, "the sample words are found");
+        const NgramModel& ngrams = pack.ngrams();
+        check(ngrams.bigram(static_cast<uint32_t>(the), static_cast<uint32_t>(time)) <= 0.0f,
+              "a written pair is found");
+        check(ngrams.bigram(static_cast<uint32_t>(the), static_cast<uint32_t>(mare)) ==
+                  NgramModel::kNoEntry,
+              "a pair never written is not");
+        check(ngrams.bigram(NgramModel::kSentenceStartContext, static_cast<uint32_t>(the)) <= 0.0f,
+              "the sentence start has its own list");
+        uint32_t first = 0;
+        const uint32_t count = ngrams.successors(static_cast<uint32_t>(the), &first);
+        check(count == 2, "\"the\" lists both of its successors");
+        bool sorted = true;
+        for (uint32_t i = 1; i < count; ++i) {
+            sorted = sorted && ngrams.successorWord(first + i - 1) < ngrams.successorWord(first + i);
+        }
+        check(sorted, "in index order");
+        check(ngrams.successors(static_cast<uint32_t>(mare), &first) == 0,
+              "a word nothing follows lists nothing");
+        check(ngrams.successors(0xFFFFFFF0u, &first) == 0,
+              "and a context outside the pack lists nothing");
+    }
+
+    {
+        // List bounds are file content and are read as claims: an offset past the pairs is
+        // clamped, never followed.
+        std::string mutated = good;
+        BkdHeader header;
+        std::memcpy(&header, mutated.data(), sizeof(header));
+        const uint32_t huge = 0xFFFFFFFFu;
+        const size_t at = static_cast<size_t>(header.sections[kSectionSuccessorOffsets].offset);
+        std::memcpy(&mutated[at + sizeof(uint32_t)], &huge, sizeof(huge));
+        repairChecksums(mutated);
+        LanguagePack pack;
+        check(openFromBytes(mutated, &pack) == kBkdOk,
+              "an offset the header cannot see still opens");
+        uint32_t first = 0;
+        bool bounded = true;
+        for (uint32_t list = 0; list <= header.wordCount; ++list) {
+            const uint32_t count = pack.ngrams().successors(list, &first);
+            bounded = bounded && first <= header.successorCount &&
+                      count <= header.successorCount - first;
+        }
+        check(bounded, "and every list stays inside the pairs the pack holds");
+        check(pack.ngrams().bigram(0u, 1u) == NgramModel::kNoEntry ||
+                  pack.ngrams().bigram(0u, 1u) <= 0.0f,
+              "a lookup through it answers rather than reading past the end");
+    }
+
+    {
+        std::string mutated = good;
+        BkdHeader header;
+        std::memcpy(&header, mutated.data(), sizeof(header));
+        header.successorCount += 1u;
+        std::memcpy(mutated.data(), &header, sizeof(header));
+        repairChecksums(mutated);
+        LanguagePack pack;
+        check(openFromBytes(mutated, &pack) == kBkdErrSectionBounds,
+              "a pair count larger than its sections is refused");
     }
 
     section("grammar sections");
@@ -254,7 +328,7 @@ void runFormatTests() {
     {
         std::string mutated = good;
         const uint32_t notPowerOfTwo = 12345;
-        std::memcpy(&mutated[offsetof(BkdHeader, bigramCapacity)], &notPowerOfTwo,
+        std::memcpy(&mutated[offsetof(BkdHeader, trigramCapacity)], &notPowerOfTwo,
                     sizeof(notPowerOfTwo));
         repairChecksums(mutated);
         LanguagePack pack;

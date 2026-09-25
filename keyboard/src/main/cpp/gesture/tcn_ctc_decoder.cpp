@@ -141,21 +141,36 @@ void TcnCtcDecoder::keyLogProbsFor(const float* spectralFrame, float intentionFr
     }
 }
 
+void TcnCtcDecoder::clearMergeTable() const {
+    for (int i = 0; i < kMergeTableSize; ++i) {
+        mergeTable_[i] = -1;
+    }
+}
+
 int TcnCtcDecoder::addOrMergeHypothesis(Hypothesis* hyps, int count, int32_t node,
                                         uint32_t lastSymbol, int32_t lastSlot, int32_t letters,
                                         float blankContribution, float nonBlankContribution) const {
-    for (int i = 0; i < count; ++i) {
-        if (hyps[i].node == node && hyps[i].lastSymbol == lastSymbol) {
-            hyps[i].logProbBlank = logSumExp(hyps[i].logProbBlank, blankContribution);
-            hyps[i].logProbNonBlank = logSumExp(hyps[i].logProbNonBlank, nonBlankContribution);
+    uint32_t cell = (static_cast<uint32_t>(node) * 0x9E3779B1u) ^ (lastSymbol * 0x85EBCA6Bu);
+    cell &= static_cast<uint32_t>(kMergeTableSize - 1);
+    for (;;) {
+        const int position = mergeTable_[cell];
+        if (position < 0) {
+            break;
+        }
+        if (hyps[position].node == node && hyps[position].lastSymbol == lastSymbol) {
+            hyps[position].logProbBlank = logSumExp(hyps[position].logProbBlank, blankContribution);
+            hyps[position].logProbNonBlank =
+                logSumExp(hyps[position].logProbNonBlank, nonBlankContribution);
             return count;
         }
+        cell = (cell + 1) & static_cast<uint32_t>(kMergeTableSize - 1);
     }
     if (count >= kMaxBeamWidth * 4) {
         return count;  // dropped: the array is already carrying more than pruneToBeamWidth keeps
     }
     hyps[count] = Hypothesis{node,       lastSymbol,           lastSlot,
                              blankContribution, nonBlankContribution, letters};
+    mergeTable_[cell] = static_cast<int16_t>(count);
     return count + 1;
 }
 
@@ -164,20 +179,26 @@ int TcnCtcDecoder::pruneToBeamWidth(Hypothesis* hyps, int count) const {
     // kMaxBeamWidth*4, so this is at most a few hundred comparisons, cheaper than the bookkeeping
     // a heap would need for a beam this size.
     const int kept = (count < kMaxBeamWidth) ? count : kMaxBeamWidth;
+    float scores[kMaxBeamWidth * 4];
+    for (int i = 0; i < count; ++i) {
+        scores[i] = logSumExp(hyps[i].logProbBlank, hyps[i].logProbNonBlank);
+    }
     for (int i = 0; i < kept; ++i) {
         int best = i;
-        float bestScore = logSumExp(hyps[i].logProbBlank, hyps[i].logProbNonBlank);
+        float bestScore = scores[i];
         for (int j = i + 1; j < count; ++j) {
-            const float score = logSumExp(hyps[j].logProbBlank, hyps[j].logProbNonBlank);
-            if (score > bestScore) {
+            if (scores[j] > bestScore) {
                 best = j;
-                bestScore = score;
+                bestScore = scores[j];
             }
         }
         if (best != i) {
             const Hypothesis tmp = hyps[i];
             hyps[i] = hyps[best];
             hyps[best] = tmp;
+            const float tmpScore = scores[i];
+            scores[i] = scores[best];
+            scores[best] = tmpScore;
         }
     }
     return kept;
@@ -189,6 +210,10 @@ int TcnCtcDecoder::decode(const float* intention, const float* spectral, const P
         return 0;
     }
 
+    for (int slot = 0; slot < keyCount_; ++slot) {
+        slotSymbol_[slot] = trie.symbolFor(geometry_->codeAt(slot));
+    }
+
     Hypothesis* current = beamA_;
     Hypothesis* next = beamB_;
     current[0] = Hypothesis{trie.root(), 0, -1, 0.f, kNegInf};  // empty prefix, probability 1
@@ -198,6 +223,7 @@ int TcnCtcDecoder::decode(const float* intention, const float* spectral, const P
         keyLogProbsFor(spectral + t * TcnEncoder::kSpectralDim, intention[t], keyLogProbs_);
         const float blankLogProb = std::log1p(-(intention[t] > 0.999999f ? 0.999999f : intention[t]));
 
+        clearMergeTable();
         int nextCount = 0;
         for (int i = 0; i < currentCount; ++i) {
             const Hypothesis& h = current[i];
@@ -217,8 +243,7 @@ int TcnCtcDecoder::decode(const float* intention, const float* spectral, const P
 
             // Extend via every key the trie can actually follow from here.
             for (int slot = 0; slot < keyCount_; ++slot) {
-                const uint32_t codePoint = geometry_->codeAt(slot);
-                const int symbol = trie.symbolFor(codePoint);
+                const int symbol = slotSymbol_[slot];
                 if (symbol <= 0) {
                     continue;
                 }

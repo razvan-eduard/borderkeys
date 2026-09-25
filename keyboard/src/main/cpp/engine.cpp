@@ -168,6 +168,10 @@ constexpr float kCompletionPenalty = 0.5f;
 // on itself.
 constexpr float kCorrectionFrequencyFloor = 9.0f;
 
+// How common the stem of a regular inflection has to be to vouch for the inflection, in nats
+// below the pack's own commonest word -- see Engine::vouchesForStem.
+constexpr float kStemFrequencyFloor = 10.5f;
+
 // How many continuations of what was typed may hold strip slots at once. See the filter at the
 // end of suggest() for why a cap and not a price: the continuations are correctly scored, there
 // are simply more of them than the strip has room for, and they arrive as a block that pushes
@@ -182,13 +186,6 @@ constexpr int kMaxShownCompletions = 4;
 // Stupid backoff, factor 0.4 as in the literature. Deterministic and needing no normalisation
 // at runtime, which is the whole reason it is used instead of a smoothed model.
 constexpr float kBackoffLogFactor = -0.9162907f;  // ln(0.4)
-
-// A language that is enabled can never be weighted below this, however badly its suggestions
-// have been doing lately.
-constexpr float kMinLanguageWeight = 0.15f;
-// How fast the acceptance average moves. Low enough that one sentence in the other language
-// does not reorder the whole keyboard.
-constexpr float kWeightAdaptRate = 0.06f;
 
 constexpr float kMaxUserBoost = 3.0f;
 
@@ -252,16 +249,11 @@ static_assert(
 // sources comparable -- and keeps a word typed once from outranking the dictionary.
 constexpr float kUserOnlyLogProb = -8.0f;
 
-// How much evidence a learned word needs before it is offered at all, in effective counts (the
-// raw count times the learning speed). Two, so the balanced default asks for a second use.
-//
-// Not a fourth constant to tune against the other three: it is the same number the settings
-// screen already describes. At the cautious setting's 0.35 multiplier it is reached at six
-// repetitions, which is the "about six" that explanation has always claimed, and at the
-// immediate setting's 3.0 the very first use clears it, which is what "the first time counts"
-// means. The default sits between them at two, and the word is still learned and still listed
-// in the personal dictionary the whole time -- this governs only what reaches the strip.
-constexpr float kMinPersonalEvidence = 2.0f;
+// How often a learned word has to have been written before repetition alone establishes it,
+// in effective counts (the raw count times the learning speed) -- see
+// Engine::personalWordEstablished. At the cautious 0.35 multiplier that is about nine uses; at
+// the immediate 3.0 the first use clears it. A word chosen once is established at any setting.
+constexpr float kMinPersonalEvidence = 3.0f;
 
 /**
  * Smoothing for a personal pair, in observations.
@@ -406,9 +398,12 @@ constexpr float kLanguageDominanceShare = 0.7f;
 // people tap, and nobody reads the fifth.
 constexpr float kGrammarWeight = 0.75f;
 
-// The reserved bigram context for "a sentence began here". Mirrors tools/build_dict.py; it is
-// outside any possible word index, and the hash stores index+1, so it stays inside 32 bits.
-constexpr uint32_t kSentenceStartIndex = 0xFFFFFFFEu;
+// The reserved context for "a sentence began here" -- see NgramModel::kSentenceStartContext.
+constexpr uint32_t kSentenceStartIndex = NgramModel::kSentenceStartContext;
+
+// How many of a context word's successors are scored in full when nothing has been typed:
+// the strongest by their pair value, chosen in one pass over the list.
+constexpr int kSuccessorWalk = 64;
 
 
 // The scale the pack quantises log probabilities on, mirrored from tools/build_pos.py.
@@ -789,7 +784,6 @@ int32_t Engine::loadLanguage(const char* tag, int fd, int64_t offset, int64_t le
         return status;
     }
     packs_[slot].configuredWeight = (weight > 0.0f) ? weight : 1.0f;
-    packs_[slot].adaptiveWeight = packs_[slot].configuredWeight;
     packs_[slot].active = true;
     return kBkdOk;
 }
@@ -834,10 +828,6 @@ void Engine::setActiveLanguages(const char* const* tags, const float* weights, i
         packs_[slot].active = true;
         const float weight = (weights != nullptr && weights[i] > 0.0f) ? weights[i] : 1.0f;
         packs_[slot].configuredWeight = weight;
-        // Adapting from the newly configured weight rather than keeping the old running value:
-        // the user has just said what they want, and last week's acceptance rate is not an
-        // argument against it.
-        packs_[slot].adaptiveWeight = weight;
     }
     // Slots have just been closed, opened and switched on or off, so whichever one the preferred
     // tag named a moment ago is not necessarily the one it names now -- which is exactly why the
@@ -1036,11 +1026,8 @@ void Engine::refreshWeights() {
     for (int i = 0; i < kMaxPacks; ++i) {
         normalisedWeight_[i] = 0.0f;
         if (packs_[i].isOpen() && packs_[i].active) {
-            const float weight = (packs_[i].adaptiveWeight < kMinLanguageWeight)
-                                     ? kMinLanguageWeight
-                                     : packs_[i].adaptiveWeight;
-            normalisedWeight_[i] = weight;
-            weightSum += weight;
+            normalisedWeight_[i] = packs_[i].configuredWeight;
+            weightSum += packs_[i].configuredWeight;
         }
     }
     if (weightSum <= 0.0f) {
@@ -1073,6 +1060,7 @@ int Engine::decodeGesture(const float* xs, const float* ys, const int64_t* ts, i
         decoder = neuralDecoder_.get();
     }
 #endif
+    lastDecodeUsedNeural_ = decoder != gestureDecoder_.get();
 
     Candidate raw[kMaxCandidates];
     const int produced = decoder->decode(xs, ys, ts, count, raw, kMaxCandidates);
@@ -1667,20 +1655,66 @@ void Engine::searchPack(int packIndex, const uint32_t* folded, int foldedLength,
 void Engine::searchNextWord(int packIndex, TopK<Candidate>& heap) {
     const LanguagePack& pack = packs_[packIndex];
     const float weightLog = std::log(normalisedWeight_[packIndex]);
-    const int32_t* const frequent = pack.frequentWords();
-    const int count = pack.frequentWordCount();
+    const int32_t context = contextWord1_[packIndex];
 
     // Nothing has been typed, so there is no prefix to walk and no way to reach the trie. The
-    // candidates are the language's most frequent words, reranked by the n-gram against what
-    // came before -- which is exactly a next-word prediction, restricted to a shortlist.
-    //
-    // The shortlist is the honest limitation: a successor whose unigram frequency is low but
-    // whose bigram after this particular word is high cannot be reached. Fixing that properly
-    // means a successor index in the pack format, which is a format change and belongs with the
-    // work that can measure whether it is worth the bytes.
+    // candidates come from two places: the words the corpus wrote after the context word -- or
+    // opened sentences with, when nothing stands before the cursor -- read from the pack's
+    // successor index, and then the language's most frequent words. Both are scored by the
+    // n-gram against what came before.
+    uint32_t previous = 0;
+    bool listed = false;
+    if (context >= 0) {
+        previous = static_cast<uint32_t>(context);
+        listed = true;
+    } else if (!hasContext1_) {
+        previous = kSentenceStartIndex;
+        listed = true;
+    }
+    if (listed) {
+        // The list is ordered by word, so its strongest pairs are found by one pass over the
+        // values keeping kSuccessorWalk of them; those are then scored in full, trigram and
+        // grammar included.
+        uint32_t first = 0;
+        const uint32_t successors = pack.ngrams().successors(previous, &first);
+        uint32_t kept[kSuccessorWalk];
+        float keptValue[kSuccessorWalk];
+        int keptCount = 0;
+        for (uint32_t i = 0; i < successors; ++i) {
+            const float value = pack.ngrams().successorLogProb(first + i);
+            if (keptCount == kSuccessorWalk && value <= keptValue[keptCount - 1]) {
+                continue;
+            }
+            int position = keptCount;
+            if (keptCount < kSuccessorWalk) {
+                ++keptCount;
+            } else {
+                position = kSuccessorWalk - 1;
+            }
+            while (position > 0 && keptValue[position - 1] < value) {
+                kept[position] = kept[position - 1];
+                keptValue[position] = keptValue[position - 1];
+                --position;
+            }
+            kept[position] = first + i;
+            keptValue[position] = value;
+        }
+        for (int i = 0; i < keptCount; ++i) {
+            const uint32_t wordIndex = pack.ngrams().successorWord(kept[i]);
+            if (wordIndex >= pack.trie().wordCount() ||
+                static_cast<int32_t>(wordIndex) == context) {
+                continue;
+            }
+            const float score = weightLog + contextLogProb(packIndex, wordIndex);
+            offerScoredWord(heap, pack.trie(), packIndex, wordIndex, score);
+        }
+    }
+
+    const int32_t* const frequent = pack.frequentWords();
+    const int count = pack.frequentWordCount();
     for (int i = 0; i < count; ++i) {
         const uint32_t wordIndex = static_cast<uint32_t>(frequent[i]);
-        if (static_cast<int32_t>(wordIndex) == contextWord1_[packIndex]) {
+        if (static_cast<int32_t>(wordIndex) == context) {
             // Not the word that was just written. With no bigram to go on this list is ordered
             // by raw frequency, so the most common word in the language is offered as its own
             // successor: "the" after "the", "și" after "și". It is never what was meant, and it
@@ -1812,6 +1846,14 @@ void Engine::searchUserPhrases(TopK<Candidate>& heap) {
             secondLength == 0) {
             continue;
         }
+        // The same rule a single successor answers to, for both words of the phrase.
+        if (!personalWordEstablished(first[i].entryIndex) && !anyPackKnows(firstText, firstLength)) {
+            continue;
+        }
+        if (!personalWordEstablished(second[0].entryIndex) &&
+            !anyPackKnows(secondText, secondLength)) {
+            continue;
+        }
         const size_t needed = firstLength + 1 + secondLength;
         if (needed + 1 > static_cast<size_t>(kMaxPhraseBytes)) {
             continue;
@@ -1885,10 +1927,38 @@ void Engine::searchUserSuccessors(TopK<Candidate>& heap) {
         const Candidate candidate{Candidate::kUserPack,
                                   static_cast<int32_t>(successors[i].entryIndex), score};
         const char* const text = candidateText(candidate, &textLength);
-        if (text != nullptr && textLength != 0) {
-            offerCandidate(heap, candidate, text, textLength);
+        if (text == nullptr || textLength == 0) {
+            continue;
+        }
+        // The word itself has to be established, or a pack's own.
+        if (!personalWordEstablished(successors[i].entryIndex) && !anyPackKnows(text, textLength)) {
+            continue;
+        }
+        offerCandidate(heap, candidate, text, textLength);
+    }
+}
+
+bool Engine::personalWordEstablished(uint32_t entryIndex) const {
+    if (userModel_.asserted(entryIndex) > 0) {
+        return true;
+    }
+    return static_cast<float>(userModel_.entryCount(entryIndex)) * learningSpeed_ >=
+           kMinPersonalEvidence;
+}
+
+bool Engine::anyPackKnows(const char* text, uint32_t length) const {
+    uint32_t folded[kMaxComposing];
+    const int foldedLength = foldUtf8(text, length, folded, kMaxComposing);
+    if (foldedLength <= 0) {
+        return false;
+    }
+    for (int i = 0; i < kMaxPacks; ++i) {
+        if (packs_[i].isOpen() && packs_[i].active &&
+            packs_[i].trie().lookupFolded(folded, foldedLength) >= 0) {
+            return true;
         }
     }
+    return false;
 }
 
 void Engine::searchUserModel(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap) {
@@ -1905,19 +1975,7 @@ void Engine::searchUserModel(const uint32_t* folded, int foldedLength, TopK<Cand
     const int found =
         userModel_.completions(folded, foldedLength, completions, kMaxUserCompletions);
     for (int i = 0; i < found; ++i) {
-        // Confirmed, not merely seen. A word written once is a word that might have been a
-        // name, a typo, or something quoted out of a message and never wanted again -- and
-        // until today it went straight into the strip and stayed there, because the anchor
-        // below is a fixed value that beats any dictionary word rarer than itself. Typing a
-        // class name once put it above every real word sharing its prefix.
-        //
-        // Measured against the *effective* count, which is the raw count times the learning
-        // speed, so this defers to the setting rather than overruling it: "the first time
-        // counts" (3x) still offers a word written once, the balanced default asks for a
-        // second, and the cautious setting needs about six -- which is what its own
-        // explanation in the settings screen has always promised and, for single words, did
-        // not previously deliver.
-        if (static_cast<float>(completions[i].count) * learningSpeed_ < kMinPersonalEvidence) {
+        if (!personalWordEstablished(completions[i].entryIndex)) {
             continue;
         }
         // Anchored to the language scale rather than to the user model's own totals, then given
@@ -2020,9 +2078,9 @@ constexpr float kPreferredEvidenceMinimum = 3.0f;
 
 // The language being *written*, not the one configured highest.
 //
-// languageEvidence_, because that is what observeContextLanguage actually moves -- adaptiveWeight
-// is the learning path's and configuredWeight is a static setting, and a user with Romanian and
-// English both enabled has them configured equally. Only the text says which they are in.
+// languageEvidence_, because that is what observeContextLanguage actually moves --
+// configuredWeight is a static setting, and a user with Romanian and English both enabled has
+// them configured equally. Only the text says which they are in.
 //
 // Deliberately not dominantPack_, which answers a different question: that one is gated behind
 // the user's language-lock setting, and it is about whether to *restrict the strip* to one
@@ -2098,6 +2156,15 @@ bool Engine::exactSpelling(const char* word, size_t length, int* packOut,
                 !sameSpellingIgnoringCase(candidate, candidateLength, word, length)) {
                 continue;
             }
+            // A name protects only the spelling it is written in. Matching case-insensitively
+            // is what lets "Ca" at the start of a field find "ca", but it also let the name
+            // "Calle" answer for a lower-case "calle" and refuse to correct it to "called".
+            // The converse rule already exists -- autocorrect never trades an ordinary word for
+            // a name -- and a name is no more evidence in this direction than in that one.
+            if (pack.trie().isProperNoun(wordIndex) &&
+                (candidateLength != length || std::memcmp(candidate, word, length) != 0)) {
+                continue;
+            }
             if (packOut != nullptr) {
                 *packOut = index;
             }
@@ -2152,10 +2219,10 @@ int Engine::knownSpelling(const char* word, size_t length, char* out, int outByt
         std::memcpy(out, text, textLength);
         return static_cast<int>(textLength);
     }
-    // The personal dictionary counts. A word this device has learned is a word this device
-    // should not be arguing with -- except in a private field, where it is not consulted at all.
+    // The personal dictionary counts once the word is established. Not consulted at all in a
+    // private field.
     const int32_t entry = personalModelEnabled_ ? userModel_.entryIndexFor(word, length) : -1;
-    if (entry >= 0) {
+    if (entry >= 0 && personalWordEstablished(static_cast<uint32_t>(entry))) {
         uint32_t textLength = 0;
         const char* const text = userModel_.entryText(static_cast<uint32_t>(entry), &textLength);
         if (text != nullptr && textLength > 0 && textLength <= static_cast<uint32_t>(outBytes)) {
@@ -2164,6 +2231,41 @@ int Engine::knownSpelling(const char* word, size_t length, char* out, int outByt
         }
     }
     return 0;
+}
+
+bool Engine::vouchesForStem(const char* word, size_t length) const {
+    if (!created_ || word == nullptr || length == 0) {
+        return false;
+    }
+    uint32_t folded[kMaxComposing];
+    const int foldedLength = foldUtf8(word, length, folded, kMaxComposing);
+    if (foldedLength <= 0) {
+        return false;
+    }
+    for (int i = 0; i < kMaxPacks; ++i) {
+        const LanguagePack& pack = packs_[i];
+        if (!pack.isOpen() || !pack.active) {
+            continue;
+        }
+        const int32_t index = pack.trie().lookupFolded(folded, foldedLength);
+        if (index < 0 || pack.trie().isProperNoun(static_cast<uint32_t>(index))) {
+            continue;
+        }
+        if (pack.frequentWordCount() <= 0) {
+            return true;
+        }
+        const float commonest =
+            pack.trie().unigramLogProb(static_cast<uint32_t>(pack.frequentWords()[0]));
+        if (pack.trie().unigramLogProb(static_cast<uint32_t>(index)) >=
+            commonest - kStemFrequencyFloor) {
+            return true;
+        }
+    }
+    if (!personalModelEnabled_) {
+        return false;
+    }
+    const int32_t entry = userModel_.entryIndexFor(word, length);
+    return entry >= 0 && personalWordEstablished(static_cast<uint32_t>(entry));
 }
 
 int Engine::candidateForPack(int packIndex, const char* word, size_t wordLength, char* out,
@@ -2365,7 +2467,7 @@ bool Engine::continuesTyped(const Candidate& candidate, const uint32_t* folded,
 
 void Engine::learn(const char* word, size_t wordLength, const char* previous1,
                    size_t previous1Length, const char* previous2, size_t previous2Length,
-                   bool deliberateCapital) {
+                   bool deliberateCapital, bool asserted) {
     if (!created_ || word == nullptr || wordLength == 0) {
         return;
     }
@@ -2378,7 +2480,7 @@ void Engine::learn(const char* word, size_t wordLength, const char* previous1,
     // the scorer prefer the more specific evidence when there is any and fall back when there
     // is not, which is the same shape the language pack's own n-grams use.
 
-    const int32_t wordIndex = userModel_.learn(word, wordLength, deliberateCapital);
+    const int32_t wordIndex = userModel_.learn(word, wordLength, deliberateCapital, asserted);
     if (previous1 != nullptr && previous1Length > 0) {
         const int32_t index1 = userModel_.entryIndexFor(previous1, previous1Length);
         userModel_.learnBigram(index1, wordIndex);
@@ -2387,53 +2489,15 @@ void Engine::learn(const char* word, size_t wordLength, const char* previous1,
             userModel_.learnTrigram(index2, index1, wordIndex);
         }
     }
-
-    // Language weight adaptation. Which packs contain the confirmed word is the only signal
-    // available without asking the user which language they are writing in, and it is a good
-    // one: the word they actually chose came from somewhere.
-    uint32_t folded[kMaxComposing];
-    const int foldedLength = foldUtf8(word, wordLength, folded, kMaxComposing);
-    if (foldedLength <= 0) {
-        return;
-    }
-    bool known[kMaxPacks] = {};
-    bool anyKnown = false;
-    for (int i = 0; i < kMaxPacks; ++i) {
-        if (packs_[i].isOpen() && packs_[i].active) {
-            known[i] = packs_[i].trie().lookupFolded(folded, foldedLength) >= 0;
-            anyKnown = anyKnown || known[i];
-        }
-    }
-    if (!anyKnown) {
-        // A word no active language knows says nothing about which language is being written;
-        // it goes into the personal dictionary above and changes no weights.
-        return;
-    }
-    for (int i = 0; i < kMaxPacks; ++i) {
-        if (!packs_[i].isOpen() || !packs_[i].active) {
-            continue;
-        }
-        const float target = known[i] ? 1.0f : 0.0f;
-        float updated = packs_[i].adaptiveWeight +
-                        kWeightAdaptRate * (target * packs_[i].configuredWeight -
-                                            packs_[i].adaptiveWeight);
-        const float floorValue = kMinLanguageWeight * packs_[i].configuredWeight;
-        if (updated < floorValue) {
-            updated = floorValue;
-        }
-        if (updated > packs_[i].configuredWeight) {
-            updated = packs_[i].configuredWeight;
-        }
-        packs_[i].adaptiveWeight = updated;
-    }
 }
 
 void Engine::loadUserWords(const char* const* words, const size_t* lengths,
-                           const int32_t* counts, int count, const int32_t* deliberateCapitals) {
+                           const int32_t* counts, int count, const int32_t* deliberateCapitals,
+                           const int32_t* asserted) {
     if (!created_) {
         return;
     }
-    userModel_.bulkLoad(words, lengths, counts, count, deliberateCapitals);
+    userModel_.bulkLoad(words, lengths, counts, count, deliberateCapitals, asserted);
 }
 
 void Engine::loadUserBigrams(const char* const* previous, const size_t* previousLengths,

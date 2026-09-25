@@ -18,6 +18,7 @@ import com.borderkeys.i18n.Keys
 enum class Screen(val titleKey: String) {
     Home(Keys.SCREEN_BORDERKEYS),
     Setup(Keys.SCREEN_SET_UP),
+    Features(Keys.FEATURES_TITLE),
     Languages(Keys.SCREEN_LANGUAGES),
     Layout(Keys.SCREEN_LAYOUT),
     Theme(Keys.SCREEN_THEME),

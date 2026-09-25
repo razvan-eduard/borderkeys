@@ -5,6 +5,8 @@ package com.borderkeys.predict
 
 import com.borderkeys.ime.AutoCorrection
 import org.junit.AfterClass
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.BeforeClass
 import org.junit.Test
@@ -42,10 +44,10 @@ class PipelineTest {
             when {
                 committed != case.committed ->
                     "  ${case.typed}: expected ${describe(case.committed)}, " +
-                        "committed ${describe(committed)}  [${outcome.situation}]"
-                outcome.situation.name != case.situation ->
+                        "committed ${describe(committed)}  [${outcome.reason}]"
+                outcome.reason != case.situation ->
                     "  ${case.typed}: right answer for the wrong reason -- expected " +
-                        "${case.situation}, was ${outcome.situation}"
+                        "${case.situation}, was ${outcome.reason}"
                 else -> null
             }
         }
@@ -64,7 +66,7 @@ class PipelineTest {
         val changed = outcomes.filter { it.committed != null }
         assertTrue(
             "nothing in this phrase needs correcting, but " +
-                changed.joinToString { "${it.typed} -> ${it.committed} [${it.situation}]" },
+                changed.joinToString { "${it.typed} -> ${it.committed} [${it.reason}]" },
             changed.isEmpty(),
         )
     }
@@ -82,10 +84,10 @@ class PipelineTest {
                 when {
                     outcome.committed != case.committed ->
                         "  ${case.typed}: expected ${describe(case.committed)}, " +
-                            "committed ${describe(outcome.committed)}  [${outcome.situation}]"
-                    outcome.situation.name != case.situation ->
+                            "committed ${describe(outcome.committed)}  [${outcome.reason}]"
+                    outcome.reason != case.situation ->
                         "  ${case.typed}: right answer for the wrong reason -- expected " +
-                            "${case.situation}, was ${outcome.situation}"
+                            "${case.situation}, was ${outcome.reason}"
                     else -> null
                 }
             }
@@ -94,6 +96,50 @@ class PipelineTest {
         } finally {
             romanian.close()
         }
+    }
+
+    /**
+     * A word the personal dictionary holds counts as a known word only once established:
+     * chosen on purpose, or written often enough.
+     */
+    @Test
+    fun `a typo typed past twice is still corrected, a word chosen once is not`() {
+        Pipeline.require()
+        val own = Pipeline.open("en-US")
+        try {
+            own.learn("teh", times = 2)
+            val twice = own.commit("teh")
+            assertEquals("the", twice.committed)
+            assertEquals(AutoCorrection.Situation.Correctable.name, twice.reason)
+
+            own.learn("teh", asserted = true)
+            val chosen = own.commit("teh")
+            assertNull(chosen.committed)
+            assertEquals(AutoCorrection.Situation.KnownWord.name, chosen.reason)
+        } finally {
+            own.close()
+        }
+    }
+
+    /**
+     * With nothing typed, the pack's successor index is walked before the frequent shortlist,
+     * so a strong successor that is itself a rare word is offered.
+     */
+    @Test
+    fun `a successor outside the frequent shortlist is predicted after its context`() {
+        Pipeline.require()
+        val pairs = listOf(
+            "ice" to "cream", "peanut" to "butter", "human" to "rights", "united" to "kingdom",
+        )
+        val failures = pairs.mapNotNull { (previous, expected) ->
+            val strip = pipeline.strip("", previous).take(5)
+            if (expected in strip) null else "  after \"$previous\": expected \"$expected\" in $strip"
+        }
+        assertTrue(
+            "${failures.size} of ${pairs.size} successors were not predicted:\n" +
+                failures.joinToString("\n"),
+            failures.isEmpty(),
+        )
     }
 
     private fun describe(text: String?) = text ?: "nothing"
@@ -115,9 +161,9 @@ class PipelineTest {
             val outcome = pipeline.commit(typed, minimumLength = 5)
             when {
                 outcome.committed != null ->
-                    "  $typed: committed ${outcome.committed}  [${outcome.situation}]"
-                outcome.situation != AutoCorrection.Situation.TooShort ->
-                    "  $typed: expected TooShort, was ${outcome.situation}"
+                    "  $typed: committed ${outcome.committed}  [${outcome.reason}]"
+                outcome.reason != AutoCorrection.Situation.TooShort.name ->
+                    "  $typed: expected TooShort, was ${outcome.reason}"
                 else -> null
             }
         }
@@ -164,7 +210,7 @@ class PipelineTest {
                 val outcome = engine.commit(capitalised)
                 if (outcome.committed != expected) {
                     "  $capitalised: expected ${describe(expected)}, " +
-                        "committed ${describe(outcome.committed)}  [${outcome.situation}]"
+                        "committed ${describe(outcome.committed)}  [${outcome.reason}]"
                 } else {
                     null
                 }

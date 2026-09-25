@@ -358,7 +358,7 @@ jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composin
 }
 
 void nativeLearn(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word, jstring prev1,
-                 jstring prev2, jboolean deliberateCapital) {
+                 jstring prev2, jboolean deliberateCapital, jboolean asserted) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr) {
         return;
@@ -384,7 +384,8 @@ void nativeLearn(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word, jstr
 
     engine->learn(wordBuffer, static_cast<size_t>(wordLength), prev1Buffer,
                   static_cast<size_t>(prev1Length), prev2Buffer,
-                  static_cast<size_t>(prev2Length), deliberateCapital == JNI_TRUE);
+                  static_cast<size_t>(prev2Length), deliberateCapital == JNI_TRUE,
+                  asserted == JNI_TRUE);
 }
 
 /**
@@ -597,6 +598,77 @@ jstring nativePossessive(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring wo
     return env->NewStringUTF(possessive);
 }
 
+/** The score of `candidate` as an answer to `typed`, term by term, as text -- see
+ *  Engine::explainScore. Null when the word is not offered for the input at all. */
+jstring nativeExplainScore(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring typed,
+                           jstring candidate) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || typed == nullptr || candidate == nullptr) {
+        return nullptr;
+    }
+    char typedBuffer[kStringBufferBytes];
+    char candidateBuffer[kStringBufferBytes];
+    jsize typedLength = copyString(env, typed, typedBuffer, sizeof(typedBuffer));
+    if (typedLength < 0) {
+        typedBuffer[0] = '\0';
+        typedLength = 0;
+    }
+    const jsize candidateLength =
+        copyString(env, candidate, candidateBuffer, sizeof(candidateBuffer));
+    if (candidateLength <= 0) {
+        return nullptr;
+    }
+    Engine::ScoreParts parts;
+    if (!engine->explainScore(typedBuffer, static_cast<size_t>(typedLength), candidateBuffer,
+                              static_cast<size_t>(candidateLength), &parts)) {
+        return nullptr;
+    }
+    char text[512];
+    std::snprintf(text, sizeof(text),
+                  "'%s' \xe2\x86\x92 '%s'\n"
+                  "rank %d \xc2\xb7 pack %d \xc2\xb7 edits %d \xc2\xb7 added %d\n"
+                  "language model %+.3f\n"
+                  "pack weight %+.3f\n"
+                  "personal %+.3f\n"
+                  "edit + completion %+.3f\n"
+                  "total %+.3f",
+                  typedBuffer, candidateBuffer, parts.rank + 1, parts.packIndex,
+                  parts.editDistance, parts.addedCharacters, parts.languageModel,
+                  parts.packWeight, parts.personal, parts.rest, parts.total);
+    return env->NewStringUTF(text);
+}
+
+/** Which of `stems` the engine vouches for -- see Engine::vouchesForStem. At most
+ *  kMaxStemsQuery. */
+jint nativeKnownStems(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray words,
+                      jbooleanArray outKnown) {
+    constexpr jsize kMaxStemsQuery = 64;
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || words == nullptr || outKnown == nullptr) {
+        return 0;
+    }
+    const jsize count = env->GetArrayLength(words);
+    if (count <= 0 || count > kMaxStemsQuery || env->GetArrayLength(outKnown) < count) {
+        return 0;
+    }
+    jboolean flags[kMaxStemsQuery];
+    jint known = 0;
+    for (jsize i = 0; i < count; ++i) {
+        jstring value = static_cast<jstring>(env->GetObjectArrayElement(words, i));
+        char buffer[kStringBufferBytes];
+        const jsize length = copyString(env, value, buffer, sizeof(buffer));
+        if (value != nullptr) {
+            env->DeleteLocalRef(value);
+        }
+        flags[i] = (length > 0 && engine->vouchesForStem(buffer, static_cast<size_t>(length)))
+            ? JNI_TRUE
+            : JNI_FALSE;
+        known += (flags[i] == JNI_TRUE) ? 1 : 0;
+    }
+    env->SetBooleanArrayRegion(outKnown, 0, count, flags);
+    return known;
+}
+
 jstring nativeKnownSpelling(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || word == nullptr) {
@@ -700,6 +772,11 @@ jboolean nativeLoadSwipeWeights(JNIEnv* env, jobject /*thiz*/, jlong handle, jby
  * Turning it off frees tier B's weights, so this is not merely a flag -- see
  * Engine::setSwipeModelEnabled.
  */
+jboolean nativeLastDecodeUsedNeural(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+    Engine* const engine = engineFrom(handle);
+    return (engine != nullptr && engine->lastDecodeUsedNeural()) ? JNI_TRUE : JNI_FALSE;
+}
+
 void nativeSetSwipeModelEnabled(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
                                 jboolean enabled) {
     Engine* const engine = engineFrom(handle);
@@ -810,23 +887,24 @@ void nativeLoadUserBigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectA
 }
 
 void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray words,
-                         jintArray counts, jintArray deliberateCapitals) {
+                         jintArray counts, jintArray deliberateCapitals, jintArray asserted) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || words == nullptr || counts == nullptr ||
-        deliberateCapitals == nullptr) {
+        deliberateCapitals == nullptr || asserted == nullptr) {
         return;
     }
     const jsize wordCount = env->GetArrayLength(words);
     const jsize countLength = env->GetArrayLength(counts);
     const jsize capsLength = env->GetArrayLength(deliberateCapitals);
+    const jsize assertedLength = env->GetArrayLength(asserted);
     // An empty list is a load too: the model replaces what it holds with what it is given, so
     // this is how forgetting the last remembered word reaches the engine.
     if (wordCount == 0) {
-        engine->loadUserWords(nullptr, nullptr, nullptr, 0, nullptr);
+        engine->loadUserWords(nullptr, nullptr, nullptr, 0, nullptr, nullptr);
         return;
     }
     if (wordCount < 0 || countLength < wordCount || capsLength < wordCount ||
-        wordCount > kMaxUserWordsPerCall) {
+        assertedLength < wordCount || wordCount > kMaxUserWordsPerCall) {
         return;
     }
 
@@ -836,7 +914,9 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
     StringColumn column(wordCount);
     Int32Column countValues(wordCount);
     Int32Column capsValues(wordCount);
-    if (!column.valid() || !countValues.valid() || !capsValues.valid()) {
+    Int32Column assertedValues(wordCount);
+    if (!column.valid() || !countValues.valid() || !capsValues.valid() ||
+        !assertedValues.valid()) {
         return;
     }
 
@@ -851,16 +931,23 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
         env->ExceptionClear();
         return;
     }
+    env->GetIntArrayRegion(asserted, 0, wordCount,
+                           reinterpret_cast<jint*>(assertedValues.data()));
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        env->ExceptionClear();
+        return;
+    }
 
     // Compacted rather than left with gaps at their original index the way the bigram and
     // trigram loaders' shared copyStringArray does: a dropped word here has no paired count of
     // its own to drop alongside it the way a dropped bigram/trigram column entry does, so the
     // count at the same index has to move down with whichever word survived, not stay behind.
-    // deliberateCapitals moves with it for the same reason.
+    // deliberateCapitals and asserted move with it for the same reason.
     char** const storage = column.data();
     size_t* const lengths = column.lengths();
     int32_t* const counts32 = countValues.data();
     int32_t* const caps32 = capsValues.data();
+    int32_t* const asserted32 = assertedValues.data();
     jsize kept = 0;
     for (jsize i = 0; i < wordCount; ++i) {
         jstring value = static_cast<jstring>(env->GetObjectArrayElement(words, i));
@@ -883,10 +970,12 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
         lengths[kept] = static_cast<size_t>(length);
         counts32[kept] = counts32[i];
         caps32[kept] = caps32[i];
+        asserted32[kept] = asserted32[i];
         ++kept;
     }
 
-    engine->loadUserWords(storage, lengths, counts32, static_cast<int>(kept), caps32);
+    engine->loadUserWords(storage, lengths, counts32, static_cast<int>(kept), caps32,
+                          asserted32);
 }
 
 jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArray xs,
@@ -1015,9 +1104,9 @@ const JNINativeMethod kMethods[] = {
     {"nativeSuggest",
      "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F[Z[I)I",
      reinterpret_cast<void*>(nativeSuggest)},
-    {"nativeLearn", "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V",
+    {"nativeLearn", "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZ)V",
      reinterpret_cast<void*>(nativeLearn)},
-    {"nativeLoadUserWords", "(J[Ljava/lang/String;[I[I)V",
+    {"nativeLoadUserWords", "(J[Ljava/lang/String;[I[I[I)V",
      reinterpret_cast<void*>(nativeLoadUserWords)},
     {"nativeLoadUserBigrams", "(J[Ljava/lang/String;[Ljava/lang/String;[I)V",
      reinterpret_cast<void*>(nativeLoadUserBigrams)},
@@ -1036,11 +1125,17 @@ const JNINativeMethod kMethods[] = {
     {"nativeLoadSwipeWeights", "(J[B)Z", reinterpret_cast<void*>(nativeLoadSwipeWeights)},
     {"nativeSetSwipeModelEnabled", "(JZ)V",
      reinterpret_cast<void*>(nativeSetSwipeModelEnabled)},
+    {"nativeLastDecodeUsedNeural", "(J)Z",
+     reinterpret_cast<void*>(nativeLastDecodeUsedNeural)},
     {"nativeWarmSwipeModel", "(J)Z", reinterpret_cast<void*>(nativeWarmSwipeModel)},
     {"nativeBestCorrection", "(J[Z)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeBestCorrection)},
     {"nativePossessive", "(JLjava/lang/String;)Ljava/lang/String;",
      reinterpret_cast<void*>(nativePossessive)},
+    {"nativeKnownStems", "(J[Ljava/lang/String;[Z)I",
+     reinterpret_cast<void*>(nativeKnownStems)},
+    {"nativeExplainScore", "(JLjava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+     reinterpret_cast<void*>(nativeExplainScore)},
     {"nativeKnownSpelling", "(JLjava/lang/String;)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeKnownSpelling)},
     {"nativeLoadUserTrigrams",

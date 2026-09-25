@@ -274,7 +274,7 @@ fun rememberParticleEffectsUpdater(): ((ParticleEffectsSettings) -> ParticleEffe
  * rather than typed out again per screen: the logic is the same list regardless of what the ids
  * in it happen to mean.
  */
-fun move(ids: List<Int>, from: Int, to: Int): List<Int> {
+fun <T> move(ids: List<T>, from: Int, to: Int): List<T> {
     if (from !in ids.indices) {
         return ids
     }
@@ -282,6 +282,68 @@ fun move(ids: List<Int>, from: Int, to: Int): List<Int> {
     val mutable = ids.toMutableList()
     mutable.add(target, mutable.removeAt(from))
     return mutable
+}
+
+/**
+ * One entry of a list a person orders: its label, an optional icon, and either the three
+ * ordering controls -- to the top, one up, remove -- or, with [onAdd], a whole row that adds
+ * it. Shared by every such list in the settings; what the entries are is the caller's.
+ */
+@Composable
+fun ReorderRow(
+    label: String,
+    index: Int,
+    icon: Int? = null,
+    onMoveTop: () -> Unit = {},
+    onMoveUp: () -> Unit = {},
+    onRemove: () -> Unit = {},
+    onAdd: (() -> Unit)? = null,
+) {
+    val strings = LocalStrings.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onAdd != null) Modifier.clickable(onClick = onAdd) else Modifier)
+            .padding(horizontal = 20.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f).padding(start = if (icon != null) 16.dp else 0.dp),
+        )
+        if (onAdd == null) {
+            IconButton(onClick = onMoveTop, enabled = index > 0, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    painter = painterResource(R.drawable.bk_reorder_top),
+                    contentDescription = strings[Keys.QUICK_MOVE_TOP],
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            IconButton(onClick = onMoveUp, enabled = index > 0, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    painter = painterResource(R.drawable.bk_reorder_up),
+                    contentDescription = strings[Keys.QUICK_MOVE_UP],
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    painter = painterResource(R.drawable.bk_reorder_remove),
+                    contentDescription = strings[Keys.QUICK_REMOVE],
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+    }
 }
 
 /**

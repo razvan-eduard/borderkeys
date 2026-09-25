@@ -31,7 +31,7 @@ class TwoLanguagePipelineTest {
         pipeline.commitPhrase("vad prea medicamentul doare stomacul pastile trebuia")
         val outcome = pipeline.commit("daca", previous = "doare")
         assertEquals(
-            "daca committed ${outcome.committed} [${outcome.situation}]",
+            "daca committed ${outcome.committed} [${outcome.reason}]",
             "dacă", outcome.committed,
         )
     }
@@ -43,7 +43,7 @@ class TwoLanguagePipelineTest {
         // "ca" is a Romanian word in its own right, whatever English thinks of it.
         val outcome = pipeline.commit("ca", previous = "doare")
         assertTrue(
-            "ca must not be rewritten: committed ${outcome.committed} [${outcome.situation}]",
+            "ca must not be rewritten: committed ${outcome.committed} [${outcome.reason}]",
             outcome.committed == null || outcome.committed == "ca",
         )
     }

@@ -109,7 +109,6 @@ public:
     // used rarely decays to nothing and can never recover, which the user experiences as the
     // keyboard having silently forgotten a language they never disabled.
     float configuredWeight = 1.0f;
-    float adaptiveWeight = 1.0f;
 
 private:
     void buildFrequentList();
@@ -177,6 +176,13 @@ public:
      */
     int knownSpelling(const char* word, size_t length, char* out, int outBytes) const;
 
+    /**
+     * Whether `word` may stand as the stem of a regular inflection: an active pack holds it
+     * folded, not as a name, within kStemFrequencyFloor of the pack's commonest word -- or the
+     * personal dictionary holds it established.
+     */
+    bool vouchesForStem(const char* word, size_t length) const;
+
     /** The one language weighted above every other, or -1 when none is. */
     int preferredPack() const;
 
@@ -232,6 +238,9 @@ public:
 
     const char* gestureDecoderName() const;
 
+    /** Whether the last [decodeGesture] went through the neural decoder. */
+    bool lastDecodeUsedNeural() const { return lastDecodeUsedNeural_; }
+
     /**
      * Loads tier B's trained weights, building the decoder to hold them if it is not there yet.
      * `plus`-only: a no-op that always returns false when this library was built without
@@ -271,12 +280,18 @@ public:
     float contextLogProb(int packIndex, uint32_t wordIndex) const override;
     float userBoost(const char* text, uint32_t length) const override;
 
+    /**
+     * Records a committed word, and the pair and triple it makes with the words before it.
+     * [deliberateCapital] and [asserted] are UserModel::learn's -- see [personalWordEstablished]
+     * for what the second one gates.
+     */
     void learn(const char* word, size_t wordLength, const char* previous1,
                size_t previous1Length, const char* previous2, size_t previous2Length,
-               bool deliberateCapital = false);
+               bool deliberateCapital = false, bool asserted = false);
 
     void loadUserWords(const char* const* words, const size_t* lengths, const int32_t* counts,
-                       int count, const int32_t* deliberateCapitals = nullptr);
+                       int count, const int32_t* deliberateCapitals = nullptr,
+                       const int32_t* asserted = nullptr);
 
     /** Replaces the remembered word pairs. Called right after [loadUserWords], from the same
      *  database read, so both halves of a pair are already known words. */
@@ -458,6 +473,17 @@ private:
     void searchUserModel(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap);
 
     /**
+     * Whether a personal-dictionary entry has been chosen on purpose at least once, or written
+     * kMinPersonalEvidence effective times. Only an established word is offered from the
+     * personal model, only an established word tells knownSpelling it is a word, and only an
+     * established word -- or one a pack holds anyway -- is predicted as a successor.
+     */
+    bool personalWordEstablished(uint32_t entryIndex) const;
+
+    /** Whether any active pack holds this text, folded. */
+    bool anyPackKnows(const char* text, uint32_t length) const;
+
+    /**
      * Offers the words this person has been seen to write after the current context word.
      *
      * Only for the empty prefix: this is the "what comes next" case, where there is nothing to
@@ -613,6 +639,9 @@ private:
      */
     std::unique_ptr<TcnDecoder> neuralDecoder_;
     bool neuralEnabled_ = false;
+#endif
+    bool lastDecodeUsedNeural_ = false;
+#ifdef BORDERKEYS_NEURAL_SWIPE
 #endif
     UserModel userModel_;
     Arena arena_;

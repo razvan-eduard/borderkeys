@@ -12,7 +12,7 @@ keyboard's suggestions is the quality of those counts.
 The six dictionaries that ship with the application (`en_US`, `ro_RO`, `de_DE`, `es_ES`, `fr_FR`,
 `it_IT`) are built from combined Wortschatz Leipzig corpora (wikipedia, news, and newscrawl
 together, not one genre alone -- a single-genre cut was found to be missing everyday words) via
-`tools/make_pack.py --corpus`, some 97,000 to 127,000 words each once the names are merged in.
+`tools/make_pack.py --corpus`, some 100,000 to 128,000 words each once the names are merged in.
 What each one actually used, and its
 licence, is recorded in `docs/licensing.md` section 2 rather than here, so there is one place to
 check rather than two that can disagree. This document is about replacing or adding to them, not
@@ -118,10 +118,11 @@ taking it off an overlay changes nothing.
 
 ## Size
 
-`--max-words` defaults to 120,000 and `--min-count` to 3. A 120,000-word pack with 200,000
-n-grams is a few megabytes -- what the six bundled dictionaries actually are, one to a few
-megabytes each. Larger than that, built from a bigger or less aggressively cut corpus, belongs on
-the device as an imported pack rather than bundled into every install of the application.
+`--max-words` defaults to 120,000 and `--min-count` to 3. The six bundled packs are 12.7 to
+14.6 MB each, the trie and its text a few megabytes of that and the pairs and triples the rest:
+pairs as a successor index of five bytes per pair, triples as a hash table. Larger than that,
+built from a bigger or less aggressively cut corpus, belongs on the device as an imported pack
+rather than bundled into every install of the application.
 
 ## Names
 

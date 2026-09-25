@@ -26,6 +26,24 @@ class SuggestionRowTest {
         map { if (it.text == correction) it.copy(isCorrection = true) else it }
 
     @Test
+    fun `the word a correction replaced leads the row while it can be put back`() {
+        val shown = row.arrange(words("the", "and", "of"), typed = "", limit = 3,
+                                correction = null, revertable = "teh")
+
+        assertEquals(listOf("teh", "the", "and"), shown.map { it.text })
+        assertEquals(0, row.typedIndex)
+        assertEquals(-1, row.appliedIndex)
+    }
+
+    @Test
+    fun `a word in progress outranks the one a correction replaced`() {
+        val shown = row.arrange(words("there", "they"), typed = "th", limit = 3,
+                                correction = null, revertable = "teh")
+
+        assertEquals(listOf("th", "there", "they"), shown.map { it.text })
+    }
+
+    @Test
     fun `the typed word leads the row even when the engine did not offer it`() {
         val words = words("dacă", "daca ce", "dar").marking("dacă")
         val shown = row.arrange(words, typed = "daca", limit = 3, correction = "dacă")

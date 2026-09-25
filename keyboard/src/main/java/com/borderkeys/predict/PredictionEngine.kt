@@ -9,10 +9,12 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.Process
 import android.os.Trace
+import com.borderkeys.data.KeyboardStats
 import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserWord
+import com.borderkeys.ime.WordStems
 
 /**
  * Owns the native engine, the thread it runs on, and the rule that the UI never waits for it.
@@ -68,6 +70,7 @@ class PredictionEngine(
             knownWord: String,
             query: String,
             possessive: String?,
+            inflection: Boolean,
         )
 
         /**
@@ -86,6 +89,15 @@ class PredictionEngine(
 
     var listener: ResultListener? = null
 
+    /** How long the engine took over the last swipe, in microseconds. Read after the answer. */
+    @Volatile
+    var lastGestureDecodeMicros: Long = 0L
+
+    /** Whether the last gesture decode went through the neural decoder. */
+    @Volatile
+    var lastGestureUsedNeural: Boolean = false
+        private set
+
     private val lock = Any()
     private var handle: Long = 0L
     private var released = false
@@ -101,10 +113,16 @@ class PredictionEngine(
     /** Autocorrect's own answer for the request being served -- see Engine::bestCorrection for
      *  why it is not simply the first entry of the strip's own ranking. */
     private var nativePossessive: String? = null
+
+    /** [WordStems.shields]'s answer for the query and the correction being served. */
+    private var nativeInflection = false
+
+    /** The tags handed to [setActiveLanguages], read on the worker for [WordStems]. */
+    private var activeTags: List<String> = emptyList()
     private var nativeCorrection: String? = null
     private var nativeCorrectionIsName = false
 
-    /** [nativeCorrectionIndex]'s value for the answer being published, under resultLock. */
+    /** [searchCorrectionIndex]'s value for the answer being published, under resultLock. */
     private var nativeCorrectionAt = -1
 
     /** The composing text the current [nativeKnownWord]/[nativeCount] answer is about. */
@@ -112,17 +130,24 @@ class PredictionEngine(
 
     // Written by the prediction thread, copied out by the UI thread under [resultLock]. Both
     // are allocated once: the suggestion path may not allocate per keystroke, and JNI fills
-    // these in place.
+    // these in place. The search itself writes the prediction thread's own scratch below and
+    // never these, so the lock is held for a copy of sixteen entries and never for a search.
     private val resultLock = Any()
     private val nativeWords = arrayOfNulls<String>(MAX_RESULTS)
     private val nativeScores = FloatArray(MAX_RESULTS)
     private val nativeProperNoun = BooleanArray(MAX_RESULTS)
+    private var nativeCount = 0
 
-    /** Which entry of [nativeWords] the corrections heap settled on, or -1 when it settled on a
+    // The prediction thread's scratch: JNI fills these, without any lock, and the answer is
+    // copied into the shared buffers above under [resultLock] once it is complete.
+    private val searchWords = arrayOfNulls<String>(MAX_RESULTS)
+    private val searchScores = FloatArray(MAX_RESULTS)
+    private val searchProperNoun = BooleanArray(MAX_RESULTS)
+
+    /** Which entry of [searchWords] the corrections heap settled on, or -1 when it settled on a
      *  word the ranking does not carry. Filled by nativeSuggest, by pack and word index rather
      *  than by comparing text. */
-    private val nativeCorrectionIndex = IntArray(1)
-    private var nativeCount = 0
+    private val searchCorrectionIndex = IntArray(1)
 
 
     private val blocked = HashSet<String>()
@@ -154,6 +179,11 @@ class PredictionEngine(
     private val gestureNativeProperNoun = BooleanArray(MAX_RESULTS)
 
     private var gestureNativeCount = 0
+
+    // The decode's own scratch, filled without a lock and copied under [gestureResultLock].
+    private val decodeWords = arrayOfNulls<String>(MAX_RESULTS)
+    private val decodeScores = FloatArray(MAX_RESULTS)
+    private val decodeProperNoun = BooleanArray(MAX_RESULTS)
 
     /** Same rule and same thread as [previewGeneration]: a decode that answers after the field
      *  changed, or after the service cancelled, is dropped rather than composed into the new
@@ -249,9 +279,13 @@ class PredictionEngine(
 
     // ---- configuration, all off the UI thread ------------------------------------------------
 
+    /** Milliseconds spent loading packs since the last activation, published by it. */
+    private var pendingPackLoadMillis = 0L
+
     fun loadLanguage(tag: String, descriptor: AssetFileDescriptor, weight: Float) {
         worker.post {
             withHandle(Unit) { current ->
+                val started = android.os.SystemClock.elapsedRealtime()
                 val status = NativePredictor.nativeLoadLanguage(
                     current, tag,
                     descriptor.parcelFileDescriptor.fd,
@@ -259,6 +293,7 @@ class PredictionEngine(
                     descriptor.length,
                     weight,
                 )
+                pendingPackLoadMillis += android.os.SystemClock.elapsedRealtime() - started
                 // The mapping keeps the file alive on its own, so the descriptor is ours to
                 // close either way; leaving it open would leak one per language pack.
                 runCatching { descriptor.close() }
@@ -274,11 +309,40 @@ class PredictionEngine(
         private set
 
     fun setActiveLanguages(tags: Array<String>, weights: FloatArray) {
+        val active = tags.toList()
         worker.post {
+            activeTags = active
+            val started = android.os.SystemClock.elapsedRealtime()
             withHandle(Unit) { current ->
                 NativePredictor.nativeSetActiveLanguages(current, tags, weights)
             }
+            KeyboardStats.packLoadMillis =
+                pendingPackLoadMillis + android.os.SystemClock.elapsedRealtime() - started
+            pendingPackLoadMillis = 0L
         }
+    }
+
+    /**
+     * Whether [query] is a regular inflection of a word the engine holds that [correction] is
+     * not built on -- see [WordStems]. Asked on the worker, beside the answer it belongs to.
+     */
+    private fun inflectionOf(query: String, correction: String?): Boolean {
+        if (correction == null) {
+            return false
+        }
+        val stems = WordStems.candidates(query, activeTags).take(NativePredictor.MAX_STEMS_QUERY)
+        if (stems.isEmpty()) {
+            return false
+        }
+        val known = BooleanArray(stems.size)
+        val found = withHandle(0) { current ->
+            NativePredictor.nativeKnownStems(current, stems.toTypedArray(), known)
+        }
+        if (found == 0) {
+            return false
+        }
+        val knownStems = stems.filterIndexed { index, _ -> known[index] }.toSet()
+        return WordStems.shields(query, correction, knownStems, activeTags)
     }
 
     /**
@@ -316,9 +380,12 @@ class PredictionEngine(
         val texts = Array(words.size) { words[it].word }
         val counts = IntArray(words.size) { words[it].count }
         val deliberateCapitals = IntArray(words.size) { words[it].deliberateCapitals }
+        val asserted = IntArray(words.size) { words[it].asserted }
         worker.post {
             withHandle(Unit) { current ->
-                NativePredictor.nativeLoadUserWords(current, texts, counts, deliberateCapitals)
+                NativePredictor.nativeLoadUserWords(
+                    current, texts, counts, deliberateCapitals, asserted,
+                )
             }
         }
     }
@@ -535,6 +602,17 @@ class PredictionEngine(
         }
     }
 
+    /** Asks the engine why [candidate] scores as it does for [typed]; the text, or null when
+     *  the word is not offered at all, arrives on the UI thread. */
+    fun explain(typed: String, candidate: String, onResult: (String?) -> Unit) {
+        worker.post {
+            val text = withHandle<String?>(null) { current ->
+                NativePredictor.nativeExplainScore(current, typed, candidate)
+            }
+            mainHandler.post { onResult(text) }
+        }
+    }
+
     fun learn(updates: List<LearnedWord>, previous1: String?, previous2: String?) {
         if (updates.isEmpty()) {
             return
@@ -544,6 +622,7 @@ class PredictionEngine(
                 for (update in updates) {
                     NativePredictor.nativeLearn(
                         current, update.word, previous1, previous2, update.deliberateCapital,
+                        update.asserted,
                     )
                 }
             }
@@ -609,21 +688,27 @@ class PredictionEngine(
         val generation = ++gestureGeneration
         worker.post {
             Trace.beginSection("PredictionEngine.decodeGesture")
+            val started = System.nanoTime()
             val found = try {
                 withHandle(0) { current ->
-                    synchronized(gestureResultLock) {
-                        val samples = synchronized(gestureLock) { gestureCount }
-                        NativePredictor.nativeDecodeGesture(
-                            current, gestureX, gestureY, gestureTime, samples,
-                            previous1, previous2, gestureNativeWords, gestureNativeScores,
-                            gestureNativeProperNoun,
-                        )
-                    }
+                    val samples = synchronized(gestureLock) { gestureCount }
+                    val count = NativePredictor.nativeDecodeGesture(
+                        current, gestureX, gestureY, gestureTime, samples,
+                        previous1, previous2, decodeWords, decodeScores, decodeProperNoun,
+                    )
+                    lastGestureUsedNeural = NativePredictor.nativeLastDecodeUsedNeural(current)
+                    count
                 }
             } finally {
+                lastGestureDecodeMicros = (System.nanoTime() - started) / 1_000L
                 Trace.endSection()
             }
-            synchronized(gestureResultLock) { gestureNativeCount = found }
+            synchronized(gestureResultLock) {
+                System.arraycopy(decodeWords, 0, gestureNativeWords, 0, found)
+                System.arraycopy(decodeScores, 0, gestureNativeScores, 0, found)
+                System.arraycopy(decodeProperNoun, 0, gestureNativeProperNoun, 0, found)
+                gestureNativeCount = found
+            }
             mainHandler.post {
                 if (generation == gestureGeneration) {
                     publishGestureResult()
@@ -689,17 +774,23 @@ class PredictionEngine(
         }
         val generation = ++previewGeneration
         worker.post {
+            val started = System.nanoTime()
             val found = withHandle(0) { current ->
-                synchronized(previewResultLock) {
-                    val samples = synchronized(previewGestureLock) { previewGestureCount }
-                    NativePredictor.nativeDecodeGesture(
-                        current, previewGestureX, previewGestureY, previewGestureTime, samples,
-                        previous1, previous2, previewNativeWords, previewNativeScores,
-                        previewNativeProperNoun,
-                    )
-                }
+                val samples = synchronized(previewGestureLock) { previewGestureCount }
+                val count = NativePredictor.nativeDecodeGesture(
+                    current, previewGestureX, previewGestureY, previewGestureTime, samples,
+                    previous1, previous2, decodeWords, decodeScores, decodeProperNoun,
+                )
+                lastGestureUsedNeural = NativePredictor.nativeLastDecodeUsedNeural(current)
+                count
             }
-            synchronized(previewResultLock) { previewNativeCount = found }
+            lastGestureDecodeMicros = (System.nanoTime() - started) / 1_000L
+            synchronized(previewResultLock) {
+                System.arraycopy(decodeWords, 0, previewNativeWords, 0, found)
+                System.arraycopy(decodeScores, 0, previewNativeScores, 0, found)
+                System.arraycopy(decodeProperNoun, 0, previewNativeProperNoun, 0, found)
+                previewNativeCount = found
+            }
             mainHandler.post {
                 // A newer preview was requested, or the gesture resumed/lifted, while this one
                 // was decoding: whatever it found is already stale, and showing it would be a
@@ -735,24 +826,26 @@ class PredictionEngine(
         while (queue.take()) {
             val generation = queue.currentGeneration
             Trace.beginSection("PredictionEngine.suggest")
+            val searchStarted = android.os.SystemClock.elapsedRealtimeNanos()
             val count = try {
                 withHandle(0) { current ->
-                    synchronized(resultLock) {
-                        NativePredictor.nativeSuggest(
-                            current,
-                            queue.currentComposing,
-                            queue.currentPrevious1,
-                            queue.currentPrevious2,
-                            nativeWords,
-                            nativeScores,
-                            nativeProperNoun,
-                            nativeCorrectionIndex,
-                        )
-                    }
+                    NativePredictor.nativeSuggest(
+                        current,
+                        queue.currentComposing,
+                        queue.currentPrevious1,
+                        queue.currentPrevious2,
+                        searchWords,
+                        searchScores,
+                        searchProperNoun,
+                        searchCorrectionIndex,
+                    )
                 }
             } finally {
                 Trace.endSection()
             }
+            KeyboardStats.searchMillis.add(
+                (android.os.SystemClock.elapsedRealtimeNanos() - searchStarted) / 1_000_000.0,
+            )
 
             // A newer request landed while this one was running: its answer is the one that
             // matters, and showing this one would be a visible flicker backwards.
@@ -795,11 +888,16 @@ class PredictionEngine(
                     NativePredictor.nativeBestCorrection(current, correctionName)
                 }
             }
+            val inflection = if (query.isEmpty()) false else inflectionOf(query, correction)
             synchronized(resultLock) {
+                System.arraycopy(searchWords, 0, nativeWords, 0, count)
+                System.arraycopy(searchScores, 0, nativeScores, 0, count)
+                System.arraycopy(searchProperNoun, 0, nativeProperNoun, 0, count)
                 nativePossessive = possessive
+                nativeInflection = inflection
                 nativeCorrection = correction
                 nativeCorrectionIsName = correctionName[0]
-                nativeCorrectionAt = nativeCorrectionIndex[0]
+                nativeCorrectionAt = searchCorrectionIndex[0]
                 nativeCount = count
                 nativeQuery = query
                 nativeKnownWord = if (spelling != null && spelling.equals(query, ignoreCase = true)) {
@@ -821,13 +919,15 @@ class PredictionEngine(
     private fun publish() {
         val known: String
         val possessive: String?
+        val inflection: Boolean
         val query: String
         synchronized(resultLock) {
             known = nativeKnownWord
             possessive = nativePossessive
+            inflection = nativeInflection
             query = nativeQuery
         }
-        listener?.onSuggestions(copyAndFilterResults(), known, query, possessive)
+        listener?.onSuggestions(copyAndFilterResults(), known, query, possessive, inflection)
     }
 
     /**

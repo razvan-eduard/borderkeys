@@ -179,6 +179,9 @@ int main(int argc, char** argv) {
     }
 
     Candidate out[Engine::kMaxCandidates];
+    int64_t encoderMicros = 0;
+    int64_t searchMicros = 0;
+    int decoded = 0;
     for (const Gesture& gesture : gestures) {
         int rank = -1;
         if (gesture.xs.size() >= 2) {
@@ -186,6 +189,9 @@ int main(int argc, char** argv) {
                                              gesture.times.data(),
                                              static_cast<int>(gesture.xs.size()), out,
                                              Engine::kMaxCandidates);
+            encoderMicros += decoder.lastEncoderMicros();
+            searchMicros += decoder.lastSearchMicros();
+            ++decoded;
             for (int i = 0; i < found; ++i) {
                 uint32_t length = 0;
                 const char* const text = engine.candidateText(out[i], &length);
@@ -197,6 +203,10 @@ int main(int argc, char** argv) {
             }
         }
         std::printf("%s\t%d\n", gesture.word.c_str(), rank);
+    }
+    if (decoded > 0) {
+        std::fprintf(stderr, "decoded %d: encoder %.2f ms, search %.2f ms per gesture\n", decoded,
+                     encoderMicros / 1000.0 / decoded, searchMicros / 1000.0 / decoded);
     }
     engine.destroy();
     return 0;
