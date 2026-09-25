@@ -230,6 +230,20 @@ class KeyboardAccessibility(
             KeyCodes.LANGUAGE -> strings[Keys.KEY_LANGUAGE_HOLD_FOR_KEYBOARD_SETTINGS]
             KeyCodes.SETTINGS -> strings[Keys.KEY_SETTINGS]
             KeyCodes.EMOJI -> strings[Keys.KEY_EMOJI]
+            KeyCodes.ESCAPE -> strings[Keys.KEY_ESCAPE]
+            KeyCodes.TAB -> strings[Keys.KEY_TAB]
+            KeyCodes.CONTROL -> strings[Keys.KEY_CONTROL]
+            KeyCodes.ALT -> strings[Keys.KEY_ALT]
+            KeyCodes.ARROW_LEFT -> strings[Keys.KEY_ARROW_LEFT]
+            KeyCodes.ARROW_RIGHT -> strings[Keys.KEY_ARROW_RIGHT]
+            KeyCodes.ARROW_UP -> strings[Keys.KEY_ARROW_UP]
+            KeyCodes.ARROW_DOWN -> strings[Keys.KEY_ARROW_DOWN]
+            KeyCodes.HOME -> strings[Keys.KEY_HOME]
+            KeyCodes.END -> strings[Keys.KEY_END]
+            KeyCodes.PAGE_UP -> strings[Keys.KEY_PAGE_UP]
+            KeyCodes.PAGE_DOWN -> strings[Keys.KEY_PAGE_DOWN]
+            KeyCodes.FORWARD_DELETE -> strings[Keys.KEY_FORWARD_DELETE]
+            KeyCodes.INSERT -> strings[Keys.KEY_INSERT]
             else -> null
         }
         if (named != null) {

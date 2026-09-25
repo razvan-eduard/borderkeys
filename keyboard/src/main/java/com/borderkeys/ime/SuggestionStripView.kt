@@ -67,6 +67,9 @@ class SuggestionStripView(
     interface Listener {
         fun onSuggestionPicked(index: Int, word: String)
 
+        /** The private row's Show or Hide was tapped. */
+        fun onPrivateRevealToggled()
+
         /**
          * A suggestion held down rather than tapped.
          *
@@ -106,6 +109,39 @@ class SuggestionStripView(
                 invalidate()
             }
         }
+
+    /** Whether the private row shows the field's text instead of the notice. */
+    var privateReveal: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
+    /** The field's text, drawn while [privateReveal] is on. Copied into a fixed buffer here,
+     *  so onDraw reads characters and allocates nothing. */
+    var privateText: CharSequence? = null
+        set(value) {
+            field = value
+            privateTextLength = 0
+            if (value != null) {
+                val length = value.length.coerceAtMost(privateTextChars.size)
+                for (i in 0 until length) {
+                    privateTextChars[i] = value[i]
+                }
+                privateTextLength = length
+            }
+            invalidate()
+        }
+
+    private val privateTextChars = CharArray(PRIVATE_TEXT_CHARS)
+    private var privateTextLength = 0
+    private var privateToggleLeft = 0f
+    private val revealPaint = android.graphics.Paint(paints.label).apply {
+        typeface = android.graphics.Typeface.MONOSPACE
+        textAlign = android.graphics.Paint.Align.LEFT
+    }
 
     /**
      * Whether the field behind the keyboard is empty.
@@ -477,7 +513,7 @@ class SuggestionStripView(
                 // reach the canvas from: private mode is meant to stay austere, not sprout
                 // effects the moment a password field is left.
                 particles.release()
-                drawNotice(canvas, privateNoticeChars, privateNotice.length)
+                drawPrivateRow(canvas)
                 return
             }
             if (decoding && count == 0) {
@@ -646,6 +682,42 @@ class SuggestionStripView(
         }
     }
 
+    /**
+     * The private field's row: the notice and a Show, or the field's own text and a Hide. The
+     * text is drawn from its end when it is wider than the room, since the end is what is being
+     * typed.
+     */
+    private fun drawPrivateRow(canvas: Canvas) {
+        val toggleChars = if (privateReveal) privateHideChars else privateShowChars
+        val toggleLength = if (privateReveal) privateHideLabel.length else privateShowLabel.length
+        val togglePaint = paints.accentLabel
+        val previousAlign = togglePaint.textAlign
+        togglePaint.textAlign = android.graphics.Paint.Align.CENTER
+        val padding = height * PRIVATE_PADDING_FRACTION
+        val toggleWidth = togglePaint.measureText(toggleChars, 0, toggleLength) + 2f * padding
+        privateToggleLeft = width - toggleWidth
+        val baseline = height / 2f + paints.secondaryBaselineOffsetPx
+        canvas.drawText(
+            toggleChars, 0, toggleLength, privateToggleLeft + toggleWidth / 2f, baseline,
+            togglePaint,
+        )
+        togglePaint.textAlign = previousAlign
+        if (!privateReveal || privateTextLength == 0) {
+            canvas.drawText(
+                privateNoticeChars, 0, privateNotice.length, privateToggleLeft / 2f, baseline,
+                paints.labelSecondary,
+            )
+            return
+        }
+        val textWidth = revealPaint.measureText(privateTextChars, 0, privateTextLength)
+        val room = privateToggleLeft - 2f * padding
+        val x = if (textWidth <= room) padding else privateToggleLeft - padding - textWidth
+        canvas.save()
+        canvas.clipRect(0f, 0f, privateToggleLeft, height.toFloat())
+        canvas.drawText(privateTextChars, 0, privateTextLength, x, baseline, revealPaint)
+        canvas.restore()
+    }
+
     private fun drawNotice(canvas: Canvas, chars: CharArray, length: Int) {
         canvas.drawText(
             chars, 0, length,
@@ -671,7 +743,16 @@ class SuggestionStripView(
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (privateMode || (count == 0 && chipOffset == 0)) {
+        if (privateMode) {
+            // The row holds one control, the Show or Hide at its right edge.
+            if (event.actionMasked == MotionEvent.ACTION_UP && event.x >= privateToggleLeft) {
+                tapHaptic()
+                listener?.onPrivateRevealToggled()
+            }
+            return event.actionMasked == MotionEvent.ACTION_DOWN ||
+                event.actionMasked == MotionEvent.ACTION_UP
+        }
+        if (count == 0 && chipOffset == 0) {
             return false
         }
         when (event.actionMasked) {
@@ -778,6 +859,12 @@ class SuggestionStripView(
     private val privateNotice = strings[Keys.STRIP_PRIVATE]
     private val privateNoticeChars =
         CharArray(privateNotice.length).also { privateNotice.toCharArray(it, 0, 0, it.size) }
+    private val privateShowLabel = strings[Keys.STRIP_SHOW_TYPED]
+    private val privateShowChars =
+        CharArray(privateShowLabel.length).also { privateShowLabel.toCharArray(it, 0, 0, it.size) }
+    private val privateHideLabel = strings[Keys.STRIP_HIDE_TYPED]
+    private val privateHideChars =
+        CharArray(privateHideLabel.length).also { privateHideLabel.toCharArray(it, 0, 0, it.size) }
     private val idleNotice = strings[Keys.STRIP_IDLE]
     private val idleNoticeChars =
         CharArray(idleNotice.length).also { idleNotice.toCharArray(it, 0, 0, it.size) }
@@ -785,6 +872,12 @@ class SuggestionStripView(
         CharArray(DECODING_NOTICE.length).also { DECODING_NOTICE.toCharArray(it, 0, 0, it.size) }
 
     companion object {
+        /** The most of a private field's text the row keeps to draw. */
+        const val PRIVATE_TEXT_CHARS = 256
+
+        /** The Show or Hide label's side padding, as a share of the row's height. */
+        const val PRIVATE_PADDING_FRACTION = 0.35f
+
         /**
          * The most the strip can ever hold, which is what its buffers are sized for. How many
          * are actually shown is [visibleLimit], a setting; this is the ceiling that lets the

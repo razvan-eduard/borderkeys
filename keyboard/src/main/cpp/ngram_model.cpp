@@ -9,21 +9,27 @@
 namespace borderkeys {
 
 bool NgramModel::bind(const uint8_t* base, uint64_t mappedBytes, const BkdHeader& header) {
-    bigramKeys_ = nullptr;
+    successorOffsets_ = nullptr;
+    successorWords_ = nullptr;
+    successorValues_ = nullptr;
+    successorCount_ = 0;
+    wordCount_ = 0;
     trigramKeys_ = nullptr;
     if (base == nullptr || bkdValidateHeader(header, mappedBytes) != kBkdOk) {
         return false;
     }
 
     logProbScale_ = static_cast<float>(header.logProbScaleQ);
+    wordCount_ = header.wordCount;
 
-    bigramCapacity_ = header.bigramCapacity;
-    bigramMask_ = (bigramCapacity_ == 0) ? 0u : bigramCapacity_ - 1u;
-    if (bigramCapacity_ != 0) {
-        bigramKeys_ = reinterpret_cast<const uint64_t*>(
-            base + header.sections[kSectionBigramKeys].offset);
-        bigramValues_ =
-            reinterpret_cast<const uint8_t*>(base + header.sections[kSectionBigramValues].offset);
+    successorCount_ = header.successorCount;
+    if (successorCount_ != 0) {
+        successorOffsets_ = reinterpret_cast<const uint32_t*>(
+            base + header.sections[kSectionSuccessorOffsets].offset);
+        successorWords_ = reinterpret_cast<const uint32_t*>(
+            base + header.sections[kSectionSuccessorWords].offset);
+        successorValues_ = reinterpret_cast<const uint8_t*>(
+            base + header.sections[kSectionSuccessorValues].offset);
     }
 
     trigramCapacity_ = header.trigramCapacity;
@@ -37,24 +43,47 @@ bool NgramModel::bind(const uint8_t* base, uint64_t mappedBytes, const BkdHeader
     return true;
 }
 
-float NgramModel::bigram(uint32_t previous, uint32_t current) const {
-    if (bigramCapacity_ == 0) {
-        return kNoEntry;
+uint32_t NgramModel::successors(uint32_t previous, uint32_t* firstOut) const {
+    *firstOut = 0;
+    if (successorCount_ == 0) {
+        return 0;
     }
-    const uint64_t key =
-        (static_cast<uint64_t>(previous + 1u) << 32) | static_cast<uint64_t>(current + 1u);
-    uint32_t slot = static_cast<uint32_t>(mix(key)) & bigramMask_;
-    // Bounded by the capacity: a table that the builder filled completely, or one whose keys
-    // were rewritten to collide on every slot, must still terminate.
-    for (uint32_t probe = 0; probe <= bigramMask_; ++probe) {
-        const uint64_t stored = bigramKeys_[slot];
-        if (stored == 0ull) {
-            return kNoEntry;
+    const uint32_t list = (previous == kSentenceStartContext) ? wordCount_ : previous;
+    if (list > wordCount_) {
+        return 0;
+    }
+    // Clamped to the pack's own count: the offsets are file content and are read as claims.
+    uint32_t begin = successorOffsets_[list];
+    uint32_t end = successorOffsets_[list + 1];
+    if (begin > successorCount_) {
+        begin = successorCount_;
+    }
+    if (end > successorCount_) {
+        end = successorCount_;
+    }
+    if (end < begin) {
+        end = begin;
+    }
+    *firstOut = begin;
+    return end - begin;
+}
+
+float NgramModel::bigram(uint32_t previous, uint32_t current) const {
+    uint32_t first = 0;
+    const uint32_t count = successors(previous, &first);
+    uint32_t low = first;
+    uint32_t high = first + count;
+    while (low < high) {
+        const uint32_t middle = low + (high - low) / 2u;
+        const uint32_t word = successorWords_[middle];
+        if (word == current) {
+            return dequantise(successorValues_[middle]);
         }
-        if (stored == key) {
-            return dequantise(bigramValues_[slot]);
+        if (word < current) {
+            low = middle + 1u;
+        } else {
+            high = middle;
         }
-        slot = (slot + 1u) & bigramMask_;
     }
     return kNoEntry;
 }

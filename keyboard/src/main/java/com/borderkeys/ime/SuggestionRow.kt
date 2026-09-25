@@ -56,12 +56,18 @@ internal class SuggestionRow {
      * So the outlined chip is placed from this value rather than found by position, and is
      * inserted when the row does not already carry it. Passing the word makes the two agree by
      * construction; passing a boolean made them agree only by coincidence.
+     *
+     * [revertable] is the word a correction just replaced, while that correction can still be
+     * put back -- the one keystroke a pending correction lives. With nothing typed it takes the
+     * first slot as the typed chip, so tapping it is the revert; it is ignored once a new word
+     * is in progress.
      */
     fun arrange(
         candidates: List<Candidate>,
         typed: String,
         limit: Int,
         correction: String?,
+        revertable: String? = null,
     ): List<Candidate> {
         typedIndex = -1
         appliedIndex = -1
@@ -72,6 +78,10 @@ internal class SuggestionRow {
             return emptyList()
         }
         if (typed.isEmpty()) {
+            if (!revertable.isNullOrEmpty()) {
+                typedIndex = 0
+                return listOf(Candidate(revertable)) + candidates.take(cap - 1)
+            }
             // Predictions for what comes next rather than candidates for a word in progress:
             // nothing was typed, so nothing is marked and the engine's order stands.
             return candidates.take(cap)

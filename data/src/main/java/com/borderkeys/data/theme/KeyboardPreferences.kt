@@ -692,6 +692,29 @@ data class KeyboardPreferences(
     val numberRow: Boolean = false,
 
     /**
+     * A row of hardware keys above the letters: escape, tab, control, alt and the arrows.
+     *
+     * Off by default. It is for terminals and editors, which read those keys, and it costs
+     * the same height as the number row.
+     */
+    val modifierRow: Boolean = false,
+
+    /**
+     * Where the modifier row sits: [MODIFIER_ROW_ABOVE] the letters, under the strip, or
+     * [MODIFIER_ROW_BELOW] the keyboard, under the space row.
+     */
+    val modifierRowPosition: Int = MODIFIER_ROW_ABOVE,
+
+    /**
+     * The keys on the modifier row, left to right, by the names [ModifierRowKeys] lists. Read
+     * through [ModifierRowKeys.sanitised]; an empty result shows the default row.
+     */
+    val modifierRowKeys: List<String> = ModifierRowKeys.DEFAULT,
+
+    /** Whether the feature tour shown after setup has been dismissed for good. */
+    val featuresTourSeen: Boolean = false,
+
+    /**
      * Where the digits sit on the number-and-symbols page.
      *
      * [SYMBOLS_NUMBER_TOP] is a row above the symbols, the arrangement a physical keyboard
@@ -1252,6 +1275,9 @@ data class KeyboardPreferences(
         const val COMPOSER_TEXT_SIZE_LARGE = 2
 
         /** Digits as a row above the symbols. */
+        const val MODIFIER_ROW_ABOVE = 0
+        const val MODIFIER_ROW_BELOW = 1
+
         const val SYMBOLS_NUMBER_TOP = 0
 
         /** Digits as a number pad down the left of the symbols. */

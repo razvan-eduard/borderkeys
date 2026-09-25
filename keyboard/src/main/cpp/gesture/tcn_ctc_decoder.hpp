@@ -80,6 +80,9 @@ private:
                              float nonBlankContribution) const;
     int pruneToBeamWidth(Hypothesis* hyps, int count) const;
 
+    /** Forgets every position the merge table holds; called before each timestep's extensions. */
+    void clearMergeTable() const;
+
     float basis_[KeyGeometry::kMaxKeys * TcnEncoder::kSpectralDim] = {};
     int keyCount_ = 0;
     float areaWidth_ = 0.f;
@@ -91,6 +94,17 @@ private:
     Hypothesis beamA_[kMaxBeamWidth * 4] = {};
     Hypothesis beamB_[kMaxBeamWidth * 4] = {};
     float keyLogProbs_[KeyGeometry::kMaxKeys] = {};
+
+    /** The trie symbol under each key slot, resolved once per decode. */
+    int slotSymbol_[KeyGeometry::kMaxKeys] = {};
+
+    /**
+     * Where a (node, last symbol) pair already sits in the beam being built, by open
+     * addressing over the pair's hash: -1 for a free cell. Sized well past the beam's
+     * capacity so probes stay short.
+     */
+    static constexpr int kMergeTableSize = 2048;
+    mutable int16_t mergeTable_[kMergeTableSize] = {};
 };
 
 }  // namespace borderkeys

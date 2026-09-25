@@ -61,12 +61,6 @@ class LearningBuffer(
         blocked.isNotEmpty() && WordFold.fold(word) in blocked
 
     /**
-     * Records one confirmed word. Returns true if it was accepted.
-     *
-     * A word is confirmed when the user picks it from the suggestion strip, or commits it by
-     * typing a delimiter after it. Nothing is learned from what is merely on screen.
-     */
-    /**
      * Records that [word] followed [previousWord], if both are things worth remembering.
      *
      * Kept apart from [record] because the two fail independently: the word is always worth
@@ -133,7 +127,21 @@ class LearningBuffer(
         return true
     }
 
-    fun record(word: String, locale: String, nowMillis: Long): Boolean {
+    /**
+     * Records one committed word. Returns true if it was accepted.
+     *
+     * A word is committed when the user types a delimiter after it, swipes it, or picks it from
+     * the suggestion strip. Nothing is learned from what is merely on screen. [deliberateCapital]
+     * and [asserted] travel with the count -- see `UserWord` -- and either one, once seen in a
+     * window, is kept for it.
+     */
+    fun record(
+        word: String,
+        locale: String,
+        nowMillis: Long,
+        deliberateCapital: Boolean = false,
+        asserted: Boolean = false,
+    ): Boolean {
         if (!enabled || word.length < MIN_WORD_LENGTH || word.length > MAX_WORD_LENGTH) {
             return false
         }
@@ -148,6 +156,8 @@ class LearningBuffer(
         if (existing != null) {
             existing.delta++
             existing.lastUsedAt = nowMillis
+            existing.deliberateCapital = existing.deliberateCapital || deliberateCapital
+            existing.asserted = existing.asserted || asserted
             return true
         }
         if (pending.size >= maxEntries) {
@@ -157,7 +167,10 @@ class LearningBuffer(
             val oldest = pending.keys.first()
             pending.remove(oldest)
         }
-        pending[key] = Entry(delta = 1, lastUsedAt = nowMillis)
+        pending[key] = Entry(
+            delta = 1, lastUsedAt = nowMillis, deliberateCapital = deliberateCapital,
+            asserted = asserted,
+        )
         return true
     }
 
@@ -187,6 +200,8 @@ class LearningBuffer(
                 locale = key.locale,
                 delta = entry.delta,
                 lastUsedAt = entry.lastUsedAt,
+                deliberateCapital = entry.deliberateCapital,
+                asserted = entry.asserted,
             )
         }
         pending.clear()
@@ -249,7 +264,12 @@ class LearningBuffer(
         val word: String,
     )
 
-    private class Entry(var delta: Int, var lastUsedAt: Long)
+    private class Entry(
+        var delta: Int,
+        var lastUsedAt: Long,
+        var deliberateCapital: Boolean = false,
+        var asserted: Boolean = false,
+    )
 
     companion object {
         const val DEFAULT_DEBOUNCE_MILLIS = 4_000L

@@ -27,11 +27,13 @@ class SituationTest {
         isProperNoun: Boolean = false,
         maxEdits: Int = Int.MAX_VALUE,
         capitaliseNames: Boolean = true,
+        inflection: Boolean = false,
     ): Situation {
         val cased = AutoCorrection.matchCase(typed, suggestion.orEmpty(),
                                              isProperNoun && capitaliseNames)
         return AutoCorrection.situationOf(typed, suggestion, suggestionQuery, knownWord, cased,
-                                          minimumLength, isProperNoun, maxEdits, capitaliseNames)
+                                          minimumLength, isProperNoun, maxEdits, capitaliseNames,
+                                          inflection)
     }
 
     @Test
@@ -90,6 +92,14 @@ class SituationTest {
         assertEquals(Situation.NoChange,
             situation("ana", "ana", knownWord = "ana", isProperNoun = true,
                       capitaliseNames = false))
+    }
+
+    @Test
+    fun `a regular inflection of a known stem is left alone`() {
+        assertEquals(Situation.Inflection, situation("smooths", "smooth", inflection = true))
+        // An accent, a case or a mark restored is not another word.
+        assertEquals(Situation.Correctable, situation("cartii", "cărții", inflection = true))
+        assertEquals(Situation.Correctable, situation("marias", "maria's", inflection = true))
     }
 
     @Test

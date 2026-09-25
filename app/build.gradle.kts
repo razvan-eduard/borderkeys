@@ -55,6 +55,10 @@ val releaseKeyAlias: String = providers.environmentVariable("RELEASE_KEY_ALIAS")
     .getOrElse("borderkeys")
 val canSignRelease = releaseKeystore != null && releaseKeystorePassword != null
 
+/** ABIs added to the shipped two, comma-separated: the instrumented job's emulator is x86_64. */
+val extraAbis: List<String> = providers.gradleProperty("borderkeys.extraAbis").orNull
+    ?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+
 android {
     namespace = "com.borderkeys"
     compileSdk {
@@ -79,7 +83,11 @@ android {
             // SQLCipher alone contributes four copies of a 4-7 MB library and the APK is
             // 23 MB before a single line of our own native code exists.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            // `-Pborderkeys.extraAbis=x86_64` adds the ABI an emulator on a CI runner has.
+            abiFilters += extraAbis
         }
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // `core` is the free build: deterministic engine plus the geometric swipe decoder, and
@@ -188,6 +196,17 @@ kotlin {
 dependencies {
     implementation(project(":keyboard"))
     implementation(project(":settings"))
+
+    // The instrumented smoke suite: the keyboard driven through a real input connection on an
+    // emulator, which no JVM test can stand in for.
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.uiautomator)
+    androidTestImplementation(libs.kotlinx.coroutines.android)
+    // The suite installs a pack and sets preferences through the same repositories the
+    // keyboard reads, and names the pack's licence from the catalogue.
+    androidTestImplementation(project(":data"))
+    androidTestImplementation(project(":i18n"))
     // Attached only to the `plus` flavor. This is why the `core` APK does not contain the
     // assistant: not because R8 removed it, but because it never entered the compilation.
     "plusImplementation"(project(":assist"))

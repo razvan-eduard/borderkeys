@@ -5,6 +5,7 @@
 # tools/make_contractions.py from this language's own word counts -- do not edit by hand.
 #
 # typed<TAB>written<TAB>other languages whose own vocabulary holds the typed spelling
+i	I	it-IT
 abcs	abc's	
 academys	academy's	
 afghanistans	afghanistan's	de-DE
@@ -172,7 +173,7 @@ hudsons	hudson's
 humanitys	humanity's	
 ibms	ibm's	
 iiis	iii's	
-im	i'm	de-DE,ro-RO
+im	I'm	de-DE,ro-RO
 indias	india's	es-ES
 indonesias	indonesia's	es-ES
 industrys	industry's	
@@ -186,7 +187,7 @@ israels	israel's	de-DE
 italys	italy's	
 itd	it'd	
 itll	it'll	
-ive	i've	es-ES,fr-FR,ro-RO
+ive	I've	es-ES,fr-FR,ro-RO
 jacksons	jackson's	de-DE,ro-RO
 jamess	james's	
 janes	jane's	de-DE

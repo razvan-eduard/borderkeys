@@ -73,6 +73,32 @@ class ContractionsTest {
         assertEquals(listOf("ro-RO", "de-DE"), entries[1].objectors)
     }
 
+    /**
+     * English writes the pronoun with a capital, and a corpus lower-cased at intake cannot say
+     * so: a spell checker accepts "i" as a letter and frequency cannot tell a pronoun from one
+     * either. The overlay carries it, the way it carries every other spelling the letters alone
+     * do not give -- and it is applied before the known-word guard, so "i" being a word of the
+     * dictionary does not stop it.
+     */
+    @Test
+    fun `the English pronoun is written with its capital`() {
+        val entries = Contractions.parse(
+            "i\tI\tit-IT\nim\tI'm\tro-RO\nive\tI've\tro-RO\n",
+        )
+        val table = Contractions.of(listOf(entries), listOf("en-US"))
+        assertEquals("I", Contractions.expansionFor("i", table))
+        assertEquals("I'm", Contractions.expansionFor("im", table))
+        assertEquals("I've", Contractions.expansionFor("ive", table))
+    }
+
+    /** Italian writes "i" as its plural article, so the entry stands down when Italian is on. */
+    @Test
+    fun `the pronoun stands down for a language that uses the letter`() {
+        val entries = Contractions.parse("i\tI\tit-IT\n")
+        val both = Contractions.of(listOf(entries), listOf("en-US", "it-IT"))
+        assertNull(Contractions.expansionFor("i", both))
+    }
+
     @Test
     fun `two languages merge into one table`() {
         val french = listOf(Contractions.Entry("cest", "c'est", emptyList()))

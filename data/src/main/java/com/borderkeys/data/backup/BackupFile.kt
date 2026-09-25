@@ -77,11 +77,9 @@ data class BackupSizeAndPosition(val portrait: KeyboardPlacement, val landscape:
 data class BackupPack(val tag: String, val enabled: Boolean, val weight: Float)
 
 /**
- * One learned word. [lastUsedAt] and [deliberateCapitals] arrived after the first files were
- * written and default to "unknown" (0) so those still read: a restore then stamps the word as
- * used now, exactly as it did before they travelled. With them, a word not written in a year
- * restores as a word not written in a year, and a name the person capitalised by hand stays
- * one -- see `UserWord.deliberateCapitals`.
+ * One learned word. [lastUsedAt], [deliberateCapitals] and [asserted] default to "unknown" (0)
+ * so a file without them still reads: a restore then stamps the word as used now. See
+ * `UserWord.deliberateCapitals` and `UserWord.asserted`.
  */
 @Serializable
 data class BackupWord(
@@ -90,6 +88,7 @@ data class BackupWord(
     val count: Int,
     val lastUsedAt: Long = 0L,
     val deliberateCapitals: Int = 0,
+    val asserted: Int = 0,
 )
 
 @Serializable

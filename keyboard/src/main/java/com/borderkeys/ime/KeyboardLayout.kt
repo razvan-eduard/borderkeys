@@ -242,8 +242,87 @@ class KeyboardLayout(
         )
     }
 
+    /**
+     * The same layout with a row of hardware keys, each sent to the application as the key it
+     * names: [keys] in that order, sharing the row's width, the shipped eight when the list
+     * holds nothing the row can carry. Shorter than a letter row, like the number row. Above
+     * everything, including the number row, unless [atBottom], which puts it under the space
+     * row.
+     */
+    fun withModifierRow(
+        keys: List<Int> = DEFAULT_MODIFIER_KEYS,
+        atBottom: Boolean = false,
+    ): KeyboardLayout {
+        if (rows.isEmpty() || id.contains(MODIFIER_ROW_SUFFIX) || id.contains(MODIFIER_ROW_BOTTOM_SUFFIX)) {
+            return this
+        }
+        val chosen = keys.filter { MODIFIER_CAPS.containsKey(it) }.distinct()
+            .take(MAX_MODIFIER_KEYS)
+            .ifEmpty { DEFAULT_MODIFIER_KEYS }
+        val width = LETTER_ROW_UNITS / chosen.size
+        val row = Row(
+            0f, MODIFIER_ROW_HEIGHT,
+            chosen.map { code ->
+                Key(
+                    code = code,
+                    label = MODIFIER_CAPS.getValue(code),
+                    alternatives = "",
+                    widthUnits = width,
+                    flags = if (KeyCodes.repeatsOnModifierRow(code)) {
+                        KeyFlags.MODIFIER or KeyFlags.REPEATABLE
+                    } else {
+                        KeyFlags.MODIFIER
+                    },
+                )
+            },
+        )
+        val suffix = (if (atBottom) MODIFIER_ROW_BOTTOM_SUFFIX else MODIFIER_ROW_SUFFIX) +
+            chosen.joinToString(".") { (-it).toString() }
+        return KeyboardLayout(
+            id = id + suffix,
+            languageTag = languageTag,
+            rows = if (atBottom) rows + row else listOf(row) + rows,
+        )
+    }
+
     companion object {
         private const val NUMBER_ROW_SUFFIX = "+num"
+        private const val MODIFIER_ROW_SUFFIX = "+mod"
+        private const val MODIFIER_ROW_BOTTOM_SUFFIX = "+modb"
+
+        /** The caps of every key the modifier row can carry. */
+        private val MODIFIER_CAPS: Map<Int, String> = mapOf(
+            KeyCodes.ESCAPE to "esc",
+            KeyCodes.TAB to "tab",
+            KeyCodes.CONTROL to "ctrl",
+            KeyCodes.ALT to "alt",
+            KeyCodes.ARROW_LEFT to "\u2190",
+            KeyCodes.ARROW_DOWN to "\u2193",
+            KeyCodes.ARROW_UP to "\u2191",
+            KeyCodes.ARROW_RIGHT to "\u2192",
+            KeyCodes.HOME to "home",
+            KeyCodes.END to "end",
+            KeyCodes.PAGE_UP to "pgup",
+            KeyCodes.PAGE_DOWN to "pgdn",
+            KeyCodes.FORWARD_DELETE to "del",
+            KeyCodes.INSERT to "ins",
+        )
+
+        /** The row as shipped, left to right. */
+        val DEFAULT_MODIFIER_KEYS: List<Int> = listOf(
+            KeyCodes.ESCAPE, KeyCodes.TAB, KeyCodes.CONTROL, KeyCodes.ALT,
+            KeyCodes.ARROW_LEFT, KeyCodes.ARROW_DOWN, KeyCodes.ARROW_UP, KeyCodes.ARROW_RIGHT,
+        )
+
+        /** The cap a modifier-row key carries, for a layout asset that names one without a label. */
+        internal fun modifierCap(code: Int): String? = MODIFIER_CAPS[code]
+
+        /** The most keys the row takes; past this each key is too narrow to hit. */
+        const val MAX_MODIFIER_KEYS = 12
+
+        /** The width the keys share: that of a ten-key letter row. */
+        private const val LETTER_ROW_UNITS = 10f
+        private const val MODIFIER_ROW_HEIGHT = 0.8f
         private const val ACCENTS_SUFFIX = "+acc"
         private const val TOP_ROW_DIGITS_SUFFIX = "+dig"
         private const val TOP_ROW_SYMBOLS_SUFFIX = "+sym"

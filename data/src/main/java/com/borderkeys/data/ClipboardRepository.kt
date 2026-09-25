@@ -94,6 +94,22 @@ class ClipboardRepository internal constructor(
     suspend fun delete(id: Long) = dao.delete(id)
 
     /**
+     * Rewrites a text entry. Another entry already holding the new text is removed first, so
+     * the history keeps one row per content. False for empty text, an image or an unknown id.
+     */
+    suspend fun update(id: Long, content: String): Boolean {
+        if (content.isEmpty()) {
+            return false
+        }
+        val hash = contentHash(content)
+        val other = dao.findByHash(hash)
+        if (other != null && other.id != id) {
+            dao.delete(other.id)
+        }
+        return dao.updateContent(id, content, hash) > 0
+    }
+
+    /**
      * Deletes the entry matching [content], unless it is pinned. Returns whether it was deleted.
      *
      * For "forget this one after I used it" -- one item leaving the moment it is inserted,

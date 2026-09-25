@@ -28,6 +28,7 @@ import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.DictionaryRepository
+import com.borderkeys.data.KeyboardStats
 import com.borderkeys.data.LanguagePackRepository
 import com.borderkeys.data.decayed
 import com.borderkeys.predict.LanguagePackInspector
@@ -176,6 +177,9 @@ class BorderKeysService :
      * typing. Only a password closes both.
      */
     private var privateMode = false
+
+    /** Whether the strip shows a private field's text, at the user's request, this field. */
+    private var privateReveal = false
     private var preferences = KeyboardPreferences()
     private var particleEffects = ParticleEffectsSettings()
 
@@ -255,6 +259,10 @@ class BorderKeysService :
     private var page = PAGE_ALPHABETIC
 
     private var shiftState = ShiftState.OFF
+
+    /** Control and alt from the modifier row, each armed for the next key. */
+    private var controlArmed = false
+    private var altArmed = false
 
     /**
      * Set when the user pressed shift themselves, cleared by the character it applied to.
@@ -392,6 +400,12 @@ class BorderKeysService :
      */
     private val gestureDecodingRunnable = Runnable { host?.suggestionStrip?.decoding = true }
 
+    /** When the last swipe was lifted, for the debug timing line in onGestureCandidates. */
+    private var gestureLiftedAt = 0L
+
+    /** Uptime of the keystroke the engine was last asked about, for the strip latency figure. */
+    private var suggestionsRequestedAt = 0L
+
     private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
         onClipboardChanged()
     }
@@ -404,6 +418,10 @@ class BorderKeysService :
 
     /** "Maria's" for the "marias" being typed, or null -- see Engine::possessiveFor. */
     private var possessiveSuggestion: String? = null
+
+    /** Whether the word being typed is a regular inflection of a word the dictionaries hold
+     *  that the offered correction is not built on -- see WordStems.shields. */
+    private var queryIsInflection = false
 
     /**
      * The word [topSuggestion] is actually an answer about.
@@ -567,6 +585,9 @@ class BorderKeysService :
 
     /** The word the strip is currently asking about, between the hold and the answer. */
     private var pendingForget: String? = null
+
+    /** The composing text the strip was about when [pendingForget] was held down. */
+    private var pendingExplainQuery: String = ""
 
     private var clipboardManager: ClipboardManager? = null
     private var clipboardListenerRegistered = false
@@ -1060,6 +1081,7 @@ class BorderKeysService :
         )
         selectionStart = newSelStart
         selectionEnd = newSelEnd
+        refreshPrivateReveal()
         // newSelEnd > 0 means there is text before the caret; the extracted-text path below
         // covers a caret at zero with text after it.
         updateEditorEmpty(newSelEnd > 0)
@@ -1133,15 +1155,17 @@ class BorderKeysService :
     }
 
     override fun onActionPicked(index: Int) {
-        // actionMode used to be shared with the assistant's own actions; it is only ever the
-        // "forget this word" question now, so a pending word is the only case there is.
+        // The "forget this word" question: forget, cancel, and in a debuggable build, explain.
         val forgetting = pendingForget ?: return
         pendingForget = null
         host?.suggestionStrip?.clear()
-        if (index == 0) {
-            forgetWord(forgetting)
-        } else {
-            requestSuggestions()
+        when (index) {
+            0 -> forgetWord(forgetting)
+            2 -> {
+                explainWord(pendingExplainQuery, forgetting)
+                requestSuggestions()
+            }
+            else -> requestSuggestions()
         }
     }
 
@@ -1236,8 +1260,11 @@ class BorderKeysService :
             learning.discard()
         }
 
+        privateReveal = false
         host?.let { view ->
             view.suggestionStrip.privateMode = privateMode
+            view.suggestionStrip.privateReveal = false
+            view.suggestionStrip.privateText = null
             view.suggestionStrip.clear()
             view.suggestionStrip.hapticEnabled = preferences.hapticFeedback
             view.keyboard.hapticEnabled = preferences.hapticFeedback
@@ -1256,6 +1283,7 @@ class BorderKeysService :
         autoLockedShift = false
         shiftState = ShiftState.OFF
         host?.keyboard?.shiftState = shiftState
+        setArmedModifiers(control = false, alt = false)
         ownEditPending = false
         resetComposing()
         resetFieldHistory()
@@ -1559,7 +1587,40 @@ class BorderKeysService :
             finishWordBeforeSwipe()
         }
         host?.postDelayed(gestureDecodingRunnable, GESTURE_DECODING_NOTICE_MILLIS)
+        gestureLiftedAt = android.os.SystemClock.uptimeMillis()
+        recordSwipeShape(xs, ys, timestamps, count)
         engine.decodeGesture(xs, ys, timestamps, count, previousWord1, previousWord2)
+    }
+
+    /** The swipe's path in key widths, its duration and its sample count, for the stats. */
+    private fun recordSwipeShape(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
+        if (count < 2) {
+            return
+        }
+        var path = 0.0
+        for (index in 1 until count) {
+            val dx = (xs[index] - xs[index - 1]).toDouble()
+            val dy = (ys[index] - ys[index - 1]).toDouble()
+            path += Math.sqrt(dx * dx + dy * dy)
+        }
+        val keyWidth = host?.keyboard?.keyWidthPx ?: 0f
+        if (keyWidth > 0f) {
+            KeyboardStats.swipePathKeys.add(path / keyWidth)
+        }
+        KeyboardStats.swipeMillis.add((timestamps[count - 1] - timestamps[0]).toDouble())
+        KeyboardStats.swipeSamples.add(count.toDouble())
+        KeyboardStats.input(gestureLiftedAt)
+    }
+
+    /** The decode's timings and its candidate count, for the stats. */
+    private fun recordSwipeDecode(candidates: Int) {
+        KeyboardStats.decodeMillis.add(engine.lastGestureDecodeMicros / 1000.0)
+        KeyboardStats.liftToTextMillis.add(
+            (android.os.SystemClock.uptimeMillis() - gestureLiftedAt).toDouble(),
+        )
+        KeyboardStats.swipeCandidates.add(candidates.toDouble())
+        KeyboardStats.neuralDecoder = engine.lastGestureUsedNeural
+        KeyboardStats.words++
     }
 
     /**
@@ -1814,6 +1875,16 @@ class BorderKeysService :
         connection.setComposingText(composing, 1)
         connection.endBatchEdit()
         composingFromGesture = true
+        recordSwipeDecode(candidates.size)
+        if (debuggable) {
+            android.util.Log.d(
+                "BorderKeys",
+                "swipe: decode ${engine.lastGestureDecodeMicros / 1000.0} ms, lift to text " +
+                    "${android.os.SystemClock.uptimeMillis() - gestureLiftedAt} ms, tier " +
+                    "${if (engine.lastGestureUsedNeural) "B" else "A"}, " +
+                    "${candidates.size} candidates",
+            )
+        }
         previewComposedThisGesture = true
         lastQuery = best
         suggestionQuery = best
@@ -2200,6 +2271,16 @@ class BorderKeysService :
         connection.setComposingText(composing, 1)
         connection.endBatchEdit()
         composingFromGesture = true
+        recordSwipeDecode(candidates.size)
+        if (debuggable) {
+            android.util.Log.d(
+                "BorderKeys",
+                "swipe: decode ${engine.lastGestureDecodeMicros / 1000.0} ms, lift to text " +
+                    "${android.os.SystemClock.uptimeMillis() - gestureLiftedAt} ms, tier " +
+                    "${if (engine.lastGestureUsedNeural) "B" else "A"}, " +
+                    "${candidates.size} candidates",
+            )
+        }
         // The strip is now about this word: its alternatives, not completions of it. lastQuery
         // is what onUpdateSelection's echo of this very edit compares against to decide whether
         // to ask the engine again -- set here so it does not, and the alternatives stay up.
@@ -2244,6 +2325,10 @@ class BorderKeysService :
     override fun onKeyRepeat(code: Int) {
         if (code == KeyCodes.DELETE) {
             handleDelete()
+        } else if (KeyCodes.isArrow(code)) {
+            handleNavigationKey(code)
+        } else if (code == KeyCodes.FORWARD_DELETE) {
+            handleHardwareKey(android.view.KeyEvent.KEYCODE_FORWARD_DEL)
         }
     }
 
@@ -2284,10 +2369,129 @@ class BorderKeysService :
             )
             KeyCodes.LANGUAGE -> switchLanguage()
             KeyCodes.SETTINGS -> toggleQuickSettings()
-            KeyCodes.EMOJI -> host?.setEmojiPanelVisible(host?.emojiPanelVisible != true)
+            KeyCodes.EMOJI -> toggleEmojiPanel()
+            KeyCodes.ESCAPE -> handleHardwareKey(android.view.KeyEvent.KEYCODE_ESCAPE)
+            KeyCodes.TAB -> handleHardwareKey(android.view.KeyEvent.KEYCODE_TAB)
+            KeyCodes.CONTROL -> setArmedModifiers(control = !controlArmed, alt = altArmed)
+            KeyCodes.ALT -> setArmedModifiers(control = controlArmed, alt = !altArmed)
+            KeyCodes.ARROW_LEFT, KeyCodes.ARROW_RIGHT, KeyCodes.ARROW_UP, KeyCodes.ARROW_DOWN,
+            KeyCodes.HOME, KeyCodes.END, KeyCodes.PAGE_UP, KeyCodes.PAGE_DOWN ->
+                handleNavigationKey(code)
+            KeyCodes.FORWARD_DELETE -> handleHardwareKey(android.view.KeyEvent.KEYCODE_FORWARD_DEL)
+            KeyCodes.INSERT -> handleHardwareKey(android.view.KeyEvent.KEYCODE_INSERT)
             else -> if (KeyCodes.isCharacter(code)) handleCharacter(code)
         }
     }
+
+    private fun setArmedModifiers(control: Boolean, alt: Boolean) {
+        controlArmed = control
+        altArmed = alt
+        host?.keyboard?.setArmedModifiers(control, alt)
+    }
+
+    /**
+     * A caret key from the modifier row -- an arrow, home, end, page up or page down -- sent
+     * as the hardware key, selecting when shift is held. The word being typed is finished
+     * first; the editor's echo of that finish is this keyboard's own edit, and only the caret
+     * the key then moves is read back.
+     */
+    private fun handleNavigationKey(code: Int) {
+        val connection = currentInputConnection ?: return
+        val keyCode = when (code) {
+            KeyCodes.ARROW_LEFT -> android.view.KeyEvent.KEYCODE_DPAD_LEFT
+            KeyCodes.ARROW_RIGHT -> android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+            KeyCodes.ARROW_UP -> android.view.KeyEvent.KEYCODE_DPAD_UP
+            KeyCodes.ARROW_DOWN -> android.view.KeyEvent.KEYCODE_DPAD_DOWN
+            KeyCodes.HOME -> android.view.KeyEvent.KEYCODE_MOVE_HOME
+            KeyCodes.END -> android.view.KeyEvent.KEYCODE_MOVE_END
+            KeyCodes.PAGE_UP -> android.view.KeyEvent.KEYCODE_PAGE_UP
+            else -> android.view.KeyEvent.KEYCODE_PAGE_DOWN
+        }
+        val meta = heldShiftMeta(spend = false)
+        ownEditPending = composing.isNotEmpty()
+        resetComposing()
+        sendPhysicalKey(connection, keyCode, meta)
+        refreshContextFromEditor()
+        applyAutoShift()
+    }
+
+    /**
+     * Escape, tab, or a character under control or alt: the word being typed is committed
+     * first, then the key goes out. The editor's echo of the commit is this keyboard's own
+     * edit; whatever the key itself changes comes back as a report of its own.
+     */
+    private fun handleHardwareKey(keyCode: Int) {
+        val connection = currentInputConnection ?: return
+        val meta = heldShiftMeta(spend = true)
+        ownEditPending = composing.isNotEmpty()
+        connection.beginBatchEdit()
+        finishComposing(connection)
+        sendPhysicalKey(connection, keyCode, meta)
+        connection.endBatchEdit()
+        checkpointField()
+        refreshContextFromEditor()
+        applyAutoShift()
+        requestSuggestions()
+    }
+
+    /**
+     * The shift bits for a hardware key: set only while the user holds shift, not for the
+     * capital auto-shift armed. With [spend], a one-shot shift is spent by the key as a letter
+     * spends it; the arrows leave it standing, so one shift covers a whole selection.
+     */
+    private fun heldShiftMeta(spend: Boolean): Int {
+        if (!shiftHeldByUser || shiftState == ShiftState.OFF) {
+            return 0
+        }
+        if (spend && shiftState == ShiftState.ON) {
+            shiftState = ShiftState.OFF
+            host?.keyboard?.shiftState = shiftState
+        }
+        return android.view.KeyEvent.META_SHIFT_ON or android.view.KeyEvent.META_SHIFT_LEFT_ON
+    }
+
+    /**
+     * Sends [keyCode] to the application as a pressed and released hardware key carrying
+     * [meta] and the armed modifiers, the modifier keys themselves going down before it and
+     * up after it. The armed modifiers are released by the send.
+     */
+    private fun sendPhysicalKey(connection: InputConnection, keyCode: Int, meta: Int) {
+        var state = meta
+        if (controlArmed) {
+            state = state or android.view.KeyEvent.META_CTRL_ON or android.view.KeyEvent.META_CTRL_LEFT_ON
+        }
+        if (altArmed) {
+            state = state or android.view.KeyEvent.META_ALT_ON or android.view.KeyEvent.META_ALT_LEFT_ON
+        }
+        val time = android.os.SystemClock.uptimeMillis()
+        val down = android.view.KeyEvent.ACTION_DOWN
+        val up = android.view.KeyEvent.ACTION_UP
+        if (controlArmed) {
+            connection.sendKeyEvent(physicalKeyEvent(time, down, android.view.KeyEvent.KEYCODE_CTRL_LEFT, state))
+        }
+        if (altArmed) {
+            connection.sendKeyEvent(physicalKeyEvent(time, down, android.view.KeyEvent.KEYCODE_ALT_LEFT, state))
+        }
+        connection.sendKeyEvent(physicalKeyEvent(time, down, keyCode, state))
+        connection.sendKeyEvent(physicalKeyEvent(time, up, keyCode, state))
+        if (altArmed) {
+            connection.sendKeyEvent(physicalKeyEvent(time, up, android.view.KeyEvent.KEYCODE_ALT_LEFT, meta))
+        }
+        if (controlArmed) {
+            connection.sendKeyEvent(physicalKeyEvent(time, up, android.view.KeyEvent.KEYCODE_CTRL_LEFT, meta))
+        }
+        if (controlArmed || altArmed) {
+            setArmedModifiers(control = false, alt = false)
+        }
+    }
+
+    private fun physicalKeyEvent(time: Long, action: Int, keyCode: Int, meta: Int) =
+        android.view.KeyEvent(
+            time, time, action, keyCode, 0, meta,
+            android.view.KeyCharacterMap.VIRTUAL_KEYBOARD, 0,
+            android.view.KeyEvent.FLAG_KEEP_TOUCH_MODE,
+            android.view.InputDevice.SOURCE_KEYBOARD,
+        )
 
     /**
      * Holding a key that has nothing else to offer.
@@ -2338,6 +2542,18 @@ class BorderKeysService :
 
     private fun handleCharacter(code: Int) {
         val connection = currentInputConnection ?: return
+        KeyboardStats.keystrokes++
+        KeyboardStats.input(android.os.SystemClock.uptimeMillis())
+        // A character under an armed control or alt is the hardware key that carries it, not
+        // text; a character no plain key carries releases the modifiers and types as usual.
+        if (controlArmed || altArmed) {
+            val keyCode = PhysicalKeys.keyCodeFor(code)
+            if (keyCode != 0) {
+                handleHardwareKey(keyCode)
+                return
+            }
+            setArmedModifiers(control = false, alt = false)
+        }
         ownEditPending = false
         val shifted = if (shiftState != ShiftState.OFF) {
             Character.toUpperCase(code)
@@ -2421,34 +2637,15 @@ class BorderKeysService :
         // it is only defensible together with the revert below: the objection to autocorrect is
         // really an objection to a correction that costs more to undo than it saved.
         val typed = composing.toString()
-        // A shortcut is a correction the user wrote themselves: it takes the same path as one
-        // -- committed in place of the typed word, revertible with the backspace straight after
-        // -- and is never learned as a word. Never for a swiped word: "omw" has to be typed to
-        // mean the shortcut.
-        val shortcut = if (composingFromGesture) {
-            null
-        } else {
-            // The user's own shortcut first: a bundled apostrophe mapping is a default, and a
-            // default never outranks something somebody wrote themselves.
-            //
-            // The mapping then answers to the same two gates a correction does, because that is
-            // what it is. Off when autocorrect is off -- somebody who turned that switch off
-            // asked for space to commit exactly the letters they typed, and this rewriting them
-            // anyway would be the same broken promise in a different coat. Off inside an address
-            // or a path too: "dont" is a mapping, but "user@dont" is a login.
-            TextShortcuts.expansionFor(typed, preferences.textShortcuts)
-                ?: if (preferences.autoCorrectOnSpace && composingIsRunningText) {
-                    // The bundled map first, then the productive possessive. The map holds what
-                    // a corpus actually wrote, and is the better evidence where it has an
-                    // answer; the possessive covers the name it never happened to write with an
-                    // apostrophe. Both answer to the same two gates as any other rewrite.
-                    Contractions.expansionFor(typed, contractions)
-                        ?: possessiveSuggestion?.takeIf { suggestionQuery == typed }
-                } else {
-                    null
-                }
-        }
-        val correction = shortcut ?: correctionFor(typed)
+        // Everything that can claim the word -- the user's own shortcut, the apostrophe map,
+        // a name's possessive, the capital a language always writes, autocorrect -- is asked in
+        // one place, in one order, with each rewrite's own gate: see WordCommit. A rewrite that
+        // is not autocorrect's takes the same path as a correction -- committed in place of the
+        // typed word, revertible with the backspace straight after -- and is never learned as a
+        // word.
+        val outcome = commitOutcome(typed)
+        val rewrite = outcome.isRewrite
+        val correction = outcome.text
         // Captured before anything commits: finishComposing and the correction branch both
         // advance previousWord1 to the word being written now.
         val contextWord = previousWord1
@@ -2545,15 +2742,15 @@ class BorderKeysService :
         if (correction != null) {
             previousWord2 = previousWord1
             // An expansion's last word is the context the next word follows.
-            previousWord1 = if (shortcut != null) correction.substringAfterLast(' ') else correction
+            previousWord1 = if (rewrite) correction.substringAfterLast(' ') else correction
             // Learning waits until the correction survives the next keystroke. Recording it
             // here would teach the personal dictionary a word the user is about to reject, and
             // the whole point of the revert is that rejecting it is expected.
             pendingCorrection = PendingCorrection(
                 typed, correction, delimiter, contextWord, grandContextWord,
-                composingCapitalisedByUser, learn = shortcut == null,
+                composingCapitalisedByUser, learn = !rewrite,
             )
-            if (shortcut == null && preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
+            if (!rewrite && preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
                 recordLanguageSwitchFlag(connection, typed, correction, delimiter)
             }
         } else {
@@ -2790,30 +2987,54 @@ class BorderKeysService :
     }
 
     /**
-     * The correction a delimiter should apply, or null to commit what was typed.
+     * What a delimiter would write in place of [typed], and why -- the whole decision, from
+     * the user's own shortcuts down to autocorrect's answer, with every gate applied. See
+     * [WordCommit], which is where it can be tested without an editor, an input connection and
+     * a dictionary.
      *
-     * The setting is checked here and the rest of the decision is [AutoCorrection]'s, which is
-     * where it can be tested without an editor, an input connection and a dictionary.
+     * Asked on every keystroke as well as at the delimiter, to decide whether the strip should
+     * outline the word it is about to write, so nothing here may read the editor:
+     * [composingIsRunningText] was settled once, as the word began -- the mistake HabitSpace's
+     * own comment records.
      */
-    private fun correctionFor(typed: String): String? {
-        if (!preferences.autoCorrectOnSpace) {
-            return null
-        }
-        // Settled once, as the word began. This function is also asked on every keystroke, to
-        // decide whether the strip should outline its correction, so reading the editor here
-        // would put a round trip on every key -- the mistake HabitSpace's own comment records.
-        if (!composingIsRunningText) {
-            return null
-        }
-        if (!RunningText.admits(typed) { null }) {
-            return null
-        }
-        return AutoCorrection.correctionFor(
-            typed, topSuggestion, suggestionQuery, knownQuery, preferences.minCorrectionLength,
-            topSuggestionIsProperNoun,
-            maxEdits = AutoCorrection.maxEditsFor(typed.length, preferences.correctionDistance),
+    private fun commitOutcome(typed: String): WordCommit.Outcome = WordCommit.decide(
+        typed = typed,
+        fromGesture = composingFromGesture,
+        runningText = composingIsRunningText,
+        shortcuts = preferences.textShortcuts,
+        contractions = contractions,
+        possessive = possessiveSuggestion,
+        suggestion = topSuggestion,
+        suggestionQuery = suggestionQuery,
+        knownWord = knownQuery,
+        isProperNoun = topSuggestionIsProperNoun,
+        inflection = queryIsInflection,
+        settings = WordCommit.Settings(
+            autoCorrectOnSpace = preferences.autoCorrectOnSpace,
+            autoCapitalise = preferences.autoCapitalise,
+            minimumLength = preferences.minCorrectionLength,
+            correctionDistance = preferences.correctionDistance,
             capitaliseNames = preferences.capitaliseNames,
-        )
+        ),
+    )
+
+    /**
+     * The word the strip outlines: what a delimiter would write, when that is one word the row
+     * can carry. A text shortcut is the user's own rule and may be a sentence, so it is not
+     * outlined; everything else the delimiter writes is.
+     */
+    private fun outlinedCommit(typed: String): String? {
+        val outcome = commitOutcome(typed)
+        return if (outcome.kind == WordCommit.Kind.SHORTCUT) null else outcome.text
+    }
+
+    /** Whether [pending]'s correction and its delimiter are still the text right before the
+     *  caret -- the one state in which the strip offers the typed word back. */
+    private fun correctionBeforeCaret(pending: PendingCorrection): Boolean {
+        val committed = pending.corrected + pending.delimiter
+        val before = currentInputConnection?.getTextBeforeCursor(committed.length, 0)
+            ?: return false
+        return before.toString() == committed
     }
 
     /**
@@ -2822,12 +3043,13 @@ class BorderKeysService :
      * Deletes the correction and its delimiter and writes the original in their place, in one
      * batch edit so the editor sees a single change rather than a deletion followed by a
      * reinsertion. Returns false when there is nothing to revert, and the caller then does what
-     * backspace normally does.
+     * backspace normally does. [viaBackspace] is whether the backspace key asked, which the
+     * revert-on-backspace setting governs; a tap on the strip's typed chip is not governed by it.
      */
-    private fun revertCorrection(connection: InputConnection): Boolean {
+    private fun revertCorrection(connection: InputConnection, viaBackspace: Boolean = true): Boolean {
         val pending = pendingCorrection ?: return false
         pendingCorrection = null
-        if (!preferences.revertCorrectionOnBackspace) {
+        if (viaBackspace && !preferences.revertCorrectionOnBackspace) {
             // Backspace is an ordinary backspace, so this is the correction being accepted the
             // same way any other key would accept it. Dropping it unlearned instead would make
             // the setting quietly change what the dictionary remembers.
@@ -2855,18 +3077,21 @@ class BorderKeysService :
         connection.commitText(pending.typed + pending.delimiter, 1)
         connection.endBatchEdit()
         previousWord1 = pending.typed
-        // Reverting is the user asserting that what they typed is a word, which is exactly the
-        // signal the personal dictionary exists to record.
+        // Reverting is the user asserting that what they typed is a word.
         recordLearned(
             pending.typed, pending.contextWord, pending.grandContextWord,
-            pending.deliberateCapital,
+            pending.deliberateCapital, asserted = true,
         )
         // And the word they rejected is unlearned. A correction is only offered that strongly
         // because something taught it -- often this dictionary, from an earlier typo confirmed
         // by accident -- and rejecting it is the clearest statement available that it should
         // not have been. Harmless when the word came from the language pack instead: there is
         // then nothing personal to forget, and the pack is not touched.
-        forgetWord(pending.corrected)
+        // Forgotten if this device taught it, never blocked. Blocking is for the prompt above,
+        // where the user was asked and answered; a backspace is one keystroke and the commonest
+        // way to undo anything. Blocking on it deleted a language-pack word outright -- "where",
+        // reverted once, stopped being offered at all and there was nothing on screen to say so.
+        forgetWord(pending.corrected, blockWhenNotPersonal = false)
         playEffect(EffectEvent.CorrectionReverted, pending.typed)
         refreshContextFromEditor()
         return true
@@ -3166,6 +3391,12 @@ class BorderKeysService :
         if (preferences.numberRow && allowNumberRow) {
             result = result.withNumberRow()
         }
+        if (preferences.modifierRow) {
+            result = result.withModifierRow(
+                keys = preferences.modifierRowKeys.map { KeyCodes.named(it) },
+                atBottom = preferences.modifierRowPosition == KeyboardPreferences.MODIFIER_ROW_BELOW,
+            )
+        }
         if (!preferences.emojiKey) {
             result = result.withoutEmojiKey()
         }
@@ -3354,12 +3585,21 @@ class BorderKeysService :
         host?.showQuickSettings(false)
     }
 
-    private fun openSettings() {
+    /**
+     * Opens the settings application, on [screen] when one is named, with [clipId] for a
+     * screen that edits a clipboard entry.
+     */
+    private fun openSettings(screen: String? = null, clipId: Long = -1L) {
         // A string class name, exactly like android:settingsActivity in method.xml. It is the
         // only reference from :keyboard towards :settings, and it creates no compile-time edge.
         val intent = Intent(Intent.ACTION_MAIN)
             .setClassName(packageName, SETTINGS_ACTIVITY)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        if (screen != null) {
+            intent.putExtra(SETTINGS_EXTRA_SCREEN, screen)
+                .putExtra(SETTINGS_EXTRA_CLIP_ID, clipId)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        }
         runCatching { startActivity(intent) }
     }
 
@@ -3372,6 +3612,19 @@ class BorderKeysService :
         // committed and no longer composing, and its X -- which discards the composing word --
         // found nothing to discard and silently did nothing.
         dismissRadialMenu()
+        // The typed chip, while a correction is pending, is the word that correction replaced:
+        // tapping it puts the word back, the same revert as a backspace.
+        val pending = pendingCorrection
+        if (pending != null && index == host?.suggestionStrip?.typedIndex &&
+            word == pending.typed && composing.isEmpty()
+        ) {
+            // Put back while the correction is still right before the caret; otherwise the
+            // correction stands and the tap does nothing more.
+            revertCorrection(connection, viaBackspace = false)
+            host?.suggestionStrip?.clear()
+            requestSuggestions()
+            return
+        }
         playEffect(EffectEvent.SuggestionPicked, word)
         // Tapping a suggestion is one of the "every other key settles it" cases onKey's own
         // comment describes -- it just does not arrive through onKey. A correction left pending
@@ -3393,6 +3646,9 @@ class BorderKeysService :
         // is exactly that case; the text immediately before the cursor is checked against it
         // first, the same guard revertCorrection uses, so a stale lastQuery deletes nothing
         // rather than deleting whatever happens to be there.
+        // Whether the pick replaces a word -- one being typed, or one the caret sits in -- or
+        // is a prediction inserted at the caret with nothing typed and nothing adopted.
+        val replacesWord = composing.isNotEmpty() || lastQuery.isNotEmpty()
         if (composing.isEmpty() && lastQuery.isNotEmpty()) {
             val before = connection.getTextBeforeCursor(lastQuery.length, 0)
             if (before != null && before.toString() == lastQuery) {
@@ -3401,12 +3657,12 @@ class BorderKeysService :
         }
         composing.setLength(0)
         composing.append(word)
-        // A pick replaces the *whole* word the caret sits in, not just the part before the
-        // caret: the composing region adoptWordAtCaret marks stops at the caret (so typing
-        // still inserts there), and "wor|d" picked as "world" used to leave "world d".
+        // A pick that replaces a word replaces the *whole* word the caret sits in, not just the
+        // part before the caret: the composing region adoptWordAtCaret marks stops at the caret
+        // (so typing still inserts there). A prediction leaves the word after the caret alone.
         val after = connection.getTextAfterCursor(CONTEXT_WINDOW_CHARS, 0)
         var tail = 0
-        if (after != null) {
+        if (after != null && replacesWord) {
             while (tail < after.length && isWordCharacter(after[tail].code)) {
                 tail++
             }
@@ -3441,16 +3697,16 @@ class BorderKeysService :
         }
         shiftHeldByUser = false
 
-        // Choosing a candidate that was not already the top one is the learning signal. This is
-        // where personalisation happens: a count goes up, and nothing is retrained.
-        // A two-word suggestion is two words confirmed, not one long one. Learning it whole
+        // A tap is the user choosing the word on purpose: the count goes up as for any commit,
+        // and the word is asserted. The chip carrying the word they typed takes the same path.
+        // A two-word suggestion is two words chosen, not one long one. Learning it whole
         // would put "vreau sa" in the personal dictionary as a single entry, which would then be
         // offered as a completion of "vr" and never match anything the user typed.
         val words = word.split(' ').filter { it.isNotEmpty() }
         var previous = contextWord
         var grandPrevious = grandContextWord
         for (part in words) {
-            recordLearned(part, previous, grandPrevious)
+            recordLearned(part, previous, grandPrevious, asserted = true)
             grandPrevious = previous
             previous = part
         }
@@ -3479,12 +3735,29 @@ class BorderKeysService :
             return
         }
         pendingForget = word
-        host?.suggestionStrip?.setActions(
-            listOf(
-                Candidate(strings.getString(Keys.ASSISTANT_FORGET, word)),
-                Candidate(strings[Keys.ASSISTANT_CANCEL]),
-            ),
+        pendingExplainQuery = lastQuery
+        val actions = mutableListOf(
+            Candidate(strings.getString(Keys.ASSISTANT_FORGET, word)),
+            Candidate(strings[Keys.ASSISTANT_CANCEL]),
         )
+        if (debuggable) {
+            actions += Candidate(strings[Keys.STRIP_WHY_THIS_WORD])
+        }
+        host?.suggestionStrip?.setActions(actions)
+    }
+
+    /** Whether this is a debuggable build, which is the only kind that explains a score. */
+    private val debuggable: Boolean
+        get() = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+
+    /** Shows the engine's own account of [word]'s score for [query], in a debuggable build. */
+    private fun explainWord(query: String, word: String) {
+        engine.explain(query, word) { text ->
+            android.widget.Toast.makeText(
+                this, text ?: strings.getString(Keys.STRIP_NOT_OFFERED, word),
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+        }
     }
 
     /**
@@ -3497,7 +3770,7 @@ class BorderKeysService :
      * longer, and what came after is no longer reached through it. The head of the chain is
      * untouched, because it is evidence about other words.
      */
-    private fun forgetWord(word: String) {
+    private fun forgetWord(word: String, blockWhenNotPersonal: Boolean = true) {
         scope.launch {
             val dictionary = DataGraph.dictionary
             // The repository suspends on its own dispatcher; the reloads only post to the
@@ -3511,7 +3784,7 @@ class BorderKeysService :
             val personal = dictionary.findIgnoreCase(word)
             if (personal != null) {
                 dictionary.forget(personal.word)
-            } else {
+            } else if (blockWhenNotPersonal) {
                 dictionary.block(word.lowercase())
                 refreshBlockedWords(dictionary)
             }
@@ -3525,6 +3798,7 @@ class BorderKeysService :
         knownWord: String,
         query: String,
         possessive: String?,
+        inflection: Boolean,
     ) {
         // This answer was asked for on an earlier keystroke and lost the race against a later
         // one: the engine has one thread and posts its answer back rather than blocking, so an
@@ -3536,6 +3810,12 @@ class BorderKeysService :
         // apply. Dropping it leaves whatever the last genuinely current answer already drew.
         if (query != lastQuery) {
             return
+        }
+        if (suggestionsRequestedAt != 0L) {
+            KeyboardStats.suggestionMillis.add(
+                (android.os.SystemClock.uptimeMillis() - suggestionsRequestedAt).toDouble(),
+            )
+            suggestionsRequestedAt = 0L
         }
         knownQuery = knownWord
         // Settled here as well as in onUpdateSelection: an editor that does not report selection
@@ -3566,6 +3846,7 @@ class BorderKeysService :
         // rather than mixed into it: it is a rewrite of a different kind and the delimiter
         // decides between them.
         possessiveSuggestion = possessive
+        queryIsInflection = inflection
         suggestionQuery = query
         // The rest of the row is not a decision the way the one correction above is -- it is
         // what the strip shows, and showing "welcome" one slot over from a correction that
@@ -3624,7 +3905,8 @@ class BorderKeysService :
         // whatever happened to rank second while space committed something else entirely.
         val row = suggestionRow.arrange(
             cased, lastQuery, preferences.suggestionCount.coerceAtMost(strip.wordSlotLimit),
-            correction = correctionFor(lastQuery),
+            correction = outlinedCommit(lastQuery),
+            revertable = pendingCorrection?.takeIf { correctionBeforeCaret(it) }?.typed,
         )
         strip.setSuggestions(row)
         strip.typedIndex = suggestionRow.typedIndex
@@ -3655,6 +3937,9 @@ class BorderKeysService :
 
     private fun requestSuggestions() {
         lastQuery = composing.toString()
+        if (privateMode) {
+            refreshPrivateReveal()
+        }
         // A password never leaves its field: nothing typed into one is sent to the engine, so
         // nothing can be predicted, corrected or learned from it. The strip's own setting is
         // not a reason to skip the request -- autocorrect needs the answer whether or not a row
@@ -3662,6 +3947,7 @@ class BorderKeysService :
         if (!dictionaryAllowed) {
             return
         }
+        suggestionsRequestedAt = android.os.SystemClock.uptimeMillis()
         engine.requestSuggestions(lastQuery, previousWord1, previousWord2)
     }
 
@@ -3696,6 +3982,7 @@ class BorderKeysService :
         composing.setLength(0)
         previousWord2 = previousWord1
         previousWord1 = word
+        KeyboardStats.words++
         return word
     }
 
@@ -3717,6 +4004,7 @@ class BorderKeysService :
         topSuggestionIsProperNoun = false
         suggestionQuery = ""
         knownQuery = ""
+        queryIsInflection = false
         composing.setLength(0)
         // Back to ordinary writing until the next word says otherwise: whatever stood in front
         // of the last one belongs to a field, or a caret position, that has been left behind.
@@ -3785,13 +4073,9 @@ class BorderKeysService :
         swipeAutoSpaceInserted = false
         // Whatever the previous word's first letter was is not evidence about this one.
         composingCapitalisedByUser = false
-        // The pending correction is deliberately *not* cleared here.
-        //
-        // Committing a correction ends the composing region, so the selection change that
-        // follows our own commit lands in this branch -- and clearing it here meant the very
-        // next backspace had nothing to undo, which is the entire feature. Nothing is lost by
-        // keeping it: revertCorrection checks that the text immediately before the cursor is
-        // still exactly what it committed, and declines when the caret has really moved.
+        // The pending correction stays. Whether it can still be put back is decided where it
+        // is acted on, against the text before the caret: revertCorrection for the backspace,
+        // correctionBeforeCaret for the strip's typed-word chip.
         val connection = currentInputConnection
         connection?.finishComposingText()
 
@@ -4070,12 +4354,17 @@ class BorderKeysService :
      * whose word never went through per-character typing at all (a swipe, or a tap on a strip
      * suggestion that was already re-cased for display) passes `false`: neither one is the user
      * manually pressing shift for a letter, so neither is evidence either way.
+     *
+     * [asserted] is whether the user chose the word on purpose rather than typed past it: a
+     * tap on the strip, including on the word they typed themselves, or a correction put back
+     * -- see `UserWord.asserted`.
      */
     private fun recordLearned(
         word: String,
         contextWord: String?,
         grandContextWord: String?,
         deliberateCapital: Boolean = false,
+        asserted: Boolean = false,
     ) {
         if (!learning.enabled || word.length < MIN_LEARNED_LENGTH) {
             return
@@ -4092,11 +4381,13 @@ class BorderKeysService :
         if (contextWord != null && grandContextWord != null) {
             learning.recordTriple(grandContextWord, contextWord, word, now)
         }
-        if (learning.record(word, locale, now)) {
+        if (learning.record(word, locale, now, deliberateCapital, asserted)) {
             playEffect(EffectEvent.LearnedWord, word)
             engine.learn(
                 listOf(
-                    com.borderkeys.data.dao.LearnedWord(word, locale, 1, now, deliberateCapital),
+                    com.borderkeys.data.dao.LearnedWord(
+                        word, locale, 1, now, deliberateCapital, asserted,
+                    ),
                 ),
                 contextWord, grandContextWord,
             )
@@ -4670,9 +4961,15 @@ class BorderKeysService :
                 val recent = DataGraph.clipboard.recent(MAX_CLIPBOARD_CARDS)
                 recent to view.clipboardPanel.decodeThumbnails(recent)
             }
+            view.clipboardPanel.query = searchWordAtCaret()
             view.clipboardPanel.setEntries(entries, thumbnails)
             view.setClipboardPanelVisible(true)
         }
+    }
+
+    override fun onClipEdited(entry: com.borderkeys.data.entity.ClipEntry) {
+        host?.setClipboardPanelVisible(false)
+        openSettings(screen = SETTINGS_SCREEN_CLIPBOARD, clipId = entry.id)
     }
 
     override fun onClipPicked(entry: com.borderkeys.data.entity.ClipEntry) {
@@ -4718,6 +5015,32 @@ class BorderKeysService :
      * The panel stays open: choosing one emoji is very often choosing three, and a picker that
      * closes on every pick is a picker reopened on every pick.
      */
+    /** Opens the emoji grid searched by the word at hand, or closes it. */
+    private fun toggleEmojiPanel() {
+        val view = host ?: return
+        val show = !view.emojiPanelVisible
+        view.setEmojiPanelVisible(show)
+        if (show) {
+            view.emojiPanel.query = searchWordAtCaret()
+        }
+    }
+
+    /** The word an emoji is looked up by: the one being typed, else the letters before the
+     *  caret. */
+    /** The word being typed, or the letters just before the caret: the panels' search word. */
+    private fun searchWordAtCaret(): String {
+        if (composing.isNotEmpty()) {
+            return composing.toString()
+        }
+        val before = currentInputConnection?.getTextBeforeCursor(SEARCH_QUERY_CHARS, 0)
+            ?: return ""
+        var start = before.length
+        while (start > 0 && Character.isLetter(before[start - 1])) {
+            start--
+        }
+        return before.substring(start)
+    }
+
     private fun onEmojiPicked(emoji: String) {
         val connection = currentInputConnection ?: return
         finishComposing(connection)
@@ -4732,6 +5055,27 @@ class BorderKeysService :
         scope.launch {
             DataGraph.themes.updatePreferences { it.copy(emojiRecents = updated) }
         }
+    }
+
+    override fun onPrivateRevealToggled() {
+        if (!privateMode) {
+            return
+        }
+        privateReveal = !privateReveal
+        host?.suggestionStrip?.privateReveal = privateReveal
+        refreshPrivateReveal()
+    }
+
+    /** Re-reads a private field's text into the strip while it is being shown. */
+    private fun refreshPrivateReveal() {
+        val strip = host?.suggestionStrip ?: return
+        if (!privateMode || !privateReveal) {
+            return
+        }
+        val connection = currentInputConnection ?: return
+        val before = connection.getTextBeforeCursor(PRIVATE_REVEAL_CHARS, 0) ?: ""
+        val after = connection.getTextAfterCursor(PRIVATE_REVEAL_CHARS, 0) ?: ""
+        strip.privateText = before.toString() + after.toString()
     }
 
     override fun onClipboardPanelClosed() {
@@ -4772,7 +5116,14 @@ class BorderKeysService :
         if (back == 0 && forward == 0) {
             return
         }
-        val caret = selectionEnd
+        // The editor's own caret, not the tracked one: an editor that reports its selection
+        // late leaves selectionEnd behind the text just read.
+        val extracted = connection.getExtractedText(ExtractedTextRequest(), 0)
+        val caret = if (extracted != null && extracted.selectionEnd >= 0) {
+            extracted.startOffset + extracted.selectionEnd
+        } else {
+            selectionEnd
+        }
         connection.setSelection(caret - back, caret + forward)
     }
 
@@ -4820,6 +5171,16 @@ class BorderKeysService :
         }
     }
 
+    /** Whether the copying app marked the clip sensitive -- a password manager's credential.
+     *  The flag exists from Android 13; below that nothing marks a clip. */
+    private fun isSensitiveClip(clip: ClipData): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
+            return false
+        }
+        return clip.description?.extras
+            ?.getBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, false) == true
+    }
+
     /**
      * Rebuilds the chip that offers what is on the clipboard.
      *
@@ -4837,7 +5198,7 @@ class BorderKeysService :
         }
         val description = clip?.description
         if (clip == null || clip.itemCount == 0 || description == null ||
-            clipSignature(clip) == withdrawnClip
+            clipSignature(clip) == withdrawnClip || isSensitiveClip(clip)
         ) {
             strip.clipboardChip = null
             shownClipSignature = null
@@ -4948,6 +5309,9 @@ class BorderKeysService :
         }
         withdrawnClip = null
         refreshClipboardChip()
+        if (isSensitiveClip(clip)) {
+            return
+        }
 
         val description = clip.description
         val uri = clip.getItemAt(0).uri
@@ -5071,6 +5435,11 @@ class BorderKeysService :
         const val PAGE_SYMBOLS_SHIFT = 2
         const val PAGE_NUMPAD = 3
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
+
+        /** The settings activity's extras: a screen to open on, and a clip that screen edits. */
+        const val SETTINGS_EXTRA_SCREEN = "com.borderkeys.settings.SCREEN"
+        const val SETTINGS_EXTRA_CLIP_ID = "com.borderkeys.settings.CLIP_ID"
+        const val SETTINGS_SCREEN_CLIPBOARD = "Clipboard"
         /**
          * The file the native personal model used to be written into on every flush and never
          * read back from -- the Room tables were always the copy it was rebuilt from at start.
@@ -5101,6 +5470,12 @@ class BorderKeysService :
         const val DOUBLE_TAP_MILLIS = 400L
 
         const val CONTEXT_WINDOW_CHARS = 64
+
+        /** How much of the text before the caret an emoji search reads its word from. */
+        const val SEARCH_QUERY_CHARS = 32
+
+        /** How much of a private field's text, either side of the caret, the strip can show. */
+        const val PRIVATE_REVEAL_CHARS = 256
 
         /**
          * How much of the field [checkpointField] and [restoreFieldVersion] will read.

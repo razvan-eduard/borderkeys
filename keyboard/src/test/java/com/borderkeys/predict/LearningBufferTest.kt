@@ -195,4 +195,21 @@ class LearningBufferTest {
         val tooLong = "a".repeat(LearningBuffer.MAX_WORD_LENGTH + 1)
         assertFalse(buffer.record(tooLong, "ro-RO", 1_000))
     }
+
+    /** Both facts about a commit reach the database with the count. */
+    @Test
+    fun `a deliberate capital and an assertion travel with the count`() {
+        val buffer = LearningBuffer()
+        buffer.record("emanuel", "ro-RO", 1_000)
+        buffer.record("emanuel", "ro-RO", 1_500, deliberateCapital = true)
+        buffer.record("emanuel", "ro-RO", 2_000, asserted = true)
+        buffer.record("plain", "ro-RO", 2_000)
+
+        val drained = buffer.drain().associateBy { it.word }
+        assertEquals(3, drained.getValue("emanuel").delta)
+        assertTrue(drained.getValue("emanuel").deliberateCapital)
+        assertTrue(drained.getValue("emanuel").asserted)
+        assertFalse(drained.getValue("plain").deliberateCapital)
+        assertFalse(drained.getValue("plain").asserted)
+    }
 }

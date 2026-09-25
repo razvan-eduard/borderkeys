@@ -42,6 +42,10 @@ public:
     /** Whether [loadWeights] has succeeded at least once. */
     bool hasWeights() const { return encoder_.hasWeights(); }
 
+    /** Microseconds the last decode spent in the encoder, and in the word search over the tries. */
+    int64_t lastEncoderMicros() const { return lastEncoderMicros_; }
+    int64_t lastSearchMicros() const { return lastSearchMicros_; }
+
 private:
     GestureScorer& scorer_;
     TcnWeights weights_;
@@ -55,6 +59,8 @@ private:
     // moment -- uninitialised, since TcnWeights has no default member initialisers -- and no
     // later setLayout call would ever correct it.
     const KeyGeometry* lastGeometry_ = nullptr;
+    int64_t lastEncoderMicros_ = 0;
+    int64_t lastSearchMicros_ = 0;
 
     float resampledX_[kTcnTimesteps] = {};
     float resampledY_[kTcnTimesteps] = {};

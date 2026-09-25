@@ -556,6 +556,8 @@ class KeyboardHostView(
         }
         if (visible) {
             emojiPanel.load(context)
+        } else {
+            emojiPanel.query = ""
         }
         emojiPanel.visibility = if (visible) VISIBLE else GONE
         keyboard.visibility = if (visible) GONE else VISIBLE

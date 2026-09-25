@@ -28,7 +28,7 @@ with a green build and a keyboard that suggests the wrong word.
 
 ### JVM — `./gradlew test`
 
-**525 test functions across 53 files.** No device, no emulator, no Robolectric.
+**576 test functions across 61 files.** No device, no emulator, no Robolectric.
 
 That is possible because the logic is deliberately kept out of the Android classes. The policy
 objects in `ime/` hold no `InputConnection` and make no native calls — they take strings and
@@ -37,6 +37,8 @@ return decisions:
 | Class | What its tests pin down |
 |---|---|
 | `AutoCorrection` | Every reason a correction is refused |
+| `WordCommit` | Which claim on a committed word wins -- shortcut, apostrophe map, possessive, capital, autocorrect -- and under which switch |
+| `WordStems` | The endings each language forms and the stems they leave |
 | `AutoShift` | Shift state from a field's request and the text before the cursor |
 | `PrivateMode` | Every input type the platform defines |
 | `LanguageSwitchCorrector` | Which flags resolve to which replacements, and where the caret lands |
@@ -50,7 +52,7 @@ return decisions:
 two keys is a touch that does nothing, and **neither a device nor a screenshot will show it**.
 Tested as arithmetic, it cannot hide.
 
-### The join — `PipelineTest`, `LanguageSwitchPipelineTest`
+### The join — `PipelineTest`, `PipelineCorpusTest`, `LanguageSwitchPipelineTest`
 
 The section above and the one below each test half of a decision. The native suite stops at the
 engine; the policy classes start after it, on values handed to them. Between the two sits the
@@ -58,21 +60,25 @@ join, and every correction bug reported from a device lived exactly there — a 
 offered and the guards were meant to refuse, or the reverse.
 
 `Pipeline` closes it. It drives the shipping engine through the shipping JNI bridge and then the
-shipping Kotlin, against the packs the application ships. Nothing in it is a model of the
-pipeline; it *is* the pipeline, with the editor and the touch surface left out. What still needs
-a device: the composing region, delimiter handling, field state, and what the service decides
-around all of it.
+shipping Kotlin -- `WordCommit` with the apostrophe maps of the languages opened, the productive
+possessive, the capital a language always writes, and every guard in `AutoCorrection` --
+against the packs the application ships. Nothing in it is a model of the pipeline; it *is* the
+pipeline, with the editor and the touch surface left out. What still needs a device: the
+composing region, delimiter handling, field state, and what the service decides around all of
+it.
 
 | Payload | What it pins |
 |---|---|
-| `pipeline_cases.tsv` | 32 cases, `typed <TAB> committed <TAB> situation` |
-| `pipeline_cases_ro.tsv` | 5 Romanian cases, against the pack most reports come from |
+| `pipeline_cases.tsv` | 49 cases, `typed <TAB> committed <TAB> reason` |
+| `pipeline_cases_ro.tsv` | 13 Romanian cases, against the pack most reports come from |
+| `PipelineCorpusTest` | Every autocorrect corpus, with a floor per corpus -- see [the whole path](#the-whole-path--pipelinecorpustest) |
 | `LanguageSwitchPipelineTest` | The backward correction, end to end over two packs |
 
-The **situation** is asserted beside the outcome because an outcome on its own can be right by
-accident: a guard can stop working while another covers for it, which is exactly what a chain of
-early returns used to hide. Adding a case costs a line, not a method, and every failure in a run
-is reported together rather than stopping at the first.
+The **reason** is asserted beside the outcome because an outcome on its own can be right by
+accident: a guard can stop working while another covers for it. The reason is the rewrite that
+claimed the word (Shortcut, Contraction, Possessive, Capital), one of autocorrect's situations,
+or the gate that kept autocorrect from being asked (NotProse). Adding a case costs a line, not a
+method, and every failure in a run is reported together rather than stopping at the first.
 
 Every line is a **requirement** — what the keyboard must do, never what it currently does.
 
@@ -118,6 +124,32 @@ A note on writing engine tests: **`setKeyGeometry` is not optional.** Without it
 `KeyGeometry::isSet()` is false and the walk never leaves exact-match mode — no substitution,
 deletion, transposition or insertion at all. A test that forgets it measures prefix completion
 and believes it has measured the engine.
+
+### Instrumented — `./gradlew :app:connectedCoreDebugAndroidTest`
+
+`app/src/androidTest/java/com/borderkeys/ImeSmokeTest.kt` is the one suite that runs the keyboard
+against the framework's own editor. It installs the bundled English pack, switches autocorrect
+on, selects the keyboard through `ime set`, opens the settings application's "Try it here" field
+and taps keys by the accessibility nodes the keyboard publishes for them, reading the field back
+through its node. What it covers is exactly what the JVM cannot: a correction written on the
+space bar, the backspace that puts the typed word back, typing after a caret move into committed
+text, and a chip picked with the caret at the start of the field followed by a new word — each
+asserting the field's final text.
+
+It runs in CI's `smoke` job on an API 30 x86_64 emulator (`-Pborderkeys.extraAbis=x86_64` adds
+the ABI, which the shipped APKs do not carry). Locally it runs on an emulator, never a phone,
+because a debug build is what it needs, and the build is installed by hand rather than by
+Gradle's connected task, which uninstalls the application and its data when the run ends:
+
+```bash
+./gradlew :app:assemblePlusDebug :app:assemblePlusDebugAndroidTest
+adb -s emulator-5554 install -r app/build/outputs/apk/plus/debug/app-plus-debug.apk
+adb -s emulator-5554 install -r app/build/outputs/apk/androidTest/plus/debug/app-plus-debug-androidTest.apk
+adb -s emulator-5554 shell am instrument -w -r -e class com.borderkeys.ImeSmokeTest \
+  com.borderkeys.plus.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+The suite leaves the pack it installed and the preferences it set in place.
 
 ---
 
@@ -283,6 +315,94 @@ The levels are not comparable to the gated table above — the same decoder read
 77.0% there. Both are QWERTY and both drop taps and out-of-pack words; `swipe-5` is simply a
 harder collection than the held-out test split. Only the movement within a column means anything.
 
+### Swipe latency and memory on a device — not gated
+
+Two numbers per swipe, printed by debuggable builds as `swipe: decode … ms, lift to text … ms`:
+the time inside the native decode, and the time from the finger lifting to the word standing in
+the field, which adds the worker hand-off, the main-thread commit and whatever the device was
+doing meanwhile. Thirty straight-line swipes of two-letter words on the emulator's QWERTY,
+`adb shell input swipe` at 400 ms each, English pack, on an API 35 arm64 image running a debug
+`plus` build on a host at load 10–20. Tier B is the neural decoder, tier A the geometric one.
+
+| | swipes | decode median | decode p90 | decode max | lift to text median | p90 | max |
+|---|---|---|---|---|---|---|---|
+| tier B | 30 | 1.5 ms | 6.7 ms | 18.3 ms | 60 ms | 133 ms | 150 ms |
+| tier A | 11 | 2.8 ms | 18.7 ms | 44.3 ms | 59 ms | 219 ms | 2,126 ms |
+
+The emulator rows are of limited worth. The tier letter on that log line was the switch's
+setting at the time, not what decoded, and the tier B row's decode times are what the geometric
+decoder costs, so whether the neural weights had loaded on the emulator for that run is not
+established; the phone rows below are the measurement. Tier A's count is lower because the
+emulator, at that load, delivered most of the injected swipes as five samples or fewer, which
+the keyboard rightly reads as taps; the eleven that arrived as gestures are pooled from three
+runs. Its 2.1 s maximum was the first decode after
+the process had been restarted, behind the packs still loading, and is the cost of a cold start
+rather than of a decode. The lift-to-text figure is dominated by the main thread, and what it
+measures is that nothing on the commit path waits on the worker: the search and the decode
+write the worker's own buffers, and the lock around the shared result is held only for the copy.
+
+The same figures from a phone, read off the debug stats panel on a HONOR DNP-NX9 running
+Android 16 and the release `plus` build with one language, geometric decoder, a short session
+(shared 2026-09-25):
+
+| figure | mean |
+|---|---|
+| keystroke to strip | 34.5 ms |
+| native search | 0.4 ms |
+| swipe decode, tier A | 1.1 ms |
+| lift to text, tier A | 17 ms |
+| touch samples per swipe | 102 for a 636 ms swipe |
+| packs loaded | 79 ms |
+| memory in use | 156 MB, of which 20 MB is the process's own heap |
+
+Against the emulator's rows above, the phone is about four times faster from lift to text and
+delivers twenty times the touch samples; the emulator numbers are ceilings, not the product.
+
+The same figures can be read on a phone without a cable: the settings application's "Debug
+stats" line, just above its "Try it here" field, opens a panel with the keystroke-to-strip and
+native search latencies, the swipe decode and lift-to-text figures labelled with the decoder in
+use, the swipe path, duration and sample figures, the pack load time, the typing speed and the
+process memory, each as last, mean and maximum with a count, re-read twice a second, with a
+Reset for the next run. A figure with a baseline carries a green, amber or red dot judged on
+its mean and a line saying what it is, whether any setting changes it and where the baseline
+lies; a figure that is only a fact about the typing carries neither. Share hands the whole
+panel to the system share sheet as plain text, headed by the build, the device and the moment. The keyboard
+records them in every build; the panel is where they are shown.
+
+The same phone, neural decoder, before the encoder and search changes below: decode 130.9 ms
+mean over five swipes, lift to text 139.8 ms, which is what led to those changes.
+
+### Where the neural decode's time goes
+
+`tcn_replay` prints, per gesture, the milliseconds spent in the encoder and in the word search
+over the tries, on this machine's release build (`cmake -S native-tests -B native-tests/build-release
+-DCMAKE_BUILD_TYPE=Release`), over the 30 gestures of `native-tests/data/gestures.csv`:
+
+| | encoder | search |
+|---|---|---|
+| before | 29.4 ms | 4.7 ms |
+| encoder loops accumulated a row at a time, so the compiler vectorises them | 3.3 ms | 4.7 ms |
+| the prune scores each hypothesis once | 3.3 ms | 4.0 ms |
+| beam merges found through a hash table, key symbols resolved once per decode | 3.3 ms | 1.6 ms |
+
+Every step keeps the arithmetic and its order, so the ranks over those 30 gestures are identical
+at each row and the tier B gate above reads the same 90.6% / 94.8% throughout. On the same
+phone as above, the neural decode went from 130.9 ms to 3.2 ms mean (6.0 ms max) over eleven
+swipes, and lift to text from 139.8 ms to 11.9 ms; on the emulator, with the tier now reported
+by the engine rather than read off the switch, thirty swipes decoded in 0.2 to 0.6 ms with one
+at 5.6 ms.
+
+The memory figure is mostly file-backed pages -- the packs and the libraries, mapped and
+shareable -- and the panel's baseline (fine to 200 MB, worth a look past 300 MB) is set for a
+phone with one or two languages on.
+
+Memory, from `/proc/<pid>/status` on a phone running the release `plus` build after a session of
+typing and swiping: 169 MB resident, of which 42 MB is the process's own (heap and stacks) and
+125 MB is file-backed — the packs and the libraries, mapped and shareable, paged in on demand.
+Peak 206 MB. On the emulator `dumpsys meminfo` reads 96–100 MB PSS with the neural decoder never
+used and 174 MB once it has decoded, which is the decoder's weights and workspace and the reason
+a decoder that has been switched off has no claim on the memory.
+
 ### Layout generalisation — not gated, and not the product number
 
 ```
@@ -328,6 +448,12 @@ worth measuring, and it is the result the guards in `AutoCorrection` exist to pr
 
 Current baseline: **71.9% first place, 81.2% top three, mean rank 1.39**, 32 cases.
 
+With nothing typed, the pack's successor index is walked before the frequent shortlist, so a
+strong successor that is itself a rare word reaches the strip: after `ice`, `cream` and
+`hockey`; after `united`, `states`, `kingdom` and `nations`; after `human`, `rights` and
+`beings`. `PipelineTest` pins four such pairs. What a prose corpus never wrote often enough
+stays out -- `happy birthday` is not among the pairs the packs hold.
+
 ### Correct words the pack has never heard of
 
 ```
@@ -355,6 +481,54 @@ this replaced took the *first* 200 words of the right length, which is alphabeti
 every one began with "a"; the headline barely changed (31.5% to 34.0% overwritten) but the
 diagnosis was badly distorted, since a leading "a" makes a shorter word unusually easy to
 reach.
+
+### The whole path — `PipelineCorpusTest`
+
+```bash
+./gradlew :keyboard:testPlusDebugUnitTest --tests 'com.borderkeys.predict.PipelineCorpusTest' -i
+```
+
+Every corpus above and below, through the engine, the bridge and `WordCommit`, with a floor
+per corpus that CI enforces. The engine's own numbers and the path's differ wherever a guard
+refuses what the engine offered, or a rewrite claims the word first; where they differ, this
+is the number a user gets.
+
+| corpus | rows | engine alone | whole path |
+|---|---|---|---|
+| `autocorrect_typo_en` | 200 | 100.0% | 199 |
+| `autocorrect_midword_en` | 200 | 98.5% | 192 |
+| `autocorrect_midtypo_en` | 200 | 71.5% | 44 |
+| `autocorrect_unknown_en` | 200 | 82.5% | 188 |
+| `autocorrect_doubled_en` | 200 | 98.0% | 187 |
+| `autocorrect_firstletter_en` | 200 | 91.5% | 166 |
+| `autocorrect_marks_en` | 240 | — | 233 |
+| `autocorrect_accents_ro` | 248 | 95.2% | 237 |
+
+The unknown corpus reads 184 without the inflection guard (`AutoCorrection.Situation.Inflection`,
+`WordStems`); the guard moves no other corpus. The gap on the doubled-letter and first-letter
+corpora is the proper-noun rule: a slip inside a name -- `ameriican`, `cecember` -- is offered
+the name and refused as `NameMismatch`, since a name corrects only its own letters. Of the twelve correct words still overwritten,
+none is a regular inflection of a stem above `kStemFrequencyFloor`: `pouter` and `headiness`
+have stems the pack holds a dozen times, and the rest are not inflections at all. The seven
+marks rows the path answers differently are a typed apostrophe carried on to the contraction
+-- `that'` to `that's` -- which the corpus expects left alone.
+
+### One letter doubled, and the first letter one key over
+
+```
+native-tests/build/suggest_eval <dict dir> --autocorrect native-tests/data/autocorrect_doubled_en.tsv en-US
+native-tests/build/suggest_eval <dict dir> --autocorrect native-tests/data/autocorrect_firstletter_en.tsv en-US
+```
+
+Two slips a keyboard sees constantly and no other corpus isolates: an inner letter repeated
+(`takking`), and the first letter hit one key over (`raking` for `taking`). Generated by
+`tools/make_doubled_corpus.py` and `tools/make_firstletter_corpus.py` from the 4,000 commonest
+words, 200 cases each, seed in the file.
+
+Current baselines: **98.0%** corrected for the doubled letter, **91.5%** for the first letter.
+Neither needs a rule of its own: a deletion and a first-position substitution are already
+priced by the walk, and the first-letter cases that fail are the ones where the slip lands on a
+different real word.
 
 ### Mistyped and unfinished at once
 
@@ -403,9 +577,10 @@ stratification is the measurement rather than a detail: restoration never failed
 `totuși` (9,779) always worked and `cană` (170) never did, so a corpus drawn from the top of the
 word list would have reported near-perfect and hidden the defect completely.
 
-Current baseline: **89.3% restored**, 300 cases. It was **3.3%** before any of this: the
+Current baseline: **95.2% restored**, 248 cases. It was **3.3%** before any of this: the
 respelling tier in the engine took it to 64.0%, normalising the dictionary's diacritic
-encodings to 86.3%, and repairing its mojibake to 89.3%.
+encodings to 86.3%, repairing its mojibake to 89.3%, and pack format 4 — a folded key carrying
+every spelling rather than only the commonest — to 95.2%.
 
 That second half was the larger surprise. `ro_RO.tsv` spelled **8,822 words two or more ways** —
 cedilla `ş`/`ţ` against comma-below `ș`/`ț`, and `ã` (a Portuguese letter) standing in for `ă` —
@@ -414,7 +589,7 @@ so a word could be ranked on a fraction of its real count, and the spelling that
 under one spelling and 441,688 under another. `tools/normalise_diacritics.py` folds them,
 returning **2,241,446 occurrences** to the right spelling.
 
-The remainder is mostly not a defect. **57 of the 300 cases have a typed form that is itself a
+The remainder is mostly not a defect. **Most of the cases left have a typed form that is itself a
 Romanian word** — `suporta` (infinitive) beside `suportă` (third person), `casa` beside `casă` —
 where leaving it alone is the correct answer and the corpus, testing words in isolation, cannot
 tell. Of the rest, a handful are foreign names carrying foreign diacritics (`León`, `Novák`),
@@ -446,6 +621,33 @@ Two things this deliberately did not do, both recorded rather than fixed:
 model, the pack weight, the personal boost, the edit and completion cost — and says what
 autocorrect would do with it. That is the question every scoring change starts with, and the one
 a ranked list cannot answer.
+
+### Word-list classification — report only
+
+```
+python3 tools/classify_wordlist.py --tag en_US --hunspell en_US=<en_US> --hunspell en_US=<en_GB> \
+    --coverage <held-out list> --review <dir>
+```
+
+`tools/classify_wordlist.py` judges every row of a list by the language's own evidence and
+reports what it would drop. It is not applied to any shipped list, and the number that decides
+that is the last one it prints: coverage of a held-out conversational frequency list (the
+OpenSubtitles 50k lists, read for measurement only, never shipped) before and after.
+
+| list | rows | dropped | 10k held-out | 20k | 50k |
+|---|---|---|---|---|---|
+| `en_US` (en_US + en_GB checkers) | 148,892 | 20,567 | 96.2% → 95.9% | 93.6% → 92.9% | 82.5% → 80.3% |
+| `es_ES` (es_ES + es_MX) | 109,770 | 10,679 | 93.8% → 93.3% | 88.0% → 87.1% | 73.4% → 71.4% |
+| `fr_FR` (fr) | 110,590 | 8,528 | 92.3% → 92.0% | 86.2% → 85.5% | 69.6% → 68.2% |
+
+Every run costs coverage. Of the 10,000 commonest English held-out words, 31 would go, and
+they are the words a prose corpus holds at low rank and no checker vouches for: `doin`,
+`comin`, `gettin`, `talkin`, `nothin`, `mmm`, `ahh`, `hah`, plus fragments of the held-out
+list's own tokenisation (`didn`, `isn`). The Spanish and French losses have the same shape
+(`vámonos`, `quizas`, `ecoute`, `peut-etre`). A list may be classified once a conversational
+witness vouches for that tail; until then the tool is a report, and the review file it writes
+is the list to read.
+```
 
 ### Why these are not tests
 
@@ -509,6 +711,12 @@ for d in dictionaries/*.tsv; do python3 tools/drop_mojibake.py "$d" --dry-run; d
 python3 tools/make_accent_corpus.py dictionaries/ro_RO.tsv
 python3 tools/make_unknown_corpus.py <hunspell en_US.dic> dictionaries/en_US.tsv
 python3 tools/make_midtypo_corpus.py dictionaries/en_US.tsv
+python3 tools/make_doubled_corpus.py dictionaries/en_US.tsv
+python3 tools/make_firstletter_corpus.py dictionaries/en_US.tsv
+
+# Classify a word list, report only: drops, guard words, coverage of a held-out list
+python3 tools/classify_wordlist.py --tag en_US --hunspell en_US=<en_US> --hunspell en_US=<en_GB> \
+    --coverage <en_50k.txt> --review /tmp/review
 
 # Measurements
 native-tests/build/suggest_eval <dict dir> native-tests/data/suggest_en.tsv en-US

@@ -42,7 +42,7 @@ import java.util.Arrays
         UserBigram::class,
         UserTrigram::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class BorderKeysDatabase : RoomDatabase() {
@@ -190,6 +190,18 @@ abstract class BorderKeysDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 6 to 7: how many times a learned word was chosen on purpose -- see
+         * [com.borderkeys.data.entity.UserWord.asserted]. Additive; existing rows start at zero.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `user_words` ADD COLUMN `asserted` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
         fun open(context: Context): BorderKeysDatabase {
             // sqlcipher-android 4.x has no static initialiser that does this: nothing in the
             // library loads its own .so, so the first call into it would fail with an
@@ -210,6 +222,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
                 .openHelperFactory(factory)
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                    MIGRATION_6_7,
                 )
                 // The settings screen and the IME run in the same process, but the text
                 // assistant runs in ":assist" and opens this database too. Without this, a write

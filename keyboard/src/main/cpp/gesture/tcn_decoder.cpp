@@ -3,6 +3,7 @@
 
 #include "tcn_decoder.hpp"
 
+#include <chrono>
 #include <memory>
 
 #include "../topk.hpp"
@@ -48,8 +49,12 @@ int TcnDecoder::decode(const float* xs, const float* ys, const int64_t* ts, int 
                              resampledX_, resampledY_)) {
         return 0;
     }
+    const auto encoderStarted = std::chrono::steady_clock::now();
     buildTcnFeatures(resampledX_, resampledY_, kTcnTimesteps, features_);
     encoder_.forward(features_, intention_, spectral_);
+    const auto searchStarted = std::chrono::steady_clock::now();
+    lastEncoderMicros_ = std::chrono::duration_cast<std::chrono::microseconds>(
+                             searchStarted - encoderStarted).count();
 
     TopK<Candidate> heap;
     Candidate heapStorage[16];
@@ -66,6 +71,9 @@ int TcnDecoder::decode(const float* xs, const float* ys, const int64_t* ts, int 
             heap.offer(perPackScratch_[i]);
         }
     }
+
+    lastSearchMicros_ = std::chrono::duration_cast<std::chrono::microseconds>(
+                            std::chrono::steady_clock::now() - searchStarted).count();
 
     Candidate drained[16];
     const int drainedCount =

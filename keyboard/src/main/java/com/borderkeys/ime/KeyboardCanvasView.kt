@@ -217,6 +217,9 @@ class KeyboardCanvasView(
      */
     private val geometry = KeyboardGeometry()
 
+    /** The average key width of the compiled layout, in pixels; 0 before the first layout. */
+    val keyWidthPx: Float get() = geometry.averageKeyWidth
+
     /** Per-key text size, fixed at compile time so the draw path never calls measureText. */
     private var labelTextSize = FloatArray(0)
 
@@ -828,7 +831,10 @@ class KeyboardCanvasView(
         }
         val radius = paints.keyCornerRadiusPx
         for (index in 0 until geometry.keyCount) {
-            val fill = if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.MODIFIER) ||
+            val code = geometry.keyCode[index]
+            val fill = if ((code == KeyCodes.CONTROL && controlArmed) || (code == KeyCodes.ALT && altArmed)) {
+                paints.keyPressedFill
+            } else if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.MODIFIER) ||
                 KeyFlags.has(geometry.keyFlags[index], KeyFlags.SECONDARY_ROW)
             ) {
                 paints.modifierKeyFill
@@ -873,6 +879,20 @@ class KeyboardCanvasView(
 
     /** One character, reused, so upper-casing a label allocates nothing on the draw path. */
     private val shiftedLabel = CharArray(1)
+
+    /** Control and alt armed for the next key; the armed key is drawn pressed until it comes. */
+    private var controlArmed = false
+    private var altArmed = false
+
+    fun setArmedModifiers(control: Boolean, alt: Boolean) {
+        if (controlArmed == control && altArmed == alt) {
+            return
+        }
+        controlArmed = control
+        altArmed = alt
+        backgroundValid = false
+        invalidate()
+    }
 
     /**
      * The lock light: caps lock is otherwise invisible, since every other letter on the board

@@ -45,7 +45,12 @@ inline constexpr uint32_t kBkdMagic = 0x31444B42u;
 // word index; it now carries the first index of a run of words that share that folded key, and
 // kSectionWordRun gives the run's length. Every per-word section is therefore longer than the
 // number of trie terminals, which is what a version 3 reader would assume they matched.
-inline constexpr uint32_t kBkdVersion = 4u;
+// 5 replaced the bigram hash table with a successor index: three sections holding, for every
+// word and for the sentence start, the words the corpus wrote after it, sorted by index, with
+// the quantised conditional log-probability of each. BkdHeader::bigramCapacity became
+// successorCount, the descriptor the index needs beyond the two it replaced came out of the
+// reserved words, and the header stays 336 bytes.
+inline constexpr uint32_t kBkdVersion = 5u;
 
 // Caps, checked before a single byte is mapped.
 //
@@ -71,8 +76,10 @@ enum BkdSectionIndex : uint32_t {
     kSectionWordOffsets,      // uint32_t[wordCount + 1], prefix offsets into the text blob
     kSectionWordFreq,         // uint8_t[wordCount], quantised unigram log-probability
     kSectionWordText,         // UTF-8, the display forms, diacritics intact
-    kSectionBigramKeys,       // uint64_t[bigramCapacity]
-    kSectionBigramValues,     // uint8_t[bigramCapacity]
+    kSectionSuccessorOffsets, // uint32_t[wordCount + 2], list starts; list wordCount is the
+                              // sentence start, the last entry is successorCount
+    kSectionSuccessorWords,   // uint32_t[successorCount], sorted within each list
+    kSectionSuccessorValues,  // uint8_t[successorCount], quantised -log P(word | context)
     kSectionTrigramKeys,      // uint32_t[3 * trigramCapacity]
     kSectionTrigramValues,    // uint8_t[trigramCapacity]
     kSectionWordTags,         // uint8_t[wordCount], part-of-speech tag index per word
@@ -113,7 +120,7 @@ struct BkdHeader {
     uint32_t wordCount;
     uint32_t nodeCount;
     uint32_t alphabetCount;
-    uint32_t bigramCapacity;   // power of two, or zero
+    uint32_t successorCount;   // pairs in the successor index, or zero
     uint32_t trigramCapacity;  // power of two, or zero
     uint32_t logProbScaleQ;    // fixed point: logProb = -quantised / logProbScaleQ
 
@@ -123,9 +130,9 @@ struct BkdHeader {
     // the term, exactly as it did before.
     uint32_t posTagCount;
 
-    // Four words shorter than in version 3, which is where kSectionWordRun's descriptor came
-    // from: the header stays 336 bytes and every section offset keeps its meaning.
-    uint32_t reserved[9];
+    // Shorter with every descriptor added since version 3, which is where they come from: the
+    // header stays 336 bytes and every section offset keeps its meaning.
+    uint32_t reserved[5];
 
     BkdSection sections[kSectionCount];
 };
@@ -269,14 +276,12 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
         return kBkdErrCounts;
     }
 
-    // Hash capacities are masked with capacity-1, which is only a valid modulo for powers of
-    // two. A non-power-of-two here would turn every probe into an out-of-range index.
-    const uint32_t bigramCap = header.bigramCapacity;
+    // The trigram capacity is masked with capacity-1, which is only a valid modulo for powers
+    // of two. A non-power-of-two here would turn every probe into an out-of-range index. The
+    // successor count is a plain count, bounded the same way.
+    const uint32_t successorCount = header.successorCount;
     const uint32_t trigramCap = header.trigramCapacity;
-    if (bigramCap > kMaxNgramCapacity || trigramCap > kMaxNgramCapacity) {
-        return kBkdErrCapacity;
-    }
-    if (bigramCap != 0 && (bigramCap & (bigramCap - 1)) != 0) {
+    if (successorCount > kMaxNgramCapacity || trigramCap > kMaxNgramCapacity) {
         return kBkdErrCapacity;
     }
     if (trigramCap != 0 && (trigramCap & (trigramCap - 1)) != 0) {
@@ -306,8 +311,10 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
         {kSectionWordFreq, sizeof(uint8_t), alignof(uint8_t), header.wordCount},
         {kSectionWordFlags, sizeof(uint8_t), alignof(uint8_t), header.wordCount},
         {kSectionWordRun, sizeof(uint8_t), alignof(uint8_t), header.wordCount},
-        {kSectionBigramKeys, sizeof(uint64_t), alignof(uint64_t), bigramCap},
-        {kSectionBigramValues, sizeof(uint8_t), alignof(uint8_t), bigramCap},
+        {kSectionSuccessorOffsets, sizeof(uint32_t), alignof(uint32_t),
+         successorCount == 0 ? 0u : static_cast<uint64_t>(header.wordCount) + 2u},
+        {kSectionSuccessorWords, sizeof(uint32_t), alignof(uint32_t), successorCount},
+        {kSectionSuccessorValues, sizeof(uint8_t), alignof(uint8_t), successorCount},
         {kSectionTrigramKeys, sizeof(uint32_t), alignof(uint32_t),
          static_cast<uint64_t>(trigramCap) * 3u},
         {kSectionWordTags, sizeof(uint8_t), alignof(uint8_t),

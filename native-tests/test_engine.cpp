@@ -666,22 +666,22 @@ void runEngineTests() {
               "nothing typed means nothing to correct");
     }
 
-    section("a word written once is kept but not offered");
+    section("a word written once or twice is kept but not offered");
     {
-        // What sent a class name typed once in a message to the top of the strip: the anchor a
-        // personal word is given is a fixed value, so it beat every dictionary word rarer than
-        // itself, and "autoc" had nothing commoner to offer than "autocarul".
+        // A personal word is anchored at a fixed value that beats any rarer dictionary word,
+        // so it reaches the strip only once established: three effective uses, or one choice.
         LoadedEngine loaded;
         loaded.open();
-        const char* words[2] = {"borderkeysonce", "borderkeystwice"};
-        const size_t lengths[2] = {14, 15};
-        const int32_t counts[2] = {1, 2};
-        loaded.engine.loadUserWords(words, lengths, counts, 2);
+        const char* words[3] = {"borderkeysonce", "borderkeystwice", "borderkeysthrice"};
+        const size_t lengths[3] = {14, 15, 16};
+        const int32_t counts[3] = {1, 2, 3};
+        loaded.engine.loadUserWords(words, lengths, counts, 3);
 
         check(loaded.rankOf("borderkeyso", "borderkeysonce") < 0,
               "a single sighting is not evidence enough to suggest");
-        check(loaded.rankOf("borderkeyst", "borderkeystwice") == 0,
-              "a second use confirms it, and it is offered");
+        check(loaded.rankOf("borderkeystw", "borderkeystwice") < 0, "nor is a second");
+        check(loaded.rankOf("borderkeysth", "borderkeysthrice") == 0,
+              "a third use confirms it, and it is offered");
 
         // The gate reads the effective count, so the setting decides rather than this constant.
         loaded.engine.setLearningSpeed(3.0f);
@@ -689,9 +689,47 @@ void runEngineTests() {
               "and \"the first time counts\" means exactly that");
 
         loaded.engine.setLearningSpeed(0.35f);
-        check(loaded.rankOf("borderkeyst", "borderkeystwice") < 0,
-              "while the cautious setting wants more repetitions than two");
+        check(loaded.rankOf("borderkeysth", "borderkeysthrice") < 0,
+              "while the cautious setting wants more repetitions than three");
         loaded.engine.setLearningSpeed(1.0f);
+
+        // Chosen on purpose once -- tapped on the strip, or put back after a correction -- and
+        // the count no longer matters, at any setting.
+        const int32_t asserted[3] = {1, 0, 0};
+        loaded.engine.loadUserWords(words, lengths, counts, 3, nullptr, asserted);
+        check(loaded.rankOf("borderkeyso", "borderkeysonce") == 0,
+              "a word chosen once is offered from then on");
+        loaded.engine.setLearningSpeed(0.35f);
+        check(loaded.rankOf("borderkeyso", "borderkeysonce") == 0,
+              "however cautious the setting");
+        loaded.engine.setLearningSpeed(1.0f);
+    }
+
+    section("a word typed past does not vouch for itself");
+    {
+        // knownSpelling answers from the personal dictionary only for an established word.
+        LoadedEngine loaded;
+        loaded.open();
+        char out[64];
+        loaded.engine.learn("borderkeystypo", 14, nullptr, 0, nullptr, 0);
+        loaded.engine.learn("borderkeystypo", 14, nullptr, 0, nullptr, 0);
+        check(loaded.engine.knownSpelling("borderkeystypo", 14, out, sizeof(out)) == 0,
+              "written twice, it is not a word the dictionaries know");
+        loaded.engine.learn("borderkeystypo", 14, nullptr, 0, nullptr, 0);
+        check(loaded.engine.knownSpelling("borderkeystypo", 14, out, sizeof(out)) == 14,
+              "written a third time, it is");
+
+        loaded.engine.learn("borderkeysmine", 14, nullptr, 0, nullptr, 0, false, true);
+        check(loaded.engine.knownSpelling("borderkeysmine", 14, out, sizeof(out)) == 14,
+              "chosen once, it is at once");
+
+        // A successor answers to the same rule.
+        loaded.engine.learn("keyboard", 8, nullptr, 0, nullptr, 0);
+        loaded.engine.learn("borderkeysnext", 14, "keyboard", 8, nullptr, 0);
+        check(loaded.rankOf("", "borderkeysnext", "keyboard") < 0,
+              "a word written once after another is not predicted after it");
+        loaded.engine.learn("borderkeysnext", 14, "keyboard", 8, nullptr, 0, false, true);
+        check(loaded.rankOf("", "borderkeysnext", "keyboard") >= 0, "until it is chosen");
     }
 
     section("a private field does not consult the personal dictionary");
@@ -803,7 +841,7 @@ void runEngineTests() {
             loaded.open();
             loaded.engine.setLearningSpeed(speed);
             for (int i = 0; i < 3; ++i) {
-                loaded.engine.learn("testing", 7, nullptr, 0, nullptr, 0);
+                loaded.engine.learn("testing", 7, nullptr, 0, nullptr, 0, false, true);
             }
             return loaded.scoreOf("test", "testing");
         };
@@ -819,7 +857,7 @@ void runEngineTests() {
         loaded.open();
         loaded.engine.setLearningSpeed(3.0f);
         for (int i = 0; i < 3; ++i) {
-            loaded.engine.learn("testing", 7, nullptr, 0, nullptr, 0);
+            loaded.engine.learn("testing", 7, nullptr, 0, nullptr, 0, false, true);
         }
         check(loaded.rankOf("test", "test") == 0, "the word typed exactly is first");
         check(loaded.rankOf("test", "testing") == 1, "the learned word follows it, not replaces it");
@@ -835,9 +873,9 @@ void runEngineTests() {
         // why a match is looked up by folded text across every active pack for exactly this case.
         LoadedEngine loaded;
         loaded.open();
-        // Twice, because a word seen once is deliberately not offered any more -- see "a word
-        // written once is kept but not offered". What this section is about is the flag the
-        // candidate carries, not the threshold that lets it through.
+        // Three times, so the word is established -- see "a word written once or twice is kept
+        // but not offered". This section is about the flag the candidate carries.
+        loaded.engine.learn("Border", 6, nullptr, 0, nullptr, 0);
         loaded.engine.learn("Border", 6, nullptr, 0, nullptr, 0);
         loaded.engine.learn("Border", 6, nullptr, 0, nullptr, 0);
 
@@ -863,8 +901,8 @@ void runEngineTests() {
         // itself from the cross-pack fallback the previous section already covers.
         LoadedEngine loaded;
         loaded.open();
-        // Twice, for the reason the previous section gives: one sighting no longer reaches
-        // the strip, and the subject here is the capitalisation flag rather than the gate.
+        // Three times, so the word is established; the subject here is the capitalisation flag.
+        loaded.engine.learn("emanuel", 7, nullptr, 0, nullptr, 0, false);
         loaded.engine.learn("emanuel", 7, nullptr, 0, nullptr, 0, false);
         loaded.engine.learn("emanuel", 7, nullptr, 0, nullptr, 0, false);
 

@@ -4,7 +4,7 @@
 # to a dictionary, and "in" means opposite things in the two. Romanian is also where most of
 # this keyboard's reports come from.
 #
-#   typed <TAB> committed <TAB> situation
+#   typed <TAB> committed <TAB> reason
 #
 # Every line here is a requirement: what the keyboard must do, not what it currently does.
 #
@@ -18,9 +18,9 @@
 totusi	totuși	Correctable
 
 # "daca" must reach "dacă" (94,655). The name "Dacia" entered the pack with the entity-name
-# merge on 2026-09-20 and outranks it; the proper-noun guard then refuses the name, so nothing
-# is committed and the accent is never restored. A name outranking an ordinary word by a factor
-# of a hundred is the trade the names list was never meant to make.
+# merge on 2026-09-20 and outranked it for a while: the proper-noun guard then refused the
+# name and nothing was committed. Since pack format 4 keeps "dacă" beside "daca" under one
+# folded key, the respelling tier takes it and "Dacia" ranks sixth, an edit and a letter away.
 daca	dacă	Correctable
 
 # "in" must reach "în" (1,782,296) -- the commonest word in the language, and the plainest case

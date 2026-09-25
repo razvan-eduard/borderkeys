@@ -74,7 +74,8 @@ int32_t UserModel::findNode(const uint32_t* folded, int count) const {
     return node;
 }
 
-int32_t UserModel::learn(const char* word, size_t length, bool deliberateCapital) {
+int32_t UserModel::learn(const char* word, size_t length, bool deliberateCapital,
+                         bool asserted) {
     if (word == nullptr || length == 0 || length > kMaxWordBytes) {
         return -1;
     }
@@ -103,6 +104,9 @@ int32_t UserModel::learn(const char* word, size_t length, bool deliberateCapital
     // undo an earlier deliberate one.
     if (deliberateCapital && entry.deliberateCapitals < UINT32_MAX) {
         ++entry.deliberateCapitals;
+    }
+    if (asserted && entry.asserted < UINT32_MAX) {
+        ++entry.asserted;
     }
     if (totalCount_ < UINT32_MAX) {
         ++totalCount_;
@@ -385,7 +389,7 @@ void UserModel::bulkLoadBigrams(const char* const* previous, const size_t* previ
 }
 
 void UserModel::bulkLoad(const char* const* words, const size_t* lengths, const int32_t* counts,
-                         int count, const int32_t* deliberateCapitals) {
+                         int count, const int32_t* deliberateCapitals, const int32_t* asserted) {
     clear();
     if (words == nullptr || lengths == nullptr || counts == nullptr) {
         return;
@@ -414,6 +418,9 @@ void UserModel::bulkLoad(const char* const* words, const size_t* lengths, const 
         entry.count = static_cast<uint32_t>(stored);
         entry.deliberateCapitals = (deliberateCapitals != nullptr && deliberateCapitals[i] > 0)
             ? static_cast<uint32_t>(deliberateCapitals[i])
+            : 0u;
+        entry.asserted = (asserted != nullptr && asserted[i] > 0)
+            ? static_cast<uint32_t>(asserted[i])
             : 0u;
         const uint64_t total = static_cast<uint64_t>(totalCount_) + entry.count;
         totalCount_ = (total > UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(total);
@@ -451,6 +458,10 @@ uint32_t UserModel::entryCount(uint32_t entryIndex) const {
 
 uint32_t UserModel::deliberateCapitals(uint32_t entryIndex) const {
     return (entryIndex < entries_.size()) ? entries_[entryIndex].deliberateCapitals : 0u;
+}
+
+uint32_t UserModel::asserted(uint32_t entryIndex) const {
+    return (entryIndex < entries_.size()) ? entries_[entryIndex].asserted : 0u;
 }
 
 void UserModel::collect(int32_t node, Completion* out, int maxOut, int* written) const {

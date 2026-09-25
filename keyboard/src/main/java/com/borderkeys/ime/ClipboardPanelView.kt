@@ -14,8 +14,10 @@ import android.os.Trace
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
+import android.view.HapticFeedbackConstants
 import android.view.ViewConfiguration
 import android.widget.OverScroller
+import com.borderkeys.data.ClipSearch
 import com.borderkeys.data.entity.ClipEntry
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
@@ -49,13 +51,44 @@ class ClipboardPanelView(
         /** The card's delete control was tapped. */
         fun onClipDeleted(entry: ClipEntry)
 
+        /** The card's edit control was tapped. Text only; an image card has none. */
+        fun onClipEdited(entry: ClipEntry)
+
         /** The panel asked to be closed. */
         fun onClipboardPanelClosed()
     }
 
     var listener: Listener? = null
 
+    /** The history as given, and as drawn: the same entries, the query's matches first. */
+    private var all: List<ClipEntry> = emptyList()
     private var entries: List<ClipEntry> = emptyList()
+
+    /** The header's note on the query: how many cards contain it. */
+    private var matchNote = ""
+
+    /**
+     * The word the panel was opened over. Cards containing it are drawn first and the header
+     * says how many there are; blank, the list is the history in its own order.
+     */
+    var query: String = ""
+        set(value) {
+            if (field == value) {
+                return
+            }
+            field = value
+            applyQuery()
+        }
+
+    /** The card whose actions a long press opened, or -1. */
+    private var actionCard = -1
+    private var longPressFired = false
+    private val longPressRunnable = Runnable { openActions() }
+    private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
+    private val pinLabel = strings[Keys.CLIPBOARD_PIN]
+    private val unpinLabel = strings[Keys.CLIPBOARD_UNPIN]
+    private val editLabel = strings[Keys.CLIPBOARD_EDIT]
+    private val deleteLabel = strings[Keys.CLIPBOARD_DELETE]
 
     /**
      * Thumbnails, by entry id.
@@ -116,11 +149,22 @@ class ClipboardPanelView(
 
     /** Replaces the list and the thumbnails [decodeThumbnails] produced for it. */
     fun setEntries(list: List<ClipEntry>, decoded: Map<Long, Bitmap?>) {
-        entries = list
+        all = list
         thumbnails.clear()
         thumbnails.putAll(decoded)
         scroller.forceFinished(true)
         scrollTo(0, 0)
+        applyQuery()
+    }
+
+    private fun applyQuery() {
+        entries = ClipSearch.rank(all, query)
+        matchNote = if (query.isEmpty()) {
+            ""
+        } else {
+            strings.getString(Keys.CLIPBOARD_PANEL_MATCHES, ClipSearch.count(all, query), query)
+        }
+        actionCard = -1
         measureContent()
         invalidate()
     }
@@ -212,7 +256,22 @@ class ClipboardPanelView(
         val previous = paints.label.textAlign
         paints.label.textAlign = android.graphics.Paint.Align.LEFT
         canvas.drawText(BACK_GLYPH, paddingPx * 2f, midY, paints.label)
-        canvas.drawText(title, paddingPx * 2f + headerHeightPx * 0.7f, midY, paints.label)
+        val titleLeft = paddingPx * 2f + headerHeightPx * 0.7f
+        canvas.drawText(title, titleLeft, midY, paints.label)
+        if (matchNote.isNotEmpty()) {
+            val noteLeft = titleLeft + paints.label.measureText(title) + paddingPx * 2f
+            val previousSecondary = paints.labelSecondary.textAlign
+            paints.labelSecondary.textAlign = android.graphics.Paint.Align.LEFT
+            canvas.save()
+            canvas.clipRect(noteLeft, viewTop, width - paddingPx, viewTop + headerHeightPx)
+            canvas.drawText(
+                matchNote, noteLeft,
+                viewTop + headerHeightPx / 2f + paints.secondaryBaselineOffsetPx,
+                paints.labelSecondary,
+            )
+            canvas.restore()
+            paints.labelSecondary.textAlign = previousSecondary
+        }
         paints.label.textAlign = previous
     }
 
@@ -237,8 +296,12 @@ class ClipboardPanelView(
     private fun drawCard(canvas: Canvas, index: Int, top: Float) {
         val entry = entries[index]
         cardRect.set(paddingPx, top, width - paddingPx, top + cardHeightPx)
-        val fill = if (index == pressedCard) paints.keyPressedFill else paints.keyFill
+        val fill = if (index == pressedCard || index == actionCard) paints.keyPressedFill else paints.keyFill
         canvas.drawRoundRect(cardRect, paints.keyCornerRadiusPx, paints.keyCornerRadiusPx, fill)
+        if (index == actionCard) {
+            drawActions(canvas, entry, top)
+            return
+        }
         // The same decision the keys make. A theme with borders off and outlined cards would
         // be one surface disagreeing with itself about whether this keyboard draws edges.
         if (paints.showKeyBorders) {
@@ -284,6 +347,57 @@ class ClipboardPanelView(
         }
     }
 
+    /** The card's actions in place of its content: pin or unpin, edit for text, delete. */
+    private fun drawActions(canvas: Canvas, entry: ClipEntry, top: Float) {
+        val zones = actionCount(entry)
+        val zoneWidth = cardRect.width() / zones
+        val previous = paints.label.textAlign
+        paints.label.textAlign = android.graphics.Paint.Align.CENTER
+        val baseline = top + cardHeightPx / 2f + paints.labelBaselineOffsetPx
+        for (zone in 0 until zones) {
+            val label = actionLabel(entry, zone)
+            canvas.drawText(label, cardRect.left + zoneWidth * (zone + 0.5f), baseline, paints.label)
+        }
+        paints.label.textAlign = previous
+    }
+
+    private fun actionCount(entry: ClipEntry): Int = if (entry.isImage) 2 else 3
+
+    private fun actionLabel(entry: ClipEntry, zone: Int): String = when {
+        zone == 0 -> if (entry.isPinned) unpinLabel else pinLabel
+        zone == 1 && !entry.isImage -> editLabel
+        else -> deleteLabel
+    }
+
+    private fun openActions() {
+        if (pressedCard < 0 || dragging) {
+            return
+        }
+        actionCard = pressedCard
+        pressedCard = -1
+        longPressFired = true
+        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        invalidate()
+    }
+
+    /** Runs the action under [x] on the open action card, closing the actions either way. */
+    private fun pickAction(x: Float) {
+        val index = actionCard
+        actionCard = -1
+        invalidate()
+        if (index !in entries.indices) {
+            return
+        }
+        val entry = entries[index]
+        val zones = actionCount(entry)
+        val zone = ((x - paddingPx) / ((width - paddingPx * 2f) / zones)).toInt().coerceIn(0, zones - 1)
+        when {
+            zone == 0 -> listener?.onClipPinToggled(entry)
+            zone == 1 && !entry.isImage -> listener?.onClipEdited(entry)
+            else -> listener?.onClipDeleted(entry)
+        }
+    }
+
     private fun labelFor(entry: ClipEntry): String = when {
         entry.isImage && thumbnails[entry.id] == null -> strings[Keys.CLIP_IMAGE_UNAVAILABLE]
         entry.isImage -> strings[Keys.CLIP_IMAGE]
@@ -308,8 +422,12 @@ class ClipboardPanelView(
                 scroller.forceFinished(true)
                 lastY = event.y
                 dragging = false
+                longPressFired = false
                 pressedHeader = event.y < headerHeightPx
                 pressedCard = if (pressedHeader) -1 else cardAt(event.y)
+                if (pressedCard >= 0 && actionCard < 0) {
+                    postDelayed(longPressRunnable, longPressTimeout)
+                }
                 invalidate()
                 return true
             }
@@ -317,6 +435,7 @@ class ClipboardPanelView(
                 val delta = lastY - event.y
                 if (!dragging && kotlin.math.abs(delta) > touchSlop) {
                     dragging = true
+                    removeCallbacks(longPressRunnable)
                     pressedCard = -1
                     pressedHeader = false
                     invalidate()
@@ -329,6 +448,7 @@ class ClipboardPanelView(
                 return true
             }
             MotionEvent.ACTION_UP -> {
+                removeCallbacks(longPressRunnable)
                 if (dragging) {
                     tracker.computeCurrentVelocity(1000)
                     scroller.fling(
@@ -336,6 +456,16 @@ class ClipboardPanelView(
                         0, 0, 0, maxScroll(),
                     )
                     postInvalidateOnAnimation()
+                } else if (longPressFired) {
+                    // The actions opened under this finger; they wait for the next tap.
+                } else if (actionCard >= 0) {
+                    // A tap on the open action card picks one of its actions; a tap anywhere
+                    // else only closes them.
+                    if (pressedCard == actionCard) {
+                        pickAction(event.x)
+                    } else {
+                        actionCard = -1
+                    }
                 } else if (pressedHeader && event.y < headerHeightPx) {
                     listener?.onClipboardPanelClosed()
                 } else {
@@ -353,6 +483,7 @@ class ClipboardPanelView(
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(longPressRunnable)
                 pressedCard = -1
                 pressedHeader = false
                 dragging = false

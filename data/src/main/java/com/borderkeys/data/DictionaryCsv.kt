@@ -19,7 +19,7 @@ import com.borderkeys.data.entity.UserWord
  */
 object DictionaryCsv {
 
-    const val HEADER = "word,locale,count,lastUsedAt"
+    const val HEADER = "word,locale,count,lastUsedAt,deliberateCapitals,asserted"
 
     /** The longest word considered plausible -- not private, because `:keyboard`'s
      *  `LearningBuffer` reads the same ceiling for the same reason on the way in: a "word" past
@@ -32,7 +32,9 @@ object DictionaryCsv {
             append(escape(entry.word)).append(',')
             append(escape(entry.locale)).append(',')
             append(entry.count).append(',')
-            append(entry.lastUsedAt).append('\n')
+            append(entry.lastUsedAt).append(',')
+            append(entry.deliberateCapitals).append(',')
+            append(entry.asserted).append('\n')
         }
     }
 
@@ -41,6 +43,9 @@ object DictionaryCsv {
      *
      * Malformed rows are skipped, not fatal. The reason to have a text export at all is that
      * someone can edit it, and a single bad line should cost that line rather than the import.
+     *
+     * Every row comes back asserted -- see `UserWord.asserted`. The two trailing columns are
+     * optional.
      */
     fun decode(csv: String, now: Long): List<LearnedWord> {
         val updates = ArrayList<LearnedWord>()
@@ -66,6 +71,8 @@ object DictionaryCsv {
                 locale = fields[1],
                 delta = count,
                 lastUsedAt = fields.getOrNull(3)?.toLongOrNull() ?: now,
+                deliberateCapital = (fields.getOrNull(4)?.toIntOrNull() ?: 0) > 0,
+                asserted = true,
             )
         }
         return updates

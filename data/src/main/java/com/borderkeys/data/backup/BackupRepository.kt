@@ -97,6 +97,7 @@ class BackupRepository(
                     count = it.count,
                     lastUsedAt = it.lastUsedAt,
                     deliberateCapitals = it.deliberateCapitals,
+                    asserted = it.asserted,
                 )
             }
         } else {
@@ -279,6 +280,9 @@ class BackupRepository(
                 for (word in payload.words) {
                     if (word.deliberateCapitals > 0) {
                         database.userWordDao().raiseDeliberateCapitals(word.word, word.deliberateCapitals)
+                    }
+                    if (word.asserted > 0) {
+                        database.userWordDao().raiseAsserted(word.word, word.asserted)
                     }
                 }
                 database.userBigramDao().incrementAll(

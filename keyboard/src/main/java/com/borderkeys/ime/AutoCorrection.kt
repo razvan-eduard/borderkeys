@@ -98,16 +98,24 @@ internal object AutoCorrection {
          */
         KnownWord,
 
+        /**
+         * A regular inflection of a word the dictionaries hold -- "smooths", "treeing" --
+         * offered a word not built on that stem. The stem is the dictionaries', the ending is
+         * the language's; see [WordStems]. Not reached when the answer differs from what was
+         * typed only by accents, case or marks.
+         */
+        Inflection,
+
         /** None of the above. */
         Correctable,
     }
 
     /**
      * Which [Situation] this is. [cased] is the answer with [matchCase] already applied, since
-     * two of the questions are about the text as it would actually land.
+     * two of the questions are about the text as it would actually land. [inflection] is
+     * [WordStems.shields]'s answer for [typed] against [suggestion].
      *
-     * The order is load-bearing and is the order the checks were written in: each later one
-     * assumes the earlier ones have been ruled out.
+     * The order is load-bearing: each later check assumes the earlier ones have been ruled out.
      */
     fun situationOf(
         typed: String,
@@ -119,6 +127,7 @@ internal object AutoCorrection {
         isProperNoun: Boolean = false,
         maxEdits: Int = Int.MAX_VALUE,
         capitaliseNames: Boolean = true,
+        inflection: Boolean = false,
     ): Situation = when {
         suggestion.isNullOrEmpty() -> Situation.NothingOffered
         typed != suggestionQuery -> Situation.StaleAnswer
@@ -132,6 +141,7 @@ internal object AutoCorrection {
             !(typed.length >= MIN_DIACRITIC_LENGTH && isDiacriticOnlyDifference(typed, suggestion)) ->
             Situation.TooShort
         typed == knownWord && !(isProperNoun && capitaliseNames) -> Situation.KnownWord
+        inflection && !isSameLetters(typed, suggestion) -> Situation.Inflection
         else -> Situation.Correctable
     }
 
@@ -144,6 +154,7 @@ internal object AutoCorrection {
         isProperNoun: Boolean = false,
         maxEdits: Int = Int.MAX_VALUE,
         capitaliseNames: Boolean = true,
+        inflection: Boolean = false,
     ): String? {
         // Cased once, up front, rather than compared raw and separately case-insensitively:
         // "would this actually change anything once matchCase has had its say" is the one
@@ -158,9 +169,16 @@ internal object AutoCorrection {
         // preference -- "everyone" must not become "Everton" whatever the user chose.
         val cased = matchCase(typed, suggestion.orEmpty(), isProperNoun && capitaliseNames)
         val situation = situationOf(typed, suggestion, suggestionQuery, knownWord, cased,
-                                    minimumLength, isProperNoun, maxEdits, capitaliseNames)
+                                    minimumLength, isProperNoun, maxEdits, capitaliseNames,
+                                    inflection)
         return if (situation == Situation.Correctable) cased else null
     }
+
+    /** Whether [typed] and [suggestion] are the same letters once accents, case and marks --
+     *  apostrophes and hyphens -- are set aside. */
+    private fun isSameLetters(typed: String, suggestion: String): Boolean =
+        stripDiacritics(typed).filter { it.isLetter() } ==
+            stripDiacritics(suggestion).filter { it.isLetter() }
 
     /**
      * Whether [typed] and [suggestion] are the same letters, differing only in accents and

@@ -32,6 +32,15 @@ interface ClipboardDao {
     @Query("SELECT * FROM clip_entries WHERE contentHash = :contentHash LIMIT 1")
     suspend fun findByHash(contentHash: Long): ClipEntry?
 
+    /** Rewrites a text entry's content and hash. An image entry is left alone. */
+    @Query(
+        """
+        UPDATE clip_entries SET content = :content, contentHash = :contentHash
+        WHERE id = :id AND uri IS NULL
+        """,
+    )
+    suspend fun updateContent(id: Long, content: String, contentHash: Long): Int
+
     /**
      * Inserts, or -- if something with this [contentHash] is already there -- just touches it.
      *

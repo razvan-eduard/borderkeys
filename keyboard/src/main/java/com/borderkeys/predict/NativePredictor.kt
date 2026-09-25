@@ -121,11 +121,13 @@ internal object NativePredictor {
     ): Int
 
     /**
-     * Records that the user confirmed [word] in this context.
+     * Records that the user committed [word] in this context.
      *
      * This is the entire learning rule of the project: a count goes up. Nothing is retrained and
-     * no gradient exists, which is also why the keyboard cannot slowly learn the user's typos --
-     * a count only moves when a word was deliberately chosen.
+     * no gradient exists. [asserted] is whether the word was chosen on purpose -- picked from
+     * the strip, or put back after a correction. A word no dictionary holds is offered, and
+     * protected from correction, only once asserted or written `kMinPersonalEvidence` effective
+     * times (engine.cpp).
      *
      * [deliberateCapital] is whether the word's first letter was upper case because the user
      * pressed shift for it themselves, never because auto-capitalise applied it -- see
@@ -139,6 +141,7 @@ internal object NativePredictor {
         prev1: String?,
         prev2: String?,
         deliberateCapital: Boolean,
+        asserted: Boolean,
     )
 
     /**
@@ -167,12 +170,14 @@ internal object NativePredictor {
     ): Int
 
     /** Replaces the in-memory personal dictionary. Called once at start, from Room.
-     *  [deliberateCapitals] is the parallel per-word count [nativeLearn]'s own doc describes. */
+     *  [deliberateCapitals] and [asserted] are the parallel per-word counts [nativeLearn]'s own
+     *  doc describes. */
     external fun nativeLoadUserWords(
         handle: Long,
         words: Array<String>,
         counts: IntArray,
         deliberateCapitals: IntArray,
+        asserted: IntArray,
     )
 
     /**
@@ -223,6 +228,9 @@ internal object NativePredictor {
      */
     external fun nativeSetSwipeModelEnabled(handle: Long, enabled: Boolean)
 
+    /** Whether the last gesture decode went through the neural decoder. */
+    external fun nativeLastDecodeUsedNeural(handle: Long): Boolean
+
     /**
      * Decodes one synthetic gesture through tier B and discards it, so the first swipe a person
      * makes is not also the first pass through the network. False means there was nothing to
@@ -248,6 +256,17 @@ internal object NativePredictor {
     external fun nativePossessive(handle: Long, word: String): String?
 
     external fun nativeKnownSpelling(handle: Long, word: String): String?
+
+    /** Marks in [outKnown] which of [stems] may stand as the stem of a regular inflection --
+     *  see Engine::vouchesForStem. Returns how many. At most [MAX_STEMS_QUERY] stems. */
+    external fun nativeKnownStems(handle: Long, stems: Array<String>, outKnown: BooleanArray): Int
+
+    /** The bridge's cap on one [nativeKnownStems] call. */
+    const val MAX_STEMS_QUERY = 64
+
+    /** The score of [candidate] as an answer to [typed], term by term, as text -- see
+     *  Engine::explainScore. Null when the word is not offered for [typed] at all. */
+    external fun nativeExplainScore(handle: Long, typed: String, candidate: String): String?
 
     /** Replaces the remembered three-word sequences. Called after the pairs, same reason. */
     external fun nativeLoadUserTrigrams(

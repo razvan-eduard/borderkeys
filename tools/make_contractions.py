@@ -145,6 +145,31 @@ def mappings(
     return best
 
 
+# Words a language always writes with a capital, whatever the corpus did.
+#
+# The corpus is lower-cased at intake, so a contraction built from it comes out "i'm" and "i've"
+# when English only ever writes "I'm" and "I've". Nothing automatic can tell this: a spell
+# checker accepts lower-case "i" as a letter, and frequency cannot separate a pronoun from a
+# letter either. So the pronoun is named, per language, the same way the single-letter words in
+# drop_unreachable.py are.
+# Value: who would object, because the same spelling is an ordinary word of theirs -- Italian
+# writes "i" as its plural article. Contractions.of drops an entry whose objector is also on.
+ALWAYS_CAPITAL = {
+    "en_US": {"i": ["it-IT"]},
+}
+
+
+def cased(written: str, tag: str) -> str:
+    """[written] with any always-capital word of [tag] restored to its capital."""
+    always = ALWAYS_CAPITAL.get(tag, {})
+    if not always:
+        return written
+    head = written.split("'", 1)[0]
+    if head in always:
+        return written[:1].upper() + written[1:]
+    return written
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dictionaries", type=Path, default=Path("dictionaries"))
@@ -182,7 +207,11 @@ def main() -> int:
             )
             if others:
                 clashing += 1
-            lines.append(f"{key}\t{written}\t{','.join(others)}")
+            lines.append(f"{key}\t{cased(written, tag)}\t{','.join(others)}")
+        # The pronoun on its own, not only inside its contractions: nothing in a corpus of
+        # lower-cased text can produce it, and it is the commonest word the rule applies to.
+        for word, objectors in sorted(ALWAYS_CAPITAL.get(tag, {}).items()):
+            lines.append(f"{word}\t{word[:1].upper() + word[1:]}\t{','.join(objectors)}")
         print(f"{BUNDLED[tag]}: {len(table):,} mappings, {clashing:,} of them claimed by "
               f"another bundled language")
         for key in sorted(table, key=lambda k: -table[k][1])[:arguments.sample]:

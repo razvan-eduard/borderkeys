@@ -103,7 +103,9 @@ one from the other, and it never was the answer to that question.
    when language lock is strict, otherwise all of them.
 4. `searchPacks()` → per pack: `collectEndpoints()` walks the fuzzy neighbourhood, `collectWords()`
    descends from each endpoint, `searchFrequentWithPrefix()` covers short prefixes the budget
-   cannot cross.
+   cannot cross. With nothing typed, `searchNextWord()` instead walks the pack's successor index
+   for the context word -- or the sentence-start list -- keeping the `kSuccessorWalk` strongest
+   pairs and scoring those in full, then the 512-word frequent shortlist.
 5. `searchUserModel()` — the personal trie.
 6. Empty-prefix case only: `searchUserSuccessors()`, `searchUserPhrases()`.
 7. Fallback: if nothing at all was found, one wider pass at `kFallbackEditCost`.
@@ -198,15 +200,20 @@ score = packWeightLog + contextLogProb + editComponent − lengthPenalty (+ pers
 Packs store **natural logs**; `kLogProbScale = 10.0` is the quantisation. Zipf values quoted in
 comments are `log10(count/total × 1e9)`.
 
+`packWeightLog` is the pack's configured weight, normalised over the active packs
+(`refreshWeights`). It is a setting and nothing else moves it: which language is being written
+is answered by the evidence and dominance mechanism below, never by drifting a weight.
+
 ### Edit costs — `engine.cpp`
 
 | Constant | Value | Why |
 |---|---|---|
 | `kEditPenalty` | **40.0** | The multiplier on every edit. Must clear `ln(worst frequency ratio)` so that one transposition outweighs the gap between the commonest and rarest word in a pack. Floored at 15 by a `static_assert`. |
 | `kInsertCost` | 0.85 | A dropped letter is a commoner slip than a wrong key, so just under a full neighbour substitution. |
-| `kDeleteCost` | 0.85 | As above. |
+| `kDeleteCost` | **1.6** | Deliberately not the mirror of `kInsertCost`. Supplying a letter someone did not type is the ordinary lossiness of typing; discarding one they *did* type throws away the only direct evidence of intent. At 0.85, 79% of the correct words the pack lacked were overwritten by something *shorter* — `bisection` → `section`, `crewel` → `crew`. Swept 0.85 to 2.0: unknown words left alone 66.0% → 90.0%, the typo and mid-word corpora never move, and the strip holds at 71.9% up to 1.6 and drops from 1.7. |
 | `kTransposeCost` | 0.80 | One gesture out of order, not two errors. Deliberately only *slightly* cheaper: at the old 0.65 this priced two equally common slips as though one were a thousand times likelier, which let `acm` → `cam` crowd out `acum`. |
-| `kApostropheInsertCost` | **0.02** | A convention dropped, not a key missed. This is what makes `cant` → `can't` reachable. At `kEditPenalty` 40 it costs 0.8 points — enough that an exactly-spelled word still wins, little enough that a commoner contraction wins on frequency. |
+| `kMarkInsertCost` | **0.02** | A mark — an apostrophe or a hyphen — left out is a convention dropped, not a key missed. This is what makes `cant` → `can't` and `wellknown` → `well-known` reachable. At `kEditPenalty` 40 it costs 0.8 points: enough that an exactly-spelled word still wins, little enough that a commoner contraction wins on frequency. |
+| `kMarkDeleteCost` | **3.0** | The same mark in the other direction. Nobody's finger lands on an apostrophe by accident, so discarding one is a contradiction rather than a correction — `the workers' rights` was becoming `the workers rights`. Above `maxEditCostFor`'s largest ceiling (2.5), so no ordinary search reaches a word by dropping a mark; below `kFallbackEditCost` (4.2), so the wide pass may still *show* the stripped word without ever committing it. |
 | `kCompletionPenalty` | **0.5** | Per character a completion adds. Was 0.12, which let longer commoner words push the typed word out of the 16 entirely — typing `car` offered `care`, `cartea`, `carol`, `carmen`, with `car` nowhere. 0.5 is measured: first-place accuracy 61.5% → 68.8%. Past ~1.0 it starts costing the half-typed words completion exists for. |
 | `kCorrectionSurcharge` | **3.0** | A flat charge for having needed a correction *at all*, on top of per-edit cost. Charged once to any candidate with cost > 0. Completions are untouched. Without it, Romanian `si` (≈80× commoner) displaced correctly-typed `stiu`. |
 | `kGrammarWeight` | 0.75 | How much the part-of-speech transition counts where the n-gram model has nothing. From a sweep on held-out text: below it the term barely moves the ranking; above it, grammatically plausible but rare words start displacing frequent ones and the fifth slot suffers for no gain in the first. The first chip is what people tap, and nobody reads the fifth. |
@@ -233,7 +240,7 @@ arriving. It implies `kEditPenalty > 15`.
 |---|---|---|
 | `kUserOnlyLogProb` | −8.0 | The log-probability for a word that exists *only* in the personal dictionary. Deliberately pessimistic and fixed: the model's own totals cannot be used, because a word confirmed 40 times out of 50 would be three quarters of that distribution — likelier than `the`. |
 | `kMaxUserBoost` | 3.0 | The ceiling on what personal evidence adds. |
-| `kMinPersonalEvidence` | 2.0 | Effective counts (raw × learning speed) before a learned word is *offered*. At the cautious 0.35 multiplier that is ~6 repetitions; at the immediate 3.0 the first use clears it. The word is learned and listed the whole time — this governs only the strip. |
+| `kMinPersonalEvidence` | 3.0 | Effective counts (raw × learning speed) at which repetition alone *establishes* a word no pack holds — offered from the personal model, treated as a known word by autocorrect, predicted as a successor. At the cautious 0.35 multiplier that is ~9 repetitions; at the immediate 3.0 the first use clears it. One assertion (a tap on the strip, a reverted correction) establishes a word at any count. The word is learned and listed the whole time. |
 | `kUserBigramPrior` | 4.0 | Smoothing, in observations. One `vreau să` out of one `vreau` is not evidence that `să` always follows. Four, not one, because this competes with a corpus. |
 | `kMaxUserBigramBoost` | 2.5 | Ceiling on what a personal pair adds. |
 | `kUserChainPreference` | 1.5 | How far a phrase *this* person writes may outrank what the corpus says follows. Scaled by confidence: +0.4 once, +0.8 at three, +1.3 at twenty. |
@@ -292,7 +299,9 @@ Everything that can stop a correction, in the order it applies.
    commonest word. Expressed relatively so a smaller corpus does not raise the bar on itself.
    Nine nats is 3.9 Zipf, which separates real targets (`occurred` 4.84, `receive` 5.09, `the`
    7.81) from junk (`cr` 3.78, `eh` 3.32) cleanly.
-3. **`kMinPersonalEvidence`** — a learned word needs a second use before it is offered.
+3. **`Engine::personalWordEstablished`** — a learned word no pack holds is offered, counts as
+   a known word, and is predicted after its context only once *established*: chosen on purpose
+   at least once, or written `kMinPersonalEvidence` effective times. Until then it is a count.
 
 ### In `AutoCorrection.correctionFor`
 
@@ -311,6 +320,12 @@ argument rather than a correction:
   it is close enough to be a correction at all. `snobul` was being replaced by `noul`;
 - **the proper-noun rule** — a name corrects only its own letters. `maria` may become `Maria` and
   `laurentiu` → `Laurențiu`, but `everyone` must never become `Everton` nor `thanks` `Hanks`.
+- **a regular inflection of a known stem** — `smooths`, `testings`, `spatting`: the stem is in
+  the dictionaries as an ordinary word within `kStemFrequencyFloor` (10.5 nats) of the pack's
+  commonest, the ending is one the language forms (`WordStems`, English and Romanian tables),
+  and the answer is neither that stem nor another inflection of it nor the typed letters carried
+  on. The prediction worker asks the engine which stems it vouches for beside the other
+  per-request answers, so the delimiter blocks on nothing.
 
 ### Cross-pack agreement
 
@@ -339,14 +354,21 @@ folded through `WordFold`, so `Shit` at a sentence start is the same refusal as 
 
 ## The learning path
 
-**There is no model being fine-tuned and no gradient anywhere.** A count goes up when the user
-picks a word that was not the top suggestion. That is the entire learning rule — and it is why
-the keyboard does not degrade over time the way a model trained on its own output does: a count
-cannot learn a typo unless the user deliberately chose the typo.
+**There is no model being fine-tuned and no gradient anywhere.** A count goes up every time
+the user commits a word — types or swipes it and moves on, or picks it from the strip. That is
+the entire learning rule.
+
+**Typed and chosen are two different facts.** Every commit raises `count`. Only a choice raises
+`asserted`: a tap on the strip (the typed word's own chip included), or a correction put back
+with backspace. A word no pack holds is *established* — offered as a completion, treated as a
+known word by autocorrect, predicted after its context — once it has been asserted at all, or
+written `kMinPersonalEvidence` effective times (three at the balanced setting). Until then it is
+recorded and listed. A CSV import asserts every row. Words the packs already hold need none of
+this — `knownSpelling` answers from the packs first.
 
 ```
-user confirms a word  (picks it from the strip, or types a delimiter after it)
-  └─ LearningBuffer            in-memory, debounced
+user commits a word  (types a delimiter after it, swipes it, or picks it from the strip)
+  └─ LearningBuffer            in-memory, debounced; carries count, deliberate capital, assertion
       └─ Room (:data)          the one durable copy, SQLCipher
       └─ UserModel (C++)       rebuilt from Room at every start
 ```
@@ -533,8 +555,8 @@ Smoothing and resampling belong to the decoder, not the caller, because both tie
 features and must not disagree about how they were produced.
 
 **Memory.** `setSwipeModelEnabled(false)` **frees the decoder outright** — it holds ~2.5 MB of
-weights by value, and the preference is off by default, so keeping it resident for a feature
-nobody asked for is the wrong trade. The next `loadSwipeWeights` rebuilds it.
+weights by value, and a decoder that has been switched off has no claim on the memory. The next
+`loadSwipeWeights` rebuilds it.
 
 **Warm-up.** `warmSwipeModel()` decodes one synthetic gesture and throws the answer away, so the
 first real swipe is not also the first pass through the network. It bypasses the tier guard
@@ -607,6 +629,12 @@ corpus ──make_pack.py──▶ dictionaries/<tag>.tsv  ──build_dict.py�
 flag. The corpora themselves are not in the repository, so tools that refine a built list edit
 the `.tsv` **in place** and `build_dict.py` recompiles.
 
+A pack (format version 5, `bkd_format.hpp`) holds the double-array trie over folded keys, one
+row per spelling, the pairs as a **successor index** -- for every word and for the sentence
+start, the words that followed it, sorted by index, each with its quantised conditional
+log-probability, five bytes a pair -- and the triples as an open-addressed hash table. A pair
+lookup is a binary search in one list; the next-word search walks the list.
+
 ### The tools
 
 | Tool | What it does |
@@ -618,6 +646,8 @@ the `.tsv` **in place** and `build_dict.py` recompiles.
 | `flag_names.py` | Flags proper nouns already in a pack's ordinary rows, by case asymmetry. |
 | `make_ordinary.py` | Which corpus words are lower-case headwords of the spelling dictionary. |
 | `build_pos.py` | Treebank tags and transition matrices → `dictionaries/<tag>.pos`. |
+| `classify_wordlist.py` | Judges every row of a list by the language's own evidence -- its spell checkers in three case forms, the treebank, the name flag, a possessive or elision base, corpus pairs -- against typo, foreign and noise rules, in two tiers by rank. Reports drops, guard words and coverage of a held-out list; report-only until the coverage it costs is recovered (see `docs/testing.md`). |
+| `make_doubled_corpus.py`, `make_firstletter_corpus.py`, `make_midtypo_corpus.py`, `make_unknown_corpus.py`, `make_accent_corpus.py` | The generated autocorrect corpora under `native-tests/data`, each from a seed. |
 | `drop_foreign.py` | Removes another language's vocabulary that a crawled corpus quoted. |
 | `drop_misspellings.py` | Review-only, multi-oracle. Review-only because a rare surname and a misspelling are the same shape in this data. |
 | `make_contractions.py` | The apostrophe maps. |

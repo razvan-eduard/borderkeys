@@ -20,7 +20,9 @@ import com.borderkeys.theme.ThemePaints
  * The list comes from Unicode's own emoji-test.txt, compiled to an asset by
  * tools/build_emoji.py, in the order that file recommends for keyboard palettes. Nothing is
  * hand-sorted here, and skin-tone variants are left out -- they multiply the grid by six for a
- * choice a strip of tabs has no room to offer.
+ * choice a strip of tabs has no room to offer. The same tool compiles each emoji's name into a
+ * second asset, which [query] searches: the word being typed when the panel opens is looked up
+ * and its matches shown first, under the magnifier tab, until a tab is picked.
  *
  * Drawn like the rest of the keyboard: one View, one onDraw, arithmetic hit testing, and only
  * the rows the viewport shows. The glyphs come from the system font, so the keyboard ships no
@@ -40,10 +42,24 @@ class EmojiPanelView(
 
     private var categories: List<String> = emptyList()
     private var byCategory: Map<String, List<String>> = emptyMap()
+    private var index: List<EmojiSearch.Entry> = emptyList()
+    private var matches: List<String> = emptyList()
 
-    /** What the grid is showing: the chosen category, or the recents when that tab is picked. */
+    /** What the grid is showing: the chosen category, the recents, or the query's matches. */
     private var current: List<String> = emptyList()
     private var selectedTab = 0
+
+    /**
+     * The word the grid is searched by. Its matches take the grid, under the magnifier drawn in
+     * place of the recents tab, until a tab is picked; a word with no match leaves the recents
+     * up. Set after [load], which is what fills the index.
+     */
+    var query: String = ""
+        set(value) {
+            field = value
+            matches = EmojiSearch.matches(value, index, MAX_MATCHES)
+            selectTab(if (matches.isEmpty()) 0 else SEARCH_TAB)
+        }
 
     /**
      * The last emoji used, most recent first.
@@ -105,16 +121,22 @@ class EmojiPanelView(
             categories = names
             byCategory = lists
         }
+        runCatching {
+            context.assets.open(NAMES_ASSET).bufferedReader().useLines { lines ->
+                index = EmojiSearch.parse(lines)
+            }
+        }
         selectTab(0)
     }
 
-    /** Tab zero is the recents; the rest are the categories in the order Unicode lists them. */
+    /** Tab zero is the recents, [SEARCH_TAB] the query's matches; the rest are the categories
+     *  in the order Unicode lists them. */
     private fun selectTab(index: Int) {
-        selectedTab = index.coerceIn(0, categories.size)
-        current = if (selectedTab == 0) {
-            recents
-        } else {
-            byCategory[categories[selectedTab - 1]].orEmpty()
+        selectedTab = index.coerceIn(SEARCH_TAB, categories.size)
+        current = when (selectedTab) {
+            SEARCH_TAB -> matches
+            0 -> recents
+            else -> byCategory[categories[selectedTab - 1]].orEmpty()
         }
         scroller.forceFinished(true)
         scrollTo(0, 0)
@@ -194,7 +216,7 @@ class EmojiPanelView(
         paints.label.textSize = tabHeightPx * TAB_GLYPH_FRACTION
         for (index in 0 until count) {
             val cx = step * index + step / 2f
-            if (index == selectedTab) {
+            if (index == selectedTab || (index == 0 && selectedTab == SEARCH_TAB)) {
                 canvas.drawLine(
                     step * index + step * 0.2f, tabHeightPx - 2f,
                     step * (index + 1) - step * 0.2f, tabHeightPx - 2f, paints.accent,
@@ -213,10 +235,11 @@ class EmojiPanelView(
         paints.label.textSize = previousSize
     }
 
-    /** The first emoji of a category stands for it; recents get a clock. */
+    /** The first emoji of a category stands for it; recents get a clock, and a search the
+     *  magnifier in the clock's place. */
     private fun tabGlyph(index: Int): String {
         if (index == 0) {
-            return "🕒"
+            return if (selectedTab == SEARCH_TAB) "🔍" else "🕒"
         }
         return byCategory[categories[index - 1]]?.firstOrNull() ?: "•"
     }
@@ -324,6 +347,14 @@ class EmojiPanelView(
 
     private companion object {
         const val ASSET = "emoji/emoji.txt"
+        const val NAMES_ASSET = "emoji/emoji_names.txt"
+
+        /** The grid's view of a search: the tab before the recents, never drawn as a tab. */
+        const val SEARCH_TAB = -1
+
+        /** The most matches a word shows. Three rows on most phones, and a name rarely fits
+         *  more. */
+        const val MAX_MATCHES = 30
 
         /** How many recents are kept. A row and a half on most phones. */
         const val MAX_RECENTS = 24

@@ -80,14 +80,15 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/10_typing_settings.jpg" alt="Capitals: off, when the app asks, or always" width="30%">
 </p>
 
-- **Swipe typing**, geometric (SHARK²) and deterministic in both flavors — no model, no training
+- **Swipe typing.** Geometric (SHARK²) and deterministic in `core` — no model, no training
   data, no accuracy number that depends on what you happened to type it on. A small loop at a
   doubled letter tells "hello" from "helo". Swiping works wherever suggestions do, and switches
-  itself off in exactly one place: a password field, whose text never reaches the engine at all. `plus` also carries an **experimental neural decoder** — a
-  small TCN hand-written in C++ with no ML runtime, its weights trained in this repository on a
-  free corpus — as an opt-in switch, off by default; see [Flavors](#flavors). Its weights are
-  read only while that switch is on, and freed the moment it goes off, so leaving it alone costs
-  nothing at all.
+  itself off in exactly one place: a password field, whose text never reaches the engine at all.
+  `plus` adds a **neural decoder** — a small TCN hand-written in C++ with no ML runtime, its
+  weights trained in this repository on a free corpus — and uses it by default, because on the
+  same 500 recorded swipes it reads 90.6% first-try against the geometric tier's 77.0%; see
+  [Flavors](#flavors). A switch turns it off, and its weights are freed the moment it goes off,
+  so `plus` with the switch off costs no more than `core`.
 - **An optional radial menu for swipe typing.** Pause mid-swipe, without lifting, to open a ring
   of alternatives around your finger — slide onto one to pick it, or onto the centre Cancel to
   discard the swipe, all in one continuous motion. Lifting elsewhere applies the top guess or
@@ -121,10 +122,15 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 
 - **Alternate physical layouts** — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona — for
   the 26-letter alphabets every bundled dictionary already knows, plus a number row, a symbols
-  page with a proper number pad, and a numeric keypad in numeric fields.
-- **A personal dictionary you can see and edit.** Every learned word or phrase is listed with
-  how often you used it, and a `Forget` (remove it) and a `Block` (never suggest it again) right
-  beside it — not a black box. Holding a suggestion offers the same from the keyboard.
+  page with a proper number pad, a numeric keypad in numeric fields, and an optional modifier
+  row — Esc, Tab, Ctrl, Alt and the arrows, with Home, End, Page up, Page down, forward Delete
+  and Insert on offer, in the order you choose, sent as the hardware keys they name, above the
+  letters or below the keyboard — for terminals and editors. Ctrl and Alt apply to the next key,
+  and with shift held the caret keys select.
+- **A personal dictionary you can see and edit.** Every learned word is listed with how often
+  you used it, and a `Forget` (remove it) and a `Block` (never suggest it again) right beside
+  it — not a black box. The word pairs it learned are counted on the same screen and go with a
+  word when it is forgotten. Holding a suggestion offers the same from the keyboard.
 - **Text shortcuts.** A word that stands for a longer text — "omw" for "on my way", an address, a
   sign-off — expands when a space or a punctuation mark follows it, takes the capital you gave the
   shortcut, and comes back with the backspace straight after, like any other correction.
@@ -151,10 +157,19 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/2_home.jpg" alt="The settings home" width="30%">
 </p>
 
+- **Panels that search by the word under the caret.** Open the emoji panel over "cake" and the
+  cakes come first; open the clipboard over "invoice" and the clips containing it come first, the
+  header saying how many. A long press on a clip pins, edits or deletes it, and the Clipboard
+  settings screen has a search box and an editor of its own.
+- **A tour after setup.** Once the keyboard is selected, a screen lists what it can do, each
+  feature with a small preview, its default and the screen it is switched on from, which a tap
+  on the card opens; it can be dismissed for good and reopened from the About card on the
+  settings home.
 - **Private mode is automatic.** In a password field, or wherever an app asks for no personalised
   learning, there is no learning, no clipboard history, no assistant, and nothing from your
   personal dictionary in the suggestions — and a password's text never reaches the prediction
-  engine at all.
+  engine at all. The strip offers a Show button there instead, so what the field holds can be
+  checked and hidden again without leaving the keyboard.
 
 ### Quick actions
 
@@ -232,7 +247,7 @@ dictionaries to each other directly, without a file. Nothing syncs anywhere on i
 | Deterministic n-gram engine, geometric swipe decoding | ✓ | ✓ |
 | Multiple languages active at once, no manual switching | ✓ | ✓ |
 | Zero permissions, no `INTERNET` in the merged manifest | ✓ | ✓ |
-| Experimental neural swipe decoder, opt-in | | ✓ |
+| Neural swipe decoder, on by default, switchable | | ✓ |
 | On-device text assistant (draft box) | | ✓ |
 | Correct, Shorten, Summarise and your own instructions in every app's text-selection menu | | ✓ |
 
@@ -280,14 +295,16 @@ compile time, not behind a runtime flag: unpack `app-core-release.apk` and the a
 is not in it. The prediction engine is the same code in both builds; `plus` compiles one extra
 gesture decoder into it — a small TCN hand-written in C++ with no ML runtime, its weights
 trained by [`tools/swipe_model`](tools/swipe_model) on the MIT-licensed `futo-org/swipe.futo.org`
-corpus — behind an "Experimental swipe model" switch that is off by default. That makes `plus`
+corpus — behind a "Neural swipe model" switch that is on by default. That makes `plus`
 free software too, weights included; see [`docs/licensing.md`](docs/licensing.md) §2.1 and
 §2.5 for the provenance and what the other options would have cost.
 
 ## Building
 
 Requires JDK 21 (the Gradle daemon provisions it), the Android SDK with platform 37, and
-NDK 27.1.12297006.
+NDK 27.1.12297006. The keyboard runs on Android 11 (API 30) and later: inline autofill
+suggestions, which are how password managers reach the strip, need that level, and the floor is
+recorded in `gradle/libs.versions.toml`.
 
 ```bash
 ./gradlew :app:assembleCoreRelease      # the free build
