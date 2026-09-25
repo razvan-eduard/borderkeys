@@ -67,6 +67,7 @@ A row's total width is `indent + Σ widthUnits`, and is never zero.
 | `alt` | Characters reachable by long press, in order. |
 | `w` | Width in key-width units. Defaults to 1. |
 | `absorb` | This key, not the space bar, takes the width of an optional key the layout drops. |
+| `secondary` | Drawn in the modifier fill without being a modifier, so a digit block reads as one against the symbols around it. |
 
 `c` and `code` are two spellings of the same field: `c` wins when present, otherwise `code` is
 resolved through `KeyCodes.named()`.
@@ -101,6 +102,7 @@ cannot forget one:
 | `REPEATABLE` | code is `DELETE` | held-backspace repeat |
 | `SECONDARY_ROW` | — | the optional digit row |
 | `ABSORBS_FREED_WIDTH` | `absorb` is true | width redistribution |
+| `SECONDARY_ROW` | `secondary` is true, or the row `withNumberRow()` adds | the key fill |
 
 **Space is a character but gets neither `LETTER` nor `PREVIEW`** — it is not a swipe letter and a
 preview bubble over the space bar is noise.
@@ -196,9 +198,11 @@ malformed overlay means a key without that accent, never a keyboard that will no
 `SYMBOLS` (−4) and `SYMBOLS_SHIFT` (−8) switch to the symbol layouts, which are ordinary layout
 assets — there is no separate mechanism for a "layer".
 
-`symbols_numpad_left` and `symbols_numpad_right` exist because a numeric pad's handedness is a
-preference, and `absorb` exists because those pages drop an optional key and something other than
-the space bar should take its width.
+`symbols_numpad_right`, the default symbols page, and `symbols_numpad_left` put the digits in a
+3×3 block with the symbols beside it -- nine keys a row, so each is close to square; the digits
+`secondary`, so they read as a block; backspace and enter down the right edge -- on whichever
+side a thumb prefers. `absorb` exists for a page that drops an optional key and wants something
+other than the space bar to take its width.
 
 The digit row is not a separate layout either: `KeyboardLayout.withTopRowDigits()` returns the
 same layout with ten digits added above it. Two details are deliberate:

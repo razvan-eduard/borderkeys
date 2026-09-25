@@ -40,7 +40,7 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   worth, because the number is smaller than it looks.
 
 <p align="center">
-  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/13_completions.jpg" alt="The suggestion strip carrying a half-typed word on to down, downtown, downs and downhill" width="30%">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/13_completions.jpg" alt="The suggestion strip carrying a half-typed down on to downtown and downs" width="30%">
 </p>
 
 - **Several languages active at once.** Every dictionary you have switched on — up to four at a
@@ -117,16 +117,23 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   allowed to correct an ordinary word.
 
 <p align="center">
-  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg" alt="Steve, Steven and Stevens offered capitalised from a lower-case stev, in the middle of a sentence" width="30%">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg" alt="Steve and Steven offered capitalised from a lower-case stev, in the middle of a sentence" width="30%">
 </p>
 
 - **Alternate physical layouts** — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona — for
   the 26-letter alphabets every bundled dictionary already knows, plus a number row, a symbols
-  page with a proper number pad, a numeric keypad in numeric fields, and an optional modifier
+  page with a proper number pad — a 3×3 block at the right or the left with the symbols beside
+  it, or a plain digit row — a numeric keypad in numeric fields, and an optional modifier
   row — Esc, Tab, Ctrl, Alt and the arrows, with Home, End, Page up, Page down, forward Delete
   and Insert on offer, in the order you choose, sent as the hardware keys they name, above the
   letters or below the keyboard — for terminals and editors. Ctrl and Alt apply to the next key,
   and with shift held the caret keys select.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/16_symbols_pad.jpg" alt="The symbols page: the digit block at the right, the symbols beside it, backspace and enter down the right edge" width="30%">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/14_modifier_row.jpg" alt="The modifier row below the keyboard: esc, tab, ctrl, alt and the arrows" width="30%">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/15_modifier_row_keys.jpg" alt="Layout &amp; keys: the modifier row's position and the keys on it, reorderable" width="30%">
+</p>
 - **A personal dictionary you can see and edit.** Every learned word is listed with how often
   you used it, and a `Forget` (remove it) and a `Block` (never suggest it again) right beside
   it — not a black box. The word pairs it learned are counted on the same screen and go with a
@@ -161,15 +168,30 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   cakes come first; open the clipboard over "invoice" and the clips containing it come first, the
   header saying how many. A long press on a clip pins, edits or deletes it, and the Clipboard
   settings screen has a search box and an editor of its own.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/18_emoji_search.jpg" alt="The emoji panel opened over the word cake: the cakes come first" width="30%">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/17_clipboard_search.jpg" alt="The clipboard panel opened over the word invoice: two clips with it, first" width="30%">
+</p>
+
 - **A tour after setup.** Once the keyboard is selected, a screen lists what it can do, each
   feature with a small preview, its default and the screen it is switched on from, which a tap
   on the card opens; it can be dismissed for good and reopened from the About card on the
   settings home.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/19_feature_tour.jpg" alt="The feature tour: autocorrect, swipe typing and the strip, each with a preview, its default and where it is switched on" width="30%">
+</p>
+
 - **Private mode is automatic.** In a password field, or wherever an app asks for no personalised
   learning, there is no learning, no clipboard history, no assistant, and nothing from your
   personal dictionary in the suggestions — and a password's text never reaches the prediction
   engine at all. The strip offers a Show button there instead, so what the field holds can be
   checked and hidden again without leaving the keyboard.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/20_private_field.jpg" alt="A password field: the strip shows the field's text after Show, with Hide beside it" width="30%">
+</p>
 
 ### Quick actions
 
@@ -342,6 +364,17 @@ build still succeeds and produces an unsigned APK, so a contributor without the 
 blocked.
 
 ## Verifying the claims yourself
+
+The settings application measures the keyboard as it runs. The **Debug stats** line above its
+"Try it here" field opens a panel with the keystroke-to-strip and native search latency, the
+swipe decode and lift-to-text figures labelled with the decoder that ran, the swipe's duration,
+path and samples, the pack load time, typing speed and process memory — each as last, mean and
+maximum, rated against a baseline with a line on what changes it — and a Share button that hands
+the panel to any app as text. The figures in [`docs/testing.md`](docs/testing.md) come from it.
+
+<p align="center">
+  <img src="fastlane/com.borderkeys.plus/metadata/android/en-US/images/phoneScreenshots/25_debug_stats.jpg" alt="Debug stats: keystroke to strip, native search, swipe decode and lift to text, each rated green" width="30%">
+</p>
 
 ```bash
 # Zero permissions. Not "only harmless ones" -- zero.
