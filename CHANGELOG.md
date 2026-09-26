@@ -33,6 +33,8 @@ attestations and the full commit lists are on the
 - Copies made in password managers and one-time-code apps the keyboard knows, or in apps you
   name, are never kept in the history.
 - The smoke suite runs at API 30 and API 35, with six more cases.
+- A user guide, docs/guide.md, with the store screenshots; the README keeps the promises and
+  how to verify them.
 
 ## v0.8.0 — 2026-09-25
 
