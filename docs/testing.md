@@ -137,8 +137,11 @@ text, a chip picked with the caret at the start of the field followed by a new w
 along the space bar with shift locked that selects what was typed, a swipe across three keys
 that writes the word, a pause in a swipe that opens the ring and a lift on its top wedge that
 picks the top word, Control on the modifier row followed by A selecting the field, a mistyped
-word in a password field left as typed, and a slide up the space bar in a field of several
-lines that moves the caret a line — each asserting the field's final text. The password field
+word in a password field left as typed, a slide up the space bar in a field of several
+lines that moves the caret a line, and letters tapped on the Russian layout, chosen through the
+subtype setting, reaching the field as themselves — each asserting the field's final text. Keys
+are found by scanning the keyboard's own nodes for the name they carry, since a selector on the
+description alone does not match a name outside the Latin script. The password field
 and the field of several lines are the "Try it here" field in two of its three modes: a tap on
 its label, which names the mode after a coloured bullet, moves to the next mode, and the field
 carries its mode and its text in its content description so the suite can read it where the
@@ -549,7 +552,7 @@ is the number a user gets.
 | `autocorrect_unknown_en` | 200 | 82.5% | 188 |
 | `autocorrect_doubled_en` | 200 | 98.0% | 187 |
 | `autocorrect_firstletter_en` | 200 | 91.5% | 166 |
-| `autocorrect_marks_en` | 240 | — | 233 |
+| `autocorrect_marks_en` | 240 | — | 240 |
 | `autocorrect_accents_ro` | 248 | 95.2% | 237 |
 
 The unknown corpus reads 184 without the inflection guard (`AutoCorrection.Situation.Inflection`,
@@ -557,9 +560,9 @@ The unknown corpus reads 184 without the inflection guard (`AutoCorrection.Situa
 corpora is the proper-noun rule: a slip inside a name -- `ameriican`, `cecember` -- is offered
 the name and refused as `NameMismatch`, since a name corrects only its own letters. Of the twelve correct words still overwritten,
 none is a regular inflection of a stem above `kStemFrequencyFloor`: `pouter` and `headiness`
-have stems the pack holds a dozen times, and the rest are not inflections at all. The seven
-marks rows the path answers differently are a typed apostrophe carried on to the contraction
--- `that'` to `that's` -- which the corpus expects left alone.
+have stems the pack holds a dozen times, and the rest are not inflections at all. A typed
+apostrophe carried on to the contraction -- `that'` on its way to `that's` -- is left alone as
+`AutoCorrection.Situation.TrailingMark`, so every marks row answers as the corpus expects.
 
 ### One letter doubled, and the first letter one key over
 

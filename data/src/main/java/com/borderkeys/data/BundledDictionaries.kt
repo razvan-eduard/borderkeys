@@ -68,12 +68,12 @@ object BundledDictionaries {
         // discarded -- Romanian by 6,306, "ca" beside "că" and "sau" beside "său".
         // Sizes from format version 6, which stores the pairs as a successor index and the
         // triples as a continuation index hung off it, in place of two hash tables.
-        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 112_224, 8_434_376),
-        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 128_217, 10_196_032),
-        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 99_859, 8_129_140),
-        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 100_782, 8_442_580),
-        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 101_673, 9_238_648),
-        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 100_884, 8_595_700),
+        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 112_197, 8_432_908),
+        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 125_817, 10_056_288),
+        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 99_828, 8_127_252),
+        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 95_877, 7_980_800),
+        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 101_638, 9_236_688),
+        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 97_382, 8_302_540),
     )
 
     /** Opens one for reading. The caller closes it; the install path copies and validates. */
