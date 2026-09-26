@@ -207,6 +207,7 @@ dependencies {
     // keyboard reads, and names the pack's licence from the catalogue.
     androidTestImplementation(project(":data"))
     androidTestImplementation(project(":i18n"))
+    androidTestImplementation(project(":settings"))
     // Attached only to the `plus` flavor. This is why the `core` APK does not contain the
     // assistant: not because R8 removed it, but because it never entered the compilation.
     "plusImplementation"(project(":assist"))

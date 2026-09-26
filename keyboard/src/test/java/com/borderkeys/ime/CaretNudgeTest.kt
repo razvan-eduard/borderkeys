@@ -59,5 +59,34 @@ class CaretNudgeTest {
         val earlier = CaretNudge.Selection(3, 1)
         val fresh = CaretNudge.slide(start = 4, end = 6, previous = earlier, steps = 1, length = 10, selecting = true)
         assertEquals(CaretNudge.Selection(4, 7), fresh)
+        val grown = CaretNudge.slide(start = 1, end = 5, previous = earlier, steps = 1, length = 10, selecting = true)
+        assertEquals(CaretNudge.Selection(1, 6), grown)
+    }
+
+    @Test
+    fun `a line up or down keeps the column`() {
+        val text = "abcd\nefgh\nij"
+        assertEquals(2, CaretNudge.lineTarget(text, 7, -1))
+        assertEquals(7, CaretNudge.lineTarget(text, 2, 1))
+        assertEquals(2, CaretNudge.lineTarget(text, 12, -2))
+    }
+
+    @Test
+    fun `a shorter line stops the caret at its end, and the field's ends stop it too`() {
+        val text = "abcd\nefgh\nij"
+        assertEquals(12, CaretNudge.lineTarget(text, 8, 1))
+        assertEquals(3, CaretNudge.lineTarget(text, 3, -1))
+        assertEquals(11, CaretNudge.lineTarget(text, 11, 3))
+        assertEquals(0, CaretNudge.lineTarget("", 0, -1))
+    }
+
+    @Test
+    fun `a line slide moves, or selects with shift held, from the moving end`() {
+        val text = "ab\ncd"
+        assertEquals(CaretNudge.Selection(2, 2), CaretNudge.slideLines(text, 5, 5, null, -1, selecting = false))
+        val selected = CaretNudge.slideLines(text, 5, 5, null, -1, selecting = true)
+        assertEquals(CaretNudge.Selection(5, 2), selected)
+        val onward = CaretNudge.slideLines(text, selected.start, selected.end, selected, 1, selecting = true)
+        assertEquals(CaretNudge.Selection(5, 5), onward)
     }
 }

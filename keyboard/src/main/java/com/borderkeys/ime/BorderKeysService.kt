@@ -1598,11 +1598,6 @@ class BorderKeysService :
         // same as a key press -- the ring goes, the swiped word stays.
         dismissRadialMenu()
         val connection = currentInputConnection ?: return
-        if (composing.isNotEmpty()) {
-            // Committing first, because moving the caret out of a composing region leaves the
-            // editor holding an underline around text nobody is editing any more.
-            finishComposing(connection)
-        }
         val extracted = connection.getExtractedText(ExtractedTextRequest(), 0) ?: return
         val length = extracted.text?.length ?: return
         val next = CaretNudge.slide(
@@ -1613,30 +1608,47 @@ class BorderKeysService :
             length = length,
             selecting = shiftState != ShiftState.OFF,
         )
+        applyNudge(connection, next)
+    }
+
+    /**
+     * Moves the caret, or the selection, to [next] as one edit: the composing word is finished
+     * first, since a caret out of a composing region would leave the editor underlining text
+     * nobody is editing any more, and the editor reports the selection once, after both, so
+     * the word at the new caret is adopted from settled text.
+     */
+    private fun applyNudge(connection: InputConnection, next: CaretNudge.Selection) {
         lastNudge = next
         if (next.start == selectionStart && next.end == selectionEnd) {
             return
         }
+        connection.beginBatchEdit()
+        if (composing.isNotEmpty()) {
+            finishComposing(connection)
+        }
         selectionStart = next.start
         selectionEnd = next.end
         connection.setSelection(next.anchor, next.caret)
+        connection.endBatchEdit()
     }
 
     /**
-     * Up or down by [lines] as the arrow keys would go, so the editor picks the line and the
-     * column; with shift held the arrows carry shift and the editor extends the selection.
+     * Up or down by [lines], through the field's own text and setSelection, as the sideways
+     * slide is: the caret keeps its column, and with shift held the slide selects.
      */
     override fun onCursorNudgeLines(lines: Int) {
         dismissRadialMenu()
         val connection = currentInputConnection ?: return
-        if (composing.isNotEmpty()) {
-            finishComposing(connection)
-        }
-        val keyCode = if (lines < 0) android.view.KeyEvent.KEYCODE_DPAD_UP else android.view.KeyEvent.KEYCODE_DPAD_DOWN
-        val meta = if (shiftState != ShiftState.OFF) SHIFT_META else 0
-        repeat(kotlin.math.abs(lines)) {
-            sendPhysicalKey(connection, keyCode, meta)
-        }
+        val text = connection.getExtractedText(ExtractedTextRequest(), 0)?.text ?: return
+        val next = CaretNudge.slideLines(
+            text = text,
+            start = selectionStart,
+            end = selectionEnd,
+            previous = lastNudge,
+            lines = lines,
+            selecting = shiftState != ShiftState.OFF,
+        )
+        applyNudge(connection, next)
     }
 
     /**
@@ -5743,10 +5755,7 @@ class BorderKeysService :
         const val PAGE_NUMPAD = 3
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
 
-        /**
-         * Shift held, as a key event carries it: a capital typed into a terminal, a selecting
-         * slide along the space bar.
-         */
+        /** Shift held, as a key event carries it, for a capital typed into a terminal. */
         const val SHIFT_META =
             android.view.KeyEvent.META_SHIFT_ON or android.view.KeyEvent.META_SHIFT_LEFT_ON
 

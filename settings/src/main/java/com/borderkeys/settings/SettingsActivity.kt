@@ -4,6 +4,7 @@
 package com.borderkeys.settings
 
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,6 +21,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -361,6 +367,36 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
                 )
+                // Debuggable builds only: a password field and a field of several lines for
+                // the smoke suite, each carrying its text in its content description.
+                val debuggable = LocalContext.current.applicationInfo.flags and
+                    ApplicationInfo.FLAG_DEBUGGABLE != 0
+                if (debuggable) {
+                    var probePassword by rememberSaveable { mutableStateOf("") }
+                    OutlinedTextField(
+                        value = probePassword,
+                        onValueChange = { probePassword = it },
+                        label = { Text(strings[Keys.SWIPE_TRY_A_PASSWORD_HERE]) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .semantics { contentDescription = ProbeFields.PASSWORD + probePassword },
+                    )
+                    var probeLines by rememberSaveable { mutableStateOf("") }
+                    OutlinedTextField(
+                        value = probeLines,
+                        onValueChange = { probeLines = it },
+                        label = { Text(strings[Keys.SWIPE_TRY_SEVERAL_LINES_HERE]) },
+                        minLines = PROBE_LINES,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .semantics { contentDescription = ProbeFields.LINES + probeLines },
+                    )
+                }
             }
         },
         topBar = {
@@ -427,3 +463,6 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
         }
     }
 }
+
+/** How many lines the debuggable builds' field of several lines shows at least. */
+private const val PROBE_LINES = 3
