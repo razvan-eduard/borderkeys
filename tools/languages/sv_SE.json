@@ -29,5 +29,5 @@
   },
   "single_letter_words": "iå",
   "expected_beyond_ascii": [],
-  "reachability_budget": null
+  "reachability_budget": 255
 }

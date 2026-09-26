@@ -28,5 +28,5 @@
   },
   "single_letter_words": "aeoéà",
   "expected_beyond_ascii": [],
-  "reachability_budget": null
+  "reachability_budget": 307
 }
