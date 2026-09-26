@@ -1,0 +1,30 @@
+{
+  "tag": "ar",
+  "name": "Arabic",
+  "wikidata": "ar",
+  "layout": "arabic",
+  "corpora": [
+    "ara_wikipedia_2021_1M",
+    "ara_news_2022_1M",
+    "ara_news_2020_1M"
+  ],
+  "hunspell": [
+    "ar/ar"
+  ],
+  "treebank": {
+    "repository": "UD_Arabic-PADT",
+    "files": [
+      "ar_padt-ud-train.conllu",
+      "ar_padt-ud-dev.conllu",
+      "ar_padt-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "ا": "أإآ",
+    "ي": "ئ",
+    "و": "ؤ"
+  },
+  "single_letter_words": "و",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

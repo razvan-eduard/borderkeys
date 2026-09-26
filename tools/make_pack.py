@@ -59,7 +59,7 @@ import unicodedata
 from collections import Counter
 from pathlib import Path
 
-from build_dict import plain_apostrophes
+from build_dict import plain_apostrophes, without_vowel_marks
 
 HERE = Path(__file__).resolve().parent
 
@@ -95,8 +95,10 @@ def alphabet_for(tag: str) -> Alphabet | None:
 # A word is letters, plus the marks that belong to them, plus the apostrophes and hyphens that
 # appear inside words. Deliberately not \w: that admits digits and underscores, and a dictionary
 # full of "covid19" and "foo_bar" predicts nothing anyone types. Every apostrophe a word holds is
-# written as the plain one on the way in.
-WORD = re.compile(r"[^\W\d_]+(?:['’‘ʼ-][^\W\d_]+)*", re.UNICODE)
+# written as the plain one on the way in, and the Hebrew and Arabic vowel marks, which the fold
+# drops, are left out of the spelling.
+LETTER = r"(?:[^\W\d_]|[֑-ׇً-ٰٟۖ-ۭ])"
+WORD = re.compile(rf"{LETTER}+(?:['’‘ʼ׳-]{LETTER}+)*", re.UNICODE)
 
 
 # Sequences that only appear when UTF-8 has been decoded as Latin-1 somewhere upstream: "dacă"
@@ -130,8 +132,8 @@ def tokenise(line: str, alphabet: Alphabet | None = None) -> list[str]:
         lowered
         for m in WORD.finditer(normalised)
         if not MOJIBAKE.search(m.group(0))
-        for lowered in (plain_apostrophes(m.group(0).lower()),)
-        if admits(lowered, alphabet)
+        for lowered in (without_vowel_marks(plain_apostrophes(m.group(0).lower())),)
+        if lowered and admits(lowered, alphabet)
     ]
 
 

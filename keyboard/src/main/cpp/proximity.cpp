@@ -191,10 +191,47 @@ static uint32_t lowerArmenianGeorgian(uint32_t codePoint) {
 // stopping there. Comparing two spellings of one folded key is a question about the diacritics,
 // so it cannot use a fold that removes them -- and it cannot use raw bytes either, because the
 // first letter of a field arrives capitalised.
-// The typographic apostrophes and the modifier letter apostrophe are the plain apostrophe:
-// a corpus writes "don't" both ways, a keyboard types one of them, and they are one word.
+// The typographic apostrophes, the modifier letter apostrophe and the Hebrew geresh are the
+// plain apostrophe, the one the keyboard types.
 static uint32_t plainApostrophe(uint32_t codePoint) {
-    return (codePoint == 0x2018u || codePoint == 0x2019u || codePoint == 0x2BCu) ? '\'' : codePoint;
+    return (codePoint == 0x2018u || codePoint == 0x2019u || codePoint == 0x2BCu || codePoint == 0x5F3u)
+               ? '\''
+               : codePoint;
+}
+
+// Hebrew: the vowel points and the cantillation marks are dropped, and the maqaf is the hyphen.
+static uint32_t foldHebrew(uint32_t codePoint) {
+    if ((codePoint >= 0x591u && codePoint <= 0x5BDu) || codePoint == 0x5BFu || codePoint == 0x5C1u ||
+        codePoint == 0x5C2u || codePoint == 0x5C4u || codePoint == 0x5C5u || codePoint == 0x5C7u) {
+        return kDroppedCodePoint;
+    }
+    return codePoint == 0x5BEu ? '-' : codePoint;
+}
+
+// Arabic: the harakat, the superscript alef, the Quranic marks and the tatweel are dropped;
+// the alef with a hamza, a madda or a wasla is the bare alef, the waw and the yeh with a hamza
+// are the bare letters, the alef maksura and the Persian yeh are the yeh, the teh marbuta is
+// the heh, and the Persian kaf is the kaf.
+static uint32_t foldArabic(uint32_t codePoint) {
+    if ((codePoint >= 0x64Bu && codePoint <= 0x65Fu) || codePoint == 0x670u || codePoint == 0x640u ||
+        (codePoint >= 0x6D6u && codePoint <= 0x6DCu) || (codePoint >= 0x6DFu && codePoint <= 0x6E4u) ||
+        codePoint == 0x6E7u || codePoint == 0x6E8u || (codePoint >= 0x6EAu && codePoint <= 0x6EDu)) {
+        return kDroppedCodePoint;
+    }
+    switch (codePoint) {
+        case 0x622u: case 0x623u: case 0x625u: case 0x671u:
+            return 0x627u;
+        case 0x624u:
+            return 0x648u;
+        case 0x626u: case 0x649u: case 0x6CCu:
+            return 0x64Au;
+        case 0x629u:
+            return 0x647u;
+        case 0x6A9u:
+            return 0x643u;
+        default:
+            return codePoint;
+    }
 }
 
 uint32_t lowerCodePoint(uint32_t codePoint) {
@@ -349,6 +386,12 @@ uint32_t foldCodePoint(uint32_t codePoint) {
     if (codePoint >= 0x400u && codePoint <= 0x4FFu) {
         return foldCyrillic(codePoint);
     }
+    if (codePoint >= 0x590u && codePoint <= 0x5FFu) {
+        return foldHebrew(codePoint);
+    }
+    if (codePoint >= 0x600u && codePoint <= 0x6FFu) {
+        return foldArabic(codePoint);
+    }
     return lowerArmenianGeorgian(codePoint);
 }
 
@@ -365,8 +408,11 @@ int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut) {
         if (next == nullptr) {
             return -1;
         }
-        out[written] = foldCodePoint(codePoint);
-        ++written;
+        const uint32_t folded = foldCodePoint(codePoint);
+        if (folded != kDroppedCodePoint) {
+            out[written] = folded;
+            ++written;
+        }
         p = next;
     }
     return written;

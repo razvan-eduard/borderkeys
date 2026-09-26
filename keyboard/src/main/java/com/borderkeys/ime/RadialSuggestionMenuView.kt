@@ -430,12 +430,28 @@ class RadialSuggestionMenuView(
 
     /** Fills [wedgeStartDeg]/[wedgeSweepDeg] from [computeWedgeBoundaries], one call per [show]
      *  rather than per frame or per touch. */
+    /**
+     * Whether the wedges are mirrored across the vertical axis, so the ring reads the way the
+     * language on the keys does: the best rank moves from the upper right to the upper left.
+     */
+    var rightToLeft: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                recomputeWedgeBoundaries()
+                invalidate()
+            }
+        }
+
     private fun recomputeWedgeBoundaries() {
         val n = words.size
-        val (start, sweep) = computeWedgeBoundaries(n)
+        val (start, sweep) = computeWedgeBoundaries(n, rightToLeft)
         wedgeStartDeg = start
         wedgeSweepDeg = sweep
     }
+
+    /** The centre angle of the wedge at [rank], mirrored when the ring is. */
+    private fun wedgeCentre(rank: Int): Float = wedgeCentreDegrees(rank, words.size, rightToLeft)
 
     override fun onDraw(canvas: Canvas) {
         Trace.beginSection("RadialSuggestionMenuView.onDraw")
@@ -500,7 +516,7 @@ class RadialSuggestionMenuView(
                 trustedPath.reset()
                 trustedPath.addPath(wedgePath)
             }
-            val midAngleRad = Math.toRadians(wedgeCentreDegrees(index, words.size).toDouble())
+            val midAngleRad = Math.toRadians(wedgeCentre(index).toDouble())
             val textX = anchorX + (midRadius * cos(midAngleRad)).toFloat()
             val textY = anchorY + (midRadius * sin(midAngleRad)).toFloat() +
                 paints.labelBaselineOffsetPx
@@ -628,11 +644,12 @@ class RadialSuggestionMenuView(
          * without a `View`/`Context` -- no Robolectric needed, plain JUnit4 like every other
          * pure function in this package.
          */
-        fun wedgeCentreDegrees(rankIndex: Int, wedgeCount: Int): Float {
+        fun wedgeCentreDegrees(rankIndex: Int, wedgeCount: Int, rightToLeft: Boolean = false): Float {
             if (wedgeCount <= 0) {
                 return 0f
             }
-            return ERGONOMIC_ORDER_DEGREES[rankIndex % ERGONOMIC_ORDER_DEGREES.size]
+            val centre = ERGONOMIC_ORDER_DEGREES[rankIndex % ERGONOMIC_ORDER_DEGREES.size]
+            return if (rightToLeft) 180f - centre else centre
         }
 
         /**
@@ -646,14 +663,14 @@ class RadialSuggestionMenuView(
          * sweep. Drawing and hit-testing both read the same two arrays this returns, so what is
          * drawn and what is tappable can never disagree.
          */
-        fun computeWedgeBoundaries(wedgeCount: Int): Pair<FloatArray, FloatArray> {
+        fun computeWedgeBoundaries(wedgeCount: Int, rightToLeft: Boolean = false): Pair<FloatArray, FloatArray> {
             val start = FloatArray(wedgeCount)
             val sweep = FloatArray(wedgeCount)
             if (wedgeCount <= 0) {
                 return start to sweep
             }
             val bySortedAngle = (0 until wedgeCount)
-                .map { rank -> rank to normalizeDegrees(wedgeCentreDegrees(rank, wedgeCount)) }
+                .map { rank -> rank to normalizeDegrees(wedgeCentreDegrees(rank, wedgeCount, rightToLeft)) }
                 .sortedBy { it.second }
             for (i in bySortedAngle.indices) {
                 val (rank, centre) = bySortedAngle[i]

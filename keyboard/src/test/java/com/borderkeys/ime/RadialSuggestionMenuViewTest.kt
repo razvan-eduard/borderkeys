@@ -28,6 +28,18 @@ class RadialSuggestionMenuViewTest {
     }
 
     @Test
+    fun `read from the right, the best two ranks are the upper diagonals mirrored`() {
+        assertEquals(225f, RadialSuggestionMenuView.wedgeCentreDegrees(0, 6, rightToLeft = true), 0f)
+        assertEquals(315f, RadialSuggestionMenuView.wedgeCentreDegrees(1, 6, rightToLeft = true), 0f)
+        assertEquals(180f, RadialSuggestionMenuView.wedgeCentreDegrees(2, 6, rightToLeft = true), 0f)
+        val (start, sweep) = RadialSuggestionMenuView.computeWedgeBoundaries(6, rightToLeft = true)
+        val (plainStart, plainSweep) = RadialSuggestionMenuView.computeWedgeBoundaries(6)
+        // The same six wedges, each one's span unchanged, sitting where its mirror image did.
+        assertEquals(plainSweep.toList(), sweep.toList())
+        assertEquals(normalize(180f - plainStart[0] - plainSweep[0]), normalize(start[0]), 0.01f)
+    }
+
+    @Test
     fun `rank order wraps rather than crashes past the table's own size`() {
         assertEquals(
             RadialSuggestionMenuView.wedgeCentreDegrees(0, 6),

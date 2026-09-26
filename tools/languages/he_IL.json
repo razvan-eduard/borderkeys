@@ -1,0 +1,26 @@
+{
+  "tag": "he-IL",
+  "name": "Hebrew",
+  "wikidata": "he",
+  "layout": "hebrew",
+  "corpora": [
+    "heb_wikipedia_2021_1M",
+    "heb_news_2020_1M",
+    "heb_newscrawl_2011_1M"
+  ],
+  "hunspell": [
+    "he_IL/he_IL"
+  ],
+  "treebank": {
+    "repository": "UD_Hebrew-HTB",
+    "files": [
+      "he_htb-ud-train.conllu",
+      "he_htb-ud-dev.conllu",
+      "he_htb-ud-test.conllu"
+    ]
+  },
+  "overlay": {},
+  "single_letter_words": "",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

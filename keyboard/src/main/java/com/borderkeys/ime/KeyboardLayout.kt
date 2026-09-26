@@ -19,6 +19,9 @@ class KeyboardLayout(
     val languageTag: String,
     val rows: List<Row>,
 ) {
+    /** Whether the layout's language is written right to left; the strip and the ring follow it. */
+    val rightToLeft: Boolean = languageTag.substringBefore('-').lowercase() in RIGHT_TO_LEFT_LANGUAGES
+
     class Row(
         /** Leading empty space, in key-width units. Half a unit is the classic QWERTY stagger. */
         val indent: Float,
@@ -286,6 +289,10 @@ class KeyboardLayout(
     }
 
     companion object {
+        /** The languages written right to left, by the language part of their tag. */
+        private val RIGHT_TO_LEFT_LANGUAGES =
+            setOf("he", "iw", "ar", "fa", "ur", "yi", "ji", "ps", "ug", "sd", "ckb", "dv")
+
         private const val NUMBER_ROW_SUFFIX = "+num"
         private const val MODIFIER_ROW_SUFFIX = "+mod"
         private const val MODIFIER_ROW_BOTTOM_SUFFIX = "+modb"

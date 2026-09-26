@@ -31,8 +31,12 @@ int utf8Encode(uint32_t codePoint, char* out);
 //
 // Covers ASCII, Latin-1 Supplement and the parts of Latin Extended-A that matter for Romanian
 // (ă â î ș ț, in both the comma-below and the historical cedilla encodings, which look
-// identical to a user and are different code points). Anything else is returned unchanged:
-// folding a script we do not understand would merge words that are genuinely distinct.
+// identical to a user and are different code points), Greek, Cyrillic, Armenian, Georgian,
+// Hebrew and Arabic. A mark a folded word does not carry -- a Hebrew vowel point, an Arabic
+// harakat -- folds to kDroppedCodePoint, which foldUtf8 leaves out. Anything else is returned
+// unchanged: folding a script we do not understand would merge words that are genuinely
+// distinct.
+constexpr uint32_t kDroppedCodePoint = 0u;
 uint32_t foldCodePoint(uint32_t codePoint);
 
 /** Lowercases without touching diacritics -- foldCodePoint's case half on its own. */

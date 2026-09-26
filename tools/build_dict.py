@@ -208,15 +208,31 @@ def _lower_armenian_georgian(code_point: int) -> int:
     return code_point
 
 
-# The typographic apostrophes and the modifier letter apostrophe fold onto the plain one, the
-# apostrophe the keyboard types.
-_APOSTROPHES = (0x2018, 0x2019, 0x2BC)
+# The typographic apostrophes, the modifier letter apostrophe and the Hebrew geresh fold onto
+# the plain apostrophe, the one the keyboard types.
+_APOSTROPHES = (0x2018, 0x2019, 0x2BC, 0x5F3)
 _PLAIN_APOSTROPHE = str.maketrans({chr(code_point): "'" for code_point in _APOSTROPHES})
+
+# What fold_code_point returns for a mark a folded word does not carry: the Hebrew vowel points
+# and cantillation marks, the Arabic harakat, the superscript alef, the Quranic marks and the
+# tatweel. Mirrors kDroppedCodePoint in proximity.hpp.
+DROPPED = 0
+_HEBREW_MARKS = frozenset(range(0x591, 0x5BE)) | {0x5BF, 0x5C1, 0x5C2, 0x5C4, 0x5C5, 0x5C7}
+_ARABIC_MARKS = (frozenset(range(0x64B, 0x660)) | {0x670, 0x640} | frozenset(range(0x6D6, 0x6DD))
+                 | frozenset(range(0x6DF, 0x6E5)) | {0x6E7, 0x6E8} | frozenset(range(0x6EA, 0x6EE)))
+_ARABIC_FOLD = {0x622: 0x627, 0x623: 0x627, 0x625: 0x627, 0x671: 0x627, 0x624: 0x648,
+                0x626: 0x64A, 0x649: 0x64A, 0x6CC: 0x64A, 0x629: 0x647, 0x6A9: 0x643}
+_VOWEL_MARKS = str.maketrans({chr(code_point): None for code_point in _HEBREW_MARKS | _ARABIC_MARKS})
 
 
 def plain_apostrophes(word: str) -> str:
     """[word] with every apostrophe written as the plain one."""
     return word.translate(_PLAIN_APOSTROPHE)
+
+
+def without_vowel_marks(word: str) -> str:
+    """[word] without the Hebrew and Arabic marks a folded word does not carry."""
+    return word.translate(_VOWEL_MARKS)
 
 
 def fold_code_point(code_point: int) -> int:
@@ -261,11 +277,23 @@ def fold_code_point(code_point: int) -> int:
         if lower == 0x45D:
             return 0x438
         return lower
+    # Hebrew: the vowel points and the cantillation marks go, and the maqaf is the hyphen.
+    if 0x590 <= code_point <= 0x5FF:
+        if code_point in _HEBREW_MARKS:
+            return DROPPED
+        return ord("-") if code_point == 0x5BE else code_point
+    # Arabic: the harakat and the tatweel go, and a letter that differs from a base letter by a
+    # hamza, a madda, a wasla or a dot folds onto it.
+    if 0x600 <= code_point <= 0x6FF:
+        if code_point in _ARABIC_MARKS:
+            return DROPPED
+        return _ARABIC_FOLD.get(code_point, code_point)
     return _lower_armenian_georgian(code_point)
 
 
 def fold_word(word: str) -> tuple[int, ...]:
-    return tuple(fold_code_point(ord(character)) for character in word)
+    """The folded key of [word]: its code points folded, the dropped marks left out."""
+    return tuple(folded for folded in (fold_code_point(ord(character)) for character in word) if folded != DROPPED)
 
 
 # --------------------------------------------------------------------------------------
@@ -882,7 +910,7 @@ def round_trip(words: list[tuple[str, int]], ngrams: dict, tag: str, samples: in
     # Diacritic folding, both directions: the undecorated spelling must reach the decorated
     # entry, and the entry must come back with its diacritics intact.
     for word, _ in words:
-        stripped = "".join(chr(fold_code_point(ord(character))) for character in word)
+        stripped = "".join(chr(folded) for folded in fold_word(word))
         if stripped == word:
             continue
         index = reader.lookup(stripped)

@@ -78,6 +78,45 @@ void runFoldTests() {
         check(foldCodePoint(0x2019u) == '\'' && foldCodePoint(0x2018u) == '\'' && foldCodePoint(0x2BCu) == '\'',
               "the typographic apostrophes fold onto the plain one");
         check(sameSpellingIgnoringCase("don\xE2\x80\x99t", 7, "don't", 5), "and the two spellings of don't are one word");
+        // Hebrew: the vowel points drop out, the maqaf is the hyphen, the geresh the apostrophe.
+        check(foldCodePoint(0x5B8u) == kDroppedCodePoint && foldCodePoint(0x5C1u) == kDroppedCodePoint,
+              "a Hebrew vowel point and the shin dot fold to the dropped mark");
+        check(foldCodePoint(0x5BEu) == '-' && foldCodePoint(0x5F3u) == '\'',
+              "the maqaf is the hyphen and the geresh the apostrophe");
+        check(foldCodePoint(0x5E9u) == 0x5E9u && foldCodePoint(0x5DDu) == 0x5DDu,
+              "a Hebrew letter and a final letter stay themselves");
+        {
+            // "שָׁלוֹם" with its points folds to the four letters of "שלום".
+            const char* const pointed = "\xD7\xA9\xD6\xB8\xD7\x81\xD7\x9C\xD7\x95\xD6\xB9\xD7\x9D";
+            uint32_t folded[16];
+            const int count = foldUtf8(pointed, std::strlen(pointed), folded, 16);
+            check(count == 4 && folded[0] == 0x5E9u && folded[1] == 0x5DCu && folded[2] == 0x5D5u &&
+                      folded[3] == 0x5DDu,
+                  "a pointed Hebrew word folds to its letters alone");
+        }
+        // Arabic: the harakat and the tatweel drop out, the hamza and madda forms fold onto the
+        // bare letter, and the Persian letters onto the Arabic ones.
+        check(foldCodePoint(0x64Eu) == kDroppedCodePoint && foldCodePoint(0x651u) == kDroppedCodePoint &&
+                  foldCodePoint(0x640u) == kDroppedCodePoint,
+              "the fatha, the shadda and the tatweel fold to the dropped mark");
+        check(foldCodePoint(0x623u) == 0x627u && foldCodePoint(0x625u) == 0x627u &&
+                  foldCodePoint(0x622u) == 0x627u && foldCodePoint(0x671u) == 0x627u,
+              "every alef with a mark folds onto the bare alef");
+        check(foldCodePoint(0x624u) == 0x648u && foldCodePoint(0x626u) == 0x64Au &&
+                  foldCodePoint(0x649u) == 0x64Au && foldCodePoint(0x629u) == 0x647u,
+              "the hamza forms, the alef maksura and the teh marbuta fold onto their base letters");
+        check(foldCodePoint(0x6CCu) == 0x64Au && foldCodePoint(0x6A9u) == 0x643u,
+              "the Persian yeh and kaf fold onto the Arabic ones");
+        {
+            // "مَدْرَسَة" with its harakat folds to the five letters of "مدرسه".
+            const char* const vowelled =
+                "\xD9\x85\xD9\x8E\xD8\xAF\xD9\x92\xD8\xB1\xD9\x8E\xD8\xB3\xD9\x8E\xD8\xA9";
+            uint32_t folded[16];
+            const int count = foldUtf8(vowelled, std::strlen(vowelled), folded, 16);
+            check(count == 5 && folded[0] == 0x645u && folded[1] == 0x62Fu && folded[2] == 0x631u &&
+                      folded[3] == 0x633u && folded[4] == 0x647u,
+                  "a vowelled Arabic word folds to its letters alone, the teh marbuta as heh");
+        }
         // Greek: case, tonos, dialytika and the final sigma.
         check(foldCodePoint(0x391u) == 0x3B1u && foldCodePoint(0x386u) == 0x3B1u && foldCodePoint(0x3ACu) == 0x3B1u,
               "Α, Ά and ά fold to α");
