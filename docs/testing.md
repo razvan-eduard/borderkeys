@@ -133,11 +133,19 @@ on, selects the keyboard through `ime set`, opens the settings application's "Tr
 and taps keys by the accessibility nodes the keyboard publishes for them, reading the field back
 through its node. What it covers is exactly what the JVM cannot: a correction written on the
 space bar, the backspace that puts the typed word back, typing after a caret move into committed
-text, and a chip picked with the caret at the start of the field followed by a new word — each
-asserting the field's final text.
+text, a chip picked with the caret at the start of the field followed by a new word, a slide
+along the space bar with shift locked that selects what was typed, a swipe across three keys
+that writes the word, a pause in a swipe that opens the ring and a lift on its top wedge that
+picks the top word, Control on the modifier row followed by A selecting the field, a mistyped
+word in a password field left as typed, and a slide up the space bar in a field of several
+lines that moves the caret a line — each asserting the field's final text. The password field
+and the field of several lines are the two extra fields debuggable builds show under "Try it
+here", each carrying its text in its content description so the suite can read it where the
+accessibility tree would show a password masked.
 
-It runs in CI's `smoke` job on an API 30 x86_64 emulator (`-Pborderkeys.extraAbis=x86_64` adds
-the ABI, which the shipped APKs do not carry). Locally it runs on an emulator, never a phone,
+It runs in CI's `smoke` job on x86_64 emulators at API 30 and API 35, the oldest and the newest
+the keyboard is built for (`-Pborderkeys.extraAbis=x86_64` adds the ABI, which the shipped APKs
+do not carry). Locally it runs on an emulator, never a phone,
 because a debug build is what it needs, and the build is installed by hand rather than by
 Gradle's connected task, which uninstalls the application and its data when the run ends:
 

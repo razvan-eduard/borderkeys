@@ -352,6 +352,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: verify
 
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [30, 35]
+
     env:
       GRADLE_HEAP: -Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
 
@@ -395,12 +400,12 @@ jobs:
         run: ./gradlew :keyboard:buildDictionaries --no-daemon "$GRADLE_HEAP"
 
       # The core flavour: the paths under test are the same in both, and core compiles no
-      # inference runtime. API 30 is minSdk, so this is the oldest editor the keyboard claims
-      # to work with.
+      # inference runtime. API 30 is minSdk, the oldest editor the keyboard claims to work
+      # with; API 35 is the newest.
       - name: Smoke suite on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          api-level: ${{ matrix.api-level }}
           arch: x86_64
           target: default
           disable-animations: true
@@ -411,5 +416,5 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-report
+          name: smoke-report-api-${{ matrix.api-level }}
           path: app/build/reports/androidTests/

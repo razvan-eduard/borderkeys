@@ -6,6 +6,7 @@ package com.borderkeys
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Point
 import android.view.KeyEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -21,9 +22,11 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.predict.LanguagePackInspector
+import com.borderkeys.settings.ProbeFields
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -73,9 +76,23 @@ class ImeSmokeTest {
             }
         }
         device.executeShellCommand("ime enable $imeId")
-        device.executeShellCommand("ime set $imeId")
-        waitUntil("the keyboard is the selected input method") { keyboardSelected() }
+        selectKeyboard()
         openProbeField()
+    }
+
+    /** Makes the keyboard the selected input method, asking again when the first ask is not answered in time. */
+    private fun selectKeyboard() {
+        repeat(SELECT_ATTEMPTS) {
+            device.executeShellCommand("ime set $imeId")
+            val deadline = System.currentTimeMillis() + LAUNCH_TIMEOUT
+            while (System.currentTimeMillis() < deadline) {
+                if (keyboardSelected()) {
+                    return
+                }
+                Thread.sleep(SETTLE_MILLIS)
+            }
+        }
+        check(keyboardSelected()) { "timed out waiting until the keyboard is the selected input method" }
     }
 
     @Test
@@ -126,6 +143,71 @@ class ImeSmokeTest {
     }
 
     @Test
+    fun controlOnTheModifierRowSelectsAllWithA() {
+        runBlocking { DataGraph.themes.updatePreferences { it.copy(modifierRow = true) } }
+        settle()
+        type("abc")
+        settle()
+        tapKey(CONTROL)
+        tapKey("a")
+        settle()
+        type("x")
+        assertField("x")
+    }
+
+    @Test
+    fun aSwipeAcrossTheKeysTypesTheWord() {
+        swipe(listOf(keyCentre("t"), keyCentre("h"), keyCentre("e")))
+        settle()
+        tapKey(SPACE)
+        assertField("the ")
+    }
+
+    @Test
+    fun aPauseInASwipeOpensTheRingAndTheLiftPicksTheTopWord() {
+        runBlocking { DataGraph.themes.updatePreferences { it.copy(radialMenuEnabled = true) } }
+        settle()
+        val end = keyCentre("e")
+        val row = device.findObject(keyMatcher("q")).visibleBounds.height()
+        val reach = (row * RING_TOP_WEDGE_ROWS).toInt()
+        val topWedge = Point(end.x + reach, end.y - reach)
+        val path = mutableListOf(keyCentre("t"), keyCentre("h"), end)
+        repeat(RING_PAUSE_STEPS) { path += end }
+        path += topWedge
+        swipe(path)
+        settle()
+        assertTrue("the ring's top word was picked", field().text.orEmpty().startsWith("the"))
+    }
+
+    @Test
+    fun aPasswordFieldIsNeverCorrected() {
+        focusProbe(ProbeFields.PASSWORD)
+        type("teh")
+        settle()
+        tapKey(SPACE)
+        settle()
+        assertEquals("teh ", probeText(ProbeFields.PASSWORD))
+    }
+
+    @Test
+    fun aSlideUpTheSpaceBarMovesTheCaretALine() {
+        focusProbe(ProbeFields.LINES)
+        type("ab")
+        tapKey(ENTER)
+        type("cd")
+        settle()
+        val space = device.wait(Until.findObject(keyMatcher(SPACE)), KEY_TIMEOUT)
+        assertNotNull("the space bar", space)
+        val bar = space.visibleBounds
+        val row = device.findObject(keyMatcher("q")).visibleBounds.height()
+        device.swipe(bar.centerX(), bar.centerY(), bar.centerX(), bar.centerY() - row, SLIDE_STEPS)
+        settle()
+        type("x")
+        settle()
+        assertEquals("abxcd", probeText(ProbeFields.LINES).replace("\n", ""))
+    }
+
+    @Test
     fun aChipPickedWithTheCaretAtZeroKeepsTheNextTypedWord() {
         type("teh")
         settle()
@@ -140,6 +222,37 @@ class ImeSmokeTest {
     }
 
     // ---- driving the keyboard ---------------------------------------------------------------
+
+    /**
+     * Focuses one of the debuggable build's extra probe fields under "Try it here", named by
+     * the [ProbeFields] prefix its content description starts with, keyboard up.
+     */
+    private fun focusProbe(name: String) {
+        val field = device.wait(Until.findObject(By.descStartsWith(name)), KEY_TIMEOUT)
+        assertNotNull("the $name field", field)
+        field.click()
+        assertTrue("the keyboard over $name", device.wait(Until.hasObject(keyMatcher("q")), KEY_TIMEOUT))
+        settle()
+    }
+
+    /** What the probe field named [name] holds, exactly, read from its content description. */
+    private fun probeText(name: String): String {
+        val field = device.findObject(By.descStartsWith(name))
+        assertNotNull("the $name field", field)
+        return field.contentDescription.orEmpty().removePrefix(name)
+    }
+
+    private fun keyCentre(name: String): Point {
+        val key = device.wait(Until.findObject(keyMatcher(name)), KEY_TIMEOUT)
+        assertNotNull("key $name", key)
+        val bounds = key.visibleBounds
+        return Point(bounds.centerX(), bounds.centerY())
+    }
+
+    /** One finger through [points] in order, [SWIPE_SEGMENT_STEPS] moves between each pair. */
+    private fun swipe(points: List<Point>) {
+        device.swipe(points.toTypedArray(), SWIPE_SEGMENT_STEPS)
+    }
 
     private fun openProbeField() {
         context.startActivity(
@@ -174,13 +287,6 @@ class ImeSmokeTest {
     private fun keyboardSelected(): Boolean =
         device.executeShellCommand("dumpsys input_method").contains("mCurMethodId=$imeId")
 
-    private fun waitUntil(what: String, condition: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + LAUNCH_TIMEOUT
-        while (!condition()) {
-            check(System.currentTimeMillis() < deadline) { "timed out waiting until $what" }
-            Thread.sleep(SETTLE_MILLIS)
-        }
-    }
 
     private fun field(): UiObject2 {
         val field = device.findObject(By.clazz(EDIT_TEXT).focused(true))
@@ -272,17 +378,27 @@ class ImeSmokeTest {
         const val ENGLISH = "en-US"
 
         /** Every word a case types, forgotten before each case so no run teaches the next. */
-        val TYPED_WORDS = listOf("teh", "the", "abc", "def", "abcx", "ab")
+        val TYPED_WORDS = listOf("teh", "the", "abc", "def", "abcx", "ab", "cd", "x", "abxcd")
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
         const val EDIT_TEXT = "android.widget.EditText"
         const val SPACE = "Space"
         const val SHIFT = "Shift"
         const val DELETE = "Delete"
+        const val ENTER = "Enter"
+        const val CONTROL = "Control"
         const val SLIDE_INSET_PX = 12
         const val SLIDE_STEPS = 40
+        const val SWIPE_SEGMENT_STEPS = 20
+
+        /** Enough moves on one spot for the ring's pause to be seen, at about 5 ms a move. */
+        const val RING_PAUSE_STEPS = 100
+
+        /** How far from the pause the ring's top wedge sits, up and to the right, in key rows. */
+        const val RING_TOP_WEDGE_ROWS = 0.85f
         const val LAUNCH_TIMEOUT = 20_000L
         const val KEY_TIMEOUT = 5_000L
         const val ATTEMPTS = 3
+        const val SELECT_ATTEMPTS = 2
         const val SETTLE_MILLIS = 700L
 
         /** The strip is about this much of a key row tall. */
