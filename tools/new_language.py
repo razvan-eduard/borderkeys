@@ -27,6 +27,7 @@ not compile into the application, and the .bkd is published as a release asset.
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -82,6 +83,7 @@ class Language:
                  names_endpoint: str = NAMES_ENDPOINT):
         self.names_page_size = names_page_size
         self.names_endpoint = names_endpoint
+        self.manifest_path = manifest
         self.manifest = json.loads(manifest.read_text(encoding="utf-8"))
         self.tag = self.manifest["tag"]
         self.file_tag = self.tag.replace("-", "_")
@@ -295,8 +297,23 @@ class Language:
         budget = self.manifest.get("reachability_budget")
         command = [evaluator, self.pack.parent, "--reachable", self.words, self.tag]
         if budget is not None:
-            command.append(str(budget))
-        run(command)
+            run(command + [str(budget)])
+            return
+        # The first run measures, and the count becomes the budget the manifest gates every
+        # later run against.
+        log(" ".join(str(part) for part in command))
+        result = subprocess.run([str(part) for part in command], capture_output=True, text=True)
+        print(result.stdout, end="", flush=True)
+        match = re.search(r"(\d+) unreachable", result.stdout)
+        if match is None:
+            raise SystemExit("the reachability check printed no count")
+        count = int(match.group(1))
+        text = self.manifest_path.read_text(encoding="utf-8")
+        marker = '"reachability_budget": null'
+        if marker not in text:
+            raise SystemExit(f"{self.manifest_path.name} has no reachability_budget to record")
+        self.manifest_path.write_text(text.replace(marker, f'"reachability_budget": {count}'), encoding="utf-8")
+        log(f"reachability budget recorded in {self.manifest_path.name}: {count}")
 
     def run_steps(self, only: set) -> None:
         actions = {

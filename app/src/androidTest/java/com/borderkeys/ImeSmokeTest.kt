@@ -27,6 +27,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -77,6 +78,7 @@ class ImeSmokeTest {
         }
         device.executeShellCommand("ime enable $imeId")
         selectKeyboard()
+        device.executeShellCommand("settings put secure selected_input_method_subtype $ENGLISH_SUBTYPE")
         openProbeField()
     }
 
@@ -223,6 +225,24 @@ class ImeSmokeTest {
 
     // ---- driving the keyboard ---------------------------------------------------------------
 
+    @Test
+    fun lettersTypedOnTheRussianLayoutReachTheField() {
+        selectSubtype(RUSSIAN_SUBTYPE, firstKey = "й")
+        try {
+            type("мир")
+            assertField("мир")
+        } finally {
+            selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
+        }
+    }
+
+    /** Switches the keyboard to the subtype [subtypeId] and waits until its [firstKey] is on screen. */
+    private fun selectSubtype(subtypeId: Int, firstKey: String) {
+        device.executeShellCommand("settings put secure selected_input_method_subtype $subtypeId")
+        waitForKey(firstKey, LAUNCH_TIMEOUT)
+        settle()
+    }
+
     /**
      * Puts the "Try it here" field into [mode] by tapping its label until the field's content
      * description says so, clears it, and focuses it with the keyboard up.
@@ -255,9 +275,7 @@ class ImeSmokeTest {
     }
 
     private fun keyCentre(name: String): Point {
-        val key = device.wait(Until.findObject(keyMatcher(name)), KEY_TIMEOUT)
-        assertNotNull("key $name", key)
-        val bounds = key.visibleBounds
+        val bounds = waitForKey(name).visibleBounds
         return Point(bounds.centerX(), bounds.centerY())
     }
 
@@ -318,14 +336,48 @@ class ImeSmokeTest {
         }
     }
 
-    /** A key by what it is called to a screen reader: its label, or the key's name. */
-    private fun keyMatcher(name: String) =
-        By.desc(Pattern.compile("^" + Pattern.quote(name) + "(\\..*)?$"))
+    /** What a key is called to a screen reader: its label, or the key's name, then its alternates. */
+    private fun keyPattern(name: String): Pattern = Pattern.compile("^" + Pattern.quote(name) + "(\\..*)?$")
 
+    private fun keyMatcher(name: String) = By.desc(keyPattern(name))
+
+    /**
+     * The key called [name] among the keyboard's own nodes, or null while it is not on screen
+     * or while the keyboard is being laid out again under the search.
+     */
+    private fun findKey(name: String): UiObject2? {
+        val pattern = keyPattern(name)
+        return try {
+            device.findObjects(By.pkg(context.packageName))
+                .firstOrNull { pattern.matcher(it.contentDescription.orEmpty()).matches() }
+        } catch (stale: StaleObjectException) {
+            null
+        }
+    }
+
+    private fun waitForKey(name: String, timeout: Long = KEY_TIMEOUT): UiObject2 {
+        val deadline = System.currentTimeMillis() + timeout
+        while (true) {
+            findKey(name)?.let { return it }
+            if (System.currentTimeMillis() > deadline) {
+                val keys = device.findObjects(By.pkg(context.packageName)).mapNotNull { it.contentDescription }
+                fail("key $name; the keys on screen are $keys")
+            }
+            Thread.sleep(SETTLE_MILLIS)
+        }
+    }
+
+    /** Taps the key called [name], finding it again if it went stale before the tap landed. */
     private fun tapKey(name: String) {
-        val key = device.wait(Until.findObject(keyMatcher(name)), KEY_TIMEOUT)
-        assertNotNull("key $name", key)
-        key.click()
+        repeat(ATTEMPTS) { attempt ->
+            try {
+                waitForKey(name).click()
+                return
+            } catch (stale: StaleObjectException) {
+                check(attempt < ATTEMPTS - 1) { "key $name kept going stale" }
+                Thread.sleep(SETTLE_MILLIS)
+            }
+        }
     }
 
     /**
@@ -398,6 +450,10 @@ class ImeSmokeTest {
         const val DELETE = "Delete"
         const val ENTER = "Enter"
         const val CONTROL = "Control"
+
+        /** Subtype ids from res/xml/method.xml; the secure setting takes them as an Int prints. */
+        const val ENGLISH_SUBTYPE = 0x0B0DE002
+        const val RUSSIAN_SUBTYPE = 0x0B0DE016
         const val SLIDE_INSET_PX = 12
         const val SLIDE_STEPS = 40
         const val SWIPE_SEGMENT_STEPS = 20
