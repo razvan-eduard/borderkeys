@@ -1,0 +1,34 @@
+{
+  "tag": "el-GR",
+  "name": "Greek",
+  "wikidata": "el",
+  "layout": "greek",
+  "corpora": [
+    "ell_wikipedia_2021_1M",
+    "ell_news_2024_1M",
+    "ell_newscrawl_2017_1M"
+  ],
+  "hunspell": [
+    "el_GR/el_GR"
+  ],
+  "treebank": {
+    "repository": "UD_Greek-GDT",
+    "files": [
+      "el_gdt-ud-train.conllu",
+      "el_gdt-ud-dev.conllu",
+      "el_gdt-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "α": "ά",
+    "ε": "έ",
+    "η": "ή",
+    "ι": "ίϊΐ",
+    "ο": "ό",
+    "υ": "ύϋΰ",
+    "ω": "ώ"
+  },
+  "single_letter_words": "ηο",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

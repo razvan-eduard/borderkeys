@@ -1,0 +1,26 @@
+{
+  "tag": "bg-BG",
+  "name": "Bulgarian",
+  "wikidata": "bg",
+  "layout": "bulgarian",
+  "corpora": [
+    "bul_wikipedia_2021_1M",
+    "bul_news_2022_1M",
+    "bul_newscrawl_2017_1M"
+  ],
+  "hunspell": [
+    "bg_BG/bg_BG"
+  ],
+  "treebank": {
+    "repository": "UD_Bulgarian-BTB",
+    "files": [
+      "bg_btb-ud-train.conllu",
+      "bg_btb-ud-dev.conllu",
+      "bg_btb-ud-test.conllu"
+    ]
+  },
+  "overlay": {},
+  "single_letter_words": "авиосу",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

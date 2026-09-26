@@ -1,0 +1,22 @@
+{
+  "tag": "mk-MK",
+  "name": "Macedonian",
+  "wikidata": "mk",
+  "layout": "macedonian",
+  "corpora": [
+    "mkd_wikipedia_2021_300K",
+    "mkd_newscrawl_2011_300K"
+  ],
+  "hunspell": [
+    {
+      "base": "mk_MK",
+      "dic": "https://raw.githubusercontent.com/wooorm/dictionaries/main/dictionaries/mk/index.dic",
+      "aff": "https://raw.githubusercontent.com/wooorm/dictionaries/main/dictionaries/mk/index.aff"
+    }
+  ],
+  "treebank": null,
+  "overlay": {},
+  "single_letter_words": "аиосу",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

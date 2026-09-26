@@ -227,4 +227,73 @@
         android:isAsciiCapable="true"
         android:imeSubtypeExtraValue="layout=hungarian" />
 
+    <!--
+        The scripts of their own: one layout each for Russian, Ukrainian, Bulgarian, Serbian,
+        Macedonian, Greek, Armenian and Georgian, named by the locale's own display name the
+        way the two QWERTY subtypes are, since each is one language.
+    -->
+    <subtype
+        android:subtypeId="0x0B0DE016"
+        android:label="@string/subtype_language_label"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="ru-RU"
+        android:isAsciiCapable="false"
+        android:imeSubtypeExtraValue="layout=russian" />
+
+    <subtype
+        android:subtypeId="0x0B0DE017"
+        android:label="@string/subtype_language_label"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="uk-UA"
+        android:isAsciiCapable="false"
+        android:imeSubtypeExtraValue="layout=ukrainian" />
+
+    <subtype
+        android:subtypeId="0x0B0DE018"
+        android:label="@string/subtype_language_label"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="bg-BG"
+        android:isAsciiCapable="false"
+        android:imeSubtypeExtraValue="layout=bulgarian" />
+
+    <subtype
+        android:subtypeId="0x0B0DE019"
+        android:label="@string/subtype_language_label"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="sr-RS"
+        android:isAsciiCapable="false"
+        android:imeSubtypeExtraValue="layout=serbian" />
+
+    <subtype
+        android:subtypeId="0x0B0DE01A"
+        android:label="@string/subtype_language_label"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="mk-MK"
+        android:isAsciiCapable="false"
+        android:imeSubtypeExtraValue="layout=macedonian" />
+
+    <subtype
+        android:subtypeId="0x0B0DE01B"
+        android:label="@string/subtype_language_label"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="el-GR"
+        android:isAsciiCapable="false"
+        android:imeSubtypeExtraValue="layout=greek" />
+
+    <subtype
+        android:subtypeId="0x0B0DE01C"
+        android:label="@string/subtype_language_label"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="hy-AM"
+        android:isAsciiCapable="false"
+        android:imeSubtypeExtraValue="layout=armenian" />
+
+    <subtype
+        android:subtypeId="0x0B0DE01D"
+        android:label="@string/subtype_language_label"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="ka-GE"
+        android:isAsciiCapable="false"
+        android:imeSubtypeExtraValue="layout=georgian" />
+
 </input-method>

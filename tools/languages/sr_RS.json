@@ -1,0 +1,25 @@
+{
+  "tag": "sr-RS",
+  "name": "Serbian",
+  "wikidata": "sr",
+  "layout": "serbian",
+  "corpora": [
+    "srp_wikipedia_2021_1M",
+    "srp_wikipedia_2016_1M"
+  ],
+  "hunspell": [
+    "sr/sr"
+  ],
+  "treebank": {
+    "repository": "UD_Serbian-SET",
+    "files": [
+      "sr_set-ud-train.conllu",
+      "sr_set-ud-dev.conllu",
+      "sr_set-ud-test.conllu"
+    ]
+  },
+  "overlay": {},
+  "single_letter_words": "аиоусј",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

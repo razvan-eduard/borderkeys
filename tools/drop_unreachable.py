@@ -67,13 +67,23 @@ def load_build_dict():
     return module
 
 
+def layout_letters(layout):
+    """The letters the keys of `keyboard/src/main/assets/layouts/<layout>.json` type."""
+    asset = json.loads(
+        (ROOT / f"keyboard/src/main/assets/layouts/{layout}.json").read_text(encoding="utf-8"),
+    )
+    return {key["c"] for row in asset["rows"] for key in row.get("keys", ())
+            if "c" in key and key["c"].isalpha()}
+
+
 def alphabet_of(tag, fold_code_point):
     """Every folded code point a word of [tag] may be built from.
 
-    Read from the keyboard's own accent overlay rather than declared again here: what the
-    keyboard offers is what the dictionary may hold, and two lists of the same letters drift.
+    Read from the keyboard's own layout and accent overlay rather than declared again here:
+    what the keyboard offers is what the dictionary may hold, and two lists of the same
+    letters drift. A language whose manifest names no layout types on QWERTY.
     """
-    letters = set("abcdefghijklmnopqrstuvwxyz") | set(JOINERS)
+    letters = layout_letters(LAYOUT.get(tag, "qwerty")) | set(JOINERS)
     name = OVERLAY.get(tag)
     if name is not None:
         overlay = json.loads(
@@ -102,6 +112,11 @@ EXPECTED_BEYOND_ASCII = {
 }
 
 
+# The layout whose keys a language's words are typed on, for the languages that do not type
+# on QWERTY; filled from the manifests.
+LAYOUT = {}
+
+
 def load_manifests() -> None:
     """The downloadable languages, described in tools/languages/<tag>.json, join the tables."""
     for manifest in sorted((ROOT / "tools" / "languages").glob("*.json")):
@@ -110,6 +125,8 @@ def load_manifests() -> None:
         SINGLE_LETTER_WORDS.setdefault(tag, language.get("single_letter_words", ""))
         OVERLAY.setdefault(tag, language["tag"])
         EXPECTED_BEYOND_ASCII.setdefault(tag, list(language.get("expected_beyond_ascii", [])))
+        if language.get("layout"):
+            LAYOUT[tag] = language["layout"]
 
 
 load_manifests()
@@ -122,6 +139,9 @@ def selftest():
         alphabet = alphabet_of(tag, build_dict.fold_code_point)
         joiners = {build_dict.fold_code_point(ord(c)) for c in JOINERS}
         beyond = sorted(c for c in alphabet if c > 0x7F and c not in joiners)
+        if tag in LAYOUT:
+            # A script of its own: every letter is beyond ASCII, and the layout is the record.
+            continue
         if beyond != expected:
             raise SystemExit(
                 f"{tag}: admits {[chr(c) for c in beyond]} beyond ASCII, expected "

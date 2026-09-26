@@ -122,7 +122,10 @@ class Language:
 
     @property
     def treebank_files(self) -> list:
-        return [self.work / "treebank" / name for name in self.manifest["treebank"]["files"]]
+        treebank = self.manifest.get("treebank")
+        if not treebank:
+            return []
+        return [self.work / "treebank" / name for name in treebank["files"]]
 
     @property
     def persons(self) -> Path:
@@ -176,9 +179,10 @@ class Language:
         for base, dic, aff in self.hunspell_sources + [english]:
             download(dic, base.with_suffix(".dic"))
             download(aff, base.with_suffix(".aff"))
-        repository = self.manifest["treebank"]["repository"]
-        for name, target in zip(self.manifest["treebank"]["files"], self.treebank_files):
-            download(TREEBANK.format(repository=repository, file=name), target)
+        treebank = self.manifest.get("treebank")
+        if treebank:
+            for name, target in zip(treebank["files"], self.treebank_files):
+                download(TREEBANK.format(repository=treebank["repository"], file=name), target)
 
     def overlay(self) -> None:
         target = ACCENTS / f"{self.tag}.json"
@@ -199,6 +203,9 @@ class Language:
     def grammar_step(self) -> None:
         if self.grammar.is_file():
             log(f"have {self.grammar.name}")
+            return
+        if not self.treebank_files:
+            log("no treebank for this language: the pack carries no grammar")
             return
         run([sys.executable, HERE / "build_pos.py", "--treebank", *self.treebank_files,
              "--out", self.grammar])
@@ -228,8 +235,9 @@ class Language:
         out = self.work / "second" / f"{self.file_tag}.bkd"
         command = [sys.executable, HERE / "make_pack.py", "--corpus", *self.sentences,
                    "--names", self.entities, "--names-flag-only", self.persons,
-                   "--grammar", self.grammar,
                    "--tag", self.tag, "--out", out, "--keep-intermediate"]
+        if self.grammar.is_file():
+            command += ["--grammar", self.grammar]
         if self.ordinary.is_file():
             command += ["--names-ordinary", self.ordinary]
         exclude = EXTRA / f"{self.file_tag}.names-exclude"
@@ -253,7 +261,8 @@ class Language:
                 if source.is_file():
                     shutil.copyfile(source, lists / source.name)
         shutil.copyfile(self.words, lists / self.words.name)
-        shutil.copyfile(self.grammar, lists / self.grammar.name)
+        if self.grammar.is_file():
+            shutil.copyfile(self.grammar, lists / self.grammar.name)
         run([sys.executable, HERE / "drop_mojibake.py", lists / self.words.name])
         run([sys.executable, HERE / "drop_unreachable.py", lists / self.words.name])
         oracles = sum((["--hunspell", f"{self.file_tag}={base}"] for base in self.hunspell_bases), [])
@@ -270,8 +279,11 @@ class Language:
 
     def compile(self) -> None:
         self.pack.parent.mkdir(exist_ok=True)
-        run([sys.executable, HERE / "build_dict.py", "--words", self.words, "--ngrams", self.ngrams,
-             "--grammar", self.grammar, "--tag", self.tag, "--out", self.pack])
+        command = [sys.executable, HERE / "build_dict.py", "--words", self.words, "--ngrams", self.ngrams,
+                   "--tag", self.tag, "--out", self.pack]
+        if self.grammar.is_file():
+            command += ["--grammar", self.grammar]
+        run(command)
         words = sum(1 for _ in self.words.open(encoding="utf-8"))
         log(f"{self.pack.name}: {self.pack.stat().st_size:,} bytes, {words:,} words")
 

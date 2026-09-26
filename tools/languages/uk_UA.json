@@ -1,0 +1,28 @@
+{
+  "tag": "uk-UA",
+  "name": "Ukrainian",
+  "wikidata": "uk",
+  "layout": "ukrainian",
+  "corpora": [
+    "ukr_wikipedia_2021_1M",
+    "ukr_news_2024_1M",
+    "ukr_newscrawl_2018_1M"
+  ],
+  "hunspell": [
+    "uk_UA/uk_UA"
+  ],
+  "treebank": {
+    "repository": "UD_Ukrainian-IU",
+    "files": [
+      "uk_iu-ud-train.conllu",
+      "uk_iu-ud-dev.conllu",
+      "uk_iu-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "г": "ґ"
+  },
+  "single_letter_words": "авзійоуяює",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}
