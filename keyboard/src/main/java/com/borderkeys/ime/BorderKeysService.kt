@@ -144,6 +144,16 @@ class BorderKeysService :
     private var addressField = false
 
     /**
+     * Whether the current field is a terminal -- see [TerminalField]. Every key then types
+     * straight through: a character is committed the moment it is pressed and never composed,
+     * a backspace deletes one character, a swiped word is committed whole, and nothing is
+     * corrected or learned. The strip still completes the word: the letters typed since the
+     * last delimiter are kept in [terminalWord], which is what a picked word replaces.
+     */
+    private var terminalField = false
+    private val terminalWord = StringBuilder()
+
+    /**
      * Whether words from the dictionaries may be offered in this field, and whether a gesture
      * may compose one into it. **The single gate for the suggestion strip, for autocorrect, for
      * swipe typing and for the ring a swipe opens** -- everything that puts a dictionary word in
@@ -1152,6 +1162,10 @@ class BorderKeysService :
                 // exactly where that commit left it, the context was already refreshed and the
                 // engine already asked. Nothing to re-derive, and no tap to read into it.
                 ownEditPending = false
+            } else if (terminalField) {
+                // A terminal's caret says nothing about the word being typed: the letters
+                // since the last delimiter are what the keyboard itself kept.
+                dismissRadialMenu()
             } else {
                 dismissRadialMenu()
                 adoptWordAtCaret()
@@ -1246,6 +1260,8 @@ class BorderKeysService :
         privateMode = PrivateMode.isPrivate(info)
         passwordField = info != null && PrivateMode.isPasswordField(info.inputType)
         addressField = info != null && AddressField.isAddress(info.inputType)
+        terminalField = TerminalField.isTerminal(info)
+        terminalWord.setLength(0)
         learning.enabled = preferences.learningEnabled && !privateMode
         // The other half of not learning here: nothing already learned is offered either. A
         // password field never reaches the engine at all (see requestSuggestions), but a field
@@ -1877,9 +1893,10 @@ class BorderKeysService :
     override fun onGesturePreviewCandidates(candidates: List<Candidate>) {
         val view = host ?: return
         val connection = currentInputConnection ?: return
-        if (candidates.isEmpty()) {
+        if (candidates.isEmpty() || terminalField) {
             // Nothing to show: the stroke goes back to plain capture, so its lift decodes the
-            // whole gesture instead of resolving a ring that never existed.
+            // whole gesture instead of resolving a ring that never existed. A terminal cannot
+            // show the ring's preview either, since the preview is composing text.
             view.keyboard.resumeGestureCapture()
             return
         }
@@ -2287,6 +2304,10 @@ class BorderKeysService :
         // one-shot shift the way a first letter does. See caseSwipedWords.
         val cased = caseSwipedWords(candidates)
         val best = cased.first().text
+        if (terminalField) {
+            swipeIntoTerminal(connection, cased)
+            return
+        }
 
         connection.beginBatchEdit()
         spaceBeforeSwipedWord(connection)
@@ -2583,6 +2604,12 @@ class BorderKeysService :
             Character.toUpperCase(code)
         } else {
             code
+        }
+        // A terminal shows what is committed and never what is composing, so the key types
+        // straight through -- see typeIntoTerminal.
+        if (terminalField) {
+            typeIntoTerminal(connection, shifted)
+            return
         }
         // A word *begins* with a letter. The apostrophe and the hyphen belong inside one --
         // "don't", "aşa-zis" -- which is why [isWordCharacter] counts them, but a leading one is
@@ -3211,6 +3238,10 @@ class BorderKeysService :
         // why closing never touches the swiped word itself.
         dismissRadialMenu()
         val connection = currentInputConnection ?: return
+        if (terminalField) {
+            deleteInTerminal(connection)
+            return
+        }
         val hasSelection = selectionEnd > selectionStart
         // A selection is what backspace deletes, all of it, before anything else is considered.
         // deleteSurroundingText would not do it: it deletes *around* the selection and leaves
@@ -3289,6 +3320,10 @@ class BorderKeysService :
 
     private fun handleEnter() {
         val connection = currentInputConnection ?: return
+        if (terminalField) {
+            enterInTerminal(connection)
+            return
+        }
         val contextWord = previousWord1
         val grandContextWord = previousWord2
         connection.beginBatchEdit()
@@ -3636,6 +3671,10 @@ class BorderKeysService :
         // committed and no longer composing, and its X -- which discards the composing word --
         // found nothing to discard and silently did nothing.
         dismissRadialMenu()
+        if (terminalField) {
+            pickIntoTerminal(connection, word)
+            return
+        }
         // The typed chip, while a correction is pending, is the word that correction replaced:
         // tapping it puts the word back, the same revert as a backspace.
         val pending = pendingCorrection
@@ -3809,6 +3848,143 @@ class BorderKeysService :
             ),
             strings.getString(Keys.STRIP_EXPLAIN_TOTAL, number(explanation.total)),
         )
+    }
+
+    // ---- terminals ------------------------------------------------------------------------
+
+    /**
+     * Types [code] into a terminal: written at once, never composed. A letter extends
+     * [terminalWord], which the strip completes; anything else ends it. A one-shot shift is
+     * spent by the letter it capitalised, as in an ordinary field.
+     */
+    private fun typeIntoTerminal(connection: InputConnection, code: Int) {
+        val letter = if (terminalWord.isEmpty()) Character.isLetter(code) else isWordCharacter(code)
+        if (letter && shiftState == ShiftState.ON) {
+            shiftState = ShiftState.OFF
+            host?.keyboard?.shiftState = shiftState
+        }
+        shiftHeldByUser = false
+        ownEditPending = true
+        writeToTerminal(connection, String(Character.toChars(code)))
+        if (letter) {
+            terminalWord.appendCodePoint(code)
+        } else {
+            terminalWord.setLength(0)
+        }
+        requestTerminalSuggestions()
+    }
+
+    /**
+     * Writes [text] to a terminal: each character as the key that carries it, shift held for
+     * a capital, and as text only where no plain key carries it. A terminal performs its
+     * deletions as key events of its own, and key events keep their order with those; text
+     * written directly lands ahead of any deletion still queued.
+     */
+    private fun writeToTerminal(connection: InputConnection, text: String) {
+        var index = 0
+        while (index < text.length) {
+            val code = text.codePointAt(index)
+            index += Character.charCount(code)
+            val keyCode = if (code < 128) PhysicalKeys.keyCodeFor(code) else 0
+            if (keyCode == 0) {
+                connection.commitText(String(Character.toChars(code)), 1)
+                continue
+            }
+            val meta = if (Character.isUpperCase(code)) TERMINAL_SHIFT_META else 0
+            sendPhysicalKey(connection, keyCode, meta)
+        }
+    }
+
+    /** [count] characters back, as the key events a terminal deletes by. */
+    private fun deleteInTerminal(connection: InputConnection, count: Int = 1) {
+        ownEditPending = true
+        repeat(count) {
+            sendPhysicalKey(connection, android.view.KeyEvent.KEYCODE_DEL, 0)
+        }
+        if (terminalWord.isNotEmpty()) {
+            terminalWord.setLength(terminalWord.offsetByCodePoints(terminalWord.length, -1))
+        }
+        requestTerminalSuggestions()
+    }
+
+    /**
+     * Replaces the letters typed so far with [word], and the space after it if one is wanted.
+     * A word that carries on from the letters typed has only its remainder written; any other
+     * word takes the letters back first, key event by key event, so it lands after them.
+     */
+    private fun pickIntoTerminal(connection: InputConnection, word: String) {
+        playEffect(EffectEvent.SuggestionPicked, word)
+        val typed = terminalWord.toString()
+        val space = if (preferences.spaceAfterSuggestion) " " else ""
+        ownEditPending = true
+        connection.beginBatchEdit()
+        if (word.length >= typed.length && word.startsWith(typed)) {
+            writeToTerminal(connection, word.substring(typed.length) + space)
+        } else {
+            repeat(typed.codePointCount(0, typed.length)) {
+                sendPhysicalKey(connection, android.view.KeyEvent.KEYCODE_DEL, 0)
+            }
+            writeToTerminal(connection, word + space)
+        }
+        connection.endBatchEdit()
+        terminalWord.setLength(0)
+        if (space.isEmpty()) {
+            terminalWord.append(word)
+        }
+        if (shiftState == ShiftState.ON) {
+            shiftState = ShiftState.OFF
+            host?.keyboard?.shiftState = shiftState
+        }
+        shiftHeldByUser = false
+        host?.suggestionStrip?.clear()
+        requestTerminalSuggestions()
+    }
+
+    /**
+     * Writes a swiped word whole, after a space when letters were typed just before it, and
+     * offers the rest of the decode on the strip. The word stays [terminalWord], so a pick from
+     * the strip replaces it the way it replaces typed letters.
+     */
+    private fun swipeIntoTerminal(connection: InputConnection, cased: List<Candidate>) {
+        val best = cased.first().text
+        ownEditPending = true
+        connection.beginBatchEdit()
+        writeToTerminal(connection, if (terminalWord.isNotEmpty()) " $best" else best)
+        connection.endBatchEdit()
+        terminalWord.setLength(0)
+        terminalWord.append(best)
+        recordSwipeDecode(cased.size)
+        lastQuery = best
+        suggestionQuery = best
+        knownQuery = best
+        topSuggestion = best
+        topSuggestionIsProperNoun = cased.first().isProperNoun
+        host?.suggestionStrip?.let { strip ->
+            strip.typedIndex = -1
+            strip.appliedIndex = -1
+            strip.setSuggestions(cased)
+        }
+        playEffect(EffectEvent.SwipeAccepted, best)
+    }
+
+    /** Enter in a terminal: the key itself, which is what runs the line. */
+    private fun enterInTerminal(connection: InputConnection) {
+        terminalWord.setLength(0)
+        ownEditPending = true
+        sendPhysicalKey(connection, android.view.KeyEvent.KEYCODE_ENTER, 0)
+        requestTerminalSuggestions()
+    }
+
+    /** The strip's completions of [terminalWord]; a terminal has no words before it to read. */
+    private fun requestTerminalSuggestions() {
+        lastQuery = terminalWord.toString()
+        previousWord1 = null
+        previousWord2 = null
+        if (!dictionaryAllowed) {
+            return
+        }
+        suggestionsRequestedAt = android.os.SystemClock.uptimeMillis()
+        engine.requestSuggestions(lastQuery, null, null)
     }
 
     override fun onExplainDismissed() {
@@ -4062,6 +4238,7 @@ class BorderKeysService :
         knownQuery = ""
         queryIsInflection = false
         composing.setLength(0)
+        terminalWord.setLength(0)
         // Back to ordinary writing until the next word says otherwise: whatever stood in front
         // of the last one belongs to a field, or a caret position, that has been left behind.
         composingIsRunningText = true
@@ -5494,6 +5671,9 @@ class BorderKeysService :
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
 
         /** The settings activity's extras: a screen to open on, and a clip that screen edits. */
+        /** Shift held, as a key event carries it, for a capital typed into a terminal. */
+        const val TERMINAL_SHIFT_META =
+            android.view.KeyEvent.META_SHIFT_ON or android.view.KeyEvent.META_SHIFT_LEFT_ON
         const val SETTINGS_EXTRA_SCREEN = "com.borderkeys.settings.SCREEN"
         const val SETTINGS_EXTRA_CLIP_ID = "com.borderkeys.settings.CLIP_ID"
         const val SETTINGS_SCREEN_CLIPBOARD = "Clipboard"

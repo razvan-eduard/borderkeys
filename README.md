@@ -140,6 +140,11 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   it — not a black box. The word pairs it learned are counted on the same screen and go with a
   word when it is forgotten. Holding a suggestion offers the same from the keyboard, and a
   "Why?": the engine's own account of the word's score, term by term, in plain words.
+- **Terminals typed into as terminals.** In Termux, ConnectBot, JuiceSSH, Termius and any field
+  that declares no text class at all, every key types straight through: a character is written
+  the moment it is pressed, never held as composing text, a backspace deletes one character,
+  and nothing is corrected or learned. The strip still completes the word being typed and a
+  swipe still writes one, replaced from the strip like anywhere else.
 - **Text shortcuts.** A word that stands for a longer text — "omw" for "on my way", an address, a
   sign-off — expands when a space or a punctuation mark follows it, takes the capital you gave the
   shortcut, and comes back with the backspace straight after, like any other correction.
