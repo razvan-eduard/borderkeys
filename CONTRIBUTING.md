@@ -35,6 +35,13 @@ in that file's comment syntax. Files that cannot carry a comment (binary blobs, 
 assets) are covered by an entry in `REUSE.toml`. `reuse lint` runs in CI and blocks the merge,
 so this is checked, not requested.
 
+## The changelog
+
+`CHANGELOG.md` is written by hand. A change the person typing would notice gets a line under
+*Unreleased* in the same pull request, in plain words, and the release workflow lifts the
+version's section into the notes of the GitHub release when the tag is cut. A refactor, a test
+or a build change needs no line.
+
 ## What the build will refuse
 
 Three Gradle tasks run as part of `assemble` and throw rather than warn:

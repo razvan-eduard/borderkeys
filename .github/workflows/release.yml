@@ -190,19 +190,29 @@ jobs:
       - name: Deepen checkout for the changelog
         run: git fetch --prune --unshallow --tags origin
 
-      - name: Generate CHANGELOG.md
+      # The notes are the tag's own section of the committed CHANGELOG.md; a tag with no
+      # section yet gets the feat, fix and perf commits since the previous tag instead.
+      - name: Write the release notes
         run: |
           set -euo pipefail
           TAG="${{ steps.version.outputs.tag }}"
           PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -v "^$TAG$" | head -n 1 || echo "")
           if [ -n "$PREV_TAG" ]; then RANGE="${PREV_TAG}..HEAD"; else RANGE="HEAD"; fi
+          SECTION=$(awk -v tag="$TAG" '
+            /^## / { if (found) exit; found = ($2 == tag) ; next }
+            found { print }
+          ' CHANGELOG.md | sed -e '1{/^$/d;}' -e '${/^$/d;}')
           {
             echo "# BorderKeys ${TAG}"
             echo ""
             echo "## Changes"
             echo ""
-            git log ${RANGE} --pretty=format:"- %s (%h)" --no-merges \
-              | grep -iE '^- (feat|fix|perf)(\(|!?:)' || echo "- Maintenance update"
+            if [ -n "$SECTION" ]; then
+              echo "$SECTION"
+            else
+              git log ${RANGE} --pretty=format:"- %s (%h)" --no-merges \
+                | grep -iE '^- (feat|fix|perf)(\(|!?:)' || echo "- Maintenance update"
+            fi
             echo ""
             echo ""
             echo "## Verifying this build"
@@ -218,8 +228,8 @@ jobs:
             else
               echo "https://github.com/${{ github.repository }}/commits/${TAG}"
             fi
-          } > CHANGELOG.md
-          cat CHANGELOG.md
+          } > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
 
       # A published tag is an address. Republishing the same commit is fine; moving a tag to a
       # different commit replaces the bytes behind an address people have already downloaded.
@@ -275,8 +285,8 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           files: |
             BorderKeys-*.apk
-            CHANGELOG.md
-          body_path: CHANGELOG.md
+            RELEASE_NOTES.md
+          body_path: RELEASE_NOTES.md
           draft: false
           prerelease: ${{ steps.version.outputs.is_prerelease }}
         env:

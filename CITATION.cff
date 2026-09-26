@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+cff-version: 1.2.0
+message: "If you use BorderKeys in research, cite it as below."
+type: software
+title: "BorderKeys"
+abstract: >-
+  An Android keyboard that asks for no permission and opens no network connection: a compact
+  trie with word pairs and triples in C++ for suggestions and corrections, a geometric and a
+  neural swipe decoder, a personal dictionary and a clipboard history in an encrypted
+  database, and a text assistant that runs in its own process on the device.
+authors:
+  - name: "BorderKeys contributors"
+repository-code: "https://github.com/razvan-eduard/borderkeys"
+license: GPL-3.0-or-later
+version: "0.8.0"
+date-released: "2026-09-25"
+keywords:
+  - android
+  - keyboard
+  - input method
+  - swipe typing
+  - privacy

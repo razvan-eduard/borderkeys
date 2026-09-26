@@ -430,6 +430,10 @@ gh attestation verify BorderKeys-v0.6.2-core.apk --repo razvan-eduard/borderkeys
   measured.
 - [`docs/translations.md`](docs/translations.md) — adding a language or a string to the
   interface.
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — DCO, no CLA.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — DCO, no CLA. [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
+  — what is expected wherever the project is discussed. [`SECURITY.md`](SECURITY.md) — how to
+  report a vulnerability, and what counts as one. [`CHANGELOG.md`](CHANGELOG.md) — what each
+  release changed, and what is on the way. [`CITATION.cff`](CITATION.cff) — how to cite the
+  project.
 - [`metadata/`](metadata) — F-Droid submission metadata for both packages;
   [`fastlane/`](fastlane) — the store listings and screenshots the custom repository publishes.
