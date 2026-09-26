@@ -50,6 +50,7 @@ import com.borderkeys.ime.fx.applyParticleLayer
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.LearningBuffer
 import com.borderkeys.predict.PredictionEngine
+import com.borderkeys.predict.ScoreExplanation
 import com.borderkeys.predict.SwipeModelLoad
 import com.borderkeys.predict.WordFold
 import com.borderkeys.theme.DynamicColors
@@ -69,6 +70,7 @@ import java.io.File
 import kotlin.math.hypot
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.i18n.Keys
+import java.util.Locale
 
 /**
  * The input method itself.
@@ -86,6 +88,7 @@ class BorderKeysService :
     QuickSettingsView.Listener,
     QuickActionsView.Listener,
     ClipboardPanelView.Listener,
+    ExplainPanelView.Listener,
     LanguageRevertPanelView.Listener,
     RadialSuggestionMenuView.Listener,
     PredictionEngine.ResultListener {
@@ -1217,6 +1220,7 @@ class BorderKeysService :
         view.quickActions.listener = this
         view.clipboardPanel.listener = this
         view.languageRevertPanel.listener = this
+        view.explainPanel.listener = this
         view.radialSuggestionMenu.listener = this
         view.emojiPanel.listener = EmojiPanelView.Listener { emoji -> onEmojiPicked(emoji) }
         view.emojiPanel.recents = preferences.emojiRecents
@@ -3757,28 +3761,59 @@ class BorderKeysService :
         }
         pendingForget = word
         pendingExplainQuery = lastQuery
-        val actions = mutableListOf(
+        val actions = listOf(
             Candidate(strings.getString(Keys.ASSISTANT_FORGET, word)),
             Candidate(strings[Keys.ASSISTANT_CANCEL]),
+            Candidate(strings[Keys.STRIP_WHY_THIS_WORD]),
         )
-        if (debuggable) {
-            actions += Candidate(strings[Keys.STRIP_WHY_THIS_WORD])
-        }
         host?.suggestionStrip?.setActions(actions)
     }
 
-    /** Whether this is a debuggable build, which is the only kind that explains a score. */
+    /** Whether this is a debuggable build. */
     private val debuggable: Boolean
         get() = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
 
-    /** Shows the engine's own account of [word]'s score for [query], in a debuggable build. */
+    /**
+     * Shows the engine's own account of [word]'s score for [query] in the explain panel: one
+     * line per term, in the catalogue's words, or the one line saying the word is not offered.
+     */
     private fun explainWord(query: String, word: String) {
-        engine.explain(query, word) { text ->
-            android.widget.Toast.makeText(
-                this, text ?: strings.getString(Keys.STRIP_NOT_OFFERED, word),
-                android.widget.Toast.LENGTH_LONG,
-            ).show()
+        val languages = activeLanguageTags
+        engine.explain(query, word) { explanation ->
+            val view = host ?: return@explain
+            val lines = if (explanation == null) {
+                listOf(strings.getString(Keys.STRIP_NOT_OFFERED, word))
+            } else {
+                explanationLines(explanation, languages)
+            }
+            view.explainPanel.show(strings.getString(Keys.STRIP_EXPLAIN_TITLE, word, query), lines)
+            view.setExplainPanelVisible(true)
         }
+    }
+
+    private fun explanationLines(explanation: ScoreExplanation, languages: List<String>): List<String> {
+        fun number(value: Float): String = String.format(Locale.ROOT, "%+.1f", value)
+        val language = languages.getOrNull(explanation.packIndex)
+            ?.let { Locale.forLanguageTag(it).displayLanguage }
+            .orEmpty()
+        return listOf(
+            strings.getString(Keys.STRIP_EXPLAIN_RANK, (explanation.rank + 1).toString(), language),
+            strings.getString(Keys.STRIP_EXPLAIN_LANGUAGE_MODEL, number(explanation.languageModel)),
+            strings.getString(Keys.STRIP_EXPLAIN_PACK_WEIGHT, number(explanation.packWeight)),
+            strings.getString(Keys.STRIP_EXPLAIN_PERSONAL, number(explanation.personal)),
+            strings.getString(
+                Keys.STRIP_EXPLAIN_EDITS,
+                explanation.editDistance.toString(),
+                explanation.addedCharacters.toString(),
+                number(explanation.editsAndCompletion),
+            ),
+            strings.getString(Keys.STRIP_EXPLAIN_TOTAL, number(explanation.total)),
+        )
+    }
+
+    override fun onExplainDismissed() {
+        host?.setExplainPanelVisible(false)
+        requestSuggestions()
     }
 
     /**
