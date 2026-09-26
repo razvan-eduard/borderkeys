@@ -57,9 +57,15 @@ class EmojiPanelView(
     var query: String = ""
         set(value) {
             field = value
-            matches = EmojiSearch.matches(value, index, MAX_MATCHES)
+            matches = EmojiSearch.matches(value, index, MAX_MATCHES, keywords)
             selectTab(if (matches.isEmpty()) 0 else SEARCH_TAB)
         }
+
+    /**
+     * The keywords each emoji is also found by, in the languages switched on: loaded by the
+     * service beside the dictionaries (see [EmojiKeywords]) and searched after the names.
+     */
+    var keywords: Map<String, List<String>> = emptyMap()
 
     /**
      * The last emoji used, most recent first.

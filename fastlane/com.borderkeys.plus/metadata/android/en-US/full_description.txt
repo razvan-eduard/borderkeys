@@ -46,7 +46,8 @@ database and are excluded from system backup and from device-to-device transfer.
   choose, above the letters or below the keyboard, each sent as the hardware key it names.
   Ctrl and Alt apply to the next key; with shift held, the arrows select.
 * Panels that search by the word under the caret: open the emoji panel over "cake" and the
-  cakes come first; open the clipboard over "invoice" and the clips containing it come first.
+  cakes come first, over "pumpkin" the lantern, in the languages switched on; open the clipboard
+  over "invoice" and the clips containing it come first.
   A long press on a clip pins, edits or deletes it.
 * A personal dictionary you can see and edit: every learned word has a Forget and a Block
   right beside it, not a black box.

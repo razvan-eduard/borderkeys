@@ -247,6 +247,9 @@ class BorderKeysService :
      */
     private var offensiveWords: Set<String> = emptySet()
 
+    /** The emoji panel's keywords for the languages switched on; see [EmojiKeywords]. */
+    private var emojiKeywords: Map<String, List<String>> = emptyMap()
+
     /** Apostrophe spellings for the languages switched on -- see [Contractions]. Rebuilt with
      *  the pack list, because which entries survive depends on which languages are enabled. */
     private var contractions: Map<String, String> = emptyMap()
@@ -774,13 +777,19 @@ class BorderKeysService :
             accentSignature = enabled.joinToString(",") { it.tag }
             activeLanguageTags = enabled.map { it.tag }
             offensiveWords = OffensiveWords.merge(enabled.map { OffensiveWords.load(assets, it.tag) })
+            emojiKeywords = EmojiKeywords.load(assets, enabled.map { it.tag })
             // Built from the same list, and against it: an entry is dropped when one of the
             // languages that calls its typed spelling an ordinary word is also switched on.
             contractions = Contractions.of(
                 enabled.map { Contractions.load(assets, it.tag) },
                 enabled.map { it.tag },
             )
-            withContext(Dispatchers.Main) { host?.let { showPage(page) } }
+            withContext(Dispatchers.Main) {
+                host?.let {
+                    it.emojiPanel.keywords = emojiKeywords
+                    showPage(page)
+                }
+            }
 
             // The final set reaches the engine before the files do, and again after. The engine
             // closes whatever it has open that is not named, which is what frees a slot for a
@@ -1211,6 +1220,7 @@ class BorderKeysService :
         view.radialSuggestionMenu.listener = this
         view.emojiPanel.listener = EmojiPanelView.Listener { emoji -> onEmojiPicked(emoji) }
         view.emojiPanel.recents = preferences.emojiRecents
+        view.emojiPanel.keywords = emojiKeywords
         applyQuickActions(view)
         view.onMoveToOtherSide = { moveKeyboardToOtherSide() }
         view.onResizeDrag = { height, width, offset -> previewResize(height, width, offset) }
