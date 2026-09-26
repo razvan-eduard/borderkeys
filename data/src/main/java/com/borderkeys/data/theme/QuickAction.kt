@@ -101,6 +101,12 @@ enum class QuickAction(val id: Int) {
 
     /** Moves the cursor one character right. */
     CURSOR_RIGHT(21),
+
+    /**
+     * Writes the date and time at the cursor, in the shape [TimestampPattern] and the
+     * `timestampPattern` preference give it.
+     */
+    TIMESTAMP(22),
     ;
 
     /**

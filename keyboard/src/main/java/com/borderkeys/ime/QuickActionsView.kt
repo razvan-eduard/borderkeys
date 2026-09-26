@@ -330,6 +330,7 @@ class QuickActionsView(
         QuickAction.NORMALISE -> Keys.ACTION_NORMALISE
         QuickAction.CURSOR_LEFT -> Keys.ACTION_CURSOR_LEFT
         QuickAction.CURSOR_RIGHT -> Keys.ACTION_CURSOR_RIGHT
+        QuickAction.TIMESTAMP -> Keys.ACTION_TIMESTAMP
     }
 
     /** Labels need a band under the icons; a vertical bar has nowhere to put one. */
@@ -357,6 +358,7 @@ class QuickActionsView(
         QuickAction.NORMALISE -> R.drawable.bk_action_normalise
         QuickAction.CURSOR_LEFT -> R.drawable.bk_action_cursor_left
         QuickAction.CURSOR_RIGHT -> R.drawable.bk_action_cursor_right
+        QuickAction.TIMESTAMP -> R.drawable.bk_action_timestamp
     }
 
     /**

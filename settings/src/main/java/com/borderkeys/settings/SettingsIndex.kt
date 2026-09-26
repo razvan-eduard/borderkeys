@@ -104,6 +104,7 @@ object SettingsIndex {
         Entry(Screen.QuickActions, Keys.QUICK_TITLE, Keys.QUICK_LABELS_SHOW),
         Entry(Screen.QuickActions, null, Keys.QUICK_BAR_TITLE),
         Entry(Screen.QuickActions, null, Keys.QUICK_BUTTONS),
+        Entry(Screen.QuickActions, null, Keys.QUICK_TIMESTAMP_TITLE),
         Entry(Screen.QuickActions, null, Keys.QUICK_CUSTOM_TITLE),
         Entry(Screen.Size, null, Keys.SIZE_HEIGHT_WIDTH_AND_POSITION),
         Entry(Screen.Size, Keys.SIZE_HEIGHT_WIDTH_AND_POSITION, Keys.THEME_FULL_WIDTH_BACKGROUND),

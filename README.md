@@ -212,9 +212,9 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 
 A row of buttons for what otherwise takes several gestures — copying a word, a line or
 everything, pasting, cutting, selecting a word or all of it, deleting a word, moving the cursor to
-either end or one character left or right, undo and redo, a new line — plus two edits on the text
-itself: **Capital** flips the first letter of the word at the cursor, **Normalise** capitalises
-the start of every sentence in the field. Built in, and extendable: a **custom quick action** is
+either end or one character left or right, undo and redo, a new line, the date and time in a
+pattern you choose — plus two edits on the text itself: **Capital** flips the first letter of the
+word at the cursor, **Normalise** capitalises the start of every sentence in the field. Built in, and extendable: a **custom quick action** is
 a macro of steps you define yourself, pinned onto the bar exactly like a built-in one. The bar
 can sit above the suggestions, below the keys, or down either side; it comes in four sizes, with
 optional labels under the buttons and an outline around each whenever the theme outlines the

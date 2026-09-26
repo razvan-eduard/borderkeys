@@ -24,6 +24,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import java.util.Locale
+import java.time.ZonedDateTime
+import com.borderkeys.data.theme.TimestampPattern
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -231,6 +235,53 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                                     picking = false
                                 },
                             )
+                        }
+                    }
+                }
+            }
+
+            SettingsSectionCard(strings[Keys.QUICK_TIMESTAMP_TITLE]) {
+                Explanation(strings[Keys.QUICK_TIMESTAMP_NOTE])
+                // Typed into locally and stored once it can write a moment, so a half-typed
+                // pattern is not replaced by the default under the cursor.
+                var pattern by remember(preferences.timestampPattern) {
+                    mutableStateOf(preferences.timestampPattern)
+                }
+                val valid = TimestampPattern.isValid(pattern)
+                OutlinedTextField(
+                    value = pattern,
+                    onValueChange = { value ->
+                        pattern = value
+                        if (TimestampPattern.isValid(value)) {
+                            update { it.copy(timestampPattern = value) }
+                        }
+                    },
+                    label = { Text(strings[Keys.QUICK_TIMESTAMP_PATTERN]) },
+                    singleLine = true,
+                    isError = !valid,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                Explanation(
+                    if (valid) {
+                        strings.getString(
+                            Keys.QUICK_TIMESTAMP_NOW,
+                            TimestampPattern.format(pattern, ZonedDateTime.now(), Locale.getDefault()),
+                        )
+                    } else {
+                        strings[Keys.QUICK_TIMESTAMP_INVALID]
+                    },
+                )
+                ChipRow {
+                    for ((labelKey, preset) in listOf(
+                        Keys.QUICK_TIMESTAMP_PRESET_DATE to TimestampPattern.DATE,
+                        Keys.QUICK_TIMESTAMP_PRESET_TIME to TimestampPattern.TIME,
+                        Keys.QUICK_TIMESTAMP_PRESET_BOTH to TimestampPattern.DATE_AND_TIME,
+                        Keys.QUICK_TIMESTAMP_PRESET_WORDS to TimestampPattern.IN_WORDS,
+                        Keys.QUICK_TIMESTAMP_PRESET_ISO to TimestampPattern.ISO_8601,
+                    )) {
+                        PickerChip(strings[labelKey], selected = pattern == preset) {
+                            pattern = preset
+                            update { it.copy(timestampPattern = preset) }
                         }
                     }
                 }
@@ -464,6 +515,7 @@ internal fun iconFor(action: QuickAction): Int = when (action) {
     QuickAction.NORMALISE -> R.drawable.bk_action_normalise
     QuickAction.CURSOR_LEFT -> R.drawable.bk_action_cursor_left
     QuickAction.CURSOR_RIGHT -> R.drawable.bk_action_cursor_right
+    QuickAction.TIMESTAMP -> R.drawable.bk_action_timestamp
 }
 
 internal fun labelFor(action: QuickAction): String = when (action) {
@@ -488,4 +540,5 @@ internal fun labelFor(action: QuickAction): String = when (action) {
     QuickAction.NORMALISE -> Keys.ACTION_NORMALISE
     QuickAction.CURSOR_LEFT -> Keys.ACTION_CURSOR_LEFT
     QuickAction.CURSOR_RIGHT -> Keys.ACTION_CURSOR_RIGHT
+    QuickAction.TIMESTAMP -> Keys.ACTION_TIMESTAMP
 }

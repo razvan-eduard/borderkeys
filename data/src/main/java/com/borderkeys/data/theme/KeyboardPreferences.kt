@@ -683,6 +683,12 @@ data class KeyboardPreferences(
     val quickActionsLabels: Boolean = false,
 
     /**
+     * What the date-and-time quick action writes, as a [TimestampPattern]. Sanitised on read:
+     * a pattern that cannot write a moment is replaced by [TimestampPattern.DEFAULT].
+     */
+    val timestampPattern: String = TimestampPattern.DEFAULT,
+
+    /**
      * A permanent row of digits above the letters.
      *
      * Off by default. It costs about a fifth of the keyboard's height, and on a touch surface
@@ -1062,6 +1068,7 @@ data class KeyboardPreferences(
         quickActions =
             QuickActionBar.sanitisedIds(quickActions, sanitisedCustomQuickActions).take(MAX_QUICK_ACTIONS),
         customQuickActions = sanitisedCustomQuickActions,
+        timestampPattern = TimestampPattern.sanitised(timestampPattern),
         composerBar = ComposerBar.sanitisedIds(composerBar, sanitisedCustomActions),
         composerTextSize =
             if (composerTextSize in COMPOSER_TEXT_SIZE_SMALL..COMPOSER_TEXT_SIZE_LARGE) {
