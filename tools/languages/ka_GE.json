@@ -1,0 +1,37 @@
+{
+  "tag": "ka-GE",
+  "name": "Georgian",
+  "wikidata": "ka",
+  "layout": "georgian",
+  "corpora": [
+    "kat_newscrawl_2016_1M",
+    "kat_wikipedia_2021_300K"
+  ],
+  "hunspell": [
+    {
+      "base": "ka_GE",
+      "dic": "https://raw.githubusercontent.com/wooorm/dictionaries/main/dictionaries/ka/index.dic",
+      "aff": "https://raw.githubusercontent.com/wooorm/dictionaries/main/dictionaries/ka/index.aff"
+    }
+  ],
+  "treebank": {
+    "repository": "UD_Georgian-GLC",
+    "files": [
+      "ka_glc-ud-train.conllu",
+      "ka_glc-ud-dev.conllu",
+      "ka_glc-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "წ": "ჭ",
+    "რ": "ღ",
+    "ტ": "თ",
+    "ს": "შ",
+    "ჯ": "ჟ",
+    "ზ": "ძ",
+    "ც": "ჩ"
+  },
+  "single_letter_words": "",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

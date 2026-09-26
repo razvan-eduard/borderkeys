@@ -48,7 +48,9 @@ def main() -> int:
         fail(f"{layout}.json has no subtype in method.xml")
     for layout in sorted(named - letters):
         fail(f"method.xml names layout={layout}, which has no asset")
-    for layout in sorted(letters - {"qwerty"}):
+    # A subtype labelled with the locale's own display name needs no string of its own.
+    own_name = set(re.findall(r'label="@string/subtype_language_label"[^>]*?layout=([a-z_]+)"', method))
+    for layout in sorted(letters - {"qwerty"} - own_name):
         if layout not in labels:
             fail(f"{layout} has no subtype_label_{layout} string")
 
@@ -66,7 +68,8 @@ def main() -> int:
                 fail(f"{name}.json: a key's c must be one character, not {char!r}")
         if name in letters:
             present = {c for c in chars if c in ALPHABET}
-            if present != ALPHABET and name != "toki_pona":
+            latin = any(c.isascii() and c.isalpha() for c in chars)
+            if latin and present != ALPHABET and name != "toki_pona":
                 fail(f"{name}.json lacks {sorted(ALPHABET - present)}")
             codes = {key.get("code") for key in rows[-1].get("keys", [])}
             if not {"space", "enter"} <= codes:

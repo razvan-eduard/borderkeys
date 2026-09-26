@@ -1,0 +1,29 @@
+{
+  "tag": "ru-RU",
+  "name": "Russian",
+  "wikidata": "ru",
+  "layout": "russian",
+  "corpora": [
+    "rus_wikipedia_2021_1M",
+    "rus_news_2024_1M",
+    "rus_news_2023_1M"
+  ],
+  "hunspell": [
+    "ru_RU/ru_RU"
+  ],
+  "treebank": {
+    "repository": "UD_Russian-GSD",
+    "files": [
+      "ru_gsd-ud-train.conllu",
+      "ru_gsd-ud-dev.conllu",
+      "ru_gsd-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "е": "ё",
+    "ь": "ъ"
+  },
+  "single_letter_words": "авикосуяю",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

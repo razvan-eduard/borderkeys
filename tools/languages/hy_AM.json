@@ -1,0 +1,35 @@
+{
+  "tag": "hy-AM",
+  "name": "Armenian",
+  "wikidata": "hy",
+  "layout": "armenian",
+  "corpora": [
+    "hye_wikipedia_2021_1M",
+    "hye_wikipedia_2016_300K"
+  ],
+  "hunspell": [
+    {
+      "base": "hy_AM",
+      "dic": "https://raw.githubusercontent.com/wooorm/dictionaries/main/dictionaries/hy/index.dic",
+      "aff": "https://raw.githubusercontent.com/wooorm/dictionaries/main/dictionaries/hy/index.aff"
+    }
+  ],
+  "treebank": {
+    "repository": "UD_Armenian-ArmTDP",
+    "files": [
+      "hy_armtdp-ud-train.conllu",
+      "hy_armtdp-ud-dev.conllu",
+      "hy_armtdp-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "ե": "էև",
+    "տ": "թ",
+    "դ": "ձ",
+    "ռ": "ր",
+    "պ": "փ"
+  },
+  "single_letter_words": "",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

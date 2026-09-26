@@ -122,7 +122,7 @@ FLAT_FREQUENCY = 40
 PAGE_SIZE = 5000
 USER_AGENT = "BorderKeys-make_names.py/1.0 (https://github.com/borderkeys/borderkeys)"
 REQUEST_DELAY_SECONDS = 1.0
-MAX_RETRIES = 3
+MAX_RETRIES = 8
 
 
 def label_filter(language: str) -> str:
