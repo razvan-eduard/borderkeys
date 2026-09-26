@@ -42,6 +42,8 @@ attestations and the full commit lists are on the
 - Thirteen more layouts: Colemak, Colemak-DH, Workman, Bépo, Turkish F and Q, and the Spanish,
   Portuguese, Nordic, Danish and Norwegian, German, Czech and Hungarian variants with their own
   letter keys.
+- Greek, Cyrillic, Armenian and Georgian words fold by case, and Greek by tonos and final
+  sigma, so a pack in those scripts is reached however a word was capitalised.
 
 ## v0.8.0 — 2026-09-25
 

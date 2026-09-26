@@ -97,7 +97,10 @@ one from the other, and it never was the answer to that question.
 
 1. Fold the input (`foldUtf8`) — case and diacritics wash out, because that is how the trie is
    keyed. This is why typing `totusi` reaches `totuși` at **zero** cost rather than as a
-   correction.
+   correction. The fold covers Latin, Greek (case, tonos, dialytika and the final sigma),
+   Cyrillic (case, and ё and ѐ onto е, ѝ onto и), Armenian and Georgian (case), in
+   `proximity.cpp` and, character for character, in `tools/build_dict.py`; the native tests
+   diff the two tables.
 2. `refreshWeights()`, `resolveContext()` — per-request, per-pack, once rather than per candidate.
 3. Choose which packs to search: the dominant pack when one is decided, otherwise the heaviest
    when language lock is strict, otherwise all of them.

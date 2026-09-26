@@ -102,6 +102,91 @@ static bool latinExtendedAUpper(uint32_t codePoint) {
     return (evenCapital && (codePoint & 1u) == 0u) || (oddCapital && (codePoint & 1u) == 1u);
 }
 
+// Greek and Coptic, case only: a capital sits 0x20 below its lowercase, and the seven
+// tonos capitals and two dialytika capitals sit apart from their lowercase forms.
+static uint32_t lowerGreek(uint32_t codePoint) {
+    switch (codePoint) {
+        case 0x386u: return 0x3ACu;
+        case 0x388u: return 0x3ADu;
+        case 0x389u: return 0x3AEu;
+        case 0x38Au: return 0x3AFu;
+        case 0x38Cu: return 0x3CCu;
+        case 0x38Eu: return 0x3CDu;
+        case 0x38Fu: return 0x3CEu;
+        case 0x3AAu: return 0x3CAu;
+        case 0x3ABu: return 0x3CBu;
+        default: break;
+    }
+    if (codePoint >= 0x391u && codePoint <= 0x3A9u && codePoint != 0x3A2u) {
+        return codePoint + 0x20u;
+    }
+    return codePoint;
+}
+
+// Greek, folded: the tonos and the dialytika go, and the final sigma folds onto the
+// ordinary one, so a word is one key whether it ends a sentence or not.
+static uint32_t foldGreek(uint32_t codePoint) {
+    switch (lowerGreek(codePoint)) {
+        case 0x3ACu: return 0x3B1u;
+        case 0x3ADu: return 0x3B5u;
+        case 0x3AEu: return 0x3B7u;
+        case 0x390u: case 0x3AFu: case 0x3CAu: return 0x3B9u;
+        case 0x3CCu: return 0x3BFu;
+        case 0x3B0u: case 0x3CBu: case 0x3CDu: return 0x3C5u;
+        case 0x3CEu: return 0x3C9u;
+        case 0x3C2u: return 0x3C3u;
+        default: return lowerGreek(codePoint);
+    }
+}
+
+// Cyrillic, case only. 0x400..0x40F sit 0x50 above their lowercase, 0x410..0x42F sit 0x20
+// above, and the rest of the block pairs each capital with its lowercase on the even code
+// point -- except 0x4C1..0x4CE, where the capital is the odd one, and 0x4C0, whose lowercase
+// is 0x4CF.
+static uint32_t lowerCyrillic(uint32_t codePoint) {
+    if (codePoint >= 0x400u && codePoint <= 0x40Fu) {
+        return codePoint + 0x50u;
+    }
+    if (codePoint >= 0x410u && codePoint <= 0x42Fu) {
+        return codePoint + 0x20u;
+    }
+    if (codePoint == 0x4C0u) {
+        return 0x4CFu;
+    }
+    if (codePoint >= 0x4C1u && codePoint <= 0x4CEu) {
+        return (codePoint & 1u) == 1u ? codePoint + 1u : codePoint;
+    }
+    if ((codePoint >= 0x460u && codePoint <= 0x481u) || (codePoint >= 0x48Au && codePoint <= 0x4BFu) ||
+        (codePoint >= 0x4D0u && codePoint <= 0x4FFu)) {
+        return (codePoint & 1u) == 0u ? codePoint + 1u : codePoint;
+    }
+    return codePoint;
+}
+
+// Cyrillic, folded: the two letters written with a mark over е and и by some and without by
+// most fold onto the plain letter, the way an accent does. The short и is a letter of its
+// own and stays.
+static uint32_t foldCyrillic(uint32_t codePoint) {
+    const uint32_t lower = lowerCyrillic(codePoint);
+    switch (lower) {
+        case 0x450u: case 0x451u: return 0x435u;
+        case 0x45Du: return 0x438u;
+        default: return lower;
+    }
+}
+
+// Armenian capitals sit 0x30 above their lowercase; Georgian Mtavruli capitals sit 0xBC0
+// above the Mkhedruli letters they are the capitals of.
+static uint32_t lowerArmenianGeorgian(uint32_t codePoint) {
+    if (codePoint >= 0x531u && codePoint <= 0x556u) {
+        return codePoint + 0x30u;
+    }
+    if ((codePoint >= 0x1C90u && codePoint <= 0x1CBAu) || (codePoint >= 0x1CBDu && codePoint <= 0x1CBFu)) {
+        return codePoint - 0xBC0u;
+    }
+    return codePoint;
+}
+
 // Case, and nothing else: the same lowering foldCodePoint does before its diacritic table,
 // stopping there. Comparing two spellings of one folded key is a question about the diacritics,
 // so it cannot use a fold that removes them -- and it cannot use raw bytes either, because the
@@ -116,7 +201,13 @@ uint32_t lowerCodePoint(uint32_t codePoint) {
     if (codePoint >= 0x100u && codePoint <= 0x17Fu && latinExtendedAUpper(codePoint)) {
         return codePoint + 1u;
     }
-    return codePoint;
+    if (codePoint >= 0x370u && codePoint <= 0x3FFu) {
+        return lowerGreek(codePoint);
+    }
+    if (codePoint >= 0x400u && codePoint <= 0x4FFu) {
+        return lowerCyrillic(codePoint);
+    }
+    return lowerArmenianGeorgian(codePoint);
 }
 
 /** Whether two UTF-8 spellings are the same but for case. Diacritics still have to match. */
@@ -244,7 +335,13 @@ uint32_t foldCodePoint(uint32_t codePoint) {
             break;
     }
 
-    return codePoint;
+    if (codePoint >= 0x370u && codePoint <= 0x3FFu) {
+        return foldGreek(codePoint);
+    }
+    if (codePoint >= 0x400u && codePoint <= 0x4FFu) {
+        return foldCyrillic(codePoint);
+    }
+    return lowerArmenianGeorgian(codePoint);
 }
 
 int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut) {
