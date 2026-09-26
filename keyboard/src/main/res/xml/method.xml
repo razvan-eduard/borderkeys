@@ -116,4 +116,115 @@
         android:isAsciiCapable="true"
         android:imeSubtypeExtraValue="layout=toki_pona" />
 
+    <!--
+        The layouts added with the downloadable packs: three more English arrangements, Bépo,
+        the two Turkish arrangements, and the national QWERTY and QWERTZ variants that carry
+        their extra letters as keys. Each subtype's languageTag is the language the layout was
+        drawn for, which is what the keyboard picker sorts and names it by; the dictionaries in
+        use are still whatever is enabled on the Languages screen.
+    -->
+    <subtype
+        android:subtypeId="0x0B0DE009"
+        android:label="@string/subtype_label_colemak"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="en-US"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=colemak" />
+
+    <subtype
+        android:subtypeId="0x0B0DE00A"
+        android:label="@string/subtype_label_colemak_dh"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="en-US"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=colemak_dh" />
+
+    <subtype
+        android:subtypeId="0x0B0DE00B"
+        android:label="@string/subtype_label_workman"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="en-US"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=workman" />
+
+    <subtype
+        android:subtypeId="0x0B0DE00C"
+        android:label="@string/subtype_label_bepo"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="fr-FR"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=bepo" />
+
+    <subtype
+        android:subtypeId="0x0B0DE00D"
+        android:label="@string/subtype_label_turkish_f"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="tr-TR"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=turkish_f" />
+
+    <subtype
+        android:subtypeId="0x0B0DE00E"
+        android:label="@string/subtype_label_turkish_q"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="tr-TR"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=turkish_q" />
+
+    <subtype
+        android:subtypeId="0x0B0DE00F"
+        android:label="@string/subtype_label_spanish"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="es-ES"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=spanish" />
+
+    <subtype
+        android:subtypeId="0x0B0DE010"
+        android:label="@string/subtype_label_portuguese"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="pt-PT"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=portuguese" />
+
+    <subtype
+        android:subtypeId="0x0B0DE011"
+        android:label="@string/subtype_label_nordic"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="sv-SE"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=nordic" />
+
+    <subtype
+        android:subtypeId="0x0B0DE012"
+        android:label="@string/subtype_label_danish"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="da-DK"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=danish" />
+
+    <subtype
+        android:subtypeId="0x0B0DE013"
+        android:label="@string/subtype_label_german"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="de-DE"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=german" />
+
+    <subtype
+        android:subtypeId="0x0B0DE014"
+        android:label="@string/subtype_label_czech"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="cs-CZ"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=czech" />
+
+    <subtype
+        android:subtypeId="0x0B0DE015"
+        android:label="@string/subtype_label_hungarian"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="hu-HU"
+        android:isAsciiCapable="true"
+        android:imeSubtypeExtraValue="layout=hungarian" />
+
 </input-method>

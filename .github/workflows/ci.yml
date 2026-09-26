@@ -202,6 +202,9 @@ jobs:
       - name: Language alphabets are what the dictionaries were built against
         run: python3 tools/drop_unreachable.py --selftest
 
+      - name: The layout assets, their subtypes and their labels agree
+        run: python3 tools/check_layouts.py
+
       # Runs from step 8 onward, when native-tests/ exists. Guarded rather than omitted so the
       # step is already wired and cannot be forgotten later; it prints what it skipped, because
       # a silently absent check reads exactly like a passing one.

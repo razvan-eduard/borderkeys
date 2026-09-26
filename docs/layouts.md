@@ -20,12 +20,19 @@ press come from — which is two separate mechanisms that meet on the same key.
 
 ## The asset format
 
-A layout is one JSON file in `keyboard/src/main/assets/layouts/`. Twelve ship today:
+A layout is one JSON file in `keyboard/src/main/assets/layouts/`. Twenty-five ship today:
 
 ```
-qwerty  qwertz  azerty  dvorak  clearflow  kasroz  toki_pona
+qwerty  qwertz  azerty  dvorak  colemak  colemak_dh  workman  bepo  clearflow  kasroz  toki_pona
+turkish_f  turkish_q  spanish  portuguese  nordic  danish  german  czech  hungarian
 numpad  symbols  symbols_shift  symbols_numpad_left  symbols_numpad_right
 ```
+
+The national variants (`spanish` with ñ, `portuguese` with ç, `nordic` with å ä ö, `danish`
+with å æ ø, `german` with ü ö ä, `czech` with ú ů, `hungarian` with ő ú é á ö ü, the two
+Turkish arrangements with ğ ü ş ı ö ç) carry their extra letters as keys; every other accented
+letter stays on the long press the language's overlay provides. Polish has no variant on
+purpose: its letters all live on the long press of their base letter.
 
 **No pixels anywhere.** Widths are in key-width units and row heights are multiples of the
 theme's row height, so one description serves every screen size and every theme.
@@ -239,6 +246,11 @@ terminals and editors. Layout assets can place the same keys themselves with the
    `und` — it is used by many).
 3. If the language needs diacritics, add `assets/accents/<tag>.json` rather than putting them in
    the layout's `alt` fields.
+4. Declare a subtype for it in `keyboard/src/main/res/xml/method.xml`, with the next free
+   `subtypeId`, `layout=<id>` as its extra value and a `subtype_label_<id>` string beside the
+   others in `res/values/strings.xml`, so the keyboard picker can offer it.
+   `python3 tools/check_layouts.py` checks that every asset, subtype and label agree, and CI
+   runs it.
 
 **Do not rely on the asset's top-level `label`.** The loader does not read it, and the comment
 says why: the value the files carry is an English word, not a catalogue key, so the one place it

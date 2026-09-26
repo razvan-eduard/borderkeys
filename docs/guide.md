@@ -104,8 +104,10 @@ ships.
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg" alt="Steve and Steven offered capitalised from a lower-case stev, in the middle of a sentence" width="30%">
 </p>
 
-- **Alternate physical layouts** — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona — for
-  the 26-letter alphabets every bundled dictionary already knows, plus a number row, a symbols
+- **Alternate physical layouts** — AZERTY, Dvorak, QWERTZ, Colemak, Colemak-DH, Workman, Bépo,
+  ClearFlow, KasRoz and Toki Pona, the two Turkish arrangements, and the Spanish, Portuguese,
+  Nordic, Danish and Norwegian, German, Czech and Hungarian variants that carry their extra
+  letters as keys — for the alphabets the dictionaries know, plus a number row, a symbols
   page with a proper number pad — a 3×3 block at the right or the left with the symbols beside
   it, or a plain digit row — a numeric keypad in numeric fields, and an optional modifier
   row — Esc, Tab, Ctrl, Alt and the arrows, with Home, End, Page up, Page down, forward Delete

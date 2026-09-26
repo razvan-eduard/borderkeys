@@ -28,5 +28,18 @@
     <string name="subtype_label_clearflow" translatable="false">ClearFlow</string>
     <string name="subtype_label_kasroz" translatable="false">KASROZ</string>
     <string name="subtype_label_toki_pona" translatable="false">Toki Pona</string>
+    <string name="subtype_label_colemak" translatable="false">Colemak</string>
+    <string name="subtype_label_colemak_dh" translatable="false">Colemak-DH</string>
+    <string name="subtype_label_workman" translatable="false">Workman</string>
+    <string name="subtype_label_bepo" translatable="false">Bépo</string>
+    <string name="subtype_label_turkish_f" translatable="false">Turkish F</string>
+    <string name="subtype_label_turkish_q" translatable="false">Turkish Q</string>
+    <string name="subtype_label_spanish" translatable="false">Spanish</string>
+    <string name="subtype_label_portuguese" translatable="false">Portuguese</string>
+    <string name="subtype_label_nordic" translatable="false">Nordic</string>
+    <string name="subtype_label_danish" translatable="false">Danish and Norwegian</string>
+    <string name="subtype_label_german" translatable="false">German</string>
+    <string name="subtype_label_czech" translatable="false">Czech</string>
+    <string name="subtype_label_hungarian" translatable="false">Hungarian</string>
 
 </resources>
