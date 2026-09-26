@@ -582,7 +582,8 @@ ids). `DEFAULT` is the five that answer *"I want that text somewhere"*:
 `COPY_PREVIOUS_WORD`, `COPY_ALL`, `PASTE`, `CLIPBOARD_HISTORY`, `SELECT_ALL`.
 
 The rest cover cursor movement (`CURSOR_START/END/LEFT/RIGHT`), selection (`SELECT_WORD`,
-`SELECT_ALL`), editing (`CUT`, `DELETE_WORD`, `NEWLINE`), case (`CAPITAL` flips the current
+`SELECT_ALL`), editing (`CUT`, `DELETE_WORD`, `NEWLINE`, and `TIMESTAMP`, the date and time in the pattern the
+`timestampPattern` preference gives it), case (`CAPITAL` flips the current
 word's first letter and leaves the cursor alone; `NORMALISE` capitalises every sentence in the
 field and changes nothing else), history (`UNDO`/`REDO` step through what *this keyboard* did to
 the field this session), and `COMPOSE` — a draft box the application cannot see, seeded from the

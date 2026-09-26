@@ -40,6 +40,8 @@ import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.EffectFrequency
 import com.borderkeys.effects.EffectStyle
 import com.borderkeys.data.theme.QuickAction
+import java.time.ZonedDateTime
+import com.borderkeys.data.theme.TimestampPattern
 import com.borderkeys.data.theme.QuickActionBar
 import com.borderkeys.data.theme.QuickActionBarItem
 import com.borderkeys.data.theme.KeyboardAppearance
@@ -5080,6 +5082,17 @@ class BorderKeysService :
             QuickAction.CURSOR_RIGHT -> {
                 resetComposing()
                 sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_DPAD_RIGHT)
+            }
+            // Not a word: the pair and triple context ends here, as it does at a line break.
+            QuickAction.TIMESTAMP -> {
+                finishComposing(connection)
+                connection.commitText(
+                    TimestampPattern.format(preferences.timestampPattern, ZonedDateTime.now(), Locale.getDefault()),
+                    1,
+                )
+                checkpointField()
+                previousWord1 = null
+                previousWord2 = null
             }
         }
         // No refresh here: onQuickAction does it once for the whole tap, per its own doc, and
