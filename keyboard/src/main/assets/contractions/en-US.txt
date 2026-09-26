@@ -5,8 +5,9 @@
 # tools/make_contractions.py from this language's own word counts -- do not edit by hand.
 #
 # typed<TAB>written<TAB>other languages whose own vocabulary holds the typed spelling
-i	I	it-IT
+abbotts	abbott's	
 abcs	abc's	
+abes	abe's	
 academys	academy's	
 afghanistans	afghanistan's	de-DE
 africas	africa's	
@@ -18,13 +19,20 @@ alaskas	alaska's	de-DE
 albertas	alberta's	
 alexanders	alexander's	de-DE
 alices	alice's	
+alis	ali's	de-DE,ro-RO
 allens	allen's	de-DE
 alzheimers	alzheimer's	
 amazons	amazon's	de-DE
+amds	amd's	de-DE
+americas	america's	es-ES
 andersons	anderson's	de-DE
-annes	anne's	de-DE
+annas	anna's	
+annes	anne's	
 anothers	another's	
+anthonys	anthony's	
+anybodys	anybody's	
 anyones	anyone's	
+aprils	april's	de-DE
 arabias	arabia's	
 arent	aren't	
 argentinas	argentina's	es-ES
@@ -35,8 +43,11 @@ armstrongs	armstrong's	de-DE
 armys	army's	
 arthurs	arthur's	de-DE
 asias	asia's	
+assads	assad's	de-DE
 assemblys	assembly's	
+atlantas	atlanta's	
 augustines	augustine's	
+austins	austin's	
 australias	australia's	
 austrias	austria's	es-ES
 authoritys	authority's	
@@ -44,34 +55,65 @@ azerbaijans	azerbaijan's
 babys	baby's	de-DE
 bachelors	bachelor's	
 baháí	bahá'í	
+baldwins	baldwin's	
+bangladeshs	bangladesh's	
+barcelonas	barcelona's	de-DE
 barretts	barrett's	
+barrs	barr's	
 baseballs	baseball's	
 batmans	batman's	de-DE
 bbcs	bbc's	
 beethovens	beethoven's	de-DE
 beijings	beijing's	
+belizes	belize's	
+bennetts	bennett's	de-DE
+bens	ben's	de-DE
+berkeleys	berkeley's	
 berlins	berlin's	de-DE
+bermudas	bermuda's	es-ES
 bidens	biden's	de-DE
 bjps	bjp's	
+blairs	blair's	
 blakes	blake's	
 bloombergs	bloomberg's	
+bobs	bob's	de-DE
 bodys	body's	
+boeings	boeing's	
+boltons	bolton's	
 bostons	boston's	
 bradys	brady's	
 brazils	brazil's	
 britains	britain's	
+bruces	bruce's	es-ES
+bryans	bryan's	
 bryants	bryant's	
 buharis	buhari's	
+bulgarias	bulgaria's	
+burkes	burke's	
+burtons	burton's	
 bushs	bush's	de-DE
 businesss	business's	
+calgarys	calgary's	
 californias	california's	
 calvins	calvin's	
+cambodias	cambodia's	
 camerons	cameron's	
 campbells	campbell's	
 canadas	canada's	
 cant	can't	it-IT,ro-RO
 cantors	cantor's	
+carolines	caroline's	
+carrolls	carroll's	
+carsons	carson's	
+carters	carter's	de-DE
+castros	castro's	de-DE,es-ES
 catherines	catherine's	
+cdcs	cdc's	
+centurys	century's	
+chaplins	chaplin's	
+charitys	charity's	
+charlies	charlie's	
+charlottes	charlotte's	fr-FR
 chelseas	chelsea's	de-DE
 chicagos	chicago's	
 childrens	children's	
@@ -79,42 +121,72 @@ childs	child's
 chinas	china's	de-DE,es-ES
 christies	christie's	
 christs	christ's	
+churchills	churchill's	
 churchs	church's	
+cias	cia's	
 citys	city's	de-DE
+clarks	clark's	
 clevelands	cleveland's	
 clintons	clinton's	de-DE
 cnns	cnn's	
+coachs	coach's	fr-FR
 cohens	cohen's	
 colombias	colombia's	
+colonys	colony's	
 colorados	colorado's	de-DE,es-ES
 columbias	columbia's	
+commonwealths	commonwealth's	
 communitys	community's	de-DE
 companys	company's	es-ES
+congresss	congress's	
 coopers	cooper's	
+corbyns	corbyn's	
 couldnt	couldn't	
 couldve	could've	
 countrys	country's	
 countys	county's	de-DE
+coxs	cox's	
+croatias	croatia's	
 cromwells	cromwell's	
+cruzs	cruz's	
 cubas	cuba's	es-ES
 cuomos	cuomo's	
+dakotas	dakota's	
 darwins	darwin's	
-davids	david's	de-DE
+davids	david's	
 delhis	delhi's	
+denmarks	denmark's	
 denvers	denver's	
+detroits	detroit's	
+dianas	diana's	de-DE,es-ES
 didnt	didn't	
+diegos	diego's	
 disneys	disney's	de-DE
 doesnt	doesn't	
+donalds	donald's	
 dont	don't	fr-FR
+drakes	drake's	
+dutertes	duterte's	
+dylans	dylan's	de-DE
 earths	earth's	fr-FR
+easts	east's	
+economys	economy's	
+ecuadors	ecuador's	de-DE
+edisons	edison's	
 egypts	egypt's	
 einsteins	einstein's	de-DE
+eisenhowers	eisenhower's	
 elizabeths	elizabeth's	
 elses	else's	
+emilys	emily's	
 enemys	enemy's	
+energys	energy's	
 englands	england's	de-DE
+epsteins	epstein's	de-DE
 erdogans	erdogan's	de-DE
+eritreas	eritrea's	
 espns	espn's	
+estonias	estonia's	
 ethiopias	ethiopia's	
 euclids	euclid's	
 europes	europe's	
@@ -123,19 +195,26 @@ everybodys	everybody's
 everyones	everyone's	
 everythings	everything's	
 facebooks	facebook's	de-DE
+facilitys	facility's	
 familys	family's	
 fbis	fbi's	
+fifas	fifa's	
+fijis	fiji's	
 finlands	finland's	
 floridas	florida's	de-DE
 floyds	floyd's	de-DE
+flynns	flynn's	
 footballs	football's	
 fords	ford's	de-DE
 foxs	fox's	
 franciscos	francisco's	
+francos	franco's	de-DE,es-ES
 franklins	franklin's	de-DE
 freuds	freud's	de-DE
 gandhis	gandhi's	de-DE
-georges	george's	de-DE,fr-FR,ro-RO
+gardners	gardner's	
+gazas	gaza's	
+georges	george's	
 georgias	georgia's	es-ES
 germanys	germany's	
 ghanas	ghana's	de-DE
@@ -144,23 +223,30 @@ gops	gop's
 grahams	graham's	
 greeces	greece's	
 gregorys	gregory's	
+greys	grey's	
 guyanas	guyana's	
 gödels	gödel's	
 hadnt	hadn't	
 hadrians	hadrian's	
 haitis	haiti's	de-DE
 hamiltons	hamilton's	de-DE
+hampshires	hampshire's	
+hancocks	hancock's	
+harolds	harold's	
+harpers	harper's	
 harrisons	harrison's	
 harrys	harry's	de-DE
 hasnt	hasn't	
 havent	haven't	
 hawaiis	hawaii's	
+hbos	hbo's	
 healths	health's	
 hed	he'd	
 heideggers	heidegger's	de-DE
 heinleins	heinlein's	
 henrys	henry's	de-DE
 heres	here's	es-ES
+heros	hero's	
 hes	he's	
 hitchcocks	hitchcock's	de-DE
 hitlers	hitler's	de-DE
@@ -168,12 +254,20 @@ hollywoods	hollywood's	de-DE
 hoovers	hoover's	
 houstons	houston's	
 howards	howard's	
+hows	how's	
+huaweis	huawei's	
 hubbards	hubbard's	
 hudsons	hudson's	
 humanitys	humanity's	
+hungarys	hungary's	
 ibms	ibm's	
+icelands	iceland's	
+id	I'd	de-DE,es-ES,fr-FR,it-IT,ro-RO
+idahos	idaho's	
 iiis	iii's	
+iis	ii's	
 im	I'm	de-DE,ro-RO
+indianas	indiana's	
 indias	india's	es-ES
 indonesias	indonesia's	es-ES
 industrys	industry's	
@@ -189,25 +283,39 @@ itd	it'd
 itll	it'll	
 ive	I've	es-ES,fr-FR,ro-RO
 jacksons	jackson's	de-DE,ro-RO
+jamaicas	jamaica's	
 jamess	james's	
 janes	jane's	de-DE
 japans	japan's	de-DE
 jeffersons	jefferson's	
 jehovahs	jehovah's	
-joes	joe's	de-DE
+jerrys	jerry's	
+jerusalems	jerusalem's	de-DE
+jims	jim's	
+joes	joe's	
 johnsons	johnson's	de-DE
+joness	jones's	
 jordans	jordan's	de-DE
 josephs	joseph's	de-DE
 jupiters	jupiter's	
+jurys	jury's	de-DE,fr-FR
 kants	kant's	de-DE
+kapoors	kapoor's	
+kashmirs	kashmir's	
+kates	kate's	
+kazakhstans	kazakhstan's	
 kellys	kelly's	de-DE,es-ES
+kennedys	kennedy's	de-DE
 kentuckys	kentucky's	
 kenyas	kenya's	
 keplers	kepler's	
 khans	khan's	de-DE
 kims	kim's	de-DE
+klopps	klopp's	de-DE
 kongs	kong's	
 koreas	korea's	de-DE
+labours	labour's	fr-FR
+ladens	laden's	de-DE
 ladys	lady's	de-DE
 lankas	lanka's	de-DE
 latters	latter's	
@@ -215,7 +323,11 @@ lawrences	lawrence's
 lebanons	lebanon's	
 lees	lee's	de-DE,es-ES
 leibnizs	leibniz's	
+leones	leone's	es-ES
+lets	let's	
+levis	levi's	fr-FR
 lewiss	lewis's	
+liberias	liberia's	
 librarys	library's	
 libyas	libya's	
 lifes	life's	
@@ -223,35 +335,65 @@ lincolns	lincoln's
 liverpools	liverpool's	de-DE
 llcs	llc's	
 londons	london's	de-DE
+lowes	lowe's	
 lukes	luke's	
+luthers	luther's	de-DE
+lynchs	lynch's	
+macrons	macron's	de-DE
 macys	macy's	
+madisons	madison's	
+madrids	madrid's	de-DE
+maduros	maduro's	de-DE,es-ES
 maines	maine's	
 majestys	majesty's	
+malawis	malawi's	
 malaysias	malaysia's	de-DE
+malis	mali's	de-DE
+maltas	malta's	de-DE
+managements	management's	de-DE
+mandelas	mandela's	de-DE
+manhattans	manhattan's	de-DE
+manitobas	manitoba's	
 mans	man's	de-DE,es-ES,fr-FR,it-IT
 maos	mao's	de-DE
 margarets	margaret's	
+marias	maria's	de-DE
+markles	markle's	
 marshalls	marshall's	
 marthas	martha's	
+marvels	marvel's	
 marxs	marx's	
+marylands	maryland's	
 marys	mary's	de-DE
 maxwells	maxwell's	
 mccains	mccain's	
+mccarthys	mccarthy's	
+mcconnells	mcconnell's	
 mcdonalds	mcdonald's	de-DE,es-ES,ro-RO
 medias	media's	es-ES,fr-FR
 meghans	meghan's	de-DE
 melbournes	melbourne's	
 melvilles	melville's	
 mens	men's	es-ES,fr-FR,it-IT
+merkels	merkel's	de-DE
 mexicos	mexico's	
+miamis	miami's	
 michigans	michigan's	
 microsofts	microsoft's	de-DE
+mightve	might've	
+mikes	mike's	de-DE
 militarys	military's	
+miltons	milton's	
 ministrys	ministry's	
 minnesotas	minnesota's	
+missouris	missouri's	
 mitchells	mitchell's	
 modis	modi's	
+mondays	monday's	
+montgomerys	montgomery's	
+montreals	montreal's	
 moodys	moody's	
+moores	moore's	
 morgans	morgan's	
 moroccos	morocco's	
 moscows	moscow's	
@@ -259,114 +401,189 @@ mozarts	mozart's	de-DE
 muellers	mueller's	
 mugabes	mugabe's	
 muhammads	muhammad's	
+mumbais	mumbai's	
 murphys	murphy's	
 murrays	murray's	
 musics	music's	
+musks	musk's	de-DE
 myanmars	myanmar's	de-DE
+namibias	namibia's	de-DE
 napoleons	napoleon's	de-DE
 nasas	nasa's	
+natos	nato's	es-ES
 navys	navy's	
 nbas	nba's	
 nbcs	nbc's	
+nelsons	nelson's	
+nepals	nepal's	
 neros	nero's	
 netanyahus	netanyahu's	
 netflixs	netflix's	
+nevadas	nevada's	es-ES
 newsoms	newsom's	
 newtons	newton's	
 nfls	nfl's	
+nhls	nhl's	
 nigerias	nigeria's	de-DE
 nintendos	nintendo's	de-DE
 nixons	nixon's	
+noahs	noah's	
 nobodys	nobody's	
+nolans	nolan's	
 norths	north's	
 norways	norway's	
 novembers	november's	de-DE
+nows	now's	
+nprs	npr's	
+oaklands	oakland's	
 obamas	obama's	de-DE
 obrien	o'brien	
 oclock	o'clock	
 oconnell	o'connell	
 oconnor	o'connor	
 odonnell	o'donnell	
+ohara	o'hara	
 ohios	ohio's	
+okeefe	o'keefe	
 oleary	o'leary	
 omalley	o'malley	
 oneal	o'neal	
+oneil	o'neil	
 oneill	o'neill	
 ontarios	ontario's	
 oregons	oregon's	
 oreilly	o'reilly	
+orourke	o'rourke	
+oshea	o'shea	
 osullivan	o'sullivan	
+otoole	o'toole	
+ottawas	ottawa's	
+oxfords	oxford's	
 pakistans	pakistan's	de-DE
+paraguays	paraguay's	de-DE
+parkers	parker's	de-DE
 parkinsons	parkinson's	
 partys	party's	de-DE
 patricks	patrick's	
-pauls	paul's	de-DE,es-ES
+pauls	paul's	
+pelosis	pelosi's	
+pences	pence's	
 pennsylvanias	pennsylvania's	
+pentagons	pentagon's	
+perrys	perry's	
+perus	peru's	de-DE
+pfizers	pfizer's	
+philadelphias	philadelphia's	
+pittsburghs	pittsburgh's	
 platos	plato's	es-ES
 polands	poland's	
+polices	police's	fr-FR
+poors	poor's	
+portlands	portland's	
+portugals	portugal's	de-DE
+powells	powell's	
+propertys	property's	
 publics	public's	fr-FR
 putins	putin's	de-DE
 qatars	qatar's	
 quebecs	quebec's	
+queenslands	queensland's	
+rachels	rachel's	
 reagans	reagan's	
+rices	rice's	
 ricos	rico's	es-ES
+robinsons	robinson's	
 romanias	romania's	
 romes	rome's	
+romneys	romney's	
 roosevelts	roosevelt's	de-DE
 russells	russell's	
 russias	russia's	
 ruths	ruth's	
+rwandas	rwanda's	
 ryans	ryan's	
+saddams	saddam's	
+sainsburys	sainsbury's	
 samsungs	samsung's	de-DE
+santas	santa's	es-ES
+saskatchewans	saskatchewan's	
 saturns	saturn's	
 scotlands	scotland's	
 scotts	scott's	de-DE
 seattles	seattle's	
 senates	senate's	
+serbias	serbia's	es-ES
+shahs	shah's	
 shakespeares	shakespeare's	de-DE
 sheriffs	sheriff's	de-DE
+shermans	sherman's	
 shes	she's	
 shouldnt	shouldn't	
 shouldve	should've	
 singapores	singapore's	
+singhs	singh's	
+skys	sky's	
 smiths	smith's	de-DE
+snyders	snyder's	
 societys	society's	
+soleimanis	soleimani's	
 somalias	somalia's	
 somebodys	somebody's	
 someones	someone's	
 sonys	sony's	de-DE
+sothebys	sotheby's	
 spains	spain's	
+spencers	spencer's	
 stalins	stalin's	de-DE
+stewarts	stewart's	de-DE
 storys	story's	de-DE
+studys	study's	
 sudans	sudan's	de-DE
 sullivans	sullivan's	
 supermans	superman's	
 swedens	sweden's	
+swifts	swift's	
 switzerlands	switzerland's	
 sydneys	sydney's	
+syracuses	syracuse's	
 syrias	syria's	
 taiwans	taiwan's	de-DE
+tanzanias	tanzania's	
 taylors	taylor's	de-DE
+technologys	technology's	
 tehrans	tehran's	
 territorys	territory's	
 teslas	tesla's	de-DE
 thailands	thailand's	de-DE
 thatll	that'll	
 thats	that's	
+thered	there'd	
 therell	there'll	
-theres	there's	de-DE
+theres	there's	
 theyd	they'd	
 theyll	they'll	
 theyre	they're	
 theyve	they've	
+thomass	thomas's	
 thompsons	thompson's	
 todays	today's	
+tokyos	tokyo's	
 tolkiens	tolkien's	de-DE
 tomorrows	tomorrow's	
 tonights	tonight's	
+tonys	tony's	
 torontos	toronto's	
 tourettes	tourette's	
+trudeaus	trudeau's	
 trumps	trump's	de-DE
+tuesdays	tuesday's	
+turkeys	turkey's	
+turners	turner's	
+twitters	twitter's	
+tysons	tyson's	
+uaes	uae's	
+ubers	uber's	
+ugandas	uganda's	de-DE
 ukraines	ukraine's	
 uks	uk's	
 uniteds	united's	
@@ -376,6 +593,8 @@ utahs	utah's
 valentines	valentine's	
 vancouvers	vancouver's	
 venezuelas	venezuela's	de-DE
+verdis	verdi's	de-DE
+vermonts	vermont's	
 victorias	victoria's	es-ES
 vietnams	vietnam's	de-DE
 virginias	virginia's	
@@ -385,9 +604,14 @@ wallaces	wallace's
 warrens	warren's	
 washingtons	washington's	de-DE
 wasnt	wasn't	
+watsons	watson's	
+waynes	wayne's	
 wed	we'd	it-IT
+weinsteins	weinstein's	
+wendys	wendy's	
 werent	weren't	
 wests	west's	
+wetsuweten	wet'suwet'en	
 weve	we've	
 whats	what's	
 wheres	where's	
@@ -405,6 +629,8 @@ wont	won't
 worlds	world's	
 wouldnt	wouldn't	
 wouldve	would've	
+wrights	wright's	
+xis	xi's	
 yall	y'all	
 yemens	yemen's	
 yesterdays	yesterday's	
@@ -418,3 +644,5 @@ zambias	zambia's
 zealands	zealand's	
 zhous	zhou's	
 zimbabwes	zimbabwe's	
+zumas	zuma's	
+i	I	it-IT

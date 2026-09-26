@@ -96,6 +96,25 @@ class SuggestionRowTest {
     }
 
     @Test
+    fun `a word the engine offered twice is shown once, in its first place`() {
+        val shown = row.arrange(words("do", "do", "does", "don't"), typed = "do", limit = 4, correction = null)
+
+        assertEquals(listOf("do", "does", "don't"), shown.map { it.text })
+        assertEquals(0, row.typedIndex)
+    }
+
+    @Test
+    fun `a double drops out of the predictions too, and its correction mark is kept`() {
+        val predictions = words("the", "and", "the", "of")
+        assertEquals(listOf("the", "and", "of"), row.arrange(predictions, typed = "", limit = 4, correction = null).map { it.text })
+
+        val marked = listOf(Candidate("dacă"), Candidate("dar"), Candidate("dacă", isCorrection = true))
+        val once = row.withoutDoubles(marked)
+        assertEquals(listOf("dacă", "dar"), once.map { it.text })
+        assertEquals(true, once[0].isCorrection)
+    }
+
+    @Test
     fun `a typed word already among the candidates is moved rather than repeated`() {
         val words = words("dacă", "dar", "daca").marking("dacă")
         val shown = row.arrange(words, typed = "daca", limit = 3, correction = "dacă")

@@ -260,6 +260,7 @@ class Language:
                 source = ROOT / "dictionaries" / f"{tag}.{ext}"
                 if source.is_file():
                     shutil.copyfile(source, lists / source.name)
+        run([sys.executable, HERE / "merge_apostrophes.py", self.words])
         shutil.copyfile(self.words, lists / self.words.name)
         if self.grammar.is_file():
             shutil.copyfile(self.grammar, lists / self.grammar.name)

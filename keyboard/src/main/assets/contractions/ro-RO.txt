@@ -6,8 +6,10 @@
 #
 # typed<TAB>written<TAB>other languages whose own vocabulary holds the typed spelling
 assassins	assassin's	en-US,fr-FR
+domle	dom'le	
 etoo	eto'o	
 mcdonalds	mcdonald's	de-DE,en-US,es-ES
 moodys	moody's	
 obrien	o'brien	
+poors	poor's	
 valentines	valentine's	en-US
