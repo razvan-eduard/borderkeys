@@ -39,6 +39,9 @@ attestations and the full commit lists are on the
   on the strip and in the panels, and for the swipe ring.
 - A "More languages" card on the Languages screen, pointing at the packs the project publishes
   beyond the six inside the app, and the pipeline that builds them from a manifest.
+- Thirteen more layouts: Colemak, Colemak-DH, Workman, Bépo, Turkish F and Q, and the Spanish,
+  Portuguese, Nordic, Danish and Norwegian, German, Czech and Hungarian variants with their own
+  letter keys.
 
 ## v0.8.0 — 2026-09-25
 
