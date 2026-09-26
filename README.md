@@ -138,7 +138,8 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 - **A personal dictionary you can see and edit.** Every learned word is listed with how often
   you used it, and a `Forget` (remove it) and a `Block` (never suggest it again) right beside
   it — not a black box. The word pairs it learned are counted on the same screen and go with a
-  word when it is forgotten. Holding a suggestion offers the same from the keyboard.
+  word when it is forgotten. Holding a suggestion offers the same from the keyboard, and a
+  "Why?": the engine's own account of the word's score, term by term, in plain words.
 - **Text shortcuts.** A word that stands for a longer text — "omw" for "on my way", an address, a
   sign-off — expands when a space or a punctuation mark follows it, takes the capital you gave the
   shortcut, and comes back with the backspace straight after, like any other correction.

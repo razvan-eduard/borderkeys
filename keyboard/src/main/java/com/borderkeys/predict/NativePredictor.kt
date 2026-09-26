@@ -264,9 +264,15 @@ internal object NativePredictor {
     /** The bridge's cap on one [nativeKnownStems] call. */
     const val MAX_STEMS_QUERY = 64
 
-    /** The score of [candidate] as an answer to [typed], term by term, as text -- see
-     *  Engine::explainScore. Null when the word is not offered for [typed] at all. */
-    external fun nativeExplainScore(handle: Long, typed: String, candidate: String): String?
+    /** The score of [candidate] as an answer to [typed], term by term, into [out] -- see
+     *  Engine::explainScore and [ScoreExplanation] for the slots. False when the word is not
+     *  offered for [typed] at all. */
+    external fun nativeExplainScore(
+        handle: Long,
+        typed: String,
+        candidate: String,
+        out: FloatArray,
+    ): Boolean
 
     /** Replaces the remembered three-word sequences. Called after the pairs, same reason. */
     external fun nativeLoadUserTrigrams(

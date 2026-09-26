@@ -604,12 +604,16 @@ class PredictionEngine(
 
     /** Asks the engine why [candidate] scores as it does for [typed]; the text, or null when
      *  the word is not offered at all, arrives on the UI thread. */
-    fun explain(typed: String, candidate: String, onResult: (String?) -> Unit) {
+    /** The engine's own account of [candidate]'s score for [typed], or null when the word is
+     *  not offered for it at all. Answered on the main thread. */
+    fun explain(typed: String, candidate: String, onResult: (ScoreExplanation?) -> Unit) {
         worker.post {
-            val text = withHandle<String?>(null) { current ->
-                NativePredictor.nativeExplainScore(current, typed, candidate)
+            val slots = FloatArray(ScoreExplanation.SLOTS)
+            val offered = withHandle(false) { current ->
+                NativePredictor.nativeExplainScore(current, typed, candidate, slots)
             }
-            mainHandler.post { onResult(text) }
+            val explanation = if (offered) ScoreExplanation.fromSlots(slots) else null
+            mainHandler.post { onResult(explanation) }
         }
     }
 

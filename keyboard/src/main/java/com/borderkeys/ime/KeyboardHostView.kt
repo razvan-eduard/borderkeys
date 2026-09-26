@@ -50,6 +50,9 @@ class KeyboardHostView(
     val clipboardPanel = ClipboardPanelView(context, paints, strings)
     val emojiPanel = EmojiPanelView(context, paints)
 
+    /** The answer to "why this word?", in the keys' place like the two panels above. */
+    val explainPanel = ExplainPanelView(context, paints, strings)
+
     /** The suggestion strip's own slot, borrowed -- see the view's own doc for why it is not a
      *  sibling of [clipboardPanel]/[emojiPanel] instead. */
     val languageRevertPanel = LanguageRevertPanelView(context, paints)
@@ -466,6 +469,8 @@ class KeyboardHostView(
         clipboardPanel.visibility = GONE
         addView(emojiPanel)
         emojiPanel.visibility = GONE
+        addView(explainPanel)
+        explainPanel.visibility = GONE
         addView(quickActions)
         // Last of all: dispatchDraw walks children in the order they were added, so this is what
         // ends up on top of the keys it overlays -- see the view's own doc for why it needs to.
@@ -529,7 +534,7 @@ class KeyboardHostView(
                 return
             }
             field = value
-            val overlaid = clipboardPanelVisible || languageRevertPanelVisible ||
+            val overlaid = clipboardPanelVisible || explainPanelVisible || languageRevertPanelVisible ||
                 radialMenuVisible || inlineSuggestions.visibility == VISIBLE
             if (!overlaid) {
                 suggestionStrip.visibility = stripRestored()
@@ -573,6 +578,22 @@ class KeyboardHostView(
         // The history is its own screen with its own back control -- a suggestion strip above it
         // would be completing text nobody is typing. Restored to the strip on the way out;
         // an inline-autofill response arriving later puts itself back.
+        suggestionStrip.visibility = if (visible) GONE else stripRestored()
+        if (visible) {
+            inlineSuggestions.visibility = GONE
+        }
+        requestLayout()
+    }
+
+    val explainPanelVisible: Boolean get() = explainPanel.visibility == VISIBLE
+
+    /** Shows or hides the "why this word?" panel, in the keys' place, the strip with them. */
+    fun setExplainPanelVisible(visible: Boolean) {
+        if (explainPanelVisible == visible) {
+            return
+        }
+        explainPanel.visibility = if (visible) VISIBLE else GONE
+        keyboard.visibility = if (visible) GONE else VISIBLE
         suggestionStrip.visibility = if (visible) GONE else stripRestored()
         if (visible) {
             inlineSuggestions.visibility = GONE
@@ -743,6 +764,12 @@ class KeyboardHostView(
             ))
             height += emojiPanel.measuredHeight
         }
+        if (explainPanel.visibility != GONE) {
+            explainPanel.measure(exactBody, MeasureSpec.makeMeasureSpec(
+                keyboardHeightForPanel(bodyWidth), MeasureSpec.EXACTLY,
+            ))
+            height += explainPanel.measuredHeight
+        }
         if (quickActions.visibility != GONE) {
             if (sideBar) {
                 // Re-measured now that the body's height is known, because a side bar is as tall
@@ -887,6 +914,10 @@ class KeyboardHostView(
         if (emojiPanel.visibility != GONE) {
             emojiPanel.layout(bodyLeft, y, bodyRight, y + emojiPanel.measuredHeight)
             y += emojiPanel.measuredHeight
+        }
+        if (explainPanel.visibility != GONE) {
+            explainPanel.layout(bodyLeft, y, bodyRight, y + explainPanel.measuredHeight)
+            y += explainPanel.measuredHeight
         }
         if (quickActions.visibility != GONE) {
             when (quickActionsPlacement) {

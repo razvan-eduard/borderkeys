@@ -598,13 +598,16 @@ jstring nativePossessive(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring wo
     return env->NewStringUTF(possessive);
 }
 
-/** The score of `candidate` as an answer to `typed`, term by term, as text -- see
- *  Engine::explainScore. Null when the word is not offered for the input at all. */
-jstring nativeExplainScore(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring typed,
-                           jstring candidate) {
+/** The score of `candidate` as an answer to `typed`, term by term, into `out` -- see
+ *  Engine::explainScore, and ScoreExplanation.kt for the order of the slots. False when the
+ *  word is not offered for the input at all. */
+jboolean nativeExplainScore(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring typed,
+                            jstring candidate, jfloatArray out) {
+    constexpr jsize kSlots = 9;
     Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || typed == nullptr || candidate == nullptr) {
-        return nullptr;
+    if (engine == nullptr || typed == nullptr || candidate == nullptr || out == nullptr ||
+        env->GetArrayLength(out) < kSlots) {
+        return JNI_FALSE;
     }
     char typedBuffer[kStringBufferBytes];
     char candidateBuffer[kStringBufferBytes];
@@ -616,26 +619,26 @@ jstring nativeExplainScore(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring 
     const jsize candidateLength =
         copyString(env, candidate, candidateBuffer, sizeof(candidateBuffer));
     if (candidateLength <= 0) {
-        return nullptr;
+        return JNI_FALSE;
     }
     Engine::ScoreParts parts;
     if (!engine->explainScore(typedBuffer, static_cast<size_t>(typedLength), candidateBuffer,
                               static_cast<size_t>(candidateLength), &parts)) {
-        return nullptr;
+        return JNI_FALSE;
     }
-    char text[512];
-    std::snprintf(text, sizeof(text),
-                  "'%s' \xe2\x86\x92 '%s'\n"
-                  "rank %d \xc2\xb7 pack %d \xc2\xb7 edits %d \xc2\xb7 added %d\n"
-                  "language model %+.3f\n"
-                  "pack weight %+.3f\n"
-                  "personal %+.3f\n"
-                  "edit + completion %+.3f\n"
-                  "total %+.3f",
-                  typedBuffer, candidateBuffer, parts.rank + 1, parts.packIndex,
-                  parts.editDistance, parts.addedCharacters, parts.languageModel,
-                  parts.packWeight, parts.personal, parts.rest, parts.total);
-    return env->NewStringUTF(text);
+    const jfloat values[kSlots] = {
+        parts.total,
+        parts.packWeight,
+        parts.languageModel,
+        parts.personal,
+        parts.rest,
+        static_cast<jfloat>(parts.packIndex),
+        static_cast<jfloat>(parts.rank),
+        static_cast<jfloat>(parts.editDistance),
+        static_cast<jfloat>(parts.addedCharacters),
+    };
+    env->SetFloatArrayRegion(out, 0, kSlots, values);
+    return JNI_TRUE;
 }
 
 /** Which of `stems` the engine vouches for -- see Engine::vouchesForStem. At most
@@ -1134,7 +1137,7 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativePossessive)},
     {"nativeKnownStems", "(J[Ljava/lang/String;[Z)I",
      reinterpret_cast<void*>(nativeKnownStems)},
-    {"nativeExplainScore", "(JLjava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+    {"nativeExplainScore", "(JLjava/lang/String;Ljava/lang/String;[F)Z",
      reinterpret_cast<void*>(nativeExplainScore)},
     {"nativeKnownSpelling", "(JLjava/lang/String;)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeKnownSpelling)},
