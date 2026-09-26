@@ -128,6 +128,9 @@ class KeyboardCanvasView(
          * the editor rather than by simulating arrow keys.
          */
         fun onCursorNudge(steps: Int)
+
+        /** The space bar was slid up or down by [lines] lines, positive downwards. */
+        fun onCursorNudgeLines(lines: Int)
     }
 
     var listener: Listener? = null
@@ -582,7 +585,9 @@ class KeyboardCanvasView(
     /** The pointer resting on the space bar, and how far it has taken the caret. */
     private var spacePointer = -1
     private var spaceStartX = 0f
+    private var spaceStartY = 0f
     private var spaceMovedBy = 0
+    private var spaceMovedLines = 0
 
     /**
      * How far the finger travels for one character.
@@ -597,6 +602,45 @@ class KeyboardCanvasView(
             0f
         }
         return if (width > 0f) width * SPACE_STEP_FRACTION else DEFAULT_SPACE_STEP_PX
+    }
+
+    /**
+     * Carries the slide along the space bar to ([x], [y]): every character step and line step
+     * crossed since the last call goes to the listener. Returns whether the press is a slide,
+     * which the first step makes it, un-pressing the key and disarming the hold armed for it.
+     */
+    private fun slideSpaceBar(pointerId: Int, x: Float, y: Float): Boolean {
+        val wanted = ((x - spaceStartX) / spaceStepPx()).toInt()
+        val wantedLines = ((y - spaceStartY) / spaceLineStepPx()).toInt()
+        if (wanted != spaceMovedBy || wantedLines != spaceMovedLines) {
+            if (spaceMovedBy == 0 && spaceMovedLines == 0) {
+                removeCallbacks(longPressRunnable)
+                val pressed = pointerKey[pointerId]
+                pointerKey[pointerId] = NO_KEY
+                if (pressed != NO_KEY) {
+                    endPress(pressed)
+                }
+            }
+            if (wanted != spaceMovedBy) {
+                listener?.onCursorNudge(wanted - spaceMovedBy)
+                spaceMovedBy = wanted
+            }
+            if (wantedLines != spaceMovedLines) {
+                listener?.onCursorNudgeLines(wantedLines - spaceMovedLines)
+                spaceMovedLines = wantedLines
+            }
+        }
+        return spaceMovedBy != 0 || spaceMovedLines != 0
+    }
+
+    /** How far the finger travels up or down the space bar for one line: most of a key row. */
+    private fun spaceLineStepPx(): Float {
+        val height = if (geometry.keyCount > 0) {
+            geometry.keyBottom[0] - geometry.keyTop[0]
+        } else {
+            0f
+        }
+        return if (height > 0f) height * SPACE_LINE_STEP_FRACTION else DEFAULT_SPACE_LINE_STEP_PX
     }
 
     // ---- gesture capture ---------------------------------------------------------------------
@@ -1258,7 +1302,9 @@ class KeyboardCanvasView(
         ) {
             spacePointer = pointerId
             spaceStartX = x
+            spaceStartY = y
             spaceMovedBy = 0
+            spaceMovedLines = 0
         }
         listener?.onKeyDown(geometry.keyCode[index])
 
@@ -1288,30 +1334,14 @@ class KeyboardCanvasView(
             updateAlternativesSelection(x)
             return
         }
-        // Sliding along the space bar moves the caret. Started only from the space bar, and
-        // only past a threshold wider than any tap wobble, so a press that happens to drift a
-        // few pixels still types a space.
+        // Sliding along the space bar moves the caret, by characters sideways and by lines up
+        // or down. Started only from the space bar, and only past a threshold wider than any
+        // tap wobble, so a press that happens to drift a few pixels still types a space. A
+        // press on the space bar is a space or a slide and nothing else: it is not carried
+        // onto the key the finger crosses on its way up.
         if (pointerId == spacePointer) {
-            val travelled = x - spaceStartX
-            val step = spaceStepPx()
-            val wanted = (travelled / step).toInt()
-            if (wanted != spaceMovedBy) {
-                if (spaceMovedBy == 0) {
-                    // The drag has begun: this press will not be typing anything, so the key
-                    // is un-pressed and the hold that was armed for it is disarmed.
-                    removeCallbacks(longPressRunnable)
-                    val pressed = pointerKey[pointerId]
-                    pointerKey[pointerId] = NO_KEY
-                    if (pressed != NO_KEY) {
-                        endPress(pressed)
-                    }
-                }
-                listener?.onCursorNudge(wanted - spaceMovedBy)
-                spaceMovedBy = wanted
-            }
-            if (spaceMovedBy != 0) {
-                return
-            }
+            slideSpaceBar(pointerId, x, y)
+            return
         }
 
         val previous = pointerKey[pointerId]
@@ -1338,12 +1368,20 @@ class KeyboardCanvasView(
             return
         }
         // The finger slid onto another key before lifting. The previous key is released without
-        // being committed, which is what lets someone correct a landing without lifting.
+        // being committed, which is what lets someone correct a landing without lifting. A
+        // swipe may still start, from the corrected landing rather than from the first key.
         endPress(previous)
         cancelPendingCallbacks()
         pointerKey[pointerId] = index
         startPress(index)
         showPreview(index, pointerId)
+        if (swipeEnabled && !gestureActive && KeyFlags.has(geometry.keyFlags[index], KeyFlags.LETTER)) {
+            gesturePointer = pointerId
+            gestureStartX = x
+            gestureStartY = y
+        } else if (pointerId == gesturePointer) {
+            gesturePointer = -1
+        }
         run {
             longPressPointer = pointerId
             postDelayed(longPressRunnable, longPressDelayFor(index))
@@ -1371,9 +1409,12 @@ class KeyboardCanvasView(
             return
         }
         if (pointerId == spacePointer) {
-            val dragged = spaceMovedBy != 0
+            // The lift's own position counts: the last step of a slide is often crossed
+            // between the last move the finger reported and the lift.
+            val dragged = slideSpaceBar(pointerId, x, y)
             spacePointer = -1
             spaceMovedBy = 0
+            spaceMovedLines = 0
             if (dragged) {
                 // The caret has already been moved; lifting must not also type a space.
                 pointerKey[pointerId] = NO_KEY
@@ -1723,6 +1764,8 @@ class KeyboardCanvasView(
         /** One key width's fraction of finger travel per character of caret movement. */
         private const val SPACE_STEP_FRACTION = 0.55f
         private const val DEFAULT_SPACE_STEP_PX = 56f
+        private const val SPACE_LINE_STEP_FRACTION = 0.9f
+        private const val DEFAULT_SPACE_LINE_STEP_PX = 120f
 
         /**
          * Fewer samples than this is a flick or a slip, not a word: nothing is decoded for it

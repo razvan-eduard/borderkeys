@@ -133,6 +133,9 @@ class BorderKeysService :
     private var selectionStart = 0
     private var selectionEnd = 0
 
+    /** What the last slide along the space bar selected, so one drag keeps one anchor. */
+    private var lastNudge: CaretNudge.Selection? = null
+
     /** Whether the field holds any text at all, which is not the same as "we are composing". */
     private var editorEmpty = true
 
@@ -1601,13 +1604,38 @@ class BorderKeysService :
         }
         val extracted = connection.getExtractedText(ExtractedTextRequest(), 0) ?: return
         val length = extracted.text?.length ?: return
-        val target = (selectionEnd + steps).coerceIn(0, length)
-        if (target == selectionEnd) {
+        val next = CaretNudge.slide(
+            start = selectionStart,
+            end = selectionEnd,
+            previous = lastNudge,
+            steps = steps,
+            length = length,
+            selecting = shiftState != ShiftState.OFF,
+        )
+        lastNudge = next
+        if (next.start == selectionStart && next.end == selectionEnd) {
             return
         }
-        selectionStart = target
-        selectionEnd = target
-        connection.setSelection(target, target)
+        selectionStart = next.start
+        selectionEnd = next.end
+        connection.setSelection(next.anchor, next.caret)
+    }
+
+    /**
+     * Up or down by [lines] as the arrow keys would go, so the editor picks the line and the
+     * column; with shift held the arrows carry shift and the editor extends the selection.
+     */
+    override fun onCursorNudgeLines(lines: Int) {
+        dismissRadialMenu()
+        val connection = currentInputConnection ?: return
+        if (composing.isNotEmpty()) {
+            finishComposing(connection)
+        }
+        val keyCode = if (lines < 0) android.view.KeyEvent.KEYCODE_DPAD_UP else android.view.KeyEvent.KEYCODE_DPAD_DOWN
+        val meta = if (shiftState != ShiftState.OFF) SHIFT_META else 0
+        repeat(kotlin.math.abs(lines)) {
+            sendPhysicalKey(connection, keyCode, meta)
+        }
     }
 
     /**
@@ -3914,7 +3942,7 @@ class BorderKeysService :
                 connection.commitText(String(Character.toChars(code)), 1)
                 continue
             }
-            val meta = if (Character.isUpperCase(code)) TERMINAL_SHIFT_META else 0
+            val meta = if (Character.isUpperCase(code)) SHIFT_META else 0
             sendPhysicalKey(connection, keyCode, meta)
         }
     }
@@ -5705,10 +5733,14 @@ class BorderKeysService :
         const val PAGE_NUMPAD = 3
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
 
-        /** The settings activity's extras: a screen to open on, and a clip that screen edits. */
-        /** Shift held, as a key event carries it, for a capital typed into a terminal. */
-        const val TERMINAL_SHIFT_META =
+        /**
+         * Shift held, as a key event carries it: a capital typed into a terminal, a selecting
+         * slide along the space bar.
+         */
+        const val SHIFT_META =
             android.view.KeyEvent.META_SHIFT_ON or android.view.KeyEvent.META_SHIFT_LEFT_ON
+
+        /** The settings activity's extras: a screen to open on, and a clip that screen edits. */
         const val SETTINGS_EXTRA_SCREEN = "com.borderkeys.settings.SCREEN"
         const val SETTINGS_EXTRA_CLIP_ID = "com.borderkeys.settings.CLIP_ID"
         const val SETTINGS_SCREEN_CLIPBOARD = "Clipboard"

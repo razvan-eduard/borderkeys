@@ -109,6 +109,23 @@ class ImeSmokeTest {
     }
 
     @Test
+    fun withShiftLockedASlideAlongTheSpaceBarSelects() {
+        type("abc")
+        settle()
+        val shift = device.wait(Until.findObject(keyMatcher(SHIFT)), KEY_TIMEOUT)
+        assertNotNull("the shift key", shift)
+        shift.longClick()
+        settle()
+        val space = device.wait(Until.findObject(keyMatcher(SPACE)), KEY_TIMEOUT)
+        assertNotNull("the space bar", space)
+        val bar = space.visibleBounds
+        device.swipe(bar.right - SLIDE_INSET_PX, bar.centerY(), bar.left + SLIDE_INSET_PX, bar.centerY(), SLIDE_STEPS)
+        settle()
+        type("x")
+        assertField("X")
+    }
+
+    @Test
     fun aChipPickedWithTheCaretAtZeroKeepsTheNextTypedWord() {
         type("teh")
         settle()
@@ -259,7 +276,10 @@ class ImeSmokeTest {
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
         const val EDIT_TEXT = "android.widget.EditText"
         const val SPACE = "Space"
+        const val SHIFT = "Shift"
         const val DELETE = "Delete"
+        const val SLIDE_INSET_PX = 12
+        const val SLIDE_STEPS = 40
         const val LAUNCH_TIMEOUT = 20_000L
         const val KEY_TIMEOUT = 5_000L
         const val ATTEMPTS = 3
