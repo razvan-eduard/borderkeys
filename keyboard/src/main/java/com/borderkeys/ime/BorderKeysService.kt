@@ -1041,13 +1041,9 @@ class BorderKeysService :
                         // what is stored, so it follows rather than holding a stale copy.
                         pushQuickSettingsState(view)
                     }
-                    view.keyboard.hapticEnabled = newPreferences.hapticFeedback
+                    applyHaptics(view, newPreferences)
                     view.keyboard.soundEnabled = newPreferences.keySound
-                    view.keyboard.hapticConstant = HapticStrength.constantFor(newPreferences.hapticStrength)
                     view.keyboard.keyPopupEnabled = newPreferences.keyPopup
-                    view.suggestionStrip.hapticConstant = view.keyboard.hapticConstant
-                    view.radialSuggestionMenu.hapticConstant = view.keyboard.hapticConstant
-                    view.emojiPanel.hapticConstant = view.keyboard.hapticConstant
                     view.keyboard.spaceCursorEnabled = newPreferences.spaceCursorControl
                     view.keyboard.holdHintsEnabled = newPreferences.longPressHints
                     view.keyboard.longPressDelayMillis = newPreferences.longPressMillis.toLong()
@@ -1057,9 +1053,7 @@ class BorderKeysService :
                     view.keyboard.radialMinPathLetters = newPreferences.radialMinPathLetters
                     view.radialSuggestionMenu.sizeScale =
                         KeyboardPreferences.radialSizeScale(newPreferences.radialMenuSize)
-                    view.radialSuggestionMenu.hapticEnabled = newPreferences.hapticFeedback
                     view.radialBlurBackground = newPreferences.radialBlurBackground
-                    view.suggestionStrip.hapticEnabled = newPreferences.hapticFeedback
                     view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
                     applyQuickActions(view)
                     refreshClipboardChip()
@@ -1078,6 +1072,7 @@ class BorderKeysService :
                     showPage(page)
                     view.fullWidthBackground = resolvedTheme.fullWidthBackground
                     view.navigationBarBackground = resolvedTheme.navigationBarBackground
+                    view.opacity = resolvedTheme.opacity
                     if (changed) {
                         view.keyboard.onThemeChanged()
                         view.quickSettings.onThemeChanged()
@@ -1228,6 +1223,22 @@ class BorderKeysService :
         }
     }
 
+    /**
+     * Which touches vibrate, and how firmly: the keys, the strip and the emoji panel, and the
+     * swipe ring each follow their own switch under the one that turns vibration on at all.
+     */
+    private fun applyHaptics(view: KeyboardHostView, preferences: KeyboardPreferences) {
+        val constant = HapticStrength.constantFor(preferences.hapticStrength)
+        view.keyboard.hapticConstant = constant
+        view.suggestionStrip.hapticConstant = constant
+        view.radialSuggestionMenu.hapticConstant = constant
+        view.emojiPanel.hapticConstant = constant
+        view.keyboard.hapticEnabled = preferences.hapticFeedback && preferences.hapticKeys
+        view.suggestionStrip.hapticEnabled = preferences.hapticFeedback && preferences.hapticSuggestions
+        view.emojiPanel.hapticEnabled = preferences.hapticFeedback && preferences.hapticSuggestions
+        view.radialSuggestionMenu.hapticEnabled = preferences.hapticFeedback && preferences.hapticRing
+    }
+
     override fun onCreateInputView(): View {
         // Built in code. LayoutInflater would parse XML and reflect to construct three views,
         // every time the keyboard is shown in a new editor.
@@ -1236,14 +1247,10 @@ class BorderKeysService :
         applyPlacement(view, preferences)
         applyParticleSettings(view, particleEffects)
         view.keyboard.listener = this
-        view.keyboard.hapticEnabled = preferences.hapticFeedback
+        applyHaptics(view, preferences)
         view.keyboard.swipeEnabled = preferences.swipeEnabled
         view.keyboard.soundEnabled = preferences.keySound
-        view.keyboard.hapticConstant = HapticStrength.constantFor(preferences.hapticStrength)
         view.keyboard.keyPopupEnabled = preferences.keyPopup
-        view.suggestionStrip.hapticConstant = view.keyboard.hapticConstant
-        view.radialSuggestionMenu.hapticConstant = view.keyboard.hapticConstant
-        view.emojiPanel.hapticConstant = view.keyboard.hapticConstant
         view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
         view.keyboard.holdHintsEnabled = preferences.longPressHints
         view.keyboard.longPressDelayMillis = preferences.longPressMillis.toLong()
@@ -1252,11 +1259,9 @@ class BorderKeysService :
         view.keyboard.radialMinPathLetters = preferences.radialMinPathLetters
         view.radialSuggestionMenu.sizeScale =
             KeyboardPreferences.radialSizeScale(preferences.radialMenuSize)
-        view.radialSuggestionMenu.hapticEnabled = preferences.hapticFeedback
         view.radialBlurBackground = preferences.radialBlurBackground
         view.keyboard.setLayout(composedLayout(alphabeticLayout))
         view.suggestionStrip.listener = this
-        view.suggestionStrip.hapticEnabled = preferences.hapticFeedback
         view.suggestionStrip.visibleLimit = preferences.suggestionCount
         view.quickSettings.listener = this
         view.quickActions.listener = this
@@ -1274,6 +1279,7 @@ class BorderKeysService :
         view.onResizeExit = { endResize() }
         view.fullWidthBackground = effectiveTheme().fullWidthBackground
         view.navigationBarBackground = effectiveTheme().navigationBarBackground
+        view.opacity = effectiveTheme().opacity
         view.onThemeChanged()
         view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> pushKeyGeometry() }
         host = view
@@ -1330,8 +1336,7 @@ class BorderKeysService :
             view.suggestionStrip.privateReveal = false
             view.suggestionStrip.privateText = null
             view.suggestionStrip.clear()
-            view.suggestionStrip.hapticEnabled = preferences.hapticFeedback
-            view.keyboard.hapticEnabled = preferences.hapticFeedback
+            applyHaptics(view, preferences)
             view.keyboard.swipeEnabled = preferences.swipeEnabled && dictionaryAllowed
             view.suggestionStripEnabled = preferences.showSuggestionStrip
             view.keyboard.soundEnabled = preferences.keySound

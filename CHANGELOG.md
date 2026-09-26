@@ -35,6 +35,8 @@ attestations and the full commit lists are on the
 - The smoke suite runs at API 30 and API 35, with six more cases.
 - A user guide, docs/guide.md, with the store screenshots; the README keeps the promises and
   how to verify them.
+- An opacity slider on the Theme screen, and a vibration switch each for the keys, for picks
+  on the strip and in the panels, and for the swipe ring.
 
 ## v0.8.0 — 2026-09-25
 

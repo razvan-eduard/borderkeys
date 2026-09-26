@@ -202,6 +202,21 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                     ) { update { it.copy(hapticStrength = KeyboardPreferences.HAPTIC_STRONG) } }
                 }
                 Explanation(strings[Keys.LAYOUT_HAPTIC_STRENGTH_NOTE])
+                SwitchRow(
+                    title = strings[Keys.LAYOUT_HAPTIC_KEYS],
+                    subtitle = strings[Keys.LAYOUT_HAPTIC_KEYS_NOTE],
+                    checked = preferences.hapticKeys,
+                ) { value -> update { it.copy(hapticKeys = value) } }
+                SwitchRow(
+                    title = strings[Keys.LAYOUT_HAPTIC_SUGGESTIONS],
+                    subtitle = strings[Keys.LAYOUT_HAPTIC_SUGGESTIONS_NOTE],
+                    checked = preferences.hapticSuggestions,
+                ) { value -> update { it.copy(hapticSuggestions = value) } }
+                SwitchRow(
+                    title = strings[Keys.LAYOUT_HAPTIC_RING],
+                    subtitle = strings[Keys.LAYOUT_HAPTIC_RING_NOTE],
+                    checked = preferences.hapticRing,
+                ) { value -> update { it.copy(hapticRing = value) } }
             }
 
             // Set once and left: how long a hold is, and what the enter key does in a field

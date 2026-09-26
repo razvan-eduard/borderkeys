@@ -127,6 +127,13 @@ data class KeyboardTheme(
     val navigationBarBackground: Boolean = true,
 
     /**
+     * How much of the keyboard's surface shows: 1 is a solid keyboard, and anything less lets
+     * the application behind show through keys, labels and strip alike, down to
+     * [MIN_OPACITY]. Clamped on read.
+     */
+    val opacity: Float = 1f,
+
+    /**
      * How the suggestion strip marks the word a delimiter would apply: [APPLIED_HIGHLIGHT_OUTLINE]
      * (a traced border, the chip's own surface showing through) or [APPLIED_HIGHLIGHT_BACKGROUND]
      * (a filled chip, [appliedHighlightColor] painted behind the word).
@@ -183,6 +190,7 @@ data class KeyboardTheme(
             backgroundImage.take(MAX_IMAGE_NAME)
         },
         backgroundImageDim = backgroundImageDim.coerceIn(0f, 1f),
+        opacity = opacity.coerceIn(MIN_OPACITY, 1f),
         appliedHighlightStyle = if (appliedHighlightStyle in
             APPLIED_HIGHLIGHT_OUTLINE..APPLIED_HIGHLIGHT_BACKGROUND
         ) {
@@ -238,6 +246,9 @@ data class KeyboardTheme(
 
         /** Long enough for a generated name, short enough not to be a path in disguise. */
         const val MAX_IMAGE_NAME = 64
+
+        /** The least of the keyboard that may show; below this the keys cannot be found. */
+        const val MIN_OPACITY = 0.3f
 
         /** A traced border -- the chip's own surface, nothing painted behind the word. */
         const val APPLIED_HIGHLIGHT_OUTLINE = 0

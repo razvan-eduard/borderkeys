@@ -231,6 +231,15 @@ class KeyboardHostView(
     private var bottomOffsetPx = 0
     private var horizontalOffsetPx = 0
 
+    /** Mirrors the theme's opacity: the whole keyboard drawn this much solid. */
+    var opacity: Float = 1f
+        set(value) {
+            if (field != value) {
+                field = value
+                alpha = value
+            }
+        }
+
     /** Mirrors the theme's own flag; pushed in with the theme rather than read per frame. */
     var fullWidthBackground: Boolean = true
         set(value) {

@@ -105,6 +105,11 @@ data class KeyboardPreferences(
      */
     val hapticStrength: Int = HAPTIC_SYSTEM,
 
+    /** Which touches vibrate while [hapticFeedback] is on: a key, a pick on the strip or in a panel, the swipe ring. */
+    val hapticKeys: Boolean = true,
+    val hapticSuggestions: Boolean = true,
+    val hapticRing: Boolean = true,
+
     /**
      * Whether a keypress makes a sound.
      *
