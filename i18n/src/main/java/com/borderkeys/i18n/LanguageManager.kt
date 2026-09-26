@@ -140,7 +140,7 @@ class LanguageManager(private val context: Context) {
          * a number, a list -- is dropped rather than coerced, because a catalogue entry that is
          * not text is a mistake in the file and silently stringifying it hides the mistake.
          */
-        internal fun parse(text: String): Map<String, String> {
+        fun parse(text: String): Map<String, String> {
             val root = JSON.parseToJsonElement(text)
             if (root !is JsonObject) {
                 return emptyMap()

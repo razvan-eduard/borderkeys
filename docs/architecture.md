@@ -654,7 +654,7 @@ is that search and one more inside the pair's own list; the next-word search wal
 | `drop_misspellings.py` | Review-only, multi-oracle. Review-only because a rare surname and a misspelling are the same shape in this data. |
 | `make_contractions.py` | The apostrophe maps. |
 | `fold_diacritic_noise.py` | Romanian has three ways to write the same accented letter. |
-| `build_emoji.py`, `gen_keys.py`, `extract_strings.py`, `inject_strings.py` | Emoji palette, key codes, i18n catalogue round-trip. |
+| `build_emoji.py`, `gen_keys.py`, `gen_settings_index.py`, `extract_strings.py`, `inject_strings.py` | Emoji palette, key codes, the settings search index, i18n catalogue round-trip. |
 | `gesture_replay.py`, `tcn_replay.py`, `swipe_model/` | Swipe measurement and training. |
 
 Every tool is **standard library only**, deliberately: they run in CI, on a laptop, and one day

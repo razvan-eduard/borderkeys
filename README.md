@@ -165,7 +165,9 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 
 - **Settings that stay out of the way.** Every card leads with what changes how typing feels;
   the calibration values, the workarounds for particular apps and the choices made once fold
-  under an "Advanced settings" line, closed until you open it.
+  under an "Advanced settings" line, closed until you open it. A search box at the top of the
+  home screen finds any screen, card or row by its title, in the language the app is shown in,
+  and opens the screen it is on.
 
 <p align="center">
   <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/2_home.jpg" alt="The settings home" width="30%">
