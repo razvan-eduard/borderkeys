@@ -236,6 +236,17 @@ class ImeSmokeTest {
         }
     }
 
+    @Test
+    fun onTheHebrewLayoutTheFirstSuggestionSitsAtTheRightEndOfTheStrip() {
+        selectSubtype(HEBREW_SUBTYPE, firstKey = "ק")
+        try {
+            assertEquals("the", tapChip(topRowKey = "ק", atRight = true))
+            assertField("the ")
+        } finally {
+            selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
+        }
+    }
+
     /** Switches the keyboard to the subtype [subtypeId] and waits until its [firstKey] is on screen. */
     private fun selectSubtype(subtypeId: Int, firstKey: String) {
         device.executeShellCommand("settings put secure selected_input_method_subtype $subtypeId")
@@ -385,15 +396,19 @@ class ImeSmokeTest {
      * draws its chips itself, so the first slot is found from the keyboard's own geometry:
      * the band above the top key row, in its left third.
      */
-    private fun tapFirstChip(): String {
-        val topRow = device.findObject(keyMatcher("q"))
-        assertNotNull("the top key row", topRow)
-        val keys = topRow.visibleBounds
+    private fun tapFirstChip(): String = tapChip(topRowKey = "q", atRight = false)
+
+    /**
+     * Taps the chip in the strip's left third, or its right third with [atRight], and returns
+     * the word it committed. The strip sits above [topRowKey]'s row.
+     */
+    private fun tapChip(topRowKey: String, atRight: Boolean): String {
+        val keys = waitForKey(topRowKey).visibleBounds
         val windowTop = device.findObjects(By.pkg(context.packageName)).minOf { it.visibleBounds.top }
             .coerceAtMost(keys.top)
         val stripTop = keys.top - STRIP_HEIGHT_FRACTION * keys.height()
         val y = ((stripTop.coerceAtLeast(windowTop.toFloat()) + keys.top) / 2f).toInt()
-        val x = device.displayWidth / 6
+        val x = if (atRight) device.displayWidth * 5 / 6 else device.displayWidth / 6
         val before = field().text.orEmpty()
         device.click(x, y)
         settle()
@@ -454,6 +469,7 @@ class ImeSmokeTest {
         /** Subtype ids from res/xml/method.xml; the secure setting takes them as an Int prints. */
         const val ENGLISH_SUBTYPE = 0x0B0DE002
         const val RUSSIAN_SUBTYPE = 0x0B0DE016
+        const val HEBREW_SUBTYPE = 0x0B0DE01E
         const val SLIDE_INSET_PX = 12
         const val SLIDE_STEPS = 40
         const val SWIPE_SEGMENT_STEPS = 20

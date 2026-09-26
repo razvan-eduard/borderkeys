@@ -138,8 +138,9 @@ along the space bar with shift locked that selects what was typed, a swipe acros
 that writes the word, a pause in a swipe that opens the ring and a lift on its top wedge that
 picks the top word, Control on the modifier row followed by A selecting the field, a mistyped
 word in a password field left as typed, a slide up the space bar in a field of several
-lines that moves the caret a line, and letters tapped on the Russian layout, chosen through the
-subtype setting, reaching the field as themselves — each asserting the field's final text. Keys
+lines that moves the caret a line, letters tapped on the Russian layout, chosen through the
+subtype setting, reaching the field as themselves, and on the Hebrew layout the first
+suggestion picked from the right end of the strip — each asserting the field's final text. Keys
 are found by scanning the keyboard's own nodes for the name they carry, since a selector on the
 description alone does not match a name outside the Latin script. The password field
 and the field of several lines are the "Try it here" field in two of its three modes: a tap on
