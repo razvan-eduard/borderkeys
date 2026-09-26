@@ -22,7 +22,7 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.predict.LanguagePackInspector
-import com.borderkeys.settings.ProbeFields
+import com.borderkeys.settings.ProbeMode
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -181,17 +181,17 @@ class ImeSmokeTest {
 
     @Test
     fun aPasswordFieldIsNeverCorrected() {
-        focusProbe(ProbeFields.PASSWORD)
+        focusProbe(ProbeMode.PASSWORD)
         type("teh")
         settle()
         tapKey(SPACE)
         settle()
-        assertEquals("teh ", probeText(ProbeFields.PASSWORD))
+        assertEquals("teh ", probeText(ProbeMode.PASSWORD))
     }
 
     @Test
     fun aSlideUpTheSpaceBarMovesTheCaretALine() {
-        focusProbe(ProbeFields.LINES)
+        focusProbe(ProbeMode.LINES)
         type("ab")
         tapKey(ENTER)
         type("cd")
@@ -204,7 +204,7 @@ class ImeSmokeTest {
         settle()
         type("x")
         settle()
-        assertEquals("abxcd", probeText(ProbeFields.LINES).replace("\n", ""))
+        assertEquals("abxcd", probeText(ProbeMode.LINES).replace("\n", ""))
     }
 
     @Test
@@ -224,22 +224,34 @@ class ImeSmokeTest {
     // ---- driving the keyboard ---------------------------------------------------------------
 
     /**
-     * Focuses one of the debuggable build's extra probe fields under "Try it here", named by
-     * the [ProbeFields] prefix its content description starts with, keyboard up.
+     * Puts the "Try it here" field into [mode] by tapping its label until the field's content
+     * description says so, clears it, and focuses it with the keyboard up.
      */
-    private fun focusProbe(name: String) {
-        val field = device.wait(Until.findObject(By.descStartsWith(name)), KEY_TIMEOUT)
-        assertNotNull("the $name field", field)
-        field.click()
-        assertTrue("the keyboard over $name", device.wait(Until.hasObject(keyMatcher("q")), KEY_TIMEOUT))
+    private fun focusProbe(mode: ProbeMode) {
+        var taps = 0
+        while (!device.hasObject(By.descStartsWith(mode.description)) && taps < ProbeMode.entries.size) {
+            val label = device.wait(Until.findObject(By.textStartsWith(ProbeMode.BULLET)), KEY_TIMEOUT)
+            assertNotNull("the probe field's mode label", label)
+            label.click()
+            taps++
+            settle()
+        }
+        val field = device.wait(Until.findObject(By.descStartsWith(mode.description)), KEY_TIMEOUT)
+        assertNotNull("the probe field in its ${mode.name} mode", field)
+        field.clear()
+        // At the field's right end: its label sits at the left while the field is empty and
+        // unfocused, and a tap on the label moves to the next mode instead of focusing.
+        val bounds = field.visibleBounds
+        device.click(bounds.right - SLIDE_INSET_PX * 4, bounds.centerY())
+        assertTrue("the keyboard over the probe field", device.wait(Until.hasObject(keyMatcher("q")), KEY_TIMEOUT))
         settle()
     }
 
-    /** What the probe field named [name] holds, exactly, read from its content description. */
-    private fun probeText(name: String): String {
-        val field = device.findObject(By.descStartsWith(name))
-        assertNotNull("the $name field", field)
-        return field.contentDescription.orEmpty().removePrefix(name)
+    /** What the probe field holds in [mode], exactly, read from its content description. */
+    private fun probeText(mode: ProbeMode): String {
+        val field = device.findObject(By.descStartsWith(mode.description))
+        assertNotNull("the probe field in its ${mode.name} mode", field)
+        return field.contentDescription.orEmpty().removePrefix(mode.description)
     }
 
     private fun keyCentre(name: String): Point {

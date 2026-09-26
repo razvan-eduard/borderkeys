@@ -139,8 +139,9 @@ that writes the word, a pause in a swipe that opens the ring and a lift on its t
 picks the top word, Control on the modifier row followed by A selecting the field, a mistyped
 word in a password field left as typed, and a slide up the space bar in a field of several
 lines that moves the caret a line — each asserting the field's final text. The password field
-and the field of several lines are the two extra fields debuggable builds show under "Try it
-here", each carrying its text in its content description so the suite can read it where the
+and the field of several lines are the "Try it here" field in two of its three modes: a tap on
+its label, which names the mode after a coloured bullet, moves to the next mode, and the field
+carries its mode and its text in its content description so the suite can read it where the
 accessibility tree would show a password masked.
 
 It runs in CI's `smoke` job on x86_64 emulators at API 30 and API 35, the oldest and the newest
