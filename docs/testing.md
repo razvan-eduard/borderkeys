@@ -315,6 +315,45 @@ The levels are not comparable to the gated table above — the same decoder read
 77.0% there. Both are QWERTY and both drop taps and out-of-pack words; `swipe-5` is simply a
 harder collection than the held-out test split. Only the movement within a column means anything.
 
+### Both tiers on other keyboards, with the lexicon — not gated
+
+The table above measures tier A alone, and the layout-generalisation table further down measures
+the neural encoder alone, without a lexicon or a beam. This one measures what a person gets: both
+shipped decoders, the shipped pack for the language actually being swiped, 500 gestures a layout
+from FUTO's `swipe-5` collection, built with `futo_layout_corpus.py` as above. The language is
+the collection's own: its AZERTY rows are French and its QWERTZ rows are English and German
+mixed, so each is measured against the pack that holds its words. A corpus filtered by the wrong
+pack keeps only the rows that happen to be words in both languages and reads 36%; that figure
+is a mistake, not a result.
+
+```
+tools/swipe_model/.venv/bin/python3 tools/swipe_model/futo_layout_corpus.py azerty \
+    --dataset azerty.jsonl --out-layout azerty.layout --out-corpus azerty.csv \
+    --dictionary dictionaries/fr_FR.tsv
+python3 tools/tcn_replay.py --binary native-tests/build/tcn_replay --layout azerty.layout \
+    --corpus azerty.csv --pack keyboard/build/generated/dictionaries/dict/fr_FR.bkd \
+    --weights keyboard/src/plus/assets/model.bkw
+```
+
+| layout | words | tier A top-1 / top-3 | tier B top-1 / top-3 |
+|---|---|---|---|
+| qwerty | English | 77.0% / 90.2% | 90.6% / 94.8% |
+| dvorak | English | 66.2% / 78.8% | 81.4% / 91.2% |
+| qwertz | English | 50.2% / 63.4% | 63.0% / 72.2% |
+| qwertz | German | 70.2% / 83.6% | 79.8% / 88.0% |
+| azerty | French | 77.4% / 85.6% | 80.8% / 88.6% |
+| german | German | 71.6% / 80.4% | 81.2% / 88.2% |
+| spanish | Spanish | 78.2% / 84.8% | 77.0% / 89.4% |
+
+The neural tier was trained on English QWERTY alone and reads the key positions at inference,
+so every other row is zero-shot for it. It still leads tier A by 10 to 15 points on Dvorak,
+QWERTZ and the German keyboard, by three on AZERTY, and ties it on the Spanish keyboard, whose
+rows are the ones with the most out-of-pack words dropped and the most taps. English on QWERTZ
+is the weakest pair for both tiers, and the least clean: the collection's QWERTZ rows are
+English and German mixed, and filtering them by the English pack keeps the English rows plus
+every German word that is an English word too, swiped by someone writing German. Not gated,
+because the corpora are built from a 312 MB download; the qwerty row is the gate above.
+
 ### Swipe latency and memory on a device — not gated
 
 Two numbers per swipe, printed by debuggable builds as `swipe: decode … ms, lift to text … ms`:
