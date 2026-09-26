@@ -168,6 +168,10 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   under an "Advanced settings" line, closed until you open it. A search box at the top of the
   home screen finds any screen, card or row by its title, in the language the app is shown in,
   and opens the screen it is on.
+- **A tile in the quick settings.** It is lit while BorderKeys is the keyboard in use and says
+  what is still to do while it is not; a tap opens the keyboard picker until it is, and the
+  settings once it is. The system binds the tile as it binds the keyboard itself, so the app
+  still asks for no permission.
 
 <p align="center">
   <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/2_home.jpg" alt="The settings home" width="30%">

@@ -166,6 +166,25 @@
                 android:resource="@xml/transfer_paths" />
         </provider>
 
+        <!--
+            The quick-settings tile. The system binds it through the permission named on the
+            service, the same shape as the input method's BIND_INPUT_METHOD; the attribute is
+            not a <uses-permission>.
+        -->
+        <service
+            android:name="com.borderkeys.settings.KeyboardTile"
+            android:exported="true"
+            android:icon="@drawable/bk_icon_keyboard"
+            android:label="@string/settings_activity_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="false" />
+        </service>
+
     </application>
 
 </manifest>
