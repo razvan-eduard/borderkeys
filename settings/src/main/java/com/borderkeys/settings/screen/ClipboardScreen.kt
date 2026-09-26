@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.ClipSearch
+import com.borderkeys.data.ClipboardExclusions
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.entity.ClipEntry
 import com.borderkeys.data.theme.KeyboardPreferences
@@ -138,6 +139,44 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
                 subtitle = strings[Keys.CLIPBOARD_DELETE_AFTER_USE_NOTE],
                 checked = preferences.clipboardDeleteAfterUse,
             ) { value -> update { it.copy(clipboardDeleteAfterUse = value) } }
+        }
+
+        SettingsSectionCard(strings[Keys.CLIPBOARD_EXCLUDED_TITLE]) {
+            Explanation(strings[Keys.CLIPBOARD_EXCLUDED_NOTE])
+            Explanation(strings.getString(Keys.CLIPBOARD_EXCLUDED_KNOWN, ClipboardExclusions.KNOWN.size))
+            for (packageName in preferences.clipboardExcludedPackages) {
+                SettingRow(
+                    title = packageName,
+                    trailing = {
+                        TextButton(onClick = {
+                            update { current ->
+                                current.copy(clipboardExcludedPackages = current.clipboardExcludedPackages - packageName)
+                            }
+                        }) { Text(strings[Keys.CLIPBOARD_EXCLUDED_REMOVE]) }
+                    },
+                )
+            }
+            var newPackage by rememberSaveable { mutableStateOf("") }
+            OutlinedTextField(
+                value = newPackage,
+                onValueChange = { newPackage = it },
+                label = { Text(strings[Keys.CLIPBOARD_EXCLUDED_PACKAGE]) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+            val addable = ClipboardExclusions.isPackageName(newPackage.trim()) &&
+                preferences.clipboardExcludedPackages.size < ClipboardExclusions.MAX_ADDED
+            TextButton(
+                enabled = addable,
+                onClick = {
+                    val added = newPackage.trim()
+                    update { current ->
+                        current.copy(clipboardExcludedPackages = current.clipboardExcludedPackages + added)
+                    }
+                    newPackage = ""
+                },
+                modifier = Modifier.padding(horizontal = 12.dp),
+            ) { Text(strings[Keys.CLIPBOARD_EXCLUDED_ADD]) }
         }
 
         SettingsSectionCard(strings[Keys.CLIPBOARD_RETENTION_TITLE]) {
