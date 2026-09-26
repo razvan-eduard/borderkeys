@@ -166,7 +166,9 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 </p>
 
 - **Panels that search by the word under the caret.** Open the emoji panel over "cake" and the
-  cakes come first; open the clipboard over "invoice" and the clips containing it come first, the
+  cakes come first, and over "pumpkin" the lantern, because each emoji is also found by the
+  keywords Unicode gives it in the languages switched on; open the clipboard over "invoice" and
+  the clips containing it come first, the
   header saying how many. A long press on a clip pins, edits or deletes it, and the Clipboard
   settings screen has a search box and an editor of its own.
 

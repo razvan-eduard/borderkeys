@@ -19,8 +19,22 @@ class EmojiSearchTest {
             "🐈‍⬛\tblack cat",
             "🎂\tbirthday cake",
             "❤️\tred heart",
+            "🎃\tjack-o-lantern",
+            "🥧\tpie",
             "no tab here",
             "🫠\t",
+        ),
+    )
+
+    private val keywords = EmojiSearch.parseKeywords(
+        sequenceOf(
+            "🎃\tcelebration|halloween|jack|jack-o-lantern|lantern|pumpkin",
+            "🥧\tfilling|pastry|pumpkin pie",
+            "🚕\tvehicle|Taxi Cab|yellow",
+            "🐱\tpet|face",
+            "no tab here",
+            "🍌\t",
+            "😀\t||",
         ),
     )
 
@@ -54,6 +68,32 @@ class EmojiSearchTest {
     @Test
     fun `the limit holds and malformed lines are skipped`() {
         assertEquals(2, EmojiSearch.matches("cat", index, 2).size)
-        assertEquals(8, index.size)
+        assertEquals(10, index.size)
+    }
+
+    @Test
+    fun `a keyword finds an emoji its name does not`() {
+        assertEquals(listOf("🎃", "🥧"), EmojiSearch.matches("pump", index, 10, keywords))
+        assertEquals(listOf("🎃"), EmojiSearch.matches("halloween", index, 10, keywords))
+    }
+
+    @Test
+    fun `a name match outranks a keyword match, and a keyword word-start outranks a name inside`() {
+        // "taxi" names 🚕 and is a keyword of nothing else; "face" names 🐱 by its second word
+        // and is a keyword of 🐱 too, so the name tier is where it lands.
+        assertEquals(listOf("🚕"), EmojiSearch.matches("taxi", index, 10, keywords))
+        assertEquals(listOf("😀", "🐱"), EmojiSearch.matches("face", index, 10, keywords))
+        // "lantern" is inside the name "jack-o-lantern" and a keyword of it: the keyword
+        // word-start tier ranks it above where the inside-the-name tier would.
+        assertEquals(listOf("🎃"), EmojiSearch.matches("lantern", index, 10, keywords))
+    }
+
+    @Test
+    fun `keywords are folded and split on the bar, and empty ones are dropped`() {
+        assertEquals(listOf("vehicle", "taxi cab", "yellow"), keywords["🚕"])
+        assertEquals(listOf("🚕"), EmojiSearch.matches("CAB", index, 10, keywords))
+        assertTrue("🍌" !in keywords)
+        assertTrue("😀" !in keywords)
+        assertEquals(4, keywords.size)
     }
 }
