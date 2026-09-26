@@ -137,7 +137,8 @@ ships.
 - **Keys that answer back.** The pressed key shows itself enlarged above your finger while it is
   held, the held key's alternates pop up in the same place, and the keypress vibration follows
   the phone's own setting or one of three strengths — its own feedback classes, so still without
-  a vibration permission. Long-press hints, the hold duration and what the enter key does are
+  a vibration permission — with a switch each for the keys, for picks on the strip and in the
+  panels, and for the swipe ring. Long-press hints, the hold duration and what the enter key does are
   settings too.
 
 <p align="center">
@@ -213,7 +214,8 @@ Built-in themes across several colour families, full manual control over every c
 corner radius, and a **custom theme library**: save what you built, import a theme someone
 shared, export and rename your own — kept separately from whichever single theme is active
 right now. Colours picked through the wheel are kept per field, the background can reach the
-whole width or stop at the keys, leave the navigation bar's strip bare or paint it, and the key
+whole width or stop at the keys, leave the navigation bar's strip bare or paint it, an opacity
+slider lets the app behind show through the whole keyboard, and the key
 outline follows every key-shaped control — the keys, the held-key popup, the panel chips — and
 frames the whole keyboard.
 

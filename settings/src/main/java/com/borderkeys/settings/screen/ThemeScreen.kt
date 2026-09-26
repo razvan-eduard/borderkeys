@@ -474,6 +474,11 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                     onCustomColoursChange = { update { t -> t.copy(customColours = t.customColours + (KeyboardTheme.KEY_GRADIENT_END to it)) } },
                 ) { update { t -> t.copy(backgroundGradientColor = it) } }
                 Explanation(strings[Keys.THEME_SECOND_COLOUR_NOTE])
+                ThemeSlider(
+                    strings[Keys.THEME_OPACITY], theme.opacity * 100f,
+                    KeyboardTheme.MIN_OPACITY * 100f..100f, strings[Keys.THEME_PERCENT], default = 100f,
+                ) { update { t -> t.copy(opacity = it / 100f) } }
+                Explanation(strings[Keys.THEME_OPACITY_NOTE])
                 AdvancedSection {
                     // "Background across the whole width" lives on the Size screen now, in the
                     // same card as the blur it gates -- see that screen's own comment.
