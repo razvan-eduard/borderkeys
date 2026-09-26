@@ -17,9 +17,11 @@ namespace borderkeys {
 // lookup is a binary search within one list, and the list itself can be walked, which is what
 // the next-word search does when nothing has been typed.
 //
-// Triples are open addressing with linear probing, capacity a power of two, load factor kept
-// below 0.7 by the builder. Word ids are stored offset by one, so that a zero key means "empty
-// slot" without needing a separate occupancy bitmap.
+// Triples hang off the pairs: for every pair, by its position in the successor index, the words
+// the corpus wrote after that pair, sorted by index, each with its own quantised conditional
+// log-probability. A triple lookup is the pair's binary search and then one more inside the
+// pair's own list. A triple whose pair the pack does not hold has nowhere to live, which is
+// also the one triple the engine never asks about.
 //
 // Values are quantised natural log-probabilities in one byte: q = round(-logProb * scale),
 // saturating at 255.
@@ -36,7 +38,7 @@ public:
     bool bind(const uint8_t* base, uint64_t mappedBytes, const BkdHeader& header);
 
     bool hasBigrams() const { return successorCount_ != 0; }
-    bool hasTrigrams() const { return trigramCapacity_ != 0; }
+    bool hasTrigrams() const { return trigramCount_ != 0; }
 
     // `previous`, `current` and the trigram's three words are word indices as returned by
     // PackedTrie, or kSentenceStartContext. Returns kNoEntry when the n-gram was not seen.
@@ -49,23 +51,34 @@ public:
      * the index does not hold, and bounded by the pack's own count whatever its offsets claim.
      */
     uint32_t successors(uint32_t previous, uint32_t* firstOut) const;
+
     uint32_t successorWord(uint32_t position) const {
         return (position < successorCount_) ? successorWords_[position] : 0u;
     }
+
     float successorLogProb(uint32_t position) const {
         return (position < successorCount_) ? dequantise(successorValues_[position]) : kNoEntry;
     }
 
-private:
-    // splitmix64's finaliser. Word indices are dense small integers, so the low bits of any
-    // cheap combination of them are heavily correlated; masking those directly would cluster
-    // every probe sequence into the same few slots.
-    static uint64_t mix(uint64_t value) {
-        value += 0x9E3779B97F4A7C15ull;
-        value = (value ^ (value >> 30)) * 0xBF58476D1CE4E5B9ull;
-        value = (value ^ (value >> 27)) * 0x94D049BB133111EBull;
-        return value ^ (value >> 31);
+    /**
+     * The continuations of the pair at successor position `pair`: how many there are, with
+     * `firstOut` set to the position of the first. Positions index [continuationWord] and
+     * [continuationLogProb]. Zero for a position outside the pairs, and bounded by the pack's
+     * own count whatever its offsets claim.
+     */
+    uint32_t continuations(uint32_t pair, uint32_t* firstOut) const;
+
+    uint32_t continuationWord(uint32_t position) const {
+        return (position < trigramCount_) ? trigramWords_[position] : 0u;
     }
+
+    float continuationLogProb(uint32_t position) const {
+        return (position < trigramCount_) ? dequantise(trigramValues_[position]) : kNoEntry;
+    }
+
+private:
+    /** Whether the pair `previous` -> `current` is in the index, and where. */
+    bool pairPosition(uint32_t previous, uint32_t current, uint32_t* positionOut) const;
 
     float dequantise(uint8_t quantised) const {
         return -static_cast<float>(quantised) / logProbScale_;
@@ -77,10 +90,10 @@ private:
     uint32_t successorCount_ = 0;
     uint32_t wordCount_ = 0;
 
-    const uint32_t* trigramKeys_ = nullptr;  // three consecutive u32 per slot
+    const uint32_t* trigramOffsets_ = nullptr;  // successorCount + 1 entries
+    const uint32_t* trigramWords_ = nullptr;
     const uint8_t* trigramValues_ = nullptr;
-    uint32_t trigramCapacity_ = 0;
-    uint32_t trigramMask_ = 0;
+    uint32_t trigramCount_ = 0;
 
     float logProbScale_ = 1.0f;
 };

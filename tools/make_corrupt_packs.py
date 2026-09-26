@@ -31,7 +31,7 @@ AT_TAG = 32
 AT_WORD_COUNT = 48
 AT_NODE_COUNT = 52
 AT_ALPHABET_COUNT = 56
-AT_TRIGRAM_CAPACITY = 64
+AT_TRIGRAM_COUNT = 64
 AT_LOG_PROB_SCALE = 68
 
 
@@ -88,7 +88,7 @@ def cases(good: bytes) -> dict[str, bytes]:
             lambda b: put(b, AT_WORD_COUNT, "<I", build_dict.MAX_WORDS + 1))
     damaged("13_node_count_over_cap.bkd",
             lambda b: put(b, AT_NODE_COUNT, "<I", build_dict.MAX_NODES + 1))
-    damaged("14_trigram_capacity_odd.bkd", lambda b: put(b, AT_TRIGRAM_CAPACITY, "<I", 12345))
+    damaged("14_trigram_count_mismatch.bkd", lambda b: put(b, AT_TRIGRAM_COUNT, "<I", 12345))
     damaged("15_empty_alphabet.bkd", lambda b: put(b, AT_ALPHABET_COUNT, "<I", 0))
     damaged("16_zero_logprob_scale.bkd", lambda b: put(b, AT_LOG_PROB_SCALE, "<I", 0))
 

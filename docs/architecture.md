@@ -629,11 +629,13 @@ corpus ──make_pack.py──▶ dictionaries/<tag>.tsv  ──build_dict.py�
 flag. The corpora themselves are not in the repository, so tools that refine a built list edit
 the `.tsv` **in place** and `build_dict.py` recompiles.
 
-A pack (format version 5, `bkd_format.hpp`) holds the double-array trie over folded keys, one
+A pack (format version 6, `bkd_format.hpp`) holds the double-array trie over folded keys, one
 row per spelling, the pairs as a **successor index** -- for every word and for the sentence
 start, the words that followed it, sorted by index, each with its quantised conditional
-log-probability, five bytes a pair -- and the triples as an open-addressed hash table. A pair
-lookup is a binary search in one list; the next-word search walks the list.
+log-probability, five bytes a pair -- and the triples as a **continuation index** hung off the
+pairs the same way: for every pair, by its position in the successor index, the words that
+followed it, five bytes a triple. A pair lookup is a binary search in one list, a triple lookup
+is that search and one more inside the pair's own list; the next-word search walks the list.
 
 ### The tools
 

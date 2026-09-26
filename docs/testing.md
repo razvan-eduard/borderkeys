@@ -210,7 +210,7 @@ not write, and a language pack can come from outside.
 
 `pack_corpus_test` is rebuilt with `-fsanitize=address,undefined` and run over the damaged-pack
 corpus — truncated headers, wrong magic, sizes that lie, section offsets past the end of the file,
-a capacity that is not a power of two, an unterminated language tag. Eighteen named cases.
+a triple count the sections cannot hold, an unterminated language tag. Eighteen named cases.
 
 The corpus repairs each file's **checksum after mutating it**, so the mutation actually reaches
 the section-bounds and traversal checks rather than being absorbed by the CRC. A crash here is a

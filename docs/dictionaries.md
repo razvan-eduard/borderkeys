@@ -118,11 +118,11 @@ taking it off an overlay changes nothing.
 
 ## Size
 
-`--max-words` defaults to 120,000 and `--min-count` to 3. The six bundled packs are 12.7 to
-14.6 MB each, the trie and its text a few megabytes of that and the pairs and triples the rest:
-pairs as a successor index of five bytes per pair, triples as a hash table. Larger than that,
-built from a bigger or less aggressively cut corpus, belongs on the device as an imported pack
-rather than bundled into every install of the application.
+`--max-words` defaults to 120,000 and `--min-count` to 3. The six bundled packs are 8.1 to 10.2 MB
+each, the trie and its text a few megabytes of that and the pairs and triples the rest, five
+bytes apiece in the successor index and the continuation index. Larger than that, built from a
+bigger or less aggressively cut corpus, belongs on the device as an imported pack rather than
+bundled into every install of the application.
 
 ## Names
 
