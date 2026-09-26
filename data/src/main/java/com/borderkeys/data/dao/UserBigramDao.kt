@@ -6,6 +6,7 @@ package com.borderkeys.data.dao
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Transaction
+import kotlinx.coroutines.flow.Flow
 import com.borderkeys.data.entity.UserBigram
 
 @Dao
@@ -65,8 +66,19 @@ interface UserBigramDao {
     @Query("DELETE FROM user_bigrams WHERE previousWord = :word OR word = :word")
     suspend fun deleteInvolving(word: String)
 
+    /** Forgets one pair, and nothing else. */
+    @Query("DELETE FROM user_bigrams WHERE previousWord = :previousWord AND word = :word")
+    suspend fun delete(previousWord: String, word: String)
+
     @Query("DELETE FROM user_bigrams")
     suspend fun deleteAll()
+
+    /** The pairs the settings screen lists, most used first, kept live by Room. */
+    @Query("SELECT * FROM user_bigrams ORDER BY count DESC, lastUsedAt DESC LIMIT :limit")
+    fun observeTop(limit: Int): Flow<List<UserBigram>>
+
+    @Query("SELECT COUNT(*) FROM user_bigrams")
+    fun observeCount(): Flow<Int>
 
     @Query("SELECT COUNT(*) FROM user_bigrams")
     suspend fun count(): Int

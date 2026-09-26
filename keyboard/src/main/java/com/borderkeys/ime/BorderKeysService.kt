@@ -679,6 +679,28 @@ class BorderKeysService :
         SwipeModelLoad.set(SwipeModelLoad.State.Off)
         observeSettings()
         observeLanguagePacks()
+        observeDictionaryEdits()
+    }
+
+    /**
+     * Reloads the personal model after an edit made by hand on the Personal dictionary screen
+     * -- a word or a phrase forgotten, a word blocked or unblocked, a file imported -- so what
+     * the strip offers agrees with what the screen shows without a restart. Under the same lock
+     * as the start-up load, so an edit during that load queues behind it.
+     */
+    private fun observeDictionaryEdits() {
+        scope.launch {
+            DataGraph.dictionary.edits.collect {
+                withContext(Dispatchers.IO) {
+                    dictionaryLoad.withLock {
+                        val dictionary = DataGraph.dictionary
+                        refreshBlockedWords(dictionary)
+                        loadPersonalModel(dictionary)
+                    }
+                }
+                requestSuggestions()
+            }
+        }
     }
 
     /**

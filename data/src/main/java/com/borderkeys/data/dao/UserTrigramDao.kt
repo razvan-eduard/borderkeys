@@ -6,6 +6,7 @@ package com.borderkeys.data.dao
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Transaction
+import kotlinx.coroutines.flow.Flow
 import com.borderkeys.data.entity.UserTrigram
 
 @Dao
@@ -56,8 +57,34 @@ interface UserTrigramDao {
     )
     suspend fun deleteInvolving(word: String)
 
+    /** Forgets one triple, and nothing else. */
+    @Query(
+        """
+        DELETE FROM user_trigrams
+        WHERE previousWord2 = :previousWord2 AND previousWord1 = :previousWord1 AND word = :word
+        """,
+    )
+    suspend fun delete(previousWord2: String, previousWord1: String, word: String)
+
+    /** Forgets every triple that runs through the pair [first] [second], on either side. */
+    @Query(
+        """
+        DELETE FROM user_trigrams
+        WHERE (previousWord2 = :first AND previousWord1 = :second)
+           OR (previousWord1 = :first AND word = :second)
+        """,
+    )
+    suspend fun deleteContainingPair(first: String, second: String)
+
     @Query("DELETE FROM user_trigrams")
     suspend fun deleteAll()
+
+    /** The triples the settings screen lists, most used first, kept live by Room. */
+    @Query("SELECT * FROM user_trigrams ORDER BY count DESC, lastUsedAt DESC LIMIT :limit")
+    fun observeTop(limit: Int): Flow<List<UserTrigram>>
+
+    @Query("SELECT COUNT(*) FROM user_trigrams")
+    fun observeCount(): Flow<Int>
 
     @Query("SELECT COUNT(*) FROM user_trigrams")
     suspend fun count(): Int

@@ -15,7 +15,10 @@ import com.borderkeys.data.entity.BlockedWord
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserWord
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 
 /**
  * The personal dictionary: what the keyboard has learned, and what it has been told to forget.
@@ -29,6 +32,31 @@ class DictionaryRepository internal constructor(
 ) {
     val words: Flow<List<UserWord>> = userWords.observeAll()
     val blocked: Flow<List<BlockedWord>> = blockedWords.observeAll()
+
+    /** The pairs and triples the settings screen lists, most used first. */
+    fun topPairsLive(limit: Int = MAX_PHRASES_LISTED): Flow<List<UserBigram>> =
+        userBigrams.observeTop(limit)
+
+    fun topTriplesLive(limit: Int = MAX_PHRASES_LISTED): Flow<List<UserTrigram>> =
+        userTrigrams.observeTop(limit)
+
+    val pairCount: Flow<Int> = userBigrams.observeCount()
+    val tripleCount: Flow<Int> = userTrigrams.observeCount()
+
+    /**
+     * Fires after an edit made by hand -- a word or a phrase forgotten, a word blocked or
+     * unblocked, everything forgotten, a file imported -- so the keyboard can reload what it
+     * holds in memory. The learning flush is not an edit and does not fire it.
+     */
+    val edits: SharedFlow<Unit> get() = editsFlow
+    private val editsFlow = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+
+    private fun edited() {
+        editsFlow.tryEmit(Unit)
+    }
 
     fun search(query: String): Flow<List<UserWord>> = userWords.observeMatching(query)
 
@@ -129,16 +157,37 @@ class DictionaryRepository internal constructor(
      */
     suspend fun findIgnoreCase(word: String): UserWord? = userWords.findIgnoreCase(word)
 
-    suspend fun forget(word: String) = database.withTransaction {
-        userWords.delete(word)
-        userBigrams.deleteInvolving(word)
-        userTrigrams.deleteInvolving(word)
+    suspend fun forget(word: String) {
+        database.withTransaction {
+            userWords.delete(word)
+            userBigrams.deleteInvolving(word)
+            userTrigrams.deleteInvolving(word)
+        }
+        edited()
     }
 
-    suspend fun forgetEverything() = database.withTransaction {
-        userWords.deleteAll()
-        userBigrams.deleteAll()
-        userTrigrams.deleteAll()
+    /** Forgets one pair and every triple that runs through it. The words stay. */
+    suspend fun forgetPair(previousWord: String, word: String) {
+        database.withTransaction {
+            userBigrams.delete(previousWord, word)
+            userTrigrams.deleteContainingPair(previousWord, word)
+        }
+        edited()
+    }
+
+    /** Forgets one triple. Its pairs and words stay. */
+    suspend fun forgetTriple(previousWord2: String, previousWord1: String, word: String) {
+        userTrigrams.delete(previousWord2, previousWord1, word)
+        edited()
+    }
+
+    suspend fun forgetEverything() {
+        database.withTransaction {
+            userWords.deleteAll()
+            userBigrams.deleteAll()
+            userTrigrams.deleteAll()
+        }
+        edited()
     }
 
     /**
@@ -148,14 +197,20 @@ class DictionaryRepository internal constructor(
      * deleting without blocking means the word comes back from the language pack the next time
      * it is typed, which reads as the setting not having worked.
      */
-    suspend fun block(word: String) = database.withTransaction {
-        blockedWords.insert(BlockedWord(word))
-        userWords.delete(word)
-        userBigrams.deleteInvolving(word)
-        userTrigrams.deleteInvolving(word)
+    suspend fun block(word: String) {
+        database.withTransaction {
+            blockedWords.insert(BlockedWord(word))
+            userWords.delete(word)
+            userBigrams.deleteInvolving(word)
+            userTrigrams.deleteInvolving(word)
+        }
+        edited()
     }
 
-    suspend fun unblock(word: String) = blockedWords.delete(word)
+    suspend fun unblock(word: String) {
+        blockedWords.delete(word)
+        edited()
+    }
 
     /**
      * The personal dictionary as CSV.
@@ -180,6 +235,7 @@ class DictionaryRepository internal constructor(
     suspend fun importCsv(csv: String, now: Long = System.currentTimeMillis()): Int {
         val updates = DictionaryCsv.decode(csv, now)
         applyLearned(updates)
+        edited()
         return updates.size
     }
 
@@ -194,5 +250,8 @@ class DictionaryRepository internal constructor(
 
         /** Matches UserModel::kMaxTrigrams. */
         const val MAX_TRIGRAMS_IN_MEMORY = 2_048
+
+        /** How many pairs, and how many triples, the settings screen lists. */
+        const val MAX_PHRASES_LISTED = 100
     }
 }
