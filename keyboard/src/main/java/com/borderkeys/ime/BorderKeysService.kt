@@ -135,6 +135,11 @@ class BorderKeysService :
      *  [dictionaryAllowed]), on top of everything [privateMode] already switches off. */
     private var passwordField = false
 
+    /** Whether the current field holds an e-mail or web address, where this keyboard adds no
+     *  space of its own: none after a mark, none after a picked word, none in front of a swiped
+     *  one, and no full stop from two spaces. See [AddressField]. */
+    private var addressField = false
+
     /**
      * Whether words from the dictionaries may be offered in this field, and whether a gesture
      * may compose one into it. **The single gate for the suggestion strip, for autocorrect, for
@@ -1226,6 +1231,7 @@ class BorderKeysService :
         // which is the point: it is a security requirement, not a preference.
         privateMode = PrivateMode.isPrivate(info)
         passwordField = info != null && PrivateMode.isPasswordField(info.inputType)
+        addressField = info != null && AddressField.isAddress(info.inputType)
         learning.enabled = preferences.learningEnabled && !privateMode
         // The other half of not learning here: nothing already learned is offered either. A
         // password field never reaches the engine at all (see requestSuggestions), but a field
@@ -2222,6 +2228,10 @@ class BorderKeysService :
      */
     private fun spaceBeforeSwipedWord(connection: InputConnection) {
         swipeAutoSpaceInserted = false
+        // An address has no space in it anywhere.
+        if (addressField) {
+            return
+        }
         val before = connection.getTextBeforeCursor(1, 0)
         if (before.isNullOrEmpty()) {
             return
@@ -2682,7 +2692,7 @@ class BorderKeysService :
         // Two spaces in quick succession end the sentence instead. Only after a word
         // character, so it never fires on an empty line or after punctuation that already
         // ended one, and only inside the window -- two spaces a minute apart are two spaces.
-        if (shifted == ' '.code && typed.isEmpty() && preferences.doubleSpacePeriod &&
+        if (shifted == ' '.code && typed.isEmpty() && preferences.doubleSpacePeriod && !addressField &&
             System.currentTimeMillis() - lastSpaceAt < DOUBLE_SPACE_MILLIS &&
             endsWithWordCharacterBeforeSpace(connection)
         ) {
@@ -3678,7 +3688,8 @@ class BorderKeysService :
         // not a separator that is already there, and a word picked before one still needs its
         // own space or the next letter runs into it.
         val nextChar = after?.getOrNull(tail)
-        val space = if (!preferences.spaceAfterSuggestion || nextChar == ' ') "" else " "
+        // Never in an address field: an e-mail or a URL has no space in it anywhere.
+        val space = if (!preferences.spaceAfterSuggestion || addressField || nextChar == ' ') "" else " "
         ownEditPending = true
         connection.commitText(word + space, 1)
         connection.endBatchEdit()
@@ -4227,6 +4238,7 @@ class BorderKeysService :
         val connection = currentInputConnection
         val follows = PunctuationSpace.follows(
             enabled = preferences.spaceAfterPunctuation,
+            addressField = addressField,
             insideNumbers = preferences.spaceInsideNumbers,
             tightPunctuation = isTightPunctuation(code),
             before = { connection?.getTextBeforeCursor(1, 0)?.firstOrNull() },

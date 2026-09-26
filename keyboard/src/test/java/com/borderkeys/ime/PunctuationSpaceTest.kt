@@ -15,9 +15,11 @@ class PunctuationSpaceTest {
         after: Char? = null,
         enabled: Boolean = true,
         insideNumbers: Boolean = false,
+        addressField: Boolean = false,
     ) =
         PunctuationSpace.follows(
             enabled = enabled,
+            addressField = addressField,
             insideNumbers = insideNumbers,
             tightPunctuation = mark in ".,!?;:",
             before = { before },
@@ -30,6 +32,14 @@ class PunctuationSpaceTest {
         assertFalse("12,55 is how Romanian writes a decimal", follows('2', ','))
         assertFalse("10:30 is a time", follows('0', ':'))
         assertFalse("1.500 is a thousands separator", follows('1', '.'))
+    }
+
+    @Test
+    fun `a mark in an address field never takes a space`() {
+        assertFalse("john.doe must not become john. doe", follows('n', '.', addressField = true))
+        assertFalse("example.org?q is one address", follows('g', '?', addressField = true))
+        assertFalse(follows('a', ',', after = null, addressField = true))
+        assertFalse("the setting does not override the field", follows('e', '.', insideNumbers = true, addressField = true))
     }
 
     @Test
