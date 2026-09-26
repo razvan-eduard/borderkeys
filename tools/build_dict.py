@@ -164,6 +164,50 @@ def _latin_extended_a_upper(code_point: int) -> bool:
     return (even_capital and code_point % 2 == 0) or (odd_capital and code_point % 2 == 1)
 
 
+_GREEK_LOWER = {
+    0x386: 0x3AC, 0x388: 0x3AD, 0x389: 0x3AE, 0x38A: 0x3AF, 0x38C: 0x3CC, 0x38E: 0x3CD,
+    0x38F: 0x3CE, 0x3AA: 0x3CA, 0x3AB: 0x3CB,
+}
+
+_GREEK_FOLD = {
+    0x3AC: 0x3B1, 0x3AD: 0x3B5, 0x3AE: 0x3B7, 0x390: 0x3B9, 0x3AF: 0x3B9, 0x3CA: 0x3B9,
+    0x3CC: 0x3BF, 0x3B0: 0x3C5, 0x3CB: 0x3C5, 0x3CD: 0x3C5, 0x3CE: 0x3C9, 0x3C2: 0x3C3,
+}
+
+
+def _lower_greek(code_point: int) -> int:
+    """Case only. Mirrors lowerGreek() in proximity.cpp."""
+    if code_point in _GREEK_LOWER:
+        return _GREEK_LOWER[code_point]
+    if 0x391 <= code_point <= 0x3A9 and code_point != 0x3A2:
+        return code_point + 0x20
+    return code_point
+
+
+def _lower_cyrillic(code_point: int) -> int:
+    """Case only. Mirrors lowerCyrillic() in proximity.cpp."""
+    if 0x400 <= code_point <= 0x40F:
+        return code_point + 0x50
+    if 0x410 <= code_point <= 0x42F:
+        return code_point + 0x20
+    if code_point == 0x4C0:
+        return 0x4CF
+    if 0x4C1 <= code_point <= 0x4CE:
+        return code_point + 1 if code_point % 2 == 1 else code_point
+    if 0x460 <= code_point <= 0x481 or 0x48A <= code_point <= 0x4BF or 0x4D0 <= code_point <= 0x4FF:
+        return code_point + 1 if code_point % 2 == 0 else code_point
+    return code_point
+
+
+def _lower_armenian_georgian(code_point: int) -> int:
+    """Case only. Mirrors lowerArmenianGeorgian() in proximity.cpp."""
+    if 0x531 <= code_point <= 0x556:
+        return code_point + 0x30
+    if 0x1C90 <= code_point <= 0x1CBA or 0x1CBD <= code_point <= 0x1CBF:
+        return code_point - 0xBC0
+    return code_point
+
+
 def fold_code_point(code_point: int) -> int:
     """Lowercase and strip the diacritic. Mirrors foldCodePoint() in proximity.cpp."""
     if code_point < 128:
@@ -191,7 +235,20 @@ def fold_code_point(code_point: int) -> int:
     if code_point in (0x21A, 0x21B):
         return ord("t")
 
-    return code_point
+    # Greek: the tonos and the dialytika go, and the final sigma folds onto the ordinary one.
+    if 0x370 <= code_point <= 0x3FF:
+        lower = _lower_greek(code_point)
+        return _GREEK_FOLD.get(lower, lower)
+    # Cyrillic: the two letters written with a mark over е and и by some and without by most
+    # fold onto the plain letter; the short и is a letter of its own and stays.
+    if 0x400 <= code_point <= 0x4FF:
+        lower = _lower_cyrillic(code_point)
+        if lower in (0x450, 0x451):
+            return 0x435
+        if lower == 0x45D:
+            return 0x438
+        return lower
+    return _lower_armenian_georgian(code_point)
 
 
 def fold_word(word: str) -> tuple[int, ...]:

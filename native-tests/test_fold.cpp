@@ -75,6 +75,22 @@ void runFoldTests() {
         // The pairs the single-parity fold got wrong: 0x139..0x148 and 0x179..0x17E put the
         // capital on the odd code point, so "ł" used to fold to "Ń" and "Ź" to itself.
         check(foldCodePoint(0x141u) == 'l' && foldCodePoint(0x142u) == 'l', "Ł and ł fold to l");
+        // Greek: case, tonos, dialytika and the final sigma.
+        check(foldCodePoint(0x391u) == 0x3B1u && foldCodePoint(0x386u) == 0x3B1u && foldCodePoint(0x3ACu) == 0x3B1u,
+              "Α, Ά and ά fold to α");
+        check(foldCodePoint(0x3C2u) == 0x3C3u && foldCodePoint(0x3A3u) == 0x3C3u, "ς and Σ fold to σ");
+        check(foldCodePoint(0x390u) == 0x3B9u && foldCodePoint(0x3ABu) == 0x3C5u, "ΐ folds to ι and Ϋ to υ");
+        check(lowerCodePoint(0x386u) == 0x3ACu, "Ά lowers to ά and keeps its tonos");
+        // Cyrillic: the three case rules, the marked е and и, and the short и that stays.
+        check(foldCodePoint(0x410u) == 0x430u && foldCodePoint(0x401u) == 0x435u && foldCodePoint(0x451u) == 0x435u,
+              "А folds to а, Ё and ё to е");
+        check(foldCodePoint(0x419u) == 0x439u && foldCodePoint(0x439u) == 0x439u, "Й and й stay й");
+        check(foldCodePoint(0x4C0u) == 0x4CFu && foldCodePoint(0x4C1u) == 0x4C2u && foldCodePoint(0x4D0u) == 0x4D1u,
+              "the odd and even capital pairs past 0x460 fold to their lowercase");
+        check(foldCodePoint(0x407u) == 0x457u && foldCodePoint(0x490u) == 0x491u, "Ї and Ґ fold to ї and ґ");
+        // Armenian and Georgian: case alone.
+        check(foldCodePoint(0x531u) == 0x561u && foldCodePoint(0x556u) == 0x586u, "Ա and Ֆ fold to their lowercase");
+        check(foldCodePoint(0x1C90u) == 0x10D0u && foldCodePoint(0x10D0u) == 0x10D0u, "Ა folds to ა, which stays");
         check(foldCodePoint(0x139u) == 'l' && foldCodePoint(0x13Au) == 'l', "Ĺ and ĺ fold to l");
         check(foldCodePoint(0x143u) == 'n' && foldCodePoint(0x144u) == 'n', "Ń and ń fold to n");
         check(foldCodePoint(0x147u) == 'n' && foldCodePoint(0x148u) == 'n', "Ň and ň fold to n");
