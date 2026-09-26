@@ -182,7 +182,8 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
   keywords Unicode gives it in the languages switched on; open the clipboard over "invoice" and
   the clips containing it come first, the
   header saying how many. A long press on a clip pins, edits or deletes it, and the Clipboard
-  settings screen has a search box and an editor of its own.
+  settings screen has a search box and an editor of its own; the box takes plain text, wildcards
+  or a regular expression.
 
 <p align="center">
   <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/18_emoji_search.jpg" alt="The emoji panel opened over the word cake: the cakes come first" width="30%">
