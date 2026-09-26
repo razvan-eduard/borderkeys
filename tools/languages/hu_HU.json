@@ -1,0 +1,31 @@
+{
+  "tag": "hu-HU",
+  "name": "Hungarian",
+  "wikidata": "hu",
+  "corpora": [
+    "hun_wikipedia_2021_1M",
+    "hun_news_2024_1M",
+    "hun_newscrawl_2017_1M"
+  ],
+  "hunspell": [
+    "hu_HU/hu_HU"
+  ],
+  "treebank": {
+    "repository": "UD_Hungarian-Szeged",
+    "files": [
+      "hu_szeged-ud-train.conllu",
+      "hu_szeged-ud-dev.conllu",
+      "hu_szeged-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "a": "á",
+    "e": "é",
+    "i": "í",
+    "o": "óöő",
+    "u": "úüű"
+  },
+  "single_letter_words": "aső",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

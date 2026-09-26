@@ -1,0 +1,32 @@
+{
+  "tag": "pt-PT",
+  "name": "Portuguese",
+  "wikidata": "pt",
+  "corpora": [
+    "por_wikipedia_2021_1M",
+    "por_news_2024_1M",
+    "por_newscrawl_2020_1M"
+  ],
+  "hunspell": [
+    "pt_PT/pt_PT"
+  ],
+  "treebank": {
+    "repository": "UD_Portuguese-Bosque",
+    "files": [
+      "pt_bosque-ud-train.conllu",
+      "pt_bosque-ud-dev.conllu",
+      "pt_bosque-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "a": "áàâãä",
+    "e": "éêè",
+    "i": "í",
+    "o": "óôõ",
+    "u": "úü",
+    "c": "ç"
+  },
+  "single_letter_words": "aeoéà",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

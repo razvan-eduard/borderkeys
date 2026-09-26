@@ -102,6 +102,19 @@ EXPECTED_BEYOND_ASCII = {
 }
 
 
+def load_manifests() -> None:
+    """The downloadable languages, described in tools/languages/<tag>.json, join the tables."""
+    for manifest in sorted((ROOT / "tools" / "languages").glob("*.json")):
+        language = json.loads(manifest.read_text(encoding="utf-8"))
+        tag = language["tag"].replace("-", "_")
+        SINGLE_LETTER_WORDS.setdefault(tag, language.get("single_letter_words", ""))
+        OVERLAY.setdefault(tag, language["tag"])
+        EXPECTED_BEYOND_ASCII.setdefault(tag, list(language.get("expected_beyond_ascii", [])))
+
+
+load_manifests()
+
+
 def selftest():
     """Every declared language still admits exactly the letters it was measured against."""
     build_dict = load_build_dict()

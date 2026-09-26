@@ -1,0 +1,34 @@
+{
+  "tag": "pl-PL",
+  "name": "Polish",
+  "wikidata": "pl",
+  "corpora": [
+    "pol_wikipedia_2021_1M",
+    "pol_news_2024_1M",
+    "pol_newscrawl_2021_1M"
+  ],
+  "hunspell": [
+    "pl_PL/pl_PL"
+  ],
+  "treebank": {
+    "repository": "UD_Polish-PDB",
+    "files": [
+      "pl_pdb-ud-train.conllu",
+      "pl_pdb-ud-dev.conllu",
+      "pl_pdb-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "a": "ą",
+    "c": "ć",
+    "e": "ę",
+    "l": "ł",
+    "n": "ń",
+    "o": "ó",
+    "s": "ś",
+    "z": "źż"
+  },
+  "single_letter_words": "aiouwz",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

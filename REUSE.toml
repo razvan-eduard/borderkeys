@@ -134,6 +134,14 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# The per-language manifests tools/new_language.py builds the downloadable packs from: plain
+# data, authored here; JSON has no comment syntax to carry a header of its own.
+[[annotations]]
+path = "tools/languages/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 BorderKeys contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # The training runs behind the shipped swipe checkpoint, kept as the record of how it was
 # reached -- loss per epoch and the restart markers tools/swipe_model/README.md explains. A log
 # has nowhere to put a comment header without becoming a different file than the one the run

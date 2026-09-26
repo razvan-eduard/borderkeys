@@ -347,6 +347,8 @@ produced by this project's own tooling; none is a third-party dataset.
 | `native-tests/data/qwerty_1080.layout` | The QWERTY geometry at 1080 px, written out for the replay harness | GPL-3.0-or-later |
 | `data/schemas/com.borderkeys.data.BorderKeysDatabase/1.json` through `6.json` | Emitted by Room's annotation processor from our own entities, one per schema version | GPL-3.0-or-later |
 | `docs/gesture-accuracy.json` | The accuracy figure CI compares against | GPL-3.0-or-later |
+| `dictionaries/extra/*.tsv`, `*.ngrams`, `*.pos`, `*.names-ordinary` | The word lists behind the downloadable packs on the `packs` release, counted by `tools/new_language.py` from the Wortschatz Leipzig corpora the manifest in `tools/languages/<tag>.json` names, with names from Wikidata and grammar from a Universal Dependencies treebank, exactly as the bundled six in 2.1. A Hunspell dictionary is read as a witness during cleaning and never copied: LibreOffice's for most languages, Göran Andersson's LGPL-3.0 Swedish list for Swedish. | CC BY 4.0 (the counts), GPL-3.0-or-later (the format and the tools) |
+| `tools/languages/*.json` | The per-language manifests the pipeline reads | GPL-3.0-or-later |
 
 ---
 

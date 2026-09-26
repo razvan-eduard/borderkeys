@@ -1,0 +1,33 @@
+{
+  "tag": "sv-SE",
+  "name": "Swedish",
+  "wikidata": "sv",
+  "corpora": [
+    "swe_wikipedia_2021_1M",
+    "swe_news_2023_1M",
+    "swe_newscrawl_2018_1M"
+  ],
+  "hunspell": [
+    {
+      "base": "sv_SE",
+      "dic": "https://raw.githubusercontent.com/wooorm/dictionaries/main/dictionaries/sv/index.dic",
+      "aff": "https://raw.githubusercontent.com/wooorm/dictionaries/main/dictionaries/sv/index.aff"
+    }
+  ],
+  "treebank": {
+    "repository": "UD_Swedish-Talbanken",
+    "files": [
+      "sv_talbanken-ud-train.conllu",
+      "sv_talbanken-ud-dev.conllu",
+      "sv_talbanken-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "a": "åä",
+    "o": "ö",
+    "e": "é"
+  },
+  "single_letter_words": "iå",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

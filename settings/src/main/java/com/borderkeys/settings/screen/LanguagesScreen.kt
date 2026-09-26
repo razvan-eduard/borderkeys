@@ -3,6 +3,7 @@
 
 package com.borderkeys.settings.screen
 
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -32,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.DataGraph
@@ -168,6 +170,21 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
                     )
                 }
             }
+        }
+        // The packs the project publishes beyond the bundled six: fetched in a browser, never
+        // by this app, and brought in through the picker below like any other file.
+        SettingsSectionCard(strings[Keys.LANGUAGES_MORE_TITLE]) {
+            Explanation(strings[Keys.LANGUAGES_MORE_NOTE])
+            TextButton(
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, PACKS_URL.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                },
+                modifier = Modifier.padding(horizontal = 12.dp),
+            ) { Text(strings[Keys.LANGUAGES_MORE_OPEN]) }
         }
         SettingsSectionCard(strings[Keys.LANGUAGES_IMPORT_YOUR_OWN]) {
             Button(
@@ -538,3 +555,6 @@ private fun LanguageLock(preferences: KeyboardPreferences, update: (Int) -> Unit
         },
     )
 }
+
+/** The rolling release that carries the packs the project publishes beyond the bundled six. */
+private const val PACKS_URL = "https://github.com/razvan-eduard/borderkeys/releases/tag/packs"

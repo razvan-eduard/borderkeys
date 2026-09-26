@@ -38,6 +38,7 @@ The whole walk-through, screen by screen, is [`docs/guide.md`](docs/guide.md). I
   correction when the sentence proves the language was misread; autocorrect off by default and
   bounded when on; a names dictionary built from Wikidata; swipe typing that is geometric in
   `core` and neural in `plus`, with an optional ring of alternatives around a paused swipe;
+  six languages inside the app and more as packs to download from the releases page;
   AZERTY, Dvorak, QWERTZ and more, a number row, a number pad and a modifier row; a personal
   dictionary you can read and edit, word by word and phrase by phrase, with "Why?" on any
   suggestion; text shortcuts; terminals typed into as terminals.

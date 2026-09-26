@@ -37,6 +37,8 @@ attestations and the full commit lists are on the
   how to verify them.
 - An opacity slider on the Theme screen, and a vibration switch each for the keys, for picks
   on the strip and in the panels, and for the swipe ring.
+- A "More languages" card on the Languages screen, pointing at the packs the project publishes
+  beyond the six inside the app, and the pipeline that builds them from a manifest.
 
 ## v0.8.0 — 2026-09-25
 
