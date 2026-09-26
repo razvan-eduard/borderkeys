@@ -1,0 +1,17 @@
+{
+  "tag": "nl-NL",
+  "name": "Dutch",
+  "wikidata": "nl",
+  "corpora": ["nld_wikipedia_2021_1M", "nld_news_2024_1M", "nld_newscrawl_2019_1M"],
+  "hunspell": ["nl_NL/nl_NL"],
+  "treebank": {
+    "repository": "UD_Dutch-Alpino",
+    "files": ["nl_alpino-ud-train.conllu", "nl_alpino-ud-dev.conllu", "nl_alpino-ud-test.conllu"]
+  },
+  "overlay": {
+    "a": "áàâä", "e": "éèêë", "i": "íìîï", "o": "óòôö", "u": "úùûü", "c": "ç", "n": "ñ"
+  },
+  "single_letter_words": "u",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

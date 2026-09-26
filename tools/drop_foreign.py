@@ -68,6 +68,10 @@ from pathlib import Path
 
 # The six that ship. Each is both a target to clean and a witness against the others.
 BUNDLED = ("en_US", "ro_RO", "de_DE", "es_ES", "fr_FR", "it_IT")
+BUNDLED += tuple(
+    json.loads(manifest.read_text(encoding="utf-8"))["tag"].replace("-", "_")
+    for manifest in sorted((Path(__file__).resolve().parent / "languages").glob("*.json"))
+)
 
 # A word has to be genuinely common somewhere else before its absence here means anything. Below
 # this, the other language's own count is too thin to be evidence of where the word belongs.

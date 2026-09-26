@@ -73,6 +73,7 @@ object SettingsIndex {
         Entry(Screen.Languages, null, Keys.LANGUAGES_INSTALLED_PACKS),
         Entry(Screen.Languages, Keys.LANGUAGES_INSTALLED_PACKS, Keys.LANGUAGES_NONE_YET),
         Entry(Screen.Languages, null, Keys.LANGUAGES_INCLUDED_WITH_THE_APP),
+        Entry(Screen.Languages, null, Keys.LANGUAGES_MORE_TITLE),
         Entry(Screen.Languages, null, Keys.LANGUAGES_IMPORT_YOUR_OWN),
         Entry(Screen.Languages, Keys.LANGUAGES_IMPORT_YOUR_OWN, Keys.LANGUAGES_TEXT),
         Entry(Screen.Layout, null, Keys.LAYOUT_NUMBERS_AND_SYMBOLS),

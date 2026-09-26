@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+name: Language packs
+
+# The downloadable packs: every word list in dictionaries/extra compiled with the same
+# tools/build_dict.py the bundled packs go through, and published on one rolling release
+# tagged `packs`, replaced in full on every run. Started by hand: the lists change rarely, and
+# a pack is a decision to publish, not a side effect of a push.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: packs
+  cancel-in-progress: false
+
+jobs:
+  packs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Compile every list in dictionaries/extra
+        run: |
+          set -euo pipefail
+          mkdir -p build/packs
+          for list in dictionaries/extra/*.tsv; do
+            name=$(basename "$list" .tsv)
+            tag=${name//_/-}
+            arguments=(--words "$list" --tag "$tag" --out "build/packs/$name.bkd")
+            [ -f "dictionaries/extra/$name.ngrams" ] && arguments+=(--ngrams "dictionaries/extra/$name.ngrams")
+            [ -f "dictionaries/extra/$name.pos" ] && arguments+=(--grammar "dictionaries/extra/$name.pos")
+            python3 tools/build_dict.py "${arguments[@]}"
+          done
+          ls -l build/packs
+
+      - name: Write the release notes
+        run: |
+          set -euo pipefail
+          {
+            echo "# Language packs"
+            echo
+            echo "One \`.bkd\` per language, built from the word lists in \`dictionaries/extra\` at"
+            echo "commit ${GITHUB_SHA}. Download one, then on the Languages screen choose"
+            echo "*Import your own* and pick the file. Sources and licences: \`docs/licensing.md\`."
+            echo
+            echo "| pack | words | bytes | sha256 |"
+            echo "|---|---|---|---|"
+            for pack in build/packs/*.bkd; do
+              name=$(basename "$pack")
+              words=$(grep -vc '^$' "dictionaries/extra/${name%.bkd}.tsv")
+              bytes=$(stat -c %s "$pack")
+              sum=$(sha256sum "$pack" | cut -c1-64)
+              echo "| $name | $words | $bytes | \`$sum\` |"
+            done
+          } > build/packs/PACKS.md
+          cat build/packs/PACKS.md
+
+      - name: Publish on the packs release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: packs
+          name: Language packs
+          body_path: build/packs/PACKS.md
+          files: build/packs/*.bkd
+          prerelease: false
+          make_latest: false

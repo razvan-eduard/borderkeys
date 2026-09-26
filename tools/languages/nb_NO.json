@@ -1,0 +1,31 @@
+{
+  "tag": "nb-NO",
+  "name": "Norwegian Bokmål",
+  "wikidata": "nb",
+  "corpora": [
+    "nob_wikipedia_2014_1M",
+    "nob_news_2013_1M",
+    "nob_newscrawl_2019_1M"
+  ],
+  "hunspell": [
+    "no/nb_NO"
+  ],
+  "treebank": {
+    "repository": "UD_Norwegian-Bokmaal",
+    "files": [
+      "no_bokmaal-ud-train.conllu",
+      "no_bokmaal-ud-dev.conllu",
+      "no_bokmaal-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "a": "åæ",
+    "o": "ø",
+    "e": "é"
+  },
+  "single_letter_words": "iå",
+  "expected_beyond_ascii": [
+    230
+  ],
+  "reachability_budget": null
+}

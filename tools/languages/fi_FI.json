@@ -1,0 +1,26 @@
+{
+  "tag": "fi-FI",
+  "name": "Finnish",
+  "wikidata": "fi",
+  "corpora": [
+    "fin_wikipedia_2021_1M",
+    "fin_news_2022_1M",
+    "fin_newscrawl_2017_1M"
+  ],
+  "hunspell": [],
+  "treebank": {
+    "repository": "UD_Finnish-TDT",
+    "files": [
+      "fi_tdt-ud-train.conllu",
+      "fi_tdt-ud-dev.conllu",
+      "fi_tdt-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "a": "äå",
+    "o": "ö"
+  },
+  "single_letter_words": "",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

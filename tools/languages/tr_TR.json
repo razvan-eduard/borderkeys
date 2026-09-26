@@ -1,0 +1,33 @@
+{
+  "tag": "tr-TR",
+  "name": "Turkish",
+  "wikidata": "tr",
+  "corpora": [
+    "tur_wikipedia_2021_1M",
+    "tur_news_2024_1M",
+    "tur_newscrawl_2018_1M"
+  ],
+  "hunspell": [
+    "tr_TR/tr_TR"
+  ],
+  "treebank": {
+    "repository": "UD_Turkish-BOUN",
+    "files": [
+      "tr_boun-ud-train.conllu",
+      "tr_boun-ud-dev.conllu",
+      "tr_boun-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "a": "â",
+    "c": "ç",
+    "g": "ğ",
+    "i": "ıî",
+    "o": "ö",
+    "s": "ş",
+    "u": "üû"
+  },
+  "single_letter_words": "o",
+  "expected_beyond_ascii": [],
+  "reachability_budget": null
+}

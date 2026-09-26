@@ -26,7 +26,9 @@ ships.
 
 - **Several languages active at once.** Every dictionary you have switched on — up to four at a
   time — is consulted on every word; the one that actually recognises what you typed wins,
-  without a manual switch. How quickly the
+  without a manual switch. Six languages are inside the app; packs for more, built the same
+  way, are on the releases page, and the "More languages" card on the Languages screen says
+  how to bring one in. How quickly the
   keyboard commits to one language once it has seen enough — off, patient, balanced, quick or
   strict — is a setting. You can also mark one language **preferred**, and it answers first
   until the words you type say otherwise: it decides where guessing starts, never what wins, so

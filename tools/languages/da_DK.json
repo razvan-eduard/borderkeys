@@ -1,0 +1,31 @@
+{
+  "tag": "da-DK",
+  "name": "Danish",
+  "wikidata": "da",
+  "corpora": [
+    "dan_wikipedia_2021_1M",
+    "dan_news_2021_1M",
+    "dan_newscrawl_2023_1M"
+  ],
+  "hunspell": [
+    "da_DK/da_DK"
+  ],
+  "treebank": {
+    "repository": "UD_Danish-DDT",
+    "files": [
+      "da_ddt-ud-train.conllu",
+      "da_ddt-ud-dev.conllu",
+      "da_ddt-ud-test.conllu"
+    ]
+  },
+  "overlay": {
+    "a": "åæ",
+    "o": "ø",
+    "e": "é"
+  },
+  "single_letter_words": "iå",
+  "expected_beyond_ascii": [
+    230
+  ],
+  "reachability_budget": null
+}

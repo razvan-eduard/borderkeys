@@ -373,3 +373,26 @@ prints, so the Languages screen offers it -- and keep those two numbers current 
 list changes, because they label the entry and the start-up repair uses them to tell an
 installed copy from the pack the build ships. No binary is committed: the pack in an APK is
 always what the committed list compiles to.
+
+## Publishing one as a downloadable pack
+
+A language the application does not bundle ships as a `.bkd` on the rolling `packs` release,
+which the Languages screen's "More languages" card points at; the person downloads it in a
+browser and imports it through "Import your own". Its word list lives in `dictionaries/extra/`,
+which the Gradle task above does not compile, and a manifest in `tools/languages/<tag>.json`
+names everything the pipeline needs: the Leipzig corpora, the Hunspell dictionary (a path in
+LibreOffice's repository, or the two files' own URLs), the Universal Dependencies treebank, the
+Wikidata language code, the long-press letters, the single-letter words, and the reachability
+budget once it has been measured.
+
+```
+python3 tools/new_language.py tools/languages/nl_NL.json
+```
+
+runs the whole of it, each step skipped when its output is already there: fetch, the accent
+overlay, the two name lists, the grammar, a first count for the ordinary-word list, the count
+again with the names merged, the cleaning tools over a working copy that holds the six bundled
+lists beside the new one, the compiled pack with its size, and the reachability check. The
+manifests also feed `drop_unreachable.py` and `drop_foreign.py`, so a downloadable language is
+judged by the same rules as a bundled one. `.github/workflows/packs.yml`, started by hand,
+compiles every list in `dictionaries/extra/` and replaces the `packs` release with the result.
