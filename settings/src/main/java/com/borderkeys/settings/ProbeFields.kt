@@ -3,13 +3,26 @@
 
 package com.borderkeys.settings
 
+import androidx.compose.ui.graphics.Color
+import com.borderkeys.i18n.Keys
+
 /**
- * The two extra fields under "Try it here" in debuggable builds, a password field and a field
- * of several lines, named for the smoke suite. Each carries its name and then its exact text
- * in its content description, so the suite reads a password field's text where the
+ * The "Try it here" field's modes: a plain field, a password field, a field that takes
+ * several lines. The field's label names the mode after a coloured bullet, and a tap on the
+ * label moves to the next mode. The field carries its mode and then its exact text in its
+ * content description, so the smoke suite can read a password field's text where the
  * accessibility tree shows it masked.
  */
-object ProbeFields {
-    const val PASSWORD = "probe-password:"
-    const val LINES = "probe-lines:"
+enum class ProbeMode(val description: String, val labelKey: String, val colour: Color) {
+    PLAIN("probe-plain:", Keys.SWIPE_TRY_IT_HERE, Color(0xFF1E88E5)),
+    PASSWORD("probe-password:", Keys.SWIPE_TRY_A_PASSWORD_HERE, Color(0xFFE53935)),
+    LINES("probe-lines:", Keys.SWIPE_TRY_SEVERAL_LINES_HERE, Color(0xFF43A047)),
+    ;
+
+    fun next(): ProbeMode = entries[(ordinal + 1) % entries.size]
+
+    companion object {
+        /** Leads the label; the suite finds the label by it. */
+        const val BULLET = "● "
+    }
 }

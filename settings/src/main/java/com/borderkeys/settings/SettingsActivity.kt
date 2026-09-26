@@ -13,6 +13,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -21,6 +22,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -360,43 +363,35 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
             ) {
                 DebugStatsLine(statsExpanded) { statsExpanded = !statsExpanded }
+                // One field, three modes: its label names the mode after a coloured bullet,
+                // and a tap on the label moves to the next. The field stays one line tall;
+                // in the several-lines mode it takes line breaks and scrolls.
+                var probeMode by rememberSaveable { mutableStateOf(ProbeMode.PLAIN) }
                 OutlinedTextField(
                     value = probe,
                     onValueChange = { probe = it },
-                    label = { Text(strings[Keys.SWIPE_TRY_IT_HERE]) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    label = {
+                        Text(
+                            ProbeMode.BULLET + strings[probeMode.labelKey],
+                            color = probeMode.colour,
+                            modifier = Modifier.clickable { probeMode = probeMode.next() },
+                        )
+                    },
+                    singleLine = probeMode != ProbeMode.LINES,
+                    visualTransformation = if (probeMode == ProbeMode.PASSWORD) {
+                        PasswordVisualTransformation()
+                    } else {
+                        VisualTransformation.None
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = if (probeMode == ProbeMode.PASSWORD) KeyboardType.Password else KeyboardType.Text,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .height(PROBE_FIELD_HEIGHT)
+                        .semantics { contentDescription = probeMode.description + probe },
                 )
-                // Debuggable builds only: a password field and a field of several lines for
-                // the smoke suite, each carrying its text in its content description.
-                val debuggable = LocalContext.current.applicationInfo.flags and
-                    ApplicationInfo.FLAG_DEBUGGABLE != 0
-                if (debuggable) {
-                    var probePassword by rememberSaveable { mutableStateOf("") }
-                    OutlinedTextField(
-                        value = probePassword,
-                        onValueChange = { probePassword = it },
-                        label = { Text(strings[Keys.SWIPE_TRY_A_PASSWORD_HERE]) },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                            .semantics { contentDescription = ProbeFields.PASSWORD + probePassword },
-                    )
-                    var probeLines by rememberSaveable { mutableStateOf("") }
-                    OutlinedTextField(
-                        value = probeLines,
-                        onValueChange = { probeLines = it },
-                        label = { Text(strings[Keys.SWIPE_TRY_SEVERAL_LINES_HERE]) },
-                        minLines = PROBE_LINES,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                            .semantics { contentDescription = ProbeFields.LINES + probeLines },
-                    )
-                }
             }
         },
         topBar = {
@@ -464,5 +459,5 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
     }
 }
 
-/** How many lines the debuggable builds' field of several lines shows at least. */
-private const val PROBE_LINES = 3
+/** One line of text with its label, whatever mode the probe field is in; more lines scroll inside. */
+private val PROBE_FIELD_HEIGHT = 68.dp
