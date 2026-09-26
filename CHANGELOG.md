@@ -44,6 +44,9 @@ attestations and the full commit lists are on the
   letter keys.
 - Greek, Cyrillic, Armenian and Georgian words fold by case, and Greek by tonos and final
   sigma, so a pack in those scripts is reached however a word was capitalised.
+- Eight layouts in scripts of their own: Russian, Ukrainian, Bulgarian, Serbian, Macedonian,
+  Greek, Armenian and Georgian, each with the letters its rows have no room for on the long
+  press.
 
 ## v0.8.0 — 2026-09-25
 
