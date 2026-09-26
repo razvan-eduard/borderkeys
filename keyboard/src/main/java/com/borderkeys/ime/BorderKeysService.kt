@@ -40,6 +40,7 @@ import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.EffectFrequency
 import com.borderkeys.effects.EffectStyle
 import com.borderkeys.data.theme.QuickAction
+import com.borderkeys.data.ClipboardExclusions
 import java.time.ZonedDateTime
 import com.borderkeys.data.theme.TimestampPattern
 import com.borderkeys.data.theme.QuickActionBar
@@ -5607,6 +5608,15 @@ class BorderKeysService :
         withdrawnClip = null
         refreshClipboardChip()
         if (isSensitiveClip(clip)) {
+            return
+        }
+        // A copy made while the keyboard is open in a password manager, a code app, or an app
+        // the person named is not kept, flagged or not.
+        if (ClipboardExclusions.isExcluded(
+                currentInputEditorInfo?.packageName,
+                preferences.clipboardExcludedPackages,
+            )
+        ) {
             return
         }
 

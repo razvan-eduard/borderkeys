@@ -3,6 +3,7 @@
 
 package com.borderkeys.data.theme
 
+import com.borderkeys.data.ClipboardExclusions
 import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.Serializer
 import kotlinx.serialization.SerialName
@@ -38,6 +39,13 @@ data class KeyboardPreferences(
     val clipboardImages: Boolean = false,
     /** Hard cap on unpinned history, independent of the retention window. */
     val clipboardMaxEntries: Int = 60,
+
+    /**
+     * Packages, beyond the password managers and code apps [ClipboardExclusions] knows, whose
+     * copies the history never keeps. Sanitised on read: trimmed, shaped like package names,
+     * each once, bounded.
+     */
+    val clipboardExcludedPackages: List<String> = emptyList(),
     /** Whether confirmed words are written to the personal dictionary at all. */
     val learningEnabled: Boolean = true,
 
@@ -950,6 +958,7 @@ data class KeyboardPreferences(
         return copy(
             hapticStrength = if (hapticStrength in HAPTIC_LIGHT..HAPTIC_SYSTEM) hapticStrength else HAPTIC_SYSTEM,
             textShortcuts = sanitisedTextShortcuts,
+            clipboardExcludedPackages = ClipboardExclusions.sanitised(clipboardExcludedPackages),
         minCorrectionLength = minCorrectionLength.coerceIn(MIN_CORRECTION_LENGTH, MAX_CORRECTION_LENGTH),
         correctionStrictness = if (correctionStrictness > 0f) {
             correctionStrictness.coerceIn(MIN_CORRECTION_STRICTNESS, MAX_CORRECTION_STRICTNESS)

@@ -188,7 +188,11 @@ read-check-generate-write of the passphrase runs behind a `FileLock` on a marker
 Clipboard history is stored in the same encrypted database and is subject to the same private
 mode rule: nothing is captured while a private field is focused. A clip the copying app marks
 sensitive — a credential copied out of a password manager, on Android 13 and later — is neither
-recorded nor offered on the strip, whatever field is focused.
+recorded nor offered on the strip, whatever field is focused. A copy made while the keyboard is
+open in a password manager or a one-time-code app the keyboard knows by package name, or in an
+app named on the Clipboard screen, is not recorded either, flagged or not; the keyboard has no
+way to learn which app made a copy beyond the field it is attached to, so this is the extent of
+that check.
 
 The keyboard holds no clipboard listener that runs when it is not the active input method — it
 has no permission that would let it, and on modern Android an IME cannot read the clipboard while

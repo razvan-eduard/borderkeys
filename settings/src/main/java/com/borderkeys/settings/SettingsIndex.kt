@@ -48,6 +48,7 @@ object SettingsIndex {
         Entry(Screen.Clipboard, null, Keys.CLIPBOARD_CLEAR_ON_CLOSE),
         Entry(Screen.Clipboard, null, Keys.CLIPBOARD_CLEAR_AFTER_INSERT),
         Entry(Screen.Clipboard, null, Keys.CLIPBOARD_DELETE_AFTER_USE),
+        Entry(Screen.Clipboard, null, Keys.CLIPBOARD_EXCLUDED_TITLE),
         Entry(Screen.Clipboard, null, Keys.CLIPBOARD_RETENTION_TITLE),
         Entry(Screen.Clipboard, null, Keys.CLIPBOARD_HISTORY),
         Entry(Screen.Clipboard, Keys.CLIPBOARD_HISTORY, Keys.CLIPBOARD_EMPTY),
