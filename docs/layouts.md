@@ -20,13 +20,20 @@ press come from — which is two separate mechanisms that meet on the same key.
 
 ## The asset format
 
-A layout is one JSON file in `keyboard/src/main/assets/layouts/`. Twenty-five ship today:
+A layout is one JSON file in `keyboard/src/main/assets/layouts/`. Thirty-three ship today:
 
 ```
 qwerty  qwertz  azerty  dvorak  colemak  colemak_dh  workman  bepo  clearflow  kasroz  toki_pona
 turkish_f  turkish_q  spanish  portuguese  nordic  danish  german  czech  hungarian
+russian  ukrainian  bulgarian  serbian  macedonian  greek  armenian  georgian
 numpad  symbols  symbols_shift  symbols_numpad_left  symbols_numpad_right
 ```
+
+The eight scripts of their own are one layout each, in the arrangement the language types on,
+with what a row has no room for on the long press its overlay provides: ё and ъ for Russian,
+ґ for Ukrainian, the accented vowels for Greek, five letters for Armenian, seven for Georgian.
+Their subtypes are named by the locale's own display name, the way the two QWERTY subtypes
+are, since each is one language.
 
 The national variants (`spanish` with ñ, `portuguese` with ç, `nordic` with å ä ö, `danish`
 with å æ ø, `german` with ü ö ä, `czech` with ú ů, `hungarian` with ő ú é á ö ü, the two
