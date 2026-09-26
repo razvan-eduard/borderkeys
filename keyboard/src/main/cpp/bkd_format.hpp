@@ -50,7 +50,13 @@ inline constexpr uint32_t kBkdMagic = 0x31444B42u;
 // the quantised conditional log-probability of each. BkdHeader::bigramCapacity became
 // successorCount, the descriptor the index needs beyond the two it replaced came out of the
 // reserved words, and the header stays 336 bytes.
-inline constexpr uint32_t kBkdVersion = 5u;
+// 6 replaced the trigram hash table with a continuation index: for every pair, by its position
+// in the successor index, the words the corpus wrote after it, sorted by index, with the
+// quantised conditional log-probability of each. The section that held the hash keys holds the
+// list starts, the values section keeps its place, the words section is new and its descriptor
+// came out of the reserved words, so the header stays 336 bytes. BkdHeader::trigramCapacity
+// became trigramCount.
+inline constexpr uint32_t kBkdVersion = 6u;
 
 // Caps, checked before a single byte is mapped.
 //
@@ -80,12 +86,14 @@ enum BkdSectionIndex : uint32_t {
                               // sentence start, the last entry is successorCount
     kSectionSuccessorWords,   // uint32_t[successorCount], sorted within each list
     kSectionSuccessorValues,  // uint8_t[successorCount], quantised -log P(word | context)
-    kSectionTrigramKeys,      // uint32_t[3 * trigramCapacity]
-    kSectionTrigramValues,    // uint8_t[trigramCapacity]
+    kSectionTrigramOffsets,   // uint32_t[successorCount + 1], list starts by pair position; the
+                              // last entry is trigramCount
+    kSectionTrigramValues,    // uint8_t[trigramCount], quantised -log P(word | pair)
     kSectionWordTags,         // uint8_t[wordCount], part-of-speech tag index per word
     kSectionPosTransitions,   // uint8_t[posTagCount * posTagCount], quantised -log P(t|prev)
     kSectionWordFlags,        // uint8_t[wordCount], kWordFlag* bits per word
     kSectionWordRun,          // uint8_t[wordCount], spellings sharing this word's folded key
+    kSectionTrigramWords,     // uint32_t[trigramCount], sorted within each list
     kSectionCount
 };
 
@@ -121,7 +129,7 @@ struct BkdHeader {
     uint32_t nodeCount;
     uint32_t alphabetCount;
     uint32_t successorCount;   // pairs in the successor index, or zero
-    uint32_t trigramCapacity;  // power of two, or zero
+    uint32_t trigramCount;     // triples in the continuation index, or zero
     uint32_t logProbScaleQ;    // fixed point: logProb = -quantised / logProbScaleQ
 
     // Rows and columns of the transition matrix, and the exclusive upper bound on a word's tag
@@ -131,8 +139,8 @@ struct BkdHeader {
     uint32_t posTagCount;
 
     // Shorter with every descriptor added since version 3, which is where they come from: the
-    // header stays 336 bytes and every section offset keeps its meaning.
-    uint32_t reserved[5];
+    // header stays 336 bytes and every section offset keeps its meaning. One word is left.
+    uint32_t reserved[1];
 
     BkdSection sections[kSectionCount];
 };
@@ -276,16 +284,16 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
         return kBkdErrCounts;
     }
 
-    // The trigram capacity is masked with capacity-1, which is only a valid modulo for powers
-    // of two. A non-power-of-two here would turn every probe into an out-of-range index. The
-    // successor count is a plain count, bounded the same way.
+    // Both are plain counts, bounded so that no section length computed from them can wrap. A
+    // triple hangs off its pair, so triples without pairs is not a pack that could have been
+    // written.
     const uint32_t successorCount = header.successorCount;
-    const uint32_t trigramCap = header.trigramCapacity;
-    if (successorCount > kMaxNgramCapacity || trigramCap > kMaxNgramCapacity) {
+    const uint32_t trigramCount = header.trigramCount;
+    if (successorCount > kMaxNgramCapacity || trigramCount > kMaxNgramCapacity) {
         return kBkdErrCapacity;
     }
-    if (trigramCap != 0 && (trigramCap & (trigramCap - 1)) != 0) {
-        return kBkdErrCapacity;
+    if (trigramCount != 0 && successorCount == 0) {
+        return kBkdErrCounts;
     }
     // A tag index is a byte, so a matrix wider than 256 could not be addressed by one. Zero is
     // a pack built without a treebank, which is valid and simply carries no grammar.
@@ -315,13 +323,14 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
          successorCount == 0 ? 0u : static_cast<uint64_t>(header.wordCount) + 2u},
         {kSectionSuccessorWords, sizeof(uint32_t), alignof(uint32_t), successorCount},
         {kSectionSuccessorValues, sizeof(uint8_t), alignof(uint8_t), successorCount},
-        {kSectionTrigramKeys, sizeof(uint32_t), alignof(uint32_t),
-         static_cast<uint64_t>(trigramCap) * 3u},
+        {kSectionTrigramOffsets, sizeof(uint32_t), alignof(uint32_t),
+         trigramCount == 0 ? 0u : static_cast<uint64_t>(successorCount) + 1u},
+        {kSectionTrigramWords, sizeof(uint32_t), alignof(uint32_t), trigramCount},
+        {kSectionTrigramValues, sizeof(uint8_t), alignof(uint8_t), trigramCount},
         {kSectionWordTags, sizeof(uint8_t), alignof(uint8_t),
          header.posTagCount == 0 ? 0u : header.wordCount},
         {kSectionPosTransitions, sizeof(uint8_t), alignof(uint8_t),
          static_cast<uint64_t>(header.posTagCount) * header.posTagCount},
-        {kSectionTrigramValues, sizeof(uint8_t), alignof(uint8_t), trigramCap},
     };
     for (const Expectation& e : expectations) {
         if (!bkdSectionFits(header.sections[e.index], fileBytes, headerBytes, e.elementSize,

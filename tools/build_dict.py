@@ -44,13 +44,13 @@ from pathlib import Path
 # --------------------------------------------------------------------------------------
 
 MAGIC = 0x31444B42  # 'B' 'K' 'D' '1' little endian
-VERSION = 5
+VERSION = 6
 # Still 336: every descriptor added since version 3 came out of the reserved words rather than
 # off the end of the header. 336 itself was 320 plus version 3's word-flags descriptor, and 320
 # was 256 plus version 2's two part-of-speech ones.
 HEADER_BYTES = 336
-# Where the section descriptors begin: the fixed fields are 76 bytes and 20 are reserved.
-SECTION_TABLE_OFFSET = 96
+# Where the section descriptors begin: the fixed fields are 76 bytes and 4 are reserved.
+SECTION_TABLE_OFFSET = 80
 MAX_PACK_BYTES = 64 * 1024 * 1024
 MAX_WORDS = 4_000_000
 MAX_NODES = 32_000_000
@@ -77,7 +77,7 @@ FLAG_CONTENT_CRC = 1 << 1
 # version bump.
 WORD_FLAG_PROPER_NOUN = 1 << 0
 
-SECTION_COUNT = 15
+SECTION_COUNT = 16
 (
     S_ALPHABET,
     S_TRIE_BASE,
@@ -88,22 +88,19 @@ SECTION_COUNT = 15
     S_SUCCESSOR_OFFSETS,
     S_SUCCESSOR_WORDS,
     S_SUCCESSOR_VALUES,
-    S_TRIGRAM_KEYS,
+    S_TRIGRAM_OFFSETS,
     S_TRIGRAM_VALUES,
     S_WORD_TAGS,
     S_POS_TRANSITIONS,
     S_WORD_FLAGS,
     S_WORD_RUN,
+    S_TRIGRAM_WORDS,
 ) = range(SECTION_COUNT)
 
 # Quantisation scale for log-probabilities: q = round(-logProb * SCALE), saturating at 255,
 # which puts the floor at about -25.5 nats. Anything less likely than that is not going to be
 # ranked into a three-slot suggestion strip by a difference this coarse.
 LOG_PROB_SCALE = 10
-
-# The trigram table is sized so the load factor stays under this. Linear probing degrades
-# sharply past roughly 0.7, and the table is looked up several times per candidate.
-NGRAM_LOAD_FACTOR = 0.6
 
 TERMINAL_SYMBOL = 0
 
@@ -202,26 +199,6 @@ def fold_word(word: str) -> tuple[int, ...]:
 
 
 # --------------------------------------------------------------------------------------
-# Hashing. Must match NgramModel::mix() in ngram_model.hpp bit for bit.
-# --------------------------------------------------------------------------------------
-
-_U64 = (1 << 64) - 1
-
-
-def mix64(value: int) -> int:
-    value = (value + 0x9E3779B97F4A7C15) & _U64
-    value = ((value ^ (value >> 30)) * 0xBF58476D1CE4E5B9) & _U64
-    value = ((value ^ (value >> 27)) * 0x94D049BB133111EB) & _U64
-    return (value ^ (value >> 31)) & _U64
-
-
-def next_power_of_two(value: int) -> int:
-    result = 1
-    while result < value:
-        result <<= 1
-    return result
-
-
 # --------------------------------------------------------------------------------------
 # Double-array trie construction.
 # --------------------------------------------------------------------------------------
@@ -341,9 +318,10 @@ def quantise_log_prob(probability: float) -> int:
 def build_successor_index(entries: dict, word_count: int):
     """Builds the successor index: one list per word, plus the sentence start's at position
     `word_count`, each sorted by successor. `entries` maps (context, successor) to a quantised
-    value. Returns the pair count and the three section payloads."""
+    value. Returns the pair count, the three section payloads, and the position every pair was
+    written at, which is what the continuation index hangs a triple on."""
     if not entries:
-        return 0, b"", b"", b""
+        return 0, b"", b"", b"", {}
     if len(entries) > MAX_NGRAM_CAPACITY:
         raise SystemExit(f"{len(entries)} pairs exceeds the cap of {MAX_NGRAM_CAPACITY}")
     lists: dict[int, list[tuple[int, int]]] = {}
@@ -353,37 +331,47 @@ def build_successor_index(entries: dict, word_count: int):
     offsets = [0]
     words: list[int] = []
     values = bytearray()
+    position_of: dict[tuple[int, int], int] = {}
     for context in range(word_count + 1):
         for second, quantised in sorted(lists.get(context, ())):
+            position_of[(context, second)] = len(words)
             words.append(second)
             values.append(quantised)
         offsets.append(len(words))
     return (len(words), struct.pack(f"<{len(offsets)}I", *offsets),
-            struct.pack(f"<{len(words)}I", *words), bytes(values))
+            struct.pack(f"<{len(words)}I", *words), bytes(values), position_of)
 
 
-def build_hash_table(entries: dict):
-    """Builds the open-addressed trigram table. `entries` maps a triple of ids to a quantised
-    value."""
+def build_continuation_index(entries: dict, pair_position: dict, pair_count: int):
+    """Builds the continuation index: one list per pair, by the pair's position in the
+    successor index, each sorted by the word that followed. `entries` maps a triple of ids to a
+    quantised value. A triple whose pair is not in the index has nowhere to hang and is
+    dropped; the count of those is returned beside the triple count and the three payloads."""
     if not entries:
-        return 0, b"", b""
-    capacity = next_power_of_two(max(8, int(len(entries) / NGRAM_LOAD_FACTOR) + 1))
-    if capacity > MAX_NGRAM_CAPACITY:
-        raise SystemExit(f"n-gram table would need {capacity} slots, cap is {MAX_NGRAM_CAPACITY}")
-    mask = capacity - 1
-
-    keys = [0] * (capacity * 3)
-    values = bytearray(capacity)
+        return 0, b"", b"", b"", 0
+    lists: dict[int, list[tuple[int, int]]] = {}
+    dropped = 0
     for (first, second, third), quantised in entries.items():
-        a, b, c = first + 1, second + 1, third + 1
-        slot = mix64(((a << 40) ^ (b << 20) ^ c) & _U64) & 0xFFFFFFFF & mask
-        while keys[slot * 3] != 0:
-            slot = (slot + 1) & mask
-        keys[slot * 3] = a
-        keys[slot * 3 + 1] = b
-        keys[slot * 3 + 2] = c
-        values[slot] = quantised
-    return capacity, struct.pack(f"<{capacity * 3}I", *keys), bytes(values)
+        position = pair_position.get((first, second))
+        if position is None:
+            dropped += 1
+            continue
+        lists.setdefault(position, []).append((third, quantised))
+    kept = sum(len(entries) for entries in lists.values())
+    if kept > MAX_NGRAM_CAPACITY:
+        raise SystemExit(f"{kept} triples exceeds the cap of {MAX_NGRAM_CAPACITY}")
+    if kept == 0:
+        return 0, b"", b"", b"", dropped
+    offsets = [0]
+    words: list[int] = []
+    values = bytearray()
+    for position in range(pair_count):
+        for third, quantised in sorted(lists.get(position, ())):
+            words.append(third)
+            values.append(quantised)
+        offsets.append(len(words))
+    return (len(words), struct.pack(f"<{len(offsets)}I", *offsets),
+            struct.pack(f"<{len(words)}I", *words), bytes(values), dropped)
 
 
 def align_up(value: int, alignment: int) -> int:
@@ -529,9 +517,12 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
                 (word_index_of[parts[0]], word_index_of[parts[1]], word_index_of[parts[2]])
             ] = quantised
 
-    successor_count, successor_offsets, successor_words, successor_values = \
+    successor_count, successor_offsets, successor_words, successor_values, pair_position = \
         build_successor_index(bigram_entries, len(display))
-    trigram_capacity, trigram_keys, trigram_values = build_hash_table(trigram_entries)
+    trigram_count, trigram_offsets, trigram_words, trigram_values, dropped = \
+        build_continuation_index(trigram_entries, pair_position, successor_count)
+    if dropped:
+        print(f"{dropped} triples dropped: their pair is not in the index", file=sys.stderr)
 
     # Grammar is optional. A pack built without a treebank declares zero tags and carries two
     # empty sections, which the engine reads as "score without the term" -- the same ranking
@@ -562,12 +553,13 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
         S_SUCCESSOR_OFFSETS: (successor_offsets, 4),
         S_SUCCESSOR_WORDS: (successor_words, 4),
         S_SUCCESSOR_VALUES: (successor_values, 1),
-        S_TRIGRAM_KEYS: (trigram_keys, 4),
+        S_TRIGRAM_OFFSETS: (trigram_offsets, 4),
         S_TRIGRAM_VALUES: (trigram_values, 1),
         S_WORD_TAGS: (word_tags, 1),
         S_POS_TRANSITIONS: (pos_transitions, 1),
         S_WORD_FLAGS: (word_flags, 1),
         S_WORD_RUN: (bytes(runs), 1),
+        S_TRIGRAM_WORDS: (trigram_words, 4),
     }
 
     body = bytearray()
@@ -590,7 +582,7 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
 
     def pack_header(header_crc: int) -> bytes:
         blob = struct.pack(
-            "<IIII Q II 16s IIIIII I 5I",
+            "<IIII Q II 16s IIIIII I 1I",
             MAGIC,
             VERSION,
             HEADER_BYTES,
@@ -603,10 +595,10 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
             len(base),
             len(alphabet),
             successor_count,
-            trigram_capacity,
+            trigram_count,
             LOG_PROB_SCALE,
             pos_tag_count,
-            *([0] * 5),
+            *([0] * 1),
         )
         for index in range(SECTION_COUNT):
             data, _ = payloads[index]
@@ -629,17 +621,17 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
 class PackReader:
     def __init__(self, blob: bytes) -> None:
         self.blob = blob
-        fields = struct.unpack_from("<IIII Q II 16s IIIIII I 5I", blob, 0)
+        fields = struct.unpack_from("<IIII Q II 16s IIIIII I 1I", blob, 0)
         (
             self.magic, self.version, self.header_bytes, self.flags,
             self.file_bytes, self.content_crc, self.header_crc, tag_raw,
             self.word_count, self.node_count, self.alphabet_count,
-            self.successor_count, self.trigram_capacity, self.log_prob_scale,
+            self.successor_count, self.trigram_count, self.log_prob_scale,
             self.pos_tag_count,
             *_reserved,
         ) = fields
         self.tag = tag_raw.split(b"\x00")[0].decode("utf-8")
-        # The descriptors start where the fixed fields end: 76 bytes of them, then 20 reserved.
+        # The descriptors start where the fixed fields end: 76 bytes of them, then 4 reserved.
         self.sections = [
             struct.unpack_from("<QQ", blob, SECTION_TABLE_OFFSET + 16 * index)
             for index in range(SECTION_COUNT)
@@ -734,6 +726,45 @@ class PackReader:
                 return value
         return None
 
+    def pair_position(self, first: int, second: int):
+        """The position of the pair in the successor index, or None."""
+        if self.successor_count == 0:
+            return None
+        context = self.word_count if first == SENTENCE_START_INDEX else first
+        if context > self.word_count:
+            return None
+        offsets_at, _ = self.sections[S_SUCCESSOR_OFFSETS]
+        words_at, _ = self.sections[S_SUCCESSOR_WORDS]
+        begin, end = struct.unpack_from("<II", self.blob, offsets_at + context * 4)
+        for position in range(begin, end):
+            if struct.unpack_from("<I", self.blob, words_at + position * 4)[0] == second:
+                return position
+        return None
+
+    def continuations(self, pair: int) -> list[tuple[int, int]]:
+        """Every (word, quantised value) written after the pair at successor position `pair`,
+        in index order."""
+        if self.trigram_count == 0 or pair >= self.successor_count:
+            return []
+        offsets_at, _ = self.sections[S_TRIGRAM_OFFSETS]
+        words_at, _ = self.sections[S_TRIGRAM_WORDS]
+        values_at, _ = self.sections[S_TRIGRAM_VALUES]
+        begin, end = struct.unpack_from("<II", self.blob, offsets_at + pair * 4)
+        out = []
+        for position in range(begin, end):
+            word = struct.unpack_from("<I", self.blob, words_at + position * 4)[0]
+            out.append((word, self.blob[values_at + position]))
+        return out
+
+    def trigram_value(self, first: int, second: int, third: int):
+        pair = self.pair_position(first, second)
+        if pair is None:
+            return None
+        for word, value in self.continuations(pair):
+            if word == third:
+                return value
+        return None
+
 
 # --------------------------------------------------------------------------------------
 # Round-trip test.
@@ -804,6 +835,25 @@ def round_trip(words: list[tuple[str, int]], ngrams: dict, tag: str, samples: in
         if followers != sorted(followers) or len(set(followers)) != len(followers):
             raise SystemExit(f"the successors of {context} are not sorted and distinct")
 
+    # A triple is found through its pair, and a triple whose pair was never written is not in
+    # the pack at all rather than hanging off a pair that is not there.
+    for parts, _count in ngrams.items():
+        if len(parts) != 3 or SENTENCE_START in parts:
+            continue
+        indices = [reader.lookup(part) for part in parts]
+        if any(index < 0 for index in indices):
+            continue
+        found = reader.trigram_value(*indices)
+        pair_written = reader.successor_value(indices[0], indices[1]) is not None
+        if pair_written and found is None:
+            raise SystemExit(f"triple {parts} was written but cannot be found")
+        if not pair_written and found is not None:
+            raise SystemExit(f"triple {parts} has no pair in the pack and was kept anyway")
+    for pair in range(reader.successor_count):
+        followers = [word for word, _ in reader.continuations(pair)]
+        if followers != sorted(followers) or len(set(followers)) != len(followers):
+            raise SystemExit(f"the continuations of pair {pair} are not sorted and distinct")
+
     print(f"round trip ok: {len(words)} words, {len(blob)} bytes, "
           f"{reader.node_count} nodes, {len(chosen)} sampled lookups")
 
@@ -852,6 +902,10 @@ SAMPLE_NGRAMS = {
     (SENTENCE_START, "the"): 2000,
     (SENTENCE_START, "these"): 400,
     ("the", "time", "is"): 900,
+    # A triple every word of which is in the pack, hanging off the ("the", "keyboard") pair.
+    ("the", "keyboard", "keys"): 10,
+    # A triple whose pair is not written: dropped at compile time, and must stay absent.
+    ("key", "keys", "test"): 5,
 }
 
 

@@ -166,6 +166,54 @@ void runFormatTests() {
     }
 
     {
+        // The sample triples build_dict.py's --selftest writes: "the keyboard keys" hangs off
+        // the ("the", "keyboard") pair; "key keys test" names a pair the pack never wrote and
+        // was dropped at compile time.
+        LanguagePack pack;
+        check(openFromBytes(good, &pack) == kBkdOk, "the test pack opens for the triple check");
+        check(pack.ngrams().hasTrigrams(), "and carries triples");
+        const uint32_t the = static_cast<uint32_t>(lookupAscii(pack, "the"));
+        const uint32_t keyboard = static_cast<uint32_t>(lookupAscii(pack, "keyboard"));
+        const uint32_t keys = static_cast<uint32_t>(lookupAscii(pack, "keys"));
+        const uint32_t key = static_cast<uint32_t>(lookupAscii(pack, "key"));
+        const uint32_t test = static_cast<uint32_t>(lookupAscii(pack, "test"));
+        const uint32_t time = static_cast<uint32_t>(lookupAscii(pack, "time"));
+        const NgramModel& ngrams = pack.ngrams();
+        check(ngrams.trigram(the, keyboard, keys) <= 0.0f, "a written triple is found");
+        check(ngrams.trigram(the, keyboard, time) == NgramModel::kNoEntry,
+              "a triple never written is not, though its pair is");
+        check(ngrams.trigram(key, keys, test) == NgramModel::kNoEntry,
+              "nor is a triple whose pair the pack does not hold");
+        check(ngrams.trigram(0xFFFFFFF0u, keyboard, keys) == NgramModel::kNoEntry,
+              "and a context outside the pack has no triples");
+    }
+
+    {
+        // The continuation lists are bounded the same way the successor lists are: an offset
+        // past the triples is clamped, never followed.
+        std::string mutated = good;
+        BkdHeader header;
+        std::memcpy(&header, mutated.data(), sizeof(header));
+        const uint32_t huge = 0xFFFFFFFFu;
+        const size_t at = static_cast<size_t>(header.sections[kSectionTrigramOffsets].offset);
+        std::memcpy(&mutated[at + sizeof(uint32_t)], &huge, sizeof(huge));
+        repairChecksums(mutated);
+        LanguagePack pack;
+        check(openFromBytes(mutated, &pack) == kBkdOk,
+              "a continuation offset the header cannot see still opens");
+        uint32_t first = 0;
+        bool bounded = true;
+        for (uint32_t pair = 0; pair < header.successorCount; ++pair) {
+            const uint32_t count = pack.ngrams().continuations(pair, &first);
+            bounded = bounded && first <= header.trigramCount &&
+                      count <= header.trigramCount - first;
+        }
+        check(bounded, "and every list stays inside the triples the pack holds");
+        check(pack.ngrams().continuations(header.successorCount, &first) == 0,
+              "a pair position outside the index lists nothing");
+    }
+
+    {
         std::string mutated = good;
         BkdHeader header;
         std::memcpy(&header, mutated.data(), sizeof(header));
@@ -327,12 +375,22 @@ void runFormatTests() {
     }
     {
         std::string mutated = good;
-        const uint32_t notPowerOfTwo = 12345;
-        std::memcpy(&mutated[offsetof(BkdHeader, trigramCapacity)], &notPowerOfTwo,
-                    sizeof(notPowerOfTwo));
+        const uint32_t claimed = 12345;
+        std::memcpy(&mutated[offsetof(BkdHeader, trigramCount)], &claimed, sizeof(claimed));
         repairChecksums(mutated);
         LanguagePack pack;
-        check(openFromBytes(mutated, &pack) == kBkdErrCapacity,
-              "a hash capacity that is not a power of two is refused");
+        check(openFromBytes(mutated, &pack) == kBkdErrSectionBounds,
+              "a triple count the sections do not hold is refused");
+    }
+    {
+        std::string mutated = good;
+        BkdHeader header;
+        std::memcpy(&header, mutated.data(), sizeof(header));
+        const uint32_t none = 0;
+        std::memcpy(&mutated[offsetof(BkdHeader, successorCount)], &none, sizeof(none));
+        repairChecksums(mutated);
+        LanguagePack pack;
+        check(header.trigramCount != 0 && openFromBytes(mutated, &pack) != kBkdOk,
+              "triples without pairs are refused");
     }
 }
