@@ -65,6 +65,13 @@ internal object AutoCorrection {
         StaleAnswer,
 
         /**
+         * What was typed ends in a mark -- an apostrophe or a hyphen -- which is typed on
+         * purpose: the word is still being written ("that'" on its way to "that'll"), or it
+         * is a possessive plural ("years'"). What follows a mark is not guessed at.
+         */
+        TrailingMark,
+
+        /**
          * Further from what was typed than a slip could account for. A ceiling on top of the
          * engine's ranking, which only ever decides *which* candidate comes first, never
          * whether it is close enough to be a correction. A correct word the dictionaries do not
@@ -131,6 +138,7 @@ internal object AutoCorrection {
     ): Situation = when {
         suggestion.isNullOrEmpty() -> Situation.NothingOffered
         typed != suggestionQuery -> Situation.StaleAnswer
+        typed.isNotEmpty() && typed.last() in TRAILING_MARKS -> Situation.TrailingMark
         editDistance(stripDiacritics(typed), stripDiacritics(suggestion)) > maxEdits ->
             Situation.TooFar
         isProperNoun &&
@@ -253,6 +261,9 @@ internal object AutoCorrection {
 
     /** From this many letters on, the default setting allows a second edit. */
     const val LONG_WORD_LETTERS = 8
+
+    /** The marks a word may end in while it is still being written: the apostrophes and the hyphen. */
+    private const val TRAILING_MARKS = "'’‘ʼ-"
 
     private fun stripDiacritics(word: String): String =
         Normalizer.normalize(word, Normalizer.Form.NFD)

@@ -113,7 +113,7 @@ class PipelineCorpusTest {
         const val UNKNOWN_FLOOR = 188
         const val DOUBLED_FLOOR = 187
         const val FIRSTLETTER_FLOOR = 166
-        const val MARKS_FLOOR = 233
+        const val MARKS_FLOOR = 240
         const val ACCENTS_FLOOR = 237
     }
 }
