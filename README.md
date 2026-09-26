@@ -137,8 +137,8 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 </p>
 - **A personal dictionary you can see and edit.** Every learned word is listed with how often
   you used it, and a `Forget` (remove it) and a `Block` (never suggest it again) right beside
-  it — not a black box. The word pairs it learned are counted on the same screen and go with a
-  word when it is forgotten. Holding a suggestion offers the same from the keyboard, and a
+  it — not a black box. The word pairs and triples it learned are listed on the same screen, each
+  with a Forget of its own, and go with a word when it is forgotten. Holding a suggestion offers the same from the keyboard, and a
   "Why?": the engine's own account of the word's score, term by term, in plain words.
 - **Terminals typed into as terminals.** In Termux, ConnectBot, JuiceSSH, Termius and any field
   that declares no text class at all, every key types straight through: a character is written

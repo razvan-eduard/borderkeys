@@ -64,6 +64,10 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     val words by (if (query.isBlank()) repository.words else repository.search(query))
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val blocked by repository.blocked.collectAsStateWithLifecycle(initialValue = emptyList())
+    val pairs by repository.topPairsLive().collectAsStateWithLifecycle(initialValue = emptyList())
+    val triples by repository.topTriplesLive().collectAsStateWithLifecycle(initialValue = emptyList())
+    val pairCount by repository.pairCount.collectAsStateWithLifecycle(initialValue = 0)
+    val tripleCount by repository.tripleCount.collectAsStateWithLifecycle(initialValue = 0)
 
     val exporter = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv"),
@@ -247,6 +251,44 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 Explanation(strings[Keys.DICTIONARY_SHOWING_THE_FIRST_200_USE_SEARCH])
             }
         }
+        // The phrases beside the words they are made of: every pair and triple the keyboard
+        // has seen written in that order, each with a Forget of its own.
+        SettingsSectionCard(strings.getString(Keys.DICTIONARY_PHRASES, pairCount + tripleCount)) {
+            Explanation(strings[Keys.DICTIONARY_PHRASES_NOTE])
+            if (pairs.isEmpty() && triples.isEmpty()) {
+                SettingRow(title = strings[Keys.DICTIONARY_NOTHING_LEARNED_YET])
+            }
+            for (pair in pairs) {
+                val phrase = listOf(pair.previousWord, pair.word).joinToString(WORD_SEPARATOR)
+                SettingRow(
+                    title = phrase,
+                    subtitle = strings.getString(Keys.DICTIONARY_PHRASE_USED, pair.count),
+                    trailing = {
+                        TextButton(onClick = {
+                            scope.launch { repository.forgetPair(pair.previousWord, pair.word) }
+                        }) { Text(strings[Keys.DICTIONARY_FORGET]) }
+                    },
+                )
+            }
+            for (triple in triples) {
+                val phrase = listOf(triple.previousWord2, triple.previousWord1, triple.word)
+                    .joinToString(WORD_SEPARATOR)
+                SettingRow(
+                    title = phrase,
+                    subtitle = strings.getString(Keys.DICTIONARY_PHRASE_USED, triple.count),
+                    trailing = {
+                        TextButton(onClick = {
+                            scope.launch {
+                                repository.forgetTriple(triple.previousWord2, triple.previousWord1, triple.word)
+                            }
+                        }) { Text(strings[Keys.DICTIONARY_FORGET]) }
+                    },
+                )
+            }
+            if (pairCount + tripleCount > pairs.size + triples.size) {
+                Explanation(strings.getString(Keys.DICTIONARY_SHOWING_PHRASES, pairs.size + triples.size))
+            }
+        }
         SettingsSectionCard(strings.getString(Keys.DICTIONARY_BLOCKED, blocked.size)) {
             Explanation(
                 strings[Keys.DICTIONARY_A_BLOCKED_WORD_IS_NEVER_SUGGESTED],
@@ -310,3 +352,6 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
         )
     }
 }
+
+/** Between the words of a listed phrase. */
+private const val WORD_SEPARATOR = " "
