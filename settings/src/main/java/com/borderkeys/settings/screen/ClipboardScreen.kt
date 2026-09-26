@@ -9,6 +9,7 @@ import com.borderkeys.settings.LocalStrings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -41,6 +42,7 @@ import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlinx.coroutines.launch
@@ -64,6 +66,8 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
     var confirmingDeleteAll by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
+    var searchMode by rememberSaveable { mutableStateOf(ClipSearch.Mode.PLAIN) }
+    val search = ClipSearch.Query.of(query, searchMode)
 
     // The entry whose text is open in the edit dialog, and the text as edited so far.
     var editing by remember { mutableStateOf<ClipEntry?>(null) }
@@ -166,10 +170,29 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
                     onValueChange = { query = it },
                     label = { Text(strings[Keys.CLIPBOARD_SEARCH]) },
                     singleLine = true,
+                    isError = search.invalid,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                 )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for ((mode, labelKey) in listOf(
+                        ClipSearch.Mode.PLAIN to Keys.CLIPBOARD_SEARCH_PLAIN,
+                        ClipSearch.Mode.WILDCARDS to Keys.CLIPBOARD_SEARCH_WILDCARDS,
+                        ClipSearch.Mode.REGEX to Keys.CLIPBOARD_SEARCH_REGEX,
+                    )) {
+                        PickerChip(strings[labelKey], selected = searchMode == mode) { searchMode = mode }
+                    }
+                }
+                when {
+                    search.invalid -> Explanation(strings[Keys.CLIPBOARD_SEARCH_INVALID])
+                    searchMode == ClipSearch.Mode.WILDCARDS -> Explanation(strings[Keys.CLIPBOARD_SEARCH_WILDCARDS_NOTE])
+                    searchMode == ClipSearch.Mode.REGEX -> Explanation(strings[Keys.CLIPBOARD_SEARCH_REGEX_NOTE])
+                }
             }
-            for (entry in ClipSearch.filter(entries, query)) {
+            for (entry in ClipSearch.filter(entries, search)) {
                 SettingRow(
                     title = entry.content.take(80).replace('\n', ' '),
                     subtitle = if (entry.isPinned) strings[Keys.CLIPBOARD_PINNED_NEVER_EXPIRES] else strings[Keys.CLIPBOARD_EXPIRES_ON_THE_TIMER],
