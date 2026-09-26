@@ -657,6 +657,7 @@ is that search and one more inside the pair's own list; the next-word search wal
 | `drop_foreign.py` | Removes another language's vocabulary that a crawled corpus quoted. |
 | `drop_misspellings.py` | Review-only, multi-oracle. Review-only because a rare surname and a misspelling are the same shape in this data. |
 | `make_contractions.py` | The apostrophe maps. |
+| `merge_apostrophes.py` | One row per word whatever apostrophe the corpus wrote: every apostrophe becomes the plain one, and the rows that then agree add up, in the word list, the n-grams, the grammar and the hand lists. |
 | `fold_diacritic_noise.py` | Romanian has three ways to write the same accented letter. |
 | `build_emoji.py`, `gen_keys.py`, `gen_settings_index.py`, `extract_strings.py`, `inject_strings.py` | Emoji palette, key codes, the settings search index, i18n catalogue round-trip. |
 | `gesture_replay.py`, `tcn_replay.py`, `swipe_model/` | Swipe measurement and training. |

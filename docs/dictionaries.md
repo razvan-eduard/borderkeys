@@ -95,6 +95,13 @@ the apostrophes and hyphen that live inside words. The keyboard is the thing tha
 to type the word, so the keyboard's own overlay is where the alphabet comes from; there is no
 second list to drift.
 
+Every apostrophe is written as the plain one, the one the keyboard types. The typographic
+apostrophes and the modifier letter apostrophe fold onto it in the compiler and in the engine, so
+a list holds one row for `don't` however its corpus spelled it: `make_pack.py` writes the plain
+one on the way in, and `tools/merge_apostrophes.py dictionaries/<tag>.tsv` rewrites a list built
+without that rule, together with its n-grams, its grammar and its hand lists, adding up the
+counts of the rows that then agree.
+
 Folded, not literal. `naïve` is an English word and no English overlay carries `ï`, but it folds
 to `i` and is typed that way — as are `Bjørn` (`ø`→`o`) and `François` (`ç`→`c`). What is refused
 is a character that folds to *itself* and is on no overlay: Greek `α`, Devanagari `ख`, the unit

@@ -75,6 +75,9 @@ void runFoldTests() {
         // The pairs the single-parity fold got wrong: 0x139..0x148 and 0x179..0x17E put the
         // capital on the odd code point, so "ł" used to fold to "Ń" and "Ź" to itself.
         check(foldCodePoint(0x141u) == 'l' && foldCodePoint(0x142u) == 'l', "Ł and ł fold to l");
+        check(foldCodePoint(0x2019u) == '\'' && foldCodePoint(0x2018u) == '\'' && foldCodePoint(0x2BCu) == '\'',
+              "the typographic apostrophes fold onto the plain one");
+        check(sameSpellingIgnoringCase("don\xE2\x80\x99t", 7, "don't", 5), "and the two spellings of don't are one word");
         // Greek: case, tonos, dialytika and the final sigma.
         check(foldCodePoint(0x391u) == 0x3B1u && foldCodePoint(0x386u) == 0x3B1u && foldCodePoint(0x3ACu) == 0x3B1u,
               "Α, Ά and ά fold to α");

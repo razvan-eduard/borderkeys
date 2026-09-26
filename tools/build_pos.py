@@ -19,6 +19,8 @@ import json
 import math
 import pathlib
 
+from build_dict import plain_apostrophes
+
 # The n-gram model's scale, mirrored so the engine can add the two without converting either.
 LOG_PROB_SCALE = 10.0
 LOG_PROB_FLOOR = -25.5
@@ -74,7 +76,7 @@ def rows(path):
         c = line.split("\t")
         if "-" in c[0] or "." in c[0]:
             continue
-        yield c[1].lower(), c[3], c[4], c[5]
+        yield plain_apostrophes(c[1].lower()), c[3], c[4], c[5]
 
 
 def uses_xpos(paths):

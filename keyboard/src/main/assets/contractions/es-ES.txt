@@ -5,11 +5,15 @@
 # tools/make_contractions.py from this language's own word counts -- do not edit by hand.
 #
 # typed<TAB>written<TAB>other languages whose own vocabulary holds the typed spelling
+dalessandro	d'alessandro	
 dalessio	d'alessio	
 desquadra	d'esquadra	
 mcdonalds	mcdonald's	de-DE,en-US,ro-RO
+moodys	moody's	
 newells	newell's	
 obrien	o'brien	
 oconnor	o'connor	
+odonnell	o'donnell	
 ohiggins	o'higgins	
+omalley	o'malley	
 oneill	o'neill	

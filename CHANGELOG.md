@@ -47,6 +47,12 @@ attestations and the full commit lists are on the
 - Eight layouts in scripts of their own: Russian, Ukrainian, Bulgarian, Serbian, Macedonian,
   Greek, Armenian and Georgian, each with the letters its rows have no room for on the long
   press.
+- Fixed: a word the personal dictionary held capitalised and a pack held in lower case was
+  offered twice on the strip, and so was a contraction the corpus wrote with both kinds of
+  apostrophe. Each is one suggestion now: the engine keeps one candidate per spelling
+  whatever its case, the typographic apostrophes fold onto the plain one in the engine and
+  in the word lists, whose rows for the two spellings are added up, and the strip never
+  shows a word twice whatever the engine sends.
 
 ## v0.8.0 — 2026-09-25
 

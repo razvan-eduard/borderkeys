@@ -1293,15 +1293,16 @@ float Engine::userBoostFor(const char* text, uint32_t length) const {
 void Engine::offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, const char* text,
                             uint32_t textLength) const {
     // The same word is reached by more than one path: a substitution and a deletion can land on
-    // it, and two active languages can both contain it. Comparing the text rather than the
-    // (pack, index) pair is what catches the cross-language case, which is the one a bilingual
-    // user hits on every second word.
+    // it, two active languages can both contain it, and the personal dictionary can hold it in
+    // the case it was last committed in while a pack holds it in lower case. Comparing the
+    // spelling, case aside, rather than the (pack, index) pair is what catches all three; the
+    // diacritics still have to match, since two spellings that differ by one are two words.
     Candidate* const items = heap.data();
     for (int i = 0; i < heap.size(); ++i) {
         uint32_t existingLength = 0;
         const char* const existing = candidateText(items[i], &existingLength);
-        if (existing == nullptr || existingLength != textLength ||
-            std::memcmp(existing, text, textLength) != 0) {
+        if (existing == nullptr ||
+            !sameSpellingIgnoringCase(existing, existingLength, text, textLength)) {
             continue;
         }
         if (candidate.score > items[i].score) {

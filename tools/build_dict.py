@@ -208,12 +208,25 @@ def _lower_armenian_georgian(code_point: int) -> int:
     return code_point
 
 
+# The typographic apostrophes and the modifier letter apostrophe fold onto the plain one, the
+# apostrophe the keyboard types.
+_APOSTROPHES = (0x2018, 0x2019, 0x2BC)
+_PLAIN_APOSTROPHE = str.maketrans({chr(code_point): "'" for code_point in _APOSTROPHES})
+
+
+def plain_apostrophes(word: str) -> str:
+    """[word] with every apostrophe written as the plain one."""
+    return word.translate(_PLAIN_APOSTROPHE)
+
+
 def fold_code_point(code_point: int) -> int:
     """Lowercase and strip the diacritic. Mirrors foldCodePoint() in proximity.cpp."""
     if code_point < 128:
         if ord("A") <= code_point <= ord("Z"):
             return code_point + 32
         return code_point
+    if code_point in _APOSTROPHES:
+        return ord("'")
 
     if 0xC0 <= code_point <= 0xDE and code_point != 0xD7:
         code_point += 0x20

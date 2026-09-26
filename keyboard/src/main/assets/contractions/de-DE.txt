@@ -6,5 +6,16 @@
 #
 # typed<TAB>written<TAB>other languages whose own vocabulary holds the typed spelling
 assassins	assassin's	en-US,fr-FR
+christies	christie's	
+dampezzo	d'ampezzo	
+gabs	gab's	
+gehts	geht's	
 germanys	germany's	
-lets	let's	en-US
+gings	ging's	
+hats	hat's	en-US
+mcdonalds	mcdonald's	en-US,es-ES,ro-RO
+moodys	moody's	
+obrien	o'brien	
+oneill	o'neill	
+rocknroll	rock'n'roll	
+sothebys	sotheby's	

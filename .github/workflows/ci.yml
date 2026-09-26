@@ -202,6 +202,9 @@ jobs:
       - name: Language alphabets are what the dictionaries were built against
         run: python3 tools/drop_unreachable.py --selftest
 
+      - name: Every kind of list merges onto the plain apostrophe
+        run: python3 tools/merge_apostrophes.py --selftest
+
       - name: The layout assets, their subtypes and their labels agree
         run: python3 tools/check_layouts.py
 
@@ -258,10 +261,10 @@ jobs:
           done <<'BUDGETS'
           en-US 611
           ro-RO 402
-          de-DE 183
-          es-ES 315
-          fr-FR 334
-          it-IT 246
+          de-DE 180
+          es-ES 313
+          fr-FR 326
+          it-IT 240
           BUDGETS
           exit $status
 

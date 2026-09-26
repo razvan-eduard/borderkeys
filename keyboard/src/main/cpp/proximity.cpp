@@ -191,10 +191,17 @@ static uint32_t lowerArmenianGeorgian(uint32_t codePoint) {
 // stopping there. Comparing two spellings of one folded key is a question about the diacritics,
 // so it cannot use a fold that removes them -- and it cannot use raw bytes either, because the
 // first letter of a field arrives capitalised.
+// The typographic apostrophes and the modifier letter apostrophe are the plain apostrophe:
+// a corpus writes "don't" both ways, a keyboard types one of them, and they are one word.
+static uint32_t plainApostrophe(uint32_t codePoint) {
+    return (codePoint == 0x2018u || codePoint == 0x2019u || codePoint == 0x2BCu) ? '\'' : codePoint;
+}
+
 uint32_t lowerCodePoint(uint32_t codePoint) {
     if (codePoint < 128u) {
         return (codePoint >= 'A' && codePoint <= 'Z') ? codePoint + 32u : codePoint;
     }
+    codePoint = plainApostrophe(codePoint);
     if (codePoint >= 0xC0u && codePoint <= 0xDEu && codePoint != 0xD7u) {
         return codePoint + 0x20u;
     }
@@ -240,6 +247,7 @@ uint32_t foldCodePoint(uint32_t codePoint) {
         }
         return codePoint;
     }
+    codePoint = plainApostrophe(codePoint);
 
     // Latin-1 Supplement: uppercase C0..DE (excluding D7, the multiplication sign) maps to the
     // lowercase E0..FE range, so folding case first halves the table below.

@@ -84,10 +84,10 @@ internal class SuggestionRow {
             }
             // Predictions for what comes next rather than candidates for a word in progress:
             // nothing was typed, so nothing is marked and the engine's order stands.
-            return candidates.take(cap)
+            return withoutDoubles(candidates).take(cap)
         }
 
-        val row = ArrayList(candidates.take(cap))
+        val row = ArrayList(withoutDoubles(candidates).take(cap))
         val at = row.indexOfFirst { it.text == typed }
         if (at >= 0) {
             row.add(0, row.removeAt(at))
@@ -116,6 +116,24 @@ internal class SuggestionRow {
         placeCorrection(row, correction, middle, cap)
         appliedIndex = middle
         return row
+    }
+
+    /**
+     * The candidates with each text once, in their order: the first of a text stays, and it
+     * takes the correction mark if a later copy carried it. Two spellings of one word can
+     * reach the row as the same text once they are cased for display.
+     */
+    fun withoutDoubles(candidates: List<Candidate>): List<Candidate> {
+        val kept = ArrayList<Candidate>(candidates.size)
+        for (candidate in candidates) {
+            val at = kept.indexOfFirst { it.text == candidate.text }
+            if (at < 0) {
+                kept += candidate
+            } else if (candidate.isCorrection && !kept[at].isCorrection) {
+                kept[at] = kept[at].copy(isCorrection = true)
+            }
+        }
+        return kept
     }
 
     /**

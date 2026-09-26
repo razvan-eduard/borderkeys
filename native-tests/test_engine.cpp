@@ -565,6 +565,25 @@ void runEngineTests() {
         check(loaded.rankOf("border", "borderkeys") == 0,
               "a word confirmed forty times outranks a rare dictionary word");
 
+        // A pack word the personal dictionary also holds, capitalised: one suggestion, not two
+        // that the strip would then show as the same word twice.
+        const char* capitalised[1] = {"Keyboard"};
+        const size_t capitalisedLength[1] = {8};
+        const int32_t capitalisedCount[1] = {40};
+        loaded.engine.loadUserWords(capitalised, capitalisedLength, capitalisedCount, 1);
+        Candidate offered[Engine::kMaxCandidates];
+        const int found = loaded.engine.suggest("keyboa", 6, nullptr, 0, nullptr, 0, offered,
+                                                Engine::kMaxCandidates);
+        int copies = 0;
+        for (int i = 0; i < found; ++i) {
+            uint32_t length = 0;
+            const char* const text = loaded.engine.candidateText(offered[i], &length);
+            if (text != nullptr && sameSpellingIgnoringCase(text, length, "keyboard", 8)) {
+                ++copies;
+            }
+        }
+        check(copies == 1, "a word held by a pack and, capitalised, by the personal dictionary is offered once");
+
         UserModel model;
         model.learn("borders", 7);
         model.learn("borders", 7);
@@ -882,15 +901,21 @@ void runEngineTests() {
         Candidate out[Engine::kMaxCandidates];
         const int found = loaded.engine.suggest("bord", 4, nullptr, 0, nullptr, 0, out,
                                                  Engine::kMaxCandidates);
-        int userPackSlot = -1;
+        // The pack's copy and the personal one are one word, so it is offered once -- from
+        // whichever source scored it higher -- and it carries the flag either way, since a
+        // personal candidate looks its flag up across the packs.
+        int slot = -1;
+        int copies = 0;
         for (int i = 0; i < found; ++i) {
-            if (out[i].packIndex == Candidate::kUserPack) {
-                userPackSlot = i;
-                break;
+            uint32_t length = 0;
+            const char* const text = loaded.engine.candidateText(out[i], &length);
+            if (text != nullptr && sameSpellingIgnoringCase(text, length, "border", 6)) {
+                slot = i;
+                ++copies;
             }
         }
-        check(userPackSlot >= 0, "the learned word is offered from the user model");
-        check(userPackSlot >= 0 && loaded.engine.candidateIsProperNoun(out[userPackSlot]),
+        check(copies == 1, "the learned word is offered once, not once per source");
+        check(slot >= 0 && loaded.engine.candidateIsProperNoun(out[slot]),
               "and is still recognised as the proper noun the pack itself flags it as");
     }
 
