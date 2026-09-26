@@ -1753,7 +1753,15 @@ void Engine::searchFrequentWithPrefix(int packIndex, const uint32_t* folded, int
         while (matched < foldedLength) {
             uint32_t codePoint = 0;
             cursor = utf8Decode(cursor, end, &codePoint);
-            if (cursor == nullptr || foldCodePoint(codePoint) != folded[matched]) {
+            if (cursor == nullptr) {
+                matches = false;
+                break;
+            }
+            const uint32_t foldedCodePoint = foldCodePoint(codePoint);
+            if (foldedCodePoint == kDroppedCodePoint) {
+                continue;
+            }
+            if (foldedCodePoint != folded[matched]) {
                 matches = false;
                 break;
             }

@@ -46,7 +46,11 @@ attestations and the full commit lists are on the
   sigma, so a pack in those scripts is reached however a word was capitalised.
 - Eight layouts in scripts of their own: Russian, Ukrainian, Bulgarian, Serbian, Macedonian,
   Greek, Armenian and Georgian, each with the letters its rows have no room for on the long
-  press.
+  press. Ukrainian has the apostrophe as a key of its own.
+- Hebrew and Arabic layouts, read from the right: the strip's first suggestion sits at the
+  right edge and the ring's wedges are mirrored. The engine folds away the Hebrew vowel points
+  and the Arabic harakat, and reaches a word by its bare alef, yeh or waw whichever hamza form
+  it is spelled with.
 - Fixed: a word the personal dictionary held capitalised and a pack held in lower case was
   offered twice on the strip, and so was a contraction the corpus wrote with both kinds of
   apostrophe. Each is one suggestion now: the engine keeps one candidate per spelling

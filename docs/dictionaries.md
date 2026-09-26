@@ -95,6 +95,12 @@ the apostrophes and hyphen that live inside words. The keyboard is the thing tha
 to type the word, so the keyboard's own overlay is where the alphabet comes from; there is no
 second list to drift.
 
+A Hebrew vowel point, an Arabic harakat and the tatweel are marks a folded word does not carry:
+the fold drops them, `make_pack.py` leaves them out of the spelling it counts, and a word typed
+or pasted with them reaches the same key as the bare word. The Arabic letters that differ from
+a base letter by a hamza, a madda or a dot fold onto it, as the Hebrew maqaf folds onto the
+hyphen and the geresh onto the apostrophe.
+
 Every apostrophe is written as the plain one, the one the keyboard types. The typographic
 apostrophes and the modifier letter apostrophe fold onto it in the compiler and in the engine, so
 a list holds one row for `don't` however its corpus spelled it: `make_pack.py` writes the plain
@@ -399,7 +405,9 @@ python3 tools/new_language.py tools/languages/nl_NL.json
 runs the whole of it, each step skipped when its output is already there: fetch, the accent
 overlay, the two name lists, the grammar, a first count for the ordinary-word list, the count
 again with the names merged, the cleaning tools over a working copy that holds the six bundled
-lists beside the new one, the compiled pack with its size, and the reachability check. The
-manifests also feed `drop_unreachable.py` and `drop_foreign.py`, so a downloadable language is
-judged by the same rules as a bundled one. `.github/workflows/packs.yml`, started by hand,
+lists beside the new one, the compiled pack with its size, and the reachability check. A manifest
+whose budget is still `null` has its count recorded by that check, and every later run is gated
+against it; the number may only ever be lowered by hand. The manifests also feed
+`drop_unreachable.py` and `drop_foreign.py`, so a downloadable language is judged by the same
+rules as a bundled one. `.github/workflows/packs.yml`, started by hand,
 compiles every list in `dictionaries/extra/` and replaces the `packs` release with the result.

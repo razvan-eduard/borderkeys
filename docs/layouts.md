@@ -26,12 +26,24 @@ A layout is one JSON file in `keyboard/src/main/assets/layouts/`. Thirty-three s
 qwerty  qwertz  azerty  dvorak  colemak  colemak_dh  workman  bepo  clearflow  kasroz  toki_pona
 turkish_f  turkish_q  spanish  portuguese  nordic  danish  german  czech  hungarian
 russian  ukrainian  bulgarian  serbian  macedonian  greek  armenian  georgian
+hebrew  arabic
 numpad  symbols  symbols_shift  symbols_numpad_left  symbols_numpad_right
 ```
+
+Hebrew and Arabic are written right to left. Their keys sit in the standard arrangement of each
+language, as they would on a physical keyboard, and the strip and the ring follow the
+language's direction: the first suggestion sits at the right, a word too long for its slot is
+clipped from its own start, and the ring's wedges are mirrored so the best rank sits at the
+upper left. The number pad stays on the side its own setting names, since that is a choice of
+thumb rather than of reading order, and the arrow keys keep moving the caret the way they
+point. Neither script has case, so neither layout carries a shift key; the Hebrew apostrophe is
+a key of its own, and the Arabic alef, yeh and waw carry their hamza forms on the long press.
 
 The eight scripts of their own are one layout each, in the arrangement the language types on,
 with what a row has no room for on the long press its overlay provides: ё and ъ for Russian,
 ґ for Ukrainian, the accented vowels for Greek, five letters for Armenian, seven for Georgian.
+Ukrainian carries the apostrophe as a key of its own in the third row, since it sits inside
+words there.
 Their subtypes are named by the locale's own display name, the way the two QWERTY subtypes
 are, since each is one language.
 

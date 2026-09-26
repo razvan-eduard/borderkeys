@@ -544,8 +544,9 @@ class SuggestionStripView(
             var appliedRectDrawnThisFrame = false
 
             if (chipOffset == 1) {
+                val chipLeft = slotLeft(0, slotWidth)
                 if (pressedIndex == 0) {
-                    canvas.drawRect(0f, 0f, slotWidth, height.toFloat(), paints.keyPressedFill)
+                    canvas.drawRect(chipLeft, 0f, chipLeft + slotWidth, height.toFloat(), paints.keyPressedFill)
                 }
                 // Drawn in the accent colour rather than the label colour: it is the one chip
                 // that inserts something the user did not type, and it should not be possible
@@ -558,15 +559,14 @@ class SuggestionStripView(
 
                 val icon = pasteIcon
                 val side = iconSizePx().toInt()
-                var textLeft = CHIP_GAP_PX
+                var textLeft = chipLeft + CHIP_GAP_PX
                 if (icon != null) {
                     val top = ((height - side) / 2f).toInt()
-                    icon.setBounds(
-                        CHIP_GAP_PX.toInt(), top, CHIP_GAP_PX.toInt() + side, top + side,
-                    )
+                    val iconLeft = (chipLeft + CHIP_GAP_PX).toInt()
+                    icon.setBounds(iconLeft, top, iconLeft + side, top + side)
                     icon.setTint(paint.color)
                     icon.draw(canvas)
-                    textLeft = CHIP_GAP_PX * 2f + side
+                    textLeft = chipLeft + CHIP_GAP_PX * 2f + side
                 }
                 // Both lines centred vertically around the middle of the strip, so a chip with
                 // one line and a chip with two sit on the same axis as the words beside them.
@@ -582,8 +582,8 @@ class SuggestionStripView(
                 paint.textSize = previous
                 paint.textAlign = previousAlign
                 if (shown > 1) {
-                    canvas.drawLine(slotWidth, height * 0.25f, slotWidth, height * 0.75f,
-                        paints.keyStroke)
+                    val edge = if (rightToLeft) chipLeft else chipLeft + slotWidth
+                    canvas.drawLine(edge, height * 0.25f, edge, height * 0.75f, paints.keyStroke)
                 }
             }
 
@@ -593,7 +593,7 @@ class SuggestionStripView(
                 if (length == 0) {
                     continue
                 }
-                val left = slotWidth * slot
+                val left = slotLeft(slot, slotWidth)
                 // Compared against the drawn slot, not the word index: slotAt returns a slot,
                 // and with the clipboard chip present the two differ by one -- which lit the
                 // chip next to the one under the finger.
@@ -660,8 +660,11 @@ class SuggestionStripView(
                     val previousAlign = paint.textAlign
                     canvas.save()
                     canvas.clipRect(left, 0f, left + slotWidth, height.toFloat())
-                    paint.textAlign = android.graphics.Paint.Align.LEFT
-                    canvas.drawText(chars[index], 0, length, left, wordBaseline, paint)
+                    // From the slot's reading start, so what survives the clip is the word's
+                    // own beginning: its right end for a language read from the right.
+                    paint.textAlign = if (rightToLeft) android.graphics.Paint.Align.RIGHT else android.graphics.Paint.Align.LEFT
+                    val start = if (rightToLeft) left + slotWidth else left
+                    canvas.drawText(chars[index], 0, length, start, wordBaseline, paint)
                     paint.textAlign = previousAlign
                     canvas.restore()
                 } else {
@@ -672,7 +675,8 @@ class SuggestionStripView(
                 }
 
                 if (slot > chipOffset) {
-                    canvas.drawLine(left, height * 0.25f, left, height * 0.75f, paints.keyStroke)
+                    val divider = if (rightToLeft) left + slotWidth else left
+                    canvas.drawLine(divider, height * 0.25f, divider, height * 0.75f, paints.keyStroke)
                 }
             }
             if (!appliedRectDrawnThisFrame) {
@@ -846,9 +850,26 @@ class SuggestionStripView(
         if (shown == 0) {
             return -1
         }
-        val slot = (x / (width.toFloat() / shown)).toInt()
+        val fromStart = if (rightToLeft) width - x else x
+        val slot = (fromStart / (width.toFloat() / shown)).toInt()
         return if (slot in 0 until shown) slot else -1
     }
+
+    /**
+     * Whether the slots run from the right, the way the language on the keys is read. The first
+     * slot then sits at the right edge and the words are clipped from their own start.
+     */
+    var rightToLeft: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
+    /** The left edge of [slot], with slot zero at the reading start. */
+    private fun slotLeft(slot: Int, slotWidth: Float): Float =
+        if (rightToLeft) width - slotWidth * (slot + 1) else slotWidth * slot
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()

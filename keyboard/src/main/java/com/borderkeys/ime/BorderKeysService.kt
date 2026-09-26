@@ -1261,6 +1261,7 @@ class BorderKeysService :
             KeyboardPreferences.radialSizeScale(preferences.radialMenuSize)
         view.radialBlurBackground = preferences.radialBlurBackground
         view.keyboard.setLayout(composedLayout(alphabeticLayout))
+        applyWritingDirection(view)
         view.suggestionStrip.listener = this
         view.suggestionStrip.visibleLimit = preferences.suggestionCount
         view.quickSettings.listener = this
@@ -3556,7 +3557,14 @@ class BorderKeysService :
             else -> composedLayout(alphabeticLayout)
         }
         host?.keyboard?.setLayout(layout)
+        host?.let { applyWritingDirection(it) }
         pushKeyGeometry()
+    }
+
+    /** The strip and the ring read the way the alphabetic layout's language does. */
+    private fun applyWritingDirection(view: KeyboardHostView) {
+        view.suggestionStrip.rightToLeft = alphabeticLayout.rightToLeft
+        view.radialSuggestionMenu.rightToLeft = alphabeticLayout.rightToLeft
     }
 
     /**

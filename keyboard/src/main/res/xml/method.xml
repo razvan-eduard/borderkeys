@@ -296,4 +296,20 @@
         android:isAsciiCapable="false"
         android:imeSubtypeExtraValue="layout=georgian" />
 
+    <subtype
+        android:subtypeId="0x0B0DE01E"
+        android:label="@string/subtype_language_label"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="he-IL"
+        android:isAsciiCapable="false"
+        android:imeSubtypeExtraValue="layout=hebrew" />
+
+    <subtype
+        android:subtypeId="0x0B0DE01F"
+        android:label="@string/subtype_language_label"
+        android:imeSubtypeMode="keyboard"
+        android:languageTag="ar"
+        android:isAsciiCapable="false"
+        android:imeSubtypeExtraValue="layout=arabic" />
+
 </input-method>
