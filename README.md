@@ -72,8 +72,9 @@ directly from [GitHub Releases](https://github.com/razvan-eduard/borderkeys/rele
 - **Capitals and spaces the way every keyboard does them.** Shift is spent by the next letter
   only; two quick taps or a hold lock it. Capitals are off, on when the field asks for them, or
   on everywhere — one choice, since some apps forget to ask. Two spaces make a full stop, a
-  space is added after punctuation and a picked suggestion, and the space you type out of habit
-  right after can be ignored once, always, or kept. The capital after a full stop is decided
+  space is added after punctuation and a picked suggestion (never in an e-mail or web-address
+  field), and the space you type out of habit right after can be ignored once, always, or
+  kept. The capital after a full stop is decided
   from what the keyboard just wrote, so it comes even in apps whose editor answers late.
 
 <p align="center">

@@ -21,6 +21,9 @@ object PunctuationSpace {
     /**
      * True when a space belongs after the mark.
      *
+     * [addressField] is [AddressField.isAddress] for the field being typed into: an e-mail or
+     * web address never gets a space after a mark.
+     *
      * [insideNumbers] is [KeyboardPreferences.spaceInsideNumbers]: with it on the digit in
      * front stops mattering and every mark is spaced wherever it falls.
      *
@@ -34,12 +37,15 @@ object PunctuationSpace {
      */
     inline fun follows(
         enabled: Boolean,
+        addressField: Boolean,
         insideNumbers: Boolean,
         tightPunctuation: Boolean,
         before: () -> Char?,
         after: () -> Char?,
     ): Boolean {
-        if (!enabled || !tightPunctuation) {
+        // An address -- an e-mail, a URL -- has no space in it anywhere, and its marks are
+        // separators of its own: "john.doe", "example.org", "?query".
+        if (!enabled || addressField || !tightPunctuation) {
             return false
         }
         // Inside a number rather than at the end of a sentence. A digit in front is the whole of
