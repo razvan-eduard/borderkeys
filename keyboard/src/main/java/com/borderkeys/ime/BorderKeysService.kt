@@ -364,6 +364,13 @@ class BorderKeysService :
     private var ownEditPending = false
 
     /**
+     * Whether [adoptWordAtCaret] is in the middle of marking the word under the caret. An editor
+     * in this same process reports each of that method's own edits back through
+     * [onUpdateSelection] before the method returns, and those reports are its echo, not a move.
+     */
+    private var adoptingWordAtCaret = false
+
+    /**
      * Whether this gesture's pause-time preview already composed a word. Read by [onGesture]
      * when the stroke resumed after that preview opened no ring: the full stroke decodes then,
      * and the preview's own guess is discarded rather than committed as a word of its own.
@@ -4379,6 +4386,18 @@ class BorderKeysService :
      * [partial] is empty exactly when that is true, and nothing is marked for an empty region.
      */
     private fun adoptWordAtCaret() {
+        if (adoptingWordAtCaret) {
+            return
+        }
+        adoptingWordAtCaret = true
+        try {
+            adoptWordAtCaretNow()
+        } finally {
+            adoptingWordAtCaret = false
+        }
+    }
+
+    private fun adoptWordAtCaretNow() {
         composing.setLength(0)
         composingFromGesture = false
         swipeAutoSpaceInserted = false

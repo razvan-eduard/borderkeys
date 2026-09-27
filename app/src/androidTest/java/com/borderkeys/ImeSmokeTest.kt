@@ -122,7 +122,12 @@ class ImeSmokeTest {
         tapKey(SPACE)
         type("def")
         settle()
-        repeat(4) { device.pressKeyCode(KeyEvent.KEYCODE_DPAD_LEFT) }
+        // One press at a time: each caret move is reported back to the keyboard, which reads
+        // the word under the caret, and the next press waits for that.
+        repeat(4) {
+            device.pressKeyCode(KeyEvent.KEYCODE_DPAD_LEFT)
+            Thread.sleep(SETTLE_MILLIS / 2)
+        }
         settle()
         type("x")
         assertField("abcx def")
@@ -179,7 +184,8 @@ class ImeSmokeTest {
         path += topWedge
         swipe(path)
         settle()
-        assertTrue("the ring's top word was picked", field().text.orEmpty().startsWith("the"))
+        val text = field().text.orEmpty()
+        assertTrue("the ring's top word was picked, but the field holds '$text'", text.startsWith("the"))
     }
 
     @Test
@@ -295,12 +301,19 @@ class ImeSmokeTest {
      * description says so, clears it, and focuses it with the keyboard up.
      */
     private fun focusProbe(mode: ProbeMode) {
+        // Each tap waits until the field has moved to another mode before the next: a tap
+        // counted before the last one has redrawn the label would cycle past the mode.
         var taps = 0
         while (!device.hasObject(By.descStartsWith(mode.description)) && taps < ProbeMode.entries.size) {
             val label = device.wait(Until.findObject(By.textStartsWith(ProbeMode.BULLET)), KEY_TIMEOUT)
             assertNotNull("the probe field's mode label", label)
+            val before = probeMode()
             label.click()
             taps++
+            val deadline = System.currentTimeMillis() + KEY_TIMEOUT
+            while (probeMode() == before && System.currentTimeMillis() < deadline) {
+                Thread.sleep(SETTLE_MILLIS / 2)
+            }
             settle()
         }
         val field = device.wait(Until.findObject(By.descStartsWith(mode.description)), KEY_TIMEOUT)
@@ -313,6 +326,10 @@ class ImeSmokeTest {
         assertTrue("the keyboard over the probe field", device.wait(Until.hasObject(keyMatcher("q")), KEY_TIMEOUT))
         settle()
     }
+
+    /** The mode the probe field is in right now, as the start of its content description, or null. */
+    private fun probeMode(): String? =
+        device.findObject(By.descStartsWith(PROBE_PREFIX))?.contentDescription?.substringBefore(':')
 
     /** What the probe field holds in [mode], exactly, read from its content description. */
     private fun probeText(mode: ProbeMode): String {
@@ -503,6 +520,9 @@ class ImeSmokeTest {
         /** Every word a case types, forgotten before each case so no run teaches the next. */
         val TYPED_WORDS = listOf("teh", "the", "abc", "def", "abcx", "ab", "cd", "x", "abxcd")
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
+
+        /** What every mode's content description starts with; the mode's own name follows. */
+        const val PROBE_PREFIX = "probe-"
         const val EDIT_TEXT = "android.widget.EditText"
         const val SPACE = "Space"
         const val SHIFT = "Shift"
