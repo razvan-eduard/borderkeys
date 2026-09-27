@@ -31,6 +31,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -231,6 +232,37 @@ class ImeSmokeTest {
             stripText(strip).pixels,
         )
         assertEquals("hunter", probeText(ProbeMode.PASSWORD))
+    }
+
+    @Test
+    fun inTermuxEachLetterArrivesAsItIsTypedAndEnterRunsTheCommand() {
+        if (!device.executeShellCommand("pm list packages $TERMUX").lines().contains("package:$TERMUX")) {
+            check(InstrumentationRegistry.getArguments().getString(TERMUX_ARGUMENT) != TERMUX_REQUIRED) {
+                "Termux is required for this run and is not installed"
+            }
+            assumeTrue("Termux is not installed", false)
+        }
+        // Termux publishes its screen as the terminal's description when it starts under an
+        // accessibility connection, as it does here.
+        device.executeShellCommand("am force-stop $TERMUX")
+        device.executeShellCommand("pm grant $TERMUX android.permission.POST_NOTIFICATIONS")
+        device.executeShellCommand("am start -n $TERMUX/$TERMUX_ACTIVITY")
+        awaitTerminal("a prompt") { lines -> lines.any { it.trimEnd().endsWith("$") } }
+        checkNotNull(terminalView()) { "Termux's terminal" }.click()
+        assertTrue("the keyboard over Termux", device.wait(Until.hasObject(keyMatcher("q")), KEY_TIMEOUT))
+        settle()
+        type("echo")
+        // Termux keeps a composing word in a buffer of its own until the word ends, so the
+        // letters reach the prompt before the space only when each is committed as it is typed.
+        awaitTerminal("the letters before the word ended", KEY_TIMEOUT) { lines ->
+            lines.any { it.trimEnd().endsWith("$ echo") }
+        }
+        tapKey(SPACE)
+        type("teh")
+        tapKey(ENTER)
+        val lines = awaitTerminal("the command's output") { it.contains("teh") }
+        assertTrue("the command as typed in $lines", lines.any { it.trimEnd().endsWith("$ echo teh") })
+        device.executeShellCommand("am force-stop $TERMUX")
     }
 
     @Test
@@ -567,6 +599,32 @@ class ImeSmokeTest {
         settle()
     }
 
+    /** Termux's terminal: its node carrying the longest description, which is its screen. */
+    private fun terminalView(): UiObject2? =
+        device.findObjects(By.pkg(TERMUX)).maxByOrNull { it.contentDescription?.length ?: 0 }
+            ?.takeIf { !it.contentDescription.isNullOrEmpty() }
+
+    /** Waits up to [timeout] for Termux's screen, line by line, to satisfy [until], and returns those lines. */
+    private fun awaitTerminal(
+        what: String,
+        timeout: Long = TERMUX_TIMEOUT,
+        until: (List<String>) -> Boolean,
+    ): List<String> {
+        val deadline = System.currentTimeMillis() + timeout
+        while (true) {
+            val lines = try {
+                terminalView()?.contentDescription?.lines().orEmpty()
+            } catch (stale: StaleObjectException) {
+                emptyList()
+            }
+            if (until(lines)) {
+                return lines
+            }
+            check(System.currentTimeMillis() < deadline) { "Termux never showed $what; its screen was $lines" }
+            Thread.sleep(SETTLE_MILLIS)
+        }
+    }
+
     private fun settle() {
         device.waitForIdle(SETTLE_MILLIS)
         Thread.sleep(SETTLE_MILLIS)
@@ -664,5 +722,15 @@ class ImeSmokeTest {
         fun colourDistance(a: Int, b: Int): Int =
             abs(Color.red(a) - Color.red(b)) + abs(Color.green(a) - Color.green(b)) +
                 abs(Color.blue(a) - Color.blue(b))
+
+        const val TERMUX = "com.termux"
+        const val TERMUX_ACTIVITY = "com.termux.app.TermuxActivity"
+
+        /** The instrumentation argument, and its value, that make a missing Termux a failure. */
+        const val TERMUX_ARGUMENT = "termux"
+        const val TERMUX_REQUIRED = "required"
+
+        /** Termux's first start unpacks its system before the prompt appears. */
+        const val TERMUX_TIMEOUT = 120_000L
     }
 }

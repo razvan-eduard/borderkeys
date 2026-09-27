@@ -137,7 +137,8 @@ text, a chip picked with the caret at the start of the field followed by a new w
 along the space bar with shift locked that selects what was typed, a swipe across three keys
 that writes the word, a pause in a swipe that opens the ring and a lift on its top wedge that
 picks the top word, Control on the modifier row followed by A selecting the field, a mistyped
-word in a password field left as typed, a slide up the space bar in a field of several
+word in a password field left as typed, a command typed into Termux reaching its prompt letter
+by letter before the word ends and running on enter, a slide up the space bar in a field of several
 lines that moves the caret a line, letters tapped on the Russian layout, chosen through the
 subtype setting, reaching the field as themselves, on the Hebrew layout the first
 suggestion picked from the right end of the strip, and with the Romanian pack installed beside
@@ -156,6 +157,13 @@ what was typed where the private notice was, and Hide puts the notice back. The 
 on its canvas and exposes neither to the accessibility tree, so the case takes a screenshot and
 measures how far across the middle of the strip the text reaches: less than half as far as the
 notice after Show, and the notice's own pixels again after Hide.
+
+The Termux case reads Termux's own screen, which Termux publishes as its terminal's description
+when it starts under an accessibility connection, as it does during the suite. It needs Termux
+on the emulator: CI installs Termux's own x86_64 release build, checked against the digest its
+release publishes, and passes `termux=required`, which makes a missing Termux a failure.
+Without that argument the case is skipped where Termux is not installed; locally, install it,
+or add `-e termux required` to the command below to insist on it.
 
 It runs in CI's `smoke` job on x86_64 emulators with a Pixel 5 profile at API 30 and API 35, the oldest and the newest
 the keyboard is built for (`-Pborderkeys.extraAbis=x86_64` adds the ABI, which the shipped APKs

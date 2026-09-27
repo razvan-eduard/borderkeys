@@ -405,6 +405,14 @@ jobs:
       - name: Build the dictionaries
         run: ./gradlew :keyboard:buildDictionaries --no-daemon "$GRADLE_HEAP"
 
+      # Termux, for the case that types a command into a terminal: its own release build,
+      # checked against the digest its release publishes.
+      - name: Fetch Termux
+        run: |
+          curl -fsSL -o termux.apk \
+            "https://github.com/termux/termux-app/releases/download/v0.118.3/termux-app_v0.118.3%2Bgithub-debug_x86_64.apk"
+          echo "3550e61f4d9eb49b712fd1bd9519dc37085a4d8eb597c57a340f0a64859b7144  termux.apk" | sha256sum -c -
+
       # The core flavour: the paths under test are the same in both, and core compiles no
       # inference runtime. API 30 is minSdk, the oldest editor the keyboard claims to work
       # with; API 35 is the newest.
@@ -418,7 +426,9 @@ jobs:
           profile: pixel_5
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew :app:connectedCoreDebugAndroidTest -Pborderkeys.extraAbis=x86_64 --no-daemon "$GRADLE_HEAP"
+          script: |
+            adb install -r termux.apk
+            ./gradlew :app:connectedCoreDebugAndroidTest -Pborderkeys.extraAbis=x86_64 -Pandroid.testInstrumentationRunnerArguments.termux=required --no-daemon "$GRADLE_HEAP"
 
       - name: Keep the report when it fails
         if: failure()

@@ -4,6 +4,7 @@
 package com.borderkeys.data.theme
 
 import com.borderkeys.data.ClipboardExclusions
+import com.borderkeys.data.PackageNames
 import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.Serializer
 import kotlinx.serialization.SerialName
@@ -46,6 +47,12 @@ data class KeyboardPreferences(
      * each once, bounded.
      */
     val clipboardExcludedPackages: List<String> = emptyList(),
+
+    /**
+     * Packages, beyond the terminals the keyboard knows, typed into as terminals: every key goes
+     * straight through. Sanitised on read like [clipboardExcludedPackages].
+     */
+    val terminalPackages: List<String> = emptyList(),
     /** Whether confirmed words are written to the personal dictionary at all. */
     val learningEnabled: Boolean = true,
 
@@ -963,7 +970,8 @@ data class KeyboardPreferences(
         return copy(
             hapticStrength = if (hapticStrength in HAPTIC_LIGHT..HAPTIC_SYSTEM) hapticStrength else HAPTIC_SYSTEM,
             textShortcuts = sanitisedTextShortcuts,
-            clipboardExcludedPackages = ClipboardExclusions.sanitised(clipboardExcludedPackages),
+            clipboardExcludedPackages = PackageNames.sanitised(clipboardExcludedPackages),
+            terminalPackages = PackageNames.sanitised(terminalPackages),
         minCorrectionLength = minCorrectionLength.coerceIn(MIN_CORRECTION_LENGTH, MAX_CORRECTION_LENGTH),
         correctionStrictness = if (correctionStrictness > 0f) {
             correctionStrictness.coerceIn(MIN_CORRECTION_STRICTNESS, MAX_CORRECTION_STRICTNESS)

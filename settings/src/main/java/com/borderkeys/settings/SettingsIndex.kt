@@ -148,5 +148,6 @@ object SettingsIndex {
         Entry(Screen.Typing, Keys.RADIAL_TITLE, Keys.RADIAL_BLUR_BACKGROUND),
         Entry(Screen.Typing, Keys.RADIAL_TITLE, Keys.RADIAL_CLOSE_ON_EDITOR_MOVE),
         Entry(Screen.Typing, Keys.RADIAL_TITLE, Keys.RADIAL_DEBUG_FORCE_OPEN),
+        Entry(Screen.Typing, null, Keys.TERMINAL_TITLE),
     )
 }
