@@ -125,8 +125,13 @@ ships.
 - **A personal dictionary you can see and edit.** Every learned word is listed with how often
   you used it, and a `Forget` (remove it) and a `Block` (never suggest it again) right beside
   it — not a black box. The word pairs and triples it learned are listed on the same screen, each
-  with a Forget of its own, and go with a word when it is forgotten. Holding a suggestion offers the same from the keyboard, and a
-  "Why?": the engine's own account of the word's score, term by term, in plain words.
+  with a Forget of its own, and go with a word when it is forgotten. The words you open
+  sentences with are learned as well, listed as the word "at the start of a sentence", and
+  offered first when a sentence begins. The "Learn at all" switch gates the whole of it: off,
+  nothing you type is recorded and nothing learned is offered, the dictionaries alone
+  suggest, and switching it off asks you first and then forgets everything learned. Holding
+  a suggestion offers the same from the keyboard, and a "Why?": the engine's own account of
+  the word's score, term by term, in plain words.
 - **Terminals typed into as terminals.** In Termux, ConnectBot, JuiceSSH, Termius and any field
   that declares no text class at all, every key types straight through: a character is written
   the moment it is pressed, never held as composing text, a backspace deletes one character,

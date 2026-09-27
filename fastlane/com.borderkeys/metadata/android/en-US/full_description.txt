@@ -12,6 +12,11 @@ database and are excluded from system backup and from device-to-device transfer.
   inflation in the keyboard process.
 * Several languages active at once, with no manual switching. Mixing two languages in one
   sentence is the normal case, not an exception.
+* Six languages inside the app — English, Romanian, German, Spanish, French and Italian —
+  and twenty more as packs to download from the releases page and import from a file:
+  Dutch, Portuguese, Swedish, Danish, Norwegian, Finnish, Polish, Czech, Hungarian, Turkish,
+  Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek, Armenian, Georgian, Hebrew and
+  Arabic, each with the same word pairs, names and grammar the bundled six carry.
 * Notices when a correction was made under the wrong language and offers the word back, or
   fixes it automatically — your choice — landing on the field's own undo history like any
   other edit.
@@ -38,9 +43,13 @@ database and are excluded from system backup and from device-to-device transfer.
 * A names dictionary built from Wikidata (CC0), so a name capitalises correctly
   mid-sentence instead of only at the start of one — while everyday words that happen to be
   somebody's name stay lower-case. One switch turns the capital off if you disagree with it.
-* Alternate physical layouts — AZERTY, Dvorak, QWERTZ, ClearFlow, KasRoz and Toki Pona —
-  alongside QWERTY, for every bundled language, and a symbols page with the digits in a 3×3
-  block beside the symbols, at the right or the left, on near-square keys.
+* Thirty layouts: QWERTY, AZERTY, QWERTZ, Dvorak, Colemak, Colemak-DH, Workman, Bépo,
+  ClearFlow, KasRoz and Toki Pona, the two Turkish arrangements, and the Spanish, Portuguese,
+  Nordic, Danish, German, Czech and Hungarian variants with their extra letters as keys;
+  Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek, Armenian and Georgian in their
+  own scripts; Hebrew and Arabic read from the right, with the suggestions and the ring
+  following. A number row, and a symbols page with the digits in a 3×3 block beside the
+  symbols, at the right or the left, on near-square keys.
 * An optional modifier row for terminals and editors: Esc, Tab, Ctrl, Alt and the arrows,
   with Home, End, Page up, Page down, forward Delete and Insert on offer, in the order you
   choose, above the letters or below the keyboard, each sent as the hardware key it names.
@@ -49,8 +58,16 @@ database and are excluded from system backup and from device-to-device transfer.
   cakes come first, over "pumpkin" the lantern, in the languages switched on; open the clipboard
   over "invoice" and the clips containing it come first.
   A long press on a clip pins, edits or deletes it.
-* A personal dictionary you can see and edit: every learned word has a Forget and a Block
-  right beside it, not a black box.
+* A personal dictionary you can see and edit: every learned word and phrase has a Forget
+  right beside it, and a Block for the words. The words you open sentences with are learned
+  and offered first when a sentence begins. One switch gates all of it — off, the
+  dictionaries alone suggest, and everything learned is forgotten after asking you — and a
+  long press on any suggestion answers "Why?" with the terms that ranked it.
+* Settings you can search, a tile in the quick settings, a date-and-time quick action in a
+  pattern of your own, clipboard search with wildcards and regular expressions, keyboard
+  opacity, and a vibration switch per kind of touch.
+* Terminals typed into as terminals: in Termux and its kin the keys arrive as key events
+  and the caret moves the way a terminal expects.
 * A row of quick actions — copy, paste, cut, select, delete a word, move the cursor, undo
   and redo, flip a word's capital, capitalise every sentence in the field — extendable with
   your own macros; above the suggestions, below the keys or down a side, in four sizes, with
