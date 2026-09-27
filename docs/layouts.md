@@ -31,10 +31,13 @@ numpad  symbols  symbols_shift  symbols_numpad_left  symbols_numpad_right
 ```
 
 Hebrew and Arabic are written right to left. Their keys sit in the standard arrangement of each
-language, as they would on a physical keyboard, and the strip and the ring follow the
-language's direction: the first suggestion sits at the right, a word too long for its slot is
-clipped from its own start, and the ring's wedges are mirrored so the best rank sits at the
-upper left. The number pad stays on the side its own setting names, since that is a choice of
+language, as they would on a physical keyboard, and the strip, the ring and the emoji and
+clipboard panels follow the language's direction: the first suggestion sits at the right, a
+word too long for its slot is clipped from its own start, the ring's wedges are mirrored so
+the best rank sits at the upper left, the emoji grid and its tabs start at the top right, and
+the clipboard's back arrow, thumbnails, pin marks and actions run from the right. A clip's
+own text is aligned by its own direction under any layout: a Hebrew clip starts at the right
+edge under an English layout too, and an English one at the left under a Hebrew layout. The number pad stays on the side its own setting names, since that is a choice of
 thumb rather than of reading order, and the arrow keys keep moving the caret the way they
 point. Neither script has case, so neither layout carries a shift key; the Hebrew apostrophe is
 a key of its own, and the Arabic alef, yeh and waw carry their hamza forms on the long press.

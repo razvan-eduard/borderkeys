@@ -3568,10 +3568,12 @@ class BorderKeysService :
         pushKeyGeometry()
     }
 
-    /** The strip and the ring read the way the alphabetic layout's language does. */
+    /** The strip, the ring and the two panels read the way the alphabetic layout's language does. */
     private fun applyWritingDirection(view: KeyboardHostView) {
         view.suggestionStrip.rightToLeft = alphabeticLayout.rightToLeft
         view.radialSuggestionMenu.rightToLeft = alphabeticLayout.rightToLeft
+        view.emojiPanel.rightToLeft = alphabeticLayout.rightToLeft
+        view.clipboardPanel.rightToLeft = alphabeticLayout.rightToLeft
     }
 
     /**

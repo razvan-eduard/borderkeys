@@ -47,8 +47,8 @@ database and are excluded from system backup and from device-to-device transfer.
   ClearFlow, KasRoz and Toki Pona, the two Turkish arrangements, and the Spanish, Portuguese,
   Nordic, Danish, German, Czech and Hungarian variants with their extra letters as keys;
   Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek, Armenian and Georgian in their
-  own scripts; Hebrew and Arabic read from the right, with the suggestions and the ring
-  following. A number row, and a symbols page with the digits in a 3×3 block beside the
+  own scripts; Hebrew and Arabic read from the right, with the suggestions, the ring and the
+  emoji and clipboard panels following. A number row, and a symbols page with the digits in a 3×3 block beside the
   symbols, at the right or the left, on near-square keys.
 * An optional modifier row for terminals and editors: Esc, Tab, Ctrl, Alt and the arrows,
   with Home, End, Page up, Page down, forward Delete and Insert on offer, in the order you

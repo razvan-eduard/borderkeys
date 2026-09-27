@@ -12,6 +12,13 @@ listed under *Unreleased* and moves under its version when it is tagged. The APK
 attestations and the full commit lists are on the
 [releases page](https://github.com/razvan-eduard/borderkeys/releases).
 
+## Unreleased
+
+- Under the Hebrew and Arabic layouts the emoji and clipboard panels run from the right as the
+  strip and the ring do: the emoji grid and its tabs start at the top right, and the clipboard's
+  back arrow, thumbnails, pin marks and actions are mirrored. A clip's text is aligned by its
+  own direction under any layout.
+
 ## v0.9.0 — 2026-09-27
 
 - The language packs carry their word triples as an index hung off the pairs, format
