@@ -73,6 +73,7 @@ class ImeSmokeTest {
                     preferredLanguageTag = "",
                     numberRow = false,
                     modifierRow = false,
+                    languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_OFF,
                 )
             }
         }
@@ -244,6 +245,41 @@ class ImeSmokeTest {
             assertField("the ")
         } finally {
             selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
+        }
+    }
+
+    @Test
+    fun aCorrectionMadeInTheWrongLanguageIsUndoneWhenTheLanguageFlips() {
+        installBundledPack(ROMANIAN)
+        runBlocking {
+            DataGraph.themes.updatePreferences {
+                it.copy(languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY)
+            }
+        }
+        try {
+            // The second pack reaches the engine off the main thread once the repository says
+            // so, and the keys are redrawn with its letters on their long press when it has.
+            val deadline = System.currentTimeMillis() + LAUNCH_TIMEOUT
+            while (findKey("a")?.contentDescription?.contains(ROMANIAN_HOLD_HINT) != true) {
+                check(System.currentTimeMillis() < deadline) { "the Romanian letters never reached the keys" }
+                Thread.sleep(SETTLE_MILLIS)
+            }
+            settle()
+            // Romanian settles the verdict, so "in" is spelled the Romanian way; enough English
+            // after it turns the verdict, and the word is asked about again, of the English pack.
+            for (word in ROMANIAN_PHRASE.split(' ') + "in" + ENGLISH_PHRASE.split(' ')) {
+                type(word)
+                tapKey(SPACE)
+            }
+            settle()
+            settle()
+            val text = field().text.orEmpty()
+            assertTrue("the English word came back in '$text'", text.contains(" in ") && !text.contains("în"))
+        } finally {
+            runBlocking {
+                DataGraph.languagePacks.allPacks().firstOrNull { it.tag == ROMANIAN }
+                    ?.let { DataGraph.languagePacks.remove(it) }
+            }
         }
     }
 
@@ -455,6 +491,14 @@ class ImeSmokeTest {
 
     private companion object {
         const val ENGLISH = "en-US"
+        const val ROMANIAN = "ro-RO"
+
+        /** Words each language holds and the other does not, the phrases LanguageSwitchPipelineTest settles a verdict with. */
+        const val ROMANIAN_PHRASE = "acesta trebuie foarte despre pentru"
+
+        /** What the a key says once the Romanian pack's ă and â join its @ on the long press. */
+        const val ROMANIAN_HOLD_HINT = "Hold for 3 more"
+        const val ENGLISH_PHRASE = "through because another thought between however people water number system"
 
         /** Every word a case types, forgotten before each case so no run teaches the next. */
         val TYPED_WORDS = listOf("teh", "the", "abc", "def", "abcx", "ab", "cd", "x", "abxcd")

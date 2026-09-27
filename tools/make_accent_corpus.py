@@ -20,6 +20,7 @@ import argparse
 import random
 import sys
 import unicodedata
+from pathlib import Path
 
 # Bands by rank, not by count: the list is Zipfian, so equal-sized rank slices give bands whose
 # frequencies differ by orders of magnitude, which is the axis being tested.
@@ -80,7 +81,8 @@ def main():
             continue
         rows.extend(rng.sample(slice_, min(args.per_band, len(slice_))))
 
-    print("# Romanian words with their diacritics stripped, as someone types them on a layout")
+    tag = Path(args.dictionary).stem.replace("_", "-")
+    print(f"# {tag} words with their diacritics stripped, as someone types them on a layout")
     print("# that has none -- and the spelling the keyboard must restore. Fed to")
     print("# `suggest_eval --autocorrect`, which asks what the space bar commits.")
     print("#")
