@@ -151,7 +151,7 @@ its label, which names the mode after a coloured bullet, moves to the next mode,
 carries its mode and its text in its content description so the suite can read it where the
 accessibility tree would show a password masked.
 
-It runs in CI's `smoke` job on x86_64 emulators at API 30 and API 35, the oldest and the newest
+It runs in CI's `smoke` job on x86_64 emulators with a Pixel 5 profile at API 30 and API 35, the oldest and the newest
 the keyboard is built for (`-Pborderkeys.extraAbis=x86_64` adds the ABI, which the shipped APKs
 do not carry). Locally it runs on an emulator, never a phone,
 because a debug build is what it needs, and the build is installed by hand rather than by

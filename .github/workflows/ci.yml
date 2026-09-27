@@ -414,6 +414,8 @@ jobs:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
           target: default
+          # A phone-sized screen, the profile the suite is run against locally.
+          profile: pixel_5
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: ./gradlew :app:connectedCoreDebugAndroidTest -Pborderkeys.extraAbis=x86_64 --no-daemon "$GRADLE_HEAP"
