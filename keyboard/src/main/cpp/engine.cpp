@@ -401,6 +401,17 @@ constexpr float kGrammarWeight = 0.75f;
 // The reserved context for "a sentence began here" -- see NgramModel::kSentenceStartContext.
 constexpr uint32_t kSentenceStartIndex = NgramModel::kSentenceStartContext;
 
+// The personal model's own word for "a sentence began here": the context the pairs a person
+// opens sentences with are learned under, and the one Kotlin records them with. Never typed,
+// since no key produces its first byte, so never completed or offered as a word.
+constexpr char kUserSentenceStart[] = "\x02start";
+constexpr size_t kUserSentenceStartLength = sizeof(kUserSentenceStart) - 1;
+
+static bool isUserSentenceStart(const char* word, size_t length) {
+    return word != nullptr && length == kUserSentenceStartLength &&
+           std::memcmp(word, kUserSentenceStart, kUserSentenceStartLength) == 0;
+}
+
 // How many of a context word's successors are scored in full when nothing has been typed:
 // the strongest by their pair value, chosen in one pass over the list.
 constexpr int kSuccessorWalk = 64;
@@ -1132,6 +1143,9 @@ void Engine::resolveContext(const char* previous1, size_t previous1Length, const
         if (personalModelEnabled_) {
             userContext1_ = userModel_.entryIndexFor(previous1, previous1Length);
         }
+    } else if (personalModelEnabled_) {
+        // A sentence began here: the words this person opens sentences with are its successors.
+        userContext1_ = userModel_.entryIndexFor(kUserSentenceStart, kUserSentenceStartLength);
     }
     // Left at -1 for a private field: every personal-context path below -- the pair bonus, the
     // phrase and successor searches -- keys off these two, so this one gate is what keeps a
@@ -2491,7 +2505,9 @@ void Engine::learn(const char* word, size_t wordLength, const char* previous1,
 
     const int32_t wordIndex = userModel_.learn(word, wordLength, deliberateCapital, asserted);
     if (previous1 != nullptr && previous1Length > 0) {
-        const int32_t index1 = userModel_.entryIndexFor(previous1, previous1Length);
+        const int32_t index1 = isUserSentenceStart(previous1, previous1Length)
+            ? userModel_.reserve(previous1, previous1Length)
+            : userModel_.entryIndexFor(previous1, previous1Length);
         userModel_.learnBigram(index1, wordIndex);
         if (previous2 != nullptr && previous2Length > 0) {
             const int32_t index2 = userModel_.entryIndexFor(previous2, previous2Length);
@@ -2507,6 +2523,9 @@ void Engine::loadUserWords(const char* const* words, const size_t* lengths,
         return;
     }
     userModel_.bulkLoad(words, lengths, counts, count, deliberateCapitals, asserted);
+    // Reserved after every load, since the load starts from nothing: the pairs loaded next name
+    // it as the context of the words that open sentences.
+    userModel_.reserve(kUserSentenceStart, kUserSentenceStartLength);
 }
 
 void Engine::loadUserBigrams(const char* const* previous, const size_t* previousLengths,

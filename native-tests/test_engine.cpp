@@ -553,6 +553,52 @@ void runEngineTests() {
               "and the engine still answers, so the reset clears evidence rather than state");
     }
 
+    section("sentence openers");
+    {
+        LoadedEngine loaded;
+        loaded.open();
+        const char* words[2] = {"hello", "borderkeys"};
+        const size_t lengths[2] = {5, 10};
+        const int32_t counts[2] = {6, 40};
+        loaded.engine.loadUserWords(words, lengths, counts, 2);
+        // The pair the keyboard records for a word with nothing before it: the sentence start
+        // itself as the context.
+        const char* previous[1] = {"\x02start"};
+        const size_t previousLengths[1] = {6};
+        const char* next[1] = {"hello"};
+        const size_t nextLengths[1] = {5};
+        const int32_t pairCounts[1] = {5};
+        loaded.engine.loadUserBigrams(previous, previousLengths, next, nextLengths, pairCounts, 1);
+        auto slotsOf = [&](int* helloAt, int* markerAt) {
+            Candidate out[Engine::kMaxCandidates];
+            const int found = loaded.engine.suggest("", 0, nullptr, 0, nullptr, 0, out,
+                                                    Engine::kMaxCandidates);
+            *helloAt = -1;
+            *markerAt = -1;
+            for (int i = 0; i < found; ++i) {
+                uint32_t length = 0;
+                const char* const text = loaded.engine.candidateText(out[i], &length);
+                if (text == nullptr || length == 0) {
+                    continue;
+                }
+                if (length == 5 && std::memcmp(text, "hello", 5) == 0) {
+                    *helloAt = i;
+                }
+                if (text[0] == '\x02') {
+                    *markerAt = i;
+                }
+            }
+        };
+        int helloAt = -1;
+        int markerAt = -1;
+        slotsOf(&helloAt, &markerAt);
+        check(helloAt >= 0, "a word this person opens sentences with is offered at a sentence start");
+        check(markerAt < 0, "the sentence start itself is never offered as a word");
+        loaded.engine.setPersonalModelEnabled(false);
+        slotsOf(&helloAt, &markerAt);
+        check(helloAt < 0, "and not while the personal model is switched off");
+    }
+
     section("personal dictionary");
     {
         LoadedEngine loaded;

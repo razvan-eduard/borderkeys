@@ -369,6 +369,17 @@ written `kMinPersonalEvidence` effective times (three at the balanced setting). 
 recorded and listed. A CSV import asserts every row. Words the packs already hold need none of
 this — `knownSpelling` answers from the packs first.
 
+**Sentence openers are learned too.** A word committed with nothing before it — an empty
+field, or a sentence end or line break before it — is recorded as a pair under a sentence-start
+marker the personal model reserves (`\x02start`, a word no key can type), and at a sentence
+start the engine asks the personal model for that marker's successors before the packs' own
+openers fill the remaining slots. The Personal dictionary screen lists such a pair as the word
+"at the start of a sentence".
+
+**The learning switch gates both halves.** Off, nothing typed is recorded and nothing personal
+is offered: the dictionaries alone answer, exactly as in a private field. Switching it off asks
+first, then forgets everything learned.
+
 ```
 user commits a word  (types a delimiter after it, swipes it, or picks it from the strip)
   └─ LearningBuffer            in-memory, debounced; carries count, deliberate capital, assertion

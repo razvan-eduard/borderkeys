@@ -74,8 +74,7 @@ int32_t UserModel::findNode(const uint32_t* folded, int count) const {
     return node;
 }
 
-int32_t UserModel::learn(const char* word, size_t length, bool deliberateCapital,
-                         bool asserted) {
+int32_t UserModel::entryFor(const char* word, size_t length) {
     if (word == nullptr || length == 0 || length > kMaxWordBytes) {
         return -1;
     }
@@ -84,7 +83,6 @@ int32_t UserModel::learn(const char* word, size_t length, bool deliberateCapital
     if (count <= 0) {
         return -1;
     }
-
     int32_t node = 0;
     for (int i = 0; i < count; ++i) {
         node = childOfOrCreate(node, folded[i]);
@@ -93,7 +91,16 @@ int32_t UserModel::learn(const char* word, size_t length, bool deliberateCapital
         nodes_[node].entryIndex = static_cast<int32_t>(entries_.size());
         entries_.push_back(Entry{std::string(word, length), 0u});
     }
-    Entry& entry = entries_[static_cast<size_t>(nodes_[node].entryIndex)];
+    return nodes_[node].entryIndex;
+}
+
+int32_t UserModel::learn(const char* word, size_t length, bool deliberateCapital,
+                         bool asserted) {
+    const int32_t index = entryFor(word, length);
+    if (index < 0) {
+        return -1;
+    }
+    Entry& entry = entries_[static_cast<size_t>(index)];
     // The display form of the last spelling wins, so that a user who starts writing "masina"
     // and later picks "mașina" ends up with the accented form in their own dictionary.
     entry.text.assign(word, length);
@@ -111,7 +118,11 @@ int32_t UserModel::learn(const char* word, size_t length, bool deliberateCapital
     if (totalCount_ < UINT32_MAX) {
         ++totalCount_;
     }
-    return nodes_[node].entryIndex;
+    return index;
+}
+
+int32_t UserModel::reserve(const char* word, size_t length) {
+    return entryFor(word, length);
 }
 
 int32_t UserModel::entryIndexFor(const char* word, size_t length) const {
@@ -400,20 +411,11 @@ void UserModel::bulkLoad(const char* const* words, const size_t* lengths, const 
             lengths[i] > kMaxWordBytes) {
             continue;
         }
-        uint32_t folded[kMaxWordCodePoints];
-        const int folds = foldUtf8(words[i], lengths[i], folded, kMaxWordCodePoints);
-        if (folds <= 0) {
+        const int32_t index = entryFor(words[i], lengths[i]);
+        if (index < 0) {
             continue;
         }
-        int32_t node = 0;
-        for (int c = 0; c < folds; ++c) {
-            node = childOfOrCreate(node, folded[c]);
-        }
-        if (nodes_[node].entryIndex < 0) {
-            nodes_[node].entryIndex = static_cast<int32_t>(entries_.size());
-            entries_.push_back(Entry{std::string(words[i], lengths[i]), 0u});
-        }
-        Entry& entry = entries_[static_cast<size_t>(nodes_[node].entryIndex)];
+        Entry& entry = entries_[static_cast<size_t>(index)];
         entry.text.assign(words[i], lengths[i]);
         entry.count = static_cast<uint32_t>(stored);
         entry.deliberateCapitals = (deliberateCapitals != nullptr && deliberateCapitals[i] > 0)

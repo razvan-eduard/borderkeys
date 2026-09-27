@@ -96,6 +96,12 @@ public:
     /** The entry index for an exact (folded) word, or -1. */
     int32_t entryIndexFor(const char* word, size_t length) const;
 
+    /**
+     * The entry for `word`, created with a count of zero when there is none: a word that pairs
+     * can name as their context without ever being counted or offered as a word itself.
+     */
+    int32_t reserve(const char* word, size_t length);
+
     /** How many times `next` has followed `previous`. Zero when the pair is unknown. */
     uint32_t bigramCount(int32_t previousIndex, int32_t nextIndex) const;
 
@@ -180,6 +186,8 @@ private:
     int32_t childOf(int32_t node, uint32_t folded) const;
     int32_t childOfOrCreate(int32_t node, uint32_t folded);
     int32_t findNode(const uint32_t* folded, int count) const;
+    /** The entry for `word`, created empty when there is none; -1 for a word that cannot be held. */
+    int32_t entryFor(const char* word, size_t length);
     void collect(int32_t node, Completion* out, int maxOut, int* written) const;
 
     struct Bigram {

@@ -56,6 +56,10 @@ attestations and the full commit lists are on the
   Polish, Czech, Hungarian, Turkish, Russian, Ukrainian, Bulgarian, Serbian, Macedonian,
   Greek, Armenian, Georgian, Hebrew and Arabic. The Languages screen's "More languages" card
   says where they are and how to import one.
+- The words you open sentences with are learned, and offered first when a sentence begins;
+  the packs' own openers fill the remaining slots.
+- The learning switch gates what is offered as well as what is recorded: off, the
+  dictionaries alone suggest. Switching it off asks first, then forgets everything learned.
 - Fixed: a ring left to apply its top word on its own timeout, with the finger still resting
   on the pause point, applied that word a second time when the finger later moved to a wedge
   and lifted.
