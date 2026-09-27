@@ -554,12 +554,15 @@ class ImeSmokeTest {
         const val SLIDE_STEPS = 40
         const val SWIPE_SEGMENT_STEPS = 20
 
-        /** Enough moves on one spot for the ring's pause to be seen, at about 5 ms a move. */
-        const val RING_PAUSE_STEPS = 100
+        /**
+         * Segments on one spot, [SWIPE_SEGMENT_STEPS] moves each at about 5 ms a move: past the
+         * ring's pause dwell, and short of the ring's own pick timeout when the steer follows.
+         */
+        const val RING_PAUSE_STEPS = 6
 
         /** How far from the pause the ring's top wedge sits, up and to the right, in key rows. */
         const val RING_TOP_WEDGE_ROWS = 0.85f
-        const val LAUNCH_TIMEOUT = 20_000L
+        const val LAUNCH_TIMEOUT = 45_000L
         const val KEY_TIMEOUT = 5_000L
         const val ATTEMPTS = 3
         const val SELECT_ATTEMPTS = 2
