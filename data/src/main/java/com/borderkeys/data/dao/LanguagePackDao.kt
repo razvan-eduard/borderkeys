@@ -21,6 +21,9 @@ interface LanguagePackDao {
     @Query("SELECT * FROM language_packs WHERE tag = :tag LIMIT 1")
     suspend fun findByTag(tag: String): LanguagePackEntry?
 
+    @Query("SELECT * FROM language_packs WHERE fileName = :fileName LIMIT 1")
+    suspend fun findByFileName(fileName: String): LanguagePackEntry?
+
     @Query("SELECT * FROM language_packs WHERE enabled = 1 ORDER BY weight DESC")
     suspend fun enabledPacks(): List<LanguagePackEntry>
 

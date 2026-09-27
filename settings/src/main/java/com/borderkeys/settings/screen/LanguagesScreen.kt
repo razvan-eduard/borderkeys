@@ -257,7 +257,7 @@ private suspend fun importPack(
         is LanguagePackInspector.Result.Valid -> {
             val info = verdict.info
             val room = repository.enabledCount() < LanguagePackRepository.MAX_ENABLED
-            repository.register(
+            repository.registerOrReplace(
                 LanguagePackEntry(
                     tag = info.tag,
                     displayName = displayNameFor(info.tag),
@@ -333,7 +333,7 @@ private suspend fun installBundled(
         is LanguagePackInspector.Result.Valid -> {
             val info = verdict.info
             val room = repository.enabledCount() < LanguagePackRepository.MAX_ENABLED
-            repository.register(
+            repository.registerOrReplace(
                 LanguagePackEntry(
                     tag = info.tag,
                     displayName = displayNameFor(info.tag),
