@@ -12,7 +12,7 @@ listed under *Unreleased* and moves under its version when it is tagged. The APK
 attestations and the full commit lists are on the
 [releases page](https://github.com/razvan-eduard/borderkeys/releases).
 
-## Unreleased
+## v0.10.0 — 2026-09-27
 
 - Under the Hebrew and Arabic layouts the emoji and clipboard panels run from the right as the
   strip and the ring do: the emoji grid and its tabs start at the top right, and the clipboard's
