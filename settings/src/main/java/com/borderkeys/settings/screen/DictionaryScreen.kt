@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.TextShortcut
@@ -60,6 +61,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     var query by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     var confirmingForgetAll by remember { mutableStateOf(false) }
+    var confirmingLearningOff by remember { mutableStateOf(false) }
 
     val words by (if (query.isBlank()) repository.words else repository.search(query))
         .collectAsStateWithLifecycle(initialValue = emptyList())
@@ -123,7 +125,13 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 title = strings[Keys.DICTIONARY_LEARN_AT_ALL],
                 subtitle = strings[Keys.DICTIONARY_OFF_MEANS_NOTHING_NEW_IS_RECORDED],
                 checked = preferences.learningEnabled,
-            ) { value -> update { it.copy(learningEnabled = value) } }
+            ) { value ->
+                if (value) {
+                    update { it.copy(learningEnabled = true) }
+                } else {
+                    confirmingLearningOff = true
+                }
+            }
             AdvancedSection {
                 Explanation(
                     strings[Keys.DICTIONARY_THIS_DOES_NOT_CHANGE_WHAT_IS],
@@ -259,7 +267,11 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 SettingRow(title = strings[Keys.DICTIONARY_NOTHING_LEARNED_YET])
             }
             for (pair in pairs) {
-                val phrase = listOf(pair.previousWord, pair.word).joinToString(WORD_SEPARATOR)
+                val phrase = if (pair.previousWord == UserBigram.SENTENCE_START) {
+                    strings.getString(Keys.DICTIONARY_SENTENCE_OPENER, pair.word)
+                } else {
+                    listOf(pair.previousWord, pair.word).joinToString(WORD_SEPARATOR)
+                }
                 SettingRow(
                     title = phrase,
                     subtitle = strings.getString(Keys.DICTIONARY_PHRASE_USED, pair.count),
@@ -336,21 +348,51 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     // Asked first: this is every word and pair the device has learned, and the one tap that
     // used to do it sat on a row beside Export and Import.
     if (confirmingForgetAll) {
-        AlertDialog(
-            onDismissRequest = { confirmingForgetAll = false },
-            title = { Text(strings[Keys.DICTIONARY_FORGET_EVERYTHING_TITLE]) },
-            text = { Text(strings[Keys.COMMON_CANNOT_BE_UNDONE]) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmingForgetAll = false
-                    scope.launch { repository.forgetEverything() }
-                }) { Text(strings[Keys.DICTIONARY_FORGET_EVERYTHING], color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmingForgetAll = false }) { Text(strings[Keys.THEME_CANCEL]) }
-            },
-        )
+        ConfirmDialog(
+            title = strings[Keys.DICTIONARY_FORGET_EVERYTHING_TITLE],
+            text = strings[Keys.COMMON_CANNOT_BE_UNDONE],
+            confirmLabel = strings[Keys.DICTIONARY_FORGET_EVERYTHING],
+            onDismiss = { confirmingForgetAll = false },
+        ) { scope.launch { repository.forgetEverything() } }
     }
+
+    if (confirmingLearningOff) {
+        ConfirmDialog(
+            title = strings[Keys.DICTIONARY_LEARNING_OFF_TITLE],
+            text = strings[Keys.DICTIONARY_LEARNING_OFF_TEXT],
+            confirmLabel = strings[Keys.DICTIONARY_LEARNING_OFF_CONFIRM],
+            onDismiss = { confirmingLearningOff = false },
+        ) {
+            update { it.copy(learningEnabled = false) }
+            scope.launch { repository.forgetEverything() }
+        }
+    }
+}
+
+/** A question with a destructive answer in the error colour and a cancel; [onConfirm] runs after it closes. */
+@Composable
+private fun ConfirmDialog(
+    title: String,
+    text: String,
+    confirmLabel: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val strings = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(text) },
+        confirmButton = {
+            TextButton(onClick = {
+                onDismiss()
+                onConfirm()
+            }) { Text(confirmLabel, color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(strings[Keys.THEME_CANCEL]) }
+        },
+    )
 }
 
 /** Between the words of a listed phrase. */

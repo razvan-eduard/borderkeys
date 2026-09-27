@@ -26,6 +26,7 @@ import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.common.TextViewStyle
 import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
+import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.DictionaryRepository
 import com.borderkeys.data.KeyboardStats
@@ -1062,6 +1063,7 @@ class BorderKeysService :
                         KeyboardPreferences.radialSizeScale(newPreferences.radialMenuSize)
                     view.radialBlurBackground = newPreferences.radialBlurBackground
                     view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
+                    applyLearningGate(newPreferences)
                     applyQuickActions(view)
                     refreshClipboardChip()
                     if (wasForcingDebugRing && !newPreferences.debugForceRadialRing) {
@@ -1304,12 +1306,7 @@ class BorderKeysService :
         addressField = info != null && AddressField.isAddress(info.inputType)
         terminalField = TerminalField.isTerminal(info)
         terminalWord.setLength(0)
-        learning.enabled = preferences.learningEnabled && !privateMode
-        // The other half of not learning here: nothing already learned is offered either. A
-        // password field never reaches the engine at all (see requestSuggestions), but a field
-        // that merely asked for no personalised learning still asks for suggestions, and they
-        // used to come from the personal dictionary like anywhere else.
-        engine.setPersonalModelEnabled(!privateMode)
+        applyLearningGate()
         engine.setLearningSpeed(
             KeyboardPreferences.learningSpeedFactor(preferences.learningSpeed),
         )
@@ -4693,6 +4690,17 @@ class BorderKeysService :
      * tap on the strip, including on the word they typed themselves, or a correction put back
      * -- see `UserWord.asserted`.
      */
+    /**
+     * Whether anything is learned here, and whether anything learned is offered: the learning
+     * switch and a private field close both. A password field never reaches the engine at all
+     * (see requestSuggestions); a field that merely asked for no personalised learning still
+     * asks for suggestions, and the personal dictionary must not be where they come from.
+     */
+    private fun applyLearningGate(preferences: KeyboardPreferences = this.preferences) {
+        learning.enabled = preferences.learningEnabled && !privateMode
+        engine.setPersonalModelEnabled(learning.enabled)
+    }
+
     private fun recordLearned(
         word: String,
         contextWord: String?,
@@ -4711,7 +4719,10 @@ class BorderKeysService :
         // why the settings screen says "typed on" rather than naming a language.
         val locale = currentSubtypeTag()
         val now = System.currentTimeMillis()
-        contextWord?.let { learning.recordPair(it, word, now) }
+        // A word with nothing before it opened a sentence, and is paired with the sentence
+        // start itself, so the words this person opens sentences with can be offered there.
+        val pairContext = contextWord ?: UserBigram.SENTENCE_START
+        learning.recordPair(pairContext, word, now)
         if (contextWord != null && grandContextWord != null) {
             learning.recordTriple(grandContextWord, contextWord, word, now)
         }
@@ -4723,7 +4734,7 @@ class BorderKeysService :
                         word, locale, 1, now, deliberateCapital, asserted,
                     ),
                 ),
-                contextWord, grandContextWord,
+                pairContext, grandContextWord,
             )
         }
         val view = host ?: return

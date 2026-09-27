@@ -39,4 +39,10 @@ data class UserBigram(
     val word: String,
     val count: Int,
     val lastUsedAt: Long,
-)
+) {
+
+    companion object {
+        /** The word a pair names as its context when the word opened a sentence. No key types its first byte. */
+        const val SENTENCE_START = "\u0002start"
+    }
+}
