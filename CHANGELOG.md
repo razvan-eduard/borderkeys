@@ -18,6 +18,8 @@ attestations and the full commit lists are on the
   strip and the ring do: the emoji grid and its tabs start at the top right, and the clipboard's
   back arrow, thumbnails, pin marks and actions are mirrored. A clip's text is aligned by its
   own direction under any layout.
+- Indonesian joins the downloadable packs, with the word pairs, names and grammar the others
+  carry. Like English it has no accents of its own, so it adds no long-press letters.
 
 ## v0.9.0 — 2026-09-27
 
