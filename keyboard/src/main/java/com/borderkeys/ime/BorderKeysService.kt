@@ -2199,6 +2199,9 @@ class BorderKeysService :
         if (wasOpen) {
             watchEditorWhileRingOpen(false)
             refreshTouchableArea()
+            // The stroke that opened the ring ends with it: a finger still down after the ring
+            // resolved on its own must not resolve it again when it lifts.
+            view?.keyboard?.abandonRingStroke()
         }
         if (debugRingOpen) {
             // Resolved by a wedge or the X: back on the next frame, for as long as the debug

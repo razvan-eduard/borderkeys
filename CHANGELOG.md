@@ -56,6 +56,9 @@ attestations and the full commit lists are on the
   Polish, Czech, Hungarian, Turkish, Russian, Ukrainian, Bulgarian, Serbian, Macedonian,
   Greek, Armenian, Georgian, Hebrew and Arabic. The Languages screen's "More languages" card
   says where they are and how to import one.
+- Fixed: a ring left to apply its top word on its own timeout, with the finger still resting
+  on the pause point, applied that word a second time when the finger later moved to a wedge
+  and lifted.
 - Fixed: a word the personal dictionary held capitalised and a pack held in lower case was
   offered twice on the strip, and so was a contraction the corpus wrote with both kinds of
   apostrophe. Each is one suggestion now: the engine keeps one candidate per spelling
