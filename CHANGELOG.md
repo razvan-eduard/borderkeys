@@ -12,7 +12,7 @@ listed under *Unreleased* and moves under its version when it is tagged. The APK
 attestations and the full commit lists are on the
 [releases page](https://github.com/razvan-eduard/borderkeys/releases).
 
-## Unreleased
+## v0.9.0 — 2026-09-27
 
 - The language packs carry their word triples as an index hung off the pairs, format
   version 6: smaller packs, the same predictions.
