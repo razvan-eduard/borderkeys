@@ -74,6 +74,7 @@ class ImeSmokeTest {
                     numberRow = false,
                     modifierRow = false,
                     languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_OFF,
+                    featuresTourSeen = true,
                 )
             }
         }
@@ -394,8 +395,13 @@ class ImeSmokeTest {
         }
     }
 
+    /**
+     * Whether the keyboard is the selected input method, both to the input method service and in
+     * the setting the settings application reads at launch.
+     */
     private fun keyboardSelected(): Boolean =
-        device.executeShellCommand("dumpsys input_method").contains("mCurMethodId=$imeId")
+        device.executeShellCommand("dumpsys input_method").contains("mCurMethodId=$imeId") &&
+            device.executeShellCommand("settings get secure default_input_method").trim() == imeId
 
 
     private fun field(): UiObject2 {
