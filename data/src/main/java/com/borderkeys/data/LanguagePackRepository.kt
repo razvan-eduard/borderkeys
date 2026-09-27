@@ -144,6 +144,21 @@ class LanguagePackRepository internal constructor(
     suspend fun register(entry: LanguagePackEntry): Long = dao.insert(entry)
 
     /**
+     * Records [entry], taking the place of a pack already recorded for the same language or
+     * under the same file name: the row keeps its id, its switch and its weight, and a file
+     * the replaced row named that this one does not is deleted.
+     */
+    suspend fun registerOrReplace(entry: LanguagePackEntry): Long {
+        val existing = dao.findByTag(entry.tag) ?: dao.findByFileName(entry.fileName)
+            ?: return dao.insert(entry)
+        if (existing.fileName != entry.fileName) {
+            fileFor(existing).delete()
+        }
+        dao.update(entry.copy(id = existing.id, enabled = existing.enabled, weight = existing.weight))
+        return existing.id
+    }
+
+    /**
      * Replaces the record of a pack that was rewritten in place.
      *
      * An update rather than an insert, because staging writes over the file of the same name:
