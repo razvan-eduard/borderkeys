@@ -51,7 +51,17 @@ class TerminalFieldTest {
     }
 
     @Test
+    fun `an app the person added is a terminal, exactly as written`() {
+        val textField = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_NORMAL
+        val added = listOf("com.example.shell")
+        assertTrue(TerminalField.isTerminal(field(textField, "com.example.shell"), added))
+        assertFalse(TerminalField.isTerminal(field(textField, "com.example.shell.lite"), added))
+        assertFalse(TerminalField.isTerminal(field(textField, "com.example.shell")))
+    }
+
+    @Test
     fun `nothing known about the field is not a terminal`() {
         assertFalse(TerminalField.isTerminal(null))
+        assertFalse(TerminalField.isTerminal(null, listOf("com.example.shell")))
     }
 }

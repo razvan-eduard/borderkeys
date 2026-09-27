@@ -1304,7 +1304,8 @@ class BorderKeysService :
         privateMode = PrivateMode.isPrivate(info)
         passwordField = info != null && PrivateMode.isPasswordField(info.inputType)
         addressField = info != null && AddressField.isAddress(info.inputType)
-        terminalField = TerminalField.isTerminal(info)
+        // The EditorInfo, and the terminal apps the person added in the settings.
+        terminalField = TerminalField.isTerminal(info, preferences.terminalPackages)
         terminalWord.setLength(0)
         applyLearningGate()
         engine.setLearningSpeed(

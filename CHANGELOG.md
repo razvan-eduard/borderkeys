@@ -22,6 +22,10 @@ attestations and the full commit lists are on the
   carry. Like English it has no accents of its own, so it adds no long-press letters.
 - The smoke suite checks that Show on a password field's strip puts what was typed in place of
   the private notice, and that Hide puts the notice back.
+- A Terminals card on the Typing and Suggestions screen: a terminal app the keyboard does not
+  recognise can be added by its package name, and is typed into as a terminal from then on.
+- The smoke suite types a command into Termux and checks each letter reaches the prompt before
+  the word ends; CI installs Termux's own release build for it.
 
 ## v0.9.0 — 2026-09-27
 

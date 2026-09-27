@@ -136,7 +136,9 @@ ships.
   that declares no text class at all, every key types straight through: a character is written
   the moment it is pressed, never held as composing text, a backspace deletes one character,
   and nothing is corrected or learned. The strip still completes the word being typed and a
-  swipe still writes one, replaced from the strip like anywhere else.
+  swipe still writes one, replaced from the strip like anywhere else. A terminal app the
+  keyboard does not recognise can be added by its package name on the Terminals card of the
+  Typing and Suggestions screen.
 - **Text shortcuts.** A word that stands for a longer text — "omw" for "on my way", an address, a
   sign-off — expands when a space or a punctuation mark follows it, takes the capital you gave the
   shortcut, and comes back with the backspace straight after, like any other correction.

@@ -36,19 +36,7 @@ object ClipboardExclusions {
         "app.keemobile.kotpass",
     )
 
-    /** How many packages a person can add. */
-    const val MAX_ADDED = 50
-
     /** Whether [packageName] is one of [KNOWN] or of [added]. Nothing known is never excluded. */
     fun isExcluded(packageName: String?, added: List<String>): Boolean =
         packageName != null && (packageName in KNOWN || packageName in added)
-
-    /** Whether [candidate] has the shape of a package name: dotted identifiers, two at least. */
-    fun isPackageName(candidate: String): Boolean = PACKAGE_NAME.matches(candidate)
-
-    /** The list as stored: trimmed, shaped like package names, each once, no more than [MAX_ADDED]. */
-    fun sanitised(added: List<String>): List<String> =
-        added.map { it.trim() }.filter { isPackageName(it) }.distinct().take(MAX_ADDED)
-
-    private val PACKAGE_NAME = Regex("""[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+""")
 }

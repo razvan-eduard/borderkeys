@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.TerminalApps
 import com.borderkeys.data.theme.KeyboardAppearance
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.predict.SwipeModelAvailability
@@ -37,6 +38,7 @@ import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.PackageListEditor
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.AdvancedSection
@@ -678,6 +680,14 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     }
                 }
                 Explanation(strings[Keys.RADIAL_EXPLANATION])
+            }
+        }
+
+        SettingsSectionCard(strings[Keys.TERMINAL_TITLE]) {
+            Explanation(strings[Keys.TERMINAL_NOTE])
+            Explanation(strings.getString(Keys.TERMINAL_KNOWN, TerminalApps.KNOWN.size))
+            PackageListEditor(preferences.terminalPackages, strings[Keys.TERMINAL_PACKAGE]) { change ->
+                update { it.copy(terminalPackages = change(it.terminalPackages)) }
             }
         }
     }
