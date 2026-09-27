@@ -51,7 +51,7 @@ attestations and the full commit lists are on the
   right edge and the ring's wedges are mirrored. The engine folds away the Hebrew vowel points
   and the Arabic harakat, and reaches a word by its bare alef, yeh or waw whichever hamza form
   it is spelled with.
-- Nineteen downloadable language packs on the `packs` release, each with n-grams, names and
+- Twenty downloadable language packs on the `packs` release, each with n-grams, names and
   grammar like the bundled six: Dutch, Portuguese, Swedish, Danish, Norwegian Bokmål, Finnish,
   Polish, Czech, Hungarian, Turkish, Russian, Ukrainian, Bulgarian, Serbian, Macedonian,
   Greek, Armenian, Georgian, Hebrew and Arabic. The Languages screen's "More languages" card
