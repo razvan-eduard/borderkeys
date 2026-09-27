@@ -10,7 +10,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.height
@@ -271,6 +275,8 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
         }
     }
     val current = stack.last()
+    // The settings search, typed into the title row of Home and answered by Home's own list.
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
     // What each screen remembers about itself -- above all where it was scrolled to -- kept
     // while the screen is on the stack and dropped when it is popped. The switch at the bottom
@@ -404,13 +410,28 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                 // the one place that distinction applies.
                 title = {
                     val title = strings[current.titleKey]
-                    Text(
-                        if (current == Screen.Home && hasAssistant) {
-                            strings.getString(Keys.HOME_TITLE_PLUS, title)
-                        } else {
-                            title
-                        },
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (current == Screen.Home && hasAssistant) {
+                                strings.getString(Keys.HOME_TITLE_PLUS, title)
+                            } else {
+                                title
+                            },
+                        )
+                        if (current == Screen.Home) {
+                            Spacer(Modifier.width(16.dp))
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                placeholder = {
+                                    Text(strings[Keys.HOME_SEARCH], style = MaterialTheme.typography.bodyMedium)
+                                },
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                            )
+                        }
+                    }
                 },
                 navigationIcon = {
                     if (stack.size > 1) {
@@ -437,7 +458,7 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
         }
         screenStates.SaveableStateProvider(current.name) {
             when (current) {
-                Screen.Home -> HomeScreen(modifier, open)
+                Screen.Home -> HomeScreen(searchQuery, modifier, open)
                 Screen.Setup -> SetupScreen(modifier, open)
                 Screen.Features -> FeaturesScreen(modifier, hasAssistant, open, onDone = pop)
                 Screen.Languages -> LanguagesScreen(modifier)

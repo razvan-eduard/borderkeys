@@ -26,6 +26,7 @@ attestations and the full commit lists are on the
   recognise can be added by its package name, and is typed into as a terminal from then on.
 - The smoke suite types a command into Termux and checks each letter reaches the prompt before
   the word ends; CI installs Termux's own release build for it.
+- The settings search sits in the title row of the home screen.
 - Fixed: importing a pack for a language already installed, or a file already imported, ended
   the settings application; it now takes the earlier copy's place, keeping its switch and
   weight.
