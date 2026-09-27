@@ -6,7 +6,9 @@ package com.borderkeys
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.Point
+import android.graphics.Rect
 import android.view.KeyEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -24,6 +26,7 @@ import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.predict.LanguagePackInspector
 import com.borderkeys.settings.ProbeMode
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -32,6 +35,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.regex.Pattern
+import kotlin.math.abs
 
 /**
  * The keyboard driven through a real input connection: keys tapped by their accessibility
@@ -204,6 +208,29 @@ class ImeSmokeTest {
         tapKey(SPACE)
         settle()
         assertEquals("teh ", probeText(ProbeMode.PASSWORD))
+    }
+
+    @Test
+    fun showOnThePrivateStripRevealsTheTypedTextAndHideCoversItAgain() {
+        focusProbe(ProbeMode.PASSWORD)
+        type("hunter")
+        settle()
+        val strip = stripRect()
+        val notice = stripText(strip)
+        tapPrivateToggle(strip)
+        val revealed = stripText(strip)
+        assertTrue(
+            "after Show the strip still reaches as far as the notice: " +
+                "${revealed.inkedColumns()} inked columns against the notice's ${notice.inkedColumns()}",
+            revealed.inkedColumns() * 2 < notice.inkedColumns(),
+        )
+        tapPrivateToggle(strip)
+        assertArrayEquals(
+            "the strip after Hide is not the notice it showed before Show",
+            notice.pixels,
+            stripText(strip).pixels,
+        )
+        assertEquals("hunter", probeText(ProbeMode.PASSWORD))
     }
 
     @Test
@@ -478,11 +505,7 @@ class ImeSmokeTest {
      * the word it committed. The strip sits above [topRowKey]'s row.
      */
     private fun tapChip(topRowKey: String, atRight: Boolean): String {
-        val keys = waitForKey(topRowKey).visibleBounds
-        val windowTop = device.findObjects(By.pkg(context.packageName)).minOf { it.visibleBounds.top }
-            .coerceAtMost(keys.top)
-        val stripTop = keys.top - STRIP_HEIGHT_FRACTION * keys.height()
-        val y = ((stripTop.coerceAtLeast(windowTop.toFloat()) + keys.top) / 2f).toInt()
+        val y = stripRect(topRowKey).centerY()
         val x = if (atRight) device.displayWidth * 5 / 6 else device.displayWidth / 6
         val before = field().text.orEmpty()
         device.click(x, y)
@@ -491,6 +514,57 @@ class ImeSmokeTest {
         val committed = after.removeSuffix(before).trim()
         check(committed.isNotEmpty()) { "no chip was picked at ($x, $y): '$before' -> '$after'" }
         return committed
+    }
+
+    /** Where the suggestion strip is on screen: the full width, above [topRowKey]'s row. */
+    private fun stripRect(topRowKey: String = "q"): Rect {
+        val keys = waitForKey(topRowKey).visibleBounds
+        val windowTop = device.findObjects(By.pkg(context.packageName)).minOf { it.visibleBounds.top }
+            .coerceAtMost(keys.top)
+        val stripTop = (keys.top - STRIP_HEIGHT_FRACTION * keys.height()).toInt().coerceAtLeast(windowTop)
+        return Rect(0, stripTop, device.displayWidth, keys.top)
+    }
+
+    /**
+     * The middle half of the strip's height across its left part, where the private row draws
+     * its notice or the field's text, clear of the Show or Hide at its right end.
+     *
+     * The strip's top is read from the screenshot: up from the key row, at the strip's left
+     * edge, to where the strip's own colour ends.
+     */
+    private fun stripText(strip: Rect): Band {
+        val shot = checkNotNull(instrumentation.uiAutomation.takeScreenshot()) { "no screenshot" }
+        val edge = strip.left + strip.width() / 50
+        val background = shot.getPixel(edge, strip.bottom - 2)
+        var top = strip.bottom - 2
+        while (top > 0 && colourDistance(shot.getPixel(edge, top - 1), background) <= FLAT_DISTANCE) {
+            top--
+        }
+        val height = (strip.bottom - top) / 2
+        val width = strip.width() * STRIP_TEXT_WIDTH_FRACTION / 100
+        val pixels = IntArray(width * height)
+        shot.getPixels(pixels, 0, width, strip.left, top + height / 2, width, height)
+        shot.recycle()
+        check(pixels.distinct().size > 1) { "the strip from y $top came back as one flat colour" }
+        return Band(pixels, width)
+    }
+
+    /** A screenshot band's pixels, [width] to a row. */
+    private class Band(val pixels: IntArray, private val width: Int) {
+
+        /** Columns holding a pixel far from the band's commonest colour: how wide its text runs. */
+        fun inkedColumns(): Int {
+            val background = pixels.groupBy { it }.maxBy { it.value.size }.key
+            return (0 until width).count { column ->
+                (column until pixels.size step width).any { colourDistance(pixels[it], background) > INK_DISTANCE }
+            }
+        }
+    }
+
+    /** Taps the Show or Hide at the private row's right end and waits for the strip to redraw. */
+    private fun tapPrivateToggle(strip: Rect) {
+        device.click(strip.right - strip.height() / 2, strip.centerY())
+        settle()
     }
 
     private fun settle() {
@@ -576,5 +650,19 @@ class ImeSmokeTest {
 
         /** The strip is about this much of a key row tall. */
         const val STRIP_HEIGHT_FRACTION = 1.1f
+
+        /** Percent of the strip's width, from its left edge, that the private row's text may fill. */
+        const val STRIP_TEXT_WIDTH_FRACTION = 60
+
+        /** How far, summed over red, green and blue, a pixel sits from the background to count as text. */
+        const val INK_DISTANCE = 96
+
+        /** How far, the same way, a pixel may sit from the strip's colour and still be the strip. */
+        const val FLAT_DISTANCE = 24
+
+        /** The distance between two colours, summed over red, green and blue. */
+        fun colourDistance(a: Int, b: Int): Int =
+            abs(Color.red(a) - Color.red(b)) + abs(Color.green(a) - Color.green(b)) +
+                abs(Color.blue(a) - Color.blue(b))
     }
 }

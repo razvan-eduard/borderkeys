@@ -151,6 +151,12 @@ its label, which names the mode after a coloured bullet, moves to the next mode,
 carries its mode and its text in its content description so the suite can read it where the
 accessibility tree would show a password masked.
 
+One case reads the screen rather than the field: in a password field, Show on the strip puts
+what was typed where the private notice was, and Hide puts the notice back. The strip draws both
+on its canvas and exposes neither to the accessibility tree, so the case takes a screenshot and
+measures how far across the middle of the strip the text reaches: less than half as far as the
+notice after Show, and the notice's own pixels again after Hide.
+
 It runs in CI's `smoke` job on x86_64 emulators with a Pixel 5 profile at API 30 and API 35, the oldest and the newest
 the keyboard is built for (`-Pborderkeys.extraAbis=x86_64` adds the ABI, which the shipped APKs
 do not carry). Locally it runs on an emulator, never a phone,
