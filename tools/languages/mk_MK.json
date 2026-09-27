@@ -18,5 +18,5 @@
   "overlay": {},
   "single_letter_words": "аиосу",
   "expected_beyond_ascii": [],
-  "reachability_budget": null
+  "reachability_budget": 96
 }

@@ -30,5 +30,5 @@
   },
   "single_letter_words": "aiouwz",
   "expected_beyond_ascii": [],
-  "reachability_budget": null
+  "reachability_budget": 248
 }
