@@ -403,7 +403,7 @@ python3 tools/new_language.py tools/languages/nl_NL.json
 ```
 
 runs the whole of it, each step skipped when its output is already there: fetch, the accent
-overlay, the two name lists, the grammar, a first count for the ordinary-word list, the count
+overlay when the language has accents of its own, the two name lists, the grammar, a first count for the ordinary-word list, the count
 again with the names merged, the cleaning tools over a working copy that holds the six bundled
 lists beside the new one, the compiled pack with its size, and the reachability check. A manifest
 whose budget is still `null` has its count recorded by that check, and every later run is gated
@@ -412,9 +412,9 @@ against it; the number may only ever be lowered by hand. The manifests also feed
 rules as a bundled one. `.github/workflows/packs.yml`, started by hand,
 compiles every list in `dictionaries/extra/` and replaces the `packs` release with the result.
 
-Twenty languages are published this way, each with the same n-grams, names and grammar the
-bundled six carry: Dutch, Portuguese, Swedish, Danish, Norwegian Bokmål, Finnish, Polish,
-Czech, Hungarian and Turkish on Latin layouts; Russian, Ukrainian, Bulgarian, Serbian,
+Twenty-one languages are published this way, each with the same n-grams, names and grammar
+the bundled six carry: Dutch, Portuguese, Swedish, Danish, Norwegian Bokmål, Finnish, Polish,
+Czech, Hungarian, Turkish and Indonesian on Latin layouts; Russian, Ukrainian, Bulgarian, Serbian,
 Macedonian, Greek, Armenian and Georgian on layouts of their own script; Hebrew and Arabic
 read from the right. Their reachability budgets sit in the manifests, and `docs/testing.md`
 carries the accent-restoration figure for the four diacritic-heavy Latin ones.

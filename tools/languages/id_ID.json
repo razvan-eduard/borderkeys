@@ -1,0 +1,15 @@
+{
+  "tag": "id-ID",
+  "name": "Indonesian",
+  "wikidata": "id",
+  "corpora": ["ind_wikipedia_2021_1M", "ind_news_2024_1M", "ind_newscrawl_2016_1M"],
+  "hunspell": ["id/id_ID"],
+  "treebank": {
+    "repository": "UD_Indonesian-GSD",
+    "files": ["id_gsd-ud-train.conllu", "id_gsd-ud-dev.conllu", "id_gsd-ud-test.conllu"]
+  },
+  "overlay": {},
+  "single_letter_words": "",
+  "expected_beyond_ascii": [],
+  "reachability_budget": 162
+}

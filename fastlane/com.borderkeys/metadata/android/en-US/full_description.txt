@@ -13,10 +13,10 @@ database and are excluded from system backup and from device-to-device transfer.
 * Several languages active at once, with no manual switching. Mixing two languages in one
   sentence is the normal case, not an exception.
 * Six languages inside the app — English, Romanian, German, Spanish, French and Italian —
-  and twenty more as packs to download from the releases page and import from a file:
+  and twenty-one more as packs to download from the releases page and import from a file:
   Dutch, Portuguese, Swedish, Danish, Norwegian, Finnish, Polish, Czech, Hungarian, Turkish,
-  Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek, Armenian, Georgian, Hebrew and
-  Arabic, each with the same word pairs, names and grammar the bundled six carry.
+  Indonesian, Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek, Armenian, Georgian,
+  Hebrew and Arabic, each with the same word pairs, names and grammar the bundled six carry.
 * Notices when a correction was made under the wrong language and offers the word back, or
   fixes it automatically — your choice — landing on the field's own undo history like any
   other edit.

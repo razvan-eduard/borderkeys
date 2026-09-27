@@ -38,7 +38,7 @@ The whole walk-through, screen by screen, is [`docs/guide.md`](docs/guide.md). I
   correction when the sentence proves the language was misread; autocorrect off by default and
   bounded when on; a names dictionary built from Wikidata; swipe typing that is geometric in
   `core` and neural in `plus`, with an optional ring of alternatives around a paused swipe;
-  six languages inside the app and twenty more as packs to download from the releases page;
+  six languages inside the app and twenty-one more as packs to download from the releases page;
   thirty layouts from AZERTY, Dvorak and Colemak to the national variants with their own
   letters, eight in scripts of their own and two read from the right, a number row, a number
   pad and a modifier row; a personal dictionary you can read and edit, word by word and

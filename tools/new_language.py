@@ -8,7 +8,8 @@ treebank and the long-press letters of one language. This runs the pipeline the 
 packs went through, step by step, each step skipped when its output is already there:
 
     fetch      the Leipzig corpora, the LibreOffice Hunspell dictionary, the UD treebank
-    overlay    the long-press letters into keyboard/src/main/assets/accents/<tag>.json
+    overlay    the long-press letters into keyboard/src/main/assets/accents/<tag>.json, when
+               the language has any
     names      the person and entity lists from Wikidata
     grammar    the tag per word and the transition matrix into dictionaries/extra/<tag>.pos
     corpus     a first count of the corpora, for the ordinary-word list
@@ -188,6 +189,10 @@ class Language:
 
     def overlay(self) -> None:
         target = ACCENTS / f"{self.tag}.json"
+        if not self.manifest["overlay"]:
+            target.unlink(missing_ok=True)
+            log(f"no long-press letters for {self.tag}: no overlay")
+            return
         keys = ", ".join(f'"{k}": "{v}"' for k, v in self.manifest["overlay"].items())
         target.write_text(f'{{ "tag": "{self.tag}", "keys": {{ {keys} }} }}\n', encoding="utf-8")
         log(f"wrote {target.relative_to(ROOT)}")

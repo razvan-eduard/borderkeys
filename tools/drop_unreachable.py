@@ -51,8 +51,8 @@ SINGLE_LETTER_WORDS = {
     "it_IT": "aeioè",    # a; e; i, the masculine plural article; o; è, from essere
 }
 
-# Which overlay file names the extra letters of each language. A tag with no file -- en_US --
-# has no long-press letters of its own and gets a-z alone.
+# Which overlay file names the extra letters of each language. A tag with no file -- en_US, and
+# a manifest whose overlay is empty -- has no long-press letters of its own and gets a-z alone.
 OVERLAY = {
     "ro_RO": "ro-RO", "de_DE": "de-DE", "es_ES": "es-ES",
     "fr_FR": "fr-FR", "it_IT": "it-IT",
@@ -123,7 +123,8 @@ def load_manifests() -> None:
         language = json.loads(manifest.read_text(encoding="utf-8"))
         tag = language["tag"].replace("-", "_")
         SINGLE_LETTER_WORDS.setdefault(tag, language.get("single_letter_words", ""))
-        OVERLAY.setdefault(tag, language["tag"])
+        if language.get("overlay"):
+            OVERLAY.setdefault(tag, language["tag"])
         EXPECTED_BEYOND_ASCII.setdefault(tag, list(language.get("expected_beyond_ascii", [])))
         if language.get("layout"):
             LAYOUT[tag] = language["layout"]
