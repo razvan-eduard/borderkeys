@@ -369,6 +369,8 @@ class ImeSmokeTest {
      * description says so, clears it, and focuses it with the keyboard up.
      */
     private fun focusProbe(mode: ProbeMode) {
+        // The label carries the mode switch only while the field has focus.
+        focusProbeField()
         // Each tap waits until the field has moved to another mode before the next: a tap
         // counted before the last one has redrawn the label would cycle past the mode.
         var taps = 0
@@ -387,8 +389,13 @@ class ImeSmokeTest {
         val field = device.wait(Until.findObject(By.descStartsWith(mode.description)), KEY_TIMEOUT)
         assertNotNull("the probe field in its ${mode.name} mode", field)
         field.clear()
-        // At the field's right end: its label sits at the left while the field is empty and
-        // unfocused, and a tap on the label moves to the next mode instead of focusing.
+        focusProbeField()
+    }
+
+    /** Taps the probe field at its right end, clear of the label, and waits for the keyboard. */
+    private fun focusProbeField() {
+        val field = device.wait(Until.findObject(By.descStartsWith(PROBE_PREFIX)), KEY_TIMEOUT)
+        assertNotNull("the probe field", field)
         val bounds = field.visibleBounds
         device.click(bounds.right - SLIDE_INSET_PX * 4, bounds.centerY())
         assertTrue("the keyboard over the probe field", device.wait(Until.hasObject(keyMatcher("q")), KEY_TIMEOUT))

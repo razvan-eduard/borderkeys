@@ -1022,6 +1022,7 @@ object Keys {
     const val SWIPE_SWIPE_A_WORD = "swipe_swipe_a_word"
     const val SWIPE_SWIPE_TYPING = "swipe_swipe_typing"
     const val SWIPE_SWIPE_TYPING_IS_CURRENTLY_OFF_SO = "swipe_swipe_typing_is_currently_off_so"
+    const val SWIPE_TAP_TO_CHANGE_MODE = "swipe_tap_to_change_mode"
     const val SWIPE_TRY_A_PASSWORD_HERE = "swipe_try_a_password_here"
     const val SWIPE_TRY_IT_HERE = "swipe_try_it_here"
     const val SWIPE_TRY_SEVERAL_LINES_HERE = "swipe_try_several_lines_here"
