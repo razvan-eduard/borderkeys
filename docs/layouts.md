@@ -20,7 +20,7 @@ press come from — which is two separate mechanisms that meet on the same key.
 
 ## The asset format
 
-A layout is one JSON file in `keyboard/src/main/assets/layouts/`. Thirty-three ship today:
+A layout is one JSON file in `keyboard/src/main/assets/layouts/`. Thirty-five ship today:
 
 ```
 qwerty  qwertz  azerty  dvorak  colemak  colemak_dh  workman  bepo  clearflow  kasroz  toki_pona

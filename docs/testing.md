@@ -340,7 +340,11 @@ from FUTO's `swipe-5` collection, built with `futo_layout_corpus.py` as above. T
 the collection's own: its AZERTY rows are French and its QWERTZ rows are English and German
 mixed, so each is measured against the pack that holds its words. A corpus filtered by the wrong
 pack keeps only the rows that happen to be words in both languages and reads 36%; that figure
-is a mistake, not a result.
+is a mistake, not a result. The layouts added since -- Colemak, Colemak-DH, Workman, Bépo, the
+two Turkish arrangements, the national variants, and the ten in other scripts -- have no
+recorded gestures in the collection, so they carry no figure here: the geometric tier needs
+only the layout and the pack, and the neural tier reaches a Latin layout through folding and
+the other scripts not at all.
 
 ```
 tools/swipe_model/.venv/bin/python3 tools/swipe_model/futo_layout_corpus.py azerty \
