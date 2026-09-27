@@ -56,6 +56,7 @@ class ImeSmokeTest {
 
     @Before
     fun prepare() {
+        keepScreenAwake()
         DataGraph.install(context.applicationContext)
         installBundledPack(ENGLISH)
         // The keyboard is taken down before its dictionary is cleaned and its preferences set,
@@ -430,10 +431,9 @@ class ImeSmokeTest {
                 .setClassName(context.packageName, SETTINGS_ACTIVITY)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
         )
-        assertNotNull(
-            "the settings probe field",
-            device.wait(Until.findObject(By.clazz(EDIT_TEXT)), LAUNCH_TIMEOUT),
-        )
+        if (device.wait(Until.findObject(By.clazz(EDIT_TEXT)), LAUNCH_TIMEOUT) == null) {
+            fail("the settings probe field is not on screen; ${screenState()}")
+        }
         device.waitForIdle(SETTLE_MILLIS)
         // The activity is still settling when the field first appears, so a node found then
         // can go stale before it is used; each step finds it afresh.
@@ -461,6 +461,29 @@ class ImeSmokeTest {
     private fun keyboardSelected(): Boolean =
         device.executeShellCommand("dumpsys input_method").contains("mCurMethodId=$imeId") &&
             device.executeShellCommand("settings get secure default_input_method").trim() == imeId
+
+    /** Wakes the screen, keeps it on for as long as the device has power, and puts away a lock screen. */
+    private fun keepScreenAwake() {
+        device.executeShellCommand("svc power stayon true")
+        device.executeShellCommand("input keyevent KEYCODE_WAKEUP")
+        device.executeShellCommand("wm dismiss-keyguard")
+    }
+
+    /**
+     * What the device shows, for a failure message: the screen's power state, the lock screen,
+     * the focused window and app, the resumed activity, and every window on screen by title.
+     */
+    private fun screenState(): String {
+        fun lines(command: String, vararg keys: String) =
+            device.executeShellCommand(command).lines().map { it.trim() }
+                .filter { line -> keys.any { it in line } }.distinct().joinToString(" | ")
+        val power = lines("dumpsys power", "mWakefulness=", "mHoldingDisplaySuspendBlocker=")
+        val lock = lines("dumpsys window policy", "showing=", "isKeyguardShowing", "mKeyguardDrawComplete")
+        val focus = lines("dumpsys window", "mCurrentFocus=", "mFocusedApp=")
+        val activity = lines("dumpsys activity activities", "ResumedActivity")
+        val windows = instrumentation.uiAutomation.windows.joinToString { "${it.title} (type ${it.type})" }
+        return "power: $power; lock: $lock; focus: $focus; activity: $activity; windows: $windows"
+    }
 
 
     private fun field(): UiObject2 {
