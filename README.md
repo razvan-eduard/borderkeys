@@ -41,8 +41,9 @@ The whole walk-through, screen by screen, is [`docs/guide.md`](docs/guide.md). I
   six languages inside the app and twenty more as packs to download from the releases page;
   thirty layouts from AZERTY, Dvorak and Colemak to the national variants with their own
   letters, eight in scripts of their own and two read from the right, a number row, a number
-  pad and a modifier row; a personal
-  dictionary you can read and edit, word by word and phrase by phrase, with "Why?" on any
+  pad and a modifier row; a personal dictionary you can read and edit, word by word and
+  phrase by phrase, that learns the words you open sentences with and offers them first, all
+  behind one learning switch that forgets everything when turned off; "Why?" on any
   suggestion; text shortcuts; terminals typed into as terminals.
 - **Around the keys.** A quick-action bar for what takes several gestures, extendable with
   macros of your own; themes and a theme library; particle effects on five surfaces; panels
@@ -53,8 +54,8 @@ The whole walk-through, screen by screen, is [`docs/guide.md`](docs/guide.md). I
   fields and wherever an app asks for no personalised learning; the clipboard history never
   keeps a copy the app marked sensitive, one made in a password manager or code app the
   keyboard knows, or one made in an app you name. Everything learned lives in an encrypted
-  database on the phone, writes to a backup file only on your say, and moves between the two
-  builds directly.
+  database on the phone, is offered back only while the learning switch is on, writes to a
+  backup file only on your say, and moves between the two builds directly.
 - **The assistant, `plus` only.** A draft box the app cannot see, and an on-device model that
   corrects, shortens, summarises, re-tones or translates it, reachable from any text selection.
 
