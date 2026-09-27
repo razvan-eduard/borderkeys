@@ -20,6 +20,8 @@ attestations and the full commit lists are on the
   own direction under any layout.
 - Indonesian joins the downloadable packs, with the word pairs, names and grammar the others
   carry. Like English it has no accents of its own, so it adds no long-press letters.
+- The smoke suite checks that Show on a password field's strip puts what was typed in place of
+  the private notice, and that Hide puts the notice back.
 
 ## v0.9.0 — 2026-09-27
 
