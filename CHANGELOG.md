@@ -29,6 +29,8 @@ attestations and the full commit lists are on the
 - The settings search sits in the title row of the home screen.
 - The "Try it here" field names its mode inside the empty box, its label says a tap on it
   changes the mode once the field has focus, and its several-lines mode shows three rows.
+- Every "Advanced settings" fold names what it holds on the line beneath it, so a closed fold
+  can be read past instead of opened to find out.
 - Fixed: importing a pack for a language already installed, or a file already imported, ended
   the settings application; it now takes the earlier copy's place, keeping its switch and
   weight.

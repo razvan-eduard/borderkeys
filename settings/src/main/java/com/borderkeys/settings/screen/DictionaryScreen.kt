@@ -132,7 +132,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                     confirmingLearningOff = true
                 }
             }
-            AdvancedSection {
+            AdvancedSection(strings[Keys.DICTIONARY_ADVANCED_NOTE]) {
                 Explanation(
                     strings[Keys.DICTIONARY_THIS_DOES_NOT_CHANGE_WHAT_IS],
                 )

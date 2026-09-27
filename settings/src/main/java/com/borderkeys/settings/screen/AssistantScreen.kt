@@ -223,7 +223,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
             }
         }
         SettingsSectionCard(strings[Keys.ASSISTANT_HOW_IT_CHOOSES_WORDS]) {
-          AdvancedSection {
+          AdvancedSection(strings[Keys.ASSISTANT_ADVANCED_NOTE]) {
             Text(
                 strings[Keys.ASSISTANT_TEMPERATURE],
                 style = MaterialTheme.typography.bodyLarge,

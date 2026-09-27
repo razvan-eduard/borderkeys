@@ -174,7 +174,7 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                 // treatment is the same on both sides of a rotation -- and set once, so under
                 // the fold. "Background across the whole width" is a theme value, kept here with
                 // the blur it gates rather than on the Theme screen away from it.
-                AdvancedSection {
+                AdvancedSection(strings[Keys.SIZE_ADVANCED_NOTE]) {
                     SectionHeader(strings[Keys.SIZE_THE_SPACE_BESIDE_THE_KEYS])
                     SwitchRow(
                         title = strings[Keys.THEME_FULL_WIDTH_BACKGROUND],

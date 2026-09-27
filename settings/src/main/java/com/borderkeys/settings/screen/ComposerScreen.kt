@@ -82,7 +82,7 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
             // Everything below describes the box. With the box switched off it would be
             // settings for something that cannot happen.
             if (preferences.composerEnabled) {
-                AdvancedSection {
+                AdvancedSection(strings[Keys.COMPOSER_ADVANCED_NOTE]) {
                     SectionHeader(strings[Keys.COMPOSER_SETTINGS_TEXT_SIZE])
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),

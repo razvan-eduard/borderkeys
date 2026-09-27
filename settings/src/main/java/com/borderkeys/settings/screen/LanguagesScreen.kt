@@ -132,7 +132,7 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
             }
             // How the packs are weighed against each other while writing: about the packs
             // above, and set once.
-            AdvancedSection {
+            AdvancedSection(strings[Keys.LANGUAGES_ADVANCED_NOTE]) {
                 LanguageLock(preferences) { lock ->
                     scope.launch { DataGraph.themes.updatePreferences { it.copy(languageLock = lock) } }
                 }
