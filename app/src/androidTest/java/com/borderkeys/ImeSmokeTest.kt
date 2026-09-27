@@ -57,6 +57,7 @@ class ImeSmokeTest {
     @Before
     fun prepare() {
         keepScreenAwake()
+        answerNotRespondingDialogs()
         DataGraph.install(context.applicationContext)
         installBundledPack(ENGLISH)
         // The keyboard is taken down before its dictionary is cleaned and its preferences set,
@@ -438,7 +439,11 @@ class ImeSmokeTest {
                 .setClassName(context.packageName, SETTINGS_ACTIVITY)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
         )
-        if (device.wait(Until.findObject(By.clazz(EDIT_TEXT)), LAUNCH_TIMEOUT) == null) {
+        var shown = device.wait(Until.findObject(By.clazz(EDIT_TEXT)), LAUNCH_TIMEOUT) != null
+        if (!shown && answerNotRespondingDialogs()) {
+            shown = device.wait(Until.findObject(By.clazz(EDIT_TEXT)), LAUNCH_TIMEOUT) != null
+        }
+        if (!shown) {
             fail("the settings probe field is not on screen; ${screenState()}")
         }
         device.waitForIdle(SETTLE_MILLIS)
@@ -468,6 +473,21 @@ class ImeSmokeTest {
     private fun keyboardSelected(): Boolean =
         device.executeShellCommand("dumpsys input_method").contains("mCurMethodId=$imeId") &&
             device.executeShellCommand("settings get secure default_input_method").trim() == imeId
+
+    /**
+     * Answers Wait on each "isn't responding" dialog on screen, which leaves the app it names
+     * running, and returns whether there was one.
+     */
+    private fun answerNotRespondingDialogs(): Boolean {
+        var answered = false
+        repeat(ATTEMPTS) {
+            val wait = device.findObject(By.res(SYSTEM_PACKAGE, NOT_RESPONDING_WAIT)) ?: return answered
+            wait.click()
+            answered = true
+            device.waitForIdle(SETTLE_MILLIS)
+        }
+        return answered
+    }
 
     /** Wakes the screen, keeps it on for as long as the device has power, and puts away a lock screen. */
     private fun keepScreenAwake() {
@@ -704,6 +724,10 @@ class ImeSmokeTest {
         /** Every word a case types, forgotten before each case so no run teaches the next. */
         val TYPED_WORDS = listOf("teh", "the", "abc", "def", "abcx", "ab", "cd", "x", "abxcd")
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
+
+        /** The Wait button of the system's "isn't responding" dialog, by package and resource id. */
+        const val SYSTEM_PACKAGE = "android"
+        const val NOT_RESPONDING_WAIT = "aerr_wait"
 
         /** What every mode's content description starts with; the mode's own name follows. */
         const val PROBE_PREFIX = "probe-"
