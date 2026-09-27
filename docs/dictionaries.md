@@ -411,3 +411,10 @@ against it; the number may only ever be lowered by hand. The manifests also feed
 `drop_unreachable.py` and `drop_foreign.py`, so a downloadable language is judged by the same
 rules as a bundled one. `.github/workflows/packs.yml`, started by hand,
 compiles every list in `dictionaries/extra/` and replaces the `packs` release with the result.
+
+Nineteen languages are published this way, each with the same n-grams, names and grammar the
+bundled six carry: Dutch, Portuguese, Swedish, Danish, Norwegian Bokmål, Finnish, Polish,
+Czech, Hungarian and Turkish on Latin layouts; Russian, Ukrainian, Bulgarian, Serbian,
+Macedonian, Greek, Armenian and Georgian on layouts of their own script; Hebrew and Arabic
+read from the right. Their reachability budgets sit in the manifests, and `docs/testing.md`
+carries the accent-restoration figure for the four diacritic-heavy Latin ones.
