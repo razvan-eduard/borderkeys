@@ -251,17 +251,24 @@ jobs:
             fi
           fi
 
-      # Same gate as publishing. On a tag push this is a no-op force-push of a tag that
-      # already points here; on a version bump it is what creates the tag at all.
+      # Same gate as publishing. A tag that already resolves to this commit is left as it is,
+      # annotation and message included; a missing tag, or one resolving elsewhere, is set to
+      # this commit.
       # GITHUB_TOKEN can never carry the `workflows` scope, and what that forbids is making a
       # ref point at a tree whose .github/workflows content differs from the repository's. Tag
       # the tip and nothing differs.
       - name: Point the tag at this commit
         if: github.event_name != 'workflow_dispatch' || inputs.publish
         run: |
+          set -euo pipefail
           TAG="${{ steps.version.outputs.tag }}"
-          git tag -f "$TAG"
-          git push origin "$TAG" --force
+          REMOTE_SHA=$(git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}" | tail -1 | cut -f1)
+          if [ "$REMOTE_SHA" = "$(git rev-parse HEAD)" ]; then
+            echo "$TAG already points at this commit"
+          else
+            git tag -f "$TAG"
+            git push origin "$TAG" --force
+          fi
 
       - name: Delete the existing release so the publish date is this one
         if: github.event_name != 'workflow_dispatch' || inputs.publish
