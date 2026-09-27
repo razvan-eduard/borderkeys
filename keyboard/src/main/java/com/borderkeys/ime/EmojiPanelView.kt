@@ -83,6 +83,18 @@ class EmojiPanelView(
             }
         }
 
+    /**
+     * Whether the grid and the tabs run from the right edge, the way the alphabetic layout's
+     * language reads: the first emoji at the top right, the recents tab rightmost.
+     */
+    var rightToLeft: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
     private val scroller = OverScroller(context)
     private var velocity: VelocityTracker? = null
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
@@ -192,14 +204,14 @@ class EmojiPanelView(
             val previousSize = paints.label.textSize
             paints.label.textSize = cellPx * GLYPH_FRACTION
             for (index in first..last) {
-                val column = index % columns
+                val left = columnLeft(index % columns)
                 val row = index / columns
-                val cx = column * cellPx + cellPx / 2f
+                val cx = left + cellPx / 2f
                 val cy = top + row * cellPx - scrollY + cellPx / 2f
                 if (index == pressedCell) {
                     canvas.drawRect(
-                        column * cellPx, cy - cellPx / 2f,
-                        column * cellPx + cellPx, cy + cellPx / 2f,
+                        left, cy - cellPx / 2f,
+                        left + cellPx, cy + cellPx / 2f,
                         paints.keyPressedFill,
                     )
                 }
@@ -228,11 +240,12 @@ class EmojiPanelView(
         val previousSize = paints.label.textSize
         paints.label.textSize = tabHeightPx * TAB_GLYPH_FRACTION
         for (index in 0 until count) {
-            val cx = step * index + step / 2f
+            val left = step * slotOf(index, count)
+            val cx = left + step / 2f
             if (index == selectedTab || (index == 0 && selectedTab == SEARCH_TAB)) {
                 canvas.drawLine(
-                    step * index + step * 0.2f, tabHeightPx - 2f,
-                    step * (index + 1) - step * 0.2f, tabHeightPx - 2f, paints.accent,
+                    left + step * 0.2f, tabHeightPx - 2f,
+                    left + step * 0.8f, tabHeightPx - 2f, paints.accent,
                 )
             }
             // A representative emoji per tab rather than an icon set of its own: the tabs are
@@ -257,12 +270,18 @@ class EmojiPanelView(
         return byCategory[categories[index - 1]]?.firstOrNull() ?: "•"
     }
 
+    /** The left edge of grid column [column], the columns counted from the right when [rightToLeft]. */
+    private fun columnLeft(column: Int): Float = Mirror.cellLeft(column, cellPx, width.toFloat(), rightToLeft)
+
+    /** Where tab [index] of [count] sits, counted from the left edge: mirrored when [rightToLeft]. */
+    private fun slotOf(index: Int, count: Int): Int = Mirror.slot(index, count, rightToLeft)
+
     private fun cellAt(x: Float, y: Float): Int {
         if (y < tabHeightPx || current.isEmpty()) {
             return -1
         }
-        val column = (x / cellPx).toInt()
-        if (column >= columns) {
+        val column = Mirror.cellAt(x, cellPx, width.toFloat(), rightToLeft)
+        if (column !in 0 until columns) {
             return -1
         }
         val row = ((y - tabHeightPx + scrollY) / cellPx).toInt()
@@ -275,7 +294,8 @@ class EmojiPanelView(
         if (count == 0) {
             return -1
         }
-        return (x / (width.toFloat() / count)).toInt().coerceIn(0, count - 1)
+        val slot = (x / (width.toFloat() / count)).toInt().coerceIn(0, count - 1)
+        return slotOf(slot, count)
     }
 
     @SuppressLint("ClickableViewAccessibility")

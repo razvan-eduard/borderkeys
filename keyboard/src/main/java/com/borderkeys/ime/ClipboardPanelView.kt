@@ -7,10 +7,12 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.net.Uri
 import android.os.Trace
+import android.text.TextDirectionHeuristics
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
@@ -78,6 +80,19 @@ class ClipboardPanelView(
             }
             field = value
             applyQuery()
+        }
+
+    /**
+     * Whether the header, the cards and their actions run from the right edge, the way the
+     * alphabetic layout's language reads. A card's text is aligned by its own direction either
+     * way.
+     */
+    var rightToLeft: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
         }
 
     /** The card whose actions a long press opened, or -1. */
@@ -253,19 +268,25 @@ class ClipboardPanelView(
             0f, viewTop + headerHeightPx, width.toFloat(), viewTop + headerHeightPx, paints.keyStroke,
         )
         val midY = viewTop + headerHeightPx / 2f + paints.labelBaselineOffsetPx
+        // Placed from the start edge: the left one, or the right when rightToLeft.
+        val align = if (rightToLeft) Paint.Align.RIGHT else Paint.Align.LEFT
         val previous = paints.label.textAlign
-        paints.label.textAlign = android.graphics.Paint.Align.LEFT
-        canvas.drawText(BACK_GLYPH, paddingPx * 2f, midY, paints.label)
-        val titleLeft = paddingPx * 2f + headerHeightPx * 0.7f
-        canvas.drawText(title, titleLeft, midY, paints.label)
+        paints.label.textAlign = align
+        canvas.drawText(if (rightToLeft) BACK_GLYPH_RTL else BACK_GLYPH, fromStart(paddingPx * 2f), midY, paints.label)
+        val titleOffset = paddingPx * 2f + headerHeightPx * 0.7f
+        canvas.drawText(title, fromStart(titleOffset), midY, paints.label)
         if (matchNote.isNotEmpty()) {
-            val noteLeft = titleLeft + paints.label.measureText(title) + paddingPx * 2f
+            val noteOffset = titleOffset + paints.label.measureText(title) + paddingPx * 2f
             val previousSecondary = paints.labelSecondary.textAlign
-            paints.labelSecondary.textAlign = android.graphics.Paint.Align.LEFT
+            paints.labelSecondary.textAlign = align
             canvas.save()
-            canvas.clipRect(noteLeft, viewTop, width - paddingPx, viewTop + headerHeightPx)
+            if (rightToLeft) {
+                canvas.clipRect(paddingPx, viewTop, width - noteOffset, viewTop + headerHeightPx)
+            } else {
+                canvas.clipRect(noteOffset, viewTop, width - paddingPx, viewTop + headerHeightPx)
+            }
             canvas.drawText(
-                matchNote, noteLeft,
+                matchNote, fromStart(noteOffset),
                 viewTop + headerHeightPx / 2f + paints.secondaryBaselineOffsetPx,
                 paints.labelSecondary,
             )
@@ -274,6 +295,9 @@ class ClipboardPanelView(
         }
         paints.label.textAlign = previous
     }
+
+    /** The x [offset] in from the start edge: the left one, or the right when [rightToLeft]. */
+    private fun fromStart(offset: Float): Float = if (rightToLeft) width - offset else offset
 
     private fun drawScrollbar(canvas: Canvas, viewTop: Float) {
         val viewport = height - headerHeightPx
@@ -286,7 +310,7 @@ class ClipboardPanelView(
         val progress = (scrollY.toFloat() / maxScroll()).coerceIn(0f, 1f)
         val topInView = headerHeightPx + paddingPx + travel * progress
         val barWidth = paddingPx * 0.6f
-        val left = width - paddingPx - barWidth
+        val left = if (rightToLeft) paddingPx else width - paddingPx - barWidth
         canvas.drawRoundRect(
             left, viewTop + topInView, left + barWidth, viewTop + topInView + thumbLength,
             barWidth / 2f, barWidth / 2f, paints.labelSecondary,
@@ -312,27 +336,35 @@ class ClipboardPanelView(
 
         val inset = paddingPx
         var textLeft = cardRect.left + inset
+        var textRight = cardRect.right - inset
         val thumbnail = thumbnails[entry.id]
         if (thumbnail != null) {
+            // At the card's start edge: the left one, or the right when rightToLeft.
             val side = (cardHeightPx - inset * 2f).toInt()
-            thumbRect.set(
-                (cardRect.left + inset).toInt(), (top + inset).toInt(),
-                (cardRect.left + inset).toInt() + side, (top + inset).toInt() + side,
-            )
+            val thumbLeft = if (rightToLeft) textRight.toInt() - side else textLeft.toInt()
+            thumbRect.set(thumbLeft, (top + inset).toInt(), thumbLeft + side, (top + inset).toInt() + side)
             canvas.drawBitmap(thumbnail, null, thumbRect, null)
-            textLeft = thumbRect.right + inset
+            if (rightToLeft) {
+                textRight = thumbRect.left - inset
+            } else {
+                textLeft = thumbRect.right + inset
+            }
         }
 
-        // Left aligned, unlike everything else this keyboard draws: a card is read from its
-        // start, and a centred line of copied text is a line nobody can scan down.
-        val previous = paints.label.textAlign
-        paints.label.textAlign = android.graphics.Paint.Align.LEFT
+        // Aligned to where the text itself begins, unlike everything else this keyboard draws:
+        // the right edge for a text whose first strong letter reads right to left, the left
+        // edge otherwise, whichever way the panel runs.
         val label = labelFor(entry)
+        val length = label.length.coerceAtMost(MAX_LABEL_CHARS)
+        val textRightToLeft = TextDirectionHeuristics.FIRSTSTRONG_LTR.isRtl(label, 0, length)
+        val previous = paints.label.textAlign
+        paints.label.textAlign = if (textRightToLeft) Paint.Align.RIGHT else Paint.Align.LEFT
         canvas.save()
-        canvas.clipRect(textLeft, top, cardRect.right - inset, top + cardHeightPx)
+        canvas.clipRect(textLeft, top, textRight, top + cardHeightPx)
         canvas.drawText(
-            label, 0, label.length.coerceAtMost(MAX_LABEL_CHARS),
-            textLeft, top + cardHeightPx / 2f + paints.labelBaselineOffsetPx, paints.label,
+            label, 0, length,
+            if (textRightToLeft) textRight else textLeft,
+            top + cardHeightPx / 2f + paints.labelBaselineOffsetPx, paints.label,
         )
         canvas.restore()
         paints.label.textAlign = previous
@@ -340,8 +372,10 @@ class ClipboardPanelView(
         if (entry.isPinned) {
             // A dot rather than a pin glyph: the panel has no icon set of its own, and the
             // question a reader has is "does this one survive the timer", which a mark answers.
+            // At the corner opposite the start edge.
             canvas.drawCircle(
-                cardRect.right - inset, top + inset + PIN_RADIUS_FRACTION * cardHeightPx,
+                if (rightToLeft) cardRect.left + inset else cardRect.right - inset,
+                top + inset + PIN_RADIUS_FRACTION * cardHeightPx,
                 PIN_RADIUS_FRACTION * cardHeightPx, paints.accent,
             )
         }
@@ -356,12 +390,15 @@ class ClipboardPanelView(
         val baseline = top + cardHeightPx / 2f + paints.labelBaselineOffsetPx
         for (zone in 0 until zones) {
             val label = actionLabel(entry, zone)
-            canvas.drawText(label, cardRect.left + zoneWidth * (zone + 0.5f), baseline, paints.label)
+            canvas.drawText(label, cardRect.left + zoneWidth * (slotOf(zone, zones) + 0.5f), baseline, paints.label)
         }
         paints.label.textAlign = previous
     }
 
     private fun actionCount(entry: ClipEntry): Int = if (entry.isImage) 2 else 3
+
+    /** Where action [zone] of [zones] sits, counted from the left edge: mirrored when [rightToLeft]. */
+    private fun slotOf(zone: Int, zones: Int): Int = Mirror.slot(zone, zones, rightToLeft)
 
     private fun actionLabel(entry: ClipEntry, zone: Int): String = when {
         zone == 0 -> if (entry.isPinned) unpinLabel else pinLabel
@@ -390,7 +427,8 @@ class ClipboardPanelView(
         }
         val entry = entries[index]
         val zones = actionCount(entry)
-        val zone = ((x - paddingPx) / ((width - paddingPx * 2f) / zones)).toInt().coerceIn(0, zones - 1)
+        val slot = ((x - paddingPx) / ((width - paddingPx * 2f) / zones)).toInt().coerceIn(0, zones - 1)
+        val zone = slotOf(slot, zones)
         when {
             zone == 0 -> listener?.onClipPinToggled(entry)
             zone == 1 && !entry.isImage -> listener?.onClipEdited(entry)
@@ -519,6 +557,9 @@ class ClipboardPanelView(
 
         /** A left-pointing arrow, drawn rather than translated: it is a direction, not a word. */
         const val BACK_GLYPH = "←"
+
+        /** The same arrow pointing right, for a header that runs from the right edge. */
+        const val BACK_GLYPH_RTL = "→"
 
         /** A card is this many key rows tall: enough for two lines of text beside a thumbnail. */
         const val CARD_HEIGHT_ROWS = 0.9f
