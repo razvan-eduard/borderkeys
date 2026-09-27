@@ -105,7 +105,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
         // the chip's offer, one empties the system clipboard, one removes the history row, one
         // empties the history on close -- and each one's own doc in KeyboardPreferences says
         // why it is not the one beside it.
-        AdvancedSection {
+        AdvancedSection(strings[Keys.CLIPBOARD_ADVANCED_NOTE]) {
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE],
                 subtitle = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE_NOTE],

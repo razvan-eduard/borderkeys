@@ -702,7 +702,7 @@ private fun OutlineLayerSection(
 
     val primaryKey = particleColourKey(regionKey, "outline", "primary")
     val secondaryKey = particleColourKey(regionKey, "outline", "secondary")
-    AdvancedSection {
+    AdvancedSection(strings[Keys.EFFECTS_ADVANCED_OUTLINE_NOTE]) {
     ColourRow(
         strings[Keys.PARTICLE_EFFECTS_PRIMARY_COLOUR],
         layer.primaryColor,
@@ -803,7 +803,7 @@ private fun FillLayerSection(
 
     val primaryKey = particleColourKey(regionKey, "fill", "primary")
     val secondaryKey = particleColourKey(regionKey, "fill", "secondary")
-    AdvancedSection {
+    AdvancedSection(strings[Keys.EFFECTS_ADVANCED_FILL_NOTE]) {
     ColourRow(
         strings[Keys.PARTICLE_EFFECTS_PRIMARY_COLOUR],
         layer.primaryColor,

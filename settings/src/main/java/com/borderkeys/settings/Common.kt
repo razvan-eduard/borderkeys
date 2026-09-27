@@ -131,9 +131,11 @@ fun SettingRow(
  * default. A card then leads with what changes how typing feels and keeps the rest a tap away
  * rather than gone. Open or closed is remembered across rotation and nothing longer: every
  * visit to a screen starts with them folded, which is the point.
+ *
+ * [summary] names what the fold holds, drawn under the line.
  */
 @Composable
-fun AdvancedSection(content: @Composable ColumnScope.() -> Unit) {
+fun AdvancedSection(summary: String? = null, content: @Composable ColumnScope.() -> Unit) {
     val strings = LocalStrings.current
     var expanded by rememberSaveable { mutableStateOf(false) }
     Row(
@@ -143,12 +145,20 @@ fun AdvancedSection(content: @Composable ColumnScope.() -> Unit) {
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            strings[Keys.COMMON_ADVANCED_SETTINGS],
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.weight(1f),
-        )
+        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+            Text(
+                strings[Keys.COMMON_ADVANCED_SETTINGS],
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            if (summary != null) {
+                Text(
+                    summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         // One icon in one place, in two states -- a chevron down while closed, up while open --
         // rather than a glyph rotated in place, which swung around its own centre.
         Icon(

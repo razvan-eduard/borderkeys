@@ -106,7 +106,7 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
                 checked = preferences.numericKeypad,
             ) { value -> update { it.copy(numericKeypad = value) } }
-            AdvancedSection {
+            AdvancedSection(strings[Keys.LAYOUT_ADVANCED_DIGITS_NOTE]) {
                 Explanation(strings[Keys.LAYOUT_WHERE_THE_DIGITS_SIT])
                 FlowRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
@@ -222,7 +222,7 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
             // Set once and left: how long a hold is, and what the enter key does in a field
             // that has its own action -- the latter folded in from its own card, which was a
             // title over three chips.
-            AdvancedSection {
+            AdvancedSection(strings[Keys.LAYOUT_ADVANCED_KEYS_NOTE]) {
                 Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
                     Text(
                         strings[Keys.LAYOUT_LONG_PRESS_DURATION],

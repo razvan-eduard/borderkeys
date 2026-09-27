@@ -363,7 +363,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                     preserveAlpha = true,
                 ) { update { t -> t.copy(swipeTrailColor = it) } }
               }
-                AdvancedSection {
+                AdvancedSection(strings[Keys.THEME_ADVANCED_CHIP_NOTE]) {
                     SwitchRow(
                         title = strings[Keys.THEME_FILL_THE_CORRECTION_CHIP],
                         subtitle = strings[Keys.THEME_FILL_THE_CORRECTION_CHIP_NOTE],
@@ -479,7 +479,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                     KeyboardTheme.MIN_OPACITY * 100f..100f, strings[Keys.THEME_PERCENT], default = 100f,
                 ) { update { t -> t.copy(opacity = it / 100f) } }
                 Explanation(strings[Keys.THEME_OPACITY_NOTE])
-                AdvancedSection {
+                AdvancedSection(strings[Keys.THEME_ADVANCED_NAVIGATION_NOTE]) {
                     // "Background across the whole width" lives on the Size screen now, in the
                     // same card as the blur it gates -- see that screen's own comment.
                     SwitchRow(
@@ -517,7 +517,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 // The finer dials: the hint text's own size, how far a pressed key sinks, and
                 // the swipe trail's width -- its one home now that the Typing screen no longer
                 // carries a second slider for the same value.
-                AdvancedSection {
+                AdvancedSection(strings[Keys.THEME_ADVANCED_TEXT_NOTE]) {
                     ThemeSlider(
                         strings[Keys.THEME_ACCENT_SIZE], theme.accentTextSizeSp, 6f..32f,
                         strings[Keys.THEME_SP], default = 15.5f,

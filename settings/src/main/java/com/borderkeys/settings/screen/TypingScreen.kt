@@ -225,7 +225,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             // The knobs behind the choices above: how a habit-space after an automatic one is
             // treated, the space before punctuation, and the two finer autocorrect dials that
             // sit under "how different a correction may be" -- the one level most people set.
-            AdvancedSection {
+            AdvancedSection(strings[Keys.CORRECTIONS_ADVANCED_NOTE]) {
                 Text(
                     strings[Keys.CORRECTIONS_AUTO_SPACE_HABIT],
                     style = MaterialTheme.typography.bodyLarge,
@@ -349,7 +349,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
 
             // The trail's width and colour live together on the Theme screen; the decoding
             // notes and the experimental model are for whoever wants to know how it works.
-            AdvancedSection {
+            AdvancedSection(strings[Keys.SWIPE_ADVANCED_NOTE]) {
                 Text(
                     strings[Keys.SWIPE_HOW_IT_DECODES],
                     style = MaterialTheme.typography.bodyLarge,
@@ -596,7 +596,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 }
                 // The dials behind the ring: how many words, how a pause is detected, and
                 // what closes it -- set once, if ever.
-                AdvancedSection {
+                AdvancedSection(strings[Keys.RADIAL_ADVANCED_NOTE]) {
                     DefaultableSlider(
                         label = strings.getString(Keys.RADIAL_COUNT, preferences.radialSuggestionCount),
                         value = preferences.radialSuggestionCount.toFloat(),
