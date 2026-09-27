@@ -8,10 +8,12 @@ import com.borderkeys.i18n.Keys
 
 /**
  * The "Try it here" field's modes: a plain field, a password field, a field that takes
- * several lines. The field's label names the mode after a coloured bullet, and a tap on the
- * label moves to the next mode. The field carries its mode and then its exact text in its
- * content description, so the smoke suite can read a password field's text where the
- * accessibility tree shows it masked.
+ * several lines. Resting inside the empty field the label names the mode; once it has floated
+ * onto the outline it says that a tap moves to the next mode, and the typing hint inside the
+ * empty field names the mode instead. Both spellings of the label lead with a bullet in the
+ * mode's colour. The field carries its mode and then its exact text in its content
+ * description, so the smoke suite can read a password field's text where the accessibility
+ * tree shows it masked.
  */
 enum class ProbeMode(val description: String, val labelKey: String, val colour: Color) {
     PLAIN("probe-plain:", Keys.SWIPE_TRY_IT_HERE, Color(0xFF1E88E5)),

@@ -48,6 +48,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -369,21 +370,36 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
             ) {
                 DebugStatsLine(statsExpanded) { statsExpanded = !statsExpanded }
-                // One field, three modes: its label names the mode after a coloured bullet,
-                // and a tap on the label moves to the next. The field stays one line tall;
-                // in the several-lines mode it takes line breaks and scrolls.
+                // One field, three modes. Resting inside the empty field the label names the
+                // mode and takes no tap of its own, so a tap anywhere in the field types.
+                // Once it has floated onto the outline it offers the mode switch instead, and
+                // the typing hint inside the empty field names the mode. Both spellings of the
+                // label lead with a bullet in the mode's colour. In the several-lines mode the
+                // field shows three rows and scrolls past them; the other modes are one line.
                 var probeMode by rememberSaveable { mutableStateOf(ProbeMode.PLAIN) }
+                var probeFocused by remember { mutableStateOf(false) }
+                val labelFloated = probeFocused || probe.isNotEmpty()
                 OutlinedTextField(
                     value = probe,
                     onValueChange = { probe = it },
                     label = {
-                        Text(
-                            ProbeMode.BULLET + strings[probeMode.labelKey],
-                            color = probeMode.colour,
-                            modifier = Modifier.clickable { probeMode = probeMode.next() },
-                        )
+                        if (labelFloated) {
+                            Text(
+                                ProbeMode.BULLET + strings[Keys.SWIPE_TAP_TO_CHANGE_MODE],
+                                color = probeMode.colour,
+                                modifier = Modifier.clickable { probeMode = probeMode.next() },
+                            )
+                        } else {
+                            Text(
+                                ProbeMode.BULLET + strings[probeMode.labelKey],
+                                color = probeMode.colour,
+                            )
+                        }
                     },
+                    placeholder = { Text(strings[probeMode.labelKey]) },
                     singleLine = probeMode != ProbeMode.LINES,
+                    minLines = if (probeMode == ProbeMode.LINES) PROBE_LINES_SHOWN else 1,
+                    maxLines = if (probeMode == ProbeMode.LINES) PROBE_LINES_SHOWN else 1,
                     visualTransformation = if (probeMode == ProbeMode.PASSWORD) {
                         PasswordVisualTransformation()
                     } else {
@@ -395,7 +411,8 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 6.dp)
-                        .height(PROBE_FIELD_HEIGHT)
+                        .then(if (probeMode == ProbeMode.LINES) Modifier else Modifier.height(PROBE_FIELD_HEIGHT))
+                        .onFocusChanged { probeFocused = it.isFocused }
                         .semantics { contentDescription = probeMode.description + probe },
                 )
             }
@@ -480,5 +497,8 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
     }
 }
 
-/** One line of text with its label, whatever mode the probe field is in; more lines scroll inside. */
+/** One line of text with its label, the probe field's height in its one-line modes. */
 private val PROBE_FIELD_HEIGHT = 68.dp
+
+/** Rows the probe field shows in its several-lines mode; more lines scroll inside. */
+private const val PROBE_LINES_SHOWN = 3
