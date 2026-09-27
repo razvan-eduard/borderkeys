@@ -12,6 +12,14 @@ listed under *Unreleased* and moves under its version when it is tagged. The APK
 attestations and the full commit lists are on the
 [releases page](https://github.com/razvan-eduard/borderkeys/releases).
 
+## v0.10.1 — 2026-09-28
+
+- Nothing changes for the person typing: the build is made with Android Gradle plugin 9.3.3 and
+  its R8 9.3.28, and the code it runs is the same as 0.10.0's.
+- A release tag keeps its annotation and message once the release is published.
+- The smoke suite answers Wait on a system "isn't responding" dialog before it looks for the
+  settings field, and once more when the field does not appear.
+
 ## v0.10.0 — 2026-09-27
 
 - Under the Hebrew and Arabic layouts the emoji and clipboard panels run from the right as the
