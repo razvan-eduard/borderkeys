@@ -18,7 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,7 +43,7 @@ import com.borderkeys.settings.rememberResumedCount
 import com.borderkeys.settings.siblingPackage
 
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
+fun HomeScreen(query: String, modifier: Modifier = Modifier, open: (Screen) -> Unit) {
     val strings = LocalStrings.current
     val context = LocalContext.current
     // Re-read whenever this screen comes back to the front, the same way Setup does: both
@@ -72,7 +71,6 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
         }.isSuccess
     }
 
-    var query by rememberSaveable { mutableStateOf("") }
     val matches = remember(query, strings, hasAssistant) {
         SettingsSearch.find(
             query,
@@ -82,13 +80,6 @@ fun HomeScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit) {
     }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            label = { Text(strings[Keys.HOME_SEARCH]) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-        )
         if (query.isNotBlank()) {
             SettingsSectionCard(strings.getString(Keys.HOME_SEARCH_MATCHES, matches.size)) {
                 if (matches.isEmpty()) {
