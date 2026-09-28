@@ -44,6 +44,7 @@ add_subdirectory(third_party/llama.cpp ${CMAKE_CURRENT_BINARY_DIR}/llama EXCLUDE
 add_library(borderkeysassist SHARED
     assist_jni.cpp
     text_assist.cpp
+    answer_cleanup.cpp
 )
 
 target_include_directories(borderkeysassist PRIVATE

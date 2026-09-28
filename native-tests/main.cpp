@@ -10,6 +10,7 @@ void runEngineTests();
 void runGestureTests();
 void runTcnTests();
 void runFoldTests();
+void runAnswerCleanupTests();
 
 int main() {
     runFormatTests();
@@ -17,6 +18,7 @@ int main() {
     runGestureTests();
     runTcnTests();
     runFoldTests();
+    runAnswerCleanupTests();
 
     std::printf("\n%d checks, %d failures\n", borderkeys_test::checks, borderkeys_test::failures);
     return borderkeys_test::failures == 0 ? 0 : 1;
