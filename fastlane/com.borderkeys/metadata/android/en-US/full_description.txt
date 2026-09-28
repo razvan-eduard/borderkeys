@@ -66,8 +66,10 @@ database and are excluded from system backup and from device-to-device transfer.
 * Settings you can search, a tile in the quick settings, a date-and-time quick action in a
   pattern of your own, clipboard search with wildcards and regular expressions, keyboard
   opacity, and a vibration switch per kind of touch.
-* Terminals typed into as terminals: in Termux and its kin the keys arrive as key events
-  and the caret moves the way a terminal expects.
+* Terminals typed into as terminals: in Termux and its kin the keys arrive as key events the
+  moment they are pressed, the caret moves the way a terminal expects, and nothing is
+  corrected or learned. A terminal app the keyboard does not recognise can be added by its
+  package name.
 * A row of quick actions — copy, paste, cut, select, delete a word, move the cursor, undo
   and redo, flip a word's capital, capitalise every sentence in the field — extendable with
   your own macros; above the suggestions, below the keys or down a side, in four sizes, with

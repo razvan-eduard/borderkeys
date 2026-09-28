@@ -91,9 +91,9 @@ dependency graph puts it on `:keyboard`'s classpath, and `verifyKeyboardHasNoCom
 the build if that ever changes.
 
 ```
-:app ──> :keyboard ──> :data
+:app ──> :keyboard ──> :data, :effects
   │           (no Compose here, in any variant)
-  ├──> :settings ──> :data
+  ├──> :settings ──> :data, :effects
   │         └──> :keyboard      (theme preview embeds the real keyboard view)
   └──> :assist ──> :data        (plusImplementation: absent from the core APK)
 ```
@@ -103,6 +103,7 @@ the build if that ever changes.
 | `:app`      | Thin application shell. Manifest, flavors, R8, signing. No logic. |
 | `:keyboard` | `InputMethodService`, the `Canvas` keyboard view, JNI, the C++ prediction and gesture engines. |
 | `:data`     | Room over SQLCipher, typed DataStore. The only place state lives. |
+| `:effects`  | The particle effects, drawn on a `Canvas` by the keyboard and by the settings preview alike. |
 | `:settings` | Every line of Compose in the repository.                          |
 | `:assist`   | Local text assistant, own process, `plus` flavor only.            |
 | `:i18n`     | Every sentence the app shows, in six languages, as JSON — see [`docs/translations.md`](docs/translations.md). |
@@ -189,7 +190,7 @@ unzip -l app/build/outputs/apk/core/release/app-core-release.apk
 Release APKs published from CI carry a build provenance attestation:
 
 ```bash
-gh attestation verify BorderKeys-v0.6.2-core.apk --repo razvan-eduard/borderkeys
+gh attestation verify BorderKeys-v0.10.1-core.apk --repo razvan-eduard/borderkeys
 ```
 
 ## Documentation

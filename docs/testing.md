@@ -758,11 +758,13 @@ the suggestion one is read because a pack rebuild legitimately moves it.
 
 Named rather than left to be discovered:
 
-- **No instrumented (on-device) test suite.** Everything above runs on a JVM or a host toolchain.
-  Views, touch dispatch and `InputConnection` behaviour are verified by hand on a device and an
-  emulator.
+- **On a device, only what the instrumented suite drives.** Everything else above runs on a JVM
+  or a host toolchain, and the suite types into the settings application's own field and into
+  Termux, on emulators: no phone, and no other app's editor. The rest of the views, touch
+  dispatch and `InputConnection` behaviour is verified by hand on a device and an emulator.
 - **No screenshot or UI-regression tests.** The keyboard draws itself on a `Canvas`, so a visual
-  regression is invisible to everything here.
+  regression is invisible to everything here, apart from the one smoke case that measures how far
+  the strip's text reaches in a screenshot.
 - **The dictionary tools have no tests of their own**, apart from `build_dict.py --selftest`.
   `make_pack.py`'s name guards, `merge_names.py`'s vetoes and `flag_names.py`'s rule are exercised
   by running them and reading the output, not by assertions.
