@@ -236,6 +236,38 @@ Builds:
       - core
     ndk: 27.1.12297006
 
+  - versionName: 0.8.0
+    versionCode: 18
+    commit: v0.8.0
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
+  - versionName: 0.9.0
+    versionCode: 19
+    commit: v0.9.0
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
+  - versionName: 0.10.0
+    versionCode: 20
+    commit: v0.10.0
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
+  - versionName: 0.10.1
+    versionCode: 21
+    commit: v0.10.1
+    subdir: app
+    gradle:
+      - core
+    ndk: 27.1.12297006
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
 CurrentVersion: 0.10.1
