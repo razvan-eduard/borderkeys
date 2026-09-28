@@ -35,7 +35,7 @@ ships.
   a couple of words in another language still switch to it.
 
 <p align="center">
-  <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/4_languages.jpg" alt="The Languages screen: choosing which language the app and the keyboard's own labels are written in" width="30%">
+  <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/4_languages.jpg" alt="The Languages screen: a dictionary inside the app waiting to be added, the More languages card, and a downloaded Hebrew pack just imported and checked" width="30%">
 </p>
 
 - **Retroactive correction when the conversation's language turns out to differ.** A correction
