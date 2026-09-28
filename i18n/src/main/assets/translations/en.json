@@ -833,6 +833,7 @@
   "radial_trusted_word": "The decoded word",
   "size_advanced_note": "The space beside the keys: background, blur and the reach arrow",
   "swipe_advanced_note": "How a swipe is decoded, and the neural model",
+  "swipe_advanced_note_decoding": "How a swipe is decoded",
   "swipe_backspace_word": "Backspace after a swipe removes the whole word",
   "swipe_backspace_word_note": "Off: backspace takes one letter, and typing then edits the swiped word in place. On: the first backspace after a swipe removes the word and the space before it.",
   "radial_count": "%s words around the menu",

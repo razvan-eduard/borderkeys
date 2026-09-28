@@ -833,6 +833,7 @@
   "radial_trusted_word": "La palabra descodificada",
   "size_advanced_note": "El espacio junto a las teclas: fondo, desenfoque y la flecha",
   "swipe_advanced_note": "Cómo se descifra un deslizamiento, y el modelo neuronal",
+  "swipe_advanced_note_decoding": "Cómo se descifra un deslizamiento",
   "swipe_backspace_word": "Retroceso tras un deslizamiento borra la palabra entera",
   "swipe_backspace_word_note": "Desactivado: retroceso borra una letra y al escribir se edita la palabra en su sitio. Activado: el primer retroceso tras un deslizamiento borra la palabra y el espacio anterior.",
   "radial_count": "%s palabras alrededor del menú",

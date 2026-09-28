@@ -833,6 +833,7 @@
   "radial_trusted_word": "Cuvântul decodat",
   "size_advanced_note": "Spațiul de lângă taste: fundal, estompare și săgeata",
   "swipe_advanced_note": "Cum este descifrată o glisare, și modelul neuronal",
+  "swipe_advanced_note_decoding": "Cum este descifrată o glisare",
   "swipe_backspace_word": "Backspace după un gest șterge tot cuvântul",
   "swipe_backspace_word_note": "Oprit: backspace șterge o literă, iar tastarea editează apoi cuvântul pe loc. Pornit: primul backspace după un gest șterge cuvântul și spațiul dinaintea lui.",
   "radial_count": "%s cuvinte în jurul meniului",

@@ -349,7 +349,15 @@ fun TypingScreen(modifier: Modifier = Modifier) {
 
             // The trail's width and colour live together on the Theme screen; the decoding
             // notes and the experimental model are for whoever wants to know how it works.
-            AdvancedSection(strings[Keys.SWIPE_ADVANCED_NOTE]) {
+            AdvancedSection(
+                strings[
+                    if (SwipeModelAvailability.neuralSwipeModelSupported) {
+                        Keys.SWIPE_ADVANCED_NOTE
+                    } else {
+                        Keys.SWIPE_ADVANCED_NOTE_DECODING
+                    },
+                ],
+            ) {
                 Text(
                     strings[Keys.SWIPE_HOW_IT_DECODES],
                     style = MaterialTheme.typography.bodyLarge,

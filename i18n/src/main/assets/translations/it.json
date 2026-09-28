@@ -833,6 +833,7 @@
   "radial_trusted_word": "La parola decodificata",
   "size_advanced_note": "Lo spazio accanto ai tasti: sfondo, sfocatura e la freccia",
   "swipe_advanced_note": "Come viene decodificato uno scorrimento, e il modello neurale",
+  "swipe_advanced_note_decoding": "Come viene decodificato uno scorrimento",
   "swipe_backspace_word": "Backspace dopo uno swipe cancella l'intera parola",
   "swipe_backspace_word_note": "Disattivato: backspace cancella una lettera e digitando si modifica la parola sul posto. Attivato: il primo backspace dopo uno swipe cancella la parola e lo spazio che la precede.",
   "radial_count": "%s parole intorno al menu",
