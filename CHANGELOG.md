@@ -12,6 +12,18 @@ listed under *Unreleased* and moves under its version when it is tagged. The APK
 attestations and the full commit lists are on the
 [releases page](https://github.com/razvan-eduard/borderkeys/releases).
 
+## v0.10.2 — 2026-09-28
+
+- Fixed: in the plus build, an answer from the assistant no longer starts with a label the
+  model put before it, in any language ("Respuesta:", "Réponse :", "Traducción:"); a label the
+  text itself opens with is kept.
+- Fixed: in the core build, the note under the swipe section's "Advanced settings" no longer
+  mentions a neural model that build does not have.
+- The store listings' screenshots show the current settings, and the core listing's are taken
+  on the core build; the README, the store descriptions, the citation and the F-Droid build
+  entries follow the current release.
+- Building the settings module on its own no longer fails on the process-text shortcut's icon.
+
 ## v0.10.1 — 2026-09-28
 
 - Nothing changes for the person typing: the build is made with Android Gradle plugin 9.3.3 and
