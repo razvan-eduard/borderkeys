@@ -155,7 +155,7 @@ ships.
   settings too.
 
 <p align="center">
-  <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/9_layout_keys.jpg" alt="Layout & keys: the number row, the accents and the key popup" width="30%">
+  <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/9_layout_keys.jpg" alt="Layout & keys: the number pad, the accents and the key popup" width="30%">
 </p>
 
 - **Settings that stay out of the way.** Every card leads with what changes how typing feels;
@@ -183,7 +183,7 @@ ships.
 
 <p align="center">
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/18_emoji_search.jpg" alt="The emoji panel opened over the word cake: the cakes come first" width="30%">
-  <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/17_clipboard_search.jpg" alt="The clipboard panel opened over the word invoice: two clips with it, first" width="30%">
+  <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/17_clipboard_search.jpg" alt="The clipboard panel opened over the word invoice: three clips with it, first" width="30%">
 </p>
 
 - **A tour after setup.** Once the keyboard is selected, a screen lists what it can do, each

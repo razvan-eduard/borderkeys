@@ -176,7 +176,7 @@ maximum, rated against a baseline with a line on what changes it — and a Share
 the panel to any app as text. The figures in [`docs/testing.md`](docs/testing.md) come from it.
 
 <p align="center">
-  <img src="fastlane/com.borderkeys.plus/metadata/android/en-US/images/phoneScreenshots/25_debug_stats.jpg" alt="Debug stats: keystroke to strip, native search, swipe decode and lift to text, each rated green" width="30%">
+  <img src="fastlane/com.borderkeys.plus/metadata/android/en-US/images/phoneScreenshots/25_debug_stats.jpg" alt="Debug stats: keystroke to strip, native search, swipe decode and lift to text, each rated against its baseline" width="30%">
 </p>
 
 ```bash
