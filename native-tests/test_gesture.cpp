@@ -22,8 +22,7 @@ using namespace borderkeys_test;
 void runGestureTests() {
     section("resampling");
     {
-        // A straight line, unevenly sampled. After resampling the points must be evenly spaced
-        // along it -- that is the whole property the shape channel depends on.
+        // A straight line, unevenly sampled; after resampling the points are evenly spaced.
         const float xs[] = {0.f, 1.f, 2.f, 40.f, 41.f, 100.f};
         const float ys[] = {0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
         float outX[kResampleCount];
@@ -44,16 +43,14 @@ void runGestureTests() {
         const float ys[] = {7.f, 7.f, 7.f};
         float outX[kResampleCount];
         float outY[kResampleCount];
-        // A tap has no length. Returning "resampled fine" would let a tap be decoded as a word.
+        // A tap has no length and is not resampled.
         check(!resamplePath(xs, ys, 3, outX, outY, kResampleCount),
               "a path with no length is refused rather than resampled");
     }
 
     section("smoothing keeps the corners");
     {
-        // A right angle with noise on it. A moving average rounds the corner off; a
-        // Savitzky-Golay filter is chosen precisely because it does not, and the corner is where
-        // a swipe changes letter.
+        // A right angle with noise on it; the Savitzky-Golay filter keeps the corner.
         float noisy[41];
         float smooth[41];
         Random random(7);
@@ -81,9 +78,7 @@ void runGestureTests() {
 
     section("shape normalisation");
     {
-        // The same figure drawn twice the size in a different place must normalise to the same
-        // shape. If it does not, the shape channel is measuring position, which is the location
-        // channel's job.
+        // The same figure drawn twice the size in a different place normalises to the same shape.
         const float smallX[] = {0.f, 10.f, 10.f, 0.f};
         const float smallY[] = {0.f, 0.f, 10.f, 10.f};
         const float largeX[] = {500.f, 540.f, 540.f, 500.f};
@@ -194,18 +189,13 @@ void runGestureTests() {
             std::snprintf(label, sizeof(label),
                           "at %.0f px of jitter: top-1 %d/%d, top-3 %d/%d", jitter, top1,
                           attempted, top3, attempted);
-            // The threshold is the literature's figure for template matching, not an aspiration.
-            // A change that drops below it has made the decoder worse than the method it claims
-            // to implement.
+            // 80% top-1, the literature's figure for template matching.
             check(attempted > 0 && top1 * 100 >= attempted * 80, label);
         }
 
         {
-            // The raw log-score a decode produces is not comparable across two different
-            // decodes -- Engine::decodeGesture bounds it into a fixed-temperature softmax over
-            // [0, 1000] before returning, precisely so a caller CAN compare, threshold or blend
-            // it later. Ranking must survive that unchanged: softmax is monotonic, so whichever
-            // candidate the raw scores put first still comes first afterwards.
+            // Engine::decodeGesture bounds the raw log-score into a fixed-temperature softmax over
+            // [0, 1000]; the ranking is unchanged by it.
             Random random(99u);
             std::vector<float> xs;
             std::vector<float> ys;
@@ -232,6 +222,37 @@ void runGestureTests() {
             check(descending, "scores are still sorted best-first after normalisation");
         }
 
+        {
+            Random random(5u);
+            std::vector<float> xs;
+            std::vector<float> ys;
+            std::vector<int64_t> times;
+            synthesiseGesture(layout, "masa", 0.f, random, xs, ys, times);
+            const auto offered = [&](const char* word) {
+                Candidate out[Engine::kMaxCandidates];
+                const int found = engine.decodeGesture(xs.data(), ys.data(), times.data(),
+                                                       static_cast<int>(xs.size()), nullptr, 0,
+                                                       nullptr, 0, out, 8);
+                for (int i = 0; i < found; ++i) {
+                    uint32_t length = 0;
+                    const char* const text = engine.candidateText(out[i], &length);
+                    if (text != nullptr && length == std::strlen(word) &&
+                        std::memcmp(text, word, length) == 0) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            check(offered("masă") && !offered("masa"),
+                  "a swipe offers the first spelling of the key it traces");
+            const char* blocked[1] = {"masă"};
+            const size_t blockedLengths[1] = {std::strlen("masă")};
+            engine.setBlockedWords(blocked, blockedLengths, 1);
+            check(!offered("masă") && offered("masa"),
+                  "and the next one when the first is blocked");
+            engine.setBlockedWords(nullptr, nullptr, 0);
+        }
+
         // A gesture with too few points is a tap that wandered, and must not decode into a word.
         const float twoX[] = {100.f, 101.f};
         const float twoY[] = {100.f, 101.f};
@@ -248,11 +269,8 @@ void runGestureTests() {
 
         section("a deliberate loop at a doubled letter");
         {
-            // "press" traced with an actual pause on its doubled "s" -- a small diamond around
-            // the key -- rather than the single pass synthesiseGesture always produces. This is
-            // the gesture the loop-variant template exists for: without it, the detour is pure
-            // noise against a straight-through template and can push the real word out of
-            // contention for a candidate that traces the plain shape more closely.
+            // "press" traced with a pause on its doubled "s", a small diamond around the key, which
+            // the loop-variant template matches.
             float px = 0.f, py = 0.f, rx = 0.f, ry = 0.f, ex = 0.f, ey = 0.f, sx = 0.f, sy = 0.f;
             check(layout.centreOf('p', &px, &py) && layout.centreOf('r', &rx, &ry) &&
                       layout.centreOf('e', &ex, &ey) && layout.centreOf('s', &sx, &sy),

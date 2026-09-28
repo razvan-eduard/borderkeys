@@ -12,23 +12,9 @@ import java.io.FileDescriptor
 import java.io.FileInputStream
 
 /**
- * The whole correction path, off a device, over as many words as you care to hand it.
- *
- * `suggest_eval` reaches the engine and stops there. Everything decided afterwards -- the
- * known-word guard, the edit ceiling, the proper-noun rule, whether the word is running text at
- * all -- lives in Kotlin, and was reachable only by typing on a phone or by modelling it a
- * second time in C++. A second implementation is a thing that drifts, and it did: the harness
- * reported `it's` corrected to `its` for a fortnight while a device refused it.
- *
- * So this drives the shipping engine through the shipping JNI bridge and then the shipping
- * Kotlin, against the packs the application ships. Nothing here is a model of the pipeline; it
- * is the pipeline, with the editor and the touch surface left out. The whole commit layer runs
- * -- the apostrophe map for the languages opened, the productive possessive, the capital a
- * language always writes, then autocorrect -- through the same [WordCommit] the service asks,
- * with corrections and auto-capitalise on and no shortcuts of the user's own.
- *
- * What is *not* covered, and would need a device: the composing region, delimiter handling,
- * field state, and everything [com.borderkeys.ime.BorderKeysService] decides around this.
+ * The engine, the JNI bridge and [WordCommit] run off a device against the shipped packs, with
+ * corrections and auto-capitalise on and no shortcuts. The editor, the composing region,
+ * delimiter handling and field state are not covered.
  */
 internal class Pipeline private constructor(
     private val handle: Long,
@@ -36,18 +22,10 @@ internal class Pipeline private constructor(
     private val languages: List<String>,
 ) {
 
-    /** What a word would become, and why -- the reason being the point. An outcome without one
-     *  can be right by accident, and a guard can stop working while another covers for it.
-     *  [reason] is [WordCommit.Outcome.reason]: the rewrite that claimed the word, or
-     *  autocorrect's own situation. */
+    /** What a word would become; [reason] is [WordCommit.Outcome.reason]. */
     internal data class Outcome(val typed: String, val committed: String?, val reason: String)
 
-    /**
-     * Runs one word exactly as a delimiter would.
-     *
-     * [previous] is the word before it, which the engine's n-grams read; a phrase is fed through
-     * here one word at a time, each carrying the one before it.
-     */
+    /** Runs one word as a delimiter would; [previous] is the word before it. */
     fun commit(
         typed: String,
         previous: String? = null,
@@ -73,8 +51,6 @@ internal class Pipeline private constructor(
         val outcome = WordCommit.decide(
             typed = typed,
             fromGesture = false,
-            // The service settles this from the character in front of the word; a corpus word
-            // stands alone, so only the word's own letters can refuse it here.
             runningText = true,
             shortcuts = emptyList(),
             contractions = contractions,
@@ -95,7 +71,7 @@ internal class Pipeline private constructor(
         return Outcome(typed, outcome.text, outcome.reason)
     }
 
-    /** The stems of [typed] the engine holds, as the prediction worker asks for them. */
+    /** The stems of [typed] the engine holds. */
     private fun knownStems(typed: String): Set<String> {
         val stems = WordStems.candidates(typed, languages).take(NativePredictor.MAX_STEMS_QUERY)
         if (stems.isEmpty()) {
@@ -117,8 +93,7 @@ internal class Pipeline private constructor(
         return (0 until n).mapNotNull { words[it] }
     }
 
-    /** The ranked words for [typed], and which of them the corrections heap settled on -- the
-     *  index nativeSuggest reports, or -1 when the correction is not among them. */
+    /** The ranked words for [typed], and the index of the engine's correction among them, or -1. */
     fun stripWithCorrection(typed: String, previous: String? = null): CorrectionView {
         val words = arrayOfNulls<String>(MAX_CANDIDATES)
         val scores = FloatArray(MAX_CANDIDATES)
@@ -135,8 +110,7 @@ internal class Pipeline private constructor(
         )
     }
 
-    /** What the engine says about one word: its ranking, which entry the corrections heap chose,
-     *  and that heap's own answer by name. Before any Kotlin policy runs. */
+    /** The engine's ranking, the index of its correction in it, and the correction itself. */
     data class CorrectionView(val ranked: List<String>, val correctionAt: Int, val correction: String?)
 
     /** Each word of [phrase] in turn, every one carrying the word before it as context. */
@@ -147,17 +121,14 @@ internal class Pipeline private constructor(
         }
     }
 
-    /** The pack the conversation is currently taken to be in, or -1 while undecided. Moves only
-     *  as words are committed through [commit], which is what feeds `observeContextLanguage`. */
+    /** The pack the conversation is taken to be in, or -1 while undecided; moved by [commit]. */
     fun dominantPack(): Int = NativePredictor.nativeDominantPack(handle)
 
-    /** What one pack alone would spell [word] as -- the question the language-switch revert
-     *  asks once the conversation turns out to have been in a different language. */
+    /** What one pack alone would spell [word] as. */
     fun candidateForPack(packIndex: Int, word: String): String? =
         NativePredictor.nativeCandidateForPack(handle, packIndex, word)
 
-    /** Evidence thresholds, as the Languages screen sets them: how one-sided the words have to
-     *  be before a language is considered decided. */
+    /** Evidence thresholds, as the Languages screen sets them. */
     fun languageLock(minimumEvidence: Float, strict: Boolean = false) =
         NativePredictor.nativeSetLanguageLock(handle, minimumEvidence, strict)
 
@@ -171,6 +142,9 @@ internal class Pipeline private constructor(
         }
     }
 
+    /** Replaces the blocked words, the way the service pushes them. */
+    fun block(vararg words: String) = NativePredictor.nativeSetBlockedWords(handle, arrayOf(*words))
+
     fun close() = NativePredictor.nativeDestroy(handle)
 
     companion object {
@@ -179,34 +153,14 @@ internal class Pipeline private constructor(
         /** The shipped apostrophe maps, relative to the module the tests run in. */
         private const val CONTRACTIONS_DIRECTORY = "src/main/assets/contractions"
 
-        /** KeyboardPreferences.CORRECTION_DISTANCE_NORMAL, the shipped default: one edit, or
-         *  two in a word of eight letters or more. Zero here is STRICT, a setting the keyboard
-         *  does not ship with. */
+        /** KeyboardPreferences.CORRECTION_DISTANCE_NORMAL, the shipped default. */
         private const val DEFAULT_DISTANCE = 1
 
-        /** Where the compiled packs are, or null when they have not been built. The same files
-         *  the application ships, produced by the `buildDictionaries` Gradle task. */
+        /** Where the compiled packs are, or null when they have not been built. */
         fun packDirectory(): File? =
             System.getProperty("borderkeys.packs")?.let(::File)?.takeIf { it.isDirectory }
 
-        /** Whether this machine can run the pipeline at all: the host bridge has to have been
-         *  built (`cmake --build native-tests/build --target borderkeys`) and the packs
-         *  compiled. Absent either, a caller skips rather than fails -- neither is produced by
-         *  an ordinary `./gradlew test`. */
-        /**
-         * Skips on a machine that has not built the harness, and *fails* on one that has no
-         * excuse.
-         *
-         * Skipping is right for a developer who has not run cmake: a suite that fails on a
-         * checkout which simply has not built the bridge teaches people to ignore it. In CI it
-         * is the opposite -- it is how a suite protects nothing while reporting green, which is
-         * exactly what happened here. Every pipeline case skipped in CI from the day it was
-         * written, because the bridge and the packs were built later in the same job, and three
-         * known defects sat in the payload marked as requirements with nothing to catch them.
-         *
-         * So CI is told to build both before `./gradlew test`, and absence there is a failure
-         * rather than a shrug.
-         */
+        /** Skips when the host bridge or the packs are missing; fails instead under CI. */
         fun require() {
             if (available()) {
                 return
@@ -220,6 +174,10 @@ internal class Pipeline private constructor(
             throw AssumptionViolatedException(missing)
         }
 
+        /**
+         * Whether the host bridge (`cmake --build native-tests/build --target borderkeys`) and the
+         * compiled packs are present.
+         */
         fun available(): Boolean {
             val packs = packDirectory() ?: return false
             if (packs.listFiles { f -> f.name.endsWith(".bkd") }.isNullOrEmpty()) {
@@ -230,23 +188,10 @@ internal class Pipeline private constructor(
                 .getOrDefault(0L) != 0L
         }
 
-        /**
-         * An engine with [tags] loaded and a QWERTY geometry set.
-         *
-         * The geometry is not optional and its absence is silent: without it
-         * `KeyGeometry::isSet()` is false, the walk never leaves exact-match mode, and the
-         * harness measures prefix completion while reporting it as the engine.
-         */
+        /** An engine with [tags] loaded, weighted equally, and a QWERTY geometry set. */
         fun open(vararg tags: String): Pipeline = open(null, *tags)
 
-        /**
-         * [preferred] is the language being written, weighted above the rest.
-         *
-         * Null leaves every language equal, which is what a single corpus word deserves: there
-         * is no sentence to detect from. But a payload written *for* a language is not that
-         * case -- someone writing Romanian has Romanian selected -- and with the weights equal
-         * the engine has no grounds to prefer "în" over the English "in" it also holds.
-         */
+        /** [open], with [preferred] weighted above the other languages; null leaves them equal. */
         fun open(preferred: String?, vararg tags: String): Pipeline {
             val packs = requireNotNull(packDirectory()) { "borderkeys.packs is not set" }
             val handle = NativePredictor.nativeCreate()
@@ -266,14 +211,10 @@ internal class Pipeline private constructor(
                 Array(tags.size) { tags[it] },
                 FloatArray(tags.size) { if (tags[it] == preferred) 2.0f else 1.0f },
             )
-            // Undecided, as a corpus case is: one word with no sentence around it gives the
-            // detector nothing to work from, and pinning a pack would measure a different
-            // engine than the one someone types their first word into.
+            // Undecided.
             NativePredictor.nativeSetLanguageLock(handle, 0.0f, false)
             qwerty(handle)
-            // The apostrophe maps the application ships for exactly these languages, built
-            // against the same list so an entry another opened language objects to is dropped
-            // here as it is on a phone. A tag with no map contributes nothing.
+            // The shipped apostrophe maps of these languages, merged as on a phone.
             val contractions = Contractions.of(
                 tags.map { tag ->
                     val file = File(CONTRACTIONS_DIRECTORY, "$tag.txt")
@@ -284,8 +225,7 @@ internal class Pipeline private constructor(
             return Pipeline(handle, contractions, tags.toList())
         }
 
-        /** The JVM has no public way to a raw file descriptor, and nativeLoadLanguage takes one.
-         *  Opened for the tests by `--add-opens java.base/java.io` in the build file. */
+        /** The raw descriptor behind [descriptor], through `--add-opens java.base/java.io`. */
         private fun rawDescriptor(descriptor: FileDescriptor): Int =
             FileDescriptor::class.java.getDeclaredField("fd")
                 .apply { isAccessible = true }

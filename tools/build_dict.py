@@ -4,12 +4,8 @@
 
 """Compiles a word list and an n-gram list into a .bkd language pack.
 
-Standard library only, deliberately: this runs in CI, on a maintainer's laptop, and one day
-inside the settings process on a phone through the same native code. A dependency here would be
-a dependency the project cannot actually check.
-
-The output format is defined by keyboard/src/main/cpp/bkd_format.hpp. That header is the
-authority; this file has to agree with it, and --selftest is what proves it still does.
+Standard library only. The output format is defined by keyboard/src/main/cpp/bkd_format.hpp;
+--selftest checks this file against it.
 
 Input
 -----
@@ -45,9 +41,6 @@ from pathlib import Path
 
 MAGIC = 0x31444B42  # 'B' 'K' 'D' '1' little endian
 VERSION = 6
-# Still 336: every descriptor added since version 3 came out of the reserved words rather than
-# off the end of the header. 336 itself was 320 plus version 3's word-flags descriptor, and 320
-# was 256 plus version 2's two part-of-speech ones.
 HEADER_BYTES = 336
 # Where the section descriptors begin: the fixed fields are 76 bytes and 4 are reserved.
 SECTION_TABLE_OFFSET = 80
@@ -71,10 +64,8 @@ SENTENCE_START_INDEX = 0xFFFFFFFE
 FLAG_CASE_FOLDED = 1 << 0
 FLAG_CONTENT_CRC = 1 << 1
 
-# Bits in a word's own S_WORD_FLAGS byte -- a different flag space from FLAG_* above, which are
-# BkdHeader::flags, one per pack rather than one per word. Mirrors kWordFlagProperNoun in
-# bkd_format.hpp exactly; the other seven bits are free for a future flag without another
-# version bump.
+# Bits in a word's own S_WORD_FLAGS byte, a different flag space from FLAG_* above, which are
+# BkdHeader::flags, one per pack. Mirrors kWordFlagProperNoun in bkd_format.hpp.
 WORD_FLAG_PROPER_NOUN = 1 << 0
 
 SECTION_COUNT = 16
@@ -98,22 +89,14 @@ SECTION_COUNT = 16
 ) = range(SECTION_COUNT)
 
 # Quantisation scale for log-probabilities: q = round(-logProb * SCALE), saturating at 255,
-# which puts the floor at about -25.5 nats. Anything less likely than that is not going to be
-# ranked into a three-slot suggestion strip by a difference this coarse.
+# which puts the floor at about -25.5 nats.
 LOG_PROB_SCALE = 10
 
 TERMINAL_SYMBOL = 0
 
 # --------------------------------------------------------------------------------------
-# Character folding.
-#
-# This MUST agree with foldCodePoint() in proximity.cpp, character for character. The trie is
-# indexed on folded forms, so a disagreement does not produce a warning -- it produces a pack
-# whose words the engine can never reach, for exactly the characters the two implementations
-# disagree about, which on a Romanian keyboard means the interesting ones.
-#
-# The duplication is deliberate rather than generated: a code generator would be a third thing
-# to keep correct. --selftest --dump-folds prints this table so the native tests can diff it.
+# Character folding. Must agree with foldCodePoint() in proximity.cpp, character for character;
+# --dump-folds prints this table so the native tests can diff the two.
 # --------------------------------------------------------------------------------------
 
 _LATIN1_FOLD = {
@@ -156,8 +139,7 @@ def _latin_extended_a_upper(code_point: int) -> bool:
     The block pairs each capital with its lowercase, but not on one parity throughout:
     0x100..0x137 and 0x14A..0x177 put the capital on the even code point, 0x139..0x148 and
     0x179..0x17E on the odd one, 0x138 (kra) and 0x149 ('n) have no capital, and 0x178 is the
-    capital of Latin-1's 0xFF. One parity test across the whole block folded "ł" to "Ń" and
-    left "Ź" unfolded. Mirrors latinExtendedAUpper() in proximity.cpp.
+    capital of Latin-1's 0xFF. Mirrors latinExtendedAUpper() in proximity.cpp.
     """
     even_capital = code_point <= 0x137 or 0x14A <= code_point <= 0x177
     odd_capital = 0x139 <= code_point <= 0x148 or 0x179 <= code_point <= 0x17E
@@ -297,7 +279,6 @@ def fold_word(word: str) -> tuple[int, ...]:
 
 
 # --------------------------------------------------------------------------------------
-# --------------------------------------------------------------------------------------
 # Double-array trie construction.
 # --------------------------------------------------------------------------------------
 
@@ -305,14 +286,8 @@ def fold_word(word: str) -> tuple[int, ...]:
 class DoubleArrayBuilder:
     """Packs a plain trie into base/check arrays.
 
-    The classic construction: walk the plain trie breadth first, and for each node find a base
-    offset such that every one of its children lands on a slot nobody else has taken. Slot reuse
-    across nodes is the whole point -- it is why the two arrays stay close to the number of
-    transitions rather than growing as nodes times alphabet.
-
-    The free-slot cursor only ever moves forward. Rescanning from zero for every node turns
-    construction quadratic on a real dictionary, which is the difference between a build step
-    and a build problem.
+    Walks the plain trie breadth first and, for each node, finds a base offset at which every one
+    of its children lands on a free slot. The free-slot cursor only ever moves forward.
     """
 
     def __init__(self) -> None:
@@ -369,7 +344,7 @@ class DoubleArrayBuilder:
 def build_double_array(words_folded: list[tuple[int, ...]], symbol_of: dict[int, int],
                        values: list[int] | None = None):
     """Returns (base, check) with terminals encoding -(wordIndex + 1) in base."""
-    # Plain trie first, as nested dicts. Memory-hungry but simple, and this is a build tool.
+    # Plain trie first, as nested dicts.
     root: dict = {}
     for word_index, folded in enumerate(words_folded):
         node = root
@@ -477,11 +452,8 @@ def align_up(value: int, alignment: int) -> int:
 
 
 class Grammar:
-    """A tag per word and a square transition matrix, as tools/build_pos.py emitted them.
-
-    Held as a mapping rather than a list because the pack's word order is decided here, after
-    the tags were derived -- looking each word up is what keeps the two files independent.
-    """
+    """A tag per word, looked up by word, and a square transition matrix, as tools/build_pos.py
+    emitted them."""
 
     def __init__(self, tags: dict[str, int], transitions: bytes, tag_count: int) -> None:
         self.tags = tags
@@ -511,8 +483,7 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
     if len(tag.encode("utf-8")) > 15:
         raise SystemExit("the language tag must fit in 15 bytes plus a terminator")
 
-    # Sorting by folded key makes the output a deterministic function of its input, which is
-    # what lets the same sources rebuild byte-identically -- the same property the APK needs.
+    # Sorted by folded key, so the same sources rebuild byte-identically.
     prepared = sorted(
         ((fold_word(word), word, frequency, word in proper_nouns) for word, frequency in words),
         key=lambda item: (item[0], item[1]),
@@ -538,8 +509,7 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
     keys = sorted(grouped.keys())
 
     # One trie terminal per folded key, carrying the first word index of that key's run; the
-    # per-word arrays hold every spelling. Most frequent first, so anything reading only the
-    # first index of a run reads what version 3 would have stored there.
+    # per-word arrays hold every spelling, most frequent first.
     words_folded = keys
     display: list[str] = []
     frequencies: list[int] = []
@@ -623,8 +593,7 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
         print(f"{dropped} triples dropped: their pair is not in the index", file=sys.stderr)
 
     # Grammar is optional. A pack built without a treebank declares zero tags and carries two
-    # empty sections, which the engine reads as "score without the term" -- the same ranking
-    # packs produced before the sections existed.
+    # empty sections, which the engine reads as "score without the term".
     if grammar is None:
         pos_tag_count = 0
         word_tags = b""
@@ -633,9 +602,7 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
         pos_tag_count = grammar.tag_count
         if pos_tag_count > MAX_POS_TAGS:
             raise SystemExit(f"{pos_tag_count} tags exceeds the format cap of {MAX_POS_TAGS}")
-        # Keyed on the words the pack actually stores, not on the list that came in: folding
-        # collapses forms that differ only by case, so the two are not the same length and a
-        # tag array built from the input would be rejected as the wrong size for wordCount.
+        # Keyed on the words the pack stores, which case merging makes fewer than the input.
         word_tags = bytes(grammar.tag_for(word) for word in display)
         pos_transitions = grammar.transitions
         if len(pos_transitions) != pos_tag_count * pos_tag_count:
@@ -709,10 +676,8 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
 
 
 # --------------------------------------------------------------------------------------
-# Reader, used only by the round-trip test.
-#
-# An independent implementation on purpose. Verifying the writer with the writer's own idea of
-# the layout proves nothing; this reads the bytes back the way bkd_format.hpp says to.
+# Reader, used only by the round-trip test: an independent implementation that reads the bytes
+# back the way bkd_format.hpp says to.
 # --------------------------------------------------------------------------------------
 
 
@@ -901,8 +866,7 @@ def round_trip(words: list[tuple[str, int]], ngrams: dict, tag: str, samples: in
         if fold_word(recovered) != fold_word(word):
             raise SystemExit(f"{word!r} came back as {recovered!r}")
 
-    # A word that is not in the pack must not be found, and must not walk out of bounds while
-    # failing to be. This is the case a trie that only ever gets valid input never exercises.
+    # A word that is not in the pack is not found, and the search stays in bounds.
     for absent in ("zzzqqq", "", "șțăxyz", "a" * 60):
         if reader.lookup(absent) >= 0:
             raise SystemExit(f"{absent!r} should not have been found")
@@ -965,25 +929,16 @@ SAMPLE_WORDS = [
     ("time", 26000), ("timer", 400), ("test", 5000), ("testing", 900), ("water", 4000),
     ("keyboard", 700), ("key", 3000), ("keys", 1500), ("border", 800), ("borders", 300),
     ("privacy", 600), ("private", 1400), ("prediction", 250), ("predict", 300), ("press", 2000),
-    # "thex" is not a word; it exists only so a test can reach it at one edit from "thexx" while
-    # "the" sits two edits away and vastly more frequent -- see kEditPenalty's own comment for
-    # why the near, rare candidate has to win anyway.
+    # Not a word: one edit from "thexx", while "the" is two edits away and far more frequent.
     ("thex", 60),
-    # This cluster reproduces the "acm"/"acum"/"cam" shape kTransposeCost's own comment
-    # describes: "acum" is one insertion from "acm" and much the most frequent word here, but
-    # "cam" is one (cheaper) transposition away and has a small bushy family of its own
-    # completions -- enough, at the old kTransposeCost, to fill the sixteen kept candidates
-    # before "acum" was ever considered.
+    # "acum" is one insertion from "acm" and the most frequent here; "cam" is one cheaper
+    # transposition away and has completions of its own.
     ("acum", 900), ("cam", 60), ("camera", 55), ("campion", 50), ("camion", 45),
-    # "în" and "in" are two real, unrelated Romanian words -- a preposition and the plant fibre
-    # -- that fold to the same key. The dedup above already keeps whichever spelling is more
-    # frequent for a shared fold, which in the real dictionaries is "în" by a wide margin; this
-    # entry reproduces that so a test can check the two-letter word still reaches its accented
-    # twin instead of being turned away by the short-word guard meant for actual guesses.
+    # "în" folds to the same key as "in".
     ("în", 9000),
-    # The words the committed gesture corpus is recorded against. Kept here so the replay
-    # harness has a dictionary to decode into without shipping a real lexicon, whose licence is
-    # still an open question.
+    # A second spelling of "masă"'s folded key.
+    ("masa", 700),
+    # The words the committed gesture corpus is recorded against, for the replay harness.
     ("these", 18000), ("people", 22000), ("should", 19000), ("because", 21000),
     ("through", 14000), ("another", 12000), ("between", 11000), ("important", 6000),
     ("different", 7000), ("question", 5000), ("together", 6500), ("water", 4000),
@@ -1009,9 +964,8 @@ SAMPLE_NGRAMS = {
 
 def load_words(path: Path) -> tuple[list[tuple[str, int]], frozenset[str]]:
     """Reads 'word<TAB>frequency', with an optional third column: 'word<TAB>frequency<TAB>name'
-    marks the row a proper noun (see WORD_FLAG_PROPER_NOUN) -- the literal string "name" is the
-    only value that means anything there, so a stray third column of anything else is a file
-    error rather than a silently-ignored flag."""
+    marks the row a proper noun (see WORD_FLAG_PROPER_NOUN), and any other third column is a
+    file error."""
     words: list[tuple[str, int]] = []
     proper_nouns: set[str] = set()
     with path.open(encoding="utf-8") as handle:
@@ -1089,9 +1043,7 @@ def main(argv: list[str]) -> int:
         return 0
 
     if arguments.selftest:
-        # "border" is already in SAMPLE_WORDS; flagging it here rather than adding a dedicated
-        # entry is enough to prove the bit round-trips, since this test is about the mechanism,
-        # not about exercising a real name.
+        # "border", already in SAMPLE_WORDS, flagged as a proper noun.
         sample_proper_nouns = frozenset({"border"})
         round_trip(SAMPLE_WORDS, SAMPLE_NGRAMS, "ro-RO", proper_nouns=sample_proper_nouns)
         if arguments.out:

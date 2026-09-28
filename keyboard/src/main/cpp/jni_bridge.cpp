@@ -10,74 +10,38 @@
 
 #include "engine.hpp"
 
-// The only file in this library that knows JNI exists. Everything below it is plain C++ that
-// the host test binary compiles and runs without an Android in sight.
-//
-// Rules this file exists to enforce:
-//
-//   * Registration goes through JNI_OnLoad and RegisterNatives, not through exported
-//     Java_com_borderkeys_... symbols. Two reasons. The symbols stay hidden, so the library
-//     exports exactly one thing and the linker can garbage-collect the rest. And the binding is
-//     checked when the library loads: a signature that drifted from the Kotlin declaration is a
-//     failure at System.loadLibrary, in the open, rather than an UnsatisfiedLinkError on the
-//     first keystroke with the keyboard already on screen.
-//
-//   * C++ exceptions are compiled out (-fno-exceptions). Errors cross this boundary as return
-//     values, never as throws, and nothing here throws a Java exception on the suggestion path
-//     either: a checked exception per keystroke would be an allocation and a stack walk inside
-//     the 8 ms budget.
-//
-//   * Nothing here allocates per call except the result strings, which cannot be avoided --
-//     Kotlin needs java.lang.String objects and only the VM can make them. The arrays holding
-//     them are supplied by the caller and reused, the input strings are read into stack
-//     buffers, and the whole path runs on the prediction thread, never the UI thread.
+// The JNI bridge, the only file in this library that uses JNI. Methods are registered in
+// JNI_OnLoad; errors cross as return values; nothing allocates per call but the result strings.
+// Runs on the prediction thread.
 
 namespace {
 
 using borderkeys::Candidate;
 using borderkeys::Engine;
 
-// The longest word this engine will look at, in UTF-16 units as GetStringUTFRegion counts
-// them. Modified UTF-8 is at most three bytes per unit, hence the buffer size.
+// The longest word the engine takes, in UTF-16 units; modified UTF-8 takes at most three bytes
+// each.
 constexpr jsize kMaxStringUnits = 64;
 constexpr jsize kStringBufferBytes = kMaxStringUnits * 3 + 1;
 
 constexpr int kMaxUserWordsPerCall = 20000;
 
-// Matches the capture buffer in KeyboardCanvasView. A gesture longer than this has already been
-// decimated on the Kotlin side, so the cap here is a bound on a hostile caller rather than on a
-// real swipe.
+// The most gesture points taken; the same as GestureCapture's capacity.
 constexpr jsize kMaxGesturePoints = 512;
-
-// No jclass, jmethodID or jfieldID is cached here, because none is needed: the bridge fills
-// arrays the caller allocated and calls nothing back into Kotlin. If that ever changes, the id
-// is resolved in JNI_OnLoad and held in a global reference -- never looked up per call, which
-// on the suggestion path would be a hash lookup in the VM's class table on every keystroke.
 
 Engine* engineFrom(jlong handle) {
     return reinterpret_cast<Engine*>(static_cast<intptr_t>(handle));
 }
 
-// Copies a Java string into a stack buffer. Returns the byte length, or -1 when the string is
-// null or longer than the buffer.
-//
-// GetStringUTFRegion rather than GetStringUTFChars: the latter may allocate and hand back a
-// pointer that has to be released on every path out of the function, including the error ones,
-// which is exactly the shape of leak that only shows up under a failing input. This copies into
-// memory we already own and cannot forget to free.
-//
-// maxUnits defaults to kMaxStringUnits -- every caller with a word-sized buffer -- but is a
-// parameter rather than the constant used directly, for the one caller whose buffer holds a
-// filesystem path instead of a word and needs a larger cap to match.
+// Copies a Java string, at most maxUnits long, into a buffer. Returns the byte length, or -1 when
+// the string is null or too long.
 jsize copyString(JNIEnv* env, jstring value, char* buffer, jsize bufferBytes,
                  jsize maxUnits = kMaxStringUnits) {
     if (value == nullptr) {
         return -1;
     }
     const jsize units = env->GetStringLength(value);
-    // GetStringUTFRegion writes modified UTF-8 and reports nothing about how much it wrote, and
-    // it does not terminate. GetStringUTFLength is the only source for the byte count; deriving
-    // it with strlen afterwards would read past whatever was written.
+    // The byte count comes from GetStringUTFLength; GetStringUTFRegion does not terminate.
     const jsize bytes = env->GetStringUTFLength(value);
     if (units <= 0 || units > maxUnits || bytes <= 0 || bytes + 1 > bufferBytes) {
         return -1;
@@ -129,14 +93,9 @@ jint nativeLoadLanguage(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring tag
 }
 
 /**
- * Describes a `.bkd` without loading it into an engine.
- *
- * Fills `out` with { status, formatVersion, wordCount } and returns the language tag, or null
- * when the pack was refused -- in which case `out[0]` carries the BkdStatus that says why.
- *
- * This exists so that Settings can name and record a pack the user has just chosen without a
- * second implementation of the header layout in Kotlin. It allocates one String per import,
- * which is not a hot path: the alternative is two parsers that agree until they do not.
+ * Describes a `.bkd` without loading it: fills `out` with { status, formatVersion, wordCount }
+ * and returns the language tag, or null when the pack was refused, `out[0]` then holding the
+ * BkdStatus.
  */
 jstring nativeInspectPack(JNIEnv* env, jobject /*thiz*/, jint fd, jlong offset, jlong length,
                           jintArray out) {
@@ -171,10 +130,7 @@ void nativeSetActiveLanguages(JNIEnv* env, jobject /*thiz*/, jlong handle, jobje
         engine->setActiveLanguages(nullptr, nullptr, 0);
         return;
     }
-    // Clamped, not refused. The Kotlin side orders the set heaviest first and caps it at
-    // LanguagePackRepository.MAX_ENABLED, so a longer list here is a database edited past the
-    // limit -- and the answer to that used to be switching every dictionary off, which is how a
-    // fifth enabled pack silently took prediction away from the other four.
+    // A longer list is cut to its first kMaxPacks tags.
     const jsize count = (total > Engine::kMaxPacks) ? Engine::kMaxPacks : total;
 
     char storage[Engine::kMaxPacks][kStringBufferBytes];
@@ -184,8 +140,7 @@ void nativeSetActiveLanguages(JNIEnv* env, jobject /*thiz*/, jlong handle, jobje
     for (jsize i = 0; i < count; ++i) {
         jstring tag = static_cast<jstring>(env->GetObjectArrayElement(tags, i));
         const jsize length = copyString(env, tag, storage[i], kStringBufferBytes);
-        // Local references are finite and this loop is bounded by kMaxPacks, but deleting them
-        // as we go keeps the pattern the same as the suggestion path, where it matters.
+        // Each local reference is deleted as it is used.
         if (tag != nullptr) {
             env->DeleteLocalRef(tag);
         }
@@ -308,9 +263,7 @@ jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composin
         std::memcpy(text, source, length);
         text[length] = '\0';
 
-        // The one unavoidable allocation on this path: only the VM can produce a
-        // java.lang.String. The array it goes into was allocated once by the caller and is
-        // reused for every request, and none of this runs on the UI thread.
+        // The one allocation on this path, into the caller's reused array.
         jstring value = env->NewStringUTF(text);
         if (value == nullptr) {
             env->ExceptionClear();
@@ -324,10 +277,7 @@ jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composin
         }
         scores[written] = candidates[i].score;
         properNoun[written] = engine->candidateIsProperNoun(candidates[i]) ? JNI_TRUE : JNI_FALSE;
-        // Which of these the corrections heap settled on, by pack and word rather than by text:
-        // the caller used to find it again by comparing strings, which is an identity the two
-        // heaps never actually shared. -1 when the correction is not among them at all, which is
-        // the ordinary case -- see correctionHeap_ in engine.hpp for why the two rankings differ.
+        // Which of these is the correction, by pack and word; -1 when none is.
         if (correction != nullptr && candidates[i].packIndex == correction->packIndex &&
             candidates[i].wordIndex == correction->wordIndex) {
             correctionIndex = written;
@@ -389,11 +339,8 @@ void nativeLearn(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word, jstr
 }
 
 /**
- * Copies a Java string array into freshly allocated C strings.
- *
- * Shared by the two bulk loaders. Both run once at service start, off the UI thread, over the
- * whole personal dictionary, so they are the one place in this file allowed to allocate in
- * proportion to their input. Returns false and frees everything on any failure.
+ * Copies a Java string array into newly allocated C strings, for the bulk loaders. Returns false
+ * and frees everything on any failure.
  */
 bool copyStringArray(JNIEnv* env, jobjectArray array, jsize count, char** storage,
                      size_t* lengths) {
@@ -406,8 +353,7 @@ bool copyStringArray(JNIEnv* env, jobjectArray array, jsize count, char** storag
         char buffer[kStringBufferBytes];
         const jsize length = copyString(env, value, buffer, sizeof(buffer));
         if (value != nullptr) {
-            // Without this the loop accumulates one local reference per element and overflows
-            // the local reference table long before a real dictionary is exhausted.
+            // One local reference at a time.
             env->DeleteLocalRef(value);
         }
         if (length <= 0) {
@@ -424,17 +370,7 @@ bool copyStringArray(JNIEnv* env, jobjectArray array, jsize count, char** storag
     return true;
 }
 
-/**
- * One Java string array's worth of copied C strings, freed on destruction.
- *
- * The three bulk loaders below each own two or three of these plus one `Int32Column`, and used
- * to free every one of them by hand at every early return -- an allocation failure, a JNI
- * exception reading the counts array, or falling off the end successfully. RAII does not need
- * exceptions to run a destructor on a `return`; it only needs one to exist, which is the actual
- * difference this makes over the hand-written version: the cleanup for a given `new` can no
- * longer be missed at one return path while present at another, because there is only one place
- * it is written at all.
- */
+/** One Java string array's worth of copied C strings, freed on destruction. */
 class StringColumn {
 public:
     explicit StringColumn(jsize count)
@@ -475,8 +411,7 @@ private:
     size_t* lengths_;
 };
 
-/** The `int32_t` counts array every bulk loader also reads via `GetIntArrayRegion`, freed the
- *  same way and for the same reason as `StringColumn`. */
+/** A bulk loader's `int32_t` counts, read with `GetIntArrayRegion`, freed on destruction. */
 class Int32Column {
 public:
     explicit Int32Column(jsize count)
@@ -493,13 +428,7 @@ private:
     int32_t* data_;
 };
 
-/**
- * Loads the remembered word pairs. Runs once, at service start, right after the words.
- *
- * The pairs are given as two parallel string arrays rather than as one array of joined strings,
- * because a separator would have to be a character no word can contain and there is no such
- * character once the dictionary can hold anything the user typed.
- */
+/** Loads the remembered three-word sequences, as parallel string arrays, after the pairs. */
 void nativeLoadUserTrigrams(JNIEnv* env, jobject /*thiz*/, jlong handle,
                             jobjectArray previous2, jobjectArray previous1, jobjectArray next,
                             jintArray counts) {
@@ -509,8 +438,7 @@ void nativeLoadUserTrigrams(JNIEnv* env, jobject /*thiz*/, jlong handle,
         return;
     }
     const jsize tripleCount = env->GetArrayLength(previous2);
-    // An empty list is a load too: the model replaces what it holds with what it is given, so
-    // this is how forgetting the last remembered triple reaches the engine.
+    // An empty list clears the triples the engine holds.
     if (tripleCount == 0) {
         engine->loadUserTrigrams(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0);
         return;
@@ -545,13 +473,8 @@ void nativeLoadUserTrigrams(JNIEnv* env, jobject /*thiz*/, jlong handle,
 }
 
 /**
- * The best word the last request reached by an *edit*, and whether it is a name.
- *
- * Read straight after nativeSuggest on the same thread, the way nativeKnownSpelling already is:
- * it describes the request that just ran and nothing else keeps it alive. Separate from the
- * suggestion arrays on purpose -- this is the answer to a different question than the strip's,
- * and merging the two is what left autocorrect reading whichever completion happened to rank
- * first.
+ * Autocorrect's answer to the last request, and whether it is a name; read right after
+ * nativeSuggest on the same thread.
  */
 jstring nativeBestCorrection(JNIEnv* env, jobject /*thiz*/, jlong handle, jbooleanArray nameOut) {
     Engine* const engine = engineFrom(handle);
@@ -577,7 +500,7 @@ jstring nativeBestCorrection(JNIEnv* env, jobject /*thiz*/, jlong handle, jboole
     return env->NewStringUTF(buffer);
 }
 
-/** "Maria's" for "marias", or null. See Engine::possessiveFor. */
+/** A name's possessive for a word missing its apostrophe, or null; see Engine::possessiveFor. */
 jstring nativePossessive(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || word == nullptr) {
@@ -598,9 +521,8 @@ jstring nativePossessive(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring wo
     return env->NewStringUTF(possessive);
 }
 
-/** The score of `candidate` as an answer to `typed`, term by term, into `out` -- see
- *  Engine::explainScore, and ScoreExplanation.kt for the order of the slots. False when the
- *  word is not offered for the input at all. */
+/** The score of `candidate` as an answer to `typed`, term by term, into `out` in
+ *  ScoreExplanation.kt's slot order; false when the word is not offered. */
 jboolean nativeExplainScore(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring typed,
                             jstring candidate, jfloatArray out) {
     constexpr jsize kSlots = 9;
@@ -641,8 +563,8 @@ jboolean nativeExplainScore(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring
     return JNI_TRUE;
 }
 
-/** Which of `stems` the engine vouches for -- see Engine::vouchesForStem. At most
- *  kMaxStemsQuery. */
+/** Which of `stems`, at most kMaxStemsQuery, the engine vouches for; see
+ *  Engine::vouchesForStem. */
 jint nativeKnownStems(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray words,
                       jbooleanArray outKnown) {
     constexpr jsize kMaxStemsQuery = 64;
@@ -743,13 +665,7 @@ jstring nativeDominantLanguageTag(JNIEnv* env, jobject /*thiz*/, jlong handle) {
     return tag == nullptr ? nullptr : env->NewStringUTF(tag);
 }
 
-/**
- * Loads tier B's trained weights from a plain byte array, not an fd/offset/length window like a
- * language pack -- at ~2.5 MB this is small enough to read fully into memory when the preference
- * asks for it, and `TcnWeights::loadFromBytes` already takes a `(data, length)` pair, so there is
- * nothing an mmap would save. A no-op returning false in a `core` build (see
- * Engine::loadSwipeWeights).
- */
+/** Loads tier B's weights from a byte array; false in a `core` build. */
 jboolean nativeLoadSwipeWeights(JNIEnv* env, jobject /*thiz*/, jlong handle, jbyteArray weights) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || weights == nullptr) {
@@ -769,17 +685,13 @@ jboolean nativeLoadSwipeWeights(JNIEnv* env, jobject /*thiz*/, jlong handle, jby
     return loaded ? JNI_TRUE : JNI_FALSE;
 }
 
-/**
- * The "experimental swipe model" preference, off by default. A no-op in a `core` build.
- *
- * Turning it off frees tier B's weights, so this is not merely a flag -- see
- * Engine::setSwipeModelEnabled.
- */
+/** Whether the last gesture decode went through tier B. */
 jboolean nativeLastDecodeUsedNeural(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
     Engine* const engine = engineFrom(handle);
     return (engine != nullptr && engine->lastDecodeUsedNeural()) ? JNI_TRUE : JNI_FALSE;
 }
 
+/** Switches tier B on or off; off frees its weights. A no-op in a `core` build. */
 void nativeSetSwipeModelEnabled(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
                                 jboolean enabled) {
     Engine* const engine = engineFrom(handle);
@@ -789,10 +701,7 @@ void nativeSetSwipeModelEnabled(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
     engine->setSwipeModelEnabled(enabled == JNI_TRUE);
 }
 
-/**
- * Runs one throwaway decode through tier B so the first real swipe is not the first one. Safe to
- * call at any time: false means there was nothing to warm (no weights, no layout, `core`).
- */
+/** Runs one discarded decode through tier B; false when there is nothing to warm. */
 jboolean nativeWarmSwipeModel(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr) {
@@ -832,8 +741,7 @@ void nativeSetPreferredLanguage(JNIEnv* env, jobject /*thiz*/, jlong handle, jst
     if (engine == nullptr) {
         return;
     }
-    // A null tag is "no preference", which is the default and has to be reachable: it is how a
-    // user turns the setting back off.
+    // A null tag clears the preference.
     if (tag == nullptr) {
         engine->setPreferredLanguage(nullptr);
         return;
@@ -858,7 +766,7 @@ void nativeLoadUserBigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectA
         return;
     }
     const jsize pairCount = env->GetArrayLength(previous);
-    // Same as the trigrams: an empty list clears the pairs the engine holds.
+    // An empty list clears the pairs the engine holds.
     if (pairCount == 0) {
         engine->loadUserBigrams(nullptr, nullptr, nullptr, nullptr, nullptr, 0);
         return;
@@ -900,8 +808,7 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
     const jsize countLength = env->GetArrayLength(counts);
     const jsize capsLength = env->GetArrayLength(deliberateCapitals);
     const jsize assertedLength = env->GetArrayLength(asserted);
-    // An empty list is a load too: the model replaces what it holds with what it is given, so
-    // this is how forgetting the last remembered word reaches the engine.
+    // An empty list clears the words the engine holds.
     if (wordCount == 0) {
         engine->loadUserWords(nullptr, nullptr, nullptr, 0, nullptr, nullptr);
         return;
@@ -911,9 +818,6 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
         return;
     }
 
-    // This runs once, at service start, off the UI thread, over the whole personal dictionary,
-    // so it is the one place in this file that is allowed to allocate proportionally to its
-    // input rather than into a fixed buffer.
     StringColumn column(wordCount);
     Int32Column countValues(wordCount);
     Int32Column capsValues(wordCount);
@@ -941,11 +845,7 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
         return;
     }
 
-    // Compacted rather than left with gaps at their original index the way the bigram and
-    // trigram loaders' shared copyStringArray does: a dropped word here has no paired count of
-    // its own to drop alongside it the way a dropped bigram/trigram column entry does, so the
-    // count at the same index has to move down with whichever word survived, not stay behind.
-    // deliberateCapitals and asserted move with it for the same reason.
+    // Compacted: a dropped word's count, capital flag and assertion drop with it.
     char** const storage = column.data();
     size_t* const lengths = column.lengths();
     int32_t* const counts32 = countValues.data();
@@ -957,8 +857,7 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
         char buffer[kStringBufferBytes];
         const jsize length = copyString(env, value, buffer, sizeof(buffer));
         if (value != nullptr) {
-            // Without this the loop accumulates one local reference per word and overflows the
-            // local reference table long before a real personal dictionary is exhausted.
+            // One local reference at a time.
             env->DeleteLocalRef(value);
         }
         if (length <= 0) {
@@ -981,6 +880,28 @@ void nativeLoadUserWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArr
                           asserted32);
 }
 
+/** Replaces the blocked words; an empty array clears them. */
+void nativeSetBlockedWords(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray words) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || words == nullptr) {
+        return;
+    }
+    const jsize count = env->GetArrayLength(words);
+    if (count == 0) {
+        engine->setBlockedWords(nullptr, nullptr, 0);
+        return;
+    }
+    if (count < 0 || count > kMaxUserWordsPerCall) {
+        return;
+    }
+    StringColumn column(count);
+    if (!column.valid()) {
+        return;
+    }
+    column.copyFrom(env, words);
+    engine->setBlockedWords(column.data(), column.lengths(), static_cast<int>(count));
+}
+
 jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArray xs,
                          jfloatArray ys, jlongArray ts, jint count, jstring prev1, jstring prev2,
                          jobjectArray outWords, jfloatArray outScores,
@@ -998,10 +919,7 @@ jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArra
         return 0;
     }
 
-    // Copied into stack buffers rather than pinned with GetPrimitiveArrayCritical. Critical
-    // sections forbid every other JNI call while they are held, and the decoder below is not a
-    // few instructions -- it is a trie walk with a thirty-millisecond budget. Eight kilobytes of
-    // stack is the cheaper trade.
+    // Copied into stack buffers.
     jfloat pointsX[kMaxGesturePoints];
     jfloat pointsY[kMaxGesturePoints];
     jlong timestamps[kMaxGesturePoints];
@@ -1072,12 +990,9 @@ jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArra
             env->ExceptionClear();
             break;
         }
-        // Already bounded to [0, 1000] by Engine::decodeGesture -- see its own comment for why
-        // that is where this happens rather than here.
+        // Already in [0, 1000].
         scores[written] = candidates[i].score;
-        // The same bit nativeSuggest reports for a typed word: the trie stores a name in lower
-        // case with this flag set, and a swipe used to arrive without it, so a swiped name was
-        // never capitalised at all.
+        // The same name flag nativeSuggest reports.
         properNoun[written] = engine->candidateIsProperNoun(candidates[i]) ? JNI_TRUE : JNI_FALSE;
         ++written;
     }
@@ -1111,6 +1026,8 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeLearn)},
     {"nativeLoadUserWords", "(J[Ljava/lang/String;[I[I[I)V",
      reinterpret_cast<void*>(nativeLoadUserWords)},
+    {"nativeSetBlockedWords", "(J[Ljava/lang/String;)V",
+     reinterpret_cast<void*>(nativeSetBlockedWords)},
     {"nativeLoadUserBigrams", "(J[Ljava/lang/String;[Ljava/lang/String;[I)V",
      reinterpret_cast<void*>(nativeLoadUserBigrams)},
     {"nativeSetLearningSpeed", "(JF)V",
@@ -1168,9 +1085,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
     if (predictor == nullptr) {
         return JNI_ERR;
     }
-    // Registering here is what turns a signature mismatch into a load-time failure. If any
-    // entry in kMethods does not match its Kotlin declaration exactly, this returns non-zero
-    // and System.loadLibrary throws, before a keyboard has been shown.
+    // A signature that does not match its Kotlin declaration fails the load.
     const jint registered =
         env->RegisterNatives(predictor, kMethods, sizeof(kMethods) / sizeof(kMethods[0]));
     env->DeleteLocalRef(predictor);

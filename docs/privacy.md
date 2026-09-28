@@ -144,12 +144,13 @@ offered, and left alone by autocorrect, only once it has been chosen or written 
 What is never recorded:
 
 - anything typed in a [private field](#private-fields);
-- any word the user has refused (`LearningBuffer.setBlockedWords`);
+- any word the user has blocked (`LearningBuffer.setRefusedWords`);
 - the offensive-word list, while that switch is on (`OffensiveWords`);
 - word order beyond three (`kMaxTrigrams`), and only the 2,048 most-used of those.
 
-Blocked entries are folded through `WordFold` before comparison, so `Shit` at a sentence start is
-the same refusal as `shit`.
+A blocked word is matched by its exact spelling, case aside, so `Maine` at a sentence start is
+the same refusal as `maine`, and `mâine` is not refused with it. The offensive list is folded
+through `WordFold` before comparison, so `Shit` is the same refusal as `shit`.
 
 `PersonalWordDecay` (`:data`) is how the dictionary forgets without being told to, and the pair
 and triple tables evict least-used entries when full — so a phrase typed once years ago does not

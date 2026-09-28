@@ -51,8 +51,6 @@ class LearningBufferTest {
         val buffer = LearningBuffer(debounceMillis = 4_000)
         buffer.record("first", "en-US", 1_000)
         buffer.record("second", "en-US", 4_000)
-        // Someone typing continuously must still get a flush; restarting the clock on every
-        // word would mean the buffer is never written while the user keeps typing.
         assertTrue(buffer.isDue(5_000))
     }
 
@@ -89,21 +87,38 @@ class LearningBufferTest {
     @Test
     fun `blocked words are never learned`() {
         val buffer = LearningBuffer()
-        buffer.setBlockedWords(setOf("teh"))
+        buffer.setRefusedWords(RefusedWords.of(setOf("teh"), emptySet()))
         assertFalse(buffer.record("teh", "en-US", 1_000))
         assertTrue(buffer.record("the", "en-US", 1_000))
         assertEquals(1, buffer.size)
     }
 
     @Test
-    fun `a blocked word is refused in any case or spelling`() {
+    fun `a blocked word is refused in any case`() {
         val buffer = LearningBuffer()
-        buffer.setBlockedWords(setOf(WordFold.fold("mașina")))
+        buffer.setRefusedWords(RefusedWords.of(setOf("mașina"), emptySet()))
         assertFalse(buffer.record("Mașina", "ro-RO", 1_000))
-        assertFalse(buffer.record("MASINA", "ro-RO", 1_000))
-        assertFalse("the cedilla spelling is the same word", buffer.record("maşina", "ro-RO", 1_000))
+        assertFalse(buffer.record("MAȘINA", "ro-RO", 1_000))
         assertFalse(buffer.recordPair("vreau", "Mașina", 1_000))
-        assertFalse(buffer.recordTriple("Masina", "e", "gata", 1_000))
+        assertFalse(buffer.recordTriple("Mașina", "e", "gata", 1_000))
+        assertTrue(buffer.isEmpty())
+    }
+
+    @Test
+    fun `a blocked word leaves the word that differs from it by an accent`() {
+        val buffer = LearningBuffer()
+        buffer.setRefusedWords(RefusedWords.of(setOf("maine"), emptySet()))
+        assertFalse(buffer.record("Maine", "ro-RO", 1_000))
+        assertTrue(buffer.record("mâine", "ro-RO", 1_000))
+        assertTrue(buffer.recordPair("pe", "mâine", 1_000))
+    }
+
+    @Test
+    fun `an offensive word is refused in any case or spelling`() {
+        val buffer = LearningBuffer()
+        buffer.setRefusedWords(RefusedWords.of(emptySet(), setOf(WordFold.fold("căcat"))))
+        assertFalse(buffer.record("căcat", "ro-RO", 1_000))
+        assertFalse(buffer.record("Cacat", "ro-RO", 1_000))
         assertTrue(buffer.isEmpty())
     }
 
@@ -139,7 +154,6 @@ class LearningBufferTest {
         assertTrue(buffer.drainPairs().isEmpty())
     }
 
-    /** A word following itself is a stutter, not a phrase. */
     @Test
     fun aWordIsNotPairedWithItself() {
         val buffer = LearningBuffer()
@@ -147,7 +161,6 @@ class LearningBufferTest {
         assertTrue(buffer.drainPairs().isEmpty())
     }
 
-    /** Private mode has to stop the pairs as firmly as it stops the words. */
     @Test
     fun disabledLearningRecordsNoPairs() {
         val buffer = LearningBuffer()
@@ -156,11 +169,10 @@ class LearningBufferTest {
         assertTrue(buffer.drainPairs().isEmpty())
     }
 
-    /** A blocked word must not come back through a phrase. */
     @Test
     fun aBlockedWordIsNotPairedOnEitherSide() {
         val buffer = LearningBuffer()
-        buffer.setBlockedWords(setOf("naspa"))
+        buffer.setRefusedWords(RefusedWords.of(setOf("naspa"), emptySet()))
         assertFalse(buffer.recordPair("vreau", "naspa", 0L))
         assertFalse(buffer.recordPair("naspa", "sa", 0L))
         assertTrue(buffer.drainPairs().isEmpty())
@@ -174,12 +186,6 @@ class LearningBufferTest {
         assertTrue(buffer.drainPairs().isEmpty())
     }
 
-    /**
-     * Every one-letter word anyone writes is already in the bundled dictionary -- "a" and "I"
-     * in English, "a" and "o" in Romanian -- so a personal row for one adds nothing and can
-     * only take a slot from a word that is not. What it does add is the stray letters a
-     * delimiter commits, which are indistinguishable from words here.
-     */
     @Test
     fun `a single letter is not worth a row of its own`() {
         val buffer = LearningBuffer()

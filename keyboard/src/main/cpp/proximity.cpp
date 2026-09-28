@@ -51,8 +51,7 @@ const char* utf8Decode(const char* p, const char* end, uint32_t* codePoint) {
         }
         value = (value << 6) | (byte & 0x3Fu);
     }
-    // Overlong forms encode a small code point in more bytes than needed. Two spellings of the
-    // same character mean two trie paths for one word, so they are refused, not normalised.
+    // Overlong forms are refused.
     if (value < minimum) {
         return nullptr;
     }
@@ -92,9 +91,8 @@ int utf8Encode(uint32_t codePoint, char* out) {
     return 4;
 }
 
-// Whether a Latin Extended-A code point is the capital of the pair it belongs to -- see the
-// comment inside foldCodePoint on the block's two parities. Mirrors _latin_extended_a_upper()
-// in tools/build_dict.py, which the native tests diff this against.
+// Whether a Latin Extended-A code point is the capital of its pair; the same as
+// _latin_extended_a_upper() in tools/build_dict.py.
 static bool latinExtendedAUpper(uint32_t codePoint) {
     const bool evenCapital = codePoint <= 0x137u || (codePoint >= 0x14Au && codePoint <= 0x177u);
     const bool oddCapital = (codePoint >= 0x139u && codePoint <= 0x148u) ||
@@ -123,8 +121,7 @@ static uint32_t lowerGreek(uint32_t codePoint) {
     return codePoint;
 }
 
-// Greek, folded: the tonos and the dialytika go, and the final sigma folds onto the
-// ordinary one, so a word is one key whether it ends a sentence or not.
+// Greek, folded: the tonos and the dialytika go, and the final sigma is the ordinary one.
 static uint32_t foldGreek(uint32_t codePoint) {
     switch (lowerGreek(codePoint)) {
         case 0x3ACu: return 0x3B1u;
@@ -163,9 +160,7 @@ static uint32_t lowerCyrillic(uint32_t codePoint) {
     return codePoint;
 }
 
-// Cyrillic, folded: the two letters written with a mark over е and и by some and without by
-// most fold onto the plain letter, the way an accent does. The short и is a letter of its
-// own and stays.
+// Cyrillic, folded: ѐ and ё are е, and ѝ is и; й stays.
 static uint32_t foldCyrillic(uint32_t codePoint) {
     const uint32_t lower = lowerCyrillic(codePoint);
     switch (lower) {
@@ -187,12 +182,8 @@ static uint32_t lowerArmenianGeorgian(uint32_t codePoint) {
     return codePoint;
 }
 
-// Case, and nothing else: the same lowering foldCodePoint does before its diacritic table,
-// stopping there. Comparing two spellings of one folded key is a question about the diacritics,
-// so it cannot use a fold that removes them -- and it cannot use raw bytes either, because the
-// first letter of a field arrives capitalised.
-// The typographic apostrophes, the modifier letter apostrophe and the Hebrew geresh are the
-// plain apostrophe, the one the keyboard types.
+// The typographic apostrophes, the modifier letter apostrophe and the Hebrew geresh, as the plain
+// apostrophe.
 static uint32_t plainApostrophe(uint32_t codePoint) {
     return (codePoint == 0x2018u || codePoint == 0x2019u || codePoint == 0x2BCu || codePoint == 0x5F3u)
                ? '\''
@@ -245,6 +236,10 @@ uint32_t lowerCodePoint(uint32_t codePoint) {
     if (codePoint >= 0x100u && codePoint <= 0x17Fu && latinExtendedAUpper(codePoint)) {
         return codePoint + 1u;
     }
+    // Ș and Ț.
+    if (codePoint == 0x218u || codePoint == 0x21Au) {
+        return codePoint + 1u;
+    }
     if (codePoint >= 0x370u && codePoint <= 0x3FFu) {
         return lowerGreek(codePoint);
     }
@@ -286,8 +281,7 @@ uint32_t foldCodePoint(uint32_t codePoint) {
     }
     codePoint = plainApostrophe(codePoint);
 
-    // Latin-1 Supplement: uppercase C0..DE (excluding D7, the multiplication sign) maps to the
-    // lowercase E0..FE range, so folding case first halves the table below.
+    // Latin-1 Supplement: capitals C0..DE, all but D7 (the multiplication sign), lower to E0..FE.
     if (codePoint >= 0xC0u && codePoint <= 0xDEu && codePoint != 0xD7u) {
         codePoint += 0x20u;
     }
@@ -312,21 +306,16 @@ uint32_t foldCodePoint(uint32_t codePoint) {
             break;
     }
 
-    // Latin Extended-A. The block pairs each capital with its lowercase, but not on one parity
-    // throughout: in 0x100..0x137 and 0x14A..0x177 the capital is the even code point, in
-    // 0x139..0x148 and 0x179..0x17E it is the odd one, 0x138 (kra) and 0x149 ('n) have no
-    // capital at all, and 0x178 is the capital of Latin-1's 0xFF. One bitwise test across the
-    // whole block folded "ł" to "Ń" and left "Ź" unfolded, so the case fold is per range.
+    // Latin Extended-A. In 0x100..0x137 and 0x14A..0x177 the capital is the even code point, in
+    // 0x139..0x148 and 0x179..0x17E the odd one; 0x138 (kra) and 0x149 ('n) have no capital, and
+    // 0x178 is the capital of Latin-1's 0xFF.
     if (codePoint >= 0x100u && codePoint <= 0x17Fu) {
         uint32_t lower = codePoint;
         if (latinExtendedAUpper(codePoint)) {
             lower += 1u;
         }
         switch (lower) {
-            // Romanian: a-breve, a-circumflex (shared with the Latin-1 block above),
-            // i-circumflex, s-comma / s-cedilla, t-comma / t-cedilla. Both encodings of the
-            // comma-below letters are folded: they render identically and users type whichever
-            // their previous keyboard produced.
+            // Each letter folds onto its base letter, the cedilla s and t included.
             case 0x101u: case 0x103u: case 0x105u:
                 return 'a';
             case 0x107u: case 0x109u: case 0x10Bu: case 0x10Du:
@@ -444,7 +433,7 @@ bool KeyGeometry::set(const int32_t* codes, const float* centersX, const float* 
     if (codes == nullptr || centersX == nullptr || centersY == nullptr || count <= 0) {
         return false;
     }
-    // A zero or negative key size would make every normalised distance infinite or negative.
+    // Key sizes must be positive.
     if (!(keyWidth > 0.0f) || !(keyHeight > 0.0f)) {
         return false;
     }
@@ -453,11 +442,11 @@ bool KeyGeometry::set(const int32_t* codes, const float* centersX, const float* 
 
     for (int i = 0; i < count && count_ < kMaxKeys; ++i) {
         if (codes[i] <= 0) {
-            continue;  // modifiers, shift, delete: not characters, not confusable with one
+            continue;  // not a character key
         }
         const uint32_t folded = foldCodePoint(static_cast<uint32_t>(codes[i]));
         if (indexOf(folded) >= 0) {
-            continue;  // a character that appears twice keeps its first, primary position
+            continue;  // a repeated character keeps its first position
         }
         codes_[count_] = folded;
         centersX_[count_] = centersX[i];
@@ -476,8 +465,7 @@ bool KeyGeometry::set(const int32_t* codes, const float* centersX, const float* 
 
 void KeyGeometry::buildNeighbours() {
     for (int i = 0; i < count_; ++i) {
-        // Slot zero is always the key itself at zero cost, so the search can iterate one list
-        // per input character and get the exact match for free.
+        // Slot zero is the key itself, at zero cost.
         neighbourCode_[i][0] = codes_[i];
         neighbourCost_[i][0] = 0.0f;
         int filled = 1;
@@ -492,8 +480,7 @@ void KeyGeometry::buildNeighbours() {
             if (cost > kNeighbourRadius) {
                 continue;
             }
-            // Insertion sort into a list of at most eight: cheaper than sorting sixty-odd
-            // candidates and discarding all but eight of them.
+            // Insertion sort into a list of at most kMaxNeighbours.
             int position = filled;
             if (filled == kMaxNeighbours) {
                 if (cost >= neighbourCost_[i][kMaxNeighbours - 1]) {
@@ -545,7 +532,7 @@ int KeyGeometry::nearestSlot(float x, float y) const {
     for (int i = 0; i < count_; ++i) {
         const float dx = x - centersX_[i];
         const float dy = y - centersY_[i];
-        const float distance = dx * dx + dy * dy;  // squared: the ordering is the same
+        const float distance = dx * dx + dy * dy;  // squared
         if (distance < bestDistance) {
             bestDistance = distance;
             best = i;

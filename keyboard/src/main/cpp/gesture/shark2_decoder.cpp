@@ -12,32 +12,23 @@ namespace borderkeys {
 namespace {
 
 // How far from the gesture's first and last point a word's first and last key may be, in key
-// widths. This is the cheapest prune there is and it removes almost everything: a swipe that
-// starts on "t" is not the word "apple", and deciding that costs one distance comparison
-// instead of a trie walk.
+// widths.
 constexpr float kEndpointRadius = 1.7f;
 
 // How close the path must come to a key's centre, in key widths, for a word using that key to
 // stay reachable in the trie descent.
 constexpr float kTouchRadius = 1.1f;
 
-// The template's path length must be within this band of the gesture's. A word twice as long as
-// what the finger drew was not what the finger drew.
+// The band the template's path length must be in, relative to the gesture's.
 constexpr float kMinLengthRatio = 0.35f;
 constexpr float kMaxLengthRatio = 2.60f;
 
-// Turning the two distance channels into something that adds to a log-probability.
-//
-// Shape distance is in units of the normalised bounding box, so it runs roughly 0 to 0.5;
-// location distance is in key widths and runs roughly 0 to 3. The weights put a plausible
-// mismatch on each channel at about one order of magnitude of probability, which is what makes
-// the geometry and the language model comparable rather than one of them decorative.
+// The weights turning the shape distance (in normalised bounding-box units) and the location
+// distance (in key widths) into log-probability terms.
 constexpr float kShapeWeight = 16.0f;
 constexpr float kLocationWeight = 8.0f;
 
-// Trie nodes one gesture may visit. The budget, not a timer, is what holds the thirty
-// millisecond target: a wall-clock check would make the answer depend on how busy the device
-// was, so two identical swipes could decode differently.
+// Trie nodes one gesture may visit.
 constexpr int kVisitBudget = 60000;
 
 constexpr int8_t kNoOccurrence = static_cast<int8_t>(kResampleCount);
@@ -46,7 +37,7 @@ constexpr int8_t kNoOccurrence = static_cast<int8_t>(kResampleCount);
 
 void Shark2Decoder::setLayout(const KeyGeometry& geometry) {
     geometry_ = &geometry;
-    // Every cached template is a path through key centres that have just moved.
+    // The cached templates are rebuilt for the new key centres.
     templates_.setGeometry(&geometry);
 }
 
@@ -59,8 +50,7 @@ void Shark2Decoder::buildTouchSequence() {
     const float radius = kTouchRadius * geometry_->keyWidth();
     const float radiusSquared = radius * radius;
 
-    // Built backwards in one pass: the answer for position i is either "here" or the answer for
-    // i + 1. Quadratic in the obvious formulation, linear in this one.
+    // Built backwards in one pass: position i's answer is either i or position i + 1's.
     for (int slot = 0; slot < KeyGeometry::kMaxKeys; ++slot) {
         nextOccurrence_[kResampleCount][slot] = kNoOccurrence;
     }
@@ -71,9 +61,7 @@ void Shark2Decoder::buildTouchSequence() {
         if (slot >= 0 && slot < slots) {
             nextOccurrence_[position][slot] = static_cast<int8_t>(position);
         }
-        // Every key the finger passes within [kTouchRadius] of, not only the nearest one. A key
-        // clipped at a corner or crossed between two samples is never nearest at any of them,
-        // and a letter the descent cannot reach is a word that is never scored at all.
+        // Every key the finger passes within kTouchRadius of, not only the nearest.
         for (int other = 0; other < slots; ++other) {
             if (other == slot) {
                 continue;
@@ -152,8 +140,8 @@ void Shark2Decoder::walk(int packIndex, const PackedTrie& trie, int32_t node, in
     ++lastVisitedNodes_;
 
     // A word ends here. Everything below decides whether it is worth measuring.
-    const int32_t wordIndex = trie.terminalWordIndex(node);
-    if (wordIndex >= 0 && depth >= 2) {
+    const int32_t firstIndex = trie.terminalWordIndex(node);
+    if (firstIndex >= 0 && depth >= 2) {
         const float endX = pathX_[kResampleCount - 1];
         const float endY = pathY_[kResampleCount - 1];
         float lastX = 0.f;
@@ -162,9 +150,13 @@ void Shark2Decoder::walk(int packIndex, const PackedTrie& trie, int32_t node, in
         if (geometry_->centreOf(letters[depth - 1], &lastX, &lastY)) {
             const float dx = lastX - endX;
             const float dy = lastY - endY;
-            if (dx * dx + dy * dy <= radius * radius) {
+            const int32_t wordIndex =
+                (dx * dx + dy * dy <= radius * radius)
+                    ? scorer_.offeredSpelling(packIndex, static_cast<uint32_t>(firstIndex))
+                    : -1;
+            if (wordIndex >= 0) {
                 const uint32_t cacheKey =
-                    (static_cast<uint32_t>(packIndex) << 30) | static_cast<uint32_t>(wordIndex);
+                    (static_cast<uint32_t>(packIndex) << 30) | static_cast<uint32_t>(firstIndex);
                 const TemplateCache::Entry* candidate =
                     templates_.templateFor(cacheKey, letters, depth);
                 const float geometryLogProb =
@@ -220,7 +212,7 @@ int Shark2Decoder::decode(const float* xs, const float* ys, const int64_t* ts, i
                           Candidate* out, int maxOut) {
     lastVisitedNodes_ = 0;
     lastScoredWords_ = 0;
-    (void)ts;  // tier A is time-invariant; the neural tier uses velocity and acceleration
+    (void)ts;  // tier A does not use time
 
     if (geometry_ == nullptr || !geometry_->isSet() || xs == nullptr || ys == nullptr ||
         out == nullptr || maxOut <= 0 || count < 2) {
@@ -261,10 +253,7 @@ void Shark2Decoder::searchPack(int packIndex, TopK<Candidate>& heap) {
         return;
     }
 
-    // The first pruning stage, applied at the root so it costs nothing per candidate: only keys
-    // near where the finger landed can start the word. On a QWERTY layout that is three or four
-    // keys out of thirty, and it removes almost the whole dictionary before a single trie
-    // transition is taken.
+    // Only keys within kEndpointRadius of where the finger landed can start the word.
     const float startX = pathX_[0];
     const float startY = pathY_[0];
     const float radius = kEndpointRadius * geometry_->keyWidth();

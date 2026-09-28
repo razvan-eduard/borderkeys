@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
+#include <initializer_list>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -50,14 +51,7 @@ struct LoadedEngine {
                                      layout.keyWidth, layout.keyHeight);
     }
 
-    /**
-     * Loads the same test pack again under a second tag and activates both.
-     *
-     * Same content twice rather than a second real pack: the point of the multi-pack tests this
-     * enables is exercising the search loop over more than one active slot (visitBudget_ being
-     * reset per pack rather than shared across the request, in particular), not testing a second
-     * language's own vocabulary.
-     */
+    /** Loads the same test pack again under a second tag and activates both. */
     bool openSecondPack(const char* secondTag) {
         struct stat info {};
         if (stat(BORDERKEYS_TEST_PACK, &info) != 0) {
@@ -93,9 +87,7 @@ struct LoadedEngine {
         return status;
     }
 
-    /** The score `expected` carries among the suggestions for `composing`, or 0 if absent.
-     *  A sibling of rankOf for the cases where the question is how strongly a candidate is
-     *  held rather than where it landed. */
+    /** The score `expected` carries among the suggestions for `composing`, or 0 if absent. */
     float scoreOf(const char* composing, const char* expected) {
         Candidate out[Engine::kMaxCandidates];
         const int found = engine.suggest(composing, std::strlen(composing), nullptr, 0, nullptr,
@@ -170,13 +162,7 @@ void runEngineTests() {
         check(foldCodePoint(0x103) == 'a', "a-breve folds to a");
         check(foldCodePoint(0xE2) == 'a', "a-circumflex folds to a");
         check(foldCodePoint(0xEE) == 'i', "i-circumflex folds to i");
-        // æ and œ are deliberately NOT folded to a bare 'a'/'o': a French or English word
-        // spelled without the ligature is spelled with two letters ("coeur", "aetiology"), not
-        // one, and collapsing the ligature to a single vowel merges it with whatever unrelated
-        // word already occupies that shorter spelling. Folding "cœur" to 'o' once made it
-        // unreachable behind "cour" (a different, more frequent word, "yard") -- an ligature
-        // fold needs the two-letter expansion "oe"/"ae" this per-code-point function cannot
-        // produce, not a same-length substitute.
+        // æ and œ are not folded to a single vowel.
         check(foldCodePoint(0xE6) == 0xE6u, "ae-ligature is left alone rather than merged into a");
         check(foldCodePoint(0x153) == 0x153u, "oe-ligature is left alone rather than merged into o");
         check(foldCodePoint(0x4E2D) == 0x4E2Du, "a script we do not understand is left alone");
@@ -242,10 +228,7 @@ void runEngineTests() {
               "a neighbouring-key slip is corrected using the pushed-down geometry");
 
         // A correction must not displace a word that needed none, however much more frequent
-        // the correction is. "the" is a hundred times more frequent than "theme" in the test
-        // pack, and deleting two characters to reach it used to cost less than that ratio was
-        // worth -- so someone who typed "theme" correctly read "the" at the head of the strip.
-        // The same shape in Romanian is "si" beating a correctly typed "stiu".
+        // the correction is.
         check(loaded.rankOf("theme", "theme") == 0,
               "a correctly spelled rare word outranks a frequent correction of it");
         // Reaching it discards two typed characters, which costs 2 x kDeleteCost -- past
@@ -257,47 +240,29 @@ void runEngineTests() {
         check(loaded.rankOf("masiv", "masiv") == 0,
               "and when the correction would also add a diacritic");
 
-        // Between two corrections -- neither exact -- the closer one wins almost regardless of
-        // frequency. "thexx" reaches "thex" at one edit (delete the trailing x) and "the" at
-        // two (delete both), and "the" is more than a thousand times more common than "thex" --
-        // yet "thex" still has to come first, because two edits is a claim that the user made
-        // two mistakes and that should lose to a one-edit reading of the same typing. This is
-        // the shape "jicat" reaching "cât" ahead of "jucat" had: not a completion (theme/the
-        // above), and not an exact word losing to a correction (also above) -- two different
-        // non-exact corrections, ranked by which one is the smaller mistake.
+        // Between two corrections, neither exact, the closer one wins almost regardless of
+        // frequency: "thexx" reaches "thex" at one edit and "the" at two.
         check(loaded.rankOf("thexx", "thex") == 0,
               "the one-edit correction outranks a much more frequent two-edit one");
         check(loaded.rankOf("thexx", "the") < 0,
               "and the two-deletion reading is beyond the ceiling too");
 
-        // Insertion has to be able to reach any character, not just the ones near whatever key
-        // comes next -- "kyboard" reaching "keyboard" needs an 'e' inserted before 'y', and 'e'
-        // is nowhere near 'y' on this keyboard. Restricting insertion to neighbouring keys meant
-        // this was never a candidate at all, the same way "because" was never reachable from
-        // "beause" (a 'c' nowhere near the 'a' after it).
+        // Insertion reaches any character, not only keys near the next one: "kyboard" needs an
+        // 'e' before the 'y'.
         check(loaded.rankOf("kyboard", "keyboard") >= 0,
               "an inserted character reaches a word even when it is not a nearby key");
 
-        // The "acm"/"acum"/"cam" shape: "acum" is one insertion away and by far the most
-        // frequent word here, but "cam" is one (cheaper) transposition away and has a small
-        // bushy family of its own completions -- camera, campion, camion. At the old, much
-        // wider gap between kTransposeCost and kInsertCost, that family alone filled every kept
-        // candidate before "acum" was ever considered, the same way "cam" and its own real
-        // completions crowded "acum" out of the real Romanian pack entirely. "acum" has to
-        // still be found even with a cheaper, bushier alternative sitting right next to it.
+        // "acum", one insertion away, is found although "cam", one cheaper transposition away,
+        // has a family of completions of its own.
         check(loaded.rankOf("acm", "acum") >= 0,
               "a frequent insertion is not crowded out by a bushy, cheaper transposition");
 
-        // "în" and "in" fold to the same key; the dictionary keeps only the more frequent
-        // spelling, so "in" reaches "în" at zero cost the same way "masina" reaches "mașina"
-        // above. This is what a keyboard-level short-word exemption must not break -- the guard
-        // belongs in AutoCorrection.kt, in front of a real suggestion, not in the search itself.
+        // "in" reaches "în", which folds to the same key, at zero cost.
         check(loaded.rankOf("in", "în") == 0,
               "a two-letter word reaches its accented twin like any other folded spelling");
 
-        // One more typo-pattern sweep over an existing word, covering the shapes the cases
-        // above don't: a plain deletion, a doubled letter, and a transposition on a word that
-        // (unlike "acm"/"cam") has no bushy competing family to get lost behind.
+        // A plain deletion, a doubled letter, and a transposition on a word with no competing
+        // family.
         check(loaded.rankOf("keybord", "keyboard") >= 0,
               "a dropped letter still reaches the word");
         check(loaded.rankOf("keyboarrd", "keyboard") >= 0,
@@ -305,9 +270,8 @@ void runEngineTests() {
         check(loaded.rankOf("kyeboard", "keyboard") >= 0,
               "a transposition still reaches the word");
 
-        // The surcharge is charged for correcting, not for completing. A completion costs no
-        // edits, so it still competes on frequency alone: this is what a suggestion strip is
-        // for, and a rule that put "car" ahead of everything starting with it would break it.
+        // The surcharge is charged for correcting, not for completing: a completion competes on
+        // frequency alone.
         check(loaded.rankOf("them", "theme") > 0,
               "a completion is still offered above nothing");
         check(loaded.rankOf("mas", "mașina") >= 0,
@@ -340,11 +304,7 @@ void runEngineTests() {
 
     section("a pack no longer named gives its slot back");
     {
-        // Settings can enable more languages than the engine has slots over time -- not at
-        // once, but one switched off and another on in its place. A pack that stopped being
-        // named in setActiveLanguages used to stay open and merely inactive, so its slot was
-        // never returned, and the replacement's load failed with kBkdErrNoSlot while nothing on
-        // the Kotlin side looked at the status.
+        // A pack no longer named in setActiveLanguages is closed and its slot returned.
         LoadedEngine loaded;
         check(loaded.open(), "the engine loads the first pack");
         check(loaded.openSecondPack("en-US"), "and a second one under another tag");
@@ -369,18 +329,8 @@ void runEngineTests() {
 
     section("more than one active pack");
     {
-        // Nothing before this exercised more than one active language pack -- every case above
-        // uses exactly one. visitBudget_ (the fuzzy-search node-visit allowance) used to be a
-        // single counter shared across every active pack in one request rather than reset per
-        // pack, so a pack searched earlier in the loop could exhaust it before a later pack's
-        // own fuzzy walk ever ran; that pack's exact matches and frequent-prefix shortlist still
-        // worked, so the strip was never empty, just silently missing that pack's corrections.
-        // The tiny self-test dictionary is nowhere near large enough to exhaust the budget on
-        // its own (that needs a real, much larger pack), so this cannot reproduce the starvation
-        // itself -- it instead pins down that activating a second pack changes nothing about
-        // what a fuzzy correction the first pack alone already finds, which is what the fix
-        // (resetting visitBudget_ inside the per-pack loop rather than once for the request)
-        // guarantees regardless of pack size.
+        // A second active pack changes nothing about a fuzzy correction the first finds alone;
+        // visitBudget_ is reset per pack.
         LoadedEngine loaded;
         check(loaded.open(), "the engine loads the first pack");
         check(loaded.openSecondPack("en-US"), "and a second pack, same content, different tag");
@@ -394,9 +344,8 @@ void runEngineTests() {
         check(loaded.rankOf("theme", "theme") == 0,
               "a correctly spelled word still outranks a frequent correction of it");
 
-        // Duplicated across packs, "keyboard" is now reachable from two active slots with
-        // identical text -- offerCandidate's text-based dedup (not (pack,index)) is what this
-        // exercises for the first time with a genuine duplicate rather than a same-pack repeat.
+        // "keyboard" is reachable from two active slots with identical text; offerCandidate
+        // dedups by text.
         Candidate out[Engine::kMaxCandidates];
         const int found = loaded.engine.suggest("keyboard", 8, nullptr, 0, nullptr, 0, out,
                                                 Engine::kMaxCandidates);
@@ -411,10 +360,8 @@ void runEngineTests() {
         check(keyboardCount == 1,
               "the same word reached from two active packs still appears once");
 
-        // Both packs hold the same test vocabulary, so this cannot show two packs disagreeing --
-        // what it pins down is that candidateForPack answers for the pack index it was given,
-        // not for whichever pack suggest()'s own dominantPack_/strictLanguage_ would have picked,
-        // which is the one thing this function exists to do differently from suggest().
+        // candidateForPack answers for the pack index it was given, not for the pack suggest()
+        // would pick.
         char spelling[64];
         int written = loaded.engine.candidateForPack(0, "keyboarf", 8, spelling, sizeof(spelling));
         check(written == 8 && std::memcmp(spelling, "keyboard", 8) == 0,
@@ -438,9 +385,8 @@ void runEngineTests() {
 
     section("a preferred language decides where an undecided search starts");
     {
-        // Both slots hold the same vocabulary, so nothing here can be answered by looking at the
-        // words that come back -- which is the point. What is being pinned down is which slot the
-        // search was restricted to, and Candidate::packIndex is where that shows.
+        // Both slots hold the same vocabulary; Candidate::packIndex shows which slot the search
+        // was restricted to.
         LoadedEngine loaded;
         check(loaded.open(), "the engine loads");
         check(loaded.openSecondPack("en-US"), "a second pack loads under another tag");
@@ -461,9 +407,7 @@ void runEngineTests() {
 
         check(loaded.engine.dominantPack() == -1, "nothing has been recognised yet");
 
-        // What an unrestricted request looks like, measured rather than assumed: every later
-        // assertion is "the same as this" or "different from this", so a change in how duplicate
-        // words across packs are resolved moves the baseline instead of silently passing.
+        // The unrestricted baseline, measured; the assertions below compare against it.
         const int unrestricted = packsReached("keyboar");
         check(unrestricted != 0, "with no preference the search answers from somewhere");
 
@@ -474,8 +418,7 @@ void runEngineTests() {
         loaded.engine.setPreferredLanguage("ro-RO");
         check(packsReached("keyboar") == 0b01, "and naming the other one moves the search to it");
 
-        // The setting is optional, and turning it off has to restore exactly what the keyboard
-        // did before it existed rather than leaving the last choice standing.
+        // Turning the setting off restores the unrestricted search.
         loaded.engine.setPreferredLanguage("");
         check(packsReached("keyboar") == unrestricted,
               "cleared, the search is exactly what it was before a preference was ever set");
@@ -484,13 +427,13 @@ void runEngineTests() {
         check(packsReached("keyboar") == unrestricted,
               "and null clears it the same way empty does");
 
-        // A tag for a language that is not loaded names no slot. It must read as "no preference"
-        // rather than as "restrict to nothing", which would empty the strip.
+        // A tag for a language that is not loaded reads as no preference, not as "restrict to
+        // nothing".
         loaded.engine.setPreferredLanguage("de-DE");
         check(packsReached("keyboar") == unrestricted,
               "an unknown tag behaves as no preference, not as no dictionary at all");
 
-        // The preference is stored as a tag precisely so that it survives the slots moving.
+        // The preference is a tag, so it survives the slots moving.
         loaded.engine.setPreferredLanguage("en-US");
         const char* tags[2] = {"en-US", "ro-RO"};
         const float weights[2] = {1.0f, 1.0f};
@@ -509,10 +452,7 @@ void runEngineTests() {
 
     section("a mark the user typed is not discarded to reach a word");
     {
-        // The shape, not the vocabulary: whatever this pack holds, appending a mark to one of
-        // its words must not produce that word back. Discarding an apostrophe or a hyphen the
-        // user deliberately typed is what turned "the workers' rights" into "the workers
-        // rights" and "'hello" into "hell". See kMarkDeleteCost.
+        // A pack word with a mark appended must not produce that word back (kMarkDeleteCost).
         LoadedEngine loaded;
         check(loaded.open(), "the engine loads");
 
@@ -537,8 +477,7 @@ void runEngineTests() {
         check(committed("'keyboard") != "keyboard",
               "nor a leading one, which is what let the rest of the word be rewritten too");
 
-        // The opposite shape still works: a mark left out is a convention dropped, and cheap.
-        // If this stops holding, the insertion branch has been broken by the deletion rule.
+        // A mark left out is cheap to insert.
         check(loaded.rankOf("keyboar", "keyboard") >= 0,
               "a word one letter short of finished is still reached");
     }
@@ -695,13 +634,7 @@ void runEngineTests() {
 
     section("autocorrect asks its own question");
     {
-        // The defect this exists for: the strip is ranked for "what are you writing", where a
-        // longer word carrying on from the typed letters belongs, and autocorrect was reading
-        // its first entry to answer "what did you mean". Typing "teh" the strip holds tehran,
-        // tehran's, Tehan and six more before "the", so autocorrect offered nothing at all.
-        //
-        // The fixture pack is small, so this checks the property rather than any particular
-        // word: whatever bestCorrection returns may carry the typed letters on by at most
+        // Whatever bestCorrection returns carries the typed letters on by at most
         // kMaxCorrectionCompletion characters.
         LoadedEngine loaded;
         loaded.open();
@@ -799,9 +732,7 @@ void runEngineTests() {
 
     section("a private field does not consult the personal dictionary");
     {
-        // The other half of not learning from a private field: what this device learned from
-        // its owner must not be offered back into a password box or a field that asked for no
-        // personalised learning. The model stays loaded -- switching it back on costs nothing.
+        // Nothing learned is offered into a private field; the model stays loaded.
         LoadedEngine loaded;
         loaded.open();
         const char* words[1] = {"borderkeysword"};
@@ -837,8 +768,7 @@ void runEngineTests() {
             }
         }
 
-        // With nothing typed, the word that follows in the phrase is offered. This is the whole
-        // point: the sequence comes back without being typed out again.
+        // With nothing typed, the word that follows in the phrase is offered.
         check(loaded.rankOf("", "sa", "vreau") == 0, "after \"vreau\" the next word is \"sa\"");
         check(loaded.rankOf("", "ma", "sa") == 0, "after \"sa\" it is \"ma\"");
         check(loaded.rankOf("", "duc", "ma") == 0, "and after \"ma\" it is \"duc\"");
@@ -858,14 +788,8 @@ void runEngineTests() {
         LoadedEngine loaded;
         loaded.open();
 
-        // Two phrases starting from the same word, one written three times and one written
-        // once. The repeated one leads: the preference for a personal chain grows with how
-        // often it has been written, so a habit outranks an accident.
-        //
-        // Both words of each phrase are learned, because that is what the service does -- a
-        // pair names two words and the model resolves those names against words it holds. A
-        // test that learned only the second word would record no pair at all and would then
-        // pass or fail for reasons that have nothing to do with what it claims to check.
+        // Two phrases starting from the same word, one written three times and one once: the
+        // repeated one leads. Both words of each phrase are learned, as the service does.
         const auto write = [&loaded](const char* first, const char* second) {
             loaded.engine.learn(first, std::strlen(first), nullptr, 0, nullptr, 0);
             loaded.engine.learn(second, std::strlen(second), first, std::strlen(first),
@@ -889,18 +813,9 @@ void runEngineTests() {
 
     section("how quickly it learns is a setting");
     {
-        // What the setting does is move a personal word along the boost curve faster: the same
-        // evidence, believed sooner. It cannot make that word beat a correctly-typed real one,
-        // and it is not meant to -- kMaxUserBoost is 3.0 against an anchor of -8.0, while "test"
-        // in the fixture scores -4.80, so no number of picks closes that gap. The static_assert
-        // beside kMaxUserBoost exists to keep it that way.
-        //
-        // This used to be checked by asking whether "testing" outranked everything for the
-        // prefix "test", which passed only because "test" itself was being evicted from the heap
-        // by cheap completions -- the same defect that made typing "car" offer "care", "cartea"
-        // and "carol" while "car" appeared nowhere. Once kCompletionPenalty stopped that, the
-        // exact word took first place and the old check failed, having never tested the setting
-        // so much as the eviction. The boost is asked about directly now.
+        // The learning speed moves a personal word along the boost curve faster. It cannot make
+        // that word beat a correctly typed one: kMaxUserBoost is 3.0 against an anchor of -8.0,
+        // and "test" in the fixture scores -4.80.
         const auto heldAfterThreePicks = [](float speed) {
             LoadedEngine loaded;
             loaded.open();
@@ -930,12 +845,9 @@ void runEngineTests() {
 
     section("a personal-dictionary word can still be a proper noun");
     {
-        // "border" is flagged a proper noun in the test pack itself (build_dict.py's --selftest
-        // fixture). Learned here under a different case -- the way a personal dictionary
-        // actually ends up holding a name, from whatever a person typed or corrected once, not
-        // from a classifier -- it must not lose that flag just because this candidate comes from
-        // the user model rather than the pack. See Engine::candidateIsProperNoun's own doc for
-        // why a match is looked up by folded text across every active pack for exactly this case.
+        // "border" is flagged a proper noun in the test pack (build_dict.py's --selftest
+        // fixture). Learned under a different case, the personal candidate keeps the flag
+        // (Engine::candidateIsProperNoun).
         LoadedEngine loaded;
         loaded.open();
         // Three times, so the word is established -- see "a word written once or twice is kept
@@ -967,9 +879,8 @@ void runEngineTests() {
 
     section("a personal word only becomes a proper noun once deliberately capitalised");
     {
-        // "emanuel" is absent from the test pack entirely, unlike "border" above -- there is no
-        // shipped-pack flag to fall back to here, so this isolates UserModel::deliberateCapitals
-        // itself from the cross-pack fallback the previous section already covers.
+        // "emanuel" is absent from the test pack, so this checks UserModel::deliberateCapitals
+        // alone.
         LoadedEngine loaded;
         loaded.open();
         // Three times, so the word is established; the subject here is the capitalisation flag.
@@ -1009,15 +920,7 @@ void runEngineTests() {
 
     section("correction strictness is a bounded multiplier, not an override");
     {
-        // kEditPenalty (40) so dominates any realistic frequency gap that even the most lenient
-        // end of the range this multiplies (0.5x) still prices a one-edit correction at roughly
-        // seventeen log-units -- far past any ratio this test pack, or a real one, can produce.
-        // So unlike setLearningSpeed's own test above, this cannot demonstrate a ranking flip:
-        // that is by design, the strictness dial is a fine adjustment on top of the calibration,
-        // not a way to turn it off. What it can and must verify is what setCorrectionStrictness
-        // shares with every other JNI-facing setter here -- that a value crossing from a stored
-        // preference cannot be trusted, and an invalid one falls back to sane rather than
-        // disabling correction or crashing.
+        // An invalid correction strictness falls back to a sane value.
         LoadedEngine lenient;
         lenient.open();
         lenient.engine.setCorrectionStrictness(0.5f);
@@ -1048,8 +951,7 @@ void runEngineTests() {
     {
         LoadedEngine loaded;
         loaded.open();
-        // With no bigram to go on, the next-word list is ordered by raw frequency, so the most
-        // frequent word in the pack would otherwise be offered as following itself.
+        // With no bigram, the most frequent word is not offered as following itself.
         check(loaded.rankOf("", "the", "the") != 0,
               "\"the\" is not the top prediction after \"the\"");
         check(loaded.rankOf("", "\u0219i", "\u0219i") != 0,
@@ -1065,8 +967,7 @@ void runEngineTests() {
             loaded.engine.learn(c, std::strlen(c), b, std::strlen(b), a, std::strlen(a));
         };
 
-        // Off by default: a keyboard that guesses two words at a time without being asked is
-        // the behaviour this project refuses everywhere else.
+        // Off by default.
         LoadedEngine off;
         off.open();
         for (int i = 0; i < 6; ++i) {
@@ -1106,13 +1007,126 @@ void runEngineTests() {
               "two words learned apart do not make a pair");
     }
 
+    section("a blocked word is no longer a word");
+    {
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads");
+
+        const auto block = [&loaded](std::initializer_list<const char*> words) {
+            const char* texts[8] = {};
+            size_t lengths[8] = {};
+            int count = 0;
+            for (const char* word : words) {
+                texts[count] = word;
+                lengths[count] = std::strlen(word);
+                ++count;
+            }
+            loaded.engine.setBlockedWords(texts, lengths, count);
+        };
+        const auto correction = [&loaded](const char* composing) {
+            Candidate out[Engine::kMaxCandidates];
+            loaded.engine.suggest(composing, std::strlen(composing), nullptr, 0, nullptr, 0, out,
+                                  Engine::kMaxCandidates);
+            const Candidate* const best = loaded.engine.bestCorrection();
+            uint32_t length = 0;
+            const char* const text =
+                best != nullptr ? loaded.engine.candidateText(*best, &length) : nullptr;
+            return text != nullptr ? std::string(text, length) : std::string();
+        };
+        const auto known = [&loaded](const char* word) {
+            char spelling[64];
+            const int length =
+                loaded.engine.knownSpelling(word, std::strlen(word), spelling, sizeof(spelling));
+            return std::string(spelling, length > 0 ? static_cast<size_t>(length) : 0u);
+        };
+        const auto possessive = [&loaded](const char* word) {
+            char spelling[64];
+            const int length =
+                loaded.engine.possessiveFor(word, std::strlen(word), spelling, sizeof(spelling));
+            return std::string(spelling, length > 0 ? static_cast<size_t>(length) : 0u);
+        };
+
+        check(loaded.rankOf("masa", "masă") == 0 && loaded.rankOf("masa", "masa") > 0,
+              "both spellings of one folded key are offered");
+        check(known("masa") == "masa" && correction("masa") == "masa",
+              "the one typed is known, and is what space commits");
+
+        block({"MASA"});
+        check(loaded.rankOf("masa", "masa") < 0, "a blocked spelling is not offered, case aside");
+        check(loaded.rankOf("masa", "masă") == 0, "the other spelling of its key still is");
+        check(known("masa") == "masă", "the typed word is not known; its key's other spelling is");
+        check(correction("masa") == "masă", "and space commits that spelling");
+
+        block({"\xC8\x98I"});
+        check(loaded.rankOf("si", "\xC8\x99i") < 0, "Ș blocks ș");
+
+        block({"în"});
+        check(loaded.rankOf("in", "în") < 0 && known("in").empty(),
+              "a key whose only spelling is blocked is not a word at all");
+        check(correction("in") != "în", "and is never a correction");
+
+        block({});
+        Candidate out[Engine::kMaxCandidates];
+        const int before =
+            loaded.engine.suggest("", 0, "the", 3, nullptr, 0, out, Engine::kMaxCandidates);
+        check(loaded.rankOf("", "time", "the") >= 0, "\"time\" is predicted after \"the\"");
+        block({"time"});
+        const int after =
+            loaded.engine.suggest("", 0, "the", 3, nullptr, 0, out, Engine::kMaxCandidates);
+        check(loaded.rankOf("", "time", "the") < 0, "blocked, it is not");
+        check(after == before, "and the next word takes its place");
+
+        const char* personal[1] = {"borderkeysword"};
+        const size_t personalLengths[1] = {14};
+        const int32_t personalCounts[1] = {40};
+        loaded.engine.loadUserWords(personal, personalLengths, personalCounts, 1);
+        block({});
+        check(loaded.rankOf("borderkeysw", "borderkeysword") == 0 &&
+                  known("borderkeysword") == "borderkeysword",
+              "a personal word is offered and known");
+        block({"borderkeysword"});
+        check(loaded.rankOf("borderkeysw", "borderkeysword") < 0 &&
+                  known("borderkeysword").empty(),
+              "blocked, it is neither");
+
+        block({});
+        check(possessive("borders").empty(), "a word the pack holds takes no apostrophe");
+        block({"borders"});
+        check(possessive("borders") == "border's",
+              "blocked, it is absent, and the name it extends takes the apostrophe");
+        block({"borders", "border's"});
+        check(possessive("borders").empty(), "unless the possessive itself is blocked");
+        block({"borders", "border"});
+        check(possessive("borders").empty(), "and a blocked name is no stem");
+
+        block({});
+        check(loaded.engine.vouchesForStem("keyboard", 8),
+              "a pack word vouches for its inflections");
+        block({"keyboard"});
+        check(!loaded.engine.vouchesForStem("keyboard", 8), "a blocked one does not");
+
+        LoadedEngine phrases;
+        phrases.open();
+        phrases.engine.setPhraseSuggestions(true);
+        for (int i = 0; i < 6; ++i) {
+            phrases.engine.learn("the", 3, nullptr, 0, nullptr, 0);
+            phrases.engine.learn("test", 4, "the", 3, nullptr, 0);
+            phrases.engine.learn("keys", 4, "test", 4, "the", 3);
+        }
+        check(phrases.rankOf("", "test keys", "the") > 0, "a phrase is offered");
+        const char* blockedWord[1] = {"keys"};
+        const size_t blockedLength[1] = {4};
+        phrases.engine.setBlockedWords(blockedWord, blockedLength, 1);
+        check(phrases.rankOf("", "test keys", "the") < 0, "not once one of its words is blocked");
+    }
+
     section("the engine survives being used after release");
     {
         Engine engine;
         engine.create();
         engine.destroy();
         Candidate out[4];
-        // Not a hypothetical: the service is destroyed while a request may already be posted.
+        // The service can be destroyed while a request is already posted.
         check(engine.suggest("the", 3, nullptr, 0, nullptr, 0, out, 4) == 0,
               "suggesting after destroy returns nothing rather than touching freed memory");
     }
