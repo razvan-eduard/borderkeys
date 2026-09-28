@@ -62,8 +62,7 @@
             android:name=".ProcessTextAlias"
             android:targetActivity="com.borderkeys.settings.SettingsActivity"
             android:exported="true"
-            android:label="@string/process_text_label"
-            android:icon="@mipmap/ic_launcher">
+            android:label="@string/process_text_label">
             <intent-filter>
                 <action android:name="android.intent.action.PROCESS_TEXT" />
                 <category android:name="android.intent.category.DEFAULT" />
