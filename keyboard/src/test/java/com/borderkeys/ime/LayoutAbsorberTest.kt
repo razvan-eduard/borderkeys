@@ -7,14 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Where the width of a dropped optional key goes, and what that does to the keys beside it.
- *
- * The numpad symbol pages put a `0` under the digit column above it. The width freed by a
- * removed emoji or globe key used to go to the space bar, which sits on the far side of that
- * `0`, so the whole left of the row slid and the `0` left its column -- for everyone with the
- * emoji key off, and for everyone at all on the globe key, which is off by default.
- */
+/** Where the width of a dropped optional key goes, and what that does to the keys beside it. */
 class LayoutAbsorberTest {
 
     private fun key(code: Int, width: Float, flags: Int = KeyFlags.NONE) =

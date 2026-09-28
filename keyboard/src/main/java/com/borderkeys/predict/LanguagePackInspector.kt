@@ -9,15 +9,8 @@ import android.os.ParcelFileDescriptor
 import java.io.File
 
 /**
- * Reads what a `.bkd` says about itself, using the same validator the engine uses.
- *
- * The one public way into the native format code. Settings needs to name a pack the user has
- * just chosen -- its language, how many words it holds -- and needs to refuse a file that is not
- * a pack. Doing that in Kotlin would mean a second implementation of the header layout, and two
- * implementations of a binary format agree right up until the day they do not. So the header
- * parser stays in C++, where the engine's copy already is, and this asks it.
- *
- * Checksums the whole file, so it belongs on a background thread.
+ * Reads what a `.bkd` says about itself, through the engine's own validator. Checksums the whole
+ * file; not for the UI thread.
  */
 object LanguagePackInspector {
 
@@ -33,12 +26,8 @@ object LanguagePackInspector {
         data class Valid(val info: PackInfo) : Result
 
         /**
-         * The pack was refused. [status] is the negative `BkdStatus` from `bkd_format.hpp`.
-         *
-         * [reasonKey] is a catalogue key rather than the sentence itself: this runs in the
-         * keyboard, which has no reason to hold a language manager, while what reads the result
-         * is the settings screen, which already has one. [reasonArgument] fills the one `%s` in
-         * the two reasons that carry a detail.
+         * The pack was refused. [status] is the negative `BkdStatus` from `bkd_format.hpp`,
+         * [reasonKey] the catalogue key of the reason, and [reasonArgument] fills its `%s`.
          */
         data class Refused(
             val status: Int,
@@ -73,14 +62,7 @@ object LanguagePackInspector {
         }
     }
 
-    /**
-     * The `BkdStatus` codes, as catalogue keys.
-     *
-     * Mirrors the enum in `bkd_format.hpp`. Kept as a `when` over literals rather than as
-     * constants shared with the native side, because the numbers are part of a published format
-     * and a name here that drifted from the header would be worse than a number: the unknown
-     * branch says the number, which is always true.
-     */
+    /** The `BkdStatus` codes of `bkd_format.hpp`, as catalogue keys. */
     private fun reasonFor(status: Int): String = when (status) {
         -1 -> Keys.PACK_THE_FILE_IS_LARGER_THAN_A
         -2 -> Keys.PACK_THE_FILE_IS_TOO_SMALL_TO

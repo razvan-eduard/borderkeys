@@ -15,7 +15,6 @@ class LanguageManagerTest {
         assertEquals(mapOf("a" to "one", "b" to "two"), parsed)
     }
 
-    /** An entry that is not text is a mistake in the file, and coercing it would hide it. */
     @Test
     fun `non-string entries are dropped`() {
         assertEquals(mapOf("a" to "one"), LanguageManager.parse("""{"a": "one", "b": 2}"""))
@@ -26,13 +25,11 @@ class LanguageManagerTest {
         assertEquals("1 of 2", LanguageManager.format("%s of %s", "1", "2"))
     }
 
-    /** A translator's stray percent sign must show as a percent sign, not crash a screen. */
     @Test
     fun `a stray percent survives`() {
         assertEquals("100% of 2", LanguageManager.format("100% of %s", "2"))
     }
 
-    /** Fewer arguments than placeholders leaves the rest standing, rather than throwing. */
     @Test
     fun `an unfilled placeholder is left alone`() {
         assertEquals("%s of %s", LanguageManager.format("%s of %s"))

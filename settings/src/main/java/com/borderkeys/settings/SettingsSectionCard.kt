@@ -17,31 +17,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/**
- * One idea per card, titled.
- *
- * A long screen of switches separated only by rules reads as one list of unrelated things, and
- * the reader has to hold which heading they are still under. A card makes the grouping a shape
- * rather than a memory.
- *
- * The same shape as the Vox applications use, so someone who has seen one settings screen in
- * this family has seen them all.
- */
+/** One idea per card, titled. */
 @Composable
 fun SettingsSectionCard(
     title: String,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    // Card rather than ElevatedCard because only this one takes a border; the elevated surface
-    // and its shadow are then asked for explicitly, so the result is a raised card with a
-    // traced edge rather than one or the other.
+    // A Card with a border, and the elevated card's colours and elevation.
     Card(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
         shape = MaterialTheme.shapes.medium,
-        // A drawn edge as well as a lift. Elevation alone is a shadow, and a shadow disappears
-        // on a dark theme against a dark surface -- the card then reads as a slightly different
-        // rectangle rather than as a container.
         border = BorderStroke(
             BORDER_WIDTH,
             MaterialTheme.colorScheme.primary.copy(alpha = BORDER_ALPHA),
@@ -55,11 +41,6 @@ fun SettingsSectionCard(
         ) {
             Text(
                 text = title,
-                // titleLarge, not titleSmall: this is the one line in the card meant to read as
-                // its title, and titleSmall (14sp in Material3's default scale) is actually
-                // *smaller* than the bodyLarge (16sp) style a card's own section labels already
-                // use inside it -- a title reading smaller than its own body text is backwards
-                // regardless of which screen's card it is.
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
@@ -69,15 +50,12 @@ fun SettingsSectionCard(
     }
 }
 
-/** The same inside every card and between every pair of them, so the rhythm is learned once. */
+/** The padding inside every card and between every pair of them. */
 private val CARD_PADDING = 10.dp
 
-/** Enough to trace the shape, not enough to be read before the contents. */
+/** The width of the card's border. */
 private val BORDER_WIDTH = 1.dp
 private const val BORDER_ALPHA = 0.35f
 
-/**
- * The halo. High enough to lift the card off the page, low enough that a column of them does
- * not look like a stack of floating tiles.
- */
+/** The card's elevation. */
 private val CARD_ELEVATION = 2.dp

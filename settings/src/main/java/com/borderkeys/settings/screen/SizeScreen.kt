@@ -42,19 +42,9 @@ import com.borderkeys.settings.rememberPreferencesUpdater
 import com.borderkeys.settings.rememberThemeUpdater
 
 /**
- * Where the keyboard is and how big -- once per orientation.
- *
- * A `heightScale` tuned to look right on a tall portrait screen is proportionally huge on a
- * landscape screen a third the height, so portrait and landscape each keep their own complete
- * set of values behind a tab, rather than sharing one that can only be right for one of them.
- * [KeyboardPreferences] keeps portrait's values flat, on itself, and landscape's in the nested
- * [KeyboardPlacement] at [KeyboardPreferences.landscape] -- see that field for why the split is
- * there rather than two equal nested objects.
- *
- * Every control writes to the DataStore and the preview redraws from the flow, so what is on
- * screen is what was stored -- and because the input method reads the same flow, a keyboard that
- * happens to be visible in another app moves at the same moment. That is the "live" part: not an
- * animation, but the absence of an apply button and of a second copy of the value.
+ * Where the keyboard is and how big, once per orientation, behind a tab: portrait's values are
+ * flat on [KeyboardPreferences], landscape's in [KeyboardPreferences.landscape]. Every control
+ * writes to the DataStore; the preview and the input method both redraw from the flow.
  */
 @Composable
 fun SizeScreen(modifier: Modifier = Modifier) {
@@ -66,9 +56,7 @@ fun SizeScreen(modifier: Modifier = Modifier) {
         .collectAsStateWithLifecycle(initialValue = remember { repository.currentAppearance() })
     val (theme, _, preferences) = appearance
 
-    // Which tab is open, not which way the phone is actually held right now -- landscape can be
-    // tuned while holding the phone upright, the same way [PlacementPreview] renders whichever
-    // tab is selected rather than the live orientation.
+    // Which tab is open, not which way the phone is held.
     var landscapeTab by remember { mutableStateOf(false) }
     val placement = preferences.placementFor(landscapeTab)
 
@@ -76,9 +64,7 @@ fun SizeScreen(modifier: Modifier = Modifier) {
         update { it.withPlacement(landscapeTab, transform) }
     }
 
-    // The preview is outside the scrolling column, so it stays on screen while the controls
-    // under it are scrolled. A preview that scrolls away is a preview you cannot see while
-    // you are changing the thing it previews, which is the only moment it is for.
+    // The preview is outside the scrolling column, so it stays on screen.
     Column(modifier = modifier.fillMaxSize()) {
         PlacementPreview(appearance, Modifier.padding(vertical = 12.dp), isLandscape = landscapeTab)
         Divider()
@@ -136,8 +122,7 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                     ) { update { it.withPositionMode(KeyboardPreferences.MODE_FLOATING, landscapeTab) } }
                 }
 
-                // Not gated on the position mode: the dock honours the width too, so that a side
-                // resize handle does something in the mode most people are in.
+                // Not gated on the position mode; the dock honours the width too.
                 DefaultableSlider(
                     value = placement.widthScale,
                     range = KeyboardPreferences.MIN_WIDTH_SCALE..1f,
@@ -153,9 +138,7 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                     default = defaultPlacement(landscapeTab).bottomOffsetDp,
                 ) { value -> updatePlacement { it.copy(bottomOffsetDp = value) } }
 
-                // Only the floating keyboard can be moved sideways; in every other mode the
-                // position is the mode, so a slider here would be a control with nothing to
-                // control.
+                // Only the floating keyboard can be moved sideways.
                 if (placement.positionMode == KeyboardPreferences.MODE_FLOATING) {
                     DefaultableSlider(
                         value = placement.horizontalOffsetDp,
@@ -168,12 +151,9 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                     onClick = { updatePlacement { defaultPlacement(landscapeTab) } },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 ) { Text(strings[Keys.SIZE_RESET_SIZE_AND_POSITION]) }
-                // Everything about the empty strip a narrowed keyboard leaves beside it, in one
-                // card: whether the background fills it, whether the app behind is blurred when
-                // it does not, and the reach-across arrow. Not per-orientation -- a gutter
-                // treatment is the same on both sides of a rotation -- and set once, so under
-                // the fold. "Background across the whole width" is a theme value, kept here with
-                // the blur it gates rather than on the Theme screen away from it.
+                // The empty strip a narrowed keyboard leaves beside it: whether the background
+                // fills it, whether the app behind is blurred when it does not, and the
+                // reach-across arrow. The same in both orientations.
                 AdvancedSection(strings[Keys.SIZE_ADVANCED_NOTE]) {
                     SectionHeader(strings[Keys.SIZE_THE_SPACE_BESIDE_THE_KEYS])
                     SwitchRow(
@@ -181,10 +161,7 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                         subtitle = strings[Keys.THEME_FULL_WIDTH_BACKGROUND_NOTE],
                         checked = theme.fullWidthBackground,
                     ) { value -> updateTheme { it.copy(fullWidthBackground = value) } }
-                    // Shown always, so it does not look deleted, but only usable when something
-                    // can show through: with the background reaching both edges there is nothing
-                    // behind the gutter to blur, so it is disabled with a note pointing at the
-                    // switch above that frees it.
+                    // Disabled, with a note, while the background reaches both edges.
                     SwitchRow(
                         title = strings[Keys.SIZE_BLUR_WHAT_SHOWS_THROUGH],
                         subtitle = strings[Keys.SIZE_BLURS_THE_APPLICATION_BEHIND_THE_EMPTY],
@@ -206,10 +183,8 @@ fun SizeScreen(modifier: Modifier = Modifier) {
 }
 
 /**
- * What Reset puts back, and what each slider's own "x" compares against -- [KeyboardPlacement]'s
- * own no-arg default for landscape (its class default is already the smaller, landscape-shaped
- * one), portrait's explicit `heightScale = 1f` for portrait, since the class default is
- * landscape's.
+ * What Reset puts back and each slider's "x" compares against: [KeyboardPlacement]'s default for
+ * landscape, the same with `heightScale = 1f` for portrait.
  */
 private fun defaultPlacement(isLandscape: Boolean): KeyboardPlacement =
     if (isLandscape) KeyboardPlacement() else KeyboardPlacement(heightScale = 1f)

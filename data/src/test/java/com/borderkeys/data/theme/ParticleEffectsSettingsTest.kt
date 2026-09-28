@@ -129,8 +129,7 @@ class ParticleEffectsSettingsTest {
 
     @Test
     fun `switching type alone preserves whatever colours and speed were already dialled in`() {
-        // The picker's whole "Custom" story depends on this: changing type is a plain
-        // copy(type = ...), never a reset to that type's own fresh defaults.
+        // Changing type with copy(type = ...) keeps the other fields.
         val customised = ParticleFillLayer(
             type = ParticleEffectsSettings.FILL_FIRE,
             primaryColor = 0xFF123456.toInt(),
@@ -168,9 +167,7 @@ class ParticleEffectsSettingsTest {
 
     @Test
     fun `withPresetType on an untouched layer selects the new preset cleanly, not as Custom`() {
-        // Nothing customised yet, so speed/density are still at their own shared defaults --
-        // this is the one case where the result can honestly still match a fresh instance of
-        // the new type, colours included.
+        // Nothing customised yet: the result matches a fresh layer of the new type.
         val fresh = ParticleFillLayer(type = ParticleEffectsSettings.FILL_GLOW)
         val switched = fresh.withPresetType(ParticleEffectsSettings.FILL_FIRE)
         assertEquals(ParticleEffectsSettings.FILL_FIRE, switched.type)
@@ -191,8 +188,7 @@ class ParticleEffectsSettingsTest {
         assertEquals(ParticleFillLayer(type = ParticleEffectsSettings.FILL_WAVES).primaryColor, switched.primaryColor)
         assertEquals(1.8f, switched.speed, 0.001f)
         assertEquals(1.6f, switched.density, 0.001f)
-        // Still reads as Custom -- correctly: an already-customised speed/density surviving the
-        // switch is exactly why, the same as it already would for the preset left behind.
+        // The customised speed and density survive the switch.
         assertFalse(switched.matchesPreset())
     }
 

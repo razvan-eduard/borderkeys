@@ -54,9 +54,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * The text assistant's model: which one, where it came from, and why an unknown file is refused.
- *
- * Present only in the `plus` build — the Home screen resolves the service before offering the
- * row, so reaching this screen at all means the assistant exists.
+ * Home offers this screen only when the assistant service resolves.
  */
 @Composable
 fun AssistantScreen(modifier: Modifier = Modifier) {
@@ -72,10 +70,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
     var importing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var removingModel by remember { mutableStateOf<com.borderkeys.data.entity.AssistModelEntry?>(null) }
-    // Set only right after a successful import, to the URI just imported from -- asked about
-    // there rather than upfront, so the choice is "delete the file that became this model" with
-    // the model already sitting safely in the list, not a checkbox ticked in advance of an
-    // import that might still have failed.
+    // The URI just imported from, set only after a successful import, while deleting it is offered.
     var offeringDeleteSource by remember { mutableStateOf<Uri?>(null) }
 
     fun updatePreferences(transform: (KeyboardPreferences) -> KeyboardPreferences) {
@@ -130,9 +125,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                     title = model.displayName + if (model.active) strings[Keys.ASSISTANT_ACTIVE] else "",
                     trailing = {
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            // Only offered for the models not already carrying the load -- a
-                            // button whose entire effect is "this is already what happens"
-                            // would just be a second, redundant way to read the label above it.
+                            // Only for a model that is not active.
                             if (!model.active) {
                                 TextButton(onClick = { scope.launch { repository.activate(model) } }) {
                                     Text(strings[Keys.ASSISTANT_ACTIVATE])
@@ -164,7 +157,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 )
             }
         }
-        // Only worth showing with a choice to make. One model runs everything.
+        // Only with two or more models; one model runs everything.
         if (models.size >= 2) {
             SettingsSectionCard(strings[Keys.ASSISTANT_WHICH_MODEL_FOR_WHAT]) {
                 ModelForCategoryRow(
@@ -273,8 +266,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    // Asked first: the model's own copy is hundreds of megabytes that took a while to import,
-    // and the original may already have been deleted at this screen's own suggestion.
+    // Asked first: removing deletes the model's copy.
     removingModel?.let { model ->
         AlertDialog(
             onDismissRequest = { removingModel = null },
@@ -302,11 +294,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                     onClick = {
                         offeringDeleteSource = null
                         scope.launch {
-                            // Best-effort: OpenDocument grants a write URI alongside the read
-                            // one, but whether the provider on the other end honours a delete
-                            // through it belongs to that provider, not this application. Nothing
-                            // about the model just imported depends on this succeeding -- it
-                            // already has its own copy, independent of the source from here on.
+                            // Best effort; the provider may refuse, and the model has its own copy.
                             withContext(Dispatchers.IO) {
                                 runCatching {
                                     DocumentsContract.deleteDocument(context.contentResolver, uri)
@@ -358,19 +346,13 @@ private fun ModelForCategoryRow(
     }
 }
 
-/**
- * What each entry in [KnownAssistModels.entries] is actually good at, keyed by its file name --
- * already a stable, unique identifier per entry, so nothing new has to be added to that class
- * just to carry a piece of Settings-screen copy a pure data layer has no other reason to know
- * about.
- */
+/** What each entry in [KnownAssistModels.entries] is good at, keyed by its file name. */
 private fun modelNoteFor(entry: KnownAssistModels.Entry): String = when (entry.fileName) {
     "Qwen3-0.6B-Q8_0.gguf" -> Keys.ASSISTANT_MODEL_QWEN3_06B_NOTE
     "Qwen3-1.7B-Q8_0.gguf" -> Keys.ASSISTANT_MODEL_QWEN3_17B_NOTE
     "SmolLM3-Q4_K_M.gguf" -> Keys.ASSISTANT_MODEL_SMOLLM3_3B_NOTE
     "EuroLLM-1.7B-Instruct.Q8_0.gguf" -> Keys.ASSISTANT_MODEL_EUROLLM_17B_NOTE
     "EuroLLM-9B-Instruct-Q4_K_M.gguf" -> Keys.ASSISTANT_MODEL_EUROLLM_9B_NOTE
-    // Reached only if a future entry is added to KnownAssistModels.kt without a matching case
-    // here -- honest about being generic rather than silently wearing another model's note.
+    // An entry without a case here gets the generic note.
     else -> Keys.ASSISTANT_MODEL_GENERAL_NOTE
 }

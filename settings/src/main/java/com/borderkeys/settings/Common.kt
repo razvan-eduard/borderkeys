@@ -56,12 +56,7 @@ import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.keyboard.R
 import kotlinx.coroutines.launch
 
-/**
- * The three shapes every settings screen is built from.
- *
- * Written once here rather than reached for from a component library, because there are three of
- * them and each is a Row with a Text in it.
- */
+/** The shapes every settings screen is built from. */
 
 @Composable
 fun SectionHeader(text: String) {
@@ -74,24 +69,9 @@ fun SectionHeader(text: String) {
 }
 
 /**
- * A row with a title, an explanation and something on the right.
- *
- * The explanation is not optional by accident. Every setting in this application either changes
- * what is stored about the user or trades one thing for another, and a switch with only a name
- * makes the user guess which.
- *
- * `onClick` is deliberately the **last** parameter, after the composable `trailing` and `content`
- * slots, which is the opposite of the usual Compose convention. The convention caused a real
- * bug: with `trailing` last, `SettingRow(strings[Keys.COMMON_ABOUT], "…") { open(Screen.About) }`
- * bound the trailing lambda to the *composable* slot, which runs during composition rather than
- * on a click — so every row navigated the moment it was drawn and the application opened on
- * whichever row came last. Putting the click last means the natural call site is the correct one
- * -- which is also why `content` takes a named argument at its own call sites rather than the
- * trailing-lambda spot: the same bug, one parameter over.
- *
- * `content`, when given, replaces `subtitle`'s plain `Text` with whatever it draws instead --
- * the one thing a `String` cannot carry, used by the two rows in Settings that want their
- * subtitle as a tappable link rather than as text.
+ * A row with a title, an explanation and something on the right. `onClick` is the last parameter,
+ * after the composable `trailing` and `content` slots, so a trailing lambda is the click; pass
+ * `content` by name. `content`, when given, replaces the subtitle's `Text`.
  */
 @Composable
 fun SettingRow(
@@ -126,13 +106,8 @@ fun SettingRow(
 }
 
 /**
- * The rows of a card that are seldom needed -- calibration values, workarounds for particular
- * apps, matters of taste settled once -- folded under one "Advanced settings" line, closed by
- * default. A card then leads with what changes how typing feels and keeps the rest a tap away
- * rather than gone. Open or closed is remembered across rotation and nothing longer: every
- * visit to a screen starts with them folded, which is the point.
- *
- * [summary] names what the fold holds, drawn under the line.
+ * A card's seldom-needed rows, folded under one "Advanced settings" line that starts closed on
+ * every visit and stays as set across rotation. [summary] names what the fold holds.
  */
 @Composable
 fun AdvancedSection(summary: String? = null, content: @Composable ColumnScope.() -> Unit) {
@@ -159,8 +134,7 @@ fun AdvancedSection(summary: String? = null, content: @Composable ColumnScope.()
                 )
             }
         }
-        // One icon in one place, in two states -- a chevron down while closed, up while open --
-        // rather than a glyph rotated in place, which swung around its own centre.
+        // A chevron, down while closed and up while open.
         Icon(
             painter = painterResource(
                 if (expanded) com.borderkeys.keyboard.R.drawable.bk_chevron_up
@@ -186,32 +160,22 @@ fun SwitchRow(
     SettingRow(
         title = title,
         subtitle = subtitle,
-        // Disabled shows the row greyed and unresponsive rather than hidden, so a setting
-        // gated on another one is still discoverable, with a note to say what unlocks it.
+        // Disabled: greyed and unresponsive, not hidden.
         onClick = if (enabled) ({ onCheckedChange(!checked) }) else null,
         trailing = { Switch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange) },
     )
 }
 
 /**
- * Dims [content] and swallows every touch inside it, for a control that is turned off rather
- * than removed -- the setting it shows is still there and still stored, it simply cannot be
- * reached right now.
- *
- * A transparent [clickable] laid over the top rather than an `enabled` flag threaded through
- * whatever is inside: the theme screen's swatches and preset cards are drawn with plain
- * `Modifier.clickable` blocks, none of which have an `enabled` parameter to thread one through,
- * and one overlay is the same fix for all of them at once rather than a fix repeated at every
- * call site. [SettingRow] has the same gap -- it expresses "not clickable" by taking a null
- * `onClick` and dims nothing by itself.
+ * Dims [content] and takes every touch inside it with a transparent [clickable] laid over it, for
+ * a control that is turned off rather than removed.
  */
 @Composable
 fun Disableable(disabled: Boolean, content: @Composable () -> Unit) {
     Box {
         Column(modifier = Modifier.alpha(if (disabled) 0.4f else 1f)) { content() }
         if (disabled) {
-            // Compose's own single-argument Box, which draws nothing -- the point of this one
-            // is only ever to sit in front of everything else and take the touch.
+            // The overlay that takes the touch; it draws nothing.
             Box(
                 modifier = Modifier
                     .matchParentSize()
@@ -226,31 +190,15 @@ fun Disableable(disabled: Boolean, content: @Composable () -> Unit) {
 
 /**
  * One choice among a small fixed set, shown as a chip that fills in when it is the current one.
- *
- * Every mode/placement/size picker in this app -- position, quick-action size, digit position,
- * text size and the rest -- turned out to be exactly this and nothing more once each screen's own
- * copy was compared against the others: a label, whether it is the one currently chosen, and what
- * picking it does. The differences between the screens were in what `onClick` writes, never in
- * what the chip itself is.
- *
- * [shape] defaults to the same [FilterChipDefaults.shape] an unstyled [FilterChip] already draws
- * with on its own, so every ordinary caller is unaffected. It exists as a parameter at all so a
- * caller that draws something *else* meant to trace this exact chip's own outline --
- * `com.borderkeys.settings.screen.EffectsScreen`'s particle-style preview, for instance -- can
- * read the real value once and hand the identical [androidx.compose.ui.graphics.Shape] to both,
- * rather than that second drawing guessing at a corner radius of its own that this chip's real
- * shape could change out from under it.
+ * [shape], [FilterChipDefaults.shape] by default, can be shared with a drawing that traces the
+ * chip's outline.
  */
 @Composable
 fun PickerChip(label: String, selected: Boolean, shape: Shape = FilterChipDefaults.shape, onClick: () -> Unit) {
     FilterChip(selected = selected, onClick = onClick, label = { Text(label) }, shape = shape)
 }
 
-/**
- * Writes a change to [KeyboardPreferences] without a screen naming `DataGraph.themes`, a
- * `rememberCoroutineScope` and its own local `update` function to do it -- every screen this
- * app has was typing the same three lines to get here.
- */
+/** Writes a change to [KeyboardPreferences]. */
 @Composable
 fun rememberPreferencesUpdater(): ((KeyboardPreferences) -> KeyboardPreferences) -> Unit {
     val themes = remember { DataGraph.themes }
@@ -258,8 +206,7 @@ fun rememberPreferencesUpdater(): ((KeyboardPreferences) -> KeyboardPreferences)
     return { transform -> scope.launch { themes.updatePreferences(transform) } }
 }
 
-/** The same, for [KeyboardTheme] -- [ThemeScreen][com.borderkeys.settings.screen.ThemeScreen]'s
- *  own equivalent of [rememberPreferencesUpdater]. */
+/** Writes a change to [KeyboardTheme]. */
 @Composable
 fun rememberThemeUpdater(): ((KeyboardTheme) -> KeyboardTheme) -> Unit {
     val themes = remember { DataGraph.themes }
@@ -267,9 +214,7 @@ fun rememberThemeUpdater(): ((KeyboardTheme) -> KeyboardTheme) -> Unit {
     return { transform -> scope.launch { themes.updateTheme(transform) } }
 }
 
-/** The same, for [ParticleEffectsSettings] --
- *  [EffectsScreen][com.borderkeys.settings.screen.EffectsScreen]'s own equivalent of
- *  [rememberPreferencesUpdater]. */
+/** Writes a change to [ParticleEffectsSettings]. */
 @Composable
 fun rememberParticleEffectsUpdater(): ((ParticleEffectsSettings) -> ParticleEffectsSettings) -> Unit {
     val themes = remember { DataGraph.themes }
@@ -277,13 +222,7 @@ fun rememberParticleEffectsUpdater(): ((ParticleEffectsSettings) -> ParticleEffe
     return { transform -> scope.launch { themes.updateParticleEffects(transform) } }
 }
 
-/**
- * Moves [from] to [to], clamped, and returns the new order.
- *
- * Shared by every bar with buttons a person reorders -- quick actions, the draft box's own bar --
- * rather than typed out again per screen: the logic is the same list regardless of what the ids
- * in it happen to mean.
- */
+/** Moves [from] to [to], clamped, and returns the new order. */
 fun <T> move(ids: List<T>, from: Int, to: Int): List<T> {
     if (from !in ids.indices) {
         return ids
@@ -356,14 +295,7 @@ fun ReorderRow(
     }
 }
 
-/**
- * The package name of the other build, or null when this one has no sibling.
- *
- * Derived from this application's own name rather than written down twice: the assistant build
- * is the core one with a suffix, so one of them is the other with the suffix removed. Shared
- * rather than kept as two copies, which had already drifted -- one behind a named constant, one
- * with the suffix typed inline.
- */
+/** The core build's package name when this is the plus build, or null. */
 fun siblingPackage(context: Context): String? {
     val self = context.packageName
     return if (self.endsWith(PLUS_SUFFIX)) self.removeSuffix(PLUS_SUFFIX) else null
@@ -372,10 +304,8 @@ fun siblingPackage(context: Context): String? {
 private const val PLUS_SUFFIX = ".plus"
 
 /**
- * The seven switches for what a backup file carries -- settings, theme, particle effects, size
- * and position, dictionary, languages, clipboard -- shared by the screen that writes a file and
- * the one that sends everything to a nearby device directly, since both are choosing the same
- * seven parts of the same [BackupRepository.Parts].
+ * The seven switches for what a backup carries: settings, theme, particle effects, size and
+ * position, dictionary, languages, clipboard. Shared by the file export and the direct transfer.
  */
 @Composable
 fun BackupPartSwitches(parts: BackupRepository.Parts, onChange: (BackupRepository.Parts) -> Unit) {
@@ -417,11 +347,7 @@ fun BackupPartSwitches(parts: BackupRepository.Parts, onChange: (BackupRepositor
     ) { value -> onChange(parts.copy(clipboard = value)) }
 }
 
-/**
- * One row per part [detected] as actually present in a parsed import file -- never all seven
- * unconditionally the way [BackupPartSwitches]' own export-time rows are, since offering a tick
- * for a section the file does not carry would be an offer to import nothing.
- */
+/** One row per part [detected] in a parsed import file. */
 @Composable
 fun BackupReviewChecklist(
     detected: BackupRepository.Parts,
@@ -488,16 +414,9 @@ fun Divider() {
 }
 
 /**
- * A line of text with one substring turned into a tappable link that opens the browser.
- *
- * Used for a model's source: something like "huggingface.co/Qwen/Qwen3-0.6B-GGUF" is a place a
- * person can go to get the file, and text they cannot tap is a place they have to retype by hand
- * instead. [link] is matched against [text] verbatim -- when it is not found the line is shown
- * as plain text rather than silently dropping the link, since a substring not appearing is a
- * caller mistake worth being visible about.
- *
- * No `https://` in [link] itself: the sources this renders are written short, for reading, and
- * the scheme is added only for the URL actually opened, not for what is displayed.
+ * A line of text with [link], matched verbatim, turned into a tappable link that opens the
+ * browser; without a match the line is plain text. [link] has no scheme; `https://` is added to
+ * the URL opened.
  */
 @Composable
 fun LinkedText(text: String, link: String) {
@@ -543,14 +462,8 @@ fun Explanation(text: String) {
 }
 
 /**
- * What [Explanation] cannot say: this setting can do something to your text, your data or your
- * device that a caption in the same colour as everything else would not prepare you for.
- *
- * A filled container rather than coloured text -- this codebase already reserves
- * [MaterialTheme.colorScheme.error] for destructive button labels, and reusing that alone here
- * would make a warning read the same as a "Delete" button standing still. This is the next step
- * up from that, short of a dialog that blocks until dismissed, which is more friction than a
- * setting someone has not even turned on yet has earned.
+ * A warning in a filled container, for a setting that can do something to your text, your data
+ * or your device.
  */
 @Composable
 fun CautionNote(text: String) {
@@ -578,15 +491,8 @@ fun CautionNote(text: String) {
 }
 
 /**
- * A slider that knows its own default, and offers to go back to it.
- *
- * The reset control -- a small "x" beside the value -- only appears once [value] has actually
- * moved away from [default]. Always showing it would mean a control that usually does nothing,
- * which on a row already this narrow reads as "is this broken" before it reads as "reset".
- *
- * The one slider every screen with a numeric setting reads from, rather than each screen
- * building its own copy: Size and Theme both used to, with no way to answer "how far is this
- * from stock" except tapping through every one by hand.
+ * A slider with a reset control, a small "x" beside the value, shown once [value] differs from
+ * [default].
  */
 @Composable
 fun DefaultableSlider(
@@ -594,12 +500,12 @@ fun DefaultableSlider(
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     default: Float,
-    /** Discrete stops between the ends, the same meaning Compose's own `Slider.steps` has --
-     *  0 for a continuous drag, passed through by the two callers stepping over a fixed list. */
+    /** Discrete stops between the ends, as `Slider.steps`; 0 for a continuous drag. */
     steps: Int = 0,
-    /** False dims the label and disables both the slider and its reset button, for a setting
-     *  that reads normally but has no effect right now -- a value another switch on the same
-     *  screen is currently bypassing entirely, not one that is merely at its default. */
+    /**
+     * False dims the label and disables the slider and its reset, for a setting another switch
+     * currently bypasses.
+     */
     enabled: Boolean = true,
     onChange: (Float) -> Unit,
 ) {

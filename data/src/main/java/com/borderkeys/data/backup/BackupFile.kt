@@ -17,25 +17,18 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * What one keyboard can hand to another, as a file.
- *
- * The two builds are separate applications with separate private directories, and neither can
- * read the other's. The alternative to a file would be a content provider in one of them and a
- * signature permission in the other -- and then the second build requests a permission, which is
- * listed wherever it is published, and "no permissions at all" stops being true of it. A file
- * the user picks costs a few more taps and no claims.
- *
- * It doubles as the only backup this application has. System backup is switched off deliberately
- * (`allowBackup="false"`), because that is an automatic copy to somebody else's computer. This is
- * the opposite: nothing happens unless it is asked for, and it goes where the user says.
+ * What one keyboard can hand to another, as a file the user picks; also the application's only
+ * backup.
  */
 @Serializable
 data class BackupPayload(
     val preferences: KeyboardPreferences? = null,
     val theme: KeyboardTheme? = null,
-    /** Named themes the user saved themselves -- see [CustomThemeEntry][com.borderkeys.data.theme.CustomThemeEntry].
-     *  A list, not a single value like [theme]: importing adds to what is already saved rather
-     *  than replacing it, the same as [words] does for the dictionary. */
+    /**
+     * Named themes the user saved, each a
+     * [CustomThemeEntry][com.borderkeys.data.theme.CustomThemeEntry]; importing adds to those
+     * already saved.
+     */
     val customThemes: List<BackupCustomTheme> = emptyList(),
     val particleEffects: ParticleEffectsSettings? = null,
     val sizeAndPosition: BackupSizeAndPosition? = null,
@@ -46,19 +39,13 @@ data class BackupPayload(
     val trigrams: List<BackupTrigram> = emptyList(),
     val blocked: List<String> = emptyList(),
     val clips: List<BackupClip> = emptyList(),
-    /** Which imported text-assistant model was active. Not the model itself -- hundreds of
-     *  megabytes that never leave the app's own private storage; see AssistModelEntry's own
-     *  doc. Reactivates a model the receiving device already has the same file for, same as
-     *  [packs] does for a language it already has the dictionary for. */
+    /**
+     * Which imported text-assistant model was active, not the model itself; a restore reactivates
+     * a model the device already has.
+     */
     val models: List<BackupModel> = emptyList(),
 ) {
-    /**
-     * Whether this carries anything that would be a loss to leave lying around.
-     *
-     * The dictionary is every word this device learned from what its owner typed, and the
-     * clipboard is whatever they last copied. Both live in an encrypted database for that
-     * reason, so a file carrying either is asked to be encrypted too. A theme is not.
-     */
+    /** Whether this carries the dictionary or the clipboard, which ask for encryption. */
     val isSensitive: Boolean
         get() = words.isNotEmpty() || bigrams.isNotEmpty() || trigrams.isNotEmpty() ||
             clips.isNotEmpty()
@@ -67,9 +54,10 @@ data class BackupPayload(
 @Serializable
 data class BackupCustomTheme(val id: String, val name: String, val theme: KeyboardTheme, val createdAt: Long)
 
-/** Both orientations' own size and position, as [KeyboardPreferences.placementFor] already
- *  shapes them -- the whole of what "Size and position" now exports/imports independently of
- *  [BackupPayload.preferences]. */
+/**
+ * Both orientations' size and position, as [KeyboardPreferences.placementFor] gives them,
+ * carried apart from [BackupPayload.preferences].
+ */
 @Serializable
 data class BackupSizeAndPosition(val portrait: KeyboardPlacement, val landscape: KeyboardPlacement)
 
@@ -108,13 +96,7 @@ data class BackupClip(val content: String, val createdAt: Long, val pinned: Bool
 @Serializable
 data class BackupModel(val fileName: String, val sha256: String, val active: Boolean)
 
-/**
- * The envelope on disk: what this is, and how to read the rest of it.
- *
- * Self-describing on purpose. Somebody who finds one of these years from now should be able to
- * tell from the first line what it is and whether they need a passphrase, without the
- * application that wrote it.
- */
+/** The envelope on disk: what this is, and how to read the rest of it. */
 @Serializable
 private data class Envelope(
     val format: Int,
@@ -142,27 +124,13 @@ object BackupFile {
 
     const val FORMAT = 1
 
-    /**
-     * The name the picker is offered, without an extension.
-     *
-     * The system appends one from the type, so anything ending in ".bkbackup" came back as
-     * "borderkeys.bkbackup.json". The file really is JSON -- the envelope is readable even when
-     * the payload is not -- so the honest name is the one the system would have given it, and
-     * the base carries the identification instead.
-     */
+    /** The name the picker is offered, without an extension; the system adds ".json". */
     const val SUGGESTED_NAME = "borderkeys-backup"
     const val MIME_TYPE = "application/json"
 
     private const val APPLICATION = "borderkeys"
 
-    /**
-     * Deliberately slow, and the reason is the passphrase.
-     *
-     * People choose short ones. The only defence against somebody trying every short one is to
-     * make each attempt cost something, and 210,000 rounds of PBKDF2-HMAC-SHA256 is the figure
-     * OWASP gives for that construction. It costs about a fifth of a second here and years to
-     * anyone working through a dictionary of guesses.
-     */
+    /** PBKDF2-HMAC-SHA256 rounds, the figure OWASP gives for it. */
     private const val ITERATIONS = 210_000
     private const val KEY_BITS = 256
     private const val SALT_BYTES = 16
@@ -175,10 +143,8 @@ object BackupFile {
     }
 
     /**
-     * Writes [payload], encrypting it when [passphrase] is not empty.
-     *
-     * The caller decides: a payload carrying the dictionary or the clipboard should not be
-     * written without one, and [BackupPayload.isSensitive] is how it decides.
+     * Writes [payload], encrypted when [passphrase] is not empty; [BackupPayload.isSensitive] tells
+     * the caller when to ask for one.
      */
     fun write(payload: BackupPayload, passphrase: String): String {
         val plain = json.encodeToString(BackupPayload.serializer(), payload).toByteArray()
@@ -211,15 +177,7 @@ object BackupFile {
         )
     }
 
-    /**
-     * Reads a file back.
-     *
-     * Every way this can fail is a distinct answer, because "could not import" tells somebody
-     * nothing about whether to try a different passphrase or a different file. A wrong
-     * passphrase is told apart from a damaged file by the authentication tag: AES-GCM verifies
-     * before it decrypts, so a bad key and a flipped bit both throw, and neither can hand back
-     * plausible rubbish.
-     */
+    /** Reads a file back; each way it can fail is its own [Failure]. */
     fun read(text: String, passphrase: String): Result {
         val envelope = runCatching { json.decodeFromString(Envelope.serializer(), text) }
             .getOrNull()
@@ -277,9 +235,7 @@ object BackupFile {
             "AES",
         )
 
-    // java.util rather than android.util: the platform's encoder is a stub outside a device,
-    // which would make this class the one thing in the file that could not be tested. minSdk is
-    // 30 and this has been in the language since 8.
+    // java.util's encoder, which also runs off a device.
     private fun encode(bytes: ByteArray): String =
         java.util.Base64.getEncoder().encodeToString(bytes)
 

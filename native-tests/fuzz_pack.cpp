@@ -12,14 +12,11 @@
 #include "bkd_format.hpp"
 #include "engine.hpp"
 
-// libFuzzer entry point for the language-pack loader, for runs longer than the test suite.
+// libFuzzer entry point for the language-pack loader, for runs longer than the test suite. The
+// header's checksums are repaired from the fuzzer's input.
 //
-// The header's checksums are repaired from the fuzzer's input rather than expected to be
-// correct. A fuzzer that has to guess a CRC-32 spends its whole budget guessing a CRC-32; with
-// them repaired, every byte it changes lands on a field that is actually interpreted.
-//
-// Built only with clang and -DBORDERKEYS_FUZZ=ON. `pack_corpus_test` covers the same ground
-// deterministically in the ordinary test run, so an ordinary build is not missing a gate.
+// Built only with clang and -DBORDERKEYS_FUZZ=ON; `pack_corpus_test` covers the same ground
+// deterministically in the ordinary test run.
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     using namespace borderkeys;

@@ -1,42 +1,36 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 #
-# REUSE annotations for files that cannot carry a comment header of their own: binary blobs,
-# generated resources, and the handful of text files where a header would be part of the
-# content. `reuse lint` runs in CI and is a blocking gate, so every path in the repository has
-# to be covered either by an SPDX header or by an entry below.
+# REUSE annotations for files that carry no SPDX header of their own. `reuse lint` runs in CI as
+# a blocking gate.
 
 version = 1
 SPDX-PackageName = "BorderKeys"
 SPDX-PackageSupplier = "BorderKeys contributors"
 SPDX-PackageDownloadLocation = "https://github.com/razvan-eduard/borderkeys"
 
-# The licence text itself. Duplicated as ./LICENSE because that is where GitHub, F-Droid and
-# most humans look, while REUSE only reads LICENSES/.
+# The licence text, also kept as ./LICENSE.
 [[annotations]]
 path = "LICENSE"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2007 Free Software Foundation, Inc. <https://fsf.org/>"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# Submodule pointers. The vendored source itself is a separate repository with its own
-# licensing, recorded in docs/licensing.md; REUSE correctly declines to descend into it.
+# Submodule pointers. The vendored source's licensing is recorded in docs/licensing.md.
 [[annotations]]
 path = ".gitmodules"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# Empty directory markers. They exist so that the module source roots survive a clone; every
-# one of them disappears as its step lands.
+# Empty directory markers.
 [[annotations]]
 path = "**/.gitkeep"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# The Gradle wrapper. Not our code: it is redistributed verbatim from the Gradle
-# distribution, and committing it is what makes the build reproducible from a bare clone.
+# The Gradle wrapper, redistributed verbatim from the Gradle distribution.
 [[annotations]]
 path = [
     "gradle/wrapper/gradle-wrapper.jar",
@@ -49,30 +43,25 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "Gradle Inc."
 SPDX-License-Identifier = "Apache-2.0"
 
-# Dictionary and n-gram blobs produced by tools/build_dict.py (step 3). The code is ours; the
-# word lists they are compiled from are not, and each one's provenance and licence is recorded
-# by hand in docs/licensing.md, because nothing can derive that automatically.
+# Dictionary and n-gram blobs produced by tools/build_dict.py. The provenance and licence of
+# the word lists they are compiled from are recorded in docs/licensing.md.
 [[annotations]]
 path = "keyboard/src/main/assets/dict/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# The word lists the bundled dictionaries are compiled from. Counted from Wortschatz Leipzig
-# corpora -- wikipedia, news and newscrawl, combined -- which are published under CC BY 4.0: the
-# attribution that licence asks for is here, in docs/licensing.md section 2.1, and in the About
-# screen's source link. What is stored is counts of words and word pairs, not the sentences they
-# were counted from.
+# The word lists the bundled dictionaries are compiled from: counts of words and word pairs from
+# the Wortschatz Leipzig corpora (wikipedia, news and newscrawl), published under CC BY 4.0. The
+# attribution is here, in docs/licensing.md section 2.1, and in the About screen's source link.
 [[annotations]]
 path = "dictionaries/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Wortschatz Leipzig, Universität Leipzig"
 SPDX-License-Identifier = "CC-BY-4.0"
 
-# The older annotation, kept for anything else that lands in the directory. Tab-separated data with no comment
-# syntax, so the licence is recorded here rather than in a header that would have to be skipped
-# by every reader of the file. Written by this project, which is what makes shipping the
-# compiled packs a licence question with an answer -- see docs/licensing.md section 2.1.
+# The same directory as written by this project: tab-separated data with no comment syntax
+# (docs/licensing.md section 2.1).
 [[annotations]]
 path = "dictionaries/**"
 precedence = "aggregate"
@@ -80,8 +69,8 @@ SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 # The words each language's Hunspell spelling dictionary lists in lower case, read off the
-# LibreOffice dictionaries by tools/make_ordinary.py: a yes/no per corpus word, not a copy of
-# any dictionary. Which dictionaries, and their licences, is in docs/licensing.md 2.1.1.
+# LibreOffice dictionaries by tools/make_ordinary.py: a yes/no per corpus word, not a copy of any
+# dictionary. The dictionaries and their licences are in docs/licensing.md 2.1.1.
 [[annotations]]
 path = "dictionaries/*.names-ordinary"
 precedence = "aggregate"
@@ -98,8 +87,7 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "Universal Dependencies contributors"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
 
-# Every user-facing word in the product, one file per language. JSON has no comment syntax, so
-# the header that would otherwise sit at the top of the file lives here.
+# Every user-facing word in the product, one JSON file per language.
 [[annotations]]
 path = "i18n/src/main/assets/translations/**"
 precedence = "aggregate"
@@ -107,11 +95,9 @@ SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 # The emoji palette, compiled by tools/build_emoji.py from Unicode's emoji-test.txt, and the
-# keywords under keywords/, compiled by the same tool from Unicode CLDR's annotation files.
-# What is stored is the code points and the groups that file defines, in the order it
-# recommends for keyboard palettes, each emoji's name, and the words CLDR gives it in the six
-# languages. Unicode's data files are under the Unicode Licence, which is permissive and
-# BSD-shaped; the attribution it asks for is this entry and docs/licensing.md.
+# keywords under keywords/, compiled by the same tool from Unicode CLDR's annotation files: code
+# points, groups, names and keywords. Unicode Licence; the attribution is this entry and
+# docs/licensing.md.
 [[annotations]]
 path = "keyboard/src/main/assets/emoji/**"
 precedence = "aggregate"
@@ -125,27 +111,23 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# Per-language accent overlays -- which stacked/alternate letters a long press reaches for each
-# enabled language. Plain data, authored here, the same as the layouts above; JSON has no
-# comment syntax to carry a header of its own.
+# Per-language accent overlays: the letters a long press reaches for each enabled language.
+# Plain data, authored here.
 [[annotations]]
 path = "keyboard/src/main/assets/accents/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# The per-language manifests tools/new_language.py builds the downloadable packs from: plain
-# data, authored here; JSON has no comment syntax to carry a header of its own.
+# The per-language manifests tools/new_language.py builds the downloadable packs from. Plain
+# data, authored here.
 [[annotations]]
 path = "tools/languages/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# The training runs behind the shipped swipe checkpoint, kept as the record of how it was
-# reached -- loss per epoch and the restart markers tools/swipe_model/README.md explains. A log
-# has nowhere to put a comment header without becoming a different file than the one the run
-# wrote, so the terms live here.
+# The training logs behind the shipped swipe checkpoint (tools/swipe_model/README.md).
 [[annotations]]
 path = "tools/swipe_model/*.log"
 precedence = "aggregate"
@@ -153,8 +135,8 @@ SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 # Per-language lists of the words the "Block offensive words" switch keeps out of suggestions
-# and learning. Authored here -- the selection was checked against the LDNOOBW lists (CC BY 4.0)
-# for coverage, not copied from them -- and each file carries a header of its own as well.
+# and learning. Authored here, checked for coverage against the LDNOOBW lists (CC BY 4.0), not
+# copied from them.
 [[annotations]]
 path = "keyboard/src/main/assets/offensive/**"
 precedence = "aggregate"
@@ -168,27 +150,24 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# Recorded swipe gestures used by tools/gesture_replay.py and the native tests (step 6.6).
+# Test corpora and recorded swipe gestures for the native tests and tools/gesture_replay.py.
 [[annotations]]
 path = "native-tests/data/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# The tier-B swipe decoder's trained weights, plus-only (keyboard/build.gradle.kts,
+# The neural swipe decoder's trained weights, plus-only (keyboard/build.gradle.kts,
 # BORDERKEYS_NEURAL_SWIPE). Trained from scratch by tools/swipe_model/train.py on the MIT-licensed
-# futo-org/swipe.futo.org corpus (docs/licensing.md section 2.5) -- the corpus's licence does not
-# attach to weights fit from it, and no other model's weights or output are involved anywhere in
-# this pipeline, so this file is ours the same way a compiled binary built from our own source is.
+# futo-org/swipe.futo.org corpus (docs/licensing.md section 2.5); no other model's weights or
+# output are involved.
 [[annotations]]
 path = "keyboard/src/plus/assets/model.bkw"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# The recorded swipe accuracy the CI gates compare against, one file per decoder tier. JSON has
-# no comment syntax, and a number the build refuses to regress past should be a plain
-# machine-readable file rather than one with a licence header wrapped around it.
+# The recorded swipe accuracy the CI gates compare against, one file per decoder.
 [[annotations]]
 path = "docs/gesture-accuracy*.json"
 precedence = "aggregate"
@@ -202,9 +181,7 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# The README's own header artwork. Own work, commissioned by the maintainer for this project,
-# not derived from anything else -- but a JPEG has no comment syntax to carry a header of its
-# own, the same reason every other binary asset in this file is here.
+# The README's header artwork: own work, commissioned by the maintainer for this project.
 [[annotations]]
 path = "docs/images/**"
 precedence = "aggregate"
@@ -212,9 +189,7 @@ SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 # F-Droid/Fastlane store listing metadata: title, descriptions, and screenshots of this
-# application's own screens. The .txt files are read verbatim as the store listing itself, so
-# a header inside one of them would show up in the description text on a user's screen --
-# exactly the reason this belongs here and not in the file.
+# application's own screens. The .txt files are read verbatim as the store listing.
 [[annotations]]
 path = "fastlane/**"
 precedence = "aggregate"

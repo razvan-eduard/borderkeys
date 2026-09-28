@@ -57,8 +57,7 @@ import sys
 from pathlib import Path
 
 # The zipf points a neighbour must win by before a row is called a typo of it, by the row's own
-# length: (shortest, longest, gap). A short word has fewer neighbours and each is likelier to be
-# a real word of its own, so it takes more of a gap to condemn one.
+# length: (shortest, longest, gap).
 TYPO_GAPS = ((6, 99, 2.0), (4, 5, 2.5), (3, 3, 3.0))
 
 # How common a row has to be elsewhere before another language is said to own it, and by how
@@ -66,8 +65,7 @@ TYPO_GAPS = ((6, 99, 2.0), (4, 5, 2.5), (3, 3, 3.0))
 FOREIGN_FLOOR = 3.0
 FOREIGN_MARGIN = 1.0
 
-# A three-letter row this rare, with nothing positive behind it, is corpus noise rather than a
-# word: initials, fragments, the tail of a bad decode.
+# A three-letter row this rare, with nothing positive behind it, is dropped as noise.
 SHORT_NOISE_LENGTH = 3
 SHORT_NOISE_ZIPF = 3.0
 
@@ -79,8 +77,7 @@ PAIR_MIN_PARTNERS = 3
 # The cut-offs at which coverage of a held-out list is reported.
 COVERAGE_TOPS = (10000, 20000, 50000)
 
-# German capitalises every noun, so "accepted when capitalised" says nothing about a word being
-# a name there: it is the ordinary spelling of half the vocabulary.
+# Languages that capitalise every noun, where "accepted when capitalised" does not mark a name.
 CAPITALISES_EVERY_NOUN = {"de_DE"}
 
 # Elided articles and pronouns whose remainder is a word of its own.
@@ -291,8 +288,7 @@ def classify(tag: str, path: Path, dictionaries: list[str], arguments, zipf_freq
     ranked = sorted(range(len(rows)), key=lambda i: -rows[i][1])
     rank_of = {rows[i][0]: place for place, i in enumerate(ranked)}
 
-    # A neighbour only condemns a row when something vouches for the neighbour: a rare string
-    # one edit from another rare string is two accidents, not a typo of anything.
+    # A neighbour only condemns a row when something vouches for the neighbour.
     high_frequency_valid = {word for word in words
                             if word in positive and zipf[word] >= SHORT_NOISE_ZIPF}
     typo: dict[str, tuple[str, float]] = {}

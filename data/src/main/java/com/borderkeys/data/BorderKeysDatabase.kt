@@ -26,12 +26,7 @@ import com.borderkeys.data.entity.UserWord
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.util.Arrays
 
-/**
- * Everything this keyboard remembers, in one encrypted file.
- *
- * `exportSchema = true` and the schemas are committed, so a migration arrives as a reviewable
- * diff rather than as a surprise on somebody's device.
- */
+/** Everything this keyboard remembers, in one encrypted file. The schemas are exported. */
 @Database(
     entities = [
         ClipEntry::class,
@@ -58,20 +53,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
     companion object {
         private const val DATABASE_NAME = "borderkeys.db"
 
-        /**
-         * Version 1 to 2: the text assistant's model table.
-         *
-         * Written rather than destroyed-and-recreated, and the reason is not that anything has
-         * shipped yet. This database holds the personal dictionary and the clipboard history --
-         * things the user cannot get back -- so "recreate on a schema change" is a policy that
-         * would eventually delete them, on some future version, on somebody's phone. The habit
-         * of writing the migration is the point.
-         *
-         * The failure this fixes was found by installing: adding an entity without moving the
-         * version made Room refuse to open the database at all, and the input method died on
-         * start with it. A keyboard that cannot start is one the user cannot replace without
-         * already having another keyboard installed.
-         */
+        /** Version 1 to 2: the text assistant's model table. */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -98,13 +80,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
             }
         }
 
-        /**
-         * Adds the table of word pairs, for predicting the next word from what this person
-         * actually writes rather than from what a corpus says.
-         *
-         * Purely additive, like the one before it: nothing existing is read, rewritten or
-         * dropped, so an install that fails here is an install that was already broken.
-         */
+        /** Version 2 to 3: the table of word pairs. Additive. */
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -129,10 +105,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
             }
         }
 
-        /**
-         * Adds the table of three-word sequences, for predicting from two words of context
-         * rather than one. Additive like the two before it.
-         */
+        /** Version 3 to 4: the table of three-word sequences. Additive. */
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -162,12 +135,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
             }
         }
 
-        /**
-         * Clipboard entries gained a URI and a MIME type, so an image can be remembered
-         * alongside text. Added as nullable columns rather than a new table: an image clip is
-         * a clipboard entry in every respect that matters -- it expires, it pins, it is listed
-         * in the same order -- and a second table would have to be merged back on every read.
-         */
+        /** Version 4 to 5: nullable URI and MIME type columns on clipboard entries, for images. */
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `uri` TEXT")
@@ -176,10 +144,8 @@ abstract class BorderKeysDatabase : RoomDatabase() {
         }
 
         /**
-         * Personal words gain a count of how many times they were committed with a deliberate
-         * capital first letter -- see [com.borderkeys.data.entity.UserWord.deliberateCapitals].
-         * Additive like the clipboard columns above: an existing row simply starts at zero,
-         * which is exactly "no evidence yet" rather than a value that has to be backfilled.
+         * Version 5 to 6: [com.borderkeys.data.entity.UserWord.deliberateCapitals]. Additive;
+         * existing rows start at zero.
          */
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -203,15 +169,12 @@ abstract class BorderKeysDatabase : RoomDatabase() {
         }
 
         fun open(context: Context): BorderKeysDatabase {
-            // sqlcipher-android 4.x has no static initialiser that does this: nothing in the
-            // library loads its own .so, so the first call into it would fail with an
-            // UnsatisfiedLinkError from inside Room's open path.
+            // sqlcipher-android 4.x does not load its own library.
             System.loadLibrary("sqlcipher")
 
             val passphrase = DatabasePassphrase.obtain(context)
             val factory = SupportOpenHelperFactory(passphrase)
-            // SQLCipher keeps its own copy, so this one is scrubbed rather than left in the heap
-            // waiting for the garbage collector to get around to it.
+            // SQLCipher keeps its own copy; this one is scrubbed.
             Arrays.fill(passphrase, 0)
 
             return Room.databaseBuilder(
@@ -224,9 +187,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
                     MIGRATION_6_7,
                 )
-                // The settings screen and the IME run in the same process, but the text
-                // assistant runs in ":assist" and opens this database too. Without this, a write
-                // in one process leaves the other's Flows showing stale rows indefinitely.
+                // The ":assist" process opens this database too.
                 .enableMultiInstanceInvalidation()
                 .build()
         }

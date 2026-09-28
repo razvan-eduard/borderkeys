@@ -4,11 +4,9 @@
 # Parole che la tastiera non suggerisce, non completa e non impara finché «Blocca le parole
 # volgari» è attivo. Scritte lettera per lettera restano intatte. Una parola per riga;
 # maiuscole e accenti non contano (ogni voce e ogni candidata sono ridotte alla stessa forma
-# prima del confronto); una riga che inizia con «#» è un commento. Le forme flesse sono parole
-# distinte per il motore, quindi ognuna è elencata.
+# prima del confronto); una riga che inizia con «#» è un commento. Ogni forma flessa è elencata.
 #
-# Solo volgarità e insulti verso un gruppo. Anatomia, medicina e parole blande restano
-# suggeribili di proposito.
+# Solo volgarità e insulti verso un gruppo.
 
 affanculo
 bagascia

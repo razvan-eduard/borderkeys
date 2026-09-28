@@ -7,22 +7,14 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-/**
- * Resolves a fractional 0..1 position to a pixel offset within some shape, at spawn time only.
- *
- * Not called from the per-frame draw loop -- only once per spawned particle, a handful of times a
- * second at most, so unlike [ParticleMotion]/[ParticleColor] these do not need to justify every
- * cycle: a caller is free to pass in `kotlin.random.Random.nextFloat()` for [fraction01] without
- * it becoming a hot-path concern.
- */
+/** Resolves 0..1 fractions to points within a shape, when a particle spawns. */
 object EmitterShape {
 
     fun rectangleX(left: Float, right: Float, fraction01: Float): Float = left + (right - left) * fraction01
 
     fun rectangleY(top: Float, bottom: Float, fraction01: Float): Float = top + (bottom - top) * fraction01
 
-    /** A point on a circle's perimeter -- [angleFraction01] 0..1 is the whole turn, not degrees
-     *  or radians, so a caller never has to know this shape's own angle convention. */
+    /** A point on a circle's perimeter; [angleFraction01] 0..1 is the whole turn. */
     fun ringX(centerX: Float, radius: Float, angleFraction01: Float): Float =
         centerX + radius * cos(angleFraction01 * TWO_PI)
 
@@ -34,13 +26,8 @@ object EmitterShape {
     fun lineY(y1: Float, y2: Float, fraction01: Float): Float = y1 + (y2 - y1) * fraction01
 
     /**
-     * A point walking a rectangle's perimeter by arc length -- clockwise from the top-left
-     * corner (top edge left to right, right edge top to bottom, bottom edge right to left, left
-     * edge bottom to top) -- so a uniform [phase01] gives a uniform *distance* around the
-     * perimeter, not a distribution skewed toward whichever edge a naive per-edge phase split
-     * would hand more phase-space to. Unlike [rectangleX]/[rectangleY], both functions need all
-     * four bounds: which edge a given distance falls on depends on the *other* axis's extent
-     * too, not just this axis's own two bounds.
+     * A point [phase01] of the way around a rectangle's perimeter by arc length, clockwise from
+     * the top-left corner.
      */
     fun rectanglePerimeterX(left: Float, top: Float, right: Float, bottom: Float, phase01: Float): Float {
         val width = right - left
@@ -75,17 +62,9 @@ object EmitterShape {
     }
 
     /**
-     * A point walking a *rounded* rectangle's perimeter by arc length -- the exact outline every
-     * key, chip and button in this app actually draws (`canvas.drawRoundRect` with the same
-     * [cornerRadius]), not the sharp bounding box [rectanglePerimeterX] walks. The difference is
-     * the whole reason this exists: a spawn point resolved on the sharp box lands *outside* the
-     * drawn shape at every corner, by up to `0.29 * cornerRadius`, and with a theme's rounder
-     * keys that is a visible ring of dots hovering off each corner rather than sitting on the
-     * outline. Same clockwise walk, same uniform-distance guarantee: top edge, top-right arc,
-     * right edge, bottom-right arc, bottom edge, bottom-left arc, left edge, top-left arc.
-     * [cornerRadius] is clamped to half the shorter side, exactly as `drawRoundRect` clamps it,
-     * so a radius bigger than the shape (a pill) walks the pill and never a self-intersecting
-     * path; `0f` reproduces [rectanglePerimeterX]/[rectanglePerimeterY] to the pixel.
+     * A point [phase01] of the way around a rounded rectangle's perimeter by arc length, clockwise
+     * from the start of the top edge. [cornerRadius] is clamped to half the shorter side, as
+     * `drawRoundRect` clamps it; `0f` walks the sharp rectangle.
      */
     fun roundedRectPerimeterX(
         left: Float,
@@ -105,12 +84,7 @@ object EmitterShape {
         phase01: Float,
     ): Float = roundedRectPerimeterPoint(left, top, right, bottom, cornerRadius, phase01).y
 
-    /**
-     * A perimeter point *with its outward unit normal* -- what the outline layer needs to push a
-     * particle away from the element rather than merely place it on the edge. Fills [out] with
-     * x, y, normalX, normalY (four floats) and allocates nothing; the X/Y accessors above are
-     * the same walk read one coordinate at a time.
-     */
+    /** Fills [out] with a perimeter point and its outward unit normal: x, y, normalX, normalY. */
     fun roundedRectPerimeterSample(
         left: Float,
         top: Float,
@@ -127,9 +101,10 @@ object EmitterShape {
         out[3] = p.ny
     }
 
-    /** [roundedRectPerimeterSample]'s equivalent for the wedge. On the inner arc the outward
-     *  normal points toward the centre -- away from the wedge, into the hole -- and on each
-     *  radial edge it points away from the wedge's own sweep. */
+    /**
+     * [roundedRectPerimeterSample] for an annular wedge. On the inner arc the normal points to the
+     * centre; on each radial edge, away from the sweep.
+     */
     fun annularWedgePerimeterSample(
         centerX: Float,
         centerY: Float,
@@ -148,10 +123,7 @@ object EmitterShape {
         out[3] = point.ny
     }
 
-    /** Resolved once for both axes, for the same reason [WedgePoint] is: an arc segment's X and
-     *  Y come from one angle, and resolving them separately could round a segment boundary
-     *  differently per axis and report a point off the perimeter. [nx]/[ny] is the outward unit
-     *  normal at that point -- straight out of a straight edge, radial on a corner arc. */
+    /** A perimeter point resolved once for both axes, with its outward unit normal. */
     private data class PlanePoint(val x: Float, val y: Float, val nx: Float = 0f, val ny: Float = 0f)
 
     private fun roundedRectPerimeterPoint(
@@ -212,8 +184,7 @@ object EmitterShape {
         return arcPoint(left + r, top + r, r, 180f, d, arcLen)
     }
 
-    /** The length of the outline [roundedRectPerimeterX] walks -- what the engine scales an
-     *  outline's spawn rate by, so a long edge is not starved of dots relative to a short one. */
+    /** The length of the outline [roundedRectPerimeterX] walks. */
     fun roundedRectPerimeterLength(left: Float, top: Float, right: Float, bottom: Float, cornerRadius: Float): Float {
         val width = (right - left).coerceAtLeast(0f)
         val height = (bottom - top).coerceAtLeast(0f)
@@ -221,23 +192,18 @@ object EmitterShape {
         return 2f * (width - 2f * r + height - 2f * r) + 2f * PI.toFloat() * r
     }
 
-    /** The area [roundedRectInteriorX] fills -- the fill layer's own equivalent of
-     *  [roundedRectPerimeterLength]. */
+    /** The area [roundedRectInteriorX] fills. */
     fun roundedRectArea(left: Float, top: Float, right: Float, bottom: Float, cornerRadius: Float): Float {
         val width = (right - left).coerceAtLeast(0f)
         val height = (bottom - top).coerceAtLeast(0f)
         val r = cornerRadius.coerceIn(0f, kotlin.math.min(width, height) / 2f)
-        // The full box minus the four corner squares' own uncovered corners.
+        // The full box minus the four corners the rounding cuts away.
         return width * height - (4f - PI.toFloat()) * r * r
     }
 
     /**
-     * A point *inside* a rounded rectangle, from two independent 0..1 fractions -- uniform over
-     * the box, with the sliver outside each corner arc folded back onto the arc rather than
-     * rejected, so a caller never loops and never allocates. Every point returned lies inside
-     * or on the drawn shape; none lands in the corner the rounding cut away. This is what a
-     * fill layer spawns from: the element's own interior, not a centre point and not its sharp
-     * bounding box.
+     * A point inside a rounded rectangle from two 0..1 fractions, uniform over the box, with a
+     * point outside a corner arc pulled onto the arc.
      */
     fun roundedRectInteriorX(
         left: Float,
@@ -297,24 +263,23 @@ object EmitterShape {
         return PlanePoint(cx + dx / d * r, cy + dy / d * r)
     }
 
-    /** The perimeter length [annularWedgePerimeterX] walks -- see [roundedRectPerimeterLength]. */
+    /** The perimeter length [annularWedgePerimeterX] walks. */
     fun annularWedgePerimeterLength(innerRadius: Float, outerRadius: Float, sweepDeg: Float): Float {
         val sweepRad = kotlin.math.abs(sweepDeg) * DEG_TO_RAD
         val edges = if (kotlin.math.abs(sweepDeg) >= 360f) 0f else 2f * (outerRadius - innerRadius).coerceAtLeast(0f)
         return outerRadius * sweepRad + innerRadius * sweepRad + edges
     }
 
-    /** The area [annularWedgeInteriorX] fills -- see [roundedRectArea]. */
+    /** The area [annularWedgeInteriorX] fills. */
     fun annularWedgeArea(innerRadius: Float, outerRadius: Float, sweepDeg: Float): Float {
         val sweepRad = kotlin.math.abs(sweepDeg) * DEG_TO_RAD
         return 0.5f * sweepRad * (outerRadius * outerRadius - innerRadius * innerRadius).coerceAtLeast(0f)
     }
 
     /**
-     * A point *inside* an annular wedge, from two independent 0..1 fractions -- uniform by area,
-     * not by radius: [radiusFraction01] is mapped through the square root of the squared radii
-     * so the wider outer band gets its fair share of points rather than the same count as the
-     * narrow inner one. [angleFraction01] sweeps [startDeg] to [startDeg] + [sweepDeg].
+     * A point inside an annular wedge from two 0..1 fractions, uniform by area: [radiusFraction01]
+     * maps through the squared radii, and [angleFraction01] sweeps [startDeg] to [startDeg] +
+     * [sweepDeg].
      */
     fun annularWedgeInteriorX(
         centerX: Float,
@@ -348,29 +313,21 @@ object EmitterShape {
         return kotlin.math.sqrt(inner2 + (outer2 - inner2) * fraction01.coerceIn(0f, 1f))
     }
 
-    /** A point [distance] along a quarter arc of [radius] around ([cx], [cy]) that starts at
-     *  [startDeg] and sweeps 90 degrees clockwise -- [android.graphics.Canvas.drawArc]'s own
-     *  convention, the same one the wedge walk below uses. */
+    /** A point [distance] along a quarter arc of [radius] around ([cx], [cy]), clockwise from
+     *  [startDeg] as [android.graphics.Canvas.drawArc] measures it. */
     private fun arcPoint(cx: Float, cy: Float, radius: Float, startDeg: Float, distance: Float, arcLen: Float): PlanePoint {
         val frac = if (arcLen > 0f) (distance / arcLen).coerceIn(0f, 1f) else 0f
         val angleRad = (startDeg + 90f * frac) * DEG_TO_RAD
         val nx = cos(angleRad)
         val ny = sin(angleRad)
-        // On a convex corner arc the outward normal is simply the radial direction.
+        // On a corner arc the outward normal is radial.
         return PlanePoint(cx + radius * nx, cy + radius * ny, nx, ny)
     }
 
     /**
-     * A point walking an annular wedge's perimeter by arc length -- the radial suggestion ring's
-     * own highlighted wedge, bounded by two arcs (at [innerRadius] and [outerRadius]) and the
-     * two straight edges connecting them at [startDeg] and [startDeg] + [sweepDeg]. Walks the
-     * same four segments in the same order [com.borderkeys.ime.RadialSuggestionMenuView] used to
-     * build this shape by hand as a `Path` before it became [ParticleGeometry.AnnularWedge] --
-     * outer arc, the far radial edge, inner arc backward, the near radial edge closing the loop
-     * -- so a uniform [phase01] gives a uniform *distance* around the perimeter, the same
-     * reasoning [rectanglePerimeterX] already gives for a rectangle. [startDeg]/[sweepDeg] use
-     * [android.graphics.Canvas.drawArc]'s own degree convention, the same one
-     * [com.borderkeys.ime.RadialSuggestionMenuView.wedgeCentreDegrees] already uses.
+     * A point [phase01] of the way around an annular wedge's perimeter by arc length: the outer
+     * arc, the far radial edge, the inner arc backwards, then the near radial edge. Angles as
+     * [android.graphics.Canvas.drawArc] measures them.
      */
     fun annularWedgePerimeterX(
         centerX: Float,
@@ -396,11 +353,7 @@ object EmitterShape {
         return centerY + point.radius * sin(point.angleDeg * DEG_TO_RAD)
     }
 
-    /** The (angle, radius) pair [annularWedgePerimeterX]/[annularWedgePerimeterY] each resolve
-     *  [phase01] to -- shared so the two never independently round a segment boundary
-     *  differently and report a point that is not actually on the perimeter, the way the
-     *  simpler [rectanglePerimeterX]/[rectanglePerimeterY] (four straight edges, no rounding
-     *  risk) can safely resolve X and Y independently. */
+    /** The angle and radius a wedge perimeter phase resolves to, with its outward unit normal. */
     private data class WedgePoint(val angleDeg: Float, val radius: Float, val nx: Float = 0f, val ny: Float = 0f)
 
     private fun annularWedgePerimeterPoint(
@@ -413,8 +366,7 @@ object EmitterShape {
         val sweepRad = kotlin.math.abs(sweepDeg) * DEG_TO_RAD
         val outerArcLen = outerRadius * sweepRad
         val innerArcLen = innerRadius * sweepRad
-        // A full turn is a complete annulus: its two radial edges coincide and are not an edge
-        // at all, so they get no length -- otherwise a seam of dots would sit at startDeg.
+        // A full turn has no radial edges.
         val edgeLen = if (kotlin.math.abs(sweepDeg) >= 360f) 0f else (outerRadius - innerRadius).coerceAtLeast(0f)
         val perimeter = outerArcLen + edgeLen + innerArcLen + edgeLen
         if (perimeter <= 0f) {
@@ -423,7 +375,7 @@ object EmitterShape {
         val distance = phase01.coerceIn(0f, 1f) * perimeter
         val endDeg = startDeg + sweepDeg
         // The direction of increasing angle at an angle a is (-sin a, cos a); a radial edge's
-        // outward normal is that tangent pointing away from the wedge's own sweep.
+        // outward normal is that tangent pointing away from the wedge's sweep.
         val sign = if (sweepDeg >= 0f) 1f else -1f
         return when {
             distance <= outerArcLen -> {

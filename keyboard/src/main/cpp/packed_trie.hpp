@@ -10,25 +10,11 @@
 
 namespace borderkeys {
 
-// A read-only double-array trie, reinterpreted in place over a memory mapping.
-//
-// Double array rather than LOUDS, deliberately. LOUDS stores the same trie in roughly a third
-// of the space, but every child lookup becomes a rank/select over a bit vector, which is
-// several dependent memory accesses plus an auxiliary index that has to be built or stored.
-// The double array resolves a transition in one addition, one bounds test and one comparison:
+// A read-only double-array trie, reinterpreted in place over a memory mapping:
 //
 //     next = base[node] + symbol;  if (check[next] == node) -> next
 //
-// The choice follows from what this trie is actually asked to do. Correcting a typo means
-// walking the neighbourhood of what was typed, so a single keystroke visits thousands of nodes,
-// not tens. Per-node latency is the budget; total bytes are not, because a language pack is a
-// few megabytes of page cache shared with the APK it was mapped from. If a pack ever has to be
-// carried on a device where those megabytes matter, LOUDS is the thing to reconsider, and the
-// only code that would change is behind this interface.
-//
-// Every accessor bounds-checks. The arrays came from a file that may have been handed to us by
-// anyone, so a node index is untrusted data even after the header validated, and a traversal
-// that walked off the end would do so inside the process that sees every keystroke.
+// Every accessor bounds-checks; node indices are untrusted.
 class PackedTrie {
 public:
     // Symbol 0 is the end-of-word marker; alphabet symbols are 1..alphabetCount.
@@ -43,8 +29,7 @@ public:
     int32_t root() const { return 0; }
 
     // The alphabet index of a folded code point, offset by one so that 0 stays the terminal
-    // marker. Returns -1 when the character does not occur in this language at all, which is
-    // the cheap test that lets a whole pack be skipped for a word it could not possibly hold.
+    // marker; -1 when the character does not occur in this language.
     int symbolFor(uint32_t foldedCodePoint) const;
 
     bool alphabetContains(uint32_t foldedCodePoint) const {
@@ -64,9 +49,7 @@ public:
         if (symbol < 0 || symbol > static_cast<int>(alphabetCount_)) {
             return -1;
         }
-        // 64-bit arithmetic on purpose: base[node] is a signed value out of the file, and
-        // base[node] + symbol overflows int32 for a hostile base. The overflowed sum would be a
-        // small in-range index that passes the check below by accident.
+        // In 64 bits, so an untrusted base cannot overflow.
         const int64_t next = static_cast<int64_t>(baseArray_[node]) + symbol;
         if (next < 0 || next >= static_cast<int64_t>(nodeCount_)) {
             return -1;
@@ -83,8 +66,7 @@ public:
         if (terminal < 0) {
             return -1;
         }
-        // A terminal node has no children, so its base slot is free to carry the word index,
-        // stored negated and offset by one so that word 0 is distinguishable from an unset 0.
+        // A terminal's base slot holds the word index, negated and offset by one.
         const int32_t encoded = baseArray_[terminal];
         if (encoded >= 0) {
             return -1;
@@ -113,10 +95,6 @@ public:
         return -static_cast<float>(wordFreqQuantised(wordIndex)) / logProbScale_;
     }
 
-    // Whether this word should always render capitalised -- a name, not a sentence-start or a
-    // shift-state accident. False (rather than out-of-bounds being an error) for the same reason
-    // wordFreqQuantised degrades gracefully: a caller asking about an index it should not have
-    // gets the safe default, not a crash.
     /** How many spellings share this word's folded key, counting from this one onwards. */
     uint32_t spellingsFrom(uint32_t wordIndex) const {
         if (wordIndex >= wordCount_ || wordRun_ == nullptr || wordRun_[wordIndex] == 0u) {
@@ -127,6 +105,7 @@ public:
         return run < remaining ? run : remaining;
     }
 
+    // Whether this word is a name, always capitalised; false for an index out of bounds.
     bool isProperNoun(uint32_t wordIndex) const {
         return wordIndex < wordCount_ && wordFlags_ != nullptr &&
                (wordFlags_[wordIndex] & kWordFlagProperNoun) != 0u;
@@ -153,8 +132,7 @@ private:
 
     float logProbScale_ = 1.0f;
 
-    // Direct map for the ASCII range, which is the whole alphabet of both shipped layouts.
-    // Without it every character of every candidate costs a binary search.
+    // Direct map for the ASCII range.
     int16_t asciiSymbol_[128] = {};
 };
 

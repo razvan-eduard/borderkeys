@@ -8,15 +8,8 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Every autocorrect corpus through the real path, with a floor per corpus.
- *
- * `suggest_eval --autocorrect` measures the engine alone. This measures what a user gets: the
- * engine, the bridge, [com.borderkeys.ime.WordCommit] and every guard in it. The two differ
- * wherever a guard refuses what the engine offered, and the floors here are the numbers
- * `docs/testing.md` quotes for the whole path.
- *
- * A corpus row is `typed<TAB>expected`; `expected` equal to `typed` means the word must be left
- * alone. Skipped, not failed, without the host bridge and the packs -- see [Pipeline.require].
+ * Every autocorrect corpus through [Pipeline], with a floor per corpus. A corpus row is
+ * `typed<TAB>expected`; `expected` equal to `typed` means the word is left alone.
  */
 class PipelineCorpusTest {
 
@@ -63,7 +56,7 @@ class PipelineCorpusTest {
                     val outcome = pipeline.commit(typed)
                     val committed = outcome.committed
                     tally.cases++
-                    // A corpus states spellings; the case a word lands in is the path's own.
+                    // Compared ignoring case.
                     val right = if (expected == typed) {
                         committed == null
                     } else {

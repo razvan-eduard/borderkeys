@@ -16,33 +16,13 @@ class ClipboardRepository internal constructor(
     private val preferences: Flow<KeyboardPreferences>,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
-    /**
-     * The live history, re-evaluated whenever the retention setting changes.
-     *
-     * The cutoff is computed when the flow is collected rather than baked in once, so shortening
-     * the retention window in Settings takes effect on the next emission instead of at the next
-     * process start.
-     */
+    /** The live history, its cutoff recomputed whenever the retention setting changes. */
     @Suppress("OPT_IN_USAGE")
     val entries: Flow<List<ClipEntry>> = preferences.flatMapLatest { settings ->
         dao.observeLive(expiryCutoff(settings))
     }
 
-    /**
-     * Records something the user copied. Returns false when clipboard history is switched off,
-     * or when the caller is in private mode and should not have called at all.
-     *
-     * Re-copying an existing entry moves it to the top instead of duplicating it. The unique
-     * index on the hash is what guarantees that, and the insert is attempted first so that the
-     * common case is one statement rather than a lookup followed by one.
-     */
-    /**
-     * Remembers a copied image by reference.
-     *
-     * The URI is stored, not the bytes. A clipboard image belongs to whatever produced it and
-     * the read grant we hold is temporary, so a thumbnail that sometimes cannot be loaded is a
-     * better trade than copying megabytes into the database on every screenshot.
-     */
+    /** Remembers a copied image by its URI, not its bytes. */
     suspend fun rememberImage(uri: String, mimeType: String): Boolean {
         if (uri.isEmpty()) {
             return false
@@ -62,6 +42,10 @@ class ClipboardRepository internal constructor(
         return true
     }
 
+    /**
+     * Records something the user copied; false when clipboard history is off. Re-copying an entry
+     * moves it to the top instead of duplicating it.
+     */
     suspend fun remember(content: String): Boolean {
         val settings = preferences.first()
         if (!settings.clipboardEnabled || content.isEmpty()) {
@@ -78,13 +62,7 @@ class ClipboardRepository internal constructor(
         return true
     }
 
-    /**
-     * The most recent entries, newest first, for the keyboard's own strip.
-     *
-     * A one-shot read rather than the flow the settings screen collects: the strip is answering
-     * a button press, not tracking the clipboard, and a subscription that outlives the press
-     * would keep the database open for a row that has already been replaced by suggestions.
-     */
+    /** The most recent entries, newest first, read once. */
     suspend fun recent(limit: Int): List<ClipEntry> = entries.first().take(limit)
 
     suspend fun setPinned(id: Long, pinned: Boolean) {
@@ -110,14 +88,8 @@ class ClipboardRepository internal constructor(
     }
 
     /**
-     * Deletes the entry matching [content], unless it is pinned. Returns whether it was deleted.
-     *
-     * For "forget this one after I used it" -- one item leaving the moment it is inserted,
-     * distinct from the timer ([purgeExpired]) and from the everything-unpinned sweep
-     * ([deleteUnpinned]) that runs when the keyboard closes. Looked up by content hash rather
-     * than an id threaded in from wherever the insert happened, because the entry a paste came
-     * from is not always known there -- the quick clipboard chip reads straight from the system
-     * clipboard, not from a row in this table.
+     * Deletes the entry matching [content], found by its hash, unless it is pinned. Returns
+     * whether it was deleted.
      */
     suspend fun deleteIfUnpinned(content: String): Boolean {
         val entry = dao.findByHash(contentHash(content)) ?: return false
@@ -136,13 +108,7 @@ class ClipboardRepository internal constructor(
     /** Forgets everything unpinned, whatever its age. Called when the keyboard closes. */
     suspend fun deleteUnpinned(): Int = dao.deleteUnpinned()
 
-    /**
-     * Deletes what the retention window has expired.
-     *
-     * Filtering in the query is what the user sees; this is what actually removes the bytes. Run
-     * on a timer and at `onFinishInput`, so an expired password does not sit in the file for the
-     * hours between one keyboard session and the next.
-     */
+    /** Deletes what the retention window has expired. */
     suspend fun purgeExpired(): Int {
         val settings = preferences.first()
         return dao.deleteExpired(expiryCutoff(settings))
@@ -152,14 +118,7 @@ class ClipboardRepository internal constructor(
         now() - settings.clipboardRetentionMinutes * 60_000L
 
     companion object {
-        /**
-         * The first eight bytes of the SHA-256 of the content, as a signed long.
-         *
-         * SHA-256 truncated rather than [String.hashCode]: a collision here is not a wrong
-         * answer, it is a clipboard entry that silently never gets stored because the unique
-         * index thinks it is already there. String.hashCode collides on short inputs often
-         * enough to hit that in normal use.
-         */
+        /** The first eight bytes of the content's SHA-256, as a signed long: the unique key. */
         fun contentHash(content: String): Long {
             val digest = MessageDigest.getInstance("SHA-256").digest(content.encodeToByteArray())
             var value = 0L

@@ -17,9 +17,8 @@
 // The binary tools/gesture_replay.py drives.
 //
 // It prints one `word<TAB>rank` line per gesture, where rank is the zero-based position of the
-// expected word among the candidates or -1 for a miss. The script owns the arithmetic and the
-// comparison against the recorded baseline; this owns nothing but the decoding, so that the
-// measurement and the thing being measured stay separable.
+// expected word among the candidates or -1 for a miss. The script does the arithmetic and the
+// comparison against the recorded baseline.
 //
 //   gesture_replay <pack.bkd> <layout> <gestures.csv>
 

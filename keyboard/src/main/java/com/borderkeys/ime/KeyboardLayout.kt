@@ -5,14 +5,7 @@ package com.borderkeys.ime
 
 /**
  * A keyboard layout as described in an asset: rows of keys with relative widths, no pixels.
- *
- * Read once, at service start, off the UI thread. It allocates freely -- it is a parse result,
- * not something the draw path touches. [KeyboardCanvasView] compiles it into parallel arrays of
- * primitives the first time it knows its own size, and after that this object is only consulted
- * again if the layout itself changes.
- *
- * Deliberately not a `List<Key>` held by the view. The point of the compile step is that the
- * rendering and hit-testing paths never dereference an object per key.
+ * [KeyboardCanvasView] compiles it into arrays once it knows its size.
  */
 class KeyboardLayout(
     val id: String,
@@ -23,7 +16,7 @@ class KeyboardLayout(
     val rightToLeft: Boolean = languageTag.substringBefore('-').lowercase() in RIGHT_TO_LEFT_LANGUAGES
 
     class Row(
-        /** Leading empty space, in key-width units. Half a unit is the classic QWERTY stagger. */
+        /** Leading empty space, in key-width units. */
         val indent: Float,
         /** Row height as a multiple of the theme's row height. */
         val heightScale: Float,
@@ -47,49 +40,15 @@ class KeyboardLayout(
 
     val totalHeightScale: Float = rows.sumOf { it.heightScale.toDouble() }.toFloat()
 
-    /**
-     * The same layout with a row of digits above it.
-     *
-     * A number row is a real trade, not a preference to be defaulted: it removes a keystroke
-     * from every digit and takes about a fifth of the keyboard's height away from the letters,
-     * on a surface where key size is accuracy. So it is offered as a setting, and the
-     * alternative -- long-pressing the top letter row, where the digits also live -- costs
-     * nothing to anyone who leaves it off.
-     *
-     * The row is shorter than a letter row: digits are hit less often and need less area, and
-     * taking a full row would cost the letters more than the digits gain.
-     */
-    /**
-     * The same layout without its emoji key, with the width handed back to the space bar.
-     *
-     * Removed rather than hidden: a key that is drawn and does nothing is worse than no key,
-     * and the space bar is the one that lost the width when the emoji key took it, so it is
-     * the one that gets it back.
-     */
+    /** The same layout without its emoji key, its width given to the space bar. */
     fun withoutEmojiKey(): KeyboardLayout = without(KeyCodes.EMOJI, NO_EMOJI_SUFFIX)
 
-    /**
-     * The same layout without its globe key.
-     *
-     * The globe cycles this keyboard's layouts, which most people do never and some do daily,
-     * so it is worth a key to them and worth nothing to everyone else. Off, the space bar takes
-     * the width and holding the space bar cycles the layouts instead.
-     */
+    /** The same layout without its globe key, its width given to the space bar. */
     fun withoutLanguageKey(): KeyboardLayout = without(KeyCodes.LANGUAGE, NO_LANGUAGE_SUFFIX)
 
     /**
-     * Drops every key with the given code and gives their width to one key in the same row.
-     *
-     * The space bar takes it, which is right nearly everywhere: it is the key that gave the
-     * width up when the optional one took it, and it has no column to hold. A row that needs
-     * one kept names its own absorber instead ([KeyFlags.ABSORBS_FREED_WIDTH]). The numpad
-     * symbol pages do: their `0` sits under the digits above it, and handing the width to the
-     * space bar slid every key on the space bar's side of the row -- on this layout, the `0`
-     * moved three and a half units away from the column it belongs to, and did so for anyone
-     * with the emoji key off or the globe key at its default of off.
-     *
-     * The id gains a suffix because the keyboard caches compiled geometry by it: two layouts
-     * that differ by a key must not be able to answer to the same name.
+     * Drops every key with [code] and gives their width to the row's
+     * [KeyFlags.ABSORBS_FREED_WIDTH] key, or else to its space bar. The id gains [suffix].
      */
     private fun without(code: Int, suffix: String): KeyboardLayout {
         if (rows.isEmpty() || id.contains(suffix)) {
@@ -104,8 +63,7 @@ class KeyboardLayout(
                 val width = row.keys.filter { it.code == code }
                     .sumOf { it.widthUnits.toDouble() }.toFloat()
                 val remaining = row.keys.filterNot { it.code == code }
-                // The row's own absorber if it named one, the space bar otherwise. Resolved
-                // per row: a layout only marks the row where the alignment matters.
+                // The row's own absorber if it names one, else the space bar.
                 val absorber = remaining.firstOrNull {
                     KeyFlags.has(it.flags, KeyFlags.ABSORBS_FREED_WIDTH)
                 } ?: remaining.firstOrNull { it.code == ' '.code }
@@ -133,15 +91,8 @@ class KeyboardLayout(
     }
 
     /**
-     * The same layout with diacritics merged onto the letter keys' long press.
-     *
-     * [overlays] maps a lowercase letter to the accented forms of it that an enabled language
-     * pack contributes, already concatenated in enabled order. They go *after* whatever the base
-     * layout put on the key, so the corner hint stays the symbol -- the diacritics are behind
-     * it in the long-press strip -- and a character already reachable is not added twice.
-     *
-     * [signature] distinguishes one merged result from another in the id, because the compiled
-     * geometry is cached by id and two accent sets must not answer to the same name.
+     * The same layout with [overlays], lowercase letter to accented forms, appended to the letter
+     * keys' long press without repeats. The id gains [signature].
      */
     fun withAccents(overlays: Map<Char, String>, signature: String): KeyboardLayout {
         if (rows.isEmpty() || overlays.isEmpty() || id.contains(ACCENTS_SUFFIX)) {
@@ -166,24 +117,11 @@ class KeyboardLayout(
         return KeyboardLayout("$id$ACCENTS_SUFFIX$signature", languageTag, rewritten)
     }
 
-    /**
-     * The same layout with a digit at the front of each key of the top letter row's long press.
-     *
-     * For when there is no number row: q holds 1, w holds 2, on to p holds 0 -- the digit
-     * ahead of any diacritic, so the corner hint is the digit and never an accent. With the
-     * number row shown the digits are a tap away and [withTopRowSymbols] takes this slot.
-     */
+    /** The same layout with a digit first on each top-row letter's long press, q 1 to p 0. */
     fun withTopRowDigits(): KeyboardLayout =
         withTopRow(TOP_ROW_DIGITS, TOP_ROW_DIGITS_SUFFIX)
 
-    /**
-     * The same layout with a symbol at the front of each key of the top letter row's long press.
-     *
-     * For when the number row is shown, and it has taken the digits: q holds %, w holds ^, on
-     * to p holds }. Ten symbols the rest of the alphabetic layout does not reach, ahead of any
-     * diacritic so the corner hint is the symbol. Matches the row a hardware keyboard's number
-     * keys shift to.
-     */
+    /** The same layout with a symbol first on each top-row letter's long press, q % to p }. */
     fun withTopRowSymbols(): KeyboardLayout =
         withTopRow(TOP_ROW_SYMBOLS, TOP_ROW_SYMBOLS_SUFFIX)
 
@@ -219,22 +157,18 @@ class KeyboardLayout(
     private fun Key.withAlternatives(alternatives: String): Key =
         Key(code, label, alternatives, widthUnits, flags or KeyFlags.HAS_ALTERNATIVES)
 
+    /** The same layout with a shorter row of the ten digits above it. */
     fun withNumberRow(): KeyboardLayout {
         if (rows.isEmpty() || id.contains(NUMBER_ROW_SUFFIX)) {
             return this
         }
-        // Just the ten digits, nothing on the long press: a physical keyboard's number row is
-        // digits, and every symbol worth shifting to is already on a letter's long press or a
-        // ?123 page. SECONDARY_ROW sets it apart from the letters visually, the way that row is
-        // set apart on a hardware keyboard.
         val digits = DIGIT_ROW.map { digit ->
             Key(
                 code = digit.code,
                 label = digit.toString(),
                 alternatives = "",
                 widthUnits = 1f,
-                // Not a LETTER: a swipe must not pass through a digit, and a digit is never a
-                // substitution target when correcting a typo.
+                // Not a LETTER: swipes and corrections skip digits.
                 flags = KeyFlags.PREVIEW or KeyFlags.SECONDARY_ROW,
             )
         }
@@ -246,11 +180,9 @@ class KeyboardLayout(
     }
 
     /**
-     * The same layout with a row of hardware keys, each sent to the application as the key it
-     * names: [keys] in that order, sharing the row's width, the shipped eight when the list
-     * holds nothing the row can carry. Shorter than a letter row, like the number row. Above
-     * everything, including the number row, unless [atBottom], which puts it under the space
-     * row.
+     * The same layout with a shorter row of hardware keys: [keys] in order, or the default eight
+     * when none can go on the row, sharing its width. At the top, or under the space row when
+     * [atBottom].
      */
     fun withModifierRow(
         keys: List<Int> = DEFAULT_MODIFIER_KEYS,
@@ -321,10 +253,10 @@ class KeyboardLayout(
             KeyCodes.ARROW_LEFT, KeyCodes.ARROW_DOWN, KeyCodes.ARROW_UP, KeyCodes.ARROW_RIGHT,
         )
 
-        /** The cap a modifier-row key carries, for a layout asset that names one without a label. */
+        /** The cap of a modifier-row key that a layout asset names without a label. */
         internal fun modifierCap(code: Int): String? = MODIFIER_CAPS[code]
 
-        /** The most keys the row takes; past this each key is too narrow to hit. */
+        /** The most keys the modifier row takes. */
         const val MAX_MODIFIER_KEYS = 12
 
         /** The width the keys share: that of a ten-key letter row. */
@@ -337,7 +269,7 @@ class KeyboardLayout(
         /** q..p when there is no number row. */
         private const val TOP_ROW_DIGITS = "1234567890"
 
-        /** q..p when the number row has the digits: ten symbols the layout does not otherwise reach. */
+        /** q..p when the number row has the digits. */
         private const val TOP_ROW_SYMBOLS = "%^~|[]<>{}"
 
         private const val NO_EMOJI_SUFFIX = "-noemoji"
@@ -358,13 +290,7 @@ class KeyboardLayout(
         private const val DIGIT_ROW = "1234567890"
         private const val NUMBER_ROW_HEIGHT = 0.8f
 
-        /**
-         * A layout that needs no asset and no parsing.
-         *
-         * Not a placeholder: it is what the keyboard falls back to when an asset is missing or
-         * malformed. An input method that fails to draw is an input method the user cannot
-         * uninstall without another one already installed, so there is always something to show.
-         */
+        /** A built-in QWERTY, used when a layout asset is missing or malformed. */
         fun fallbackQwerty(): KeyboardLayout {
             fun letters(characters: String): List<Key> = characters.map { character ->
                 Key(
@@ -387,7 +313,6 @@ class KeyboardLayout(
                         listOf(
                             Key(KeyCodes.SHIFT, "⇧", "", 1.5f, KeyFlags.MODIFIER),
                         ) + letters("zxcvbnm") + listOf(
-                            // REPEATABLE -- see LayoutLoader's identical note.
                             Key(
                                 KeyCodes.DELETE, "⌫", "", 1.5f,
                                 KeyFlags.MODIFIER or KeyFlags.REPEATABLE,

@@ -3,10 +3,7 @@
 
 name: CI
 
-# Every push to main and every pull request against it. The release workflow only wakes on a
-# version bump or a tag, so without this a commit that touches :keyboard or :data and no
-# version would never be compiled by anything until the next release — which then blames
-# whoever released.
+# Every push to main and every pull request against it.
 on:
   push:
     branches: [main]
@@ -14,31 +11,24 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
-# A second push makes the first irrelevant: only the tip needs to be green. Releases
-# deliberately do not do this — abandoning a publish half way is a different kind of mess —
-# but a verification run is safe to cancel.
+# A newer push cancels the run in progress.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Seconds, not minutes, and it fails on things a reviewer cannot see in a diff: a new file
-  # without an SPDX header, an asset with no REUSE annotation. Its own job and first, because a
-  # missing licence header should not be reported after a ten-minute Android build.
+  # SPDX headers and REUSE annotations, in a job of its own.
   licensing:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # The charset-normalizer extra rather than plain `reuse`: without an encoding-detection
-      # module the tool cannot even import, and which one is available depends on whether
-      # libmagic happens to be on the runner. Pinning the pure-Python one removes the variable.
+      # With the charset-normalizer extra, its encoding detection.
       - name: Install REUSE
         run: pipx install 'reuse[charset-normalizer]'
 
-      # Blocking, not advisory. The project claims to be open source from the first commit;
-      # a file nobody can tell the licence of makes that claim false.
+      # Blocking, not advisory.
       - name: reuse lint
         run: reuse lint
 
@@ -46,24 +36,18 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # gradle.properties asks for 4 GB, sized for one developer machine building one flavor.
-      # This job compiles both flavors and runs R8 twice in a single invocation. Raised here
-      # rather than in gradle.properties so a laptop is not asked to reserve 6 GB for every
-      # build.
+      # More heap than gradle.properties' 4 GB: this job builds both flavors and runs R8 twice.
       GRADLE_HEAP: -Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
 
     steps:
-      # The `plus` flavor compiles llama.cpp from the vendored submodule, so the build cannot
-      # run without it. Shallow: the pinned commit is all that is needed, and a full clone of
-      # llama.cpp is several hundred megabytes for history nobody here reads.
+      # With the llama.cpp submodule the `plus` flavor compiles; shallow.
       - name: Checkout
         uses: actions/checkout@v7
         with:
           submodules: recursive
           fetch-depth: 1
 
-      # 21 because gradle/gradle-daemon-jvm.properties pins the daemon to 21. A different JDK
-      # here means the runner downloads its own, silently, on every run.
+      # 21, the JDK gradle/gradle-daemon-jvm.properties pins the daemon to.
       - name: Set up JDK
         uses: actions/setup-java@v6
         with:
@@ -74,17 +58,14 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
-          # The action's own default package list is "tools platform-tools", and Google has
-          # since pulled the legacy "tools" package from the SDK repository entirely --
-          # sdkmanager now fails outright trying to fetch it. platform-tools is all this step
-          # is actually here for (adb, the rest comes from Gradle's own SDK resolution).
+          # Not the action's default list, whose legacy "tools" package the SDK repository no
+          # longer has.
           packages: platform-tools
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # Read out of the catalog rather than restated here, so a CI run and a release cannot
-      # compile the same native code with different compilers.
+      # Read out of the catalog, as the release workflow does.
       - name: Resolve the pinned NDK and CMake
         run: |
           echo "NDK_VERSION=$(grep -m1 '^ndk = ' gradle/libs.versions.toml | sed 's/.*"\(.*\)".*/\1/')" >> "$GITHUB_ENV"
@@ -93,11 +74,8 @@ jobs:
       - name: Install NDK and CMake
         run: sdkmanager --install "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}"
 
-      # The pipeline harness drives the real engine over JNI against the real packs, and skips
-      # itself when either is missing. CI was precisely that machine: both were built later in
-      # this job, so every pipeline case skipped here from the day it was written and the step
-      # went green over three known defects. Built before the tests, and Pipeline.require()
-      # fails rather than skips when CI is set, so this cannot quietly come undone again.
+      # The host engine library and the real packs the pipeline harness runs against, built
+      # before the tests; Pipeline.require() fails rather than skips when CI is set.
       - name: Build what the pipeline harness needs
         run: |
           set -euo pipefail
@@ -108,14 +86,11 @@ jobs:
       - name: Unit tests, every module
         run: ./gradlew test --no-daemon "$GRADLE_HEAP"
 
-      # Both flavors, because the interesting failures are asymmetric: `plus` compiles native
-      # code `core` does not, and `core` is the one whose emptiness is the product claim.
-      # The three verification tasks are wired into assemble, so this runs them.
+      # Both flavors. The three verification tasks are wired into assemble.
       - name: Assemble both flavors
         run: ./gradlew :app:assembleCoreRelease :app:assemblePlusRelease --no-daemon "$GRADLE_HEAP"
 
-      # Named explicitly as well. If someone unwires a gate from `assemble` while leaving the
-      # task in place, the step above goes green and this one does not.
+      # Named explicitly as well.
       - name: Verification gates
         run: |
           ./gradlew --no-daemon "$GRADLE_HEAP" \
@@ -123,9 +98,7 @@ jobs:
             :app:verifyNoForbiddenDependencies \
             :keyboard:verifyKeyboardHasNoCompose
 
-      # The Gradle tasks check the sources of the APK. This checks the APK. They are not the
-      # same claim: a merged manifest with no INTERNET and a packaged binary with no INTERNET
-      # are separated by resource shrinking, R8 and the packager.
+      # The packaged APKs themselves, through aapt2.
       - name: The shipped APKs request no permissions at all
         run: |
           set -euo pipefail
@@ -148,9 +121,7 @@ jobs:
           done
           exit "$FAILED"
 
-      # `plusImplementation` is what keeps the assistant out of the free build, and it is a
-      # single line in one build file. Asserted against the dex rather than trusted: DEX stores
-      # type descriptors as plain strings, so grep is enough and needs no extra tooling.
+      # Checked in the dex, which stores type descriptors as plain strings.
       - name: The core APK contains no assistant code, runtime or model files
         run: |
           set -euo pipefail
@@ -161,8 +132,7 @@ jobs:
             echo "::error::core APK contains com.borderkeys.assist classes"
             exit 1
           fi
-          # The inference runtime is a native library, so it would not show up in the dex check
-          # above even if the whole of llama.cpp were packaged.
+          # The inference runtime is a native library, outside the dex.
           if unzip -l "$APK" | grep -q 'borderkeysassist'; then
             echo "::error::core APK contains the inference runtime"
             exit 1
@@ -175,8 +145,6 @@ jobs:
           fi
           echo "core APK: no assistant classes, no inference runtime, no model files"
 
-      # Neither flavor bundles a model. `plus` ships the runtime and nothing to run: a model
-      # arrives because the user chose a file, and that keeps `plus` free of non-free assets.
       - name: Neither flavor bundles a model
         run: |
           set -euo pipefail
@@ -189,16 +157,11 @@ jobs:
           done
           echo "no model files in either flavor"
 
-      # The .bkd writer and the engine that reads it are two implementations of one format,
-      # and the only thing keeping them in agreement is that both were written against
-      # bkd_format.hpp. This builds a pack and reads it back with an independent reader, so a
-      # drift in the layout fails here rather than as a pack the keyboard silently cannot use.
+      # A pack built and read back with an independent reader.
       - name: Dictionary compiler round trip
         run: python3 tools/build_dict.py --selftest
 
-      # Which letters a language admits is read off its long-press overlay, so an overlay edited
-      # for the sake of the keys can silently decide what the dictionary may hold. Only a letter
-      # with no unaccented twin can do that -- "ß", "æ", "œ" -- and this is what says one left.
+      # The letters with no unaccented twin ("ß", "æ", "œ") are still on their overlays.
       - name: Language alphabets are what the dictionaries were built against
         run: python3 tools/drop_unreachable.py --selftest
 
@@ -208,16 +171,7 @@ jobs:
       - name: The layout assets, their subtypes and their labels agree
         run: python3 tools/check_layouts.py
 
-      # Runs from step 8 onward, when native-tests/ exists. Guarded rather than omitted so the
-      # step is already wired and cannot be forgotten later; it prints what it skipped, because
-      # a silently absent check reads exactly like a passing one.
-      # The engine compiled for the host and run against the same sources the device gets.
-      # The test pack is produced by tools/build_dict.py rather than by a fixture, so a drift
-      # between the writer and the reader fails here instead of shipping.
-      # Every header has to compile on its own. The alternative is a header that works only
-      # because whatever included it first happened to pull in <cstdint>, which is true on
-      # libc++ and false on libstdc++ -- so it builds on the machine it was written on and
-      # fails here, which is exactly what happened.
+      # Every header compiles on its own, with libstdc++.
       - name: Headers are self-contained
         run: |
           set -euo pipefail
@@ -238,17 +192,8 @@ jobs:
           cmake --build native-tests/build --parallel
           ctest --test-dir native-tests/build --output-on-failure
 
-      # ctest runs entirely against test_pack.bkd, a 3 KB pack built by build_dict.py --selftest,
-      # so until this step nothing in CI ever queried a shipped dictionary -- the packs were
-      # compiled above and never asked a question. This asks the only one that has to hold: a
-      # word compiled into a pack must come back out of it.
-      #
-      # Case is not part of it: a pack keeps one casing of "Warren"/"warren" and the keyboard
-      # capitalises for itself, so the other casing is reachable. The budgets are defect counts,
-      # not properties of the languages, and they may only ever
-      # be lowered. What remains is two things: a spelling merged into another that differs from
-      # it only by case, which the keyboard re-cases for itself, and a short fragment the corpus
-      # carries that no longer ranks once real words compete with it -- "th", "pr", "inc".
+      # Every word compiled into a shipped pack comes back out of it, in either casing. The
+      # budgets are defect counts and may only be lowered.
       - name: Every word in a pack is reachable from it
         run: |
           set -euo pipefail
@@ -268,9 +213,8 @@ jobs:
           BUDGETS
           exit $status
 
-      # The same loader, under the sanitisers, with the checksums repaired after each mutation
-      # so the mutation reaches the section-bounds and traversal checks rather than being
-      # absorbed by the CRC. A crash here is a build failure, not a report.
+      # The same loader under the sanitisers, with the checksums repaired after each mutation.
+      # A crash fails the build.
       - name: Language-pack loader under ASan and UBSan
         run: |
           set -euo pipefail
@@ -281,11 +225,8 @@ jobs:
           ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 \
             ./native-tests/build-asan/pack_corpus_test
 
-      # The same loader under libFuzzer, seeded from the committed corpus, with a fixed time
-      # budget so the job stays bounded. pack_corpus_test covers this ground deterministically
-      # on every run; this is what finds the inputs nobody thought to write down. A crash fails
-      # the build, and the reproducer is uploaded so it can become a corpus entry rather than
-      # having to be re-derived.
+      # The same loader under libFuzzer, seeded from the committed corpus, for a fixed time. A
+      # crash fails the build, and the reproducer is uploaded.
       - name: Language-pack loader under libFuzzer
         run: |
           set -euo pipefail
@@ -293,13 +234,11 @@ jobs:
             -DBORDERKEYS_FUZZ=ON \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
           cmake --build native-tests/build-fuzz --target fuzz_pack --parallel
-          # The committed corpus is copied out first. libFuzzer writes the inputs it keeps back
-          # into the directory it is given, and data/corpus is a fixture with eighteen named
-          # cases in it, not a scratch pad.
+          # The committed corpus is copied out first: libFuzzer writes into the directory it is
+          # given.
           mkdir -p /tmp/fuzz-corpus /tmp/fuzz-artifacts
           cp native-tests/data/corpus/*.bkd /tmp/fuzz-corpus/
-          # A valid pack in the seed set matters more than any of the broken ones: it is the
-          # only input from which the fuzzer can reach the code behind the header checks.
+          # A valid pack in the seed set.
           cp native-tests/build/test_pack.bkd /tmp/fuzz-corpus/valid.bkd
           ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 \
             ./native-tests/build-fuzz/fuzz_pack /tmp/fuzz-corpus \
@@ -316,12 +255,8 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
-      # Accuracy is the only thing that says whether a decoder change helped. Compared against
-      # the number recorded in docs/gesture-accuracy.json, so a regression fails here rather
-      # than being noticed on a device weeks later.
-      # Both tiers, against the real English pack and 500 recorded traces. The pack matters as
-      # much as the corpus: the 59-word test pack this used to gate against made almost any
-      # decode correct.
+      # Both decoders, against the real English pack and 500 recorded traces, compared with the
+      # numbers recorded in docs/gesture-accuracy.json and docs/gesture-accuracy-tcn.json.
       - name: Swipe decoder accuracy
         run: |
           set -euo pipefail
@@ -348,12 +283,8 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # The keyboard on a real input connection. The unit tests and the pipeline harness stop at
-  # the engine's answer; what the framework's editor does with a composing region, a caret
-  # move or a commit is only visible on a device, so app/src/androidTest drives the settings
-  # probe field through the keyboard on an emulator. KVM is what makes an x86_64 emulator
-  # usable on a hosted runner, and the shipped ABIs do not include x86_64, so the build adds
-  # it here and nowhere else.
+  # The keyboard on a real input connection: app/src/androidTest drives the settings probe field
+  # through the keyboard on an x86_64 emulator, with KVM. The build adds the x86_64 ABI here only.
   smoke:
     runs-on: ubuntu-latest
     needs: verify
@@ -413,9 +344,7 @@ jobs:
             "https://github.com/termux/termux-app/releases/download/v0.118.3/termux-app_v0.118.3%2Bgithub-debug_x86_64.apk"
           echo "3550e61f4d9eb49b712fd1bd9519dc37085a4d8eb597c57a340f0a64859b7144  termux.apk" | sha256sum -c -
 
-      # The core flavour: the paths under test are the same in both, and core compiles no
-      # inference runtime. API 30 is minSdk, the oldest editor the keyboard claims to work
-      # with; API 35 is the newest.
+      # The core flavour, on API 30 (minSdk) and API 35.
       - name: Smoke suite on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:

@@ -18,9 +18,8 @@ object Strings {
 
     object Languages {
         /**
-         * The catalogue that is always complete, and the one every other language is held
-         * against by [TranslationParity]. Also the last resort when a phone's language is one
-         * BorderKeys does not ship.
+         * The catalogue that is always complete, the one [TranslationParity] holds every other
+         * language against, and the last resort when no shipped language matches the phone's.
          */
         const val DEFAULT = "en"
 

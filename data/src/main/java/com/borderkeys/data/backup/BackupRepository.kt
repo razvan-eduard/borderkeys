@@ -14,17 +14,9 @@ import com.borderkeys.data.entity.BlockedWord
 import kotlinx.coroutines.flow.first
 
 /**
- * Gathering what a keyboard knows, and putting it back.
- *
- * Seven parts, chosen one at a time by whoever is exporting, because they are not equally
- * private and not equally worth carrying. Settings are a handful of numbers. The dictionary is
- * every word this device learned from what its owner typed. The clipboard is what they last
- * copied. Which of those goes into a file is not a decision to make on their behalf.
- *
- * Importing adds rather than replaces, wherever adding makes sense. A dictionary is a count per
- * word, so two devices' dictionaries merge by summing -- and a merge cannot lose what was
- * already there, which a wholesale replacement can. Settings, theme, particle effects and size
- * and position are the exception: each is one coherent set and half of one is not a setting.
+ * Gathering what a keyboard knows, and putting it back, in parts chosen one at a time. Importing
+ * adds where it can (a dictionary merges by summing counts); settings, theme, particle effects and
+ * size and position are each replaced whole.
  */
 class BackupRepository(
     private val database: BorderKeysDatabase,
@@ -47,8 +39,7 @@ class BackupRepository(
     }
 
     suspend fun gather(parts: Parts): BackupPayload {
-        // Read once, shared by settings (the behaviour fields) and sizeAndPosition (only the
-        // placement half of the same object) -- either alone still needs this fetched.
+        // Read once for settings and for size and position.
         val rawPreferences = if (parts.settings || parts.sizeAndPosition) {
             themes.preferences.first()
         } else {
@@ -68,9 +59,7 @@ class BackupRepository(
         } else {
             null
         }
-        // Which model is active, not the model itself -- see BackupModel's own doc. Rides with
-        // settings rather than its own toggle: this is a choice of which assistant to use, the
-        // same kind of thing a theme or a layout is, not a body of learned or copied text.
+        // The active model, with the settings.
         val models = if (parts.settings) {
             database.assistModelDao().observeAll().first().map {
                 BackupModel(fileName = it.fileName, sha256 = it.sha256, active = it.active)
@@ -87,8 +76,7 @@ class BackupRepository(
             emptyList()
         }
 
-        // Everything, not the top few. A dictionary carried across with its tail cut off is one
-        // that has forgotten exactly the uncommon words it was worth carrying for.
+        // Every word.
         val words = if (parts.dictionary) {
             database.userWordDao().topWords(Int.MAX_VALUE).map {
                 BackupWord(
@@ -122,14 +110,12 @@ class BackupRepository(
         } else {
             emptyList()
         }
-        // The words the user refused travel with the dictionary. A device that has been told
-        // twice not to suggest something should not have to be told a third time.
+        // Blocked words travel with the dictionary.
         val blocked = if (parts.dictionary) database.blockedWordDao().allWords() else emptyList()
 
         val clips = if (parts.clipboard) {
             database.clipboardDao().observeLive(0L).first()
-                // An image is a reference to a file this application does not own and the other
-                // one could not read. Only the text travels.
+                // Text only.
                 .filter { !it.isImage }
                 .map {
                     BackupClip(
@@ -158,7 +144,7 @@ class BackupRepository(
         )
     }
 
-    /** What an import actually did, so the screen can say so rather than "done". */
+    /** What an import did. */
     data class Applied(
         val settings: Boolean = false,
         val theme: Boolean = false,
@@ -179,27 +165,18 @@ class BackupRepository(
 
         if (parts.settings) {
             payload.preferences?.let { incoming ->
-                // Never placement: sizeAndPosition is the only part allowed to write it, so
-                // whatever is live right now for both orientations is re-applied on top of the
-                // incoming object before it is stored -- through sanitised() regardless, like
-                // every other read, since a file is a file, whoever wrote it.
+                // The live placement is kept; only sizeAndPosition writes it.
                 themes.updatePreferences { current ->
                     incoming
                         .withPlacement(false) { current.placementFor(false) }
                         .withPlacement(true) { current.placementFor(true) }
-                        // Not carried across: swipeModelFailed records that *this* installation
-                        // could not read *its own* copy of the swipe model, which a file written
-                        // on another phone knows nothing about. Restoring it would disable the
-                        // option here for a fault that never happened here.
+                        // swipeModelFailed describes this installation, not the file.
                         .copy(swipeModelFailed = false)
                 }
             }
             applied = applied.copy(settings = payload.preferences != null)
 
-            // Only a model this device already has the file for -- by hash, since the same file
-            // re-imported gets a new row and a new id every time. A model the payload names but
-            // this device has never imported is one nothing here can switch on, the same limit
-            // languages already has for a dictionary it does not carry.
+            // Only a model this device already has, matched by hash.
             var reactivated = 0
             for (model in payload.models) {
                 if (!model.active) {
@@ -215,11 +192,7 @@ class BackupRepository(
         if (parts.theme) {
             payload.theme?.let { incoming -> themes.updateTheme { incoming.sanitised() } }
 
-            // Added rather than replaced, like the dictionary below -- a saved theme is one of a
-            // collection, not the one coherent setting `theme` is. Restoring under the SAME id is
-            // what makes importing the same backup twice not duplicate every theme in it; a name
-            // edited locally since the backup was taken is overwritten back to what the backup
-            // says, the same trade `theme` itself already makes.
+            // Added under their own ids, so importing twice does not duplicate them.
             var restoredThemes = 0
             for (customTheme in payload.customThemes) {
                 val saved = themes.saveCustomTheme(
@@ -247,8 +220,7 @@ class BackupRepository(
 
         if (parts.sizeAndPosition) {
             payload.sizeAndPosition?.let { incoming ->
-                // The only part allowed to write placement -- settings' own apply above always
-                // preserves whatever is live here instead, regardless of what its payload carries.
+                // The only part that writes placement.
                 themes.updatePreferences { current ->
                     current
                         .withPlacement(false) { incoming.portrait }
@@ -260,9 +232,7 @@ class BackupRepository(
 
         if (parts.dictionary) {
             val stamp = now()
-            // One transaction across all four tables: a process death midway through used to be
-            // able to leave a word's count restored but its bigrams not, the same failure mode
-            // DictionaryRepository.forget/block close on the way out rather than in.
+            // One transaction across all four tables.
             database.withTransaction {
                 database.userWordDao().incrementAll(
                     payload.words.map {
@@ -270,9 +240,7 @@ class BackupRepository(
                             word = it.word,
                             locale = it.locale,
                             delta = it.count,
-                            // A file from before the stamp travelled carries zero and reads as
-                            // "used now" -- what every restored word got back then. A real
-                            // stamp comes across, so decay picks up where the old device left it.
+                            // A file without the stamp reads as used now.
                             lastUsedAt = if (it.lastUsedAt > 0L) it.lastUsedAt else stamp,
                         )
                     },
@@ -319,9 +287,7 @@ class BackupRepository(
         }
 
         if (parts.languages) {
-            // Only packs this device already has. The file carries which languages were on, not
-            // the dictionaries themselves -- those are in the application, and one it does not
-            // have is one it cannot switch on.
+            // Only packs this device already has.
             var touched = 0
             for (pack in payload.packs) {
                 val existing = database.languagePackDao().findByTag(pack.tag) ?: continue
@@ -335,10 +301,7 @@ class BackupRepository(
         if (parts.clipboard) {
             var added = 0
             for (clip in payload.clips) {
-                // The same hash ClipboardRepository.remember/rememberImage write, not a second,
-                // weaker derivation of the same idea: two different hashes over identical content
-                // would mean a backup restore and a live copy of the same text never recognise
-                // each other, defeating the whole point of the unique index they both rely on.
+                // The same hash ClipboardRepository writes.
                 val hash = ClipboardRepository.contentHash(clip.content)
                 if (database.clipboardDao().findByHash(hash) != null) {
                     continue

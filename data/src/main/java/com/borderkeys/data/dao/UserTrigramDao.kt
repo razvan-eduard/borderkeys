@@ -40,8 +40,7 @@ interface UserTrigramDao {
         }
     }
 
-    /** The triple equivalent of [UserWordDao.decayStale] -- see there for why this is a plain
-     *  conditional `UPDATE` rather than a read-modify-write. */
+    /** [UserWordDao.decayStale], for triples. */
     @Query(
         """
         UPDATE user_trigrams SET count = MAX(1, count / 2), lastUsedAt = :now

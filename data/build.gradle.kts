@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-// The single source of truth. Everything the user has ever typed that we keep lives behind
-// this module, in one encrypted database and one typed DataStore. No module owns a second
-// copy of that state.
+// Everything kept about the user: one encrypted database and the typed DataStores.
 
 plugins {
     alias(libs.plugins.android.library)
@@ -46,8 +44,7 @@ kotlin {
 }
 
 ksp {
-    // Schemas are committed so that a migration is reviewed as a diff rather than
-    // discovered on a user's device.
+    // The schemas are committed.
     arg("room.schemaLocation", "$projectDir/schemas")
     arg("room.generateKotlin", "true")
 }
@@ -57,16 +54,13 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
-    // SQLCipher supplies the SupportSQLiteOpenHelper.Factory that Room opens the database
-    // through; androidx.sqlite is pinned to the version room-runtime resolves to so the two
-    // cannot drift apart silently.
+    // SQLCipher's SupportSQLiteOpenHelper.Factory; androidx.sqlite pinned to room-runtime's.
     implementation(libs.sqlcipher.android)
     implementation(libs.androidx.sqlite)
     // Holds the database passphrase, with the master key in the Android Keystore.
     implementation(libs.androidx.security.crypto)
 
-    // Typed DataStore, not the preferences variant: the keyboard theme is a schema, and a
-    // string-keyed bag would turn every rename into a silent default.
+    // Typed DataStore.
     implementation(libs.androidx.datastore)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)

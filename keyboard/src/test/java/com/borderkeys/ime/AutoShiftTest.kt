@@ -7,16 +7,7 @@ import android.text.InputType
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/**
- * The decision behind auto-capitalisation, kept separate from the platform calls it needs.
- *
- * Two bugs shipped from getting this wrong by hand: a field of a class that was not text could
- * have the text-capitalisation bit positions set for its own unrelated reasons and be read as
- * wanting capitals anyway, and the answer for "should shift already be on" was computed once at
- * `onStartInputView` before the target had been switched back from a draft box that was left
- * open, so it was answering about the wrong field. Neither is possible to catch from a device
- * screenshot the way it is possible to catch here.
- */
+/** [AutoShift]'s decision, without the platform calls it needs. */
 class AutoShiftTest {
 
     private val sentences = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
@@ -35,8 +26,7 @@ class AutoShiftTest {
 
     @Test
     fun `a field that is not text is never capitalised, even if the bits line up`() {
-        // TYPE_CLASS_NUMBER's own flags share bit positions with the text class's CAP_SENTENCES
-        // flag; a field of a different class must not be read through the text class's flags.
+        // TYPE_CLASS_NUMBER's own flags share bit positions with the text class's CAP_SENTENCES.
         val numberField = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         assertEquals(
             "a non-text field was read as wanting capitals",
@@ -175,8 +165,7 @@ class AutoShiftTest {
 
     @Test
     fun `an e-mail field that itself asks for sentences still gets them`() {
-        // The exemption is the force override's alone: a field that asked for capitals is
-        // answered as asked, address or not -- the platform's own answer decides.
+        // A field that asks for capitals gets the platform's answer, address or not.
         val asked = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS or
             InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         assertEquals(
@@ -205,8 +194,7 @@ class AutoShiftTest {
 
     @Test
     fun `a field that already asks for capitals is unaffected by the force override`() {
-        // The force override only changes what happens when a field asks for NOTHING; a field
-        // that already sets CAP_SENTENCES keeps using the platform's own capsMode, unchanged.
+        // A field that sets CAP_SENTENCES keeps the platform's capsMode.
         assertEquals(
             1,
             AutoShift.stateFor(
@@ -294,11 +282,7 @@ class AutoShiftTest {
 
     @Test
     fun `a line just started is a sentence start, with nothing after the newline yet`() {
-        // The platform's own capsMode is not asked to carry this one: Android's getCapsMode
-        // only treats a blank line (a paragraph break) as equivalent to a full stop, not a
-        // single Return -- which is exactly what sentenceEndsBeforeCursor's own '\n' branch
-        // exists to cover, unconditionally and without waiting for a space to follow it the
-        // way a written full stop has to.
+        // Answered by sentenceEndsBeforeCursor's '\n' branch, not by the platform's capsMode.
         assertEquals(1, afterText("one\n"))
         assertEquals(1, afterText("one.\n"))
     }

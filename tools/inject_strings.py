@@ -5,7 +5,7 @@
 
 Adds the import and, at the top of each function whose body mentions `strings`, the line that
 reads it out of the composition local. Functions that are not composable are left alone and
-reported, because those need the manager passed as a parameter -- a decision, not a rewrite.
+reported.
 """
 
 import pathlib

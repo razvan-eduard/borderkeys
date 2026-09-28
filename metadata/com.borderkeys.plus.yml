@@ -1,17 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 #
-# The `plus` flavour, published as its own package so that it and `core` are a choice a user can
-# decline to make. With one applicationId, installing this would replace the other: the
-# repository could only list one of them, and taking the assistant would mean giving up the
-# settings and the learned dictionary of the build it replaced. As separate packages both can be
-# listed and both can be installed, at the cost of them learning separately.
+# The `plus` flavour, published as its own package, installable side by side with `core`.
 #
 # No AntiFeatures. This adds llama.cpp (MIT, compiled from the vendored source) and the libc++ it
-# links against (Apache-2.0 with the LLVM exception). It bundles no model and cannot fetch one:
-# there is still no INTERNET permission. A model arrives only when the user picks a file whose
-# SHA-256 matches an entry compiled into the build, and all five of those are Apache-2.0. See
-# docs/licensing.md section 2.2.1.
+# links against (Apache-2.0 with the LLVM exception). It bundles no model and has no INTERNET
+# permission; a model arrives only when the user picks a file whose SHA-256 matches an entry
+# compiled into the build, all five of them Apache-2.0. See docs/licensing.md section 2.2.1.
 
 Categories:
   - System
@@ -119,19 +114,14 @@ Description: |-
 RepoType: git
 Repo: https://github.com/razvan-eduard/borderkeys.git
 
-# The same release certificate as the core package. A build signed by anything else is rejected
-# rather than quietly accepted.
+# The same release certificate as the core package.
 AllowedAPKSigningKeys: f49409d101891a6d5c7254168b083cc4d0772cda2448cc853e8e2f331b4e5321
 
-# The vendored llama.cpp checkout (assist/src/main/cpp/third_party/llama.cpp) is a git
-# submodule, and this is the flavour that actually compiles it -- without this, the build
-# server's checkout leaves that directory empty and the native build fails on missing source.
+# The vendored llama.cpp (assist/src/main/cpp/third_party/llama.cpp), a git submodule this
+# flavour compiles.
 Submodules: true
 
-# No historical entries before this one, on purpose. Every tag up to and including v0.2.3 built
-# this flavour with the same applicationId as core, so a build of one of those tags would
-# produce a package called com.borderkeys and would be rejected against this file. This is the
-# first tag cut after the package was split (d64fc7c).
+# Builds start at the first tag after the package was split (d64fc7c).
 Builds:
   - versionName: 0.3.0
     versionCode: 7

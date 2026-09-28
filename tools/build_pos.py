@@ -3,14 +3,9 @@
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 """Derives a part-of-speech tag per word and a tag transition matrix from a UD treebank.
 
-Why a treebank and not a tagger: a treebank carries a tag for every *token in context*, which is
-what makes it possible to see that "la" is a preposition almost always and a noun occasionally.
-A tagger would give one answer per word type and hide exactly the ambiguity that matters. It is
-also one fewer dependency -- no runtime, no model file, no version to pin.
-
 The output is what the pack compiler folds into the .bkd: a tag per word in the word list, and
 the matrix of P(tag | previous tag). Both are quantised to a byte, on the same log scale the
-n-gram probabilities already use.
+n-gram probabilities use.
 """
 
 import argparse
@@ -25,29 +20,18 @@ from build_dict import plain_apostrophes
 LOG_PROB_SCALE = 10.0
 LOG_PROB_FLOOR = -25.5
 
-# One byte per tag, and 255 of them cover 99.4% of Romanian tokens; everything rarer shares the
-# last slot. The alternative -- a wider tag -- would spend memory on distinctions that appear a
-# few hundred times in a treebank and never in a phone.
+# One byte per tag; every tag rarer than the commonest 255 shares the last slot.
 MAX_TAGS = 255
 OTHER_TAG = 255
 
 
-# The features that change what may follow a word, in the order they are composed into a tag.
-#
-# Not every feature UD defines: Foreign, Typo and the rest describe the token rather than
-# constrain the next one, and each one kept multiplies the tagset. These are the ones agreement
-# is expressed through -- which is what grammar constrains, and the reason coarse tags measured
-# no better than no grammar at all.
+# The features agreement is expressed through, in the order they are composed into a tag.
 FEATURES = ("Gender", "Number", "Case", "Person", "VerbForm", "Mood", "Definite", "PronType")
 
 
 def compose(upos, feats):
-    """A tag from the universal columns, so it does not matter whether a treebank fills XPOS.
-
-    French GSD and Spanish GSD leave XPOS empty, which produced one tag for a whole language and
-    a transition matrix that said nothing. UPOS plus the agreement features is available in
-    every treebank and gives Romanian a tagset within a few of its own MULTEXT-East one.
-    """
+    """A tag from the universal columns, UPOS plus the agreement features, whether or not a
+    treebank fills XPOS."""
     if feats == "_":
         return upos
     values = dict(p.split("=", 1) for p in feats.split("|") if "=" in p)
@@ -59,8 +43,7 @@ def compose(upos, feats):
     return ".".join(parts)
 
 
-# Below this many distinct XPOS values a treebank is not really filling the column, and the
-# composed tag is used instead. Romanian RRT has 476 and French GSD has one.
+# Below this many distinct XPOS values the composed tag is used instead.
 MIN_USEFUL_XPOS = 20
 
 
@@ -80,13 +63,8 @@ def rows(path):
 
 
 def uses_xpos(paths):
-    """Whether the treebank's own fine tagset is worth preferring to a composed one.
-
-    Where a treebank fills XPOS it is a tagset a linguist designed for that language, and it
-    measured better than composition -- 11.0% against 10.1% on Romanian. Where it does not,
-    composition is the only option. Deciding per treebank rather than picking one for all of
-    them costs a pass over the file and gets both.
-    """
+    """Whether the treebank fills its own fine tagset (XPOS), which is then preferred to a
+    composed one."""
     seen = set()
     for path in paths:
         for row in rows(path):
@@ -142,8 +120,7 @@ def main():
     kept = sum(tag_counts[t] for t in ordered)
     total = sum(tag_counts.values())
 
-    # P(tag | previous tag), add-one smoothed so an unseen pair is unlikely rather than
-    # impossible -- a treebank is 8,000 sentences and absence in it is weak evidence.
+    # P(tag | previous tag), add-one smoothed.
     size = len(ordered)
     matrix = bytearray(size * size)
     for previous, counter in transitions.items():
@@ -156,9 +133,8 @@ def main():
             q = max(LOG_PROB_FLOOR, math.log(p))
             matrix[row * size + i] = min(255, int(round(-q * LOG_PROB_SCALE)))
 
-    # One tag per word: the one it carries most often. Keyed by word rather than by position,
-    # because the pack's word order is decided by the pack compiler, after this runs. The
-    # ambiguity a single tag discards is reported, because it is the honest cost of one byte.
+    # One tag per word, the one it carries most often, keyed by word. The ambiguity this
+    # discards is reported.
     tags = {}
     ambiguous = 0
     for word, counter in word_tags.items():

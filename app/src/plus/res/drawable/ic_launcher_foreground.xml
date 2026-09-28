@@ -3,18 +3,9 @@
     SPDX-License-Identifier: GPL-3.0-or-later
     SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-    The core mark with a badge on it, because the two builds can now be installed side by side
-    and a launcher full of identical icons is a launcher you have to read.
-
-    The badge sits on the lower right of the space bar rather than in the corner of the canvas.
-    A corner is exactly what an adaptive icon does not have: the launcher applies its own mask,
-    and only the middle 66 of the 108 units are guaranteed to survive it. Centred at 70,64 with
-    a radius of 11, the badge's farthest point is 33 units from the centre, inside the
-    guarantee, so it is never the part a round mask takes off.
-
-    It is punched out of the bar rather than drawn over it: the disc is the pale key colour and
-    the cross is the background, which reads at the size a folder shrinks this to. A thin
-    stroke over a light bar would not.
+    The core mark with a badge on the lower right of the space bar, centred at 70,64 with a
+    radius of 11, inside the middle 66 units a launcher guarantees. The disc is the pale key
+    colour and the cross is the background colour.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"

@@ -99,9 +99,7 @@ class KeyboardGeometryTest {
 
     @Test
     fun `there is no dead pixel anywhere on the keyboard`() {
-        // A touch in the gap between two keys must still type. Sampling the whole surface is
-        // the only way to be sure the grid has no cell resolving to nothing -- and a gap that
-        // does nothing is invisible in a screenshot and infuriating in use.
+        // Samples the whole surface.
         val geometry = compiled()
         var x = 0.5f
         while (x < width) {
@@ -138,8 +136,6 @@ class KeyboardGeometryTest {
 
     @Test
     fun `the grid agrees with an exhaustive nearest-key search`() {
-        // The grid is a precomputed cache of nearestKey. If they ever disagree, the cache is
-        // wrong -- which would show up as a key that is hard to hit near its edge.
         val geometry = compiled()
         var mismatches = 0
         var samples = 0
@@ -151,8 +147,7 @@ class KeyboardGeometryTest {
                 val exact = geometry.nearestKey(x, y)
                 val grid = geometry.findKeyAt(x, y)
                 if (exact != grid) {
-                    // Disagreement is only acceptable in a gap, where both answers are a
-                    // nearest key rather than a containing one.
+                    // They may disagree only in a gap.
                     val insideExact = x >= geometry.keyLeft[exact] && x < geometry.keyRight[exact] &&
                         y >= geometry.keyTop[exact] && y < geometry.keyBottom[exact]
                     if (insideExact) {
@@ -183,8 +178,6 @@ class KeyboardGeometryTest {
             assertTrue(xs[index] in 0f..width)
             assertTrue(ys[index] in 0f..height)
         }
-        // Shift, delete, space and enter must not be there: a swipe through shift means nothing,
-        // and offering it as a substitution target would corrupt every correction near it.
         assertTrue(codes.take(written).none { it == KeyCodes.SPACE })
     }
 
@@ -200,7 +193,6 @@ class KeyboardGeometryTest {
     @Test
     fun `labels are packed into one shared buffer`() {
         val geometry = compiled()
-        // No String per key: the draw path reads characters out of one array.
         var total = 0
         for (index in 0 until geometry.keyCount) {
             total += geometry.labelLength[index]
@@ -239,8 +231,6 @@ class KeyboardLayoutTest {
 
     @Test
     fun `a digit is not a swipe letter`() {
-        // A gesture must not be able to pass through the number row, and a digit must never be
-        // offered as a substitution when correcting a typo.
         val digits = KeyboardLayout.fallbackQwerty().withNumberRow().rows[0].keys
         for (key in digits) {
             assertTrue(
@@ -258,8 +248,6 @@ class KeyboardLayoutTest {
 
     @Test
     fun `applying the number row twice changes nothing`() {
-        // The service reapplies the layout whenever a setting changes, so this has to be
-        // idempotent or the keyboard grows a row on every emission.
         val once = KeyboardLayout.fallbackQwerty().withNumberRow()
         val twice = once.withNumberRow()
         assertEquals(once.keyCount, twice.keyCount)
@@ -297,7 +285,7 @@ class NumberRowSymbolsTest {
             assertEquals(digit.toString(), row[index].label)
             assertEquals("a digit carries no long press", "", row[index].alternatives)
             assertTrue(!KeyFlags.has(row[index].flags, KeyFlags.HAS_ALTERNATIVES))
-            // Drawn apart from the letters, but still typed as a character rather than a swipe letter.
+            // Drawn apart from the letters, and not a swipe letter.
             assertTrue(KeyFlags.has(row[index].flags, KeyFlags.SECONDARY_ROW))
             assertTrue(!KeyFlags.has(row[index].flags, KeyFlags.LETTER))
         }
@@ -305,10 +293,7 @@ class NumberRowSymbolsTest {
 
     @Test
     fun `the base layout ships no digits and no language diacritics`() {
-        // There is one QWERTY now. Its long presses are symbols only: the digits are added by
-        // withTopRowDigits when there is no number row, and the accents by withAccents from the
-        // enabled packs. Read as text -- org.json is stubbed in a JVM unit test, and this is
-        // about what ships.
+        // The shipped QWERTY's long presses are symbols only, read as text.
         val file = java.io.File("src/main/assets/layouts/qwerty.json")
         assertTrue("qwerty.json is missing", file.isFile)
         val alternates = Regex("\"alt\"\\s*:\\s*\"([^\"]*)\"").findAll(file.readText())
@@ -321,9 +306,7 @@ class NumberRowSymbolsTest {
                 value.all { it.code < 0x80 },
             )
         }
-        // Each bundled language with diacritics of its own has an accent overlay, and every
-        // overlay maps a single plain letter to accented forms -- nothing ASCII on the value
-        // side, and (English has no accents of its own) no en-US overlay at all.
+        // Every accent overlay maps one plain letter to non-ASCII forms; en-US has no overlay.
         assertTrue(
             "en-US should carry no accents -- English has none of its own",
             !java.io.File("src/main/assets/accents/en-US.json").exists(),
@@ -407,20 +390,14 @@ class NumberRowSymbolsTest {
             ),
         )
         val overlaid = base.withAccents(mapOf('a' to "ăâ"), "ro-RO")
-        // Symbol first (so the corner hint is the symbol), then the new diacritic, and "â" is
-        // not repeated because it was already reachable.
+        // The symbol, then the new diacritic; "â" is not repeated.
         assertEquals("@âă", overlaid.rows[0].keys[0].alternatives)
         // A letter the overlay says nothing about is untouched.
         assertEquals("#", overlaid.rows[0].keys[1].alternatives)
-        // Idempotent by id suffix: the service recomposes on every setting change.
+        // Idempotent by id suffix.
         assertEquals(overlaid.keyCount, overlaid.withAccents(mapOf('a' to "ă"), "ro-RO").keyCount)
     }
-    /**
-     * Turning the emoji key off gives its width back rather than leaving a gap.
-     *
-     * A row that loses a key and keeps its total width is a row where every remaining key
-     * moves, which is worse than the key being there.
-     */
+    /** Turning the emoji key off gives its width to the space bar. */
     @Test
     fun `removing the emoji key widens the space bar`() {
         val withEmoji = KeyboardLayout(

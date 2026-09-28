@@ -6,16 +6,8 @@ package com.borderkeys.data.theme
 import kotlinx.serialization.Serializable
 
 /**
- * One whole look someone saved themselves, under a name they chose -- an [outline] and a [fill]
- * together, applied identically to every region at once so the keyboard reads as one coherent
- * theme rather than five independently-dialled-in ones. The same idea [CustomThemeEntry] already
- * is for a whole [KeyboardTheme], one level down: presets like Fire/Comet are this application's
- * own, fixed, per-layer building blocks; this is the user's own combination of them, saved once
- * and applied everywhere in one tap.
- *
- * Deliberately not region-scoped and not per-layer: an earlier shape saved Fill and Outline
- * separately and offered them per region, which answered "what does this one surface look like"
- * rather than the actual ask, "make the whole keyboard match."
+ * One look someone saved under a name they chose: an [outline] and a [fill], applied to every
+ * region at once.
  */
 @Serializable
 data class CustomEffectsPresetEntry(
@@ -32,15 +24,9 @@ data class CustomEffectsPresetEntry(
         fill = fill.sanitised(),
     )
 
-    /** Whether every region in [settings] still shows exactly this pair -- what "this preset is
-     *  the keyboard's current look" actually means, now that a preset is meant to reach every
-     *  region: checking only whichever one region happened to be selected in the picker would
-     *  say yes even after a different region had already drifted away from it. */
+    /** Whether every region in [settings] still shows exactly this pair. */
     fun matches(settings: ParticleEffectsSettings): Boolean {
-        // Named locals, not the entry's own properties by their bare names: inside an extension
-        // on ParticleRegionSettings those resolve to the *region's* outline and fill, so the
-        // comparison read "region.outline == region.outline" and every saved preset matched
-        // everything -- always selected, never any drift to report.
+        // Locals: inside the extension below, `outline` and `fill` name the region's.
         val presetOutline = outline
         val presetFill = fill
         fun ParticleRegionSettings.matchesThis() = this.outline == presetOutline && this.fill == presetFill
@@ -51,9 +37,10 @@ data class CustomEffectsPresetEntry(
             settings.quickActions.matchesThis()
     }
 
-    /** This pair written to every region, each switched on, and this entry recorded as the
-     *  applied preset -- [BuiltInEffectsPreset.appliedTo]'s counterpart, one pair for all five
-     *  rather than one look per region. */
+    /**
+     * [settings] with this pair written to every region, each switched on, and this entry recorded
+     * as the applied preset.
+     */
     fun appliedTo(settings: ParticleEffectsSettings): ParticleEffectsSettings {
         fun apply(region: ParticleRegionSettings) = region.copy(enabled = true, outline = outline, fill = fill)
         return settings.copy(
@@ -72,8 +59,7 @@ data class CustomEffectsPresetEntry(
     }
 }
 
-/** The whole saved collection, as one DataStore file -- see [CustomThemeLibrary]'s own doc for
- *  why this is a file of its own rather than a list bolted onto [ParticleEffectsSettings]. */
+/** The whole saved collection, as one DataStore file. */
 @Serializable
 data class CustomEffectsPresetLibrary(val presets: List<CustomEffectsPresetEntry> = emptyList()) {
     fun sanitised(): CustomEffectsPresetLibrary = copy(
@@ -86,8 +72,10 @@ data class CustomEffectsPresetLibrary(val presets: List<CustomEffectsPresetEntry
     }
 }
 
-/** The shape an earlier build wrote to `keyboard_custom_outline_presets.json` -- see
- *  [ThemeRepository.importLegacyOutlinePresets]. Kept only to read that file once. */
+/**
+ * The shape an earlier build wrote to `keyboard_custom_outline_presets.json`, read once by
+ * [ThemeRepository.importLegacyOutlinePresets].
+ */
 @Serializable
 internal data class LegacyOutlinePreset(
     val id: String,

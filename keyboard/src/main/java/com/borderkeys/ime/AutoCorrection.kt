@@ -5,111 +5,41 @@ package com.borderkeys.ime
 
 import java.text.Normalizer
 
-/**
- * Whether a delimiter should replace what was typed, and with what.
- *
- * Its own object rather than two methods on the service because this is the decision the whole
- * feature is: a keyboard that rewrites correct words is the failure this project was written
- * against, and the rules for not doing that are worth being able to test without an editor, an
- * input connection and a dictionary.
- */
+/** Whether a delimiter should replace what was typed, and with what. */
 internal object AutoCorrection {
 
     /**
-     * The correction to apply, or null to commit what was typed.
-     *
-     * Null in every case where applying one would be an argument rather than a correction:
-     *
-     *  - the word is shorter than [minimumLength] -- unless the only difference from what was
-     *    typed is a diacritic, which is not a guess at what the user meant, only at which key
-     *    they didn't reach for. "in" reaching "în" is exactly this: two real, unrelated words
-     *    that happen to be the same letters without their accents, not a coin toss;
-     *  - the dictionaries spell the word, so it is a word, and a keyboard does not correct
-     *    words -- the engine ranks by likelihood, so a real but uncommon word loses to a longer
-     *    common one and was being replaced by it;
-     *  - the suggestion is what was typed;
-     *  - the suggestion is what was typed in a different case, which changes nothing but the
-     *    capital the user chose;
-     *  - [suggestionQuery] -- the word the engine's answer is actually about -- is not [typed].
-     *    The engine has one thread and answers by posting back rather than blocking, so a
-     *    delimiter can be typed before the answer for the word just finished has arrived at all.
-     *    [suggestion] would then still be whatever an earlier, unrelated word last resolved to,
-     *    and applying it would correct the word being committed to a word never asked about --
-     *    not a bad ranking, an answer to a different question. "tinde" reaching "idependent" is
-     *    this: no edit-distance budget this engine uses reaches "idependent" from "tinde", so it
-     *    was never the engine's answer for "tinde" to begin with.
-     *
-     * Otherwise the correction, carrying the capitalisation of the word it replaces.
-     */
-    /**
      * What a word and the answer offered for it amount to. Exactly one holds, and only
      * [Correctable] replaces anything.
-     *
-     * Named rather than left as a chain of early returns, because these are seven different
-     * questions and a chain says only "no". A case that has to be reasoned about -- and every
-     * one of these has been, at least once, from a report -- can be pointed at, tested by name,
-     * and given its reason in one place. Adding an eighth is a member and a clause, not another
-     * `return null` in the middle of six others.
      */
     enum class Situation {
         /** Nothing was offered at all. */
         NothingOffered,
 
-        /**
-         * The answer is about a different moment. The engine has one thread and answers by
-         * posting back, so a delimiter can be typed before the answer for the word just
-         * finished has arrived; applying it would correct the word being committed to a word
-         * never asked about. "tinde" reaching "idependent" was this -- no edit budget reaches
-         * one from the other, so it was never the answer to "tinde" at all.
-         */
+        /** The answer is for an earlier query, not for what was typed. */
         StaleAnswer,
 
-        /**
-         * What was typed ends in a mark -- an apostrophe or a hyphen -- which is typed on
-         * purpose: the word is still being written ("that'" on its way to "that'll"), or it
-         * is a possessive plural ("years'"). What follows a mark is not guessed at.
-         */
+        /** What was typed ends in an apostrophe or a hyphen. */
         TrailingMark,
 
-        /**
-         * Further from what was typed than a slip could account for. A ceiling on top of the
-         * engine's ranking, which only ever decides *which* candidate comes first, never
-         * whether it is close enough to be a correction. A correct word the dictionaries do not
-         * know ("snobul") was being replaced by whatever ranked first, however far away
-         * ("noul", two edits on six letters).
-         */
+        /** The answer is more edits from what was typed than the distance setting allows. */
         TooFar,
 
-        /**
-         * A name, offered for a word that is not it. A name corrects only its own letters:
-         * "maria" may become "Maria" and "laurentiu" "Laurențiu", but "everyone" must never
-         * become "Everton" nor "thanks" "Hanks". A typo two edits from somebody's name is still
-         * a typo, not that person.
-         */
+        /** A name offered for a word whose letters are not the name's. */
         NameMismatch,
 
         /** Once cased, the answer is what was typed. Nothing to do. */
         NoChange,
 
-        /**
-         * Too short to guess about, and not an accent being restored. "in" reaching "în" is two
-         * real words that differ by an accent, not a coin toss, so it is not caught here.
-         */
+        /** Shorter than the minimum length, and not an accent being restored. */
         TooShort,
 
-        /**
-         * The dictionaries spell it, so it is a word, and a keyboard does not correct words.
-         * Except for a name being recased: there `knownWord` equalling what was typed is the
-         * *reason* there is something to do -- the dictionary is offering the same word with a
-         * capital, not a different word.
-         */
+        /** The dictionaries spell what was typed, and it is not a name being capitalised. */
         KnownWord,
 
         /**
-         * A regular inflection of a word the dictionaries hold -- "smooths", "treeing" --
-         * offered a word not built on that stem. The stem is the dictionaries', the ending is
-         * the language's; see [WordStems]. Not reached when the answer differs from what was
-         * typed only by accents, case or marks.
+         * A regular inflection of a dictionary word ([WordStems]), offered a word that differs in
+         * more than accents, case or marks.
          */
         Inflection,
 
@@ -118,11 +48,8 @@ internal object AutoCorrection {
     }
 
     /**
-     * Which [Situation] this is. [cased] is the answer with [matchCase] already applied, since
-     * two of the questions are about the text as it would actually land. [inflection] is
-     * [WordStems.shields]'s answer for [typed] against [suggestion].
-     *
-     * The order is load-bearing: each later check assumes the earlier ones have been ruled out.
+     * Which [Situation] this is, checked in order. [cased] is the answer after [matchCase];
+     * [inflection] is [WordStems.shields]'s answer for [typed] against [suggestion].
      */
     fun situationOf(
         typed: String,
@@ -153,6 +80,7 @@ internal object AutoCorrection {
         else -> Situation.Correctable
     }
 
+    /** The correction to apply, cased like [typed], or null to commit what was typed. */
     fun correctionFor(
         typed: String,
         suggestion: String?,
@@ -164,17 +92,7 @@ internal object AutoCorrection {
         capitaliseNames: Boolean = true,
         inflection: Boolean = false,
     ): String? {
-        // Cased once, up front, rather than compared raw and separately case-insensitively:
-        // "would this actually change anything once matchCase has had its say" is the one
-        // question both of the old separate checks (exact match, and match but for case) were
-        // really asking, and asking it this way is also what lets a name exactly matching what
-        // was typed -- "ana" against the dictionary's own "ana" -- still become a correction
-        // when isProperNoun says the only thing wrong with it is the case.
-        //
-        // [capitaliseNames] gates only the capital, never NameMismatch: with the setting off a
-        // name is cased like any other word, but it still may not correct anything but its own
-        // letters. The two uses of the flag are separate questions, and only the first is a
-        // preference -- "everyone" must not become "Everton" whatever the user chose.
+        // [capitaliseNames] gates only a name's capital, not [Situation.NameMismatch].
         val cased = matchCase(typed, suggestion.orEmpty(), isProperNoun && capitaliseNames)
         val situation = situationOf(typed, suggestion, suggestionQuery, knownWord, cased,
                                     minimumLength, isProperNoun, maxEdits, capitaliseNames,
@@ -188,24 +106,13 @@ internal object AutoCorrection {
         stripDiacritics(typed).filter { it.isLetter() } ==
             stripDiacritics(suggestion).filter { it.isLetter() }
 
-    /**
-     * Whether [typed] and [suggestion] are the same letters, differing only in accents and
-     * case -- "in"/"în", "sa"/"să". This is a separate, looser fold than the dictionary's own
-     * (`foldCodePoint` in proximity.cpp), which stays the single source of truth for what the
-     * engine considers the same word. This one only has to tell "restoring an accent" apart from
-     * "guessing a different word" for the [minimumLength] gate above, so Unicode's own canonical
-     * decomposition is enough -- it does not need to agree with the native fold character for
-     * character the way the Kotlin/C++ pair documented there does.
-     */
+    /** Whether [typed] and [suggestion] differ only in accents and case. */
     private fun isDiacriticOnlyDifference(typed: String, suggestion: String): Boolean =
         stripDiacritics(typed) == stripDiacritics(suggestion)
 
     /**
-     * The edit ceiling [correctionFor] applies for a word of [typedLength] letters under the
-     * user's `correctionDistance` setting (`KeyboardPreferences.CORRECTION_DISTANCE_*`, passed
-     * as a plain int because `:keyboard` cannot reference `:data`'s constants):
-     * strict is one edit, loose is two, and the default allows the second edit only once a
-     * word is long enough (eight letters) for two slips to be likelier than a different word.
+     * The edit ceiling for a word of [typedLength] letters under the `correctionDistance` setting:
+     * one when strict, two when loose, and by default two from [LONG_WORD_LETTERS] letters on.
      */
     fun maxEditsFor(typedLength: Int, distanceSetting: Int): Int = when (distanceSetting) {
         DISTANCE_STRICT -> 1
@@ -214,10 +121,8 @@ internal object AutoCorrection {
     }
 
     /**
-     * Optimal string alignment distance -- Levenshtein plus a swap of two adjacent letters as a
-     * single edit, since "teh" for "the" is one slip, not two. Both inputs are already folded by
-     * the caller. Two short rows, allocated per call; this runs once per delimiter, never per
-     * frame.
+     * Optimal string alignment distance: Levenshtein, with a swap of two adjacent letters as one
+     * edit.
      */
     fun editDistance(a: String, b: String): Int {
         if (a == b) return 0
@@ -243,26 +148,17 @@ internal object AutoCorrection {
         return previous[b.length]
     }
 
-    /** Mirrors `KeyboardPreferences.CORRECTION_DISTANCE_STRICT/LOOSE`; `:keyboard` cannot
-     *  reference `:data`'s constants directly, the same reasoning `forSetting` gives elsewhere. */
-    /**
-     * The shortest word an accent may be restored on, below which [minimumLength] is not waived.
-     *
-     * Restoring one is exempt from that setting because the short words are exactly where it
-     * matters -- "sa" for "să", "in" for "în", "si" for "și" -- and a minimum of three would
-     * refuse every one of them. The exemption had no floor, so a single letter qualified too:
-     * typing "t" offered "ț", which is not a word in any language this ships. Two is the
-     * shortest that can be one.
-     */
+    /** The shortest word an accent may be restored on below the minimum length. */
     const val MIN_DIACRITIC_LENGTH = 2
 
+    /** Same as `KeyboardPreferences.CORRECTION_DISTANCE_STRICT` and `_LOOSE`. */
     const val DISTANCE_STRICT = 0
     const val DISTANCE_LOOSE = 2
 
     /** From this many letters on, the default setting allows a second edit. */
     const val LONG_WORD_LETTERS = 8
 
-    /** The marks a word may end in while it is still being written: the apostrophes and the hyphen. */
+    /** The marks a word may end in while still being written: the apostrophes and the hyphen. */
     private const val TRAILING_MARKS = "'’‘ʼ-"
 
     private fun stripDiacritics(word: String): String =
@@ -271,38 +167,15 @@ internal object AutoCorrection {
             .lowercase()
 
     /**
-     * Gives a correction the capitalisation of the word it replaces.
-     *
-     * The built-in dictionaries store lower-case spellings, so a correction from one of those
-     * arrives lower case whatever was typed. The personal dictionary is not so tidy: it keeps the
-     * literal spelling last committed (see `UserModel::learn`), which is capitalised whenever
-     * that commit happened to be -- a genuine sentence start, a host app misreporting its caps
-     * state, or a stray shift press -- and that capital survives in storage regardless of where
-     * the word is typed next. Left unchecked that reads as a personal word "randomly" showing up
-     * capitalised mid-sentence, so both branches below fully decide the correction's case rather
-     * than only ever adding a capital never seen -- restoring one just as readily as removing one
-     * a dictionary should not have offered.
-     *
-     * [isProperNoun] reaches here already combined with the "capitalise names" preference by
-     * every caller -- see correctionFor's own [capitaliseNames]. It means the dictionary flagged
-     * [correction] a name (see
-     * PackedTrie::isProperNoun) -- capitalised regardless of what [typed] looked like, the one
-     * override this function makes that is not about [typed] at all, because a name is not a
-     * guess about which key the user meant to reach the way the rest of this function is. The
-     * personal dictionary never sets this (there is no name classifier for a freshly learned
-     * word), so a learned name only reads capitalised here when [typed] itself was.
-     * Checked after the all-caps branch, not before: caps lock is a deliberate, stronger
-     * instruction than "capitalise this one word", so "ANA" typed in full caps still shouts,
-     * exactly as any other word would.
+     * Gives [correction] the capitalisation of [typed]: all capitals when [typed] has more than
+     * one letter and no lower case, else the case of its first letter. [isProperNoun], already
+     * combined with the "capitalise names" setting, capitalises the first letter unless [typed]
+     * is all capitals.
      */
     fun matchCase(typed: String, correction: String, isProperNoun: Boolean = false): String {
         if (typed.isEmpty() || correction.isEmpty()) {
             return correction
         }
-        // Shouted, and more than one *letter*: two capitals are a decision, one is the start of a
-        // sentence. A single "I" stays "I" rather than becoming a shout -- and so does "I'" or
-        // "A-", where the second character is an apostrophe or hyphen (word characters to the
-        // keyboard, but not capitals anyone chose).
         if (typed.count { it.isLetter() } > 1 && typed.none { it.isLowerCase() }) {
             return correction.uppercase()
         }

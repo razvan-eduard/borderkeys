@@ -7,16 +7,8 @@ import android.content.res.AssetManager
 import org.json.JSONObject
 
 /**
- * The diacritics an enabled language pack lends to the letter keys.
- *
- * The base layout carries no language-specific accents -- see `assets/layouts/qwerty.json`.
- * Each bundled language has a small `assets/accents/<tag>.json` instead, mapping a plain letter
- * to its accented forms, and the keyboard merges the ones for the languages the user has turned
- * on. Enable Romanian and `a` holds ă â; turn it off and it does not. Accents follow the
- * Languages screen, not the layout.
- *
- * Every failure is empty, not an exception: a missing or malformed overlay means a key without
- * that accent, never a keyboard that will not draw.
+ * The diacritics the enabled languages lend to the letter keys' long press, from
+ * `assets/accents/<tag>.json`. A missing or malformed file lends none.
  */
 object AccentOverlays {
 
@@ -37,11 +29,7 @@ object AccentOverlays {
         }
     }.getOrElse { emptyMap() }
 
-    /**
-     * One overlay from several, in the given order, each letter's forms concatenated with the
-     * duplicates dropped. The order is the order the packs are enabled in, so the first
-     * language's accent is the one the corner hint shows.
-     */
+    /** One overlay from several, in order, each letter's forms concatenated without repeats. */
     fun merge(perLanguage: List<Map<Char, String>>): Map<Char, String> {
         val out = LinkedHashMap<Char, StringBuilder>()
         for (map in perLanguage) {

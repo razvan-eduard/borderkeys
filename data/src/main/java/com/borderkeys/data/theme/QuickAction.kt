@@ -4,15 +4,8 @@
 package com.borderkeys.data.theme
 
 /**
- * The things a quick-action button can do.
- *
- * Stored as [id] rather than as an ordinal, so reordering this list or removing an action does
- * not silently turn someone's saved bar into a different bar. An id no build knows is dropped
- * when the bar is read, which is what makes it safe to remove one later.
- *
- * Every action here is something that is otherwise several gestures: a long press to select, a
- * drag to extend, a menu to find "copy". That is the whole selection criterion -- a button that
- * saves one tap is not worth the row it sits in.
+ * The things a quick-action button can do, stored by [id]; an id this build does not know is
+ * dropped when the bar is read.
  */
 enum class QuickAction(val id: Int) {
 
@@ -49,12 +42,7 @@ enum class QuickAction(val id: Int) {
     /** Moves the cursor to the end of the text. */
     CURSOR_END(11),
 
-    /**
-     * Inserts a line break.
-     *
-     * Worth a button because in a messaging app the return key sends the message, and the
-     * gesture for "new line without sending" is different in every one of them.
-     */
+    /** Inserts a line break. */
     NEWLINE(12),
 
     /** Switches to the next enabled layout, the same as the globe key. */
@@ -66,16 +54,12 @@ enum class QuickAction(val id: Int) {
     /**
      * Steps back through what this keyboard has done to the field this session, one word or
      * paste or deletion at a time.
-     *
-     * Not in [DEFAULT] -- worth choosing rather than finding, the same as [COMPOSE].
      */
     UNDO(15),
 
     /**
-     * Opens the draft box: a place to write that the application cannot see.
-     *
-     * Seeded from the selection when there is one. Not in [DEFAULT] -- a bar of five is already
-     * a bar of five, and this is worth choosing rather than finding.
+     * Opens the draft box, a place to write that the application cannot see, seeded from the
+     * selection when there is one.
      */
     COMPOSE(16),
 
@@ -96,7 +80,7 @@ enum class QuickAction(val id: Int) {
      */
     NORMALISE(19),
 
-    /** Moves the cursor one character left -- the arrow key a phone keyboard does not have. */
+    /** Moves the cursor one character left. */
     CURSOR_LEFT(20),
 
     /** Moves the cursor one character right. */
@@ -110,28 +94,21 @@ enum class QuickAction(val id: Int) {
     ;
 
     /**
-     * Whether this can be one step of a [CustomQuickAction] macro.
-     *
-     * A macro runs its steps back to back with nothing shown in between, so a step has to be a
-     * plain edit on the field and nothing else: [CLIPBOARD_HISTORY] opens a panel and only acts
-     * once something is picked from it later, which a macro cannot wait for; [SWITCH_LAYOUT],
-     * [SETTINGS] and [COMPOSE] all leave the field for something else entirely (another IME
-     * subtype, another Activity) rather than editing it. Every other action reads or writes
-     * through [android.view.inputmethod.InputConnection] alone and finishes within the tap that
-     * started it, which is what makes it safe to chain.
+     * Whether this can be one step of a [CustomQuickAction] macro: an edit through the
+     * [android.view.inputmethod.InputConnection] alone that finishes within its tap.
      */
     val macroEligible: Boolean
         get() = this !in setOf(CLIPBOARD_HISTORY, SWITCH_LAYOUT, SETTINGS, COMPOSE)
 
     companion object {
-        /** What a new install starts with: the five that answer "I want that text somewhere". */
+        /** What a new install starts with. */
         val DEFAULT: List<QuickAction> = listOf(
             COPY_PREVIOUS_WORD, COPY_ALL, PASTE, CLIPBOARD_HISTORY, SELECT_ALL,
         )
 
         fun fromId(id: Int): QuickAction? = idMatching(entries.toTypedArray(), id) { it.id }
 
-        /** Drops ids this build does not know, so an older bar opens rather than failing. */
+        /** The actions for [ids], dropping ids this build does not know. */
         fun fromIds(ids: List<Int>): List<QuickAction> =
             idsMatching(entries.toTypedArray(), ids) { it.id }
     }

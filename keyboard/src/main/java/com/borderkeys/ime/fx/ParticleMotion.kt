@@ -8,26 +8,14 @@ import kotlin.math.exp
 import kotlin.math.sin
 
 /**
- * Where a particle sits at a given age, in closed form.
- *
- * Every function here takes the particle's fixed spawn point plus how long it has lived, and
- * returns where it is *now* -- never a velocity to integrate. That is the whole reason a
- * [ParticleField] can hold a particle as `spawnX`/`spawnY`/`ageSeconds` and nothing else: there is
- * no "current position" to carry from one frame to the next, so there is nothing here for a
- * frame's rounding error to accumulate in either.
- *
- * Pure and allocation-free, the same shape as
- * [com.borderkeys.ime.RadialSuggestionMenuView.wedgeCentreDegrees] -- plain numbers in, one
- * `Float` out, safe to call sixty times a second per particle.
+ * Where a particle is at a given age, in closed form from its spawn point. Pure and
+ * allocation-free.
  */
 object ParticleMotion {
 
     /**
-     * Horizontal drift for the rise-and-shrink motion (the "Fire" preset).
-     *
-     * The direction is not stored anywhere: it falls out of the spawn point itself, even/odd on
-     * its truncated `spawnX`, so two particles spawned a pixel apart drift opposite ways without
-     * the field needing a seed array just to remember which.
+     * Horizontal drift for the rise-and-shrink motion, leftwards or rightwards as the truncated
+     * [spawnX] is even or odd.
      */
     fun riseAndShrinkX(spawnX: Float, ageSeconds: Float, driftPxPerSecond: Float): Float {
         val direction = if (spawnX.toInt() % 2 == 0) 1f else -1f
@@ -38,21 +26,13 @@ object ParticleMotion {
     fun riseAndShrinkY(spawnY: Float, ageSeconds: Float, riseSpeedPxPerSecond: Float): Float =
         spawnY - riseSpeedPxPerSecond * ageSeconds
 
-    /**
-     * Exponential decay, the closed-form equivalent of "shrinks by a fraction every second": a
-     * loop that multiplied the radius by `(1 - rate * dt)` every frame would approach this same
-     * curve in the limit of small `dt`, but would also have to store the shrinking radius itself
-     * as state. This computes it directly from age instead.
-     */
+    /** The radius decaying exponentially at [shrinkPerSecond]. */
     fun riseAndShrinkRadius(spawnRadiusPx: Float, ageSeconds: Float, shrinkPerSecond: Float): Float =
         spawnRadiusPx * exp(-shrinkPerSecond * ageSeconds)
 
     /**
-     * The outline layer's own motion: straight out along the spawn point's outward normal
-     * ([normalX]/[normalY]) at [outwardPxPerSecond], plus a constant drift of [driftPxPerSecond]
-     * along the preset's emit direction ([driftX]/[driftY], a unit vector). Both terms are linear
-     * in age, so like every other motion here there is no state to carry between frames; and
-     * since the normal always points away from the element, a particle is never inside it.
+     * The outline motion: out along the normal ([normalX], [normalY]) at [outwardPxPerSecond],
+     * plus a drift of [driftPxPerSecond] along the unit vector ([driftX], [driftY]).
      */
     fun outwardX(spawnX: Float, normalX: Float, driftX: Float, ageSeconds: Float, outwardPxPerSecond: Float, driftPxPerSecond: Float): Float =
         spawnX + (normalX * outwardPxPerSecond + driftX * driftPxPerSecond) * ageSeconds
@@ -60,15 +40,11 @@ object ParticleMotion {
     fun outwardY(spawnY: Float, normalY: Float, driftY: Float, ageSeconds: Float, outwardPxPerSecond: Float, driftPxPerSecond: Float): Float =
         spawnY + (normalY * outwardPxPerSecond + driftY * driftPxPerSecond) * ageSeconds
 
-    /** Oscillates around the spawn point -- the "Glow" and "Rainbow" presets' motion. */
+    /** Oscillates around the spawn point. */
     fun pulseInPlaceY(spawnY: Float, ageSeconds: Float, amplitudePx: Float, frequencyHz: Float): Float =
         spawnY + amplitudePx * sin(ageSeconds * frequencyHz * TWO_PI)
 
-    /**
-     * A travelling wave, not synchronised bobbing: the phase depends on [spawnX], so a whole
-     * field of particles reads as one wave passing through rather than everything pulsing in
-     * lockstep.
-     */
+    /** A travelling wave, its phase from [spawnX]. */
     fun waveDriftY(
         spawnX: Float,
         spawnY: Float,
@@ -84,8 +60,7 @@ object ParticleMotion {
         return spawnY + amplitudePx * sin(phase)
     }
 
-    // Static flicker needs no function of its own: x stays spawnX, y stays spawnY: only the
-    // colour moves, in ParticleColor.singleColorPulse.
+    // Static flicker stays at the spawn point; only its colour moves.
 
     private val TWO_PI = (2.0 * PI).toFloat()
 }

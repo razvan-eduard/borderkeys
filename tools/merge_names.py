@@ -4,80 +4,15 @@
 
 """Merges a make_names.py list into an already-built `dictionaries/<tag>.tsv`.
 
-Why this exists rather than `make_pack.py --names`
---------------------------------------------------
-`make_pack.py` merges names while it is building a pack out of a corpus, and the corpora the
-bundled packs were built from are not in this repository -- they are tens of gigabytes of text.
-`dictionaries/<tag>.tsv` IS the surviving output of that stage, so a new name list has to be
-merged into it in place, and `build_dict.py` recompiles the pack from there.
+Edits the list in place; `build_dict.py` recompiles the pack from it. The guards are
+`make_pack.py`'s own, imported: `name_allowed` and `NAME_ADD_MIN_USES`.
 
-Feeding the `.tsv` back through `make_pack.py --frequencies` is not the same thing and would
-lose work: `read_frequencies` reads a name row's count correctly but returns only counts, so
-every existing proper-noun flag -- 48,123 of them in English, including everything
-`flag_names.py` found -- would be dropped on the floor. Editing in place is also what makes the
-result reviewable, because the diff is exactly the set of rows that changed.
+Flagging a word the list already has is also refused when any shipped language's spell checker
+accepts it in lower case. Adding a word the list does not have asks only this language's own
+dictionary.
 
-The guards are `make_pack.py`'s own, imported rather than copied, so there is one definition of
-what may carry the flag: `name_allowed` (the treebank, the spelling list, the frequency tiers)
-and `NAME_ADD_MIN_USES` for whether a word the corpus never wrote down may be added at all.
-
-The one guard this adds
------------------------
-**A word that is an ordinary lower-case word in ANY language we ship is never a name, whatever
-Wikidata says.** Every spell checker passed on the command line vetoes, not just the one
-belonging to the list being merged.
-
-`make_pack.name_allowed` has a version of this rule but lets the treebank overrule it, which is
-right for a person's name and wrong for a company's. Real organisations are named after ordinary
-words, so the entity list offers `zero`, `joy`, `guard`, `opera`, `blues` and `sentenced` in
-English -- and a web treebank has met the company more often than the word, so it tags them as
-proper nouns and the veto never fires.
-
-Asking only the list's own language is not enough, and the number is why. Languages borrow, and
-the borrowed word arrives in lower case without ever becoming a headword in the borrower's
-dictionary: Romanian writes `live`, `punk` and `rap`, Italian writes `blogger` and `ceo`, French
-writes `arena` and `ghost`, and no Romanian, Italian or French spell checker has any of them.
-Measured across the six bundled languages, 977 flagged words are ordinary somewhere -- 9% of
-English, 27% of German -- so a per-language rule leaves a thousand-word hand list to curate and
-keep curated. Asking every shipped dictionary costs one subprocess per language and needs no
-list at all.
-
-German is the case that makes this necessary rather than merely tidy. German capitalises every
-noun, so its own spell checker refuses `panik`, `pilot` and `investor` in lower case exactly as
-it refuses a name, and the veto is structurally inert there -- the same reason `flag_names.py`
-refuses German outright in `CAPITALISES_EVERY_NOUN`. The other five dictionaries are what still
-work on it.
-
-The cost, stated plainly: a word that is both an ordinary word somewhere and a real name here is
-refused. English `amazon`, `intel`, `shell`, `orange` and `sky` go, and so does German `island`,
-which is German for Iceland. They keep their corpus row and stay uncapitalised, which is what
-they already did -- the trade is a name not gained against an ordinary word wrongly capitalised
-in the middle of a sentence, and the second is the worse keyboard.
-
-What survives is what no dictionary anywhere holds, which is exactly the class this list exists
-for: `ubisoft`, `bytedance`, `paribas`, `xiaomi`, `spacex`, `kaufland`, `transgaz`, `biontech`.
-
-Adding asks a narrower question than flagging
----------------------------------------------
-The rule above is for **flagging** -- giving the proper-noun bit to a word the corpus already
-has, which changes how something the user already types behaves, and deserves the strictest
-test available.
-
-**Adding** a word the corpus never wrote down is a different question, and only this language's
-own dictionary is asked. Every-language would be wrong here, and country names are why: `chile`
-is a pepper in English, `argentina` is "silvery" in Italian, `ecuador` is the equator in
-Spanish. Measured, the strict rule costs 16 of 25 country names while the narrow one costs
-none, and it costs nothing in safety -- a word the corpus does not contain is not a word this
-language's users are currently typing and having capitalised out from under them.
-
-
-The alphabet
-------------
-Letters outside the ones the language actually writes with are dropped -- `islām`, `hokkaidō`,
-`mahārāṣṭra` -- because a word that cannot be typed on the layout cannot be looked up either.
-The alphabet is read off the pack's own most frequent words rather than declared, which gives
-26 letters for English and 34 for Romanian. Read it off too deep a slice and corpus noise
-starts contributing: at 20,000 words English picks up `ā` and `α` and the filter stops working.
+A word with a letter outside the language's alphabet is dropped; the alphabet is read off the
+pack's ALPHABET_SAMPLE most frequent words.
 
 Usage
 -----
@@ -99,17 +34,10 @@ from pathlib import Path
 
 import make_pack
 
-# How deep into the pack to look when working out which letters the language writes with. Deep
-# enough to have seen every letter, shallow enough that the corpus's own foreign-word tail has
-# not started: measured, 5,000 gives English exactly its 26 and Romanian its 34, while 20,000
-# gives English 30 and the extra four are noise.
+# How deep into the pack to look when working out which letters the language writes with.
 ALPHABET_SAMPLE = 5_000
 
-# Below this there is not enough word to judge. Two-letter tokens are overwhelmingly
-# abbreviations, particles and state codes -- the person list offers "wa", "ga" and "mi", each
-# of them somebody's name to Wikidata -- and a spell checker's verdict on them says more about
-# its own abbreviation list than about the language. Same floor and same reason as
-# flag_names.py's MIN_LENGTH and make_names.py's MIN_NAME_LENGTH.
+# The shortest word judged, as flag_names.py's MIN_LENGTH and make_names.py's MIN_NAME_LENGTH.
 MIN_LENGTH = 3
 
 
@@ -128,13 +56,7 @@ def read_rows(path: Path) -> list[tuple[str, str, bool]]:
 def accepted_lower_case(words: list[str], dictionaries: list[Path]) -> set[str]:
     """Which of [words] at least one of these spell checkers accepts in lower case.
 
-    One accepting is enough to veto, and that is the whole point: these are every language the
-    project ships, not just the one being merged. A word that is ordinary in British but not
-    American English is still an ordinary word; so is one that is ordinary in English and merely
-    borrowed into Romanian, which is where `live`, `punk` and `rap` come from.
-
-    A spell checker that will not run vetoes nothing, and says so. That is the safe direction
-    here -- the opposite default would silently let the whole list through.
+    A spell checker that will not run vetoes nothing, and says so.
     """
     if not words:
         return set()
@@ -271,9 +193,8 @@ def main() -> int:
         print(f"    review written: {arguments.report}")
 
     if arguments.apply:
-        # Existing rows keep their order and their real corpus frequency; only the third column
-        # moves. Added rows go on the end at the flat frequency, which is what make_pack.py does
-        # with a name the corpus never wrote down.
+        # Existing rows keep their order and frequency; only the third column moves. Added rows
+        # go on the end at the flat frequency, as make_pack.py adds them.
         written = [f"{line}\tname" if word in flag else line for word, line, _ in rows]
         written.extend(f"{word}\t{flat[word]}\tname" for word in sorted(add))
         path.write_text("\n".join(written) + "\n", encoding="utf-8")

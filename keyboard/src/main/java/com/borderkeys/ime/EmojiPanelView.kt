@@ -15,18 +15,8 @@ import android.widget.OverScroller
 import com.borderkeys.theme.ThemePaints
 
 /**
- * The emoji picker: a scrolling grid with a row of category tabs.
- *
- * The list comes from Unicode's own emoji-test.txt, compiled to an asset by
- * tools/build_emoji.py, in the order that file recommends for keyboard palettes. Nothing is
- * hand-sorted here, and skin-tone variants are left out -- they multiply the grid by six for a
- * choice a strip of tabs has no room to offer. The same tool compiles each emoji's name into a
- * second asset, which [query] searches: the word being typed when the panel opens is looked up
- * and its matches shown first, under the magnifier tab, until a tab is picked.
- *
- * Drawn like the rest of the keyboard: one View, one onDraw, arithmetic hit testing, and only
- * the rows the viewport shows. The glyphs come from the system font, so the keyboard ships no
- * emoji images and looks like the phone it is running on.
+ * The emoji picker: a scrolling grid with a row of category tabs, from the list
+ * tools/build_emoji.py compiles, without skin-tone variants, drawn in the system font.
  */
 @SuppressLint("ViewConstructor")
 class EmojiPanelView(
@@ -50,9 +40,8 @@ class EmojiPanelView(
     private var selectedTab = 0
 
     /**
-     * The word the grid is searched by. Its matches take the grid, under the magnifier drawn in
-     * place of the recents tab, until a tab is picked; a word with no match leaves the recents
-     * up. Set after [load], which is what fills the index.
+     * The word the grid is searched by: its matches replace the recents, under a magnifier tab,
+     * until a tab is picked. Set after [load].
      */
     var query: String = ""
         set(value) {
@@ -67,12 +56,7 @@ class EmojiPanelView(
      */
     var keywords: Map<String, List<String>> = emptyMap()
 
-    /**
-     * The last emoji used, most recent first.
-     *
-     * Held here and handed to the service to persist. A picker that forgets what you just used
-     * is a picker you scroll through again every time.
-     */
+    /** The last emoji used, most recent first; the service persists them. */
     var recents: List<String> = emptyList()
         set(value) {
             field = value.take(MAX_RECENTS)
@@ -114,15 +98,13 @@ class EmojiPanelView(
         isHapticFeedbackEnabled = true
     }
 
-    /** Reads the compiled list. Once per view, off the typing path. */
+    /** Reads the compiled list, once per view. */
     fun load(context: Context) {
         if (categories.isNotEmpty()) {
             return
         }
         runCatching {
-            // One line per category: name, tab, emoji separated by spaces. No parser, because
-            // no emoji contains a space or a tab and a JSON library has no business being in
-            // this process for a list of lists of strings.
+            // One line per category: its name, a tab, then the emoji separated by spaces.
             val names = ArrayList<String>()
             val lists = HashMap<String, List<String>>()
             context.assets.open(ASSET).bufferedReader().useLines { lines ->
@@ -184,7 +166,7 @@ class EmojiPanelView(
         contentHeight = (rows * cellPx).toInt()
     }
 
-    /** The class the keys play -- see [HapticStrength] -- so an emoji feels like a key. */
+    /** The [android.view.HapticFeedbackConstants] class an emoji plays, the same as the keys'. */
     var hapticConstant: Int = android.view.HapticFeedbackConstants.KEYBOARD_TAP
     var hapticEnabled: Boolean = true
 
@@ -248,8 +230,7 @@ class EmojiPanelView(
                     left + step * 0.8f, tabHeightPx - 2f, paints.accent,
                 )
             }
-            // A representative emoji per tab rather than an icon set of its own: the tabs are
-            // then in the same font as their contents and need no drawable per category.
+            // Each tab shows an emoji.
             val text = tabGlyph(index)
             val length = text.length.coerceAtMost(glyph.size)
             text.toCharArray(glyph, 0, 0, length)
@@ -270,10 +251,10 @@ class EmojiPanelView(
         return byCategory[categories[index - 1]]?.firstOrNull() ?: "•"
     }
 
-    /** The left edge of grid column [column], the columns counted from the right when [rightToLeft]. */
+    /** The left edge of grid column [column], counted from the right when [rightToLeft]. */
     private fun columnLeft(column: Int): Float = Mirror.cellLeft(column, cellPx, width.toFloat(), rightToLeft)
 
-    /** Where tab [index] of [count] sits, counted from the left edge: mirrored when [rightToLeft]. */
+    /** Where tab [index] of [count] sits from the left edge, mirrored when [rightToLeft]. */
     private fun slotOf(index: Int, count: Int): Int = Mirror.slot(index, count, rightToLeft)
 
     private fun cellAt(x: Float, y: Float): Int {
@@ -387,11 +368,10 @@ class EmojiPanelView(
         /** The grid's view of a search: the tab before the recents, never drawn as a tab. */
         const val SEARCH_TAB = -1
 
-        /** The most matches a word shows. Three rows on most phones, and a name rarely fits
-         *  more. */
+        /** The most matches a word shows. */
         const val MAX_MATCHES = 30
 
-        /** How many recents are kept. A row and a half on most phones. */
+        /** How many recents are kept. */
         const val MAX_RECENTS = 24
 
         const val TAB_HEIGHT_ROWS = 0.62f

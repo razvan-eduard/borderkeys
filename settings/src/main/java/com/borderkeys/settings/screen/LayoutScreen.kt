@@ -49,12 +49,7 @@ import com.borderkeys.settings.rememberPreferencesUpdater
 
 /**
  * The keys: how many rows, what the long press reaches, how big the letters are, how long a hold
- * takes -- and, at the bottom, the input-method subtypes the platform owns.
- *
- * Separate from Languages on purpose, and the explanation on it is the point: there is one
- * QWERTY, and which accents sit on the letters is decided by the enabled dictionaries, not by a
- * layout. Separate from Size only because a resize is a drag gesture with its own screen; the
- * key toggles that used to live there are here now, where the rest of the keys are.
+ * takes, and, at the bottom, the input-method subtypes the platform owns.
  */
 @Composable
 fun LayoutScreen(modifier: Modifier = Modifier) {
@@ -159,8 +154,7 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.SIZE_SPACE_CURSOR_NOTE],
                 checked = preferences.spaceCursorControl,
             ) { value -> update { it.copy(spaceCursorControl = value) } }
-            // The two ways a key press can be felt without being seen. Here with the keys
-            // rather than on a screen of their own: two switches were not a screen.
+            // The two ways a key press can be felt without being seen.
             SwitchRow(
                 title = strings[Keys.SIZE_KEY_SOUND],
                 subtitle = strings[Keys.SIZE_KEY_SOUND_NOTE],
@@ -219,9 +213,7 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 ) { value -> update { it.copy(hapticRing = value) } }
             }
 
-            // Set once and left: how long a hold is, and what the enter key does in a field
-            // that has its own action -- the latter folded in from its own card, which was a
-            // title over three chips.
+            // How long a hold is, and what the enter key does in a field that has its own action.
             AdvancedSection(strings[Keys.LAYOUT_ADVANCED_KEYS_NOTE]) {
                 Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
                     Text(
@@ -281,10 +273,8 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 onClick = {
                     context.startActivity(
                         Intent("android.settings.INPUT_METHOD_SUBTYPE_SETTINGS")
-                            // The input method's own component id: a name, not a sentence,
-                            // so it is built here from the class rather than read out of the
-                            // catalogue, where it sat as a translatable string that one "fixed"
-                            // translation would have broken this button with.
+                            // The input method's component id, built from the class, not a
+                            // catalogue string.
                             .putExtra(
                                 android.provider.Settings.EXTRA_INPUT_METHOD_ID,
                                 "${context.packageName}/${com.borderkeys.ime.BorderKeysService::class.java.name}",

@@ -18,7 +18,7 @@ class PredictionRequestQueueTest {
         }
         assertTrue(queue.take())
         assertEquals("word9", queue.currentComposing)
-        // Nothing else is waiting: the nine intermediate answers were already obsolete.
+        // Nothing else is waiting.
         assertFalse(queue.take())
         assertEquals(9, queue.droppedRequests)
     }

@@ -1,47 +1,17 @@
 # The same contract as pipeline_cases.tsv, against the Romanian pack.
 #
-# Its own file because the language is the fixture: a word is correct or not only with respect
-# to a dictionary, and "in" means opposite things in the two. Romanian is also where most of
-# this keyboard's reports come from.
-#
 #   typed <TAB> committed <TAB> reason
-#
-# Every line here is a requirement: what the keyboard must do, not what it currently does.
-#
-# Three of these once described a defect and were written green so the suite would pass. That
-# was a mistake worth naming, because it inverts what a suite is for: a passing line is
-# indistinguishable from a requirement, so CI went green *enforcing* the bug, and no change to
-# the keyboard was ever going to turn it red. A defect belongs in the tracker or in a red test,
-# never in a green one.
 
 # --- a missing accent is restored -------------------------------------------------------------
 totusi	totuși	Correctable
-
-# "daca" must reach "dacă" (94,655). The name "Dacia" entered the pack with the entity-name
-# merge on 2026-09-20 and outranked it for a while: the proper-noun guard then refused the
-# name and nothing was committed. Since pack format 4 keeps "dacă" beside "daca" under one
-# folded key, the respelling tier takes it and "Dacia" ranks sixth, an edit and a letter away.
 daca	dacă	Correctable
-
-# "in" must reach "în" (1,782,296) -- the commonest word in the language, and the plainest case
-# the accent restoration exists for. The diacritic-free spelling folds onto the accented one
-# exactly, so it is reached at no cost at all, and a zero-cost endpoint is scored as merely
-# unpenalised rather than as the strong reading it is. "ins" (508) is offered instead.
 in	în	Correctable
 
 # --- a correct Romanian word is left alone ----------------------------------------------------
 snobul	-	NothingOffered
-
-# "cana" must reach "cană" (170) and not "canal" (1,369). Both are reachable from the letters
-# typed: the first is the typed word with its diacritic restored, the second a different word
-# with a letter added. Ranked on frequency alone the commoner one wins -- which is the whole
-# defect, and why "totusi" -> "totuși" (9,779) has always worked while this never did. Not two
-# behaviours; one rule, decided by whichever side happens to be commoner.
 cana	-	NoChange
 
-# Capitalised, because the first letter of a field arrives capitalised and nothing else here
-# does. The engine matched a spelling against the letters typed byte for byte, so every one of
-# these was corrected away on a phone while the lower-case row beside it passed.
+# --- a capitalised word, as the first word of a field -----------------------------------------
 Ca	-	NoChange
 Sau	-	NoChange
 Fata	-	NoChange

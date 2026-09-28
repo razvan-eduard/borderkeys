@@ -5,9 +5,8 @@
 """Trains TcnEncoder (model.py) from scratch on the free swipe.futo.org corpus.
 
 CTC + emission-regularizer loss, AdamW with cosine decay, the coordinated trajectory+layout
-augmentation (augment.py) applied fresh every sample every epoch -- see docs/licensing.md section
-2.5 for why this exists (a free-weights alternative to FUTO's own non-free released weights) and
-model.py for the architecture this trains.
+augmentation (augment.py) applied fresh every sample every epoch. See docs/licensing.md section
+2.5, and model.py for the architecture.
 """
 
 from __future__ import annotations
@@ -26,10 +25,9 @@ from features_np import TIMESTEPS, build_features, resample_uniform_time
 from futo_layout import letters_in_order, load_futo_layout
 from model import TIMESTEPS_OUT, KeyEmbedding, TcnEncoder, key_log_probs
 
-# Training uses only "qwerty", matching the paper's own choice (see futo_layout.py's module doc)
-# -- QWERTY_LETTERS' order is the fixed index->letter mapping the CTC target alphabet and the
-# exported .bkw file both commit to, so it must stay whatever letters_in_order deterministically
-# produces (alphabetical), not swipe-5/layouts/qwerty.json's own key order.
+# Training uses only "qwerty", as the paper does (futo_layout.py). QWERTY_LETTERS' order, the
+# alphabetical one letters_in_order produces, is the index-to-letter mapping the CTC target
+# alphabet and the exported .bkw file both use.
 _QWERTY_CENTERS_BY_LETTER = load_futo_layout("qwerty")
 QWERTY_LETTERS = letters_in_order(_QWERTY_CENTERS_BY_LETTER)
 QWERTY_CENTERS = _QWERTY_CENTERS_BY_LETTER
@@ -51,15 +49,7 @@ class SwipeDataset(Dataset):
 
     def __getitem__(self, index: int):
         record = self.records[index]
-        # futo-org/swipe.futo.org already stores x/y as a canvas fraction, not pixels --
-        # confirmed 2026-09-13 by sampling raw points against their own canvas_width/height,
-        # which stayed near-constant across wildly different canvas sizes. Dividing by
-        # canvas_width/height again here, as an earlier version of this method did, squashed
-        # every gesture into a ~0.0025-wide sliver near the origin -- a scale this dataset's
-        # own resample_uniform_time docstring ("already normalised to [0,1]^2") and the C++
-        # implementation both correctly assume was never actually used, and every checkpoint
-        # trained under that bug learned a feature space no [0,1]-scaled input, real or
-        # synthetic, would ever land in.
+        # swipe.futo.org stores x/y as a canvas fraction already, in [0,1].
         xs = np.array(record["xs"], dtype=np.float32)
         ys = np.array(record["ys"], dtype=np.float32)
         ts = np.array(record["ts"], dtype=np.float64)
@@ -73,20 +63,12 @@ class SwipeDataset(Dataset):
 
         if reversed_word:
             word = word[::-1]
-        # Letters this layout doesn't have (punctuation, digits, an apostrophe) are dropped
-        # rather than failing the sample -- the same "untypeable letters are skipped, never
-        # guessed" rule the geometric engine already follows for the same reason.
+        # Letters this layout does not have (punctuation, digits, an apostrophe) are dropped.
         target = [self.letter_index[c] + 1 for c in word if c in self.letter_index]  # +1: 0 = blank
 
-        # CTC needs a blank between two adjacent occurrences of the same symbol to tell them
-        # apart from one extended emission of it, so a target with R adjacent-repeated letters
-        # needs len(target)+R timesteps at minimum. This is a standing trap in CTC training,
-        # and it fails silently: torch.nn.functional.ctc_loss's zero_infinity=True
-        # silently zeroes the loss/gradient for any example that doesn't fit, so every such
-        # example was training on nothing, unnoticed, rather than erroring. Filtered here, up
-        # front, rather than discovered downstream as a zeroed loss -- this dataset is also what
-        # eval_ctc.py evaluates against, so evaluation excludes the same structurally-infeasible
-        # examples training never actually learned from.
+        # CTC needs a blank between two adjacent occurrences of the same symbol, so a target
+        # with R adjacent-repeated letters needs len(target)+R timesteps at minimum. An example
+        # that does not fit is filtered out here; eval_ctc.py evaluates the same set.
         adjacent_repeats = sum(1 for a, b in zip(target, target[1:]) if a == b)
         if len(target) + adjacent_repeats > TIMESTEPS_OUT:
             return None
@@ -104,9 +86,7 @@ def collate(batch):
     targets = [torch.from_numpy(b[1]) for b in batch]
     target_lengths = torch.tensor([len(t) for t in targets], dtype=torch.int64)
     targets_flat = torch.cat(targets)
-    # Every sample in a batch was built from the SAME QWERTY_CENTERS, only perturbed by
-    # augmentation independently per sample -- so key centres are per-sample, not shared, exactly
-    # like the trajectory they were perturbed alongside.
+    # Key centres per sample: augmentation perturbs each sample's independently.
     key_centers = torch.from_numpy(np.stack([b[2] for b in batch]))
     return features, targets_flat, target_lengths, key_centers
 
@@ -117,16 +97,11 @@ def ctc_and_emission_loss(model: TcnEncoder, key_embedding: KeyEmbedding, featur
     intention, spectral = model(features)  # (B,T), (B,T,64)
     batch_size = features.shape[0]
 
-    # One basis matrix per sample, since augmentation perturbs each sample's key centres
-    # independently -- unlike inference, where one basis serves every gesture on one layout.
-    # Batched, not a Python loop over the batch: key_embedding and key_log_probs both broadcast
-    # over leading dimensions precisely so this scales to a thousand-sample batch without a
-    # thousand separate small matmuls -- the difference between an epoch and an afternoon at this
-    # size.
+    # One basis matrix per sample, batched: key_embedding and key_log_probs broadcast over
+    # leading dimensions.
     basis = key_embedding(key_centers)  # (B, K, 64)
     blank_lp, char_lp = key_log_probs(spectral, intention, basis)  # (B,T), (B,T,K)
-    # blank at index 0 to match PackedTrie's own kTerminalSymbol=0 convention (a coincidence of
-    # index, not of meaning -- see tcn_ctc_decoder.hpp's own note on this).
+    # blank at index 0, the index of PackedTrie's kTerminalSymbol (tcn_ctc_decoder.hpp).
     log_probs = torch.cat([blank_lp.unsqueeze(-1), char_lp], dim=-1)  # (B, T, K+1)
     log_probs = log_probs.transpose(0, 1)  # (T, B, K+1), what ctc_loss expects
 
@@ -135,10 +110,8 @@ def ctc_and_emission_loss(model: TcnEncoder, key_embedding: KeyEmbedding, featur
         log_probs, targets, input_lengths, target_lengths, blank=0, zero_infinity=True,
     )
 
-    # Emission-count regularizer: the SUM of the intention gate across the gesture should land
-    # near the number of letters actually being typed -- without this, sigmoid(0)=0.5 at every
-    # timestep is a cheap local optimum for the gate that the CTC loss alone does not clearly
-    # forbid early in training.
+    # Emission-count regularizer: the sum of the intention gate across the gesture should land
+    # near the number of letters being typed.
     expected_counts = target_lengths.to(intention.dtype)
     actual_counts = intention.sum(dim=1)
     emission_loss = torch.mean((actual_counts - expected_counts) ** 2)

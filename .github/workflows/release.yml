@@ -5,22 +5,10 @@ name: Release
 
 on:
   # A tag, and nothing else.
-  #
-  # This used to also fire on a push to main touching app/build.gradle.kts, on the theory that
-  # a version bump is the only reason that file changes. That is true for a finished app and
-  # false for one being built: adding ndkVersion, adding a signing config and adding a flavor
-  # each fired a release for a version that was never meant to ship, and the "has this version
-  # already been released?" guard cannot catch it, because a version nobody has released yet
-  # looks exactly like a version somebody wants released.
-  #
-  # A tag is a statement of intent. Cutting a release is one, and should be made deliberately.
   push:
     tags:
       - 'v*'
-  # A dispatched run builds and verifies but does not publish, unless this is ticked. A
-  # blanket block would also remove the only way to re-publish a release whose build succeeded
-  # and whose publish step failed; an explicit opt-in keeps the accident impossible and the
-  # deliberate case available.
+  # A dispatched run builds and verifies but does not publish, unless this is ticked.
   workflow_dispatch:
     inputs:
       publish:
@@ -28,10 +16,7 @@ on:
         type: boolean
         default: false
 
-# One release at a time. Two pushes landing close together would both force-move the same tag
-# and both delete the same release before recreating it, and which one won would depend on
-# runner scheduling. Queued rather than cancelled: a publish interrupted half way leaves a tag
-# pointing at a release that no longer exists.
+# One release at a time, queued rather than cancelled.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -41,8 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      # Provenance is signed with a short-lived OIDC identity and recorded in a transparency
-      # log; neither is possible without these two.
+      # For the provenance attestation: an OIDC identity and a transparency-log entry.
       id-token: write
       attestations: write
 
@@ -67,8 +51,7 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
-          # See ci.yml's own comment on this: the action's default "tools" package no longer
-          # exists in the SDK repository, so sdkmanager fails outright unless overridden.
+          # Not the action's default list, as in ci.yml.
           packages: platform-tools
 
       - name: Set up Gradle
@@ -82,9 +65,7 @@ jobs:
       - name: Install NDK and CMake
         run: sdkmanager --install "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}"
 
-      # A tag carries its own version. A dispatched run has no tag, so it reads the version out
-      # of the build file -- which is how "build this and let me look at it" works without
-      # having to tag something first.
+      # The tag's version, or, for a dispatched run, the build file's.
       - name: Determine version
         id: version
         run: |
@@ -103,13 +84,7 @@ jobs:
           fi
           echo "Release tag: $TAG"
 
-      # Same two prerequisites as CI, and for the same reason: the pipeline harness drives the
-      # real engine over JNI against the real packs, and neither is produced by `./gradlew
-      # test`. Absent them it used to skip itself silently, which is worst here of all places --
-      # BundledPackMetadataTest checks the recorded pack sizes against the compiled ones, and a
-      # release is exactly when a stale one ships to people. Pipeline.require() fails rather
-      # than skips when CI is set, so without this step the tests below would not merely skip,
-      # they would fail.
+      # The same two prerequisites as in ci.yml.
       - name: Build what the pipeline harness needs
         run: |
           set -euo pipefail
@@ -123,8 +98,7 @@ jobs:
       - name: Decode signing keystore
         run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
 
-      # The verification gates run as part of assemble; a release that skipped them would be
-      # the one build where it matters most.
+      # The verification gates run as part of assemble.
       - name: Build both flavors, signed
         env:
           RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.jks
@@ -142,14 +116,11 @@ jobs:
           done
           ls -l BorderKeys-*.apk
 
-      # Gradle only signs when it sees the keystore environment variables, and an unsigned APK
-      # installs over nothing. Assert rather than assume: a release that is quietly unsigned
-      # looks identical to one that is not until somebody tries to update.
+      # Gradle signs only when it sees the keystore environment variables.
       - name: The APKs are signed with the release certificate
         run: |
           set -euo pipefail
-          # -L: the SDK path on a runner is a tree of symlinks, and an unfollowed find matches
-          # nothing.
+          # -L: the SDK path on a runner is a tree of symlinks.
           BUILD_TOOLS="$(find -L "$ANDROID_HOME/build-tools" -maxdepth 1 -type d | sort -V | tail -1)"
           EXPECTED="${{ vars.RELEASE_CERT_SHA256 }}"
           for APK in BorderKeys-*.apk; do
@@ -167,8 +138,7 @@ jobs:
             fi
           done
 
-      # Same two assertions CI makes, repeated on the artifacts that are about to be published
-      # rather than on a build that resembles them.
+      # The same assertions as in ci.yml, on the artifacts about to be published.
       - name: The published core APK is free of permissions, models and assistant code
         run: |
           set -euo pipefail
@@ -231,8 +201,7 @@ jobs:
           } > RELEASE_NOTES.md
           cat RELEASE_NOTES.md
 
-      # A published tag is an address. Republishing the same commit is fine; moving a tag to a
-      # different commit replaces the bytes behind an address people have already downloaded.
+      # A published tag is never moved to a different commit.
       - name: Refuse to move a published tag
         if: github.event_name != 'workflow_dispatch' || inputs.publish
         env:
@@ -253,10 +222,7 @@ jobs:
 
       # Same gate as publishing. A tag that already resolves to this commit is left as it is,
       # annotation and message included; a missing tag, or one resolving elsewhere, is set to
-      # this commit.
-      # GITHUB_TOKEN can never carry the `workflows` scope, and what that forbids is making a
-      # ref point at a tree whose .github/workflows content differs from the repository's. Tag
-      # the tip and nothing differs.
+      # this commit, the tip, whose .github/workflows GITHUB_TOKEN may point a ref at.
       - name: Point the tag at this commit
         if: github.event_name != 'workflow_dispatch' || inputs.publish
         run: |
@@ -276,9 +242,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release delete "${{ steps.version.outputs.tag }}" --yes || true
 
-      # Ties these exact bytes to this commit, this workflow and this runner, signed. Someone
-      # who downloads the APK runs `gh attestation verify` and learns where it came from,
-      # rather than trusting it because of where it was hosted.
+      # Ties these exact bytes to this commit, this workflow and this runner, signed; checked
+      # with `gh attestation verify`.
       - name: Attest build provenance
         if: github.event_name != 'workflow_dispatch' || inputs.publish
         uses: actions/attest-build-provenance@v4

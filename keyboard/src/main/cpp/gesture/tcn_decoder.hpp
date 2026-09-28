@@ -12,15 +12,10 @@
 namespace borderkeys {
 
 /**
- * Tier B: a trained, layout-agnostic swipe decoder -- see `docs/licensing.md` section 2.5 and
- * `tools/swipe_model/` for where the weights this loads come from. `plus`-only; see
- * `BORDERKEYS_NEURAL_SWIPE` in CMakeLists.txt.
- *
- * `decode` is the same three-stage pipeline every call this class makes is named after:
- * [resampleUniformTime] + [buildTcnFeatures] turn raw touch samples into the encoder's input,
- * [TcnEncoder] turns that into per-timestep intention/spectral output, [TcnCtcDecoder] turns THAT
- * plus the active language's lexicon into ranked words -- merged across every active pack the
- * same way [Shark2Decoder::decode] already merges across packs, through the same [GestureScorer].
+ * Tier B, `plus` only: the trained, layout-agnostic swipe decoder; see `docs/licensing.md`
+ * section 2.5. [resampleUniformTime] and [buildTcnFeatures] prepare the encoder's input,
+ * [TcnEncoder] produces per-timestep output, and [TcnCtcDecoder] turns it into ranked words across
+ * the active packs through the [GestureScorer].
  */
 class TcnDecoder final : public GestureDecoder {
 public:
@@ -33,10 +28,8 @@ public:
 
     const char* name() const override { return "TCN"; }
 
-    /** Loads the trained weights this decoder runs. Returns false (and leaves any previously
-     *  loaded weights in place) on a malformed file -- see [TcnWeights::loadFromBytes]. Decoding
-     *  before this succeeds once returns nothing, the same as [Shark2Decoder] before
-     *  [setLayout]. */
+    /** Loads the trained weights; false, keeping any loaded before, for a malformed file.
+     *  Decoding returns nothing until this has succeeded. */
     bool loadWeights(const uint8_t* data, size_t length);
 
     /** Whether [loadWeights] has succeeded at least once. */
@@ -52,12 +45,7 @@ private:
     TcnEncoder encoder_;
     TcnCtcDecoder ctcDecoder_;
 
-    // Remembered so loadWeights() can rebuild ctcDecoder_'s basis once real weights exist, even
-    // when setLayout ran first (the common case: layout is known at keyboard-measure time,
-    // long before the async weights read off disk finishes). Without this, a setLayout that
-    // arrives before loadWeights would bake in whatever weights_ happened to hold at that
-    // moment -- uninitialised, since TcnWeights has no default member initialisers -- and no
-    // later setLayout call would ever correct it.
+    // The layout, for loadWeights() to rebuild ctcDecoder_'s basis against.
     const KeyGeometry* lastGeometry_ = nullptr;
     int64_t lastEncoderMicros_ = 0;
     int64_t lastSearchMicros_ = 0;

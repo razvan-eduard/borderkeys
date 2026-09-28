@@ -3,9 +3,8 @@
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 """Second pass: the text the call-site pass could not see -- `when` branches, `append`, `?:`.
 
-Works literal by literal rather than by call site, so it needs a list of the strings that are
-identifiers rather than words. That list is the whole point of the file: everything not on it is
-text a person reads, which is the assumption that keeps a new string from quietly staying English.
+Works literal by literal rather than by call site, with a list of the strings that are
+identifiers rather than words; everything not on it is treated as text a person reads.
 """
 
 import json

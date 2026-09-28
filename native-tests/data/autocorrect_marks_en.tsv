@@ -1,11 +1,9 @@
-# Frequent pack words carrying a mark -- an apostrophe or a hyphen -- appended, prepended and
-# wrapped, plus contractions whose mark was left out. Generated across the class rather than
-# listed, so it covers hyphens as well as the apostrophes that were reported.
+# Frequent pack words carrying a mark (an apostrophe or a hyphen) appended, prepended and
+# wrapped, plus contractions whose mark was left out.
 #
-# Two expectations in one file, told apart by whether the mark is present in what was typed.
-# A mark typed is deliberate and the text must survive intact -- `suggest_eval --autocorrect`
-# should commit nothing. A mark omitted is a convention dropped and must still be restored:
-# those rows name the contraction. See kMarkDeleteCost and kMarkInsertCost in engine.cpp.
+# A typed mark must survive intact: `suggest_eval --autocorrect` should commit nothing. An
+# omitted mark is restored: those rows name the contraction. See kMarkDeleteCost and
+# kMarkInsertCost in engine.cpp.
 that'	that'
 'that	'that
 'that'	'that'

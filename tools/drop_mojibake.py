@@ -7,9 +7,7 @@ Handles two shapes.
 
 **A trailing "â"**, which is a typographic apostrophe read as UTF-8-through-Latin-1: U+2019's
 bytes E2 80 99 become "a-circumflex, euro, trademark", and tokenising keeps the first. "it's"
-counts as "itâ", French "l'" as "lâ", Italian "dell'" as "dellâ". Deleted with their counts --
-no word in any shipped language ends in "â", and "itâ" stands for "it'", which is not a word
-either.
+counts as "itâ", French "l'" as "lâ", Italian "dell'" as "dellâ". Deleted with their counts.
 
 **A Romanian letter carrying another codepage's glyph**: "ºi" for "și", "faþã" for "față",
 "pånă" for "până". Each glyph in LATIN2 maps to every letter it might stand for, and the entry
@@ -112,14 +110,11 @@ def main():
 
         if not any(c in word for c in LATIN2):
             continue
-        # A name keeps whatever spelling the corpus counted: "Miloš" and "Miloș" are two
-        # renderings of one name, not a word and its corruption, and merging them loses one.
+        # A name keeps whatever spelling the corpus counted.
         if flag == "name":
             kept += 1
             continue
         # The most frequent spelling this could be, among those the dictionary already holds.
-        # Frequency breaks the tie because the alternatives are the same word under different
-        # accents, and the common one is the word the corpus was actually counting.
         candidates = [c for c in reversals(word)
                       if position.get(canonical(c)) is not None
                       and rows[position[canonical(c)]][0] is not None]

@@ -4,37 +4,9 @@
 package com.borderkeys.ime.fx
 
 /**
- * A graphic element particles can affect -- a key, a suggestion chip, a quick-action button, a
- * panel row, the radial ring's highlighted wedge or its centre button, the settings screen's
- * preview chip. The one thing a subclass has to say is [geometry]: the shape it actually draws,
- * in its host's own pixel space. Everything about *where* particles then go is decided here and
- * in the engine, never by the element and never by the host that owns it:
- *
- * - [outlineGeometry] is what the outline layer traces -- dots walk its perimeter by arc length
- *   (rounded corners included, see [EmitterShape.roundedRectPerimeterX]) and a stroke style
- *   draws the same shape. By default the element's own [geometry].
- * - [fillGeometry] is what the fill layer fills -- bursts and ambient trickles spawn uniformly
- *   inside it. By default the element's own [geometry] too.
- *
- * Both are `open` only so an element whose fill region genuinely differs from its outline can
- * say so; nothing in this app needs that today. A host never hands the engine a rectangle, a
- * centre point, a radius or a path of its own -- it hands it an element, through
- * [ParticleSurface.press]/[ParticleSurface.hold]/[ParticleSurface.release] -- so the shape a
- * stroke traces, the perimeter dots sit on and the interior a burst spawns in are always the
- * one shape the element itself draws. That is the whole point of this class existing: the
- * earlier design let every host derive its own rectangle at the call site, and each one drifted
- * from what was on screen in its own way (a settings chip traced its 48dp touch target, not its
- * 32dp surface; a key burst from a point rather than its area; the ring's cancel button had no
- * geometry at all).
- *
- * `null` from [geometry] means "not laid out yet, nothing to affect" and is harmless everywhere.
- *
- * Deliberately an abstract class rather than an interface on the host `View`: a `View` is not
- * an element -- `KeyboardCanvasView` draws dozens of keys from parallel arrays, the strip draws
- * several chips -- so the element is its own small object the host points at the thing
- * currently pressed or highlighted. Hosts that have exactly one such thing keep one reusable
- * instance and set its index/rect before each call, so a press never allocates in the hot path
- * beyond the geometry value itself.
+ * A graphic element particles can affect, by the shape it draws: [geometry], in its host's pixel
+ * space, null before layout. The outline layer traces [outlineGeometry] and the fill layer spawns
+ * inside [fillGeometry], both [geometry] unless overridden.
  */
 abstract class ParticleElement {
 
@@ -51,12 +23,8 @@ abstract class ParticleElement {
 }
 
 /**
- * The one reusable element most hosts need: a rounded rectangle whose bounds the host [set]s
- * right before pressing or holding it -- a key read off the geometry arrays, the strip's applied
- * chip, a quick-action button's pressed surface, a panel row, the ring's centre button (a circle
- * is [ParticleGeometry.circle]). One instance per host, re-pointed per press, so the press path
- * allocates nothing but the geometry value handed to the engine. Unset ([set] never called, or
- * [clear]ed) reads as `null`: nothing to affect.
+ * A reusable rounded-rectangle element the host [set]s before pressing or holding it; null until
+ * set, and after [clear].
  */
 class RoundedRectElement : ParticleElement() {
     private var left = 0f
@@ -86,8 +54,7 @@ class RoundedRectElement : ParticleElement() {
         get() = if (isSet) ParticleGeometry.RoundedRect(left, top, right, bottom, cornerRadius) else null
 }
 
-/** [RoundedRectElement]'s equivalent for the radial ring's wedge -- see
- *  [ParticleGeometry.AnnularWedge] for the parameters. */
+/** A reusable annular-wedge element; see [ParticleGeometry.AnnularWedge]. */
 class AnnularWedgeElement : ParticleElement() {
     private var centerX = 0f
     private var centerY = 0f

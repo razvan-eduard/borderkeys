@@ -3,48 +3,22 @@
 
 package com.borderkeys.predict
 
-/**
- * One word the engine offers, with everything a caller needs to rank, apply or draw it.
- *
- * The result callbacks used to carry a word array beside a `BooleanArray` of proper-noun bits
- * and a `FloatArray` of decode shares, each read at the same index. Every producer had to filter
- * and compact all three in lockstep, and nothing checked that they still lined up: a word wearing
- * the flags of a word two places along is the bug that shape invites, and it is silent. One
- * object per word makes it unrepresentable.
- *
- * Immutable and allocated per result rather than pooled. A result is assembled at human speed --
- * once per keystroke or once per swipe -- and never on the drawing path, which reads
- * [com.borderkeys.ime.SuggestionStripView]'s own char arrays and never touches this.
- */
+/** One word the engine offers, with its flags. */
 data class Candidate(
     val text: String,
 
-    /**
-     * A name from the dictionary, which renders capitalised whatever was typed and whatever the
-     * shift state says -- see `NativePredictor.nativeSuggest` for where the bit comes from.
-     */
+    /** A name from the dictionary, always shown capitalised. */
     val isProperNoun: Boolean = false,
 
     /**
-     * This candidate's share of a decode, per mille, the softmax `Engine::normaliseGestureScores`
-     * leaves behind: the shares of one result sum to 1000. Rank one holding more than half of it
-     * is a swipe with nothing left to ask about.
-     *
-     * Zero for typed suggestions, which are ranked but never normalised into a distribution.
+     * This candidate's share of a swipe decode, per mille; the shares of one result sum to 1000.
+     * Zero for typed suggestions.
      */
     val share: Float = 0f,
 
     /**
-     * The word autocorrect would put in place of what was typed, if a delimiter were pressed.
-     *
-     * Set by [PredictionEngine], which is the only thing that knows the engine keeps a second,
-     * separate ranking for "what did you mean" beside the one for "what are you writing" (see
-     * `correctionHeap_` in engine.hpp). A consumer asks the list which word this is; it never
-     * re-derives the answer by comparing text, which is an identity the two rankings do not
-     * share -- the same word can reach them cased differently.
-     *
-     * At most one candidate in a result carries it, and it may be a word the ranking would not
-     * otherwise have offered at all.
+     * The word autocorrect would put in place of what was typed. At most one candidate in a
+     * result carries it.
      */
     val isCorrection: Boolean = false,
 )

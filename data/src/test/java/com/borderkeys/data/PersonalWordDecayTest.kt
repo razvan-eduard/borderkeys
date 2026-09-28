@@ -65,12 +65,6 @@ class PersonalWordDecayTest {
         assertEquals(word.lastUsedAt, decayed.lastUsedAt)
     }
 
-    /**
-     * The gap halving alone leaves. A word written once floors at a count of one and its row is
-     * never touched again, so the table grows for the life of the install with entries that
-     * were mostly never vocabulary: a name from one conversation, an identifier pasted into a
-     * message, a typo that reached a delimiter.
-     */
     @Test
     fun `an unconfirmed word is given a month, a confirmed one is only ever halved`() {
         assertTrue(
@@ -79,8 +73,7 @@ class PersonalWordDecayTest {
         )
         assertEquals(30L * 24 * 60 * 60 * 1000, PersonalWordDecay.UNCONFIRMED_LIFE_MILLIS)
 
-        // Halving cannot reach a count of one, which is exactly why the sweep needs the other
-        // rule: this is the value that would otherwise sit in the table for ever.
+        // Halving floors at one.
         assertEquals(1, PersonalWordDecay.decayed(1, lastUsedAt = 0, now = halfLife))
     }
 }

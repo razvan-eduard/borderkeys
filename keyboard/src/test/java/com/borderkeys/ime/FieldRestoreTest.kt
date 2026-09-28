@@ -6,16 +6,12 @@ package com.borderkeys.ime
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/**
- * The span [FieldRestore.diff] hands back is what an undo/redo step is allowed to touch. A wide
- * span here is a paragraph rewritten for a one-word edit; these are the shapes that matter.
- */
+/** The span [FieldRestore.diff] hands back, which is what an undo/redo step may touch. */
 class FieldRestoreTest {
 
     @Test
     fun `identical strings touch nothing`() {
-        // The whole string is the shared prefix, so deleteFrom lands at its end -- what matters
-        // is that nothing is deleted and nothing is inserted, not exactly where the no-op sits.
+        // Nothing is deleted and nothing is inserted.
         val span = FieldRestore.diff("hello world", "hello world")
         assertEquals(0, span.deleteCount)
         assertEquals("", span.insert)
@@ -71,9 +67,7 @@ class FieldRestoreTest {
 
     @Test
     fun `a repeated character does not let prefix and suffix overlap`() {
-        // "aa" -> "aaa": scanned independently, the prefix and suffix passes could each claim
-        // more of the string than is actually left once the other's claim is subtracted, which
-        // would produce a negative delete count. maxPrefix/maxSuffix are what cap them apart.
+        // The shared prefix and suffix do not overlap.
         val span = FieldRestore.diff("aa", "aaa")
         assertEquals(0, span.deleteCount)
         assertEquals("a", span.insert)

@@ -46,12 +46,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * What this device has learned, and the only way it can be moved to another one.
- *
- * A CSV export is the whole of "sync" in an application with no network. The user exports a
- * file, carries it, imports it. Nothing leaves the device unless a person moves it.
- */
+/** What this device has learned, with a CSV export and import. */
 @Composable
 fun DictionaryScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
@@ -84,8 +79,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                     }
                 }.isSuccess
             }
-            // The count of what was written, not of the list on screen -- that one is capped
-            // and follows the search box, and used to be what this sentence reported.
+            // The count of what was written, not of the list on screen.
             message = if (written) {
                 strings.getString(Keys.DICTIONARY_EXPORTED_WORDS, export.words)
             } else {
@@ -165,8 +159,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 )
             }
         }
-        // Shortcuts beside the learned words: both are "what this keyboard knows that the
-        // dictionaries do not", one taught by typing and one written down on purpose.
+        // Text shortcuts, beside the learned words.
         SettingsSectionCard(strings[Keys.DICTIONARY_SHORTCUTS]) {
             Explanation(strings[Keys.DICTIONARY_SHORTCUTS_NOTE])
             if (preferences.textShortcuts.isEmpty()) {
@@ -204,8 +197,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 enabled = addable,
                 onClick = {
                     val added = TextShortcut(trigger.trim(), expansion.trim())
-                    // Replaces a shortcut with the same trigger rather than adding a second that
-                    // would never fire -- sanitised() keeps the first one it meets.
+                    // Replaces a shortcut with the same trigger; sanitised() keeps only the first.
                     update { current ->
                         current.copy(
                             textShortcuts = current.textShortcuts
@@ -219,10 +211,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
             ) { Text(strings[Keys.DICTIONARY_SHORTCUT_ADD]) }
         }
         SettingsSectionCard(strings.getString(Keys.DICTIONARY_LEARNED_WORDS, words.size)) {
-            // At the top of the list it filters. It used to close the "how quickly it learns"
-            // card instead, two cards above this one and separated from it by the shortcuts --
-            // near nothing it affected, so the list it belongs to read as having no search at
-            // all, and the note under a long list telling you to use one pointed at thin air.
+            // At the top of the list it filters.
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -259,8 +248,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 Explanation(strings[Keys.DICTIONARY_SHOWING_THE_FIRST_200_USE_SEARCH])
             }
         }
-        // The phrases beside the words they are made of: every pair and triple the keyboard
-        // has seen written in that order, each with a Forget of its own.
+        // Every learned pair and triple, each with its own Forget.
         SettingsSectionCard(strings.getString(Keys.DICTIONARY_PHRASES, pairCount + tripleCount)) {
             Explanation(strings[Keys.DICTIONARY_PHRASES_NOTE])
             if (pairs.isEmpty() && triples.isEmpty()) {
@@ -345,8 +333,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    // Asked first: this is every word and pair the device has learned, and the one tap that
-    // used to do it sat on a row beside Export and Import.
+    // Asked first: this forgets every learned word and phrase.
     if (confirmingForgetAll) {
         ConfirmDialog(
             title = strings[Keys.DICTIONARY_FORGET_EVERYTHING_TITLE],
@@ -369,7 +356,10 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     }
 }
 
-/** A question with a destructive answer in the error colour and a cancel; [onConfirm] runs after it closes. */
+/**
+ * A question with a destructive answer in the error colour and a cancel; [onConfirm] runs after
+ * it closes.
+ */
 @Composable
 private fun ConfirmDialog(
     title: String,

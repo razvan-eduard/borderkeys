@@ -21,21 +21,12 @@ using namespace borderkeys_test;
 
 // Replays malformed language packs through the loader and the query path.
 //
-// Two halves, and the second is the one that matters.
+// The committed corpus under data/corpus holds blobs that are wrong in named ways: a truncated
+// header, an offset past the end, a length that overlaps another section.
 //
-// The committed corpus under data/corpus holds blobs that are wrong in named ways -- a truncated
-// header, an offset past the end, a length that overlaps another section. They document the
-// cases and they are cheap to run.
-//
-// The mutation half then edits the valid pack at random and **repairs both checksums** before
-// loading it. Without the repair the CRC rejects better than 99% of mutations and everything
-// behind it -- the section-bounds arithmetic, the trie traversal, the hash probes -- is never
-// executed at all. Measured: naive mutation reached the loader's deeper checks in 3 cases out of
-// 4000; with the repair it is roughly one in eight.
-//
-// A pack that survives loading is then queried, because refusing bad input is only half of it.
-// The other half is that a pack which *passes* validation and is structurally nonsense must
-// still not walk off the end of anything.
+// The mutation half edits the valid pack at random and repairs both checksums before loading it,
+// so the mutations reach the checks behind the CRC. A pack that survives loading is then queried,
+// and must not read past the end of anything.
 
 namespace {
 
@@ -97,13 +88,11 @@ bool loadAndQuery(const std::string& bytes, const char* scratchPath, bool* loade
         for (int i = 0; i < found; ++i) {
             uint32_t length = 0;
             const char* const text = engine.candidateText(out[i], &length);
-            // Touching every byte is what makes an out-of-range text pointer a crash here
-            // rather than a wrong suggestion on someone's phone.
+            // Every byte is read, so an out-of-range text pointer crashes here.
             volatile char sink = 0;
             for (uint32_t k = 0; text != nullptr && k < length; ++k) {
-                // Assigned to a volatile, which is what stops the compiler dropping the read.
-                // Casting to `volatile char` instead would be a cast to a qualified prvalue,
-                // where the qualifier is discarded -- gcc warns about it and is right to.
+                // Assigned to a volatile so the read is not dropped; a cast to `volatile char`
+                // would discard the qualifier.
                 sink = text[k];
             }
             (void)sink;
@@ -158,11 +147,8 @@ int main() {
                               name.c_str());
                 check(ran, label);
 
-                // Every blob in this directory is damaged by construction -- the file names say
-                // how -- so every one has to be refused rather than mapped. Asserting only
-                // "did not crash" would let a validator that quietly started accepting a
-                // section offset past the end of the file keep passing, which is the exact
-                // failure this corpus exists to catch.
+                // Every blob in this directory is damaged by construction, as its file name says,
+                // so every one has to be refused rather than mapped.
                 std::snprintf(label, sizeof(label), "%s is refused rather than mapped",
                               name.c_str());
                 check(!loaded, label);
@@ -209,7 +195,7 @@ int main() {
                       "%d mutated packs loaded and were fully queried without crashing, of %d",
                       accepted, rounds);
         check(true, label);
-        // If nothing gets past validation the run proved nothing about the code behind it.
+        // Enough mutations pass validation to reach the code behind it.
         check(accepted > rounds / 100,
               "enough mutations reach the code behind the checksum for this to mean something");
     }

@@ -42,19 +42,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Writing what this keyboard knows to a file, and reading one back.
- *
- * The only way anything moves between the two builds -- they are separate applications with
- * separate private directories -- and the only backup this application has at all, since system
- * backup is switched off on purpose.
- *
- * Seven parts, each its own answer, because they are not equally private. A theme is a handful of
- * numbers. The dictionary is every word this device learned from what its owner typed. The
- * screen asks for a passphrase exactly when one of the private two is included, and says why.
- *
- * Reading a file stops short of applying it: what a file turns out to contain is shown as a
- * checklist first (see [BackupReviewDialog]), since asking after the fact whether everything it
- * had should really have been applied is not a question importing silently can still be asked.
+ * Writing what this keyboard knows to a file, and reading one back. Seven parts, each chosen
+ * separately; a passphrase is required when the dictionary or the clipboard is included. A file
+ * that is read is shown as a checklist ([BackupReviewDialog]) before anything is applied.
  */
 @Composable
 fun BackupScreen(modifier: Modifier = Modifier) {
@@ -67,12 +57,8 @@ fun BackupScreen(modifier: Modifier = Modifier) {
     var passphrase by remember { mutableStateOf("") }
     var notice by remember { mutableStateOf("") }
 
-    // What a just-read file turned out to contain, awaiting the person's own review -- null
-    // whenever nothing is pending. reviewDetected is fixed the moment the file is read and never
-    // changes again; reviewSelection starts as a copy of it, all ticked, and only narrows from
-    // there as rows are deliberately unticked -- the two would be the same value throughout if
-    // nothing were ever unticked, which is exactly why they have to be stored separately rather
-    // than one recomputed from the other.
+    // A read file awaiting review, or null. reviewDetected is fixed when the file is read;
+    // reviewSelection starts as a copy of it and narrows as rows are unticked.
     var pendingImport by remember { mutableStateOf<BackupPayload?>(null) }
     var reviewDetected by remember { mutableStateOf(BackupRepository.Parts()) }
     var reviewSelection by remember { mutableStateOf(BackupRepository.Parts()) }
@@ -93,8 +79,6 @@ fun BackupScreen(modifier: Modifier = Modifier) {
                     context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
                 }.isSuccess
             }
-            // A write that failed, said as one: this used to borrow the "file is damaged"
-            // sentence, which describes a file that could not be read.
             notice = if (ok) strings[Keys.BACKUP_WRITTEN] else strings[Keys.BACKUP_ERROR_WRITE_FAILED]
         }
     }
@@ -128,8 +112,7 @@ fun BackupScreen(modifier: Modifier = Modifier) {
                 }
                 return@launch
             }
-            // Handed to the review dialog rather than applied outright -- what a file turns out
-            // to carry is shown before anything is written, all ticked to start.
+            // Handed to the review dialog, all ticked, before anything is written.
             val contents = backups.contentsOf(payload)
             reviewDetected = contents
             reviewSelection = contents
@@ -165,8 +148,7 @@ fun BackupScreen(modifier: Modifier = Modifier) {
 
         SettingsSectionCard(strings[Keys.BACKUP_EXPORT]) {
             Button(
-                // Refused rather than written unprotected: the passphrase is the only thing
-                // standing between a dictionary and whatever else can read the folder it lands in.
+                // The private parts are never written without a passphrase.
                 enabled = parts.any && (!private || passphrase.isNotEmpty()),
                 onClick = { write.launch(BackupFile.SUGGESTED_NAME) },
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
@@ -204,10 +186,8 @@ fun BackupScreen(modifier: Modifier = Modifier) {
 }
 
 /**
- * What a read-but-not-yet-applied file turned out to carry, ticked so a person can narrow it
- * before anything is written -- see [BackupScreen]'s own doc for why importing stops here rather
- * than applying outright. [detected] never changes once shown; only [selected] moves as rows are
- * unticked.
+ * What a read file carries, ticked so it can be narrowed before anything is written. [detected]
+ * never changes once shown; only [selected] moves as rows are unticked.
  */
 @Composable
 private fun BackupReviewDialog(

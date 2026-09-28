@@ -8,11 +8,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Where the two chips that mean something end up.
- *
- * The row is read at a glance or not at all, so the guarantees under test are about position:
- * the typed word is first every time, and the word a delimiter would apply is in the middle
- * every time, whatever the engine returned and however many slots are shown.
+ * [SuggestionRow]: the typed word first and the word a delimiter would apply in the middle,
+ * whatever the engine returned and however many slots are shown.
  */
 class SuggestionRowTest {
 
@@ -20,8 +17,7 @@ class SuggestionRowTest {
 
     private fun words(vararg items: String): List<Candidate> = items.map { Candidate(it) }
 
-    /** What the engine does before the row ever sees the list: marks the candidate its
-     *  corrections heap settled on. The row finds it by that mark, not by its letters. */
+    /** Marks [correction] as the engine's correction, as the engine does. */
     private fun List<Candidate>.marking(correction: String): List<Candidate> =
         map { if (it.text == correction) it.copy(isCorrection = true) else it }
 
@@ -64,14 +60,6 @@ class SuggestionRowTest {
         assertEquals(listOf("daca", "dacă", "dar"), shown.map { it.text })
     }
 
-    /**
-     * The row is the ranked list and the correction comes from the corrections heap, so the word
-     * a delimiter will commit is often nowhere on the row. It still has to be the outlined one.
-     *
-     * Reported from a device: typing "put" outlined "putem" and the space bar committed "out" --
-     * a word that had never been on the row. Outlining by position rather than by value is what
-     * let the row say one thing while the delimiter did another.
-     */
     @Test
     fun `a correction the row does not carry is inserted rather than mis-outlined`() {
         val words = words("puține", "putem", "puts")
@@ -80,8 +68,7 @@ class SuggestionRowTest {
         assertEquals("the outlined chip is the word space will commit",
             "out", shown[row.appliedIndex].text)
         assertEquals("put", shown[row.typedIndex].text)
-        // The middle of a four-slot row is the third, and the candidate that had been last is
-        // what makes room -- the slot nobody reads paying for the one that has to be right.
+        // The middle of a four-slot row is the third; the last candidate makes room.
         assertEquals(listOf("put", "puține", "out", "putem"), shown.map { it.text })
     }
 
@@ -127,8 +114,6 @@ class SuggestionRowTest {
 
     @Test
     fun `with nothing to correct nothing is outlined`() {
-        // The typed word is italic and unmarked; there is no correction, so no chip is
-        // outlined. Outlining the typed word would be pointing at what space already does.
         val words = words("carte", "cartea", "cărți")
         row.arrange(words, typed = "carte", limit = 3, correction = null)
 
@@ -138,8 +123,7 @@ class SuggestionRowTest {
 
     @Test
     fun `the middle is the middle of the row that is drawn, not of the setting`() {
-        // The engine returned two words where five slots were allowed. Marking slot two would
-        // mark an empty one.
+        // Two words where five slots were allowed.
         val words = words("dacă", "dar").marking("dacă")
         val shown = row.arrange(words, typed = "daca", limit = 5, correction = "dacă")
 
@@ -150,8 +134,6 @@ class SuggestionRowTest {
 
     @Test
     fun `a one-slot row shows what was typed and marks no correction`() {
-        // Honest rather than convenient: the correction is not on the row, so nothing on the row
-        // is outlined as the thing a space would do.
         val words = words("dacă").marking("dacă")
         val shown = row.arrange(words, typed = "daca", limit = 1, correction = "dacă")
 
@@ -163,7 +145,7 @@ class SuggestionRowTest {
 
     @Test
     fun `nothing is marked when no word is being typed`() {
-        // Predictions for the next word, not candidates for this one.
+        // Predictions for the next word.
         val words = words("și", "de", "la")
         val shown = row.arrange(words, typed = "", limit = 3, correction = null)
 

@@ -6,16 +6,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-        So this build can tell whether the other one is on the device, and offer to bring its
-        settings and dictionary across during setup.
-
-        A <queries> entry is a declaration of what may be looked for, not a permission: nothing
-        is requested, nothing is granted, and it does not appear in the list of permissions an
-        application holds. Without it, package visibility on API 30 and above simply reports
-        that the other build is not installed, and the offer would never be made.
-
-        One package name, not a broad query. This asks about exactly one application, which is
-        the one this build is a variant of.
+        So this build can see whether the core build is installed, and offer to bring its
+        settings and dictionary across during setup. A declaration, not a permission.
     -->
     <queries>
         <package android:name="com.borderkeys" />

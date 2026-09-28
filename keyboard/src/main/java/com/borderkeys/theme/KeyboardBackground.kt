@@ -12,29 +12,14 @@ import android.graphics.Shader
 import com.borderkeys.data.theme.KeyboardTheme
 
 /**
- * The surface the keys sit on: a colour, optionally a gradient, optionally a pattern.
- *
- * Everything expensive happens when the theme changes. The pattern is rendered once into a small
- * tile and handed to a `BitmapShader` set to repeat, so drawing it is one `drawRect` regardless
- * of how many dots are on screen -- the alternative, a loop drawing a few hundred circles, is
- * several hundred draw operations per frame on the one view that is invalidated on every touch.
- *
- * The gradient is a `LinearGradient` rebuilt only when the height changes, for the same reason.
- *
- * Patterns are drawn in code rather than shipped as images. That keeps them resolution
- * independent, keeps them themeable -- the colour is the user's -- and keeps the package free
- * of artwork whose licence would have to be tracked.
+ * The surface the keys sit on: a colour or a gradient, a picture, and patterns drawn as repeating
+ * tiles. The tiles are built when the theme changes, the gradient when the height changes.
  */
 class KeyboardBackground {
 
     private val fill = Paint()
 
-    /**
-     * One paint per pattern being drawn, because a paint carries one shader.
-     *
-     * Patterns layer rather than replacing each other: dots over a grid is a third thing, and
-     * nothing about a keyboard requires it to have an opinion on that.
-     */
+    /** One paint per pattern, drawn in order over one another. */
     private val patternPaints = ArrayList<Paint>(KeyboardTheme.PATTERN_COUNT)
 
     private val imagePaint = Paint(Paint.FILTER_BITMAP_FLAG)
@@ -46,7 +31,7 @@ class KeyboardBackground {
 
     private var gradient: LinearGradient? = null
 
-    /** What the current tiles and gradient were built from, so neither is rebuilt for nothing. */
+    /** What the current tiles and gradient were built from. */
     private var tilePatterns: List<Int> = emptyList()
     private var tileSize = 0
     private var tileColor = 0
@@ -54,17 +39,12 @@ class KeyboardBackground {
     private var bottomColor = 0
     private var gradientHeight = 0f
 
-    /**
-     * Re-reads the theme.
-     *
-     * Called from [ThemePaints.update], which is itself called only when the theme or the
-     * density actually changed, so this is not on any path that runs per frame.
-     */
+    /** Re-reads the theme. */
     fun update(theme: KeyboardTheme, density: Float) {
         fill.color = theme.backgroundColor
         topColor = theme.backgroundColor
         bottomColor = theme.gradientEnd()
-        // A new gradient is needed even at the same height, since the colours moved.
+        // The gradient is rebuilt on the next draw.
         gradient = null
         gradientHeight = 0f
 
@@ -84,21 +64,14 @@ class KeyboardBackground {
         rebuildTiles(density)
     }
 
-    /**
-     * The picture to draw behind the keys, or null.
-     *
-     * Handed in rather than loaded here: the theme carries a file name, and resolving one needs
-     * a Context, which a class that only draws has no business holding.
-     */
+    /** The picture to draw behind the keys, or null. */
     fun setImage(bitmap: android.graphics.Bitmap?) {
         image = bitmap
     }
 
     /**
-     * Paints the background over the given box, in the canvas's own coordinates.
-     *
-     * The gradient runs from the top of the box to its bottom, so a keyboard that grows or
-     * shrinks keeps the whole gradient rather than showing a slice of one.
+     * Paints the background over the given box, in the canvas's own coordinates, the gradient
+     * running from the box's top to its bottom.
      */
     fun draw(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float) {
         val height = bottom - top
@@ -118,20 +91,13 @@ class KeyboardBackground {
         }
         canvas.drawRect(left, top, right, bottom, fill)
         drawImage(canvas, left, top, right, bottom)
-        // Over the picture, not under it: a pattern is drawn on the surface, and a surface with
-        // a photograph on it is still the surface.
+        // Patterns over the picture.
         for (paint in patternPaints) {
             canvas.drawRect(left, top, right, bottom, paint)
         }
     }
 
-    /**
-     * The picture, filling the box without being stretched, and then darkened.
-     *
-     * Centre-cropped rather than squashed: a keyboard is a wide strip and almost no photograph
-     * is, so fitting one to the box exactly would make every face in it a foot wide. The dim
-     * that follows is what keeps the labels readable over whatever the picture happens to be.
-     */
+    /** The picture, centre-cropped to fill the box, then dimmed. */
     private fun drawImage(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float) {
         val bitmap = image ?: return
         if (bitmap.isRecycled || bitmap.width <= 0 || bitmap.height <= 0) {
@@ -155,15 +121,12 @@ class KeyboardBackground {
         }
     }
 
-    /** Draws over the whole of a view, which is what every caller but the host wants. */
+    /** Draws over the whole of a view. */
     fun draw(canvas: Canvas, width: Float, height: Float) =
         draw(canvas, 0f, 0f, width, height)
 
     private fun rebuildTiles(density: Float) {
-        // The old bitmaps are dropped, not recycled: a shader holding one may still be inside a
-        // display list that has not been played back yet, and drawing a recycled bitmap throws.
-        // A handful of tiles at most 256 by 256 is not worth the risk of getting that ordering
-        // wrong.
+        // Old tiles are dropped, never recycled: a display list not yet played back may hold one.
         patternPaints.clear()
         for (pattern in tilePatterns) {
             buildTile(pattern, density)?.let { patternPaints.add(it) }
@@ -181,9 +144,7 @@ class KeyboardBackground {
         val stroke = (density * LINE_WIDTH_DP).coerceAtLeast(1f)
         val edge = size.toFloat()
         when (pattern) {
-            // Every pattern is drawn so that its opposite edges match, or the repeat shows a
-            // seam every tile. Dots sit in the middle, lines run edge to edge, and the diagonal
-            // is drawn three times so the parts cut off at one corner arrive at the other.
+            // Opposite tile edges match: dots centred, lines edge to edge, the diagonal thrice.
             KeyboardTheme.PATTERN_DOTS ->
                 canvas.drawCircle(edge / 2f, edge / 2f, edge * DOT_RADIUS_FRACTION, ink)
 
@@ -216,7 +177,7 @@ class KeyboardBackground {
     }
 
     private companion object {
-        /** A tile smaller than this repeats into mush; larger than this is a wallpaper. */
+        /** Tile size bounds, in pixels. */
         const val MIN_TILE_PX = 8
         const val MAX_TILE_PX = 256
 

@@ -12,16 +12,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * A fixed-size pool of particles, owned and driven entirely by whichever `View` wants them --
- * never a shared singleton, the same way [com.borderkeys.ime.KeyboardCanvasView] owns its own
- * key-press animation state independently of every other view in the process.
- *
- * The actual particle state and physics live in [ParticleSimulation]; this class adds the real
- * frame clock (one shared [Choreographer.FrameCallback] per instance, re-armed only while
- * something is live -- [com.borderkeys.ime.KeyboardCanvasView]'s own `scheduleFrame`/
- * `onAnimationFrame`/`animating` idiom, ported rather than reinvented) and lands the result on a
- * `Canvas`. Split specifically so the simulation itself stays plain-JVM testable -- see
- * [ParticleSimulation]'s own doc for why this half, not that one, is where `Choreographer` lives.
+ * A fixed-size pool of particles owned by one view: a [ParticleSimulation] advanced by a frame
+ * callback that runs only while something is live, and drawn onto a `Canvas`.
  */
 class ParticleField(
     capacity: Int,
@@ -50,29 +42,21 @@ class ParticleField(
     var secondaryColor: Int = DEFAULT_COLOR
 
     /**
-     * The exact shape a stroke should trace, for a region whose true outline
-     * [ParticleSimulation]'s closed-form rect-perimeter/annular-wedge-perimeter primitives
-     * cannot represent -- [ParticleGeometry.Exact], set only via [bind]. `null` (every region
-     * this app actually has one of today) falls back to tracing
-     * [ParticleSimulation.currentAmbientOutlineShape] as before.
+     * The outline a stroke traces for a [ParticleGeometry.Exact] region, set by [bind]; null
+     * traces [ParticleSimulation.currentAmbientOutlineShape].
      */
     private var strokePath: Path? = null
 
-    /** Reused every frame [draw] traces a stroke into, never allocated there. Sized for the
-     *  larger of the shapes [ParticleSimulation.currentAmbientOutlineShape] can fill (the
-     *  annular-wedge case, 6 floats). */
+    /** Scratch for [ParticleSimulation.currentAmbientOutlineShape], six floats. */
     private val ambientShapeScratch = FloatArray(6)
 
-    /** Reused by [drawAmbientStroke]'s [ParticleSimulation.AmbientOutlineShape
-     *  .ANNULAR_WEDGE_PERIMETER] case to build the wedge's one closed contour (outer arc, radial
-     *  edge, inner arc, radial edge) -- never allocated there. */
+    /** The wedge outline [drawAmbientStroke] traces, reused. */
     private val wedgeStrokePath = Path()
     private val wedgeOuterBounds = RectF()
     private val wedgeInnerBounds = RectF()
 
-    /** The hard gate. `false` clears every live particle, stops any ambient emission and cancels
-     *  the frame callback immediately -- while off, [Choreographer.postFrameCallback] is never
-     *  called at all, not merely drawing nothing. */
+    /** Whether the field runs; off clears every particle, stops the ambient and cancels the frame
+     *  callback. */
     var enabled: Boolean = false
         set(value) {
             if (field == value) {
@@ -91,10 +75,8 @@ class ParticleField(
     private val frameCallback = Choreographer.FrameCallback { frameTimeNanos -> onFrame(frameTimeNanos) }
 
     /**
-     * A one-shot burst spawned uniformly inside [geometry] -- the fill layer's press moment.
-     * [burstMultiplier] times the preset's own burst count; the shape's own area scales it
-     * further (see [ParticleSimulation.spawnBurstInRoundedRect]). `null`, or an
-     * [ParticleGeometry.Exact] with no emitter fallback, spawns nothing.
+     * A burst inside [geometry] of [burstMultiplier] times the preset's count, scaled by its area.
+     * Null, or a [ParticleGeometry.Exact] without an emitter shape, spawns nothing.
      */
     fun burstIn(geometry: ParticleGeometry?, burstMultiplier: Int = 1) {
         if (!enabled) {
@@ -114,11 +96,7 @@ class ParticleField(
         scheduleFrame()
     }
 
-    /**
-     * Starts (or moves) a low-rate ambient trickle spawning uniformly inside [geometry] -- the
-     * fill layer's held moment: the strip's applied chip while it is on screen, the ring's wedge
-     * while the finger hovers it. `null` stops it, the same as [stopAmbient].
-     */
+    /** Starts or moves an ambient spawning inside [geometry]; null stops it. */
     fun ambientIn(geometry: ParticleGeometry?) {
         if (!enabled) {
             return
@@ -141,17 +119,8 @@ class ParticleField(
     }
 
     /**
-     * The outline layer's one entry point: trace [geometry]'s own perimeter -- dots walk it by
-     * arc length, and a stroke style draws it -- until bound to something else or to `null`.
-     * Reached only through [ParticleSurface] handing in a [ParticleElement]'s own
-     * [ParticleElement.outlineGeometry], so the shape a stroke traces can never drift from the
-     * shape the dots sit on or from what the element actually draws: all three are this one
-     * value. The corner radius goes to the simulation rather than a field here, because that is
-     * where spawn points are resolved, and [drawAmbientStroke] reads it back from the very same
-     * place ([ParticleSimulation.currentAmbientOutlineShape]).
-     *
-     * `null` (nothing pressed/selected right now) stops the ambient the same moment a caller
-     * would otherwise call [stopAmbient] directly.
+     * Traces [geometry]'s outline: particles along it and, for a stroke style, a stroke. Null
+     * stops the ambient.
      */
     fun bind(geometry: ParticleGeometry?) {
         if (!enabled) {
@@ -171,14 +140,11 @@ class ParticleField(
         scheduleFrame()
     }
 
-    /** Draws every live particle as a flat filled circle into [paint], mutating its colour in
-     *  place per particle -- never allocating a `Paint`, matching how [Paint] is used everywhere
-     *  else in this package's views. No-op while [enabled] is false.
-     *
-     *  When [ParticleEffectPreset.strokeWidthPx] is set (the outline "Fire"/"Wind" looks), also
-     *  traces a real stroke along the current ambient shape first, under the particles -- see
-     *  [ParticleSimulation.currentAmbientOutlineShape]. Every other preset leaves it at `0f` and
-     *  draws exactly as before: pure particle scatter, no line. */
+    /**
+     * Draws every live particle as a filled circle with [paint], its colour set per particle, over
+     * a stroke along the ambient shape when [ParticleEffectPreset.strokeWidthPx] is set. Does
+     * nothing while [enabled] is false.
+     */
     fun draw(canvas: Canvas, paint: Paint) {
         if (!enabled) {
             return
@@ -200,19 +166,10 @@ class ParticleField(
         }
     }
 
-    /** [paint] is the same shared, mutate-in-place instance every particle circle in this same
-     *  frame draws with -- [com.borderkeys.ime.KeyboardCanvasView]'s own `paints.particlePaint`,
-     *  reused across every field a view owns. Its style/width are saved and restored around the
-     *  stroke so leaving it in [Paint.Style.STROKE] never bleeds into the very next
-     *  [canvas.drawCircle] call, here or in whichever field draws after this one this frame.
-     *
-     *  [widthMultiplier] scales the stroke's own width here, exactly as it already scales a
-     *  particle's radius -- the same "Width" slider is Outline's one thickness knob regardless
-     *  of whether the current style draws circles, a line, or (Fire/Wind) both. Floored to
-     *  [ParticleSimulation.MIN_LEGIBLE_SIZE_PX] so dragging Width to its minimum thins the line
-     *  rather than fading it past the point of showing at all -- this method is only reached once
-     *  [preset.strokeWidthPx] is already known positive, so the floor cannot conjure a stroke for
-     *  a style that is not supposed to have one. */
+    /**
+     * Strokes the ambient shape with [paint], restoring its style and width after. The width is
+     * scaled by the width multiplier and floored at [ParticleSimulation.MIN_LEGIBLE_SIZE_PX].
+     */
     private fun drawAmbientStroke(canvas: Canvas, paint: Paint) {
         val strokeWidth = (preset.strokeWidthPx * widthMultiplier).coerceAtLeast(ParticleSimulation.MIN_LEGIBLE_SIZE_PX)
         val savedStyle = paint.style
@@ -258,12 +215,7 @@ class ParticleField(
         paint.strokeWidth = savedWidth
     }
 
-    /**
-     * The tight bounding box of every live particle, for
-     * [com.borderkeys.ime.KeyboardCanvasView]'s own dirty-rect invalidation -- the one view among
-     * this package's callers that must not fall back to a bare `invalidate()`. Returns false
-     * (and leaves [out] untouched) when nothing is live.
-     */
+    /** Puts the live particles' bounding box in [out]; false, [out] untouched, if none. */
     fun computeLiveBounds(out: RectF): Boolean {
         var found = false
         var left = 0f
@@ -296,8 +248,7 @@ class ParticleField(
         return found
     }
 
-    /** Call from `onDetachedFromWindow`. [Choreographer] is a process-global singleton, not tied
-     *  to a view's lifecycle -- nothing else would cancel a pending callback on detach. */
+    /** Cancels the pending frame callback; call from `onDetachedFromWindow`. */
     fun cancel() {
         if (animating) {
             Choreographer.getInstance().removeFrameCallback(frameCallback)

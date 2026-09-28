@@ -6,18 +6,13 @@ package com.borderkeys.ime
 import android.text.InputType
 
 /**
- * Whether the field being typed into holds an address: an e-mail address, in either of
- * Android's two spellings of it, or a URI. An address has no words and no sentences, so nothing
- * the keyboard adds after one -- the space after a mark, the space after a picked suggestion,
- * the full stop two spaces make -- belongs in it.
- *
- * Pure, so the test suite can enumerate the input types the platform defines.
+ * Whether the field being typed into holds an address: an e-mail address, in either of Android's
+ * variations, or a URI. The keyboard adds no automatic spaces or full stops in one.
  */
 object AddressField {
 
     fun isAddress(inputType: Int): Boolean {
-        // The variation bits only mean this inside the text class: a number or a phone field
-        // can carry the same bit values for reasons of its own.
+        // The variation counts only inside the text class.
         if ((inputType and InputType.TYPE_MASK_CLASS) != InputType.TYPE_CLASS_TEXT) {
             return false
         }

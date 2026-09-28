@@ -9,12 +9,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The pool's state and physics, exercised without any real frame clock -- [ParticleField] is
- * what owns a `Choreographer`, deliberately kept out of this class entirely (see
- * [ParticleSimulation]'s own doc), so `advance(rawDeltaSeconds)` here stands in for a real frame
- * exactly the way a synthetic value would.
- */
+/** [ParticleSimulation]'s pool and physics, driven by `advance(rawDeltaSeconds)`. */
 class ParticleSimulationTest {
 
     private fun testPreset(
@@ -75,8 +70,7 @@ class ParticleSimulationTest {
         simulation.spawnBurstAtPoint(0f, 0f, count = 1)
         assertEquals(1, simulation.liveCount)
 
-        // Unclamped, 5 seconds of age would blow straight past the 1-second lifetime in one
-        // step. Clamped to 0.1s, the particle is still well within it.
+        // Clamped to 0.1s, a 5-second step leaves the particle within its 1-second lifetime.
         simulation.advance(5f)
 
         assertEquals(1, simulation.liveCount)
@@ -154,8 +148,7 @@ class ParticleSimulationTest {
             val x = simulation.xAt(slot)
             val y = simulation.yAt(slot)
             val r = simulation.radiusAt(slot)
-            // Pushed out of the rectangle along the edge's normal by exactly its own radius: the
-            // whole dot sits outside, tangent to the edge, never inside.
+            // One radius outside the rectangle, along the edge's normal.
             val outsideByRadius = kotlin.math.abs(x + r) < 0.01f || kotlin.math.abs(x - 100f - r) < 0.01f ||
                 kotlin.math.abs(y + r) < 0.01f || kotlin.math.abs(y - 50f - r) < 0.01f
             assertTrue("point ($x,$y) should sit just outside an edge, not on or inside it", outsideByRadius)
@@ -167,10 +160,7 @@ class ParticleSimulationTest {
         val simulation = ParticleSimulation(capacity = 50)
         simulation.preset = testPreset(spawnRatePerSecond = 200f, maxParticles = 50, lifetimeSeconds = 100f)
             .copy(motion = ParticleMotionKind.STATIC_FLICKER)
-        // startDeg=0/sweepDeg=90 makes both radial edges axis-aligned (dy=0 at 0 deg, dx=0 at 90
-        // deg -- Canvas.drawArc's own convention, clockwise from +X), so this test can check
-        // each of the wedge's four segments with a plain coordinate comparison rather than a
-        // general angle one.
+        // startDeg 0 and sweepDeg 90 put both radial edges on the axes, clockwise from +X.
         simulation.setAmbientAnnularWedgePerimeter(
             centerX = 100f, centerY = 100f, innerRadius = 15f, outerRadius = 20f, startDeg = 0f, sweepDeg = 90f,
         )
@@ -184,8 +174,8 @@ class ParticleSimulationTest {
             val dy = simulation.yAt(slot) - 100f
             val radius = kotlin.math.sqrt(dx * dx + dy * dy)
             val r = simulation.radiusAt(slot)
-            // Just outside the wedge, by exactly the dot's own radius: past the outer arc, inside
-            // the inner arc (toward the centre), or beside a radial edge -- never in the wedge.
+            // One radius outside the wedge: past the outer arc, inside the inner arc, or beside
+            // a radial edge.
             val offOuterArc = kotlin.math.abs(radius - 20f - r) < 0.01f
             val offInnerArc = kotlin.math.abs(radius - 15f + r) < 0.01f
             val offRadialEdge = (kotlin.math.abs(dy + r) < 0.01f && dx in 14.99f..20.01f) ||
@@ -204,10 +194,7 @@ class ParticleSimulationTest {
             .copy(motion = ParticleMotionKind.STATIC_FLICKER, travelLoopsPerSecond = 0.05f)
         simulation.setAmbientRectanglePerimeter(0f, 0f, 100f, 50f)
 
-        // A short burst of frames: the phase barely advances (0.05 loops/sec over a fraction of
-        // a second), but the high spawn rate fills the pool -- every live particle should land
-        // within a small neighbourhood of the first one, not scattered across the whole
-        // perimeter the way a non-traveling (randomly re-rolled) ambient already is.
+        // Five frames: the phase barely advances, so every particle lands near the first.
         repeat(5) { simulation.advance(1f / 60f) }
 
         val liveSlots = (0 until 50).filter { simulation.isLive(it) }
@@ -333,8 +320,7 @@ class ParticleSimulationTest {
 
     @Test
     fun `a rounded perimeter ambient spawns just outside the rounded outline, never at a sharp corner`() {
-        // A square with corners rounded to a full circle: every dot must sit tangent to that
-        // circle from the outside -- its centre exactly one radius past the outline.
+        // Corners rounded to a full circle: every dot's centre is one radius past the outline.
         val simulation = ParticleSimulation(capacity = 64)
         simulation.preset = ParticleOutlineStylePresets.PULSE
         simulation.densityMultiplier = 2f
@@ -367,9 +353,8 @@ class ParticleSimulationTest {
             seen++
             val y = simulation.yAt(slot)
             val x = simulation.xAt(slot)
-            // Fire faces up: embers come only off the top edge and the upper corner arcs (so
-            // never lower than the corner radius), and every one of them sits outside the
-            // rectangle as it rises -- never inside, never off the bottom edge.
+            // Fire faces up: embers leave only the top edge and the upper corner arcs, outside the
+            // rectangle.
             val inside = x > 0f && x < 100f && y > 0f && y < 50f
             assertTrue("slot $slot at ($x, $y) is inside the shape", !inside)
             assertTrue("slot $slot at ($x, $y) came off somewhere other than the top", y < 8f)

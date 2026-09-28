@@ -3,9 +3,7 @@
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
 """The numpy mirror of keyboard/src/main/cpp/gesture/tcn_features.{hpp,cpp} -- same resampling
-rule (evenly spaced in TIME, not arc length), same 8-D feature vector, so training and inference
-extract identical features from identical input. See that file's own doc for why arc-length
-resampling (the OTHER decoder's resample.cpp) is the wrong choice here."""
+rule (evenly spaced in time, not arc length) and the same 8-D feature vector."""
 
 from __future__ import annotations
 
@@ -44,9 +42,7 @@ def build_features(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
 
     angle = np.arctan2(vy, vx)
     delta = np.diff(angle, prepend=angle[0])
-    # Wrapped to (-pi, pi] before being read as a turn rate -- same reason tcn_features.cpp wraps
-    # it: a heading crossing from just under +pi to just under -pi is a small turn, not almost a
-    # full circle.
+    # Wrapped to (-pi, pi] before being read as a turn rate, as tcn_features.cpp does.
     delta = (delta + np.pi) % (2 * np.pi) - np.pi
     curvature = np.clip(delta, -2.0, 2.0)
 

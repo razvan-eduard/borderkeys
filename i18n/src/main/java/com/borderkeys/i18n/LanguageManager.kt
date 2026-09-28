@@ -12,17 +12,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * The one place a word on screen comes from: a flat key to text map read once from
- * `assets/translations/{lang}.json`.
- *
- * A key with no entry comes back as itself. That is deliberate -- a missing translation appears
- * on screen as `settings_swipe_title` rather than as a blank row, so it is found by looking at
- * the app instead of by a bug report about an empty screen.
- *
- * Loading is eager and synchronous, once, because both callers need text before they can draw:
- * the settings activity in `onCreate` and the IME in `onCreateInputView`. The catalogue is a few
- * hundred short strings, which parses in well under a millisecond -- and the IME's budget is
- * about what happens per keystroke, not about the one-time cost of building the view.
+ * The one place a word on screen comes from: a flat key to text map read once, eagerly and
+ * synchronously, from `assets/translations/{lang}.json`. A key with no entry comes back as itself.
  */
 class LanguageManager(private val context: Context) {
 
@@ -34,9 +25,7 @@ class LanguageManager(private val context: Context) {
 
     /**
      * Loads [langCode], falling back to [Strings.Languages.DEFAULT] if it is missing or broken.
-     * The fallback is not recursive past the default: if English itself fails to parse, the
-     * catalogue stays empty and every screen shows its keys, which is the loudest possible
-     * signal that the build is wrong.
+     * If the default fails as well, the catalogue stays empty.
      */
     fun loadLanguage(langCode: String) {
         try {
@@ -65,23 +54,12 @@ class LanguageManager(private val context: Context) {
     /** The text for [key], or [key] itself when the catalogue has no entry for it. */
     fun getString(key: String): String = translations[key] ?: key
 
-    /**
-     * [getString] as `strings[Keys.SOMETHING]`, which is how nearly every call site reads.
-     *
-     * The bracket form is short enough that a line of UI code stays about as readable as it was
-     * with the text written into it, which is what keeps the catalogue from feeling like a tax.
-     */
+    /** [getString] as `strings[Keys.SOMETHING]`. */
     operator fun get(key: String): String = getString(key)
 
     /**
-     * A line that carries a count, in the form that count takes.
-     *
-     * Looks for `key_one` at one and `key_many` where the language has a separate form for
-     * larger numbers, falling back to [key] otherwise -- so a string carries only the forms its
-     * own language distinguishes, and adding a language adds no code.
-     *
-     * Romanian is why this exists rather than a `%d` and a shrug: it counts in three, and "1
-     * cuvinte" or "20 cuvinte" is wrong in a way a reader takes as carelessness.
+     * A line that carries a count, in the form that count takes: `key_one` at one, `key_many`
+     * where the language has a separate form for larger numbers, [key] otherwise.
      */
     fun counted(key: String, count: Int): String {
         val suffixed = countedKey(key, count, usesLargeNumberForm)
@@ -89,12 +67,7 @@ class LanguageManager(private val context: Context) {
         return format(pattern, count.toString())
     }
 
-    /**
-     * [getString] with `%s` replaced by [arguments], left to right.
-     *
-     * Takes `Any?` rather than `String` because most call sites substitute a number and would
-     * otherwise all carry a `.toString()` that says nothing.
-     */
+    /** [getString] with `%s` replaced by [arguments], left to right. */
     fun getString(key: String, vararg arguments: Any?): String =
         format(getString(key), *Array(arguments.size) { arguments[it].toString() })
 
@@ -128,18 +101,10 @@ class LanguageManager(private val context: Context) {
         /** Languages with a distinct form for larger numbers. */
         internal const val LARGE_NUMBER_LANGUAGE = "ro"
 
-        /**
-         * Lenient so that a trailing comma in a hand-edited catalogue is a warning in review
-         * rather than an app that shows nothing but keys; `isLenient` does not accept anything
-         * that would change the meaning of a well-formed file.
-         */
+        /** Lenient: a trailing comma is accepted, and a well-formed file reads the same. */
         private val JSON = Json { isLenient = true; ignoreUnknownKeys = true }
 
-        /**
-         * Reads a flat object of key to text. Anything that is not a string -- a nested object,
-         * a number, a list -- is dropped rather than coerced, because a catalogue entry that is
-         * not text is a mistake in the file and silently stringifying it hides the mistake.
-         */
+        /** Reads a flat object of key to text; a value that is not a string is dropped. */
         fun parse(text: String): Map<String, String> {
             val root = JSON.parseToJsonElement(text)
             if (root !is JsonObject) {
@@ -167,13 +132,7 @@ class LanguageManager(private val context: Context) {
         /** Romanian switches to "20 de cuvinte" here. */
         private const val LARGE_NUMBER_THRESHOLD = 20
 
-        /**
-         * Substitutes `%s` placeholders left to right.
-         *
-         * Hand-rolled rather than [String.format] because the catalogue is translated text: a
-         * translator who writes a stray `%` should see a stray `%` on screen, not crash the
-         * settings screen with an UnknownFormatConversionException.
-         */
+        /** Substitutes `%s` placeholders left to right; any other `%` is left as it is. */
         internal fun format(pattern: String, vararg arguments: String): String {
             if (arguments.isEmpty() || !pattern.contains(PLACEHOLDER)) {
                 return pattern

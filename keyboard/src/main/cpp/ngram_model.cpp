@@ -97,7 +97,7 @@ uint32_t NgramModel::successors(uint32_t previous, uint32_t* firstOut) const {
     if (list > wordCount_) {
         return 0;
     }
-    // Clamped to the pack's own count: the offsets are file content and are read as claims.
+    // Clamped to the pack's count.
     return clampedRun(successorOffsets_[list], successorOffsets_[list + 1], successorCount_,
                       firstOut);
 }

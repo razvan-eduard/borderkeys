@@ -2,14 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-"""Measures swipe decoding accuracy over a recorded corpus.
-
-Without this, a change to the decoder can only be judged by swiping a few words and forming an
-impression. An impression is not a measurement: the constants in the scorer trade one class of
-word against another, and the only way to know whether a change helped is to replay the same
-gestures through the old and the new build and compare two numbers.
-
-Standard library only, like every other tool here.
+"""Measures swipe decoding accuracy over a recorded corpus. Standard library only.
 
 Formats
 -------
@@ -24,8 +17,7 @@ Corpus (`native-tests/data/*.csv`), one touch sample per line:
 
     id,word,x,y,t
 
-Gestures are grouped by `id` and must appear contiguously. One sample per line rather than one
-gesture per line so the file diffs usefully when a recording is added or corrected.
+Gestures are grouped by `id` and must appear contiguously.
 
 Usage
 -----
@@ -108,12 +100,7 @@ def load_corpus(path: Path) -> list[Gesture]:
 
 
 # --------------------------------------------------------------------------------------
-# Synthesis
-#
-# A synthesised gesture is not a substitute for a recorded one -- a real finger overshoots
-# corners, slows before a turn and wobbles in ways no generator reproduces. It is what makes the
-# harness runnable and the regression gate meaningful before any recordings exist, and the
-# corpus format is the same either way, so recordings drop straight in.
+# Synthesis, in the same corpus format as a recording.
 # --------------------------------------------------------------------------------------
 
 
@@ -258,8 +245,7 @@ def main(argv: list[str]) -> int:
           f"{sum(len(g.samples) for g in gestures)} samples, from {arguments.corpus}")
 
     if not arguments.binary.is_file():
-        # The native harness is built by native-tests/, which arrives with step 8. Saying so is
-        # the point: a check that silently does nothing reads exactly like a check that passed.
+        # The native harness is built by native-tests/; a missing one is reported.
         print(f"::notice::{arguments.binary} not built — accuracy not measured, nothing compared")
         return 0
     if arguments.pack is None:
@@ -287,8 +273,7 @@ def main(argv: list[str]) -> int:
             print(f"::notice::{BASELINE} does not exist — nothing to compare against")
             return 0
         baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
-        # A tolerance, not equality: the corpus is fixed and the decoder is deterministic, so
-        # any drop is real, but a rounding difference between platforms should not fail a build.
+        # A tolerance, not equality, for rounding differences between platforms.
         tolerance = 0.5
         if measured["top1"] + tolerance < baseline["top1"]:
             print(f"::error::top-1 fell from {baseline['top1']}% to {measured['top1']}%")

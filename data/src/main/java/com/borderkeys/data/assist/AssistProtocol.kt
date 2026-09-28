@@ -4,15 +4,8 @@
 package com.borderkeys.data.assist
 
 /**
- * The wire contract between the keyboard and the assistant process.
- *
- * It lives in `:data` because both ends need it and neither may depend on the other: `:keyboard`
- * must not know `:assist` exists -- the assistant is absent from the free build entirely, and
- * the keyboard has to work without it. The keyboard binds by component name, as a string, the
- * same way it opens the settings screen.
- *
- * A [android.os.Messenger] rather than AIDL. The exchange is one request and one reply carrying
- * a bounded string; AIDL would generate a stub, a proxy and an interface file to express that.
+ * The [android.os.Messenger] contract between the keyboard and the assistant process, which the
+ * keyboard binds by component name.
  */
 object AssistProtocol {
 
@@ -51,9 +44,8 @@ object AssistProtocol {
     const val KEY_TRUNCATED = "truncated"
 
     /**
-     * Service to keyboard, on an MSG_STATUS reply: the loaded model's own chars-per-token ratio,
-     * or absent when nothing is loaded yet to measure it against -- see
-     * `TextAssist::charsPerToken`'s own doc for what it is measured from.
+     * Service to keyboard, on an MSG_STATUS reply: the loaded model's chars-per-token ratio
+     * (`TextAssist::charsPerToken`), or absent when nothing is loaded.
      */
     const val KEY_CHARS_PER_TOKEN = "chars_per_token"
 
@@ -65,17 +57,12 @@ object AssistProtocol {
 
     /**
      * Keyboard to service, on an MSG_RUN: true for a chunk after the first within one
-     * ChunkedAssistRunner job, telling the service it may decode against whatever the previous
-     * request left in the model's memory instead of clearing it first -- see
-     * `TextAssist::run`'s `reuseSharedPrefix` doc, in text_assist.hpp, for what that means and
-     * why it is safe. Absent (read as false) for every other request.
+     * ChunkedAssistRunner job, letting the service keep the model's memory of the shared prefix
+     * (`TextAssist::run`'s `reuseSharedPrefix`). Absent, read as false, otherwise.
      */
     const val KEY_CONTINUE_JOB = "continue_job"
 
     // ---- errors ---------------------------------------------------------------------------
-    //
-    // Every one of these is a sentence the user can be shown. A failure that reaches the sheet
-    // as "something went wrong" is a failure the user cannot act on.
 
     const val ERROR_NONE = 0
 

@@ -3,11 +3,8 @@
     SPDX-License-Identifier: GPL-3.0-or-later
     SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-    Referenced by android:dataExtractionRules, for API 31 and above. Both transports are
-    excluded in full: cloud backup because nothing typed here should reach a server, and
-    device-to-device transfer because the encrypted database is keyed to this device's
-    Keystore and would arrive unreadable anyway. The personal dictionary migrates through the
-    explicit CSV export in Settings instead (section 4.3).
+    Referenced by android:dataExtractionRules, for API 31 and above. Cloud backup and
+    device-to-device transfer are both excluded in full.
 -->
 <data-extraction-rules>
     <cloud-backup>

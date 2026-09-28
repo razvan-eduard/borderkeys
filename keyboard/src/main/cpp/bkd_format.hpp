@@ -7,71 +7,27 @@
 #include <cstddef>
 #include <cstdint>
 
-// The on-disk language pack format, and the rules for deciding whether a given pile of bytes
-// is one.
-//
-// This header is the security boundary of the whole application. A .bkd file may have been
-// handed to us by the user from anywhere, and the code that reads it does pointer arithmetic
-// over a memory mapping inside the process that sees every character typed on this device. A
-// malformed pack is not "bad suggestions", it is memory corruption in the worst possible
-// process. Everything here is therefore written as if the producer were hostile, including the
-// packs we generate ourselves -- because at load time we cannot tell the difference.
-//
-// Layout: a fixed 336-byte header (256 in version 1, grown twice since -- see the version notes
-// below), then section payloads at header-declared offsets. Nothing is parsed: the loader
-// validates the header, checks every section against the real file size, and reinterprets
-// pointers into the mapping. Opening a pack is O(1) in the dictionary size. The one linear pass
-// is the content checksum, which is deliberate and is paid once, off the UI thread, at load --
-// the content-CRC step of the header validation below.
+// The on-disk language pack format, and the checks a file must pass to be read as one. Every
+// field is treated as untrusted. A fixed 336-byte header is followed by section payloads at
+// header-declared offsets, each checked against the real file size and read in place; the content
+// checksum is the one linear pass.
 
 namespace borderkeys {
 
-// 'B' 'K' 'D' '1' read as a little-endian u32. Byte order is part of the format: the file is
-// little-endian, every Android ABI we build for is little-endian, and a big-endian reader would
-// fail the magic rather than silently misread every offset in the header.
+// 'B' 'K' 'D' '1' read as a little-endian u32; the file is little-endian.
 inline constexpr uint32_t kBkdMagic = 0x31444B42u;
 
-// Bumped whenever the meaning of any field changes. A pack whose version is not exactly this
-// is refused; there is no best-effort interpretation of an unknown layout.
-// 2 added the part-of-speech sections and grew the header from 256 to 320 bytes to hold their
-// descriptors. A version 1 pack is refused rather than read with the new fields zeroed: the
-// header grew, so every section offset in an old file means something different now.
-// 3 added kSectionWordFlags (one byte per word, kWordFlagProperNoun so far), the same way 2
-// added its own two sections: BkdHeader::sections grew by one entry, growing the header itself
-// from 320 to 336 bytes, for the same reason 1 -> 2 grew it from 256 to 320 -- every section
-// offset in an older file was computed against a shorter header, so nothing downstream of it can
-// be trusted either.
-// 4 added kSectionWordRun and changed what a trie terminal holds. A folded key used to carry one
-// word index; it now carries the first index of a run of words that share that folded key, and
-// kSectionWordRun gives the run's length. Every per-word section is therefore longer than the
-// number of trie terminals, which is what a version 3 reader would assume they matched.
-// 5 replaced the bigram hash table with a successor index: three sections holding, for every
-// word and for the sentence start, the words the corpus wrote after it, sorted by index, with
-// the quantised conditional log-probability of each. BkdHeader::bigramCapacity became
-// successorCount, the descriptor the index needs beyond the two it replaced came out of the
-// reserved words, and the header stays 336 bytes.
-// 6 replaced the trigram hash table with a continuation index: for every pair, by its position
-// in the successor index, the words the corpus wrote after it, sorted by index, with the
-// quantised conditional log-probability of each. The section that held the hash keys holds the
-// list starts, the values section keeps its place, the words section is new and its descriptor
-// came out of the reserved words, so the header stays 336 bytes. BkdHeader::trigramCapacity
-// became trigramCount.
+// The format version; a pack of any other version is refused.
 inline constexpr uint32_t kBkdVersion = 6u;
 
-// Caps, checked before a single byte is mapped.
-//
-// 64 MB is far above any real dictionary (a large one is a few MB) and far below a size that
-// could exhaust address space or make the checksum pass noticeable. The word and node caps
-// exist so that a header claiming four billion nodes is rejected on the field itself, before
-// its value is ever multiplied by a size to compute a section length.
+// Caps, checked before a byte is mapped and before any count is multiplied by a size.
 inline constexpr uint64_t kMaxPackBytes = 64ull * 1024ull * 1024ull;
 inline constexpr uint32_t kMaxWords = 4000000u;
 inline constexpr uint32_t kMaxNodes = 32000000u;
 inline constexpr uint32_t kMaxAlphabet = 1024u;
 inline constexpr uint32_t kMaxNgramCapacity = 1u << 26;
 
-// One byte per tag, so the matrix a pack may declare is bounded by what that byte can index.
-// 255 tags cover 99.4% of Romanian tokens; the tail shares the last slot.
+// The most part-of-speech tags, one byte each.
 inline constexpr uint32_t kMaxPosTags = 256u;
 
 // Section table. Order is fixed; a section may be empty (length 0) but may not be missing.
@@ -97,9 +53,7 @@ enum BkdSectionIndex : uint32_t {
     kSectionCount
 };
 
-// Bits in a kSectionWordFlags byte. One bit defined so far; the other seven are free for a
-// future flag without another format version bump, the same headroom kBkdFlagCaseFolded and
-// kBkdFlagContentCrc already leave in BkdHeader::flags below.
+// Bits in a kSectionWordFlags byte.
 inline constexpr uint8_t kWordFlagProperNoun = 1u << 0;  // always capitalise, regardless of
                                                           // typed case or shift state
 
@@ -132,14 +86,10 @@ struct BkdHeader {
     uint32_t trigramCount;     // triples in the continuation index, or zero
     uint32_t logProbScaleQ;    // fixed point: logProb = -quantised / logProbScaleQ
 
-    // Rows and columns of the transition matrix, and the exclusive upper bound on a word's tag
-    // index. Zero when the pack carries no grammar, which is a pack built without a treebank
-    // rather than a broken one -- the two sections are then empty and the engine scores without
-    // the term, exactly as it did before.
+    // Rows and columns of the transition matrix, and the exclusive bound on a word's tag index;
+    // zero for a pack without grammar, whose two grammar sections are then empty.
     uint32_t posTagCount;
 
-    // Shorter with every descriptor added since version 3, which is where they come from: the
-    // header stays 336 bytes and every section offset keeps its meaning. One word is left.
     uint32_t reserved[1];
 
     BkdSection sections[kSectionCount];
@@ -149,8 +99,7 @@ static_assert(sizeof(BkdHeader) == 336, "the .bkd header is a fixed 336 bytes");
 static_assert(sizeof(BkdSection) == 16, "section descriptors are two 64-bit fields");
 static_assert(alignof(BkdHeader) == 8, "header alignment is part of the layout");
 
-// Reasons a pack was refused. Returned across JNI as a plain int; exceptions are disabled and
-// error paths never allocate.
+// Reasons a pack was refused, returned across JNI as a plain int.
 enum BkdStatus : int32_t {
     kBkdOk = 0,
     kBkdErrTooLarge = -1,
@@ -171,9 +120,7 @@ enum BkdStatus : int32_t {
     kBkdErrArgument = -16,
 };
 
-// CRC-32 (IEEE 802.3, reflected, polynomial 0xEDB88320). Not a cryptographic check and not
-// pretending to be one: it catches truncation and corruption. Tampering is what the SHA-256
-// recorded at import time in the database is for.
+// CRC-32 (IEEE 802.3, reflected, polynomial 0xEDB88320).
 inline uint32_t crc32Update(uint32_t crc, const void* data, size_t length) {
     static const uint32_t* const table = [] {
         static uint32_t generated[256];
@@ -199,13 +146,8 @@ inline uint32_t crc32(const void* data, size_t length) {
     return crc32Update(0u, data, length);
 }
 
-// True when `count` elements of `elementSize` bytes fit at `section.offset` inside a mapping of
-// `fileBytes`, at the alignment the type needs.
-//
-// Written with subtraction rather than addition throughout. `offset + length <= fileBytes` is
-// the obvious form and it is wrong: both are attacker-controlled 64-bit values and the sum
-// wraps, which is precisely how a section that claims to end before the file ends up pointing
-// past it.
+// True when `expectedCount` elements of `elementSize` bytes fit at `section.offset` inside a
+// mapping of `fileBytes`, at the type's alignment. Checked by subtraction, without overflow.
 inline bool bkdSectionFits(const BkdSection& section,
                            uint64_t fileBytes,
                            uint64_t headerBytes,
@@ -231,13 +173,8 @@ inline bool bkdSectionFits(const BkdSection& section,
     return section.length <= fileBytes - section.offset;
 }
 
-// Validates everything that can be checked from the header alone, plus the section table
-// against the real size of the mapped window. Kept inline and self-contained so that the host
-// fuzzing target links against exactly the code the device runs.
-//
-// Order matters. Cheap and absolute checks first (size caps, magic, version), then the header
-// checksum, then the section table -- so that a fuzzed input is rejected on the earliest field
-// that is wrong rather than after arithmetic has been done on the later ones.
+// Validates the header, and its section table against the real size of the mapped window: size
+// caps, magic and version first, then the header checksum, the counts and the sections.
 inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) {
     if (mappedBytes < sizeof(BkdHeader)) {
         return kBkdErrTooSmall;
@@ -254,8 +191,7 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
     if (header.headerBytes != sizeof(BkdHeader)) {
         return kBkdErrHeaderSize;
     }
-    // The declared size must be the size we actually have. Without this every later bound is
-    // checked against a number the file chose for itself.
+    // The declared size must be the mapped size.
     if (header.fileBytes != mappedBytes) {
         return kBkdErrFileSize;
     }
@@ -272,7 +208,7 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
         header.alphabetCount == 0 || header.alphabetCount > kMaxAlphabet) {
         return kBkdErrCounts;
     }
-    // A trie with no nodes cannot even hold a root, and the walk code indexes node 0 directly.
+    // The trie needs at least its root.
     if (header.nodeCount < 1) {
         return kBkdErrCounts;
     }
@@ -284,9 +220,7 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
         return kBkdErrCounts;
     }
 
-    // Both are plain counts, bounded so that no section length computed from them can wrap. A
-    // triple hangs off its pair, so triples without pairs is not a pack that could have been
-    // written.
+    // Both counts are bounded, and triples need pairs.
     const uint32_t successorCount = header.successorCount;
     const uint32_t trigramCount = header.trigramCount;
     if (successorCount > kMaxNgramCapacity || trigramCount > kMaxNgramCapacity) {
@@ -295,8 +229,7 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
     if (trigramCount != 0 && successorCount == 0) {
         return kBkdErrCounts;
     }
-    // A tag index is a byte, so a matrix wider than 256 could not be addressed by one. Zero is
-    // a pack built without a treebank, which is valid and simply carries no grammar.
+    // At most kMaxPosTags tags; zero for a pack without grammar.
     if (header.posTagCount > kMaxPosTags) {
         return kBkdErrCounts;
     }
@@ -339,8 +272,7 @@ inline int32_t bkdValidateHeader(const BkdHeader& header, uint64_t mappedBytes) 
         }
     }
 
-    // The text blob is the one section whose length is not implied by a count, so it is bounded
-    // directly instead.
+    // The text blob's length is bounded directly.
     const BkdSection& text = header.sections[kSectionWordText];
     if (header.wordCount == 0) {
         if (text.length != 0) {

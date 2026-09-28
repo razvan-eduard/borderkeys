@@ -9,14 +9,7 @@ import kotlinx.serialization.SerializationException
 import java.io.InputStream
 import java.io.OutputStream
 
-/**
- * Reads and writes [ParticleEffectsSettings] as JSON for the typed DataStore -- the same shape
- * as [KeyboardThemeSerializer], minus a legacy-migration step: this domain did not exist before
- * this file, so there is no older shape to carry forward. An install upgrading from the first
- * particle-effects release starts fresh here (every region off, every layer at its type's own
- * default) rather than migrating the old flat `KeyboardPreferences`/`KeyboardTheme` fields --
- * see this feature's own plan notes for why that reset is the accepted trade-off.
- */
+/** Reads and writes [ParticleEffectsSettings] as JSON for the typed DataStore. */
 object ParticleEffectsSettingsSerializer : Serializer<ParticleEffectsSettings> {
 
     private val json = PERSISTED_JSON

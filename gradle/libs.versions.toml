@@ -1,20 +1,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 #
-# Single source of truth for every external coordinate in the build. Nothing in a
-# module script may hardcode a version: `verifyNoForbiddenDependencies` inspects the
-# resolved graph, but a catalog is what keeps the graph small enough to reason about.
+# Every external coordinate in the build; no module script hardcodes a version.
 
 [versions]
-# Toolchain. Pinned as a validated set; bumping one of these means re-validating all of them.
+# Toolchain, pinned as a validated set.
 agp = "9.3.3"
 kotlin = "2.4.10"
 ksp = "2.3.11"
 ndk = "27.1.12297006"
 cmake = "3.22.1"
 
-# SDK levels. minSdk 30 is a hard floor, not a convenience: inline autofill suggestions
-# (the password-manager integration, section 5.4) only exist from Android 11.
+# SDK levels. minSdk 30 is a hard floor: inline autofill suggestions start at Android 11.
 compileSdk = "37"
 minSdk = "30"
 targetSdk = "36"
@@ -32,8 +29,7 @@ richeditor = "1.2.0"
 securityCrypto = "1.1.0"
 serialization = "1.9.0"
 sqlcipher = "4.11.0"
-# Must track what room-runtime resolves to, otherwise SQLCipher's SupportSQLiteOpenHelper
-# implementation and Room's expectation of it drift apart at runtime rather than at build time.
+# Must match what room-runtime resolves to.
 sqlite = "2.6.2"
 
 # Test-only.
@@ -77,9 +73,8 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 
 [plugins]
-# AGP 9 has built-in Kotlin support and refuses to coexist with org.jetbrains.kotlin.android,
-# so that plugin is deliberately absent; the `kotlin` version above still drives the two
-# Kotlin compiler plugins below.
+# No org.jetbrains.kotlin.android: AGP 9 has built-in Kotlin support. The `kotlin` version above
+# drives the two Kotlin compiler plugins below.
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

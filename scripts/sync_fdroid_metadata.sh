@@ -7,15 +7,8 @@ set -e
 # Generates the F-Droid metadata tree `fdroid update` expects for both BorderKeys flavors:
 # metadata/<applicationId>/en-US/{icon.png, summary.txt, description.txt, phoneScreenshots/*,
 # changelogs/<versionCode>.txt} -- sourced from this repo's own fastlane/ store listing plus a
-# git-log-generated changelog.
-#
-# Modeled on VoxApps' scripts/sync_fdroid_metadata.sh, which pushes into the same custom repo
-# (vox-fdroid-repo) -- kept as close to that script's shape as this repo's own single-app,
-# two-flavor layout allows, rather than inventing a second convention for the same target repo.
-# The one real difference: VoxApps is a monorepo of unrelated apps and scopes its git-log range
-# per app directory; BorderKeys ships both flavors from the same tag with one shared
-# versionCode, so one changelog is written under both application IDs, not two independently
-# generated ones.
+# git-log-generated changelog. Both flavors share one versionCode, so one changelog is written
+# under both application IDs.
 
 APPS=(com.borderkeys com.borderkeys.plus)
 
@@ -32,8 +25,7 @@ fi
 LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | sed -n '1p')
 PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | sed -n '2p')
 
-# Same filter release.yml's own CHANGELOG.md generation uses, kept identical on purpose so the
-# F-Droid "what's new" text and the GitHub release notes never tell two different stories.
+# The same filter release.yml's release notes use.
 KEEP_TYPES='^- (feat|fix|perf)(\(|!?:)'
 if [ -n "$LATEST_TAG" ] && [ -n "$PREV_TAG" ]; then
     echo "Generating changelog from $PREV_TAG to $LATEST_TAG..."
@@ -51,10 +43,7 @@ if [ -z "$CHANGELOG" ]; then
     CHANGELOG="Maintenance update and performance improvements."
 fi
 
-# F-Droid's whatsNew field has a hard 500-character limit; fdroid update silently truncates
-# anything longer mid-character, which can cut a bullet off mid-word. Trim to whole bullet
-# lines that fit instead, so a long changelog degrades to "here are the first few things"
-# rather than a garbled half-word fragment.
+# F-Droid's whatsNew field holds 500 characters: trimmed to the whole bullet lines that fit.
 if [ ${#CHANGELOG} -gt 500 ]; then
     TRIMMED=""
     while IFS= read -r line; do

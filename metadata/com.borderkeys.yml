@@ -1,19 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 #
-# F-Droid metadata for the `core` flavour: the one that carries no inference runtime at all.
+# F-Droid metadata for the `core` flavour, which carries no inference runtime.
 #
-# `plus` is published too, as its own package, in com.borderkeys.plus.yml. It is a separate
-# application rather than a replacement, so the two can be installed side by side and choosing
-# the assistant does not cost anyone the settings and dictionary of the build it would have
-# replaced. It needs no AntiFeatures either: llama.cpp is MIT and compiled from source, the
-# libc++ it links against is Apache-2.0 with the LLVM exception, and it bundles no model. See
-# docs/licensing.md section 2.2.1.
-#
-# This comment used to claim `plus` would need NonFreeAssets. That was written while the plan
-# still included the FUTO Swipe weights, which are genuinely non-free -- they require a visible
-# "powered by FUTO" notice. That option was never taken: its runtime needs CMake 3.29 against
-# the 3.22.1 this project pins. The weights never shipped and the note outlived them.
+# `plus` is published as its own package, in com.borderkeys.plus.yml, installable side by side
+# with this one.
 
 Categories:
   - System
@@ -101,8 +92,7 @@ Description: |-
 RepoType: git
 Repo: https://github.com/razvan-eduard/borderkeys.git
 
-# Pins publishing to our release certificate, so a build signed by anything else is rejected
-# rather than silently accepted. SHA-256 of the signing certificate, lowercase hex.
+# The release certificate a build must be signed with: its SHA-256, lowercase hex.
 AllowedAPKSigningKeys: f49409d101891a6d5c7254168b083cc4d0772cda2448cc853e8e2f331b4e5321
 
 Builds:
@@ -154,8 +144,7 @@ Builds:
       - core
     ndk: 27.1.12297006
 
-  # First tag cut after `plus` became its own applicationId (d64fc7c) -- see
-  # com.borderkeys.plus.yml's own note on why its Builds list starts here rather than earlier.
+  # The first tag after `plus` became its own applicationId (d64fc7c).
   - versionName: 0.3.0
     versionCode: 7
     commit: v0.3.0

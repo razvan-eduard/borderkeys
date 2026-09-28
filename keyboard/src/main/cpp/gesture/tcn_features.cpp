@@ -22,18 +22,8 @@ bool resampleUniformTime(const float* xs, const float* ys, const int64_t* ts, in
         return false;
     }
 
-    // Two-pointer walk: `segment` only ever advances, since both the raw samples and the target
-    // times are non-decreasing. Bounded to count-2 so segment+1 is always a valid index.
-    //
-    // `targetTime` stays a double throughout -- rounding it to the nearest millisecond first (an
-    // earlier version of this function did) matches training's own interpolation only at exact
-    // multiples of a millisecond, and training (features_np.py's resample_uniform_time, via
-    // np.interp) interpolates at the exact continuous target time. For a real swipe -- samples
-    // roughly as far apart as the ~64-point resampling grid itself -- that rounding was not a
-    // rounding error close to the sampled points, it was a different point on the path, at every
-    // one of the 64 steps, compounding through five dilated blocks with a wide temporal receptive
-    // field into the accuracy collapse confirmed 2026-09-13 (96.67% top-1 for Shark2 against 0%
-    // for this decoder on the same 30-gesture corpus -- fixed by this change, not by the model).
+    // Two-pointer walk: `segment` only advances, and stays below count-1. `targetTime` stays a
+    // double, as in training's resample_uniform_time.
     int segment = 0;
     for (int i = 0; i < kTcnTimesteps; ++i) {
         const double u = static_cast<double>(i) / static_cast<double>(kTcnTimesteps - 1);
@@ -57,15 +47,12 @@ void buildTcnFeatures(const float* xs, const float* ys, int count, float* outFea
     if (count <= 0) {
         return;
     }
-    // Generic over `count` rather than hard-wired to kTcnTimesteps, so a native test can exercise
-    // this directly on a small hand-written trajectory without also exercising the resampler.
     constexpr int kMax = kTcnTimesteps;
     const int n = (count < kMax) ? count : kMax;
     float vx[kMax] = {};
     float vy[kMax] = {};
 
-    // Central differences (forward/backward at the two ends), computed in a first pass because
-    // acceleration below needs a velocity's neighbours, not just its own timestep.
+    // Velocity by central differences, one-sided at the ends, in a first pass.
     for (int i = 0; i < n; ++i) {
         const int prev = (i > 0) ? i - 1 : i;
         const int next = (i < n - 1) ? i + 1 : i;
@@ -87,9 +74,7 @@ void buildTcnFeatures(const float* xs, const float* ys, int count, float* outFea
         float curvature = 0.f;
         if (i > 0) {
             float delta = angle - previousAngle;
-            // Wrapped to (-pi, pi] before being read as a turn rate: a heading that crosses from
-            // just under +pi to just under -pi is a small turn, not the almost-full-circle one
-            // the unwrapped difference would say it was.
+            // The heading change, wrapped to (-pi, pi].
             while (delta > kPi) {
                 delta -= 2.f * kPi;
             }

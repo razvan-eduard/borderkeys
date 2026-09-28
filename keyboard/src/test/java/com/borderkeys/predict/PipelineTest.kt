@@ -12,21 +12,8 @@ import org.junit.BeforeClass
 import org.junit.Test
 
 /**
- * Every case in `pipeline_cases.tsv`, through the real path, asserted.
- *
- * The suites either side of this each test half of a decision. `borderkeys_tests` stops at the
- * engine; `AutoCorrectionTest` and `SituationTest` start after it, on values handed to them.
- * Between the two sat the join, and every bug reported from a device this session lived exactly
- * there -- a word the engine offered and the guards were supposed to refuse, or the reverse.
- *
- * One test method rather than one per case, deliberately: a payload file is meant to be appended
- * to when something is reported, and that should cost a line rather than a method. Every failure
- * is collected and reported together, so a change that breaks nine cases says so once instead of
- * stopping at the first.
- *
- * Skipped, not failed, where the host bridge or the packs are missing: neither is produced by an
- * ordinary `./gradlew test`, and a suite that fails on a machine that simply has not run
- * `cmake --build native-tests/build --target borderkeys` teaches people to ignore it.
+ * Every case in `pipeline_cases.tsv` and `pipeline_cases_ro.tsv` through [Pipeline], each payload
+ * in one test that reports all of its failures together.
  */
 class PipelineTest {
 
@@ -57,8 +44,6 @@ class PipelineTest {
         )
     }
 
-    /** A phrase carries context word to word, which a single-word corpus cannot exercise: the
-     *  n-grams are most of why a candidate wins, and "put" was committed as "out" mid-sentence. */
     @Test
     fun `a phrase leaves its correctly spelled words alone`() {
         Pipeline.require()
@@ -71,9 +56,6 @@ class PipelineTest {
         )
     }
 
-    /** The same contract against the Romanian pack, which is where most of the reports came
-     *  from and which reaches a rule English never does: a missing accent may be restored below
-     *  the length at which guessing otherwise stops. */
     @Test
     fun `every Romanian case commits what it should, for the reason it should`() {
         Pipeline.require()
@@ -144,16 +126,7 @@ class PipelineTest {
 
     private fun describe(text: String?) = text ?: "nothing"
 
-    /**
-     * The length guard, asserted at a setting where it can fire.
-     *
-     * At the default minimum of three the engine proposes nothing at all for a two-character
-     * word -- its own edit-cost ceiling is tighter than the guard is -- so TooShort is
-     * unreachable through the whole path and a case claiming it passes for the wrong reason.
-     * Raised to five, the very words the default corrects are refused on length instead, which
-     * is the rule this covers. Measured: at three, "tge", "hte", "teh" and "adn" all commit
-     * "the" or "and" as Correctable.
-     */
+    /** At a minimum length of five, words the default corrects are refused as TooShort. */
     @Test
     fun `a word below the minimum length is refused on length, not corrected`() {
         Pipeline.require()
@@ -173,26 +146,13 @@ class PipelineTest {
         )
     }
 
-    /**
-     * Every case again, with the first letter capitalised.
-     *
-     * The first letter of a field arrives capitalised and nothing in these payloads did, so a
-     * rule that compared a spelling against the letters typed byte for byte passed the whole
-     * suite and failed on every word on a phone. Capitalising is not a separate feature to be
-     * covered separately: it is the ordinary state of the first word of anything anyone writes.
-     *
-     * The outcome must match the lower-case run with its own first letter capitalised. A case
-     * whose committed word differs in any other way is a real difference and belongs in the
-     * payload as its own row.
-     */
+    /** Every case again with its first letter capitalised commits the same word, capitalised. */
     @Test
     fun `every case behaves the same when the first letter is capitalised`() {
         Pipeline.require()
         val romanian = Pipeline.open("ro-RO")
         val failures = try {
-            // Each payload against the engine it was written for. Reading the Romanian rows
-            // into the English pipeline is not a stricter test, it is a different one: every
-            // Romanian word is then an unknown word and the answers mean nothing.
+            // Each payload against its own language's pipeline.
             val runs = readCases().map { it to pipeline } +
                 readCases("pipeline_cases_ro.tsv").map { it to romanian }
             runs.mapNotNull { (case, engine) ->
@@ -201,9 +161,7 @@ class PipelineTest {
                 }
                 val capitalised = case.typed.replaceFirstChar { it.uppercaseChar() }
                 val expected = case.committed?.replaceFirstChar { it.uppercaseChar() }
-                // A name whose only correction was its capital has nothing left to do once the
-                // capital is typed: "tehran" commits "Tehran", "Tehran" commits nothing, and
-                // both leave the same text on screen.
+                // Skipped when the correction was only the capital.
                 if (expected == capitalised) {
                     return@mapNotNull null
                 }

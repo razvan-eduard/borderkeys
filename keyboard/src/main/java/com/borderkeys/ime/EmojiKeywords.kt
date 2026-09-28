@@ -6,11 +6,8 @@ package com.borderkeys.ime
 import android.content.res.AssetManager
 
 /**
- * The keywords the emoji panel searches beside the names: Unicode's CLDR annotations, compiled
- * by tools/build_emoji.py into one file per language under `emoji/keywords/`.
- *
- * Loaded for the languages that are switched on, and for English always, since the names the
- * panel already searches are English too. A language with no file contributes nothing.
+ * The keywords the emoji panel searches beside the names: Unicode's CLDR annotations, compiled by
+ * tools/build_emoji.py under `emoji/keywords/`, for the enabled languages and always English.
  */
 internal object EmojiKeywords {
 

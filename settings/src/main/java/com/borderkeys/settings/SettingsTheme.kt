@@ -11,16 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 /**
- * The settings UI's own palette.
- *
- * Deliberately unrelated to [com.borderkeys.data.theme.KeyboardTheme]. The keyboard's colours
- * are a user preference stored in a DataStore and compiled into Paint objects; these are the
- * chrome of an ordinary Android screen and follow the system's light/dark setting. Tying them
- * together would mean a user who picked a dark keyboard got a dark settings screen whether or
- * not their phone is in dark mode.
- *
- * No dynamic colour. It reads the wallpaper, which is one more thing this application would be
- * looking at for no reason the user asked for.
+ * The settings UI's own palette, independent of [com.borderkeys.data.theme.KeyboardTheme]; it
+ * follows the system's light or dark setting. No dynamic colour.
  */
 private val Accent = Color(0xFF6EA8FE)
 

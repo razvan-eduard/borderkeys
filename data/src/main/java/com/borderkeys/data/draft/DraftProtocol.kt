@@ -4,20 +4,9 @@
 package com.borderkeys.data.draft
 
 /**
- * Opening the draft box from inside the keyboard itself, while a field is being typed into.
- *
- * The keyboard is a Service, and everything the draft box needs -- Compose, the animated ring,
- * the version rail -- lives in `:settings` and cannot live in `:keyboard` (a hard rule, checked
- * at build time: the keyboard renders into a Canvas on the UI thread with a per-key latency
- * budget, and Compose does not fit inside that). So the "Compose" quick action does what
- * [com.borderkeys.data.backup.TransferProtocol] already does for a different reason: it starts
- * `SettingsActivity` by class name with this action set, and the same screen the system's own
- * text-selection menu opens is what draws itself.
- *
- * There is no calling activity on this path -- it was not reached through
- * `ACTION_PROCESS_TEXT` -- so nothing here can set a result the way a selection-menu launch can.
- * The screen answers with the clipboard instead, the same way it already does for a selection
- * that was never editable to begin with.
+ * Opening the draft box from inside the keyboard: the "Compose" quick action starts
+ * `SettingsActivity` by class name with this action set. With no calling activity, the screen
+ * answers through the clipboard.
  */
 object DraftProtocol {
 

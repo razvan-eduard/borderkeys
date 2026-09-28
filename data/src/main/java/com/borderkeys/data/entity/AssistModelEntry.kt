@@ -8,12 +8,8 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * A language model the user imported for the text assistant.
- *
- * There is at most one active at a time and usually zero: a model is hundreds of megabytes and
- * nothing here downloads anything, so having one is a deliberate act. The row exists so that
- * Settings can show what is installed, and so the hash can be re-checked before the file is
- * ever mapped and executed.
+ * A language model the user imported for the text assistant; at most one is active. The hash is
+ * re-checked before the file is mapped.
  */
 @Entity(
     tableName = "assist_models",

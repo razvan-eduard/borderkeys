@@ -20,8 +20,7 @@ interface AssistModelDao {
     @Query("SELECT * FROM assist_models WHERE active = 1 LIMIT 1")
     suspend fun activeModel(): AssistModelEntry?
 
-    /** Identity for a restore: the same file re-imported gets a new row and a new id, so what
-     *  a backup can still recognise is the hash, not the row. */
+    /** The model with this hash, which is what a restore matches on. */
     @Query("SELECT * FROM assist_models WHERE sha256 = :sha256 LIMIT 1")
     suspend fun findBySha256(sha256: String): AssistModelEntry?
 

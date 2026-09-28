@@ -21,30 +21,17 @@ import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
 
 /**
- * The real suggestion strip, showing sample words, so the count can be seen rather than imagined.
- *
- * The same class the keyboard shows and the same paints, for the same reason the theme screen
- * embeds the real keyboard: a preview drawn separately is a second implementation that is free
- * to be wrong, and the thing it is most likely to be wrong about is exactly what this preview
- * exists to show -- how narrow eight slots get.
- *
- * Inert. Touches are consumed and dropped, because a suggestion accepted inside a settings
- * screen would have nowhere to go.
- *
- * Takes one [KeyboardAppearance] rather than a theme and a set of preferences as two loose
- * parameters -- see [KeyboardAppearance] for why.
+ * The real suggestion strip, showing sample words, so the slot count can be seen. Inert: touches
+ * are consumed and dropped.
  */
 @Composable
 fun SuggestionStripPreview(
     appearance: KeyboardAppearance,
     modifier: Modifier = Modifier,
     /**
-     * When given, drawn regardless of its own [ParticleRegionSettings.enabled] -- for
-     * [com.borderkeys.settings.screen.EffectsScreen]'s Suggestion Strip card, where the whole
-     * point is previewing a look before deciding whether to switch the region on at all. Null
-     * for every other caller, so this preview's particles stay exactly as inert as they were
-     * before this parameter existed: this throwaway `SuggestionStripView` is never reached by
-     * `BorderKeysService`'s own preference wiring, so nothing else would ever turn them on.
+     * When given, drawn regardless of its [ParticleRegionSettings.enabled], for
+     * [com.borderkeys.settings.screen.EffectsScreen]'s Suggestion Strip card. Null elsewhere: no
+     * particles.
      */
     previewParticles: ParticleRegionSettings? = null,
 ) {
@@ -52,7 +39,7 @@ fun SuggestionStripPreview(
     val strings = LocalStrings.current
     val paints = remember { ThemePaints() }
     val (theme, lightTheme, preferences) = appearance
-    // Resolved into the array the view reads, once per language rather than once per frame.
+    // Resolved into the array the view reads, once per language.
     val sample = remember(strings) {
         SAMPLE_KEYS.map { Candidate(strings[it]) }
     }
@@ -68,15 +55,12 @@ fun SuggestionStripPreview(
                 view.visibleLimit = preferences.suggestionCount
                 view.setSuggestions(sample)
                 // Marked the way the real row marks: the first chip is what was typed, and one
-                // in the middle is what a delimiter would put in its place. A preview that
-                // showed neither would be a preview of a row nobody sees.
+                // in the middle is what a delimiter would put in its place.
                 view.typedIndex = 0
                 view.appliedIndex = (preferences.suggestionCount / 2)
                     .coerceAtMost(sample.size - 1)
                     .coerceAtLeast(0)
-                // Ignores ParticleRegionSettings.enabled (the region's own master) on purpose,
-                // per previewParticles' own doc -- the whole point of this preview is showing a
-                // look before that switch is turned on at all.
+                // Ignores ParticleRegionSettings.enabled, as previewParticles says.
                 if (previewParticles != null) {
                     applyParticleLayer(view.particles, previewParticles.copy(enabled = true))
                 } else {
@@ -92,13 +76,8 @@ fun SuggestionStripPreview(
 }
 
 /**
- * Eight words of realistic length, so the preview narrows the way the real strip will.
- *
- * Keys rather than words: the point is realistic *length*, and a language whose words are longer
- * than English's would make the preview a lie if it kept showing English ones.
- *
- * Short filler words would make eight slots look comfortable and then surprise the user on the
- * first long word, which is the opposite of what a preview is for.
+ * Catalogue keys of eight words of realistic length in each language, so the preview narrows the
+ * way the real strip will.
  */
 private val SAMPLE_KEYS = arrayOf(
     Keys.SUGGESTION_STRIP_PREVIEW_KEYBOARD, Keys.SUGGESTION_STRIP_PREVIEW_BECAUSE, Keys.SUGGESTION_STRIP_PREVIEW_THROUGH, Keys.SUGGESTION_STRIP_PREVIEW_ANOTHER,

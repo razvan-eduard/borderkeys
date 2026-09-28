@@ -8,14 +8,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
 
-/**
- * [LanguagePackRepository.MAX_ENABLED] against the engine's own slot count.
- *
- * The native bridge clamps a set of active languages to `Engine::kMaxPacks`, so every place
- * that lets a pack be switched on has to agree with that header. Read off the header itself
- * rather than repeated here as a second literal: a second literal is exactly the kind of copy
- * that drifts.
- */
+/** [LanguagePackRepository.MAX_ENABLED] against `Engine::kMaxPacks`, read from engine.hpp. */
 class LanguagePackLimitTest {
 
     @Test

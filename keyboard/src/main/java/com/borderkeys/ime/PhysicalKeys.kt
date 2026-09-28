@@ -6,11 +6,8 @@ package com.borderkeys.ime
 import android.view.KeyEvent
 
 /**
- * The hardware key a character sits on, for a character typed while control or alt is held.
- *
- * An application reading a shortcut looks at the key, not the character: control with the
- * key that carries `a` is "select all" whatever the keyboard's letters say. Only the keys
- * a plain keyboard has are mapped; a character off that set has no key to send.
+ * The hardware key a character sits on, for a character typed while control or alt is held. Only
+ * a plain keyboard's keys are mapped.
  */
 internal object PhysicalKeys {
 

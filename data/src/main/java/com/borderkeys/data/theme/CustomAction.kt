@@ -7,26 +7,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * An instruction the user wrote and kept, with a short name and an icon for its button.
- *
- * In the preferences rather than in the database, unlike the clipboard: there are a handful of
- * these, they are a few hundred bytes each, and they are settings -- the same kind of thing as
- * which buttons are on the bar. A table would buy a migration and a DAO for a list that fits in
- * one screen.
- *
- * [name] is what fits on a button; [instruction] is what is sent. They are separate because no
- * instruction worth writing fits in the width of a button, and a button that says "rewrite thi..."
- * is a button nobody can tell apart from the next one.
- *
- * Was `SavedPrompt` (name + text only): renamed once its role grew from "a re-runnable prompt"
- * to "something that can also sit on the bar as its own button", which needs a stable [id] to be
- * addressed by ([KeyboardPreferences.composerBar] holds ids, not the actions themselves) and an
- * [icon] to be drawn with. `@SerialName` on both the changed property and the renamed class's
- * former field in [KeyboardPreferences] keeps the on-disk JSON shape identical, so an existing
- * install's saved prompts still decode -- [PERSISTED_JSON]'s `ignoreUnknownKeys` and
- * `encodeDefaults` mean the two new fields below simply default rather than requiring a migration
- * of their own; [KeyboardPreferences.sanitised] is what turns [id]'s default of 0 into a real,
- * stable one, once, the first time an old list is read under this schema.
+ * An instruction the user wrote and kept, stored in the preferences: [name] is what fits on its
+ * button, [instruction] what is sent, [id] what [KeyboardPreferences.composerBar] refers to it by.
+ * An [id] of 0, from an older file, is backfilled by [KeyboardPreferences.sanitised].
  */
 @Serializable
 data class CustomAction(
@@ -45,20 +28,10 @@ data class CustomAction(
         /** As many as anyone will scroll through before writing a new one instead. */
         const val MAX_CUSTOM_ACTIONS = 20
 
-        /**
-         * Backfilled ids for entries decoded with [id] still at its 0 default -- only possible
-         * for a prompt saved before this field existed. Position-based rather than random so
-         * [KeyboardPreferences.sanitised] stays a pure, idempotent function: the same list in
-         * the same order must get the same ids back on every call, not a fresh one each time,
-         * or a custom action already pinned to the bar would be orphaned by its own next save.
-         */
+        /** The base of backfilled ids, which follow list position so backfilling is idempotent. */
         private const val LEGACY_ID_BASE = 100
 
-        /**
-         * Where freshly created custom actions draw their id from -- clear of both
-         * [ComposerAction]'s own 1-10 and [LEGACY_ID_BASE]'s range, so no id is ever ambiguous
-         * between a built-in action, a backfilled legacy prompt, and a newly created one.
-         */
+        /** The first id a new custom action may take, clear of built-in and backfilled ids. */
         private const val NEW_ID_MIN = 1_000
 
         /** [actions] with every 0-[id] entry backfilled -- see [LEGACY_ID_BASE]. */

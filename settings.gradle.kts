@@ -3,9 +3,7 @@
 
 pluginManagement {
     repositories {
-        // Content filters are not cosmetic: they stop a typo'd coordinate from being
-        // searched for -- and possibly found -- in a repository that has no business
-        // serving it.
+        // Only these groups are looked up in Google's repository.
         google {
             content {
                 includeGroupByRegex("com\\.android.*")
@@ -19,8 +17,7 @@ pluginManagement {
 }
 
 plugins {
-    // Provisions the JDK named by gradle/gradle-daemon-jvm.properties on a machine that
-    // does not already have it, so a fresh clone builds without a manual JDK install.
+    // Provisions the JDK named by gradle/gradle-daemon-jvm.properties where it is missing.
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
@@ -34,9 +31,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "BorderKeys"
 
-// Exactly six modules. The split is the enforcement mechanism for "Compose never enters
-// the keyboard process": :keyboard cannot see Compose because no path in the dependency
-// graph puts it there, so an accidental import is a compile error rather than a review note.
+// The modules. No path in the dependency graph gives :keyboard Compose.
 include(":app")
 include(":keyboard")
 include(":data")

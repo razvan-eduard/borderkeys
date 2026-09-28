@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 #
-# Training-only tooling. None of this is a runtime dependency of the app -- see
-# keyboard/src/main/cpp/gesture/tcn_encoder.cpp, which is hand-written C++ with no ML runtime at
-# all. Install into a venv under this directory, not system-wide:
+# Training-only tooling, not a runtime dependency of the app. Install into a venv under this
+# directory:
 #
 #   python3 -m venv tools/swipe_model/.venv
 #   tools/swipe_model/.venv/bin/pip install -r tools/swipe_model/requirements.txt

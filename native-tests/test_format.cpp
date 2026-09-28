@@ -87,9 +87,8 @@ void runFormatTests() {
     section("proper noun flag");
 
     {
-        // The sample word list build_dict.py's own --selftest builds the test pack from flags
-        // exactly one word, "border" (see build_dict.py's sample_proper_nouns) -- so this is a
-        // real round-trip through the actual compiler, not a hand-built fixture.
+        // The sample word list build_dict.py's --selftest builds the test pack from flags exactly
+        // one word, "border" (sample_proper_nouns): a round trip through the compiler.
         LanguagePack pack;
         check(openFromBytes(good, &pack) == kBkdOk, "the test pack opens for the proper-noun check");
 
@@ -228,8 +227,7 @@ void runFormatTests() {
     section("grammar sections");
 
     {
-        // The test pack is built without a treebank, which is the case every language starts
-        // in and the one that must keep working: no tags, no matrix, and a score with no
+        // The test pack is built without a treebank: no tags, no matrix, and a score with no
         // grammar term rather than a refusal.
         LanguagePack pack;
         check(openFromBytes(good, &pack) == kBkdOk, "a pack with no grammar opens");
@@ -239,8 +237,7 @@ void runFormatTests() {
     }
 
     {
-        // posTagCount is the field every grammar read is bounded by, so a value a byte could
-        // not index has to be refused on the field rather than trusted into an array index.
+        // posTagCount bounds every grammar read; a value a byte cannot index is refused.
         std::string mutated = good;
         BkdHeader header;
         std::memcpy(&header, mutated.data(), sizeof(header));
@@ -275,8 +272,7 @@ void runFormatTests() {
         uint8_t xorValue;
         int32_t expected;
     };
-    // Each of these targets one field, so a failure names the check that stopped caring rather
-    // than "something was wrong somewhere".
+    // Each of these targets one field.
     const Case cases[] = {
         {"a wrong magic is refused", 0, 0xFF, kBkdErrMagic},
         {"a wrong format version is refused", 4, 0x09, kBkdErrVersion},

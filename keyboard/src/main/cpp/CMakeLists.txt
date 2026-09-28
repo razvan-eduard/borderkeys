@@ -10,16 +10,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(BORDERKEYS_ASAN "Build with AddressSanitizer" OFF)
 
-# Off by default -- set ON only by the `plus` flavor's own externalNativeBuild.cmake.arguments
-# (keyboard/build.gradle.kts). This is what makes tier B a real per-flavor difference rather than
-# a runtime branch on an identical binary: `core` never lists tcn_*.cpp as a source at all, so no
-# amount of reading app-core-release.apk's .so can find a trace of it. See docs/licensing.md
-# section 2.5 and tools/swipe_model/ for where the weights this tier loads come from.
+# ON only in the `plus` flavor's externalNativeBuild arguments (keyboard/build.gradle.kts); off,
+# no tier B source is compiled.
 option(BORDERKEYS_NEURAL_SWIPE "Build the trained (tier B) swipe decoder, plus flavor only" OFF)
 
-# Sources are listed, not globbed. file(GLOB) resolves at configure time, so a new file appears
-# in the build only after something else forces a reconfigure -- which means it compiles on the
-# machine that added it and silently does not on CI.
+# Sources are listed, not globbed.
 set(BORDERKEYS_SOURCES
     jni_bridge.cpp
     engine.cpp
@@ -50,9 +45,7 @@ endif()
 
 target_include_directories(borderkeys PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-# Exceptions and RTTI are off. Errors cross every boundary in this library as return codes, and
-# the JNI bridge is written to that contract; enabling them would add unwind tables to a library
-# whose whole point is to be small and to have no path that allocates while failing.
+# Exceptions and RTTI are off; errors cross every boundary as return codes.
 target_compile_options(borderkeys PRIVATE
     -fno-exceptions
     -fno-rtti
@@ -71,32 +64,21 @@ target_compile_options(borderkeys PRIVATE
     $<$<CONFIG:Debug>:-g>
 )
 
-# --gc-sections drops every function nothing reaches, which after RegisterNatives is most of
-# what a naive build would keep. --exclude-libs,ALL stops symbols from the static libc++ being
-# re-exported from our .so, where they could satisfy another library's link at runtime and bind
-# it to our copy of the STL.
+# --gc-sections drops every function nothing reaches; --exclude-libs,ALL keeps the static
+# libc++'s symbols from being exported.
 target_link_options(borderkeys PRIVATE
     $<$<CONFIG:Release>:-Wl,--gc-sections>
     -Wl,--exclude-libs,ALL
     # 16 KB page alignment.
-    #
-    # Android 15 ships devices whose page size is 16384 bytes, and a shared library whose LOAD
-    # segments are aligned to the old 4096 simply does not load there: dlopen fails and the
-    # keyboard comes up with no prediction engine at all. This was found by installing on such a
-    # device and reading the segment alignment out of the ELF -- every third-party .so in the
-    # APK already had 0x4000 and ours had 0x1000, which is invisible in any build log.
     -Wl,-z,max-page-size=16384
     -Wl,-z,common-page-size=16384
 )
 
 if(BORDERKEYS_ASAN)
-    # Off by default and never enabled for a shipped build: ASan replaces the allocator, which
-    # is the opposite of what an engine designed around not calling the allocator wants measured.
+    # Never for a shipped build.
     target_compile_options(borderkeys PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(borderkeys PRIVATE -fsanitize=address)
 endif()
 
-# Only two. `log` for __android_log_print in debug builds, `android` for AAssetManager when a
-# bundled pack is opened by name rather than by descriptor. Nothing else is linked, and the
-# acceptance criteria say so out loud because it is checkable with readelf.
+# `log` for __android_log_print in debug builds, `android` for AAssetManager; nothing else.
 target_link_libraries(borderkeys log android)

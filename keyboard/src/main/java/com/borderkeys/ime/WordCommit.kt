@@ -6,23 +6,16 @@ package com.borderkeys.ime
 import com.borderkeys.data.theme.TextShortcut
 
 /**
- * What a delimiter writes in place of the word just typed, and why.
- *
- * Five things can claim the word, asked in this order: the user's own text shortcut, the
- * bundled apostrophe map, a name's productive possessive, a word the language always writes
- * with a capital, and autocorrect's own answer. Each has a gate of its own -- a shortcut always
- * applies, the apostrophe and the possessive only with corrections on and only in running text,
- * the capital only with auto-capitalise on -- and the first to claim the word wins.
- *
- * Pure: strings and settings in, a decision out. Nothing here reads the editor or the engine.
- * The service and the pipeline harness both decide through this object.
+ * What a delimiter writes in place of the word just typed, and why. The first to claim the word
+ * wins, in order: the user's text shortcut; the bundled map, restoring an apostrophe with
+ * corrections on in running text, or a capital with auto-capitalise on; a name's possessive, with
+ * corrections on in running text; autocorrect. Reads neither the editor nor the engine.
  */
 internal object WordCommit {
 
     /**
-     * Which of the five claimed the word. [NONE] is a delimiter committing the letters typed.
-     * [reason] is the label a payload row asserts, in the same style as
-     * [AutoCorrection.Situation]'s own names.
+     * What claimed the word; [NONE] commits the letters typed. [reason] is the label a payload
+     * row asserts.
      */
     enum class Kind(val reason: String) {
         NONE("None"),
@@ -35,9 +28,9 @@ internal object WordCommit {
 
     /**
      * The decision. [text] is what the delimiter writes in place of the typed word, or null to
-     * commit the letters as typed. [situation] is autocorrect's own reason when it was
-     * autocorrect's turn and null when a rewrite claimed the word first. [reason] is the one
-     * word a payload row asserts: the rewrite's kind, or autocorrect's situation.
+     * commit the letters as typed. [situation] is autocorrect's reason, null when a rewrite
+     * claimed the word. [reason] is the word a payload row asserts: the rewrite's kind, or
+     * autocorrect's situation.
      */
     class Outcome(
         val text: String?,
@@ -45,13 +38,12 @@ internal object WordCommit {
         val situation: AutoCorrection.Situation?,
         val reason: String,
     ) {
-        /** A rewrite of the user's own -- or the language's -- that autocorrect had no say in.
-         *  Never learned as a word, never revisited by a language switch. */
+        /** Whether a rewrite, not autocorrect, claimed the word. */
         val isRewrite: Boolean
             get() = kind != Kind.NONE && kind != Kind.CORRECTION
     }
 
-    /** The settings the decision reads, passed as values so the object stays pure. */
+    /** The settings the decision reads. */
     class Settings(
         val autoCorrectOnSpace: Boolean,
         val autoCapitalise: Boolean,
@@ -67,15 +59,10 @@ internal object WordCommit {
     const val REASON_NOT_PROSE = "NotProse"
 
     /**
-     * Decides for [typed].
-     *
-     * [fromGesture] is a swiped word, which no rewrite may claim: "omw" has to be typed to mean
-     * the shortcut, and a decoded word is a whole word of the dictionary already.
-     * [runningText] is the answer settled as the word began -- whether what stands in front of
-     * it makes it part of a sentence (see [RunningText]). [possessive] is the engine's productive
-     * possessive for [suggestionQuery], and counts only when that query is [typed] itself, the
-     * same staleness rule [AutoCorrection] applies to [suggestion]. [inflection] is
-     * [WordStems.shields]'s answer for the same query and suggestion.
+     * Decides for [typed]. No rewrite claims a word from a gesture ([fromGesture]). [runningText]
+     * is whether the word is part of a sentence, settled as it began ([RunningText]).
+     * [possessive] is the engine's possessive for [suggestionQuery], used only when that is
+     * [typed]; [inflection] is [WordStems.shields]'s answer for the same query and suggestion.
      */
     fun decide(
         typed: String,
@@ -97,9 +84,8 @@ internal object WordCommit {
             TextShortcuts.expansionFor(typed, shortcuts)?.let { expansion ->
                 return Outcome(expansion, Kind.SHORTCUT, null, Kind.SHORTCUT.reason)
             }
-            // The map holds two kinds of entry, told apart by whether the letters change. An
-            // apostrophe restored answers to autocorrect's two gates; a capital restored -- the
-            // English pronoun -- answers to the auto-capitalise switch alone.
+            // An entry that changes the letters is gated like autocorrect; one that changes only
+            // the case, by auto-capitalise.
             Contractions.expansionFor(typed, contractions)?.let { written ->
                 if (written == typed) {
                     return@let
@@ -112,9 +98,7 @@ internal object WordCommit {
                     return Outcome(written, Kind.CONTRACTION, null, Kind.CONTRACTION.reason)
                 }
             }
-            // A name's productive possessive -- see Engine::possessiveFor. Same two gates as
-            // the map. The stem is a name, spelled in lower case by the pack, so it takes a
-            // name's capital.
+            // A name's possessive (Engine::possessiveFor), gated like the map, cased as a name.
             if (settings.autoCorrectOnSpace && prose && possessive != null &&
                 suggestionQuery == typed
             ) {

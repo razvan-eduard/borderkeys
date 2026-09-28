@@ -5,11 +5,9 @@
 # „Anstößige Wörter blockieren“ eingeschaltet ist. Buchstabe für Buchstabe getippt bleiben sie
 # unangetastet. Ein Wort pro Zeile; Groß-/Kleinschreibung und Akzente spielen keine Rolle (jeder
 # Eintrag und jeder Kandidat werden vor dem Vergleich auf dieselbe Form gebracht); eine Zeile,
-# die mit „#“ beginnt, ist ein Kommentar. Flexionsformen sind für den Motor eigene Wörter, daher
-# steht jede einzeln. ß und ss sind zwei Schreibweisen, daher beide.
+# die mit „#“ beginnt, ist ein Kommentar. Jede Flexionsform steht einzeln, mit ß und mit ss.
 #
-# Nur Vulgärsprache und Schimpfwörter gegen Gruppen. Anatomie, Medizin und milde Wörter bleiben
-# absichtlich vorschlagbar.
+# Nur Vulgärsprache und Schimpfwörter gegen Gruppen.
 
 arsch
 ärsche

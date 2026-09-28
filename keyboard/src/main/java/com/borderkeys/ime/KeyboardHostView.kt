@@ -15,19 +15,8 @@ import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.i18n.Keys
 
 /**
- * The root of the input view: three children stacked vertically, laid out by arithmetic.
- *
- * Built in code, never inflated. `LayoutInflater` parses XML, reflects to construct each view and
- * walks an attribute table, and it does that every time the input view is created -- which is
- * every time the keyboard is shown in a new editor. Three children whose positions are two
- * additions do not need any of that.
- *
- * No `ConstraintLayout` and no `LinearLayout` either, for the same reason: a measure pass that
- * resolves constraints, for a stack.
- *
- * Only one of the two suggestion rows is visible at a time. When a password manager has inline
- * suggestions to offer, its row takes the place of ours -- and in a password field ours is
- * empty anyway, which is the point.
+ * The root of the input view: its children stacked vertically and laid out in code. Only one of
+ * the two suggestion rows, ours or a password manager's inline one, is visible at a time.
  */
 @SuppressLint("ViewConstructor")
 class KeyboardHostView(
@@ -40,64 +29,37 @@ class KeyboardHostView(
     val inlineSuggestions = InlineSuggestionsHostView(context, paints)
     val keyboard = KeyboardCanvasView(context, paints, strings)
 
-    /**
-     * Size and position, reachable without leaving the keyboard. Covers the keys the same way
-     * the assistant's sheet does, because it is the same trade: the panel needs the space, and
-     * the keys are not useful while it is open.
-     */
+    /** Size and position settings, shown in the keys' place. */
     val quickSettings = QuickSettingsView(context, paints, strings)
     val quickActions = QuickActionsView(context, paints, strings)
     val clipboardPanel = ClipboardPanelView(context, paints, strings)
     val emojiPanel = EmojiPanelView(context, paints)
 
-    /** The answer to "why this word?", in the keys' place like the two panels above. */
+    /** The answer to "why this word?", shown in the keys' place. */
     val explainPanel = ExplainPanelView(context, paints, strings)
 
-    /** The suggestion strip's own slot, borrowed -- see the view's own doc for why it is not a
-     *  sibling of [clipboardPanel]/[emojiPanel] instead. */
+    /** Shown in the suggestion strip's place. */
     val languageRevertPanel = LanguageRevertPanelView(context, paints)
 
-    /** A paused or just-lifted swipe's ring of words, overlaid on [keyboard]'s own rect -- see
-     *  its own doc for why it is not a sibling row like [languageRevertPanel]. Added and
-     *  measured/laid out below, deliberately last among this group's children so it draws over
-     *  the keys rather than under them. */
+    /** The ring of words of a paused or lifted swipe, over [keyboard]; added after it. */
     val radialSuggestionMenu = RadialSuggestionMenuView(context, paints)
 
-    /** The word a swipe settled on, rising and fading over the keys. Added after the ring so a
-     *  ring closing into an acceptance does not paint over the animation it triggered. */
+    /** The word a swipe settled on, rising and fading over the keys; added after the ring. */
     val effects = EffectStage(context).apply { basePaint = paints.label }
 
-    /** Whether [setRadialMenuVisible] blurs [keyboard] behind the ring, on API 31+. Mirrors
-     *  [com.borderkeys.data.theme.KeyboardPreferences.radialBlurBackground]; on by default,
-     *  unlike [com.borderkeys.data.theme.KeyboardPreferences.blurBehindKeyboard] -- that one
-     *  runs every frame the window is visible, this one only for as long as the ring itself is
-     *  up, which is what makes the same cost worth defaulting on here and not there. */
+    /** Whether [setRadialMenuVisible] blurs [keyboard] behind the ring, on API 31+. */
     var radialBlurBackground: Boolean = true
 
-    /**
-     * Which edge the quick-action bar sits against. Mirrors KeyboardPreferences; kept as an Int
-     * so this module does not depend on :data for four constants.
-     */
-    /**
-     * Reports a drag on one of the resize handles, in the units the settings store.
-     *
-     * The view knows where the finger is; what a scale means is the service's business, and it
-     * is the one that can write it down.
-     */
+    /** Reports a drag on one of the resize handles, in the units the settings store. */
     var onResizeDrag: ((height: Float, width: Float, offset: Float) -> Unit)? = null
 
-    /** Called when a resize drag ends, so the result can be written once rather than per frame. */
+    /** Called when a resize drag ends. */
     var onResizeFinished: (() -> Unit)? = null
 
-    /** Called when the user is done resizing, from the overlay's own way out. */
+    /** Called when the user leaves the resize overlay. */
     var onResizeExit: (() -> Unit)? = null
 
-    /**
-     * Whether the keyboard is showing its resize handles.
-     *
-     * A mode rather than handles that are always there: a handle on the edge of a keyboard is
-     * a handle a thumb reaching for the outermost key finds by accident, every time.
-     */
+    /** Whether the keyboard is showing its resize handles. */
     var resizing: Boolean = false
         set(value) {
             if (field != value) {
@@ -110,14 +72,13 @@ class KeyboardHostView(
             }
         }
 
+    /** Which edge the quick-action bar sits against, as a PLACEMENT_ constant. */
     var quickActionsPlacement: Int = 0
         set(value) {
             if (field != value) {
                 field = value
                 quickActions.vertical = value == PLACEMENT_LEFT || value == PLACEMENT_RIGHT
-                // The side of the bar that meets the keyboard, so its tabs are flat there: a
-                // bar above the keyboard is flat along its bottom, one below along its top, one
-                // down the left is flat on its right, one down the right on its left.
+                // The bar's tabs are flat on the side that meets the keyboard.
                 quickActions.attachedEdge = when (value) {
                     PLACEMENT_BELOW_KEYS -> QuickActionsView.EDGE_TOP
                     PLACEMENT_LEFT -> QuickActionsView.EDGE_RIGHT
@@ -128,47 +89,16 @@ class KeyboardHostView(
             }
         }
 
-    /**
-     * Space the system's own IME navigation bar occupies along the bottom edge.
-     *
-     * Android 15 enforces edge-to-edge for the input method window, so the framework draws its
-     * switcher and hide-keyboard controls over whatever we put there unless we move out of the
-     * way. Without this the bottom row -- symbols, comma, space, full stop, enter -- sits
-     * underneath them, and the keys are both unreadable and untappable.
-     *
-     * Set from [applyNavigationInset], which is called both from [onAttachedToWindow] and from
-     * the dispatched-insets listener below -- not the listener alone. On some devices the first
-     * insets this window is handed report the navigation bar as visible but its height as zero,
-     * as though the system had not finished measuring it yet, and no later dispatch ever
-     * arrives to correct it -- the keyboard settles under the bar rather than above it, and
-     * which happens seems to depend on whether the bar or this window finishes drawing first.
-     * A zero paired with "visible" is treated as exactly that -- not as a phone with no bar --
-     * and [systemNavigationBarHeightPx] is asked directly instead of waiting on a dispatch that
-     * is not guaranteed to come.
-     *
-     * A three-button bar that can move to a side -- [navigationBarCanMove], the same flag
-     * SystemUI itself reads for this -- does exactly that in landscape on some devices, and the
-     * dispatched insets are not to be trusted about it: measured live against a marked-up
-     * screenshot on one such phone, the IME window's own insets kept reporting a full-height
-     * *bottom* inset with the bar's buttons actually drawn along the right edge and nothing at
-     * the true bottom at all -- neither this nor the fallback below is a case that value can
-     * survive. Gesture navigation is excluded from that override: its pill stays at the bottom
-     * in landscape too, on every device this has been checked against, and that reported inset
-     * is real.
-     */
+    /** The navigation bar's height along the bottom edge, set by [applyNavigationInset]. */
     private var navigationBarInset = 0
 
-    /** The same `config_navBarCanMove` boolean SystemUI's own `NavigationBarView` reads to
-     *  decide whether a three-button bar is allowed to relocate to a side edge in landscape --
-     *  a property of the device, not of anything that changes mid-session. */
+    /** Whether a three-button navigation bar moves to a side edge in landscape on this device. */
     private val navigationBarCanMove: Boolean by lazy {
         val id = resources.getIdentifier("config_navBarCanMove", "bool", "android")
         id > 0 && resources.getBoolean(id)
     }
 
-    /** `Settings.Secure.NAVIGATION_MODE` isn't a public constant, so the key is spelled out --
-     *  0 is three-button, 2 is gesture navigation; anything else is treated as not-gesture, the
-     *  side [navigationBarCanMove] considers safe to override. */
+    /** Whether the system uses gesture navigation: `navigation_mode` 2. */
     private fun isGestureNavigation(): Boolean =
         android.provider.Settings.Secure.getInt(context.contentResolver, "navigation_mode", 0) == 2
 
@@ -176,11 +106,8 @@ class KeyboardHostView(
         resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     private fun applyNavigationInset(insets: WindowInsets) {
-        // isEnabled is never set to false anywhere in the real input method -- only the two
-        // preview composables in :settings do that. A preview is a widget embedded mid-scroll
-        // in an ordinary Activity window; the real window's navigation bar sits nowhere near
-        // it, and reserving room for one here would just be a gap this preview has no reason
-        // to leave.
+        // None for a settings preview (disabled) or a three-button bar moved to the side; the
+        // system's bar height when a visible bar reports zero.
         val bottom = if (!isEnabled) {
             0
         } else if (navigationBarCanMove && isLandscape() && !isGestureNavigation()) {
@@ -202,8 +129,7 @@ class KeyboardHostView(
         }
     }
 
-    /** What Android's own theme says the navigation bar reserves -- a fixed resource, not a
-     *  per-window measurement, so it carries none of [applyNavigationInset]'s timing race. */
+    /** The navigation bar height from the system's resources. */
     private fun systemNavigationBarHeightPx(): Int {
         val id = resources.getIdentifier("navigation_bar_height", "dimen", "android")
         return if (id > 0) resources.getDimensionPixelSize(id) else 0
@@ -211,18 +137,10 @@ class KeyboardHostView(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        // Asked for directly rather than waited for: attachment is the earliest point a real
-        // answer can exist, and the first frame drawn from a stale zero is the one someone
-        // notices.
         rootWindowInsets?.let { applyNavigationInset(it) }
     }
 
     // ---- size and position -------------------------------------------------------------------
-    //
-    // A keyboard is the one part of the screen a thumb has to reach a hundred times a minute,
-    // and the right size for it depends on the hand holding the phone rather than on the phone.
-    // These four values are what let it be moved instead of endured, and they arrive from the
-    // preferences flow, so a change applies to the keyboard that is already on screen.
 
     /** Fraction of the available width the keys occupy. Below 1 only away from docked. */
     private var widthScale = 1f
@@ -240,7 +158,7 @@ class KeyboardHostView(
             }
         }
 
-    /** Mirrors the theme's own flag; pushed in with the theme rather than read per frame. */
+    /** The theme's full-width background flag. */
     var fullWidthBackground: Boolean = true
         set(value) {
             if (field != value) {
@@ -250,14 +168,8 @@ class KeyboardHostView(
         }
 
     /**
-     * Whether this view claims the rest of the screen above the keys, transparent, for as long
-     * as a ring is open. The keyboard's window is normally only as tall as the keyboard, so a
-     * tap on the app above it is the app's -- which, for a ring, means the app takes the focus
-     * or scrolls and the keyboard only ever hears about it second-hand, if at all. Grown to the
-     * top of the screen, the window gets that tap itself: [radialSuggestionMenu] is laid out
-     * over the whole view, so its own outside-tap rule closes the ring and the tap goes no
-     * further. The app is told nothing changed -- `BorderKeysService.onComputeInsets` keeps the
-     * reported top of the keyboard at [keyboardAreaTop] -- so nothing on screen moves.
+     * Whether this view extends, transparent, to the top of the screen while a ring is open; a
+     * tap there goes to the ring. The keyboard's reported top stays at [keyboardAreaTop].
      */
     var reserveScreenAbove: Boolean = false
         set(value) {
@@ -267,17 +179,15 @@ class KeyboardHostView(
             }
         }
 
-    /** How far down the window the keyboard actually starts: the transparent room above it
-     *  when [reserveScreenAbove], else zero. */
+    /** How far down the window the keyboard starts: the room above it when [reserveScreenAbove],
+     *  else zero. */
     var keyboardAreaTop: Int = 0
         private set
 
-    /** [keyboardAreaTop] as of the last layout, so a change between layouts can be handed to the
-     *  ring as the distance the keys moved under it. */
+    /** [keyboardAreaTop] as of the last layout. */
     private var laidOutKeyboardAreaTop = 0
 
-    /** Mirrors [com.borderkeys.data.theme.KeyboardTheme.navigationBarBackground]; see
-     *  [drawBackground] for what it actually changes. */
+    /** Mirrors [com.borderkeys.data.theme.KeyboardTheme.navigationBarBackground]. */
     var navigationBarBackground: Boolean = true
         set(value) {
             if (field != value) {
@@ -286,7 +196,7 @@ class KeyboardHostView(
             }
         }
 
-    /** The height scale, kept so a drag can start from where the keyboard already is. */
+    /** The current height scale, where a resize drag starts from. */
     var heightScaleForDrag: Float = 1f
 
     private val handleFrame = android.graphics.RectF()
@@ -294,12 +204,7 @@ class KeyboardHostView(
     private val doneHit = android.graphics.RectF()
     private val labelMetrics = android.graphics.Paint.FontMetrics()
 
-    /**
-     * The overlay's own paints.
-     *
-     * Not the theme's key stroke: that one is hairline-thin and, on a theme with borders turned
-     * off, has no width at all -- which would draw the resize frame as nothing.
-     */
+    /** The resize overlay's paints. */
     private val resizeFrame = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         style = android.graphics.Paint.Style.STROKE
     }
@@ -325,22 +230,14 @@ class KeyboardHostView(
     /** Called when the arrow in the gutter is tapped. */
     var onMoveToOtherSide: (() -> Unit)? = null
 
-    /**
-     * Where the arrow is, in this view's coordinates, or empty when there is none.
-     *
-     * Computed in layout rather than per touch: the gutter only moves when the placement does,
-     * and a touch that has to recompute geometry is a touch that has to think.
-     */
+    /** Where the arrow is, in this view's coordinates, or empty; computed in layout. */
     private val arrowBounds = android.graphics.Rect()
     private val arrowPath = android.graphics.Path()
     private var arrowPressed = false
 
     /**
-     * Turns a drag on a handle into the three numbers the settings hold.
-     *
-     * Reported continuously so the keyboard resizes under the finger, and written once when the
-     * finger lifts -- a preferences write per frame would be sixty database writes a second for
-     * a value only the last of which matters.
+     * Turns a drag on a handle into the three numbers the settings hold, reported on every move
+     * and finished when the finger lifts.
      */
     private fun handleResizeTouch(event: android.view.MotionEvent): Boolean {
         when (event.actionMasked) {
@@ -356,20 +253,11 @@ class KeyboardHostView(
                 }
                 draggingHandle = handleAt(event.x, event.y)
                 // Screen coordinates, not this view's.
-                //
-                // The view is the thing being resized: growing the keyboard by a hundred
-                // pixels moves this view's top edge a hundred pixels up the screen, so a
-                // finger that has not moved reads a hundred pixels further down in local
-                // coordinates. Measuring the drag that way makes every frame cancel the last
-                // one, and the keyboard bounces between two sizes instead of following the
-                // finger. rawX and rawY are fixed to the screen and do not move with it.
                 dragStartX = event.rawX
                 dragStartY = event.rawY
                 dragStartWidth = widthScale
                 dragStartHeight = heightScaleForDrag
-                // The height the keys would have at scale 1, captured once. Dividing the
-                // finger's travel by it makes the drag linear: the same distance is the same
-                // change in scale, whether the keyboard is currently short or tall.
+                // The height the keys would have at scale 1.
                 dragBaseHeightPx = ((keyboard.bottom - keyboardTopForResize()) /
                     dragStartHeight.coerceAtLeast(0.01f)).coerceAtLeast(1f)
                 invalidate()
@@ -388,12 +276,8 @@ class KeyboardHostView(
                         horizontalOffsetPx.toFloat(),
                     )
 
-                    // Dragging away from the keys widens it, whichever side the handle is on.
-                    // How fast depends on what the other edge is doing: a centred keyboard
-                    // grows at both ends at once, so the edge under the finger only accounts
-                    // for half the width, while a one-handed keyboard is pinned to its side
-                    // and the edge under the finger accounts for all of it. Using one factor
-                    // for both made the one-handed keyboard leap out from under the finger.
+                    // Dragging away from the keys widens it: a centred keyboard at both edges,
+                    // a one-handed one at the dragged edge only.
                     HANDLE_LEFT, HANDLE_RIGHT -> {
                         val direction = if (draggingHandle == HANDLE_LEFT) -1f else 1f
                         val edges = if (isOneHanded()) 1f else 2f
@@ -421,9 +305,7 @@ class KeyboardHostView(
 
     fun setPlacement(mode: Int, widthScale: Float, bottomOffsetPx: Int, horizontalOffsetPx: Int) {
         val docked = mode == MODE_DOCKED
-        // The dock honours the width too: the resize handles are on the keyboard in every mode,
-        // and a side handle that does nothing in the mode most people are in is a broken
-        // handle. Docked and narrow means centred, which contentLeft does.
+        // Every mode honours the width; contentLeft centres a narrowed dock.
         val effectiveWidth = widthScale.coerceIn(0.4f, 1f)
         if (this.positionMode == mode && this.widthScale == effectiveWidth &&
             this.bottomOffsetPx == bottomOffsetPx && this.horizontalOffsetPx == horizontalOffsetPx
@@ -432,7 +314,7 @@ class KeyboardHostView(
         }
         this.positionMode = mode
         this.widthScale = effectiveWidth
-        // Docked means flush with the bottom edge; a gap under a docked keyboard is just a gap.
+        // A docked keyboard sits flush with the bottom edge.
         this.bottomOffsetPx = if (docked) 0 else bottomOffsetPx
         this.horizontalOffsetPx = if (mode == MODE_FLOATING) horizontalOffsetPx else 0
         requestLayout()
@@ -448,19 +330,14 @@ class KeyboardHostView(
         MODE_ONE_HANDED_RIGHT -> totalWidth - contentWidth
         MODE_FLOATING -> ((totalWidth - contentWidth) / 2 + horizontalOffsetPx)
             .coerceIn(0, totalWidth - contentWidth)
-        // Centred, not flush left: a docked keyboard narrowed by the resize handles should sit
-        // in the middle of the screen. At full width the two are the same expression.
         else -> (totalWidth - contentWidth) / 2
     }
 
     init {
-        // The children paint themselves; the group paints only the arrow in the gutter, and only
-        // when the keys have been narrowed enough to leave one.
+        // The group draws the gutter arrow.
         setWillNotDraw(false)
         isClickable = false
-        // One background for the whole window, painted here. A pattern drawn separately by each
-        // child would restart its tile at that child's corner, which shows as a seam along
-        // every edge where two children meet.
+        // One background for the whole window, painted here.
         keyboard.drawsBackground = false
         suggestionStrip.drawsBackground = false
         quickActions.drawsBackground = false
@@ -470,19 +347,14 @@ class KeyboardHostView(
         languageRevertPanel.visibility = GONE
         addView(keyboard)
         addView(quickSettings)
-        // Last, so it draws over the others where a side bar overlaps a rounded corner. It is
-        // measured and laid out by this class like the rest; being a child is what makes that
-        // reach it at all -- the first version measured it and never added it, so it took up
-        // height in the window and drew nothing in it.
         addView(clipboardPanel)
         clipboardPanel.visibility = GONE
         addView(emojiPanel)
         emojiPanel.visibility = GONE
         addView(explainPanel)
         explainPanel.visibility = GONE
+        // The bar draws over the panels, the ring and the effects over everything.
         addView(quickActions)
-        // Last of all: dispatchDraw walks children in the order they were added, so this is what
-        // ends up on top of the keys it overlays -- see the view's own doc for why it needs to.
         addView(radialSuggestionMenu)
         radialSuggestionMenu.visibility = GONE
         addView(effects)
@@ -492,18 +364,12 @@ class KeyboardHostView(
 
         setOnApplyWindowInsetsListener { _, insets ->
             applyNavigationInset(insets)
-            // Consumed rather than passed on: the children are ours, they fill what is left, and
-            // none of them has any use for an inset.
+            // The children get no insets.
             WindowInsets.CONSUMED
         }
     }
 
-    /**
-     * Switches between our suggestions and the autofill service's.
-     *
-     * Called from `onInlineSuggestionsResponse`, which can arrive at any moment while an editor
-     * is focused.
-     */
+    /** Switches between our suggestions and the autofill service's. */
     fun showInlineSuggestions(show: Boolean) {
         val wantsInline = show && inlineSuggestions.hasSuggestions
         val inlineVisibility = if (wantsInline) VISIBLE else GONE
@@ -532,10 +398,8 @@ class KeyboardHostView(
     val clipboardPanelVisible: Boolean get() = clipboardPanel.visibility == VISIBLE
 
     /**
-     * Whether the suggestion row is wanted at all (`KeyboardPreferences.showSuggestionStrip`).
-     * Off, the row is GONE and stays GONE through every panel that would otherwise restore it
-     * on its way out; the setting used to be read only by the service, which stopped asking the
-     * engine and left the row up, blank.
+     * Whether the suggestion row is shown at all (`KeyboardPreferences.showSuggestionStrip`);
+     * while off, no panel restores it.
      */
     var suggestionStripEnabled: Boolean = true
         set(value) {
@@ -554,13 +418,6 @@ class KeyboardHostView(
     /** What the strip goes back to when whatever covered it leaves. */
     private fun stripRestored(): Int = if (suggestionStripEnabled) VISIBLE else GONE
 
-    /**
-     * Shows or hides the clipboard history, standing the keys down while it is up.
-     *
-     * The keys go rather than being covered: a panel drawn over live keys is a panel a stray
-     * touch types through, and the window keeps its height either way because the panel is
-     * measured to exactly the height the keys had.
-     */
     val emojiPanelVisible: Boolean get() = emojiPanel.visibility == VISIBLE
 
     /** Shows or hides the emoji grid, standing the keys down while it is up. */
@@ -578,15 +435,13 @@ class KeyboardHostView(
         requestLayout()
     }
 
+    /** Shows or hides the clipboard history, in the keys' place, the strip with them. */
     fun setClipboardPanelVisible(visible: Boolean) {
         if (clipboardPanelVisible == visible) {
             return
         }
         clipboardPanel.visibility = if (visible) VISIBLE else GONE
         keyboard.visibility = if (visible) GONE else VISIBLE
-        // The history is its own screen with its own back control -- a suggestion strip above it
-        // would be completing text nobody is typing. Restored to the strip on the way out;
-        // an inline-autofill response arriving later puts itself back.
         suggestionStrip.visibility = if (visible) GONE else stripRestored()
         if (visible) {
             inlineSuggestions.visibility = GONE
@@ -612,13 +467,7 @@ class KeyboardHostView(
 
     val languageRevertPanelVisible: Boolean get() = languageRevertPanel.visibility == VISIBLE
 
-    /**
-     * Shows or hides the language-switch revert offer, in the suggestion strip's own slot.
-     *
-     * Unlike [setClipboardPanelVisible]/[setEmojiPanelVisible], the keys stay up: this is an
-     * offer beside live keys, not a screen that replaces them. See [LanguageRevertPanelView]'s
-     * own doc for why.
-     */
+    /** Shows or hides the language-switch revert offer in the strip's place; the keys stay up. */
     fun setLanguageRevertPanelVisible(visible: Boolean) {
         if (languageRevertPanelVisible == visible) {
             return
@@ -634,65 +483,35 @@ class KeyboardHostView(
     val radialMenuVisible: Boolean get() = radialSuggestionMenu.visibility == VISIBLE
 
     /**
-     * Shows or hides the radial menu, overlaid exactly on [keyboard]'s own rect.
-     *
-     * Unlike [setClipboardPanelVisible]/[setEmojiPanelVisible], the keys stay up and stay
-     * visible underneath -- this sits over them, in the same slot, rather than replacing them.
-     * The suggestion strip, though, is mutually exclusive with it -- both offer word candidates,
-     * and showing both at once is two answers to the same question on screen together -- the
-     * same trade [setLanguageRevertPanelVisible] already makes for its own overlay, and applied
-     * here the identical way: hidden while the ring (preview or real, either one) is up, restored
-     * the moment it is not.
+     * Shows or hides the radial menu over [keyboard]; the keys stay up and the strip is hidden
+     * while it is open.
      */
     fun setRadialMenuVisible(visible: Boolean) {
-        // A view still VISIBLE only because a celebration burst is finishing (pendingHide) is
-        // already hidden as far as the strip, the blur and everything else here is concerned --
-        // comparing against the raw visibility would make a ring reopened during that burst
-        // return early below with the strip still up and the keys unblurred.
+        // A ring waiting for its burst to finish counts as hidden.
         val wasShown = radialMenuVisible && !radialSuggestionMenu.pendingHide
         if (visible) {
-            // Cancels any close deferred below for a celebration burst that had not finished
-            // yet -- the ring is being genuinely reused, not left to auto-hide underneath a
-            // fresh open a moment later.
             radialSuggestionMenu.pendingHide = false
         }
         if (wasShown == visible) {
             return
         }
         if (visible) {
-            // Forced to the top of the z-order explicitly, every time, rather than trusting
-            // that it stays the last-added child forever -- addView order in init{} is the
-            // right default, but a menu that must always draw over everything else should not
-            // depend on nobody ever adding a tenth child after it.
             radialSuggestionMenu.bringToFront()
             inlineSuggestions.visibility = GONE
         }
-        // A resolved pick may still have a celebration burst animating over the ring's own (by
-        // then empty) wedges and scrim, which RadialSuggestionMenuView.onDraw already stops
-        // drawing the moment they are gone -- so the only thing deferring here does is let that
-        // burst keep drawing atop the keys for its own last few frames, rather than being cut
-        // off mid-flight. The View flips itself to GONE once the burst finishes; see
-        // RadialSuggestionMenuView's own pendingHide doc.
+        // With a burst still animating, the ring hides itself once the burst ends.
         if (!visible && radialSuggestionMenu.hasLiveParticles()) {
             radialSuggestionMenu.pendingHide = true
         } else {
             radialSuggestionMenu.visibility = if (visible) VISIBLE else GONE
         }
-        // INVISIBLE, not GONE: the row keeps its height while the ring is up, so the keyboard
-        // window does not shrink -- and the keys under the finger shift -- in the middle of the
-        // very stroke that opened it. The other overlays take the row's slot themselves; this
-        // one floats over the keys and has nothing to put there.
+        // The strip keeps its height while the ring is up.
         suggestionStrip.visibility = when {
             !visible -> stripRestored()
             suggestionStripEnabled -> INVISIBLE
             else -> GONE
         }
-        // A real blur of the keys behind the ring, not just the scrim the ring draws over
-        // itself -- applied to the source view directly (blur what keyboard actually rendered)
-        // rather than attempting a backdrop-filter of "whatever is behind this overlay," which
-        // has no simple, reliable equivalent in the framework for an arbitrary child view.
-        // RenderEffect is API 31+, and radialBlurBackground is its own opt-out on top of that;
-        // either way, the ring's own semi-transparent scrim still dims things on its own.
+        // Blurs the keys behind the ring, on API 31+.
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             keyboard.setRenderEffect(
                 if (visible && radialBlurBackground) {
@@ -718,9 +537,7 @@ class KeyboardHostView(
             0, MeasureSpec.UNSPECIFIED,
         )
 
-        // A bar down the side takes width from the keys; one above or below takes height. Both
-        // are measured before anything else so the keys are laid out in what is left, rather
-        // than being pushed off the bottom of a window that was already sized.
+        // Measured first: a side bar takes width from the keys, a top or bottom bar height.
         val sideBar = quickActions.visibility != GONE &&
             (quickActionsPlacement == PLACEMENT_LEFT || quickActionsPlacement == PLACEMENT_RIGHT)
         var barThickness = 0
@@ -752,16 +569,13 @@ class KeyboardHostView(
             height += keyboard.measuredHeight
         }
         if (quickSettings.visibility != GONE) {
-            // The panel takes exactly the height the keys would have had, so opening it does not
-            // move the editor's text or resize the window under the user's finger.
+            // Each panel takes the height the keys would have had.
             quickSettings.measure(exactBody, MeasureSpec.makeMeasureSpec(
                 keyboardHeightForPanel(bodyWidth), MeasureSpec.EXACTLY,
             ))
             height += quickSettings.measuredHeight
         }
         if (clipboardPanel.visibility != GONE) {
-            // Same rule, same reason: the window keeps the height it had, so opening the
-            // history does not shove the conversation up the screen and back down again.
             clipboardPanel.measure(exactBody, MeasureSpec.makeMeasureSpec(
                 keyboardHeightForPanel(bodyWidth), MeasureSpec.EXACTLY,
             ))
@@ -781,8 +595,7 @@ class KeyboardHostView(
         }
         if (quickActions.visibility != GONE) {
             if (sideBar) {
-                // Re-measured now that the body's height is known, because a side bar is as tall
-                // as what it sits beside.
+                // A side bar is as tall as the body.
                 quickActions.measure(
                     MeasureSpec.makeMeasureSpec(barThickness, MeasureSpec.EXACTLY),
                     MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY),
@@ -793,8 +606,7 @@ class KeyboardHostView(
         }
 
         val keyboardHeight = height + navigationBarInset + bottomOffsetPx
-        // See reserveScreenAbove: the transparent room above the keys is whatever the window
-        // has left, which a wrap-content window is measured against as an upper bound.
+        // With reserveScreenAbove, the room above the keys is whatever the window has left.
         keyboardAreaTop = if (reserveScreenAbove) {
             val available = when (MeasureSpec.getMode(heightMeasureSpec)) {
                 MeasureSpec.UNSPECIFIED -> resources.displayMetrics.heightPixels
@@ -805,15 +617,7 @@ class KeyboardHostView(
             0
         }
         val totalHeight = keyboardHeight + keyboardAreaTop
-        // Measured unconditionally, not gated behind its own visibility like every other child
-        // here, and against the host's final total size rather than a row of its own -- this
-        // overlays everything, not just the keys, so it must not add to totalHeight itself. See
-        // the matching layout call's own comment for why measuring it regardless of visibility
-        // matters: RadialSuggestionMenuView.show()'s edge clamp reads this view's width/height,
-        // and the very first ring of a keyboard session calls show() while it is still GONE --
-        // skip measuring it here and that clamp silently no-ops against a view that has never
-        // been through a layout pass at all, 0x0, letting the ring land wherever the raw anchor
-        // said to, off the edge of the screen included.
+        // The ring and the effects are measured to the whole view, hidden or not.
         radialSuggestionMenu.measure(
             MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(totalHeight, MeasureSpec.EXACTLY),
@@ -823,8 +627,7 @@ class KeyboardHostView(
             MeasureSpec.makeMeasureSpec(totalHeight, MeasureSpec.EXACTLY),
         )
 
-        // The window is always full width; the keys are narrower and offset inside it. That
-        // keeps the touchable region and the insets the system computes correct in every mode.
+        // The window is always full width; the keys are narrower and offset inside it.
         setMeasuredDimension(width, totalHeight)
     }
 
@@ -870,44 +673,19 @@ class KeyboardHostView(
         }
         if (keyboard.visibility != GONE) {
             keyboard.layout(bodyLeft, y, bodyRight, y + keyboard.measuredHeight)
-            // Told, not discovered: keyboard has no way to ask its own parent how much space
-            // sits above it, and it needs to know for the long-press alternatives popup's own
-            // above-or-below decision -- see that property's own doc.
+            // The room above the keys, for the alternatives popup's placement.
             keyboard.hostTopInsetPx = keyboard.top.toFloat()
             y += keyboard.measuredHeight
         }
-        // Laid out unconditionally, not gated behind its own visibility like every other child
-        // here -- the entire host, corner to corner, not keyboard's own rect, and not bodyLeft/
-        // bodyRight either. Above all else on the z axis (bringToFront, below) is only true in
-        // practice if the ring's own canvas actually reaches everywhere a sibling could be
-        // drawing: quick actions above the strip, or beside the keys as a sidebar, one-handed
-        // mode's empty gutter, all of it. A ring anchored near any edge would otherwise be laid
-        // out on a canvas that stops short of that edge, clamped inward and unable to ever draw
-        // over whatever sits past it -- which reads as the ring appearing "under" something, when
-        // what is actually happening is that it can never reach there at all. See
-        // BorderKeysService.radialAnchor's own doc for the matching coordinate offset this
-        // requires on every anchor X/Y it hands to RadialSuggestionMenuView.show.
-        //
-        // Unconditional for a second reason too, past what the comment above already covers:
-        // RadialSuggestionMenuView.show()'s own edge clamp reads this view's width/height, and
-        // the very first ring of a keyboard session calls show() while radialSuggestionMenu is
-        // still GONE (visibility only flips to VISIBLE afterwards, in setRadialMenuVisible). Skip
-        // laying it out here on account of that, and its width/height are still 0 -- whatever it
-        // last was before this view even existed -- so that clamp silently no-ops against a view
-        // that has never actually been positioned at all, letting the ring land wherever the raw
-        // anchor said to, off the edge of the screen included.
+        // The ring and the effects cover the whole view, hidden or not.
         radialSuggestionMenu.topInset = keyboardAreaTop.toFloat()
         radialSuggestionMenu.layout(0, 0, width, b - t)
-        // Laid out over the same rect for the same reason, and given the key area's own top and
-        // bottom so the rise is measured against the keys rather than the whole window.
         effects.keyAreaLeft = keyboard.left.toFloat()
         effects.keyAreaRight = keyboard.right.toFloat()
         effects.keyAreaTop = keyboard.top.toFloat()
         effects.keyAreaBottom = keyboard.bottom.toFloat()
         effects.layout(0, 0, width, b - t)
-        // A ring opens before the room above the keys is reserved (the reservation is what its
-        // opening asks for), so it was anchored to keys that have since moved down by exactly
-        // this much; and it is still showing when the room goes again on the way out.
+        // An open ring moves with the keys when the room above them changes.
         if (keyboardAreaTop != laidOutKeyboardAreaTop) {
             radialSuggestionMenu.shiftBy((keyboardAreaTop - laidOutKeyboardAreaTop).toFloat())
             laidOutKeyboardAreaTop = keyboardAreaTop
@@ -939,13 +717,7 @@ class KeyboardHostView(
         layoutArrow(width, left, right, keyboard.top, keyboard.bottom)
     }
 
-    /**
-     * Puts an arrow in the wider of the two gutters, pointing at the emptier side.
-     *
-     * Only where there is room for a target a thumb can hit: below that the arrow is either
-     * invisible or a mis-tap waiting to happen next to the outermost key, and the panel behind
-     * the globe still moves the keyboard.
-     */
+    /** Puts an arrow in the wider gutter, when it is at least [MIN_ARROW_GUTTER_DP] wide. */
     private fun layoutArrow(width: Int, contentLeft: Int, contentRight: Int, top: Int,
                             bottom: Int) {
         arrowBounds.setEmpty()
@@ -970,9 +742,8 @@ class KeyboardHostView(
         if (arrowBounds.isEmpty) {
             return
         }
-        // Pointing at the gutter it sits in, which is the direction the keyboard would travel.
+        // Points into the gutter it sits in, the way the keyboard would move.
         val pointsRight = arrowBounds.centerX() > width / 2
-        // The label paints are fills, so the arrow is a filled triangle rather than a stroke.
         val paint = if (arrowPressed) paints.label else paints.labelSecondary
         val inset = arrowBounds.width() * 0.22f
         val tipX = if (pointsRight) arrowBounds.right - inset else arrowBounds.left + inset
@@ -985,21 +756,12 @@ class KeyboardHostView(
     }
 
     /**
-     * Paints the surface the keys sit on.
-     *
-     * Full width by default, including the space beside a one-handed or floating keyboard: that
-     * space used to be a hole showing the application underneath, and a background that stops
-     * at the keys leaves the pattern nowhere to show. Down to the keyboard's own bottom rather
-     * than the view's, so the gap a floating keyboard is lifted by stays a gap -- and, the same
-     * way, short of [navigationBarInset] rather than the view's own bottom when
-     * [navigationBarBackground] is off, so that strip stays a gap too, showing whatever the
-     * system draws behind its own navigation bar instead of this surface reaching past the keys
-     * that needed the room.
+     * Paints the surface the keys sit on, full width or under the keys only, from
+     * [keyboardAreaTop] to the keyboard's bottom, short of the navigation bar when
+     * [navigationBarBackground] is off.
      */
     private fun drawBackground(canvas: android.graphics.Canvas) {
         val skippedInset = if (navigationBarBackground) 0 else navigationBarInset
-        // Never into the room reserved above the keys: that stays transparent, the app showing
-        // through exactly as it did before the window grew.
         val top = keyboardAreaTop.toFloat()
         val bottom = (height - bottomOffsetPx - skippedInset).toFloat()
         if (bottom <= top) {
@@ -1017,13 +779,8 @@ class KeyboardHostView(
     }
 
     /**
-     * The "outline the keys" setting's other half: a hairline framing the whole keyboard --
-     * suggestions and all -- rather than each key's own edge, which [KeyboardCanvasView]
-     * already draws for itself. Each side only where there is actually an edge there to mark:
-     * top always; bottom once the keyboard is lifted clear of the screen's own bottom edge;
-     * left/right once it is narrower than the screen and its background does not already reach
-     * to the sides -- [left] and [right] are already the screen's own edges whenever it does,
-     * so the two checks below are the same test the top/bottom ones are, not a separate one.
+     * A hairline framing the whole keyboard when key outlines are on: the top always, the bottom
+     * and the sides where the keyboard stops short of the screen's edge.
      */
     private fun drawOutline(canvas: android.graphics.Canvas, left: Float, right: Float, bottom: Float) {
         if (!paints.showKeyBorders) {
@@ -1040,10 +797,7 @@ class KeyboardHostView(
         if (right < width) {
             canvas.drawLine(right - half, 0f, right - half, bottom, paints.keyStroke)
         }
-        // The quick-action bar reads as a fourth row rather than its own control without a line
-        // marking where it stops and the rest of the keyboard starts -- the same setting, one
-        // edge earlier. Unlike the four above, this one sits entirely inside the view on both
-        // sides, so it is drawn on the boundary itself rather than inset by half a stroke.
+        // A line on the boundary between the quick-action bar and the rest.
         if (quickActions.visibility != GONE) {
             when (quickActionsPlacement) {
                 PLACEMENT_ABOVE_STRIP -> {
@@ -1066,14 +820,7 @@ class KeyboardHostView(
         }
     }
 
-    /**
-     * Re-measures every child after the shared metrics changed.
-     *
-     * `View.measure` skips a child whose measure spec has not changed, and the specs do not
-     * change when the row height does -- the children read that from the paints they share
-     * rather than from the spec. Without forcing each one, a taller row height only makes the
-     * key labels bigger inside a keyboard that keeps the height it had.
-     */
+    /** Forces every child to re-measure after the shared metrics changed. */
     fun relayoutForNewMetrics() {
         for (i in 0 until childCount) {
             getChildAt(i).forceLayout()
@@ -1081,14 +828,13 @@ class KeyboardHostView(
         requestLayout()
     }
 
-    /** Re-reads the overlay's colours from the theme. Cheap, and only on a theme change. */
+    /** Re-reads the overlay's colours from the theme. */
     fun onThemeChanged() {
         resizeFrame.color = paints.accent.color
         resizeFrame.strokeWidth =
             (paints.rowHeightPx.takeIf { it > 0f } ?: ThemePaints.DEFAULT_ROW_HEIGHT_PX) * RESIZE_FRAME_ROWS
         resizeScrim.color = paints.background.color
         resizeScrim.alpha = RESIZE_SCRIM_ALPHA
-        // Opaque, unlike the wash: the pill is what makes its label readable over the keys.
         pillFill.color = paints.background.color
         pillFill.alpha = 255
         resizeLabel.color = paints.accent.color
@@ -1097,16 +843,10 @@ class KeyboardHostView(
         }
     }
 
-    /**
-     * Draws the resize overlay on top of the children.
-     *
-     * `dispatchDraw` rather than `onDraw`: a ViewGroup paints itself first and its children
-     * after, so the frame drawn in `onDraw` would end up underneath the keys it is framing.
-     */
-    /** Reused so a held key's alternatives popup allocates nothing on the draw path -- the same
-     *  trick KeyboardCanvasView's own `shiftedLabel` already plays for an ordinary key face. */
+    /** A reused buffer for one alternative's label. */
     private val alternativeLabel = CharArray(1)
 
+    /** Draws the alternatives popup or key preview, and the resize overlay, over the children. */
     override fun dispatchDraw(canvas: android.graphics.Canvas) {
         super.dispatchDraw(canvas)
         if (keyboard.alternativesVisible) {
@@ -1124,23 +864,18 @@ class KeyboardHostView(
         if (bottom <= top) {
             return
         }
-        // A wash over the keys, so the frame reads as a frame rather than as a stray rectangle
-        // drawn across a keyboard that still looks live.
+        // A wash over the keys.
         canvas.drawRect(left, top, right, bottom, resizeScrim)
         handleFrame.set(left, top, right, bottom)
         canvas.drawRect(handleFrame, resizeFrame)
 
         val radius = handleRadiusPx()
-        // Top for height, sides for width. No bottom handle: the bottom edge is where the
-        // keyboard meets the screen, and dragging it would fight the offset setting rather
-        // than the size.
+        // Top for height, sides for width.
         drawHandle(canvas, (left + right) / 2f, top, radius, draggingHandle == HANDLE_TOP)
         drawHandle(canvas, left, (top + bottom) / 2f, radius, draggingHandle == HANDLE_LEFT)
         drawHandle(canvas, right, (top + bottom) / 2f, radius, draggingHandle == HANDLE_RIGHT)
 
-        // Two words and no way to leave would be a trap, so the way out is drawn where the
-        // finger already is: inside the frame it is resizing. Both sit on a filled pill, or
-        // they would be blue text on top of key labels and legible in neither theme.
+        // Reset and Done, on pills inside the frame.
         resizeLabel.textSize = density() * LABEL_TEXT_DP
         resizeLabel.getFontMetrics(labelMetrics)
         val labelTop = top + radius * 1.4f
@@ -1148,21 +883,13 @@ class KeyboardHostView(
         val done = strings[Keys.RESIZE_DONE]
         drawPill(canvas, done, right - radius * 1.4f - pillWidth(done), labelTop, doneHit)
 
-        // What to do, once, along the bottom edge where nothing else is drawn.
+        // The hint, along the bottom edge.
         val hint = strings[Keys.RESIZE_HINT]
         drawPill(canvas, hint, (left + right - pillWidth(hint)) / 2f,
             bottom - radius * 1.4f - pillHeight(), null)
     }
 
-    /**
-     * A held key's alternatives popup, translated from [keyboard]'s own local coordinates into
-     * this view's by its left/top -- the same offset [BorderKeysService.radialAnchor] already
-     * needs for the ring, and for the same reason: `keyboard` cannot draw past its own edges, so
-     * the top row's popup -- which needs to reach above them, into where the suggestion strip and
-     * quick actions bar sit -- has to be drawn from up here instead. See
-     * [KeyboardCanvasView]'s own "long-press alternatives" section for the rest of the story;
-     * this only reads what it already computed.
-     */
+    /** A held key's alternatives popup, in [keyboard]'s coordinates offset by its position. */
     private fun drawAlternativesPopup(canvas: android.graphics.Canvas) {
         val count = keyboard.alternativesCount
         if (count == 0) {
@@ -1187,10 +914,7 @@ class KeyboardHostView(
                 paints.accent,
             )
         }
-        // The "outline the keys" setting reaches the popup too: it is a row of keys, drawn
-        // the way KeyboardCanvasView draws its own -- the stroke on the edge itself -- with a
-        // hairline between cells where the keys' own gaps would be. Under the labels, so a
-        // glyph that reaches a cell's edge is not crossed by the line.
+        // With key outlines on, the popup is outlined with a line between cells, under the labels.
         if (paints.showKeyBorders) {
             canvas.drawRoundRect(
                 left, top, left + cellWidth * count, top + rowHeight, radius, radius,
@@ -1215,15 +939,10 @@ class KeyboardHostView(
         paints.label.textSize = base
     }
 
-    /** Reused so the key preview allocates nothing on the draw path. */
+    /** A reused buffer for the key preview's label. */
     private val previewLabel = CharArray(8)
 
-    /**
-     * The pressed key, enlarged above the finger -- drawn from up here for the same reason the
-     * alternatives popup is (see [drawAlternativesPopup]): the top row's preview reaches above
-     * the keyboard view's own bounds. The key's own fill and, with the setting on, its outline,
-     * so it reads as the key lifted rather than a different control.
-     */
+    /** The pressed key enlarged above the finger, with the key's fill and outline. */
     private fun drawKeyPreview(canvas: android.graphics.Canvas) {
         val length = keyboard.keyPreviewLabel(previewLabel)
         if (length == 0) {
@@ -1240,8 +959,7 @@ class KeyboardHostView(
         }
         val base = paints.label.textSize
         paints.label.textSize = keyboard.keyPreviewTextSizePx
-        // Centred on the box from the enlarged font's own metrics, not the key label's baseline
-        // offset, which was measured at the key's own size.
+        // Centred on the box from the enlarged font's metrics.
         val metrics = paints.label.fontMetrics
         val baseline = (top + bottom) / 2f - (metrics.ascent + metrics.descent) / 2f
         canvas.drawText(previewLabel, 0, length, (left + right) / 2f, baseline, paints.label)
@@ -1283,23 +1001,11 @@ class KeyboardHostView(
         canvas.drawCircle(x, y, radius, resizeFrame)
     }
 
-    /**
-     * The top of the frame.
-     *
-     * The keys, not the strip above them: height scales the key rows, so framing the strip too
-     * would show an edge that the top handle cannot move.
-     */
+    /** The top of the frame: the top of the keys, below the strip. */
     private fun keyboardTopForResize(): Int = keyboard.top
 
     private fun density(): Float = resources.displayMetrics.density
 
-    /**
-     * Big enough to hit without looking, which is the whole point of dragging one.
-     *
-     * In dp rather than as a fraction of a key row: the row height is the thing being dragged,
-     * so tying the handle to it would make the handle hardest to grab exactly when the keyboard
-     * is at its smallest and the user most wants it back.
-     */
     private fun handleRadiusPx(): Float = density() * HANDLE_RADIUS_DP
 
     /** Which handle a touch is on, or HANDLE_NONE. */
@@ -1321,16 +1027,9 @@ class KeyboardHostView(
         return HANDLE_NONE
     }
 
-    /**
-     * Keeps every touch away from the children while resizing.
-     *
-     * Without this the keys would take the down event and type a letter, and the drag would
-     * never reach this class at all.
-     */
+    /** Keeps every touch away from the children while resizing. */
     override fun onInterceptTouchEvent(event: android.view.MotionEvent): Boolean = resizing
 
-    // The touches this takes are the resize drags, which have no click to perform; the lint
-    // suppression used to sit on drawBackground, which handles no touches at all.
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
         if (resizing) {
@@ -1369,12 +1068,7 @@ class KeyboardHostView(
         return arrowPressed
     }
 
-    /**
-     * What the keys would have measured, so the panel can take their place exactly.
-     *
-     * Measured rather than remembered: the keyboard is GONE while the panel is open, and a view
-     * that is GONE reports a measured height of zero.
-     */
+    /** What the keys would measure, for a panel shown in their place. */
     private fun keyboardHeightForPanel(widthSpec: Int): Int {
         val unbounded = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
         keyboard.measure(widthSpec, unbounded)
@@ -1382,15 +1076,9 @@ class KeyboardHostView(
     }
 
     private companion object {
-        /** How strongly the keyboard blurs behind the radial ring, in pixels -- see
-         *  [setRadialMenuVisible]'s own doc for why this blurs the keyboard itself rather than
-         *  attempting a backdrop filter. */
+        /** How strongly the keyboard blurs behind the radial ring, in pixels. */
         const val RADIAL_BLUR_RADIUS_PX = 18f
 
-        // Read from KeyboardPreferences rather than retyped: :keyboard already depends on
-        // :data for the class itself (BorderKeysService holds a KeyboardPreferences directly),
-        // so there was no dependency this was actually avoiding -- only a second copy of four
-        // integers with nothing to stop it drifting from the first.
         const val MODE_DOCKED = KeyboardPreferences.MODE_DOCKED
 
         const val PLACEMENT_ABOVE_STRIP = KeyboardPreferences.QUICK_ACTIONS_ABOVE_STRIP
@@ -1417,12 +1105,11 @@ class KeyboardHostView(
         /** The frame's stroke, as a fraction of a key row. */
         const val RESIZE_FRAME_ROWS = 0.022f
 
-        // Read from KeyboardPreferences, same as MODE_DOCKED above.
         const val MODE_ONE_HANDED_LEFT = KeyboardPreferences.MODE_ONE_HANDED_LEFT
         const val MODE_ONE_HANDED_RIGHT = KeyboardPreferences.MODE_ONE_HANDED_RIGHT
         const val MODE_FLOATING = KeyboardPreferences.MODE_FLOATING
 
-        /** Below this there is not enough empty space for a target a thumb can hit. */
+        /** The narrowest gutter that gets an arrow, in dp. */
         const val MIN_ARROW_GUTTER_DP = 28f
         const val MAX_ARROW_SIZE_DP = 56f
     }

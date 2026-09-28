@@ -8,17 +8,8 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * A language pack the user has imported, and what is known about it.
- *
- * Nothing is ever downloaded, so every row here got there because someone chose a file. That is
- * also why [sha256] exists and is re-checked at every start for enabled packs: the file lives in
- * the app's private storage, but "private" is a statement about other apps, not about a
- * filesystem that can be corrupted, a restore that can substitute a file, or a rooted device.
- * A pack whose hash no longer matches disables itself and says so, rather than being mapped.
- *
- * [licenseNote] is required at import and is not decorative. Many lexical corpora are not free,
- * and docs/licensing.md can only be kept honest if the provenance is recorded at the moment the
- * user knows it -- nobody can reconstruct it later from the bytes.
+ * A language pack the user has imported. [sha256] is re-checked at every start for enabled packs;
+ * [licenseNote], the pack's provenance, is required at import.
  */
 @Entity(
     tableName = "language_packs",

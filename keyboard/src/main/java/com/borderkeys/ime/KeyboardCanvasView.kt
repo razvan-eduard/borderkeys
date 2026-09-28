@@ -26,24 +26,12 @@ import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.i18n.Keys
 
 /**
- * The typing surface: one [View] that draws itself and resolves touches arithmetically.
+ * The typing surface: one [View] that draws the keys and resolves touches from a layout compiled
+ * into arrays.
  *
- * No Compose, no XML inflation, no child views, and no object per key. A layout is compiled once
- * into parallel arrays of primitives, and after that the draw path reads floats out of arrays
- * and the touch path indexes into a precomputed grid. The budget it is built around is two
- * milliseconds from a finger going down to a character reaching `InputConnection`, and four for
- * redrawing the region that changed.
- *
- * Two things follow from that and are not negotiable in this file:
- *
- *  * **`onDraw` and `onTouchEvent` allocate nothing.** No `Paint`, no `Rect`, no `String`, no
- *    boxing, no capturing lambda, no iterator. Every buffer is preallocated and reused, labels
- *    are drawn from a shared `CharArray` so no `String` is created, and the runnables for
- *    long-press and auto-repeat are fields rather than lambdas made at press time.
- *  * **The static part is recorded once.** Unpressed keys and their labels go into a
- *    [RenderNode] that is re-recorded only when the theme, layout or size changes. A frame
- *    caused by one key going down replays that display list and draws one key over it, into the
- *    bounding box of that key -- not the whole keyboard.
+ * `onDraw` and `onTouchEvent` allocate nothing. Unpressed keys and their labels are recorded into
+ * a [RenderNode], re-recorded when the theme, layout or size changes; a pressed key is drawn over
+ * it.
  */
 @SuppressLint("ViewConstructor")
 class KeyboardCanvasView(
@@ -52,13 +40,7 @@ class KeyboardCanvasView(
     private val strings: LanguageManager,
 ) : View(context) {
 
-    /**
-     * Whether this view paints the surface behind itself.
-     *
-     * The keyboard host paints one background across the whole window, so that a pattern is
-     * continuous instead of restarting at every child's top-left corner and showing a seam
-     * where they meet. It turns this off. The settings preview has no host, so it stays on.
-     */
+    /** Whether this view paints the surface behind itself; off under [KeyboardHostView]. */
     var drawsBackground: Boolean = true
 
     /** What the service is told about. Called on the UI thread, inside a touch event. */
@@ -70,63 +52,33 @@ class KeyboardCanvasView(
         fun onKeyDown(code: Int)
 
         /**
-         * A completed swipe, as raw touch samples in view pixels.
-         *
-         * The arrays are the view's own capture buffers and are reused on the next gesture, so
-         * the listener must consume or copy them before returning.
+         * A completed swipe, as raw touch samples in view pixels. The arrays are reused on the
+         * next gesture; the listener consumes or copies them before returning.
          */
         fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int)
 
         /**
-         * The finger paused mid-swipe long enough to open the radial ring. Unlike [onGesture],
-         * this is not the end of anything: the trajectory captured up to this exact point is
-         * final (see [captureGestureSamples]'s own doc for why capture stops here), this is the
-         * one and only decode this gesture will ever get, and the finger stays down afterwards
-         * -- see [onGestureSteered]/[onGestureRingResolved] for what happens next, still on the
-         * same touch-down. Same reuse-or-copy contract on the arrays as [onGesture]'s own doc.
+         * The finger paused mid-swipe long enough to open the ring; the samples so far, which are
+         * final. The finger is still down. Same array contract as [onGesture].
          */
         fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int)
 
-        /**
-         * The finger moved after [onGesturePaused] fired, still without lifting. Not gesture
-         * capture -- the trajectory is already frozen -- purely where to steer the ring's
-         * highlight: a wedge, the centre Cancel button, or neither. [x]/[y] are in this view's
-         * own local pixels, the same space [onGesturePaused]'s arrays and [onGesture]'s already
-         * are.
-         */
+        /** The finger moved after [onGesturePaused], still down, to [x], [y] in view pixels. */
         fun onGestureSteered(x: Float, y: Float)
 
-        /**
-         * The finger lifted while the ring was open. The listener reads whatever
-         * [onGestureSteered] last resolved to (a wedge, the centre button, or neither) and acts
-         * on it -- this callback carries no data of its own because the ring itself is the one
-         * place that state already lives.
-         */
+        /** The finger lifted while the ring was open. */
         fun onGestureRingResolved()
 
-        /**
-         * The touch stream was interrupted (`ACTION_CANCEL`) while the ring was open -- a parent
-         * intercepting the gesture, not a deliberate release. Always discards rather than
-         * guessing at a resolution, since nothing about an interruption says what the user meant.
-         */
+        /** The touch stream was cancelled while the ring was open. */
         fun onGestureRingCancelled()
 
         /**
-         * A key held down that has no alternatives to show.
-         *
-         * Returning true means the press was consumed: the finger lifting afterwards must not
-         * also type the key. That is what makes holding the globe open the settings panel
-         * without also switching language on the way out.
+         * A key held down that has no alternatives to show. Returning true consumes the press, so
+         * the lift types nothing.
          */
         fun onKeyLongPress(code: Int, keyIndex: Int): Boolean
 
-        /**
-         * The space bar was slid sideways by [steps] characters, positive to the right.
-         *
-         * Reported in characters rather than in pixels because the view has no idea how wide a
-         * character is in the field it is typing into, and the service moves the caret through
-         * the editor rather than by simulating arrow keys.
-         */
+        /** The space bar was slid sideways by [steps] characters, positive to the right. */
         fun onCursorNudge(steps: Int)
 
         /** The space bar was slid up or down by [lines] lines, positive downwards. */
@@ -140,9 +92,8 @@ class KeyboardCanvasView(
     var hapticConstant: Int = HapticFeedbackConstants.KEYBOARD_TAP
 
     /**
-     * Mirrors [com.borderkeys.data.theme.KeyboardPreferences.keyPopup]: the pressed key shown
-     * enlarged above the finger while it is held. Drawn by [KeyboardHostView], like the
-     * alternatives popup and for the same reason -- see [keyPreviewVisible].
+     * [com.borderkeys.data.theme.KeyboardPreferences.keyPopup]: the pressed key shown enlarged
+     * above the finger, drawn by [KeyboardHostView].
      */
     var keyPopupEnabled: Boolean = true
         set(value) {
@@ -155,41 +106,24 @@ class KeyboardCanvasView(
         }
     var swipeEnabled: Boolean = true
 
-    /**
-     * Whether the pause-preview machinery arms at all.
-     *
-     * Off costs exactly one boolean read per captured sample and nothing else -- see
-     * [captureGestureSamples] -- the same "the feature being off costs nothing" rule
-     * [holdHintsEnabled] and the rest of this view's optional machinery already follow.
-     */
+    /** Whether a pause mid-swipe is detected, for the ring. */
     var radialMenuEnabled: Boolean = false
 
     /** How long a real pause must hold before [Listener.onGesturePaused] fires. */
     var radialPauseDwellMillis: Long = DEFAULT_RADIAL_PAUSE_DWELL_MILLIS
 
-    /** How far a swipe must have already travelled before the pause timer is ever armed, in
-     *  letters -- see [updatePauseDetection]'s own doc for the pixel conversion. `0` removes the
-     *  guard entirely. */
+    /** How far a swipe must have travelled, in key widths, before a pause counts; 0 for none. */
     var radialMinPathLetters: Float = DEFAULT_RADIAL_MIN_PATH_LETTERS
 
-    /**
-     * Whether a press makes a sound.
-     *
-     * Played through the platform's own keypress effect rather than an asset of our own, so it
-     * is the sound the rest of the phone makes, at the volume the user set for it, and the
-     * keyboard ships no audio file.
-     */
+    /** Whether a press plays the platform's keypress sound. */
     var soundEnabled: Boolean = false
 
     /** Whether sliding along the space bar moves the cursor instead of typing a space. */
     var spaceCursorEnabled: Boolean = true
 
     /**
-     * How long a key is held before its long press fires, in milliseconds.
-     *
-     * A repeatable key -- backspace is the only one -- is never allowed past [LONG_PRESS_MILLIS]
-     * here, because its long press has to win the race against the character repeat that
-     * [REPEAT_DELAY_MILLIS] arms on the same press. See [longPressDelayFor].
+     * How long a key is held before its long press fires, in milliseconds; capped at
+     * [LONG_PRESS_MILLIS] for a repeatable key. See [longPressDelayFor].
      */
     var longPressDelayMillis: Long = LONG_PRESS_MILLIS
 
@@ -212,26 +146,18 @@ class KeyboardCanvasView(
 
     private var layout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
 
-    /**
-     * Where every key is, and which key a touch belongs to.
-     *
-     * Held rather than inlined so that the arithmetic can be tested without a device: a
-     * one-pixel gap between two keys is a touch that does nothing, and no screenshot shows it.
-     */
+    /** Where every key is, and which key a touch belongs to. */
     private val geometry = KeyboardGeometry()
 
     /** The average key width of the compiled layout, in pixels; 0 before the first layout. */
     val keyWidthPx: Float get() = geometry.averageKeyWidth
 
-    /** Per-key text size, fixed at compile time so the draw path never calls measureText. */
+    /** Per-key text size, fixed when the layout is compiled. */
     private var labelTextSize = FloatArray(0)
 
     // ---- touch state ---------------------------------------------------------------------
 
-    /**
-     * pointer id to key index. An `IntArray`, not a `Map`: this is written inside a motion event
-     * and a boxed key would allocate on every finger down.
-     */
+    /** Pointer id to key index. */
     private val pointerKey = IntArray(MAX_POINTERS) { NO_KEY }
     private val pointerDownAt = LongArray(MAX_POINTERS)
     private var touchSlop = 0
@@ -240,29 +166,17 @@ class KeyboardCanvasView(
 
     private fun beginGesture(fromKey: Int) {
         gestureActive = true
-        // A finger that is swiping is not pressing the key it started on.
         hidePreview()
-        // The key the finger started on is released without committing: the press became a
-        // swipe, and a swipe must not also type its first letter.
+        // The key the swipe started on is released without typing.
         endPress(fromKey)
         pointerKey[gesturePointer] = fromKey
         cancelPendingCallbacks()
         dismissAlternatives()
-        // The real pointer-down time, on the same clock every later sample carries. A zero
-        // here made the decoder's first interval span the whole uptime and collapse the
-        // resampled stroke to its two ends.
+        // Starts at the pointer-down time, on the clock the samples carry.
         gesture.begin(gestureStartX, gestureStartY, pointerDownAt[gesturePointer])
     }
 
-    /**
-     * Reads every sample the motion event carries, not just the current one.
-     *
-     * A touch driver batches: one `ACTION_MOVE` typically holds several samples taken between
-     * frames, reachable only through the historical accessors. Ignoring them throws away most
-     * of a fast swipe and, with it, exactly the curvature that tells "than" from "thin" -- and
-     * it is the single most common mistake in an amateur implementation, because the trail
-     * still looks fine and only the accuracy suffers.
-     */
+    /** Captures every sample the motion event carries, the historical ones included. */
     private fun captureGestureSamples(event: MotionEvent, pointerIndex: Int) {
         eventSamples.bind(event, pointerIndex)
         gesture.capture(eventSamples)
@@ -274,34 +188,18 @@ class KeyboardCanvasView(
     }
 
     /**
-     * A pause is "no real movement for [radialPauseDwellMillis]", not "no `ACTION_MOVE` arrived"
-     * -- a touch driver can keep delivering samples at a fixed rate even while the finger is
-     * dead still, which would mean this timer is perpetually reset and a real pause never fires.
-     * [GestureCapture.distanceFromPrevious] is what tells the two apart: real movement reschedules
-     * the timer, a driver repeating the same coordinate leaves whatever was already scheduled
-     * alone. The timer firing is the pause signal itself, in [firePause] below.
-     *
-     * Never called once [ringOpen]: the caller in [onTouchEvent] routes further movement to
-     * [Listener.onGestureSteered] instead of [captureGestureSamples], so there is nothing left
-     * here to detect a pause in -- the one pause this gesture will ever have already fired.
+     * Re-arms the pause timer on every movement larger than [PAUSE_MOVEMENT_EPSILON_PX], once the
+     * swipe is eligible for a preview; [firePause] runs when it expires.
      */
     private fun updatePauseDetection() {
         if (gesture.distanceFromPrevious() <= PAUSE_MOVEMENT_EPSILON_PX) {
             return
         }
         removeCallbacks(pauseRunnable)
-        // Guards against a slow-starting swipe reading as an instant pause: the first real
-        // movement of a fresh gesture is, by definition, still close to where the finger went
-        // down, and arming the timer before there is anything worth previewing would fire on
-        // every swipe's own first frame. radialMinPathLetters is user-configurable (down to 0,
-        // which removes this guard entirely) -- see its own doc.
         val pathLengthPx = kotlin.math.hypot(
             (gesture.maxX - gesture.minX).toDouble(), (gesture.maxY - gesture.minY).toDouble(),
         ).toFloat()
-        // Letters, not pixels: nobody knows how many pixels their screen has, but everybody
-        // knows roughly how wide a key is. geometry.averageKeyWidth is 0 before the first layout
-        // pass (see its own doc); a real gesture cannot exist yet at that point either, so the
-        // fallback only matters for arithmetic safety, never for an actual swipe.
+        // radialMinPathLetters in pixels.
         val keyWidthPx = if (geometry.averageKeyWidth > 0f) {
             geometry.averageKeyWidth
         } else {
@@ -325,21 +223,12 @@ class KeyboardCanvasView(
     }
 
     /**
-     * Whether the radial ring is open for the swipe in progress -- a pause has fired and its
-     * decode is being shown, or awaited. While true, [onTouchEvent]'s `ACTION_MOVE` branch stops
-     * feeding [captureGestureSamples] and calls [Listener.onGestureSteered] instead. The one
-     * way back is [resumeGestureCapture]: the service found nothing to open a ring for, and the
-     * stroke goes on being captured as if the pause had never happened.
+     * Whether the ring is open for the swipe in progress. While true, movement goes to
+     * [Listener.onGestureSteered] instead of the capture.
      */
     private var ringOpen = false
 
-    /**
-     * The pause opened no ring -- nothing decoded, or too few alternatives -- so the stroke is
-     * a plain swipe again: further movement is captured, the trail keeps drawing, the lift
-     * decodes the whole gesture through [Listener.onGesture], and a later pause may fire again.
-     * Without this the canvas kept routing every move to a ring nobody could see, the trail
-     * froze at the pause point and the rest of the word was lost.
-     */
+    /** Turns a paused stroke that opened no ring back into a captured swipe. */
     fun resumeGestureCapture() {
         if (!gestureActive) {
             return
@@ -347,19 +236,12 @@ class KeyboardCanvasView(
         ringOpen = false
     }
 
-    /** The system touch slop, in pixels -- what [onTouchEvent] itself uses to tell a swipe from
-     *  a press, shared so the ring's own "has the finger actually moved" test agrees with it. */
+    /** The system touch slop, in pixels. */
     val touchSlopPx: Float get() = touchSlop.toFloat()
 
     private val pauseRunnable = Runnable { firePause() }
 
-    /**
-     * Reads the samples of the event being handled, without allocating one per event.
-     *
-     * A single instance is rebound on each `ACTION_MOVE` and cleared afterwards, so the view
-     * never holds a `MotionEvent` the framework has already recycled. Being the only
-     * implementation loaded in this process, the calls through it stay monomorphic.
-     */
+    /** The samples of the motion event being handled; one instance, rebound on each move. */
     private inner class EventSamples : MotionSamples {
         private var event: MotionEvent? = null
         private var pointerIndex = 0
@@ -413,14 +295,10 @@ class KeyboardCanvasView(
         gesturePointer = -1
         invalidateTrailFully()
         if (wasRingOpen) {
-            // The one decode this gesture gets already happened at the pause -- see
-            // Listener.onGesturePaused's own doc. Resolution reads whatever onGestureSteered
-            // last settled on; this callback carries no data of its own.
             listener?.onGestureRingResolved()
         } else if (count >= MIN_GESTURE_POINTS) {
             listener?.onGesture(gesture.xs, gesture.ys, gesture.times, count)
         }
-        // Reset by index. The arrays keep their storage for the next swipe.
         gesture.reset()
     }
 
@@ -438,14 +316,8 @@ class KeyboardCanvasView(
     }
 
     /**
-     * The service closed the ring out from under a stroke that may still be down -- a second
-     * pointer pressed a key, the caret was tapped elsewhere, the field changed. Forgets that
-     * stroke without any callback of its own: its eventual lift must neither reach
-     * [Listener.onGestureRingResolved] (there is no ring left to read) nor [Listener.onGesture]
-     * (its one decode already happened at the pause), and must not type the key it started on
-     * either -- [beginGesture] keeps that key in [pointerKey] for the lift to clear, so it is
-     * cleared here instead and [onPointerUp] then ignores the pointer outright. A no-op when no
-     * stroke is active, which is the common case (a ring waiting for a tap has no stroke at all).
+     * Forgets the stroke under a ring the service closed, with no callback: its lift resolves
+     * nothing, decodes nothing and types nothing.
      */
     fun abandonRingStroke() {
         removeCallbacks(pauseRunnable)
@@ -462,17 +334,7 @@ class KeyboardCanvasView(
         invalidateTrailFully()
     }
 
-    /**
-     * Repaints only the rectangle the trail occupies.
-     *
-     * The four-argument `invalidate` is deprecated in favour of repainting the whole view, on
-     * the grounds that a hardware-accelerated pipeline redraws everything anyway. That holds for
-     * a view whose content is one display list; it does not hold here. The keys are drawn once
-     * into a `RenderNode` and replayed, so a full invalidation costs a replay of the whole
-     * keyboard plus the trail, and a partial one costs the trail. Keeping the deprecated call is
-     * the deliberate choice, and it is measured: it is what holds `onDraw` under 4 ms while a
-     * swipe is in flight.
-     */
+    /** Repaints only the rectangle the trail occupies. */
     @Suppress("DEPRECATION")
     private fun invalidateTrail() {
         val margin = paints.swipeTrailWidthPx + 2f
@@ -488,13 +350,7 @@ class KeyboardCanvasView(
         }
     }
 
-    /**
-     * Draws the trail as a few polylines of increasing opacity.
-     *
-     * The fade is per segment rather than per point because alpha lives on the paint, not on a
-     * vertex: three or four `drawPath` calls give the effect that a per-point gradient would
-     * need a shader for, and cost nothing measurable.
-     */
+    /** Draws the trail as [TRAIL_SEGMENTS] polylines, the oldest faintest. */
     private fun drawGestureTrail(canvas: Canvas) {
         if (gesture.count < 2) {
             return
@@ -524,26 +380,17 @@ class KeyboardCanvasView(
 
     // ---- press animation -----------------------------------------------------------------
 
-    /**
-     * A fixed pool of press states, one per key that is currently lit. No `ValueAnimator`, no
-     * object per press: a `ValueAnimator` allocates, posts to the animation handler and holds a
-     * listener, all to interpolate one float that this already has a frame callback for.
-     */
+    /** A fixed pool of press states, one per lit key, advanced by the frame callback. */
     private val pressKey = IntArray(PRESS_POOL) { NO_KEY }
     private val pressProgress = FloatArray(PRESS_POOL)
     private val pressReleasing = BooleanArray(PRESS_POOL)
     private var lastFrameNanos = 0L
     private var animating = false
 
-    /** Both particle layers for the keys -- a burst inside the pressed key and its outline traced
-     *  while it is down. Exposed non-private so [BorderKeysService] can push the user's
-     *  particle-effect settings directly, the same way [hapticEnabled] already is. */
+    /** The keys' particle layers: a fill inside the pressed key and a trace of its outline. */
     val particles = ParticleSurface(FILL_PARTICLE_POOL_CAPACITY, OUTLINE_PARTICLE_POOL_CAPACITY) { invalidateParticleBounds() }
 
-    /** The key currently being pressed, as the element the engine reads its shape from -- one
-     *  reusable instance re-pointed at [geometry]'s own arrays on every press, so the exact
-     *  rounded rectangle [drawStatic] paints is the one particles trace and fill. See
-     *  [com.borderkeys.ime.fx.ParticleElement]. */
+    /** The pressed key's rounded rectangle, for the particles; re-pointed on every press. */
     private val keyElement = RoundedRectElement()
     private val particleBoundsScratch = RectF()
     private val particleBoundsScratch2 = RectF()
@@ -559,25 +406,14 @@ class KeyboardCanvasView(
     private var longPressPointer = -1
 
     /**
-     * How much space exists above this view's own top edge, inside its host, that the
-     * alternatives popup is free to draw into -- KeyboardHostView draws the popup now, not this
-     * view (see [alternativesVisible]'s own doc), so the room available to it is the host's, not
-     * just this view's own y=0. Set by [KeyboardHostView] on every layout pass, mirroring its own
-     * top; 0 (the old, view-only behaviour) until the first pass sets it.
+     * The room above this view's top edge, inside its host, that the alternatives popup may draw
+     * into. Set by [KeyboardHostView] on every layout pass.
      */
     var hostTopInsetPx: Float = 0f
 
     private var repeatKey = NO_KEY
 
-    /**
-     * The pointer whose held backspace already deleted one word and is now deleting more.
-     *
-     * Separate from [repeatKey]: that one repeats a character every [REPEAT_INTERVAL_MILLIS],
-     * and never gets the chance to arm for backspace because [LONG_PRESS_MILLIS] is shorter
-     * than [REPEAT_DELAY_MILLIS] and consumes the press first -- see [onLongPressElapsed]. This
-     * is what keeps going after it does: the same action, a whole word, for as long as the
-     * finger stays down, rather than a hold that deletes exactly one word and then nothing.
-     */
+    /** The pointer whose held backspace keeps deleting whole words. */
     private var longPressRepeatPointer = -1
     private var longPressRepeatCode = 0
     private var longPressRepeatIndex = NO_KEY
@@ -589,12 +425,7 @@ class KeyboardCanvasView(
     private var spaceMovedBy = 0
     private var spaceMovedLines = 0
 
-    /**
-     * How far the finger travels for one character.
-     *
-     * A fraction of a key rather than a fixed number of pixels, so the gesture feels the same
-     * on a narrow phone and a tablet, and so it scales with the width setting.
-     */
+    /** How far the finger travels for one character: [SPACE_STEP_FRACTION] of a key's width. */
     private fun spaceStepPx(): Float {
         val width = if (geometry.keyCount > 0) {
             geometry.keyRight[0] - geometry.keyLeft[0]
@@ -645,32 +476,15 @@ class KeyboardCanvasView(
 
     // ---- gesture capture ---------------------------------------------------------------------
 
-    /**
-     * The captured swipe, in three preallocated arrays.
-     *
-     * Nothing is allocated for the duration of a gesture. A swipe produces hundreds of samples
-     * in under a second, and a growing list would allocate and copy several times inside the
-     * window where the finger is moving and the trail has to keep up with it.
-     */
-    /**
-     * The points of the swipe in progress, and the bounding box the trail is invalidated
-     * against. Lives in its own class so its invariants can be asserted without a `Canvas`.
-     */
-    /**
-     * The virtual view hierarchy a screen reader explores.
-     *
-     * Built from the same compiled geometry the drawing and the hit-testing use, so a key that
-     * is drawn is a key that can be explored and there is no second layout to drift.
-     */
+    /** The virtual view hierarchy a screen reader explores, built from [geometry]. */
     private val accessibility = KeyboardAccessibility(this, geometry, strings).apply {
         listener = KeyboardAccessibility.Listener { code, keyIndex ->
-            // Activated by the reader rather than by a finger: there was no press to release,
-            // so this goes straight to the same place a completed tap goes. Qualified because
-            // `listener` inside `apply` is the accessibility helper's own.
+            // A key the reader activated goes where a completed tap goes.
             this@KeyboardCanvasView.listener?.onKey(code, keyIndex)
         }
     }
 
+    /** The points of the swipe in progress, in preallocated arrays. */
     private val gesture = GestureCapture()
 
     /** Rebound on every move event; see [EventSamples]. */
@@ -682,14 +496,7 @@ class KeyboardCanvasView(
     private var gestureStartY = 0f
 
 
-    /**
-     * One Path per trail segment, recycled with `rewind()`.
-     *
-     * `rewind()` rather than `reset()`: reset frees the internal buffer and the next gesture
-     * allocates it again, which is precisely the allocation this is avoiding. Several paths
-     * rather than one because the trail fades with age, and alpha is a property of the paint
-     * rather than of a point.
-     */
+    /** One Path per trail segment, recycled with `rewind()`. */
     private val trailPaths = Array(TRAIL_SEGMENTS) { Path() }
 
     // ---- reused scratch ----------------------------------------------------------------------
@@ -701,11 +508,7 @@ class KeyboardCanvasView(
     private var dirtyRight = 0
     private var dirtyBottom = 0
 
-    /**
-     * One instance each, created here and never again. Scheduling these with `postDelayed`
-     * allocates nothing; a lambda written at the call site would allocate a new object on every
-     * key press.
-     */
+    /** The scheduled callbacks, one instance each. */
     private val longPressRunnable = Runnable { onLongPressElapsed() }
     private val repeatRunnable = object : Runnable {
         override fun run() {
@@ -744,12 +547,7 @@ class KeyboardCanvasView(
         layout = newLayout
         if (width > 0 && height > 0) {
             compile(width, height)
-            // The key that caused this very switch -- ?123, ABC, the shift-symbols toggle --
-            // is still fading out its own press highlight over the next few frames (see
-            // onAnimationFrame), by an index into the layout that was current when the finger
-            // went down. A page with fewer keys than that index leaves it pointing past the end
-            // of the geometry these frames now read, so a slot the new layout has outgrown is
-            // dropped rather than carried into it.
+            // Drops press states whose key index the new layout does not have.
             for (slot in 0 until PRESS_POOL) {
                 if (pressKey[slot] != NO_KEY && pressKey[slot] >= geometry.keyCount) {
                     pressKey[slot] = NO_KEY
@@ -775,7 +573,7 @@ class KeyboardCanvasView(
         centersYOut: FloatArray,
     ): Int = geometry.exportGeometry(codesOut, centersXOut, centersYOut)
 
-    /** Average key size, for the same purpose. Zero before the first layout pass. */
+    /** Average key size, for the native engine. Zero before the first layout pass. */
     val averageKeyWidth: Float get() = geometry.averageKeyWidth
 
     val averageKeyHeight: Float get() = geometry.averageKeyHeight
@@ -798,20 +596,13 @@ class KeyboardCanvasView(
 
     override fun getAccessibilityNodeProvider(): AccessibilityNodeProvider = accessibility.provider
 
-    /**
-     * With a screen reader on, a finger dragged over the keyboard produces hover events instead
-     * of touches. They are routed to the virtual view under them; anything not consumed falls
-     * through to the framework's own handling.
-     */
+    /** Routes a screen reader's hover events to the virtual view under them. */
     override fun dispatchHoverEvent(event: MotionEvent): Boolean =
         accessibility.dispatchHoverEvent(event) || super.dispatchHoverEvent(event)
 
     /**
-     * Turns the layout description into the arrays everything else reads.
-     *
-     * Runs on a size change, a layout change and a theme change -- never per frame and never per
-     * touch. Reallocates only when the number of keys actually changed, so rotating the device
-     * or resizing the window reuses every array.
+     * Compiles the layout into the arrays everything else reads, on a size, layout or theme
+     * change. Reallocates only when the key count changed.
      */
     private fun compile(viewWidth: Int, viewHeight: Int) {
         geometry.compile(layout, viewWidth.toFloat(), viewHeight.toFloat(), paints.keyGapPx)
@@ -820,18 +611,10 @@ class KeyboardCanvasView(
         }
         measureLabels()
         recordBackground(viewWidth, viewHeight)
-        // Every virtual view just moved, and a reader holding a stale node would speak the
-        // wrong key or none at all.
         accessibility.onGeometryChanged()
     }
 
-    /**
-     * Fixes each label's text size now, so the draw path never calls `measureText`.
-     *
-     * Most labels are one character and keep the theme's size. The wide ones -- "?123" on a key
-     * one and a half units across -- are shrunk to fit here, once, instead of being measured on
-     * every frame or silently overflowing their key.
-     */
+    /** Fixes each label's text size, shrinking a label wider than its key to fit. */
     private fun measureLabels() {
         val themeSize = paints.label.textSize
         val base = themeSize
@@ -853,7 +636,7 @@ class KeyboardCanvasView(
         paints.label.textSize = themeSize
     }
 
-    /** O(1). Delegated to the compiled geometry, where it can be tested. */
+    /** The key at ([x], [y]), from the compiled geometry. */
     fun findKeyAt(x: Float, y: Float): Int = geometry.findKeyAt(x, y)
 
     // ---- drawing -------------------------------------------------------------------------------
@@ -902,26 +685,18 @@ class KeyboardCanvasView(
         }
     }
 
-    /**
-     * Whether shift is off, held for one letter, or locked.
-     *
-     * The keyboard drew no shift state at all before this: the letters stayed lower case and
-     * the shift key looked the same whatever it was about to do, which made automatic
-     * capitalisation something you could only discover by typing a letter and looking at the
-     * field.
-     */
+    /** Whether shift is off, on for one letter, or locked; the labels are drawn to match. */
     var shiftState: Int = ShiftState.OFF
         set(value) {
             if (field != value) {
                 field = value
-                // The labels live in the cached background layer, so it has to be
-                // re-recorded rather than merely redrawn over.
+                // The labels are in the recorded background layer.
                 backgroundValid = false
                 invalidate()
             }
         }
 
-    /** One character, reused, so upper-casing a label allocates nothing on the draw path. */
+    /** A reused one-character buffer for upper-casing a label. */
     private val shiftedLabel = CharArray(1)
 
     /** Control and alt armed for the next key; the armed key is drawn pressed until it comes. */
@@ -938,14 +713,7 @@ class KeyboardCanvasView(
         invalidate()
     }
 
-    /**
-     * The lock light: caps lock is otherwise invisible, since every other letter on the board
-     * already looks identical whether shift is on for one character or locked -- see
-     * [shiftState]'s own doc. A fixed colour rather than a themed one, the same reasoning as
-     * the draft box's Insert button: a lit indicator reads by its colour before anything else, and
-     * a theme whose accent sits close to the key's own fill would make it hardest to notice on
-     * the one keyboard where it matters most that it is still on.
-     */
+    /** The caps-lock light on the shift key, in a fixed green. */
     private val shiftLockLedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF43A047.toInt()
         style = Paint.Style.FILL
@@ -967,10 +735,7 @@ class KeyboardCanvasView(
             return
         }
         paints.label.textSize = labelTextSize[index]
-        // Upper-cased at the moment of drawing rather than in the geometry, so switching shift
-        // costs one invalidate and no relayout -- the caps are the same width as the letters
-        // they replace at this size, and the buffer they come from is shared with everything
-        // else on the row.
+        // A one-letter label is upper-cased as it is drawn while shift is on.
         val chars = if (shiftState != ShiftState.OFF && length == 1 &&
             Character.isLowerCase(geometry.labelChars[geometry.labelOffset[index]])
         ) {
@@ -989,22 +754,14 @@ class KeyboardCanvasView(
     }
 
     /**
-     * What a key offers when it is held, drawn in its corner.
-     *
-     * A key with alternatives shows the first of them, which is the character the hold would
-     * type. A key whose hold does something else -- enter and the globe open the panel, the
-     * space bar cycles the layouts -- has no character to show, so it gets three dots: the
-     * same "there is more here" mark a menu button carries, and no text to translate.
+     * Draws in the key's corner what holding it does: its first alternative, or three dots for a
+     * key whose hold opens something ([holdsAMenu]).
      */
     private fun drawHoldHint(canvas: Canvas, index: Int) {
         if (!holdHintsEnabled) {
             return
         }
-        // An invisible box in the key's own top-right corner, its right and top edges exactly
-        // the key's own -- not inset from them by some separate gap value. The box is sized
-        // bigger than the widest character it ever has to hold (see hintCellHalfWidthPx's own
-        // doc), so the box's own size is what keeps a hint off the corner it sits in, the way
-        // padding keeps a view's content off a container's edge.
+        // The hint's cell sits in the key's top-right corner.
         val hintX = geometry.keyRight[index] - paints.hintCellHalfWidthPx
         val hintY = geometry.keyTop[index] + paints.hintCellTopInsetPx
         if (geometry.altLength[index] > 0) {
@@ -1034,22 +791,13 @@ class KeyboardCanvasView(
         Trace.beginSection("KeyboardCanvasView.onDraw")
         try {
             if (backgroundValid && canvas.isHardwareAccelerated) {
-                // A RenderNode's display list belongs to the hardware renderer of the window the
-                // view is attached to, and that renderer is destroyed when the view leaves the
-                // window. An input view outlives its window -- the framework keeps it and shows
-                // it again in the next editor -- so a node recorded during one appearance can
-                // come back empty on the next, and `drawRenderNode` on an empty node draws
-                // nothing at all. That is invisible in testing until the keys vanish and only
-                // the suggestion strip is left, which is exactly how it was found.
-                //
-                // The check is one boolean read per frame and re-records only after a real loss.
+                // Re-records the node when its display list was lost with a previous window.
                 if (!backgroundNode.hasDisplayList()) {
                     recordBackground(width, height)
                 }
                 canvas.drawRenderNode(backgroundNode)
             } else {
-                // Software canvas: a screenshot, a magnifier, or the theme preview being drawn
-                // into a bitmap. Correct, just not the fast path.
+                // A software canvas draws the static layer directly.
                 drawStatic(canvas, width.toFloat(), height.toFloat())
             }
 
@@ -1086,12 +834,7 @@ class KeyboardCanvasView(
 
     // ---- long-press alternatives, read by KeyboardHostView -----------------------------------
     //
-    // Drawn by KeyboardHostView, not this view -- see its own dispatchDraw override's doc. This
-    // view cannot draw outside its own bounds, and the top row's popup has to reach above them,
-    // into where the suggestion strip and quick actions bar sit above it. Everything below is
-    // this view's own local coordinates; KeyboardHostView offsets them by [keyboard]'s own
-    // left/top before drawing, the same translation [BorderKeysService.radialAnchor] already
-    // does for the ring.
+    // Drawn by KeyboardHostView, which offsets these local coordinates by this view's left/top.
 
     /** Whether the popup is up at all. */
     val alternativesVisible: Boolean get() = alternativesKey != NO_KEY
@@ -1107,18 +850,13 @@ class KeyboardCanvasView(
     val alternativesCellWidthPx: Float get() = alternativesCellWidth
     val alternativesRowHeightPx: Float get() = alternativesHeight
 
-    /** The held key's own label size, so the popup's characters read the same size the key
-     *  itself would have. 0 when [alternativesVisible] is false. */
+    /** The held key's label size. 0 when [alternativesVisible] is false. */
     val alternativesTextSizePx: Float get() = if (alternativesKey == NO_KEY) 0f else labelTextSize[alternativesKey]
 
     /** The alternative at [position], already cased for the current shift state. */
     fun alternativeCharAt(position: Int): Char = altCharAt(alternativesKey, position)
 
-    /**
-     * An alternative as it should read right now: upper-cased when shift is on and it is a
-     * lowercase letter, so a held "a" offers "Ă" while the board is shifted -- the same rule
-     * [drawLabel] applies to the key face. A symbol has no case and passes straight through.
-     */
+    /** An alternative, upper-cased while shift is on. */
     private fun altCharAt(index: Int, position: Int): Char {
         val character = geometry.altChars[geometry.altOffset[index] + position]
         return if (shiftState != ShiftState.OFF && Character.isLowerCase(character)) {
@@ -1130,10 +868,8 @@ class KeyboardCanvasView(
 
     // ---- the key preview, read by KeyboardHostView --------------------------------------------
     //
-    // The pressed key enlarged above the finger for as long as it is held. Drawn by
-    // KeyboardHostView for the same reason the alternatives popup is: the top row's preview
-    // has to reach above this view's own bounds. Everything below is in this view's own local
-    // coordinates, offset by the host before drawing.
+    // The pressed key enlarged above the finger, drawn by KeyboardHostView from these local
+    // coordinates.
 
     private var previewKey = NO_KEY
     private var previewPointer = -1
@@ -1165,8 +901,7 @@ class KeyboardCanvasView(
             return (geometry.centerX[index] - width / 2f).coerceIn(0f, max(0f, this.width - width))
         }
 
-    /** Above the key, or below it where even the host's space above this view runs out --
-     *  the same fallback the alternatives popup makes. */
+    /** Above the key, or below it where the host has no room above. */
     val keyPreviewTopPx: Float
         get() {
             val index = previewKey
@@ -1177,12 +912,11 @@ class KeyboardCanvasView(
             return if (above + hostTopInsetPx >= 0f) above else geometry.keyBottom[index] + gap
         }
 
-    /** The previewed key's label size, enlarged: big enough to read under a thumb. */
+    /** The previewed key's label size, enlarged by [KEY_PREVIEW_TEXT_SCALE]. */
     val keyPreviewTextSizePx: Float
         get() = if (previewKey == NO_KEY) 0f else labelTextSize[previewKey] * KEY_PREVIEW_TEXT_SCALE
 
-    /** Fills [out] with the previewed key's label as the key itself shows it -- upper-cased
-     *  under shift the way [drawLabel] does -- and returns its length, 0 with nothing to show. */
+    /** Fills [out] with the previewed key's label as drawn, and returns its length, or 0. */
     fun keyPreviewLabel(out: CharArray): Int {
         val index = previewKey
         if (index == NO_KEY) return 0
@@ -1197,9 +931,7 @@ class KeyboardCanvasView(
         return length
     }
 
-    /** Letters, digits and symbols: a key whose face is what it types. Shift, backspace, the
-     *  space bar and enter say what they are by what happens, and a preview of "⇧" adds
-     *  nothing. */
+    /** Whether a key is previewed: any labelled key but a modifier, repeatable, space or enter. */
     private fun previewable(index: Int): Boolean {
         val flags = geometry.keyFlags[index]
         val code = geometry.keyCode[index]
@@ -1278,8 +1010,7 @@ class KeyboardCanvasView(
         startPress(index)
         showPreview(index, pointerId)
 
-        // Every press on a letter is a gesture that has not started yet. Recording the origin
-        // here costs two floats and means the slop test below needs no extra state.
+        // A press on a letter records where a swipe from it would start.
         if (swipeEnabled && !gestureActive && KeyFlags.has(geometry.keyFlags[index], KeyFlags.LETTER)) {
             gesturePointer = pointerId
             gestureStartX = x
@@ -1287,16 +1018,13 @@ class KeyboardCanvasView(
         }
 
         if (hapticEnabled) {
-            // Needs no VIBRATE permission, which is why the manifest has none.
             performHapticFeedback(hapticConstant)
         }
         if (soundEnabled) {
-            // Honours the phone's own "touch sounds" setting on top of ours: playSoundEffect
-            // is silent when the system has them off, so the two switches compose the way a
-            // reader would expect rather than one overriding the other.
+            // Silent when the system's touch sounds are off.
             playSoundEffect(android.view.SoundEffectConstants.CLICK)
         }
-        // A press on the space bar is a cursor drag that has not started yet.
+        // A press on the space bar records where a caret slide would start.
         if (spaceCursorEnabled && KeyFlags.has(geometry.keyFlags[index], KeyFlags.REPEATABLE).not() &&
             geometry.keyCode[index] == ' '.code
         ) {
@@ -1312,10 +1040,7 @@ class KeyboardCanvasView(
             repeatKey = index
             postDelayed(repeatRunnable, REPEAT_DELAY_MILLIS)
         }
-        // Armed for every key, not only for keys with alternatives. A key with none offers the
-        // hold to the service instead, which is how holding the globe opens the settings panel.
-        // The cost is one postDelayed and one removeCallbacks per press, both of which the
-        // repeatable keys above were already paying, and neither allocates.
+        // Armed for every key; one without alternatives offers the hold to the listener.
         longPressPointer = pointerId
         postDelayed(longPressRunnable, longPressDelayFor(index))
     }
@@ -1334,11 +1059,7 @@ class KeyboardCanvasView(
             updateAlternativesSelection(x)
             return
         }
-        // Sliding along the space bar moves the caret, by characters sideways and by lines up
-        // or down. Started only from the space bar, and only past a threshold wider than any
-        // tap wobble, so a press that happens to drift a few pixels still types a space. A
-        // press on the space bar is a space or a slide and nothing else: it is not carried
-        // onto the key the finger crosses on its way up.
+        // A press on the space bar is a space or a caret slide, never another key.
         if (pointerId == spacePointer) {
             slideSpaceBar(pointerId, x, y)
             return
@@ -1349,9 +1070,7 @@ class KeyboardCanvasView(
             return
         }
 
-        // A swipe begins when the finger has travelled past the touch slop without lifting.
-        // Distance is the only arbiter: a timer would either start a gesture out of a slow tap
-        // or refuse one from a fast flick, and the user's intent is in the movement.
+        // A swipe begins once the finger travels past the touch slop without lifting.
         if (swipeEnabled && !gestureActive && pointerId == gesturePointer &&
             KeyFlags.has(geometry.keyFlags[previous], KeyFlags.LETTER)
         ) {
@@ -1367,9 +1086,8 @@ class KeyboardCanvasView(
         if (index == previous || index == NO_KEY) {
             return
         }
-        // The finger slid onto another key before lifting. The previous key is released without
-        // being committed, which is what lets someone correct a landing without lifting. A
-        // swipe may still start, from the corrected landing rather than from the first key.
+        // The finger slid onto another key: the previous one is released untyped, and a swipe
+        // may start from the new one.
         endPress(previous)
         cancelPendingCallbacks()
         pointerKey[pointerId] = index
@@ -1396,11 +1114,6 @@ class KeyboardCanvasView(
             hidePreview()
         }
         if (pointerId == longPressRepeatPointer) {
-            // pointerKey[pointerId] was already cleared the moment the hold was consumed, so
-            // the ordinary path below -- built for a key that is still "down" as far as this
-            // view's own bookkeeping knows -- never runs for this pointer. Stopping it here is
-            // what a lifted finger means when the key it lifted from isn't tracked as pressed
-            // any more.
             stopLongPressRepeat()
         }
         if (gestureActive && pointerId == gesturePointer) {
@@ -1409,14 +1122,13 @@ class KeyboardCanvasView(
             return
         }
         if (pointerId == spacePointer) {
-            // The lift's own position counts: the last step of a slide is often crossed
-            // between the last move the finger reported and the lift.
+            // The lift's position is the slide's last step.
             val dragged = slideSpaceBar(pointerId, x, y)
             spacePointer = -1
             spaceMovedBy = 0
             spaceMovedLines = 0
             if (dragged) {
-                // The caret has already been moved; lifting must not also type a space.
+                // A slide types no space.
                 pointerKey[pointerId] = NO_KEY
                 return
             }
@@ -1481,24 +1193,15 @@ class KeyboardCanvasView(
             return
         }
         if (geometry.altLength[index] == 0) {
-            // No alternatives to show, so the hold is offered to the service instead. If it
-            // takes it, the press is released here so that lifting the finger does not also
-            // type the key that was held.
+            // With no alternatives, the hold goes to the listener; a consumed hold releases the
+            // key untyped and cancels its repeat.
             if (listener?.onKeyLongPress(geometry.keyCode[index], index) == true) {
                 endPress(index)
                 hidePreview()
                 pointerKey[pointerId] = NO_KEY
-                // The full reset, not just longPressPointer: a REPEATABLE key (backspace is the
-                // only one today) already has repeatRunnable armed from ACTION_DOWN, and
-                // onPointerUp's own cancelPendingCallbacks() is never reached for this pointer --
-                // pointerKey was just cleared above, so onPointerUp takes its early-return branch
-                // and skips it. Leaving repeatRunnable running would keep firing onKeyRepeat
-                // every REPEAT_INTERVAL_MILLIS with no finger on the key at all.
                 cancelPendingCallbacks()
                 if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.REPEATABLE)) {
-                    // Holding on: a hold that stops after exactly one word is not what holding
-                    // means anywhere else on this board. The same action repeats now at its own
-                    // pace, still a whole word at a time, until the finger lifts.
+                    // A repeatable key repeats the long-press action until the finger lifts.
                     longPressRepeatPointer = pointerId
                     longPressRepeatCode = geometry.keyCode[index]
                     longPressRepeatIndex = index
@@ -1507,8 +1210,7 @@ class KeyboardCanvasView(
             }
             return
         }
-        // The popup takes over from the preview: both sit above the same key, and the one that
-        // offers a choice is the one that matters once the hold has been recognised.
+        // The popup replaces the preview.
         hidePreview()
         alternativesKey = index
         alternativesSelection = 0
@@ -1518,13 +1220,7 @@ class KeyboardCanvasView(
         alternativesHeight = geometry.keyBottom[index] - geometry.keyTop[index]
         val desiredLeft = geometry.centerX[index] - alternativesCellWidth * count / 2f
         alternativesLeft = desiredLeft.coerceIn(0f, max(0f, width - alternativesCellWidth * count))
-        // Above the key normally; below it only where even the host's own space above this view
-        // -- hostTopInsetPx, not just this view's own y=0 -- runs out, which in practice means
-        // the top row with the suggestion strip and quick actions bar both off. Genuinely drawn
-        // above this view's own top edge when it fits there instead of at hostTopInsetPx's floor:
-        // KeyboardHostView is what actually paints the popup now (see its own dispatchDraw
-        // override), specifically so the top row's popup can reach up into space this view does
-        // not have and never draws into itself.
+        // Above the key, or below it where the host has no room above.
         alternativesTop = if (geometry.keyTop[index] + hostTopInsetPx - alternativesHeight >= 0f) {
             geometry.keyTop[index] - alternativesHeight
         } else {
@@ -1533,15 +1229,7 @@ class KeyboardCanvasView(
         invalidateAlternatives()
     }
 
-    /**
-     * [invalidate] alone is not enough here: `KeyboardHostView` -- not this view -- is what
-     * actually paints the popup now (see [alternativesVisible]'s own doc), and a plain
-     * `invalidate()` only marks this view's own RenderNode dirty. The hardware renderer can then
-     * recomposite this view's updated content on its own, without ever re-running
-     * `KeyboardHostView.dispatchDraw`'s own Kotlin code -- which is exactly what has to re-run,
-     * since that is where the popup's pixels actually come from. Invalidating the parent as well
-     * is what forces that.
-     */
+    /** Invalidates this view and its parent, which draws the popup and the preview. */
     private fun invalidateAlternatives() {
         invalidate()
         (parent as? View)?.invalidate()
@@ -1598,12 +1286,7 @@ class KeyboardCanvasView(
                 pressProgress[slot] = 0f
                 pressReleasing[slot] = false
                 invalidateKey(index)
-                // A key that is already lit (the loop above) does not get a second burst --
-                // this is specifically the moment a key starts being visually pressed, whether
-                // that is a fresh finger-down or a slide onto a new key without lifting. The
-                // element is exactly the rounded rectangle drawStatic paints for this key; the
-                // engine decides where inside and around it particles go. No-ops on its own
-                // while the layers' own enabled flags are off.
+                // A newly lit key starts its particles.
                 keyElement.set(
                     geometry.keyLeft[index], geometry.keyTop[index],
                     geometry.keyRight[index], geometry.keyBottom[index],
@@ -1614,8 +1297,7 @@ class KeyboardCanvasView(
                 return
             }
         }
-        // Pool full: eleven fingers, or a stuck slot. Dropping the highlight is the right
-        // failure -- the key still commits, it just does not light up.
+        // With the pool full, the key is not lit.
     }
 
     private fun endPress(index: Int) {
@@ -1677,20 +1359,7 @@ class KeyboardCanvasView(
         }
     }
 
-    /**
-     * Invalidates one key's rectangle, not the view.
-     *
-     * The dirty rectangle is deprecated, and it is worth being precise about why it is still
-     * here. Under hardware rendering the framework ignores it: the view's display list is
-     * re-recorded whole either way, so this buys nothing on a modern device and is kept for the
-     * software path and for the intent it records.
-     *
-     * What actually pays for a cheap frame is the [RenderNode] above. Re-recording this view
-     * costs one `drawRenderNode` plus the handful of pressed keys -- not forty rounded
-     * rectangles and forty labels -- and that is true whether or not the dirty rectangle is
-     * honoured. The lift offset is included in the box so the software path leaves nothing
-     * behind.
-     */
+    /** Invalidates one key's rectangle, lift offset included. */
     @Suppress("DEPRECATION")
     private fun invalidateKey(index: Int) {
         val margin = paints.pressedElevationPx + 2f
@@ -1701,11 +1370,7 @@ class KeyboardCanvasView(
         invalidate(dirtyLeft, dirtyTop, dirtyRight, dirtyBottom)
     }
 
-    /** [particles]' own dirty rect -- the tight bounding box of whatever is actually still live
-     *  on either layer, not a whole-key or whole-view invalidate, for the same reason
-     *  [invalidateKey] itself is not a bare `invalidate()`: this view's RenderNode-cached static
-     *  layer has nothing to do with a particle burst, and re-recording it every particle frame
-     *  would defeat the one thing that layer exists for. */
+    /** Invalidates the bounding box of the live particles on both layers. */
     @Suppress("DEPRECATION")
     private fun invalidateParticleBounds() {
         if (!particles.computeLiveBounds(particleBoundsScratch, particleBoundsScratch2)) {
@@ -1731,31 +1396,18 @@ class KeyboardCanvasView(
     }
 
     companion object {
-        // Read from KeyboardGeometry, which is the class that actually decides what "no key"
-        // means (nearestKey/findKeyAt returning it) -- kept here too, rather than qualified at
-        // every one of this view's own call sites, only because there are enough of them that
-        // renaming would be its own source of risk for no benefit: the value cannot drift on
-        // its own now, which is the only thing a second copy of -1 ever put at risk.
         const val NO_KEY = KeyboardGeometry.NO_KEY
 
         private const val MAX_POINTERS = 16
         private const val PRESS_POOL = 10
 
-        /** Sized for the busiest preset's own burst count (10, see
-         *  [com.borderkeys.ime.fx.ParticleEffectPresets]) scaled up for a wide key like space
-         *  (see [com.borderkeys.ime.fx.ParticleSimulation.MAX_EXTENT_FACTOR]), with headroom for
-         *  two presses landing close together -- not [MAX_POINTERS], which would size this for
-         *  eleven simultaneous full-hand chords. */
+        /** The most fill particles alive at once. */
         private const val FILL_PARTICLE_POOL_CAPACITY = 40
 
-        /** Comet's own particle cap (18, see [com.borderkeys.ime.fx.ParticleOutlineStylePresets])
-         *  scaled up for the longest key outline there is, the space bar. */
+        /** The most outline particles alive at once. */
         private const val OUTLINE_PARTICLE_POOL_CAPACITY = 56
 
-        /** Compensates for anti-aliased circles bleeding a pixel or two past
-         *  [ParticleField.computeLiveBounds]'s own mathematical edge -- the same purpose
-         *  [invalidateKey]'s own `+ 2f` margin serves, kept as its own constant since a
-         *  particle's edge and a key's lift offset are not the same kind of margin. */
+        /** Added on every side of the live particles' bounds when invalidating. */
         private const val PARTICLE_INVALIDATE_MARGIN_PX = 2f
         private const val LABEL_WIDTH_FRACTION = 0.82f
         private const val DEFAULT_ROW_HEIGHT_PX = 150f
@@ -1767,69 +1419,48 @@ class KeyboardCanvasView(
         private const val SPACE_LINE_STEP_FRACTION = 0.9f
         private const val DEFAULT_SPACE_LINE_STEP_PX = 120f
 
-        /**
-         * Fewer samples than this is a flick or a slip, not a word: nothing is decoded for it
-         * and no pause is detected in it. (The capture buffer's own capacity lives with
-         * [GestureCapture].)
-         */
+        /** Gestures with fewer samples are neither decoded nor checked for a pause. */
         private const val MIN_GESTURE_POINTS = 6
         private const val TRAIL_SEGMENTS = 4
 
-        /** Matches [com.borderkeys.data.theme.KeyboardPreferences.DEFAULT_RADIAL_PAUSE_DWELL_MILLIS]
-         *  -- the value this field actually runs with once a real preference stream is attached;
-         *  kept here too only as this property's own out-of-the-box default. */
+        /** The pause dwell until preferences arrive; same as the preference's default. */
         private const val DEFAULT_RADIAL_PAUSE_DWELL_MILLIS = 200L
 
-        /** Below this, two samples are the same point as far as pause detection is concerned --
-         *  noise-floor, not a tunable, so it lives beside [MIN_GESTURE_POINTS] rather than in
-         *  KeyboardPreferences with the numbers someone is actually meant to adjust. */
+        /** Samples closer than this are one point for pause detection. */
         private const val PAUSE_MOVEMENT_EPSILON_PX = 3f
 
-        /** Matches [com.borderkeys.data.theme.KeyboardPreferences.DEFAULT_RADIAL_MIN_PATH_LETTERS]
-         *  -- kept here too only as [radialMinPathLetters]'s own out-of-the-box default. */
+        /** The minimum path until preferences arrive; same as the preference's default. */
         private const val DEFAULT_RADIAL_MIN_PATH_LETTERS = 1f
 
-        /** A reasonable key width to convert [radialMinPathLetters] against before real geometry
-         *  exists -- matters only for arithmetic safety, since no real gesture can happen before
-         *  the keyboard has been measured at least once either. */
+        /** The key width [radialMinPathLetters] is measured in before the keyboard is laid out. */
         private const val FALLBACK_KEY_WIDTH_PX = 100f
 
-        /** Not private: [SuggestionStripView] holds a long press to the same threshold, so the
-         *  two gestures feel like one -- referencing this is what keeps that true instead of
-         *  being a second 380L typed by hand and promised to match. */
+        /** The long-press threshold, shared with [SuggestionStripView]. */
         internal const val LONG_PRESS_MILLIS = 380L
 
-        /** A hint dot's radius, as a fraction of [ThemePaints.hint]'s own text size. */
+        /** A hint dot's radius, as a fraction of [ThemePaints.hint]'s text size. */
         private const val HINT_DOT_RADIUS_FRACTION = 0.09f
 
-        /** The key preview against the key it enlarges: wider, a little taller, its label half
-         *  again as big, and a small gap so it reads as floating above rather than growing out
-         *  of the key. */
+        /** The key preview's size, label size and gap, relative to the key it enlarges. */
         private const val KEY_PREVIEW_WIDTH_SCALE = 1.4f
         private const val KEY_PREVIEW_HEIGHT_SCALE = 1.15f
         private const val KEY_PREVIEW_TEXT_SCALE = 1.5f
         private const val KEY_PREVIEW_GAP_FRACTION = 0.12f
 
-        /** How far the three-dot cluster's centre sits above the hint box's baseline, as a
-         *  fraction of [ThemePaints.hint]'s text size -- roughly a glyph's own vertical centre. */
+        /** How far the three-dot cluster's centre sits above the hint baseline, as a fraction of
+         *  [ThemePaints.hint]'s text size. */
         private const val HINT_DOT_CENTRE_FRACTION = 0.35f
 
-        /** The lock light's radius and inset, as fractions of the shift key's own width/height. */
+        /** The lock light's radius and inset, as fractions of the shift key's width and height. */
         private const val LED_RADIUS_FRACTION = 0.08f
         private const val LED_INSET_FRACTION = 0.2f
         private const val REPEAT_DELAY_MILLIS = 400L
         private const val REPEAT_INTERVAL_MILLIS = 55L
 
-        /**
-         * How often a held backspace deletes another whole word, after the first.
-         *
-         * Slower than [REPEAT_INTERVAL_MILLIS]: that paces single characters, where losing one
-         * extra to a slow reaction costs nothing. A word is bigger to lose by one beat too many,
-         * so the pace is closer to a deliberate rhythm than to a texture.
-         */
+        /** How often a held backspace deletes another whole word, after the first. */
         private const val LONG_PRESS_REPEAT_INTERVAL_MILLIS = 130L
 
-        /** Progress per second. A press reaches full in about 60 ms, a release fades in 110 ms. */
+        /** Press and release progress per second. */
         private const val PRESS_RATE = 16f
         private const val RELEASE_RATE = 9f
     }

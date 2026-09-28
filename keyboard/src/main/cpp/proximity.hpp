@@ -7,35 +7,21 @@
 #include <cstddef>
 #include <cstdint>
 
-// Text normalisation and finger-geometry costs: everything the matcher needs to decide that
-// "masina" was meant to be "masina" with the diacritics on, or that "s" was a slip for "a"
-// because those two keys are eleven pixels apart on this particular layout.
-//
-// UTF-8 decoding lives here rather than in its own file because its only caller is the
-// normaliser: nothing else in the engine ever sees bytes, only folded code points.
+// Text folding and key-geometry costs, with the UTF-8 decoding folding needs.
 
 namespace borderkeys {
 
-// Decodes one code point. Returns the position after it, or null when the sequence is malformed
-// or truncated. Rejects overlong forms, surrogates and anything above U+10FFFF -- a decoder
-// that accepts overlong encodings lets two different byte strings fold to the same word, which
-// is a way to smuggle a blocked word past a filter that compares bytes.
+// Decodes one code point. Returns the position after it, or null for a malformed, truncated or
+// overlong sequence, a surrogate, or anything above U+10FFFF.
 const char* utf8Decode(const char* p, const char* end, uint32_t* codePoint);
 
 // Writes up to four bytes. Returns the count, or 0 if the code point is not encodable.
 int utf8Encode(uint32_t codePoint, char* out);
 
-// Lowercases and strips the diacritic, so that the trie can be indexed once and reached from
-// either spelling. The pack stores the display form separately, so "masina" finds the entry
-// whose text is "mașina" and the suggestion strip shows the correct one.
-//
-// Covers ASCII, Latin-1 Supplement and the parts of Latin Extended-A that matter for Romanian
-// (ă â î ș ț, in both the comma-below and the historical cedilla encodings, which look
-// identical to a user and are different code points), Greek, Cyrillic, Armenian, Georgian,
-// Hebrew and Arabic. A mark a folded word does not carry -- a Hebrew vowel point, an Arabic
-// harakat -- folds to kDroppedCodePoint, which foldUtf8 leaves out. Anything else is returned
-// unchanged: folding a script we do not understand would merge words that are genuinely
-// distinct.
+// Lowercases and strips the diacritic, for ASCII, Latin-1 Supplement, Latin Extended-A, the
+// Romanian comma-below letters, Greek, Cyrillic, Armenian, Georgian, Hebrew and Arabic; any other
+// code point is returned unchanged. A mark a folded word does not carry, such as a Hebrew vowel
+// point, folds to kDroppedCodePoint, which foldUtf8 leaves out.
 constexpr uint32_t kDroppedCodePoint = 0u;
 uint32_t foldCodePoint(uint32_t codePoint);
 
@@ -49,38 +35,26 @@ bool sameSpellingIgnoringCase(const char* a, size_t aLength, const char* b, size
 // malformed or longer than `maxOut`. Writes nothing on failure.
 int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut);
 
-// The physical layout of the keys currently on screen, pushed down from Kotlin whenever the
-// view is measured. The engine corrects finger slips without knowing anything about how the
-// keyboard is drawn; this class is the entire extent of what it knows about pixels.
+// The keys on screen and their centres, pushed from Kotlin whenever the view is measured.
 class KeyGeometry {
 public:
     static constexpr int kMaxKeys = 64;
-    // Eight is the number of keys touching a key on a staggered QWERTY grid. A candidate
-    // further away than its immediate ring is not a slip, it is a different word.
+    // The most keys in one key's neighbour ring.
     static constexpr int kMaxNeighbours = 8;
 
     void clear();
     bool isSet() const { return count_ > 0; }
 
-    // `codes` are the folded code points of the key labels. Extra keys beyond kMaxKeys and
-    // duplicate codes are dropped rather than rejected: a layout with a modifier row is normal,
-    // and the engine only cares about the letters.
+    // `codes` are the folded code points of the key labels; keys past kMaxKeys and repeated codes
+    // are dropped.
     bool set(const int32_t* codes, const float* centersX, const float* centersY, int count,
              float keyWidth, float keyHeight);
 
-    // Cost, in key widths, of the finger having landed on `typed` when `intended` was meant.
-    // Zero for the same key. Unknown keys get kUnknownKeyCost, which is high enough that a
-    // candidate differing by a character not on the keyboard is only reached when nothing
-    // better exists.
+    // Cost, in key widths, of the finger landing on `typed` when `intended` was meant: zero for
+    // the same key, kUnknownKeyCost for a key not on the layout.
     float substitutionCost(uint32_t typedFolded, uint32_t intendedFolded) const;
 
-    /**
-     * The centre of a key, in the same pixel space the view uses.
-     *
-     * Exposed for the gesture decoder, which draws a word's ideal path through the centres of
-     * its letters. Returns false when the character is not on the current layout -- which is
-     * how "could this word have been swiped at all" is answered, before any geometry is done.
-     */
+    /** The centre of a key in the view's pixels; false when the character is not on the layout. */
     bool centreOf(uint32_t folded, float* x, float* y) const;
 
     int keyCount() const { return count_; }
@@ -90,33 +64,18 @@ public:
         return (slot >= 0 && slot < count_) ? codes_[slot] : 0u;
     }
 
-    /**
-     * The key nearest to a point, as a slot index. Returns -1 when no geometry is set.
-     *
-     * Used by the gesture decoder to turn a trajectory into the sequence of keys the finger
-     * passed over. Nearest by centre rather than by containment, because a swipe crosses the
-     * gaps between keys constantly and "no key here" is never the useful answer.
-     */
+    /** The key nearest to a point by centre, as a slot index; -1 when no geometry is set. */
     int nearestSlot(float x, float y) const;
 
-    // The ring around a typed key, cheapest first and including the key itself at cost 0.
-    // Returns the count. The search expands only these instead of the whole alphabet, which is
-    // what keeps a fuzzy walk from costing forty array probes per node per input position.
+    // The ring around a typed key, cheapest first, the key itself first at cost 0. Returns the
+    // count.
     int neighbours(uint32_t typedFolded, const uint32_t** codesOut, const float** costsOut) const;
 
     static constexpr float kUnknownKeyCost = 1.6f;
-    // Beyond this many key widths apart, two keys are not confusable and the pair is left out
-    // of the neighbour ring entirely.
+    // Keys further apart than this, in key widths, are not in each other's ring.
     static constexpr float kNeighbourRadius = 1.45f;
-    // The floor substitutionCost() clamps to for two genuinely different keys. Nothing about the
-    // geometry math otherwise stops two distinct keys placed unusually close together (a bug in
-    // a layout file, or a future very dense layout) from pricing a substitution near zero --
-    // and engine.cpp's own scoring assumes no edit ever gets that cheap: kMaxUserBoost happens
-    // to equal kCorrectionSurcharge exactly, so a near-zero-cost substitution is the one case
-    // that could let a heavily-used personal word tie a correctly-typed real word instead of
-    // losing to it, the same shape as the completion bug fixed earlier. Comfortably below any
-    // distance two non-identical keys produce on a real layout (adjacent keys are ~1.0 key
-    // widths apart), so this only ever guards the degenerate case, never real typing.
+    // The least substitutionCost() charges for two different keys; engine.cpp's static_assert
+    // relies on it.
     static constexpr float kMinSubstitutionCost = 0.2f;
 
 private:
@@ -134,8 +93,7 @@ private:
     uint32_t neighbourCode_[kMaxKeys][kMaxNeighbours] = {};
     float neighbourCost_[kMaxKeys][kMaxNeighbours] = {};
 
-    // ASCII letters are every key on both shipped layouts, so the common lookup is a single
-    // array read rather than a scan of up to 64 entries per character per trie node.
+    // The slot of each ASCII character, for a single-read lookup.
     int8_t asciiIndex_[128] = {};
 };
 

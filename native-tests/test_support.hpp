@@ -12,10 +12,7 @@
 #include <string>
 #include <vector>
 
-// The whole test framework. A counter, a macro and a name.
-//
-// Everything a larger framework adds -- fixtures, parameterisation, mocking, discovery -- is
-// weight this does not need: these tests take a pack and an engine and assert about numbers.
+// The whole test framework: a counter, a macro and a name.
 
 namespace borderkeys_test {
 
@@ -107,7 +104,7 @@ struct TestLayout {
     }
 };
 
-/** A small deterministic generator. std::rand differs between libraries; this does not. */
+/** A small deterministic generator, the same on every standard library. */
 class Random {
 public:
     explicit Random(uint32_t seed) : state_(seed) {}
@@ -124,11 +121,7 @@ private:
 
 /**
  * Synthesises a swipe over a word: interpolate through the key centres, jitter, sample
- * unevenly.
- *
- * Not a substitute for a recording -- a real finger overshoots corners and slows before a turn
- * in ways this does not reproduce. It is what makes the decoder testable at all without a
- * device, and the corpus format is the same either way, so recordings drop straight in.
+ * unevenly. Recordings use the same corpus format.
  */
 inline void synthesiseGesture(const TestLayout& layout, const char* word, float jitter,
                               Random& random, std::vector<float>& xs, std::vector<float>& ys,

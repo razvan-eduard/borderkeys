@@ -7,14 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/**
- * The two ways a correction turns into an argument with the user.
- *
- * Both of these shipped: a correctly spelled word was replaced by a longer, more common one
- * because the engine ranks by likelihood and nothing was asking whether the word was already a
- * word; and a capitalised word was "corrected" to the same word in lower case, because the
- * dictionaries store one spelling and the comparison was exact.
- */
+/** [AutoCorrection]'s guards and its casing. */
 class AutoCorrectionTest {
 
     private val minimum = 3
@@ -74,8 +67,6 @@ class AutoCorrectionTest {
 
     @Test
     fun `a single capital letter starts a sentence, it does not shout`() {
-        // One capital is where a sentence begins; two are a decision to shout. A correction of
-        // a one-letter word must not come back in capitals.
         assertEquals("Ai", AutoCorrection.matchCase("A", "ai"))
     }
 
@@ -89,24 +80,21 @@ class AutoCorrectionTest {
 
     @Test
     fun `with the names setting off a name is cased like any other word`() {
-        // The capital is the only thing the preference governs. "maria" typed lower case stays
-        // lower case, and the dictionary's own spelling no longer forces one.
+        // A name typed lower case stays lower case.
         assertNull(
             AutoCorrection.correctionFor(
                 "maria", "Maria", "maria", "maria", 3,
                 isProperNoun = true, capitaliseNames = false,
             ),
         )
-        // But the guard that keeps a name away from an ordinary word is not a preference: it
-        // still refuses, exactly as it does with the setting on.
+        // The guard keeping a name from an ordinary word still refuses.
         assertNull(
             AutoCorrection.correctionFor(
                 "everyone", "Everton", "everyone", "", 3,
                 isProperNoun = true, maxEdits = 2, capitaliseNames = false,
             ),
         )
-        // A name's own letters still correct -- what changes is only that the result is not
-        // capitalised for having been flagged.
+        // A name's own letters still correct, uncapitalised.
         assertEquals(
             "laurențiu",
             AutoCorrection.correctionFor(
@@ -118,12 +106,6 @@ class AutoCorrectionTest {
 
     @Test
     fun `a correction capitalised for no reason the typed word gives is brought back down`() {
-        // The personal dictionary keeps the literal case a word was last committed in (see
-        // UserModel::learn), which can be capitalised from an unrelated earlier sentence start
-        // and has nothing to do with isProperNoun -- the trie never sets that flag for a learned
-        // word. Left alone, that stale capital would resurface here mid-sentence forever; this is
-        // the bug matchCase's own doc now describes as the reason both branches fully decide the
-        // case rather than only ever adding a capital.
         assertEquals("radial", AutoCorrection.matchCase("radial", "Radial"))
     }
 
@@ -147,8 +129,6 @@ class AutoCorrectionTest {
 
     @Test
     fun `a diacritic restores even on a word shorter than the minimum`() {
-        // "in" and "în" are both real, unrelated Romanian words -- this is not a guess the way
-        // "ai" -> "aici" above is, so the short-word gate must not apply to it.
         assertEquals(
             "în",
             AutoCorrection.correctionFor(
@@ -171,11 +151,6 @@ class AutoCorrectionTest {
 
     @Test
     fun `a single letter is not corrected into an accented one`() {
-        // Reported from a device: typing "t" outlined "ț" as the word space would commit. The
-        // diacritic exemption waives the minimum because short words are where restoring an
-        // accent matters, and it had no floor -- so one letter qualified. No one-letter word in
-        // any language here needs one: "a", "o", "e" and "i" are words, "ă", "î", "ț" and "ș"
-        // are not.
         assertNull(
             AutoCorrection.correctionFor(
                 typed = "t", suggestion = "ț",
@@ -212,11 +187,6 @@ class AutoCorrectionTest {
 
     @Test
     fun `an answer about an earlier word is not applied to this one`() {
-        // The engine posts its answer back rather than blocking, so a delimiter can be typed
-        // before the answer for the word just finished has arrived -- suggestion would then
-        // still be whatever "tinde" resolved to two words ago, not an answer about "harta" at
-        // all. This shipped as "tinde" reaching "idependent": no edit-distance budget this
-        // engine uses gets from one to the other, because it was never asked to.
         assertNull(
             "a suggestion answering for a different word than the one being committed was applied",
             AutoCorrection.correctionFor(
@@ -228,27 +198,17 @@ class AutoCorrectionTest {
 
     @Test
     fun `a name typed lower case mid-sentence is still capitalised`() {
-        // The whole point of the proper-noun flag: "ana" is not the start of a sentence and
-        // shiftState says nothing special about this position, yet a name is still "Ana" -- the
-        // one override that is not about what was typed at all.
         assertEquals("Ana", AutoCorrection.matchCase("ana", "ana", isProperNoun = true))
     }
 
     @Test
     fun `a name typed in full caps still shouts`() {
-        // Caps lock is a stronger, more deliberate signal than "capitalise this one name" -- see
-        // matchCase's own doc for why this check has to come before the proper-noun one, not
-        // after it.
         assertEquals("ANA", AutoCorrection.matchCase("ANA", "ana", isProperNoun = true))
     }
 
     @Test
     fun `correctionFor also applies the proper-noun override`() {
-        // knownWord equals typed here on purpose: a name the dictionary knows is exactly the
-        // realistic case, not an edge case -- the dictionary is not offering a different word,
-        // only a capitalised spelling of the same one, and the "a word the dictionary knows is
-        // left alone" rule below must not read that as "nothing to do" the way it correctly
-        // does for an ordinary word (see "a word the dictionaries know is left alone" above).
+        // A name the dictionary knows, typed as it is spelled.
         assertEquals(
             "Ana",
             AutoCorrection.correctionFor(
@@ -261,9 +221,6 @@ class AutoCorrectionTest {
 
     @Test
     fun `an ordinary word the dictionary knows is still left alone even so`() {
-        // The regression this feature must not cause: adding the isProperNoun escape hatch to
-        // the knownWord gate must not loosen it for every OTHER word that happens to equal
-        // knownWord -- only for a name.
         assertNull(
             AutoCorrection.correctionFor(
                 typed = "cana", suggestion = "canapea",
@@ -295,8 +252,7 @@ class AutoCorrectionTest {
 
     @Test
     fun `a correct word the dictionaries do not know is not replaced by something far away`() {
-        // "snobul" is Romanian for "the snob"; the dictionaries only know "snob". Two edits on
-        // six letters is a different word, not a slip -- left alone under the default ceiling.
+        // Two edits on six letters is refused under the default ceiling.
         assertNull(
             AutoCorrection.correctionFor(
                 typed = "snobul", suggestion = "noul",
@@ -304,7 +260,7 @@ class AutoCorrectionTest {
                 maxEdits = AutoCorrection.maxEditsFor(6, 1),
             ),
         )
-        // The same distance on a long word is two slips, and still corrects.
+        // Two edits on nine letters corrects.
         assertEquals(
             "accommodate",
             AutoCorrection.correctionFor(
@@ -313,7 +269,7 @@ class AutoCorrectionTest {
                 maxEdits = AutoCorrection.maxEditsFor(9, 1),
             ),
         )
-        // A transposition is one edit and always corrects.
+        // A transposition is one edit.
         assertEquals(
             "the",
             AutoCorrection.correctionFor(
@@ -322,7 +278,7 @@ class AutoCorrectionTest {
                 maxEdits = AutoCorrection.maxEditsFor(3, AutoCorrection.DISTANCE_STRICT),
             ),
         )
-        // An accent-only restoration is zero edits after folding, whatever the ceiling.
+        // An accent-only restoration is zero edits after folding.
         assertEquals(
             "să",
             AutoCorrection.correctionFor(
@@ -342,10 +298,6 @@ class AutoCorrectionTest {
 
     @Test
     fun `a suggestion identical to what was typed is not a correction`() {
-        // Every other test here supplies a genuinely different suggestion or one differing by
-        // case, which is the separate branch matchCase exists for -- none of them exercises the
-        // exact-match branch directly. This is the plain "nothing to correct" case the doc
-        // comment lists first, asserted on its own rather than only as a side effect.
         assertNull(
             AutoCorrection.correctionFor(
                 typed = "canapea", suggestion = "canapea",

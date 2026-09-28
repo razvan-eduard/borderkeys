@@ -12,16 +12,9 @@
 namespace borderkeys {
 
 /**
- * The ideal trajectory for a word: the polyline through the centres of its letters' keys,
- * resampled to [kResampleCount] points, in both the absolute and the shape-normalised form.
- *
- * Built on demand and cached. Not precomputed for the dictionary: a hundred thousand words at
- * a kilobyte each is a hundred megabytes to hold something that is regenerated in a few hundred
- * operations, and which is invalidated wholesale every time the keyboard is resized.
- *
- * The cache is direct-mapped rather than an LRU. A collision costs one rebuild, which is
- * cheaper than the bookkeeping an LRU would do on every hit -- and the access pattern here is a
- * few hundred distinct words per gesture, not a working set worth modelling.
+ * Words' ideal trajectories: the polyline through the centres of a word's letters' keys,
+ * resampled to [kResampleCount] points, absolute and shape-normalised. Built on demand into a
+ * direct-mapped cache.
  */
 class TemplateCache {
 public:
@@ -36,12 +29,8 @@ public:
         float length;
 
         /**
-         * A second candidate trajectory for a word with an adjacent repeated letter: the same
-         * path, but tracing a small loop at each doubled letter instead of just passing over it
-         * once. Some people swipe a double letter that way on purpose, to disambiguate it from
-         * the single-letter word the same path would otherwise trace -- this is what lets that
-         * gesture still match. Scored alongside the plain channels above and the better of the
-         * two wins; [hasLoop] is false, and the loop arrays unused, for every other word.
+         * Whether the word has a second trajectory, for a doubled letter: the same path with a
+         * small loop at each doubled letter. The better of the two scores.
          */
         bool hasLoop;
         float loopLocationX[kResampleCount];
@@ -57,11 +46,8 @@ public:
     void clear();
 
     /**
-     * Returns the template for a word given its folded letters, building it if absent.
-     *
-     * `cacheKey` should be unique per (pack, word). Returns null when the word contains a
-     * character that is not on the keyboard, which is the honest answer: a word that cannot be
-     * drawn cannot have been swiped.
+     * The template for a word given its folded letters, built if absent; null when a letter is
+     * not on the keyboard. `cacheKey` should be unique per (pack, word).
      */
     const Entry* templateFor(uint32_t cacheKey, const uint32_t* letters, int letterCount);
 
@@ -70,8 +56,7 @@ public:
 private:
     static constexpr int kCapacity = 256;
     static constexpr int kMaxLetters = 32;
-    /** Room for a small loop (4 extra points) at every letter, the worst case of every letter in
-     *  a [kMaxLetters]-long word doubling the one before it. */
+    /** Room for a loop of 4 extra points at every letter of a [kMaxLetters]-long word. */
     static constexpr int kMaxLoopPoints = kMaxLetters * 5;
 
     bool build(Entry& entry, const uint32_t* letters, int letterCount) const;

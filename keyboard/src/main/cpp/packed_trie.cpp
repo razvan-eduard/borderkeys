@@ -44,16 +44,13 @@ bool PackedTrie::bind(const uint8_t* base, uint64_t mappedBytes, const BkdHeader
     wordText_ = reinterpret_cast<const char*>(base + textSection.offset);
     wordTextBytes_ = static_cast<uint32_t>(textSection.length);
 
-    // The root must be a real node with no parent. A file claiming otherwise has either been
-    // corrupted or built by something that is not our tool, and either way every traversal
-    // below would start from a lie.
+    // The root must be a real node with no parent.
     if (checkArray_[0] != -1) {
         baseArray_ = nullptr;
         return false;
     }
 
-    // The alphabet has to be strictly ascending: symbolFor binary-searches it, and an unsorted
-    // array would silently fail to find characters that are present.
+    // The alphabet must be strictly ascending, for symbolFor's binary search.
     for (uint32_t i = 1; i < alphabetCount_; ++i) {
         if (alphabet_[i] <= alphabet_[i - 1]) {
             baseArray_ = nullptr;
@@ -61,9 +58,7 @@ bool PackedTrie::bind(const uint8_t* base, uint64_t mappedBytes, const BkdHeader
         }
     }
 
-    // The offset table must be non-decreasing and stay inside the text blob. Checked once here
-    // rather than on every wordText() call, because this loop is bounded by wordCount and the
-    // accessor is on the suggestion path.
+    // The offset table must be non-decreasing and inside the text blob.
     if (wordCount_ != 0) {
         if (wordOffsets_[0] != 0u) {
             baseArray_ = nullptr;
@@ -117,8 +112,7 @@ const char* PackedTrie::wordText(uint32_t wordIndex, uint32_t* lengthOut) const 
     }
     const uint32_t begin = wordOffsets_[wordIndex];
     const uint32_t end = wordOffsets_[wordIndex + 1];
-    // bind() proved the table is monotonic and bounded, so this cannot fail; the test stays
-    // because "cannot fail" and "is checked" are different claims about a file we did not write.
+    // Checked again, though bind() proved the table monotonic and bounded.
     if (end < begin || end > wordTextBytes_) {
         return nullptr;
     }

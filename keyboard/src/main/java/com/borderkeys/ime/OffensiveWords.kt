@@ -7,15 +7,9 @@ import android.content.res.AssetManager
 import com.borderkeys.predict.WordFold
 
 /**
- * The words the "Block offensive words" switch keeps out of suggestions, corrections and
- * learning: one list per bundled language, in `assets/offensive/<tag>.txt`, merged for the
- * languages the user has turned on, the same way the accent overlays are.
- *
- * A list is one word per line, `#` comments and blank lines allowed, and every word is folded
- * on the way in ([WordFold]) so the comparison against a candidate never depends on how either
- * side was spelled. Nothing here decides what a person may type: the words only stop being
- * *offered*. Every failure is empty, not an exception -- a missing list means nothing is
- * blocked for that language, never a keyboard that will not start.
+ * The words "Block offensive words" keeps out of suggestions, corrections and learning, from
+ * `assets/offensive/<tag>.txt` for the enabled languages: one word per line, `#` comments and
+ * blank lines allowed, each folded by [WordFold]. A missing list blocks nothing.
  */
 object OffensiveWords {
 
@@ -26,7 +20,7 @@ object OffensiveWords {
         assets.open("$DIRECTORY/$tag.txt").use { parse(it.readBytes().decodeToString()) }
     }.getOrElse { emptySet() }
 
-    /** Pure, so the format and the folding are tested on the JVM. */
+    /** Parses one list, folding each word. */
     fun parse(text: String): Set<String> {
         val words = HashSet<String>()
         for (line in text.lineSequence()) {

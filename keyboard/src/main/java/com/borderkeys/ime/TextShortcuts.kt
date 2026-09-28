@@ -6,11 +6,8 @@ package com.borderkeys.ime
 import com.borderkeys.data.theme.TextShortcut
 
 /**
- * Matches the word just typed against the user's [TextShortcut]s, on text alone.
- *
- * The match ignores case and the typed word's case is carried onto the expansion the way a
- * correction's would be: "omw" gives the expansion as written, "Omw" capitalises its first
- * letter, "OMW" shouts it -- so a shortcut at the start of a sentence needs no second entry.
+ * Matches the word just typed against the user's [TextShortcut]s ignoring case, and carries the
+ * typed word's case onto the expansion as a correction's would be.
  */
 object TextShortcuts {
 

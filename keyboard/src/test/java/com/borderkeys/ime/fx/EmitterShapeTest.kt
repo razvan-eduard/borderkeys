@@ -101,10 +101,8 @@ class EmitterShapeTest {
     }
 
     /**
-     * The property that matters for "dots sit exactly on the outline": every sampled point lies
-     * on the rounded rectangle's own boundary -- on a straight edge between the corner arcs, or
-     * at exactly the corner radius from that corner's arc centre. A sharp-box walk fails this at
-     * every corner, which is the whole reason the rounded walk exists.
+     * Every sampled point lies on a straight edge between the corner arcs, or at the corner radius
+     * from its corner's centre.
      */
     @Test
     fun `rounded rect perimeter points all lie on the rounded outline`() {
@@ -220,7 +218,7 @@ class EmitterShapeTest {
 
     @Test
     fun `rounded rect perimeter clamps an oversized radius to a pill and never leaves the shape`() {
-        // Radius bigger than half the height: drawRoundRect clamps it to a pill, so must this.
+        // A radius over half the height is clamped to a pill, as drawRoundRect does.
         val left = 0f
         val top = 0f
         val right = 100f
@@ -275,10 +273,7 @@ class EmitterShapeTest {
 
     @Test
     fun `annular wedge perimeter on a zero-sweep wedge does not divide by zero`() {
-        // sweepDeg=0 collapses both arcs to zero length while the two radial edges stay
-        // positive (innerRadius 3, outerRadius 5) -- perimeter as a whole is not zero, but the
-        // very first segment phase 0 lands in (the outer arc) has zero length of its own, which
-        // is exactly the 0f/0f a naive "distance / arcLen" would produce.
+        // sweepDeg 0: both arcs have zero length, the radial edges do not.
         val x = EmitterShape.annularWedgePerimeterX(0f, 3f, 5f, 0f, 0f, 0f)
         val y = EmitterShape.annularWedgePerimeterY(0f, 3f, 5f, 0f, 0f, 0f)
         assertTrue("expected a finite point, got ($x, $y)", x.isFinite() && y.isFinite())

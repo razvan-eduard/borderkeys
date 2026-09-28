@@ -7,8 +7,7 @@ Each case transposes two adjacent middle letters and drops the last character, s
 intended word needs one edit and one completed character together. Emitted as
 `mangled<TAB>intended`, read by `suggest_eval --autocorrect`.
 
-Cases whose mangled form is itself a dictionary word are skipped: the keyboard is right to leave
-those alone.
+Cases whose mangled form is itself a dictionary word are skipped.
 
     python3 tools/make_midtypo_corpus.py dictionaries/en_US.tsv > out.tsv
 """

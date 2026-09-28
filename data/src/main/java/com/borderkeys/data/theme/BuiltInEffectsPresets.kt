@@ -3,11 +3,7 @@
 
 package com.borderkeys.data.theme
 
-/**
- * One region's own slice of a [BuiltInEffectsPreset] -- an (outline, fill) pair, the same shape
- * [CustomEffectsPresetEntry] saves, but never persisted: there are exactly five of these per
- * preset, one per region, written by hand below rather than by the user.
- */
+/** One region's (outline, fill) pair in a [BuiltInEffectsPreset]. */
 data class ParticleRegionLook(val outline: ParticleOutlineLayer, val fill: ParticleFillLayer) {
     fun appliedTo(region: ParticleRegionSettings, enabled: Boolean = true): ParticleRegionSettings =
         region.copy(enabled = enabled, outline = outline, fill = fill)
@@ -17,36 +13,9 @@ data class ParticleRegionLook(val outline: ParticleOutlineLayer, val fill: Parti
 }
 
 /**
- * A whole-keyboard look that ships with the app, rather than one the user built and saved --
- * [CustomEffectsPresetEntry]'s counterpart, one level up. A [CustomEffectsPresetEntry] is a
- * single (outline, fill) pair broadcast identically to all five regions, because it is a snapshot
- * of whichever one region the user had open; a built-in preset is not limited to that, and tunes
- * each region on its own -- a ring reads differently from a key or a strip, so "Fire" earns its
- * name by giving each region a combination suited to it, the way a person dialling in five
- * regions by hand would, rather than repeating one pair five times.
- *
- * Every one of the five regions gets a real, non-default outline style and a real fill style --
- * never left at [ParticleEffectsSettings.OUTLINE_NONE] -- and its own speed/density (and, for
- * outline, width), so a preset reads as a deliberately paced, deliberately coloured look rather
- * than five regions each quietly sitting at the 1.0 default.
- *
- * Not renameable, not deletable and not stored in [CustomEffectsPresetLibrary] -- there is nothing
- * here for the user to have authored, so there is nothing here for them to rename or delete.
- *
- * [id] is a bare, stable slug ("fire", "ice", ...), not a display name -- this module has no
- * dependency on `:i18n` and never will, so the caller maps [id] to a translated string itself,
- * the same way it already maps [ParticleFillLayer.type] to one of [ParticleEffectsSettings]'s
- * own `FILL_*` constants to a string.
- *
- * [enabled] is what the preset writes to every region's own master switch: `true` for every
- * named look (Fire, Ice, ...), `false` for exactly one built-in, [BuiltInEffectsPresets.OFF].
- * That is the only thing that sets Off apart. It is a preset of exactly the same weight as the
- * named ones: applying it writes its five looks and switches the regions off, and it matches
- * only while every region still carries those looks, switched off -- so the moment anything is
- * changed from it, a region switched on included, that is a change from Off the same way a
- * colour changed from Fire is a change from Fire. It used to touch only the switches and leave
- * the looks alone, which made "custom" mean something different depending on which preset was
- * applied.
+ * A whole-keyboard look that ships with the app: an (outline, fill) pair per region, each with its
+ * own speed, density and width. [id] is a stable slug the caller maps to a translated name.
+ * [enabled] is written to every region's switch; only [BuiltInEffectsPresets.OFF] has it false.
  */
 data class BuiltInEffectsPreset(
     val id: String,
@@ -57,9 +26,10 @@ data class BuiltInEffectsPreset(
     val quickActions: ParticleRegionLook,
     val enabled: Boolean = true,
 ) {
-    /** The five looks written to their regions, and this preset recorded as the applied one --
-     *  [ParticleEffectsSettings.appliedPresetId] -- in the same value, so the two can never
-     *  disagree about which preset the regions came from. */
+    /**
+     * [settings] with the five looks written to their regions and this preset recorded as
+     * [ParticleEffectsSettings.appliedPresetId].
+     */
     fun appliedTo(settings: ParticleEffectsSettings): ParticleEffectsSettings = settings.copy(
         keyboard = keyboard.appliedTo(settings.keyboard, enabled),
         radial = radial.appliedTo(settings.radial, enabled),
@@ -87,15 +57,7 @@ data class BuiltInEffectsPreset(
     }
 }
 
-/**
- * The five starting looks "My presets" ships with -- see [BuiltInEffectsPreset]'s own doc for
- * why each region gets its own combination rather than one pair repeated five times.
- *
- * Every colour below is one of [ThemePalette.COLOURS] by reference, not a hand-typed hex value:
- * a swatch row rings the entry that equals the current value, and a colour that is not actually
- * in that list draws as the unmarked, uncommitted-looking "transient" swatch at the end of the
- * row instead -- exactly what a built-in preset, of all things, should never look like.
- */
+/** The looks "My presets" ships with; every colour is one of [ThemePalette.COLOURS]. */
 object BuiltInEffectsPresets {
 
     private val BLUE_SOFT = ThemePalette.COLOURS[0]
@@ -134,7 +96,7 @@ object BuiltInEffectsPresets {
     private fun fill(type: Int, primary: Int, secondary: Int, speed: Float, density: Float) =
         ParticleFillLayer(type = type, primaryColor = primary, secondaryColor = secondary, speed = speed, density = density)
 
-    /** Fast and dense throughout -- this one is meant to feel urgent, not merely coloured red. */
+    /** Fast and dense throughout. */
     private val FIRE = BuiltInEffectsPreset(
         id = "fire",
         keyboard = ParticleRegionLook(
@@ -159,7 +121,7 @@ object BuiltInEffectsPresets {
         ),
     )
 
-    /** Slow and sparse throughout -- crystalline rather than lively, on purpose. */
+    /** Slow and sparse throughout. */
     private val ICE = BuiltInEffectsPreset(
         id = "ice",
         keyboard = ParticleRegionLook(
@@ -184,8 +146,7 @@ object BuiltInEffectsPresets {
         ),
     )
 
-    /** Warm and unhurried -- the palette has no tan of its own, so amber and orange carry the
-     *  warmth and grey/white stand in for the pale, sun-bleached half of the look. */
+    /** Warm and unhurried: amber and orange, with grey and white. */
     private val SAND = BuiltInEffectsPreset(
         id = "sand",
         keyboard = ParticleRegionLook(
@@ -210,8 +171,7 @@ object BuiltInEffectsPresets {
         ),
     )
 
-    /** Middling speed, but dense throughout -- lush rather than sparse, the one axis this preset
-     *  leans on hardest. */
+    /** Middling speed, dense throughout. */
     private val FOREST = BuiltInEffectsPreset(
         id = "forest",
         keyboard = ParticleRegionLook(
@@ -236,8 +196,7 @@ object BuiltInEffectsPresets {
         ),
     )
 
-    /** Fast, dense and wide throughout -- the most extreme preset on every axis at once, on
-     *  purpose: this is the one that should look nothing like sitting at the 1.0 default. */
+    /** Fast, dense and wide throughout. */
     private val NEON = BuiltInEffectsPreset(
         id = "neon",
         keyboard = ParticleRegionLook(
@@ -262,10 +221,7 @@ object BuiltInEffectsPresets {
         ),
     )
 
-    /** The one-tap "everything off" -- see [BuiltInEffectsPreset.enabled]'s own doc. Its looks
-     *  are each layer's stock values (no outline, the stock fill), written like any other
-     *  preset's, so that a region switched back on by hand starts from the same place a fresh
-     *  install does. */
+    /** Every region switched off, with each layer's stock values. */
     val OFF = BuiltInEffectsPreset(
         id = "off",
         enabled = false,
@@ -276,9 +232,6 @@ object BuiltInEffectsPresets {
         quickActions = ParticleRegionLook(ParticleOutlineLayer(), ParticleFillLayer()),
     )
 
-    /** Declared after the six presets above, not before -- a property initialiser can only
-     *  read what has already run, and an `object`'s properties run top to bottom. [OFF] first:
-     *  the one-tap "back to nothing" reads as the baseline every named look departs from, not
-     *  one more look alongside them. */
+    /** Declared after the presets it lists, which initialise top to bottom; [OFF] first. */
     val ALL: List<BuiltInEffectsPreset> = listOf(OFF, FIRE, ICE, SAND, FOREST, NEON)
 }

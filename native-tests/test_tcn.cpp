@@ -43,8 +43,7 @@ bool readWholeFile(const char* path, std::vector<uint8_t>* out) {
     return read == out->size();
 }
 
-/** A `.bkw` byte buffer with the right header and every weight zeroed -- the "inert" weights
- *  Phase 1's exit criterion is written against: not trained, but load-bearing and well-defined. */
+/** A `.bkw` byte buffer with the right header and every weight zeroed. */
 std::vector<uint8_t> zeroWeightsFile() {
     std::vector<uint8_t> bytes(TcnWeights::kHeaderBytes + kTcnWeightsFloatCount * sizeof(float), 0);
     TcnWeights::writeHeader(bytes.data());
@@ -123,9 +122,7 @@ void runTcnTests() {
     section("TCN weight file format");
     {
         const std::vector<uint8_t> good = zeroWeightsFile();
-        // Heap, not a local: TcnWeights is ~2.5 MB, and this function already declares several of
-        // these across its sections -- summed as one stack frame, at -O0, that overflows even an
-        // 8 MB thread stack. Same reasoning as tcn_decoder.cpp's loadWeights().
+        // Heap, not a local: TcnWeights is ~2.5 MB.
         auto weights = std::make_unique<TcnWeights>();
         check(weights->loadFromBytes(good.data(), good.size()), "a well-formed .bkw file loads");
 
@@ -166,9 +163,8 @@ void runTcnTests() {
 
     section("the shipped weights load");
     {
-        // tools/swipe_model/export_weights.py writes this file and TcnWeights reads it: two
-        // implementations of one format, in two languages, agreeing only because both are
-        // written against the same architecture. This is what catches them drifting apart.
+        // tools/swipe_model/export_weights.py writes this file and TcnWeights reads it; the two
+        // must agree.
         std::vector<uint8_t> shipped;
         if (!readWholeFile(BORDERKEYS_SWIPE_MODEL, &shipped)) {
             check(false, "the shipped model.bkw is readable");
@@ -186,11 +182,9 @@ void runTcnTests() {
 
     section("the shipped weights compute what model.py computes");
     {
-        // The payload is read positionally, so two same-shaped arrays written in the wrong order
-        // load at the same byte length and pass magic, version and every descriptor field.
         // tools/swipe_model/export_weights.py --golden records model.py's output for a fixed
-        // input; this runs the C++ encoder on the same input with the same file. They agree only
-        // when each array is where both sides expect it.
+        // input; this runs the C++ encoder on the same input with the same file. The two agree
+        // only when each array is where both sides expect it, which the header cannot show.
         std::vector<uint8_t> golden;
         std::vector<uint8_t> shipped;
         if (!readWholeFile(BORDERKEYS_TEST_DATA "/tcn_golden.bin", &golden) ||
@@ -252,10 +246,8 @@ void runTcnTests() {
             check(worstIntention <= 1e-3f, "the intention track matches model.py's");
             check(worstSpectral <= 1e-3f, "the spectral track matches model.py's");
 
-            // The swap the descriptor cannot see, performed on purpose: seReduceWeight is
-            // [trunk * seReduced] and seExpandWeight is [seReduced * trunk], so exchanging them
-            // changes no length and no descriptor field. A comparison that still passed here
-            // would be measuring nothing.
+            // seReduceWeight [trunk * seReduced] and seExpandWeight [seReduced * trunk]
+            // exchanged, which changes no length and no descriptor field; the comparison fails.
             std::vector<float> swapped(TcnWeights::kTrunk * TcnWeights::kSeReduced);
             std::memcpy(swapped.data(), weights->blocks[0].seReduceWeight, sizeof(swapped[0]) * swapped.size());
             std::memcpy(weights->blocks[0].seReduceWeight, weights->blocks[0].seExpandWeight,
@@ -297,11 +289,8 @@ void runTcnTests() {
             }
             check(worstEmbedding <= 1e-3f, "the key embedding matches model.py's");
 
-            // keyEmbedHiddenBias and keyEmbedOutputBias are both one row and different lengths,
-            // so the pair that a length check cannot separate is the two weight matrices:
-            // [(2 + spectralDim) * hidden] against [hidden * spectralDim], 6336 and 6144 floats.
-            // Reversing one matrix in place is the same shape of corruption at exactly its own
-            // size, which no header field sees.
+            // keyEmbedOutputWeight [hidden * spectralDim] reversed in place, a corruption no
+            // header field sees.
             std::vector<float> reversed(
                 fresh->keyEmbedOutputWeight,
                 fresh->keyEmbedOutputWeight + TcnWeights::kKeyEmbedHidden * TcnWeights::kSpectralDim);
@@ -384,9 +373,7 @@ void runTcnTests() {
         engine.setKeyGeometry(layout.codes, layout.xs, layout.ys, layout.count, layout.keyWidth,
                               layout.keyHeight);
 
-        // Heap, not a local: TcnDecoder embeds a TcnWeights by value (~2.5 MB), and this section
-        // needs two of them alive at once (see foundBeforeWeights below) -- the same stack-frame
-        // overflow the comment on tcn_decoder.cpp's loadWeights() already documents.
+        // Heap, not a local: TcnDecoder embeds a ~2.5 MB TcnWeights, and two are alive at once.
         auto tcn = std::make_unique<TcnDecoder>(engine);
         tcn->setLayout(engine.geometry());
         const std::vector<uint8_t> zeroed = zeroWeightsFile();
@@ -431,8 +418,7 @@ void runTcnTests() {
         engine.setKeyGeometry(layout.codes, layout.xs, layout.ys, layout.count, layout.keyWidth,
                               layout.keyHeight);
 
-        // Nothing is built until something asks for it: a fresh engine costs none of the two and
-        // a half megabytes the decoder holds, whatever the preference ends up saying.
+        // Nothing is built until something asks for it.
         check(std::strcmp(engine.gestureDecoderName(), "SHARK2") == 0,
               "a new engine decodes with tier A");
         check(!engine.warmSwipeModel(), "warming with no weights loaded does nothing");
@@ -451,8 +437,7 @@ void runTcnTests() {
         check(!engine.warmSwipeModel(),
               "switching off freed the weights, so there is nothing left to warm");
 
-        // And it comes back: the preference turning on again reloads from the asset, which is
-        // the whole shape of the trade -- off costs nothing, on pays for itself once.
+        // Turning the preference on again reloads from the asset.
         check(engine.loadSwipeWeights(zeroed.data(), zeroed.size()),
               "the decoder is rebuilt by the next load");
         engine.setSwipeModelEnabled(true);

@@ -17,32 +17,17 @@ import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
 
 /**
- * The keyboard's end of the assistant, and the only thing in `:keyboard` that knows it exists.
- *
- * Binds by component *name*, as a string. That is not a stylistic choice: `:assist` is attached
- * to the application only in the `plus` flavor, so in the free build the class genuinely is not
- * there. A compile-time reference would make the free build impossible; a name that fails to
- * resolve makes the feature simply absent, which is what it is.
- *
- * The connection is opened when the user asks for something and dropped when the sheet closes.
- * The service unloads its model on its own timer after that, so an assistant used once costs
- * nothing for the rest of the session.
+ * The keyboard's end of the assistant. Binds to [AssistProtocol.SERVICE_CLASS] by name, which
+ * resolves only in the `plus` flavor.
  */
 class AssistClient(private val context: Context) {
 
     interface Listener {
-        /**
-         * `truncated` is true when [text] stops short of where the model itself would have
-         * stopped -- the length limit was reached, or the request was cancelled mid-generation.
-         */
+        /** `truncated` is true when the length limit or a cancel cut [text] short. */
         fun onAssistResult(requestId: Int, text: String, modelName: String?, truncated: Boolean)
         fun onAssistError(requestId: Int, error: Int)
 
-        /**
-         * `charsPerToken` is the loaded model's own tokeniser ratio, measured on the other side
-         * of the process boundary, or 0 when nothing has loaded yet to measure it against --
-         * routine before the first request of a session, not a failure.
-         */
+        /** `charsPerToken` is the loaded model's measured ratio, or 0 before one has loaded. */
         fun onAssistAvailability(available: Boolean, modelName: String?, charsPerToken: Float)
     }
 
@@ -86,8 +71,7 @@ class AssistClient(private val context: Context) {
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             service = binder?.let { Messenger(it) }
-            // A request made before the binding completed is held rather than dropped: binding
-            // takes a process start the first time, and the user pressed the button before that.
+            // Sends the request held while binding.
             pendingRun?.let { queued ->
                 pendingRun = null
                 dispatch(queued)
@@ -99,7 +83,7 @@ class AssistClient(private val context: Context) {
         }
     }
 
-    /** True when the `plus` flavor is installed and the service can be resolved at all. */
+    /** True when the assistant service resolves, in the `plus` flavor. */
     fun isAvailable(): Boolean = resolveIntent() != null
 
     private fun resolveIntent(): Intent? {
@@ -121,8 +105,7 @@ class AssistClient(private val context: Context) {
         if (!bound) {
             return
         }
-        // Tell the service to stop generating before letting go: an answer nobody will read is
-        // still seconds of a phone's CPU.
+        // Cancels generation, then unbinds.
         runCatching { service?.send(Message.obtain(null, AssistProtocol.MSG_CANCEL)) }
         runCatching { context.unbindService(connection) }
         bound = false
@@ -141,21 +124,15 @@ class AssistClient(private val context: Context) {
     }
 
     /**
-     * Runs a task over a selection. Returns the request id, or -1 when the assistant is absent.
-     *
-     * The id comes back with the answer, so a result arriving after the user has already closed
-     * the sheet and started something else can be discarded rather than shown.
-     *
-     * `continueJob` should be true only for a chunk after the first within one
-     * [ChunkedAssistRunner] job -- see [AssistProtocol.KEY_CONTINUE_JOB]'s own doc for what it
-     * lets the service do and why chunks of one job are the one case this is safe for.
+     * Runs a task over a selection. Returns the request id, which comes back with the answer, or
+     * -1 when the assistant is absent or the request invalid. `continueJob` is true only for a
+     * [ChunkedAssistRunner] chunk after the first; see [AssistProtocol.KEY_CONTINUE_JOB].
      */
     fun run(task: AssistTask, text: String, instruction: String = "", continueJob: Boolean = false): Int {
         if (text.isEmpty() || text.length > AssistProtocol.MAX_SELECTION_CHARS) {
             return -1
         }
-        // A custom task without an instruction is the caller's mistake, not the model's: the
-        // wrapper alone tells it to apply an instruction and then names none.
+        // A custom task needs an instruction.
         if (task == AssistTask.CUSTOM &&
             (instruction.isBlank() || instruction.length > AssistTask.MAX_INSTRUCTION_CHARS)
         ) {
@@ -191,8 +168,7 @@ class AssistClient(private val context: Context) {
             pendingRun = message
             return
         }
-        // A service that died between binding and sending is a normal outcome -- it stops itself
-        // on an idle timer. Reconnecting on the next request is the whole recovery.
+        // A failed send is held until the service connects again.
         if (runCatching { target.send(message) }.isFailure) {
             service = null
             pendingRun = message

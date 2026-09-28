@@ -5,16 +5,7 @@ package com.borderkeys.settings
 
 import com.borderkeys.i18n.Keys
 
-/**
- * Where the settings UI can be.
- *
- * An enum rather than a sealed hierarchy of `data object`s because nothing here carries an
- * argument between screens, `when` over an enum compiles to a switch on the ordinal, and
- * `entries` gives the back stack something cheap to hold.
- *
- * Not `navigation-compose`: that would bring a graph builder, a route parser and argument
- * encoding to move between sixteen screens that pass nothing to each other.
- */
+/** Where the settings UI can be. */
 enum class Screen(val titleKey: String) {
     Home(Keys.SCREEN_BORDERKEYS),
     Setup(Keys.SCREEN_SET_UP),

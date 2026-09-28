@@ -21,13 +21,11 @@ class LanguageResolutionTest {
         assertEquals("en", LanguageResolution.resolve(listOf("hu-HU"), shipped))
     }
 
-    /** A phone set to Catalan then Spanish should get Spanish, not English. */
     @Test
     fun `the second preference is used when the first is missing`() {
         assertEquals("ro", LanguageResolution.resolve(listOf("ca-ES", "ro-RO"), shipped))
     }
 
-    /** A Brazilian reading European Portuguese is better served than one reading English. */
     @Test
     fun `a region falls back to the bare language`() {
         assertEquals("pt", LanguageResolution.resolve(listOf("pt-BR"), listOf("en", "pt")))
@@ -43,7 +41,6 @@ class LanguageResolutionTest {
         assertEquals("en", LanguageResolution.resolve(listOf("ro-RO"), shipped, override = "en"))
     }
 
-    /** A stored language that is no longer shipped must not strand the user in its absence. */
     @Test
     fun `an override that is gone falls back to the phone`() {
         assertEquals("ro", LanguageResolution.resolve(listOf("ro-RO"), shipped, override = "hu"))

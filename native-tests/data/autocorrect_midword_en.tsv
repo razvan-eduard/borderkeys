@@ -1,11 +1,8 @@
-# Real English words with its last letter not yet typed, generated from the top 4,000 of the bundled pack so the
-# set cannot be chosen to flatter a change. Fed to `suggest_eval --autocorrect`, which
-# asks what the space bar commits rather than where the strip ranks a word.
+# Real English words with their last letter not yet typed, generated from the top 4,000 of the
+# bundled pack. Fed to `suggest_eval --autocorrect`, which asks what the space bar commits
+# rather than where the strip ranks a word.
 #
-# These two exist as a pair and only mean anything together: the mid-word set is what
-# excluding completions from the corrections heap got wrong (12% right, 68% a different
-# word), and the typo set is what it got right (100%) and what a fix must not cost.
-# See kMaxCorrectionCompletion in engine.cpp.
+# Read together with autocorrect_typo_en.tsv; see kMaxCorrectionCompletion in engine.cpp.
 peopl	people
 durin	during
 becaus	because

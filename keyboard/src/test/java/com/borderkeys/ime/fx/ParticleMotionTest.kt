@@ -8,9 +8,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Plain numbers in, one `Float` out -- no `View`/`Context`/Robolectric needed, the same
- *  convention [com.borderkeys.ime.RadialSuggestionMenuViewTest] already uses for its own pure
- *  functions. */
+/** [ParticleMotion]'s paths: plain numbers in, one `Float` out. */
 class ParticleMotionTest {
 
     @Test

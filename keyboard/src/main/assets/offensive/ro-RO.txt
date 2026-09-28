@@ -5,10 +5,9 @@
 # „Blochează cuvintele vulgare” este pornit. Scrise literă cu literă, rămân neatinse. Un cuvânt
 # pe rând; majusculele și diacriticele nu contează (fiecare intrare și fiecare candidat sunt
 # reduse la aceeași formă înainte de comparație); o linie care începe cu „#” este comentariu.
-# Formele flexionate sunt cuvinte separate pentru motor, așa că fiecare este trecută.
+# Fiecare formă flexionată este trecută separat.
 #
-# Doar vulgarități și insulte etnice sau homofobe. Anatomia, medicina și cuvintele blânde rămân
-# sugerabile dinadins.
+# Doar vulgarități și insulte etnice sau homofobe.
 
 băga-mi-aș
 bozgor

@@ -2,19 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-"""Measures the trained encoder on REAL swipes from layouts it never trained on -- the actual
-claim being tested, not an assumption backing it.
-
-`swipe-5` is FUTO's own held-out multi-layout collection run, per its README: "This collection
-expands to different languages and layouts to validate the encoder model's generalization
-capabilities." Training (train.py) uses only "qwerty" -- everything else here is zero-shot.
-
-Restricted to the layouts whose alphabet is a SUBSET of training's 26 a-z letters: qwerty (in-
-domain, a sanity check), azerty, dvorak, qwertz, clearflow, kasroz, toki_pona. german/spanish/
-lithuanian_qwerty add accented letters and shavian is a different script entirely -- none of
-those are representable by this model's fixed 26-class CTC output without extending its
-vocabulary and retraining, so evaluating on them would only measure that gap, not
-layout-agnosticism.
+"""Measures the trained encoder on real swipes from layouts it never trained on: `swipe-5`, FUTO's
+held-out multi-layout collection. Training (train.py) uses only "qwerty"; the rest is zero-shot.
+Restricted to the layouts whose alphabet is a subset of training's 26 a-z letters.
 """
 
 from __future__ import annotations
@@ -29,8 +19,8 @@ from futo_layout import load_futo_layout
 from features_np import build_features, resample_uniform_time
 from model import KeyEmbedding, TcnEncoder
 
-# Every layout whose alphabet is a-z-only or a subset of it, per a live check of each layout's
-# own "letters" field in swipe-5/layouts/*.json.
+# Every layout whose alphabet is a-z or a subset of it, per each layout's "letters" field in
+# swipe-5/layouts/*.json.
 COMPATIBLE_LAYOUTS = ("qwerty", "azerty", "dvorak", "qwertz", "clearflow", "kasroz", "toki_pona")
 
 
@@ -54,8 +44,7 @@ def evaluate_layout(model: TcnEncoder, key_embedding: KeyEmbedding, layout_name:
             word = record["word"].lower()
             if any(c not in letters for c in word):
                 continue
-            # Already a canvas fraction, not pixels -- see train.py's SwipeDataset for why
-            # dividing by canvas_width/height again here would be a second, compounding bug.
+            # Already a canvas fraction, not pixels.
             xs = torch.tensor([p["x"] for p in points], dtype=torch.float32)
             ys = torch.tensor([p["y"] for p in points], dtype=torch.float32)
             ts = torch.tensor([p["t"] for p in points], dtype=torch.float64)

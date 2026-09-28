@@ -9,24 +9,10 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The capture buffer, checked against what a touch driver actually delivers.
- *
- * The batching is the point. A driver sampling at 120 Hz on a panel that reports at 60 Hz hands
- * the view one `ACTION_MOVE` holding two samples, and on a slow frame five or six. Reading only
- * the newest one is the classic mistake, and its symptom is not a visible bug -- the trail is
- * drawn from whatever was captured, so it stays smooth -- but a decoder fed a path with the
- * curvature sampled out of it.
- */
+/** [GestureCapture] against batched move events. */
 class GestureCaptureTest {
 
-    /**
-     * A batched move event: [count] samples, the last of which is the "current" one.
-     *
-     * `MotionEvent` cannot be constructed on the JVM without an emulator, so the capture buffer
-     * reads through [MotionSamples] and this stands in for the real thing. It counts its own
-     * reads so a test can prove nothing was skipped rather than infer it from the totals.
-     */
+    /** A batched move event, its last sample the current one; counts its x reads. */
     private class Batch(
         private val xs: FloatArray,
         private val ys: FloatArray,
@@ -58,8 +44,7 @@ class GestureCaptureTest {
         val capture = GestureCapture()
         capture.begin(0f, 0f, 0L)
 
-        // Three events carrying five, one and eight samples: a fast stroke, a frame where the
-        // finger barely moved, and a frame the system was late delivering.
+        // Three events carrying five, one and eight samples.
         val sizes = intArrayOf(5, 1, 8)
         var next = 1
         for (size in sizes) {
@@ -97,10 +82,7 @@ class GestureCaptureTest {
         assertEquals(310f, capture.maxY, 0f)
     }
 
-    /**
-     * The one invariant the whole class exists for: the arrays handed to the decoder are the
-     * same objects the buffer started with, no matter how long the swipe ran.
-     */
+    /** The arrays handed to the decoder stay the same objects however long the swipe runs. */
     @Test
     fun theBuffersAreNeverReplaced() {
         val capture = GestureCapture()
@@ -109,7 +91,7 @@ class GestureCaptureTest {
         val times = capture.times
 
         capture.begin(0f, 0f, 0L)
-        // Four times the capacity, delivered in ragged batches the way a driver delivers them.
+        // Four times the capacity, in ragged batches.
         var next = 1
         var size = 1
         while (next < capture.capacity * 4) {
@@ -125,11 +107,7 @@ class GestureCaptureTest {
         assertTrue("the buffer never decimated", capture.decimations >= 2)
     }
 
-    /**
-     * Decimation has to keep the shape of the stroke, not just its length. Halving a monotone
-     * ramp must leave a monotone ramp that still starts where the finger went down and still
-     * reaches near where it is now.
-     */
+    /** Decimating a monotone ramp keeps it monotone, from its first point to near the newest. */
     @Test
     fun decimationKeepsTheShapeOfTheStroke() {
         val capture = GestureCapture(capacity = 16)
@@ -146,8 +124,7 @@ class GestureCaptureTest {
                 capture.xs[i] > capture.xs[i - 1],
             )
         }
-        // Four halvings of a 64-sample ramp leave a stride of 16, so the last kept point is
-        // within one stride of the newest sample rather than somewhere in the middle.
+        // Four halvings of 64 samples leave a stride of 16.
         val last = capture.xs[capture.count - 1]
         assertTrue("decimation lost the end of the stroke: last was $last", last >= 64f - 16f)
     }
@@ -184,11 +161,6 @@ class GestureCaptureTest {
         assertSame(xs, capture.xs)
     }
 
-    /**
-     * A new gesture must not inherit the previous one's bounding box, or the first trail
-     * invalidation covers the rectangle between the two swipes and repaints most of the
-     * keyboard for nothing.
-     */
     @Test
     fun beginResetsTheBoundingBox() {
         val capture = GestureCapture()

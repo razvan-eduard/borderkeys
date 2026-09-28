@@ -41,9 +41,7 @@ import com.borderkeys.keyboard.R
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.move
 
-/** The one place a [CustomIcon] becomes a drawable -- shared across every screen that draws
- *  one, the same way [ComposerAction]'s own `iconFor` in ComposerScreen.kt is scoped to that
- *  file alone, except this one genuinely is needed from more than one screen. */
+/** The drawable for a [CustomIcon]. */
 internal fun iconFor(icon: CustomIcon): Int = when (icon) {
     CustomIcon.WAND -> R.drawable.bk_icon_wand
     CustomIcon.CHAT -> R.drawable.bk_icon_chat
@@ -63,10 +61,7 @@ internal fun iconFor(icon: CustomIcon): Int = when (icon) {
     CustomIcon.BOOKMARK -> R.drawable.bk_icon_bookmark
 }
 
-/** Every [CustomIcon], in a simple fixed grid -- 16 entries is short enough that a lazy grid
- *  buys nothing a plain row-of-rows does not already give for free, the same call this codebase
- *  already makes for its other short, fixed lists (the bar's own reorder rows, the tone/translate
- *  menus). */
+/** Every [CustomIcon], in a fixed grid. */
 @Composable
 internal fun IconPicker(selected: CustomIcon, onPick: (CustomIcon) -> Unit, modifier: Modifier = Modifier) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -100,9 +95,7 @@ internal fun IconPicker(selected: CustomIcon, onPick: (CustomIcon) -> Unit, modi
     }
 }
 
-/** [IconPicker] in a plain dialog -- no existing sheet/dialog convention in this module to
- *  match (checked: there is none), so this is the plainest thing that works: a title, the grid,
- *  a dismiss. */
+/** [IconPicker] in a plain dialog: a title, the grid, a dismiss. */
 @Composable
 internal fun IconPickerDialog(selected: CustomIcon, onPick: (CustomIcon) -> Unit, onDismiss: () -> Unit) {
     val strings = LocalStrings.current
@@ -121,18 +114,9 @@ internal fun IconPickerDialog(selected: CustomIcon, onPick: (CustomIcon) -> Unit
 }
 
 /**
- * Name, instruction, icon and an optional pin to the bar, in one form -- the settings-screen
- * entry point for "create a custom action" (see ComposerScreen.kt's own call site). The
- * ad-hoc-prompt entry point (ProcessTextScreen.kt's `SavePromptRow`) covers the same ground with
- * a name and an icon already offered inline; this is for starting from nothing rather than from
- * a prompt that was just run.
- *
- * [editing] non-null turns this into the same form pre-filled with an existing action's fields,
- * title included -- the one dialog covers both creating and editing (which is what makes editing
- * also cover renaming: the name field is not a special case here) rather than a second, near-
- * identical form existing only to start from something instead of nothing. [pinnedInitially] is
- * whatever [editing]'s own bar membership already is, since that is not something this dialog
- * itself has any way to know -- the caller does.
+ * Name, instruction, icon and an optional pin to the bar, in one form, for a custom action. With
+ * [editing] the form is pre-filled with that action, name included; [pinnedInitially] is its bar
+ * membership.
  */
 @Composable
 internal fun CreateCustomActionDialog(
@@ -208,20 +192,12 @@ internal fun CreateCustomActionDialog(
 }
 
 /**
- * Name, icon, an ordered list of steps and an optional pin to the bar -- the quick-action bar's
- * equivalent of [CreateCustomActionDialog], for a macro instead of a single free-text instruction.
+ * Name, icon, an ordered list of steps and an optional pin to the bar, for a macro on the quick
+ * action bar.
  *
- * A step is built from either a [QuickAction.macroEligible] builtin or another already-saved
- * [CustomQuickAction] in [existing] -- recursion allowed, per [QuickActionBar.hasCycle]. A custom
- * action whose own addition would close a reference cycle back to the macro being built is simply
- * left off the "add a step" list, so there is no "that would create a loop" error to design a
- * response to; nothing offered here can ever be refused at save time.
- *
- * [editing] non-null pre-fills the form the same way [CreateCustomActionDialog] does, for the same
- * reason -- one form covers creating and editing, which is what makes editing also cover renaming.
- * Removing a step asks first: a step is one tap to add back, but "which two were left" is not
- * obvious from the row alone once one is gone, so this un-does one tap's worth of damage rather
- * than none.
+ * A step is a [QuickAction.macroEligible] builtin or a saved [CustomQuickAction] from [existing];
+ * one that would close a reference cycle ([QuickActionBar.hasCycle]) is left off the list.
+ * [editing] pre-fills the form as in [CreateCustomActionDialog]. Removing a step asks first.
  */
 @Composable
 internal fun CreateCustomQuickActionDialog(
@@ -239,8 +215,7 @@ internal fun CreateCustomQuickActionDialog(
     var pickingIcon by remember { mutableStateOf(false) }
     var removingStepAt by remember { mutableStateOf(-1) }
 
-    // 0 for a new action -- never a real id (see CustomQuickAction.nextId's NEW_ID_MIN), so a
-    // step can never name "itself" by accident before it has an id of its own to collide with.
+    // 0 for a new action, never a real id (CustomQuickAction.nextId starts at NEW_ID_MIN).
     val selfId = editing?.id ?: 0
     val byId = existing.associateBy { it.id }
 

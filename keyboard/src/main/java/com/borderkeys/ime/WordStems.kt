@@ -6,25 +6,18 @@ package com.borderkeys.ime
 import java.text.Normalizer
 
 /**
- * The stems a word would have if it were a regular inflection, per language.
- *
- * A stem is what is left after one listed ending comes off, in every spelling the ending
- * attaches to: the bare stem, the stem with a doubled final consonant undone, and -- before an
- * ending that begins with a vowel -- the stem with its final e restored. Words are folded to
- * lower case without accents first, the way the dictionaries key them. A stem shorter than
- * [MIN_STEM_LETTERS] is not returned, and an ending whose first letter only repeats the stem's
- * last letter is a doubled letter, not an ending.
- *
- * Pure. The engine answers which stems it holds; [shields] then says whether the correction
- * offered for the word is built on one of them.
+ * The stems a word would have if it were a regular inflection, per language: what is left after
+ * one listed ending comes off, also with a doubled final consonant undone or, before an ending
+ * that begins with a vowel, a final e restored. Words are folded like the dictionaries' keys;
+ * stems shorter than [MIN_STEM_LETTERS] are not returned, and an ending whose first letter
+ * repeats the stem's last letter does not count.
  */
 internal object WordStems {
 
     /** The shortest stem worth looking up. */
     const val MIN_STEM_LETTERS = 4
 
-    /** An ending and what replaces it: "ies" comes off as "y". [restoresE] is whether the
-     *  ending may have taken a final e off its stem: "hiking" from "hike". */
+    /** An ending and what replaces it; [restoresE] if it may have taken a final e off its stem. */
     private class Ending(
         val suffix: String,
         val replacement: String = "",

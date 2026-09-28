@@ -2,15 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-"""Raw (lexicon-unconstrained) greedy CTC decode accuracy on a held-out split -- a fast sanity
-check during training, not the number that matters for shipping.
-
-The real figure is the lexicon-constrained beam search TcnCtcDecoder actually runs on-device;
-reproducing that exactly in Python here would mean maintaining a second copy of
-tcn_ctc_decoder.cpp's trie-walk logic against a Python trie reader, for a number this script's
-job is only to sanity-check DURING training, epoch to epoch, before anything is exported. Once a
-checkpoint looks promising, export it (export_weights.py) and measure the real number the way
-tools/gesture_replay.py measures Shark2's: against the app's own decoder.
+"""Raw (lexicon-unconstrained) greedy CTC decode accuracy on a held-out split: a sanity check
+during training. The on-device figure is TcnCtcDecoder's lexicon-constrained beam search,
+measured by tools/tcn_replay.py on an exported checkpoint.
 """
 
 from __future__ import annotations

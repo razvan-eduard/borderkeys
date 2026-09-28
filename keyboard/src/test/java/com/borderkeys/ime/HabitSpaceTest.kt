@@ -37,12 +37,7 @@ class HabitSpaceTest {
         assertFalse(swallows(habit = KeyboardPreferences.AUTO_SPACE_KEEP))
     }
 
-    /**
-     * The bug this rule was rewritten for. Each of these is a real sequence: picking a
-     * suggestion and then tapping an emoji, pasting, moving the caret into other text, or
-     * backspacing over the space itself. The flag is still armed in every one of them, and the
-     * space the user then types is one they mean.
-     */
+    /** The flag is still armed, but the character before the caret is not the space. */
     @Test
     fun `a remembered space that is no longer behind the caret is not dropped`() {
         assertFalse("an emoji was committed over it", swallows(before = '\uD83D'))

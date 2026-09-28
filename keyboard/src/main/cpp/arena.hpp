@@ -11,16 +11,8 @@
 
 namespace borderkeys {
 
-// A bump allocator holding one malloc for the lifetime of the engine.
-//
-// The prediction path runs on every keystroke inside an 8 ms budget. malloc on that path is not
-// slow on average -- it is slow *sometimes*, when an arena in the allocator needs a new span or
-// a lock is contended, and a p95 budget is decided by exactly those cases. Here the whole
-// working set is claimed once at engine creation, reset() rewinds the offset between requests,
-// and nothing is ever freed individually.
-//
-// Not thread safe by construction. One engine, one prediction thread; the JNI bridge is what
-// enforces that, and there is no lock here to make the single-threaded case pay for it.
+// A bump allocator holding one malloc for the engine's lifetime; reset() rewinds it between
+// requests. Not thread safe: one engine, one prediction thread.
 class Arena {
 public:
     Arena() = default;
@@ -50,9 +42,7 @@ public:
     // Rewinds to empty. Every pointer handed out before this call is dangling afterwards.
     void reset() { used_ = 0; }
 
-    // Rewinds to a mark taken earlier with used(). Lets a search reuse the same bytes for each
-    // branch it explores instead of growing the arena by the number of branches -- the peak is
-    // then the depth of the search, not its width.
+    // Rewinds to a mark taken earlier with used().
     void rewind(size_t mark) {
         if (mark <= used_) {
             used_ = mark;
@@ -61,9 +51,7 @@ public:
 
     void* allocate(size_t bytes, size_t align) {
         const size_t aligned = (used_ + (align - 1)) & ~(align - 1);
-        // Exhaustion returns null rather than growing. A request that does not fit is a bug in
-        // the caller's bounds, and silently reallocating would hide it until a device with less
-        // memory found it instead.
+        // Exhaustion returns null; the arena never grows.
         if (aligned > capacity_ || bytes > capacity_ - aligned) {
             return nullptr;
         }

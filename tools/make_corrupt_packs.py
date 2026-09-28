@@ -4,9 +4,8 @@
 """Writes the corrupt language packs under native-tests/data/corpus.
 
 Each file is the self-test pack of build_dict.py damaged in one named way. Where the damage is
-structural, both checksums are repaired afterwards so the loader reaches the bounds check the
-file exists to exercise rather than refusing it on the CRC. `pack_corpus_test` loads every one
-and requires it refused.
+structural, both checksums are repaired afterwards, so the loader reaches the bounds check.
+`pack_corpus_test` loads every one and requires it refused.
 
     python3 tools/make_corrupt_packs.py native-tests/data/corpus
 """

@@ -5,16 +5,9 @@
 """Downloads the free, MIT-licensed swipe.futo.org gesture corpus and caches it in a fast-loading
 shape for train.py.
 
-Deliberately does the LEAST amount of processing here: raw (x, y, t) per swipe, the target word,
-and the canvas size it was captured at, one file per split. Resampling, the 8-D feature vector,
-and the coordinated trajectory+layout augmentation all belong in train.py instead -- augmentation
-in particular has to run fresh every epoch, so doing it here would either bake in one fixed
-augmentation per sample forever or require this script to run inside the training loop, which
-defeats the point of having it separate.
-
-Does not touch futo-org/swipe-negatives (Apache-2.0, also free): that corpus is for the
-fixed-layout decoder refinement's hard-negative mining, which is out of scope for v1 -- see the
-"scope decision" in the project's plan. Recorded here so it stays easy to add if that changes.
+Raw (x, y, t) per swipe, the target word, and the canvas size it was captured at, one file per
+split. Resampling, the 8-D feature vector and the augmentation happen in train.py.
+futo-org/swipe-negatives is not used.
 """
 
 from __future__ import annotations
@@ -24,10 +17,8 @@ import json
 from pathlib import Path
 
 DATASET_ID = "futo-org/swipe.futo.org"
-# "Multiple collection runs from the swipe.futo.org website" (the dataset card's own words),
-# published as five separate configs rather than one -- there is no default, `load_dataset`
-# refuses to guess. All five combined is what the paper's own "939,550 swipes" training-split
-# figure corresponds to; --configs lets a smoke test ask for just one.
+# The dataset's five collection runs, published as separate configs; together they are the
+# paper's training split. --configs picks a subset.
 ALL_CONFIGS = ("swipe-1", "swipe-2", "swipe-3", "swipe-4", "swipe-5")
 SPLITS = ("train", "validation", "test")
 
@@ -70,9 +61,7 @@ def main() -> int:
                              "test rather than the real ~1.04M-row pull.")
     arguments = parser.parse_args()
 
-    # Imported here, not at module scope: this whole file is dead weight to anyone who has not
-    # run `pip install -r requirements.txt` yet, and importing it should not be the thing that
-    # tells them so with a traceback.
+    # Imported here, not at module scope.
     from datasets import concatenate_datasets, load_dataset
 
     arguments.out.mkdir(parents=True, exist_ok=True)

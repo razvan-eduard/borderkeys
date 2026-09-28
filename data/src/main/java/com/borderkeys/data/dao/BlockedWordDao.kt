@@ -16,7 +16,7 @@ interface BlockedWordDao {
     @Query("SELECT * FROM blocked_words ORDER BY word")
     fun observeAll(): Flow<List<BlockedWord>>
 
-    /** Loaded once at service start and held as a set, so the check costs no query per keystroke. */
+    /** Every blocked word, loaded once at service start and held as a set. */
     @Query("SELECT word FROM blocked_words")
     suspend fun allWords(): List<String>
 

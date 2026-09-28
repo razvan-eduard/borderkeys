@@ -8,18 +8,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * What a preset has to be true of, and what the palette has to be true of.
- *
- * Presets used to be required to draw only palette colours, because a swatch row rings the entry
- * equal to the current colour and a colour missing from the row left it with no selection at
- * all -- the keyboard changed and the picker went blank. That stopped being true when the rows
- * gained the custom wheel, which is ringed exactly when the colour is not one of the swatches,
- * so a preset can now use any colour it likes and the row still shows where the colour is.
- *
- * What replaced it is the check that matters more anyway: a preset nobody can read is a preset
- * that should not ship, and ten of them is more than anyone will check by eye.
- */
+/** What a preset has to be true of, and what the palette has to be true of. */
 class ThemePaletteTest {
 
     /** WCAG AA for body text, and the lower bar it sets for large or secondary text. */
@@ -49,7 +38,7 @@ class ThemePaletteTest {
         assertEquals("a preset is not readable", emptyList<String>(), offences)
     }
 
-    /** Two presets that look the same are one preset and a mistake. */
+    /** No two presets look the same. */
     @Test
     fun `no two presets are the same`() {
         val themes = PRESETS.map { it.theme }
@@ -58,7 +47,7 @@ class ThemePaletteTest {
         assertEquals("two presets share a name", names.size, names.toSet().size)
     }
 
-    /** Fifteen, as offered. A row that quietly loses one is a row nobody notices has lost one. */
+    /** Fifteen presets, as offered. */
     @Test
     fun `the row offers fifteen presets`() {
         assertEquals(15, PRESETS.size)
@@ -75,14 +64,14 @@ class ThemePaletteTest {
         }
     }
 
-    /** A duplicate swatch would draw two rings for one colour. */
+    /** No swatch is listed twice. */
     @Test
     fun `the palette has no duplicates`() {
         val palette = ThemePalette.COLOURS
         assertTrue("the palette repeats a colour", palette.size == palette.toSet().size)
     }
 
-    /** Anything drawn behind a key label has to be opaque or the key shows the wallpaper. */
+    /** Everything drawn behind a key label is opaque. */
     @Test
     fun `every palette entry is opaque`() {
         for (colour in ThemePalette.COLOURS) {
@@ -90,12 +79,7 @@ class ThemePaletteTest {
         }
     }
 
-    /**
-     * The contrast ratio of two opaque colours, as WCAG defines it.
-     *
-     * Written out rather than pulled from a library: it is eight lines, and a keyboard that
-     * takes no permissions is not going to add a dependency to divide two numbers.
-     */
+    /** The contrast ratio of two opaque colours, as WCAG defines it. */
     private fun contrast(a: Int, b: Int): Double {
         val first = luminance(a)
         val second = luminance(b)

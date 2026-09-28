@@ -6,25 +6,9 @@ plugins {
 }
 
 // ---------------------------------------------------------------------------------------
-// Release signing.
-//
-// An input method is not a normal app to test: it has to be enabled in system settings, it
-// is the process every other app types through, and the numbers this project is built around
-// -- 2 ms to commit a keystroke, 4 ms to redraw, 30 ms to decode a swipe -- are meaningless
-// on a debug build, which has R8 off and JNI debugging on. So a device must never carry a
-// debug build, which means a release build has to be installable, which means it has to be
-// signed. `./gradlew :app:installCoreRelease` is the command; the key below is what makes it
-// work.
-//
-// Three sources, in order. Environment variables come first because that is what CI sets
-// (decoded from a repository secret into the runner's temp directory). A Gradle property is
-// the escape hatch for a different local layout. Otherwise ~/.borderkeys/, which is where a
-// developer machine keeps it.
-//
-// If none of them resolve -- a fresh clone, a fork's CI, a contributor without the key --
-// no signing config is created at all and the release APK comes out unsigned, exactly as it
-// did before. That is a deliberate non-failure: an outside contributor must be able to build
-// and test this project without holding the release key.
+// Release signing. The keystore comes from environment variables (CI), then a Gradle property,
+// then ~/.borderkeys/. When none resolves, no signing config is created and the release APK is
+// unsigned.
 // ---------------------------------------------------------------------------------------
 
 val keystoreFileProvider: Provider<RegularFile> = layout.file(
@@ -64,10 +48,7 @@ android {
     compileSdk {
         version = release(libs.versions.compileSdk.get().toInt())
     }
-    // This module compiles no native code of its own, but it is the one that packages the .so
-    // files coming out of :keyboard, and stripping them needs llvm-strip from the NDK. Without
-    // an ndkVersion here AGP cannot find the toolchain, warns once, and packages the libraries
-    // unstripped -- 868 KB of DWARF per ABI for 154 KB of actual code.
+    // For the NDK's llvm-strip, which strips the .so files this module packages.
     ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
@@ -78,10 +59,7 @@ android {
         versionName = "0.10.2"
 
         ndk {
-            // Packaging-level filter, and the only one that decides what actually lands in
-            // the APK for .so files that arrive inside a third-party AAR. Without it,
-            // SQLCipher alone contributes four copies of a 4-7 MB library and the APK is
-            // 23 MB before a single line of our own native code exists.
+            // The packaging-level filter, which also applies to a third-party AAR's .so files.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
             // `-Pborderkeys.extraAbis=x86_64` adds the ABI an emulator on a CI runner has.
             abiFilters += extraAbis
@@ -90,10 +68,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // `core` is the free build: deterministic engine plus the geometric swipe decoder, and
-    // physically no neural code. `plus` adds the neural swipe tier (step 6) and the text
-    // assistant (step 7). The split is auditable from the outside -- unpack the APK and the
-    // heavy parts are absent -- which a runtime feature flag could never be.
+    // `core`: the deterministic engine and the geometric swipe decoder, with no neural code.
+    // `plus` adds the neural swipe tier and the text assistant.
     flavorDimensions += "engine"
     productFlavors {
         create("core") {
@@ -103,14 +79,7 @@ android {
         create("plus") {
             dimension = "engine"
             versionNameSuffix = "-plus"
-            // Its own package, so the two are not a choice.
-            //
-            // With one applicationId, installing plus replaces core: the same repository could
-            // only ever offer one of them, and taking the assistant would mean giving up the
-            // settings and the learned dictionary of the build being replaced. As separate
-            // packages both can be listed, both can be installed, and someone can try the
-            // assistant without losing anything -- at the cost of them being two applications
-            // that learn separately, which is the honest half of the trade.
+            // Its own package, so both builds can be installed side by side.
             applicationIdSuffix = ".plus"
         }
     }
@@ -122,10 +91,7 @@ android {
                 storePassword = releaseKeystorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeystorePassword
-                // Stated, not defaulted. An installed app only accepts an update signed by
-                // the same certificate under the same scheme, so this is not something to
-                // let an AGP default change underneath a shipped release. v1 is JAR signing,
-                // which nothing above API 24 reads and minSdk here is 30.
+                // Stated, not left to AGP's defaults.
                 enableV1Signing = false
                 enableV2Signing = true
                 enableV3Signing = true
@@ -147,9 +113,7 @@ android {
         }
         debug {
             isJniDebuggable = true
-            // So that a build that somehow reached a device announces itself on the About
-            // screen instead of being mistaken for the real thing while someone measures
-            // frame times on it.
+            // Shown on the About screen.
             versionNameSuffix = "-debug"
             isMinifyEnabled = false
             isShrinkResources = false
@@ -172,15 +136,11 @@ android {
     }
 
     packaging {
-        // Uncompressed and page-aligned .so files: the loader maps them straight out of the
-        // APK instead of extracting them, which is both smaller on disk and faster on the
-        // first keystroke after a cold start.
+        // Uncompressed and page-aligned .so files, mapped straight out of the APK.
         jniLibs { useLegacyPackaging = false }
     }
 
-    // The dependency blob AGP normally writes into the APK signing block is encrypted with a
-    // Google public key and is not reproducible. F-Droid rejects it for that reason, and we
-    // have no use for it either.
+    // No dependency-info blob in the APK signing block; F-Droid rejects it.
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
@@ -198,7 +158,7 @@ dependencies {
     implementation(project(":settings"))
 
     // The instrumented smoke suite: the keyboard driven through a real input connection on an
-    // emulator, which no JVM test can stand in for.
+    // emulator.
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.uiautomator)
@@ -208,7 +168,6 @@ dependencies {
     androidTestImplementation(project(":data"))
     androidTestImplementation(project(":i18n"))
     androidTestImplementation(project(":settings"))
-    // Attached only to the `plus` flavor. This is why the `core` APK does not contain the
-    // assistant: not because R8 removed it, but because it never entered the compilation.
+    // Attached only to the `plus` flavor; the `core` APK never compiles the assistant.
     "plusImplementation"(project(":assist"))
 }

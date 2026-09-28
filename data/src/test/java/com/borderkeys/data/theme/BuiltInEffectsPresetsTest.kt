@@ -65,8 +65,7 @@ class BuiltInEffectsPresetsTest {
 
     @Test
     fun `applying a preset records it as the applied one, and a tweak afterwards keeps that record`() {
-        // The picker's "which preset is this" answer must survive the first slider moved: the
-        // chip stays selected and the drift notice can name what it drifted from.
+        // The applied preset is still recorded after a slider moves.
         val fire = BuiltInEffectsPresets.ALL.first { it.id == "fire" }
         val applied = fire.appliedTo(ParticleEffectsSettings())
         assertEquals("fire", applied.appliedPresetId)

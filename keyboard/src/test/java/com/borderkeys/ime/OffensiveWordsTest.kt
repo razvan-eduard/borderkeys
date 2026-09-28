@@ -25,9 +25,8 @@ class OffensiveWordsTest {
     }
 
     /**
-     * The shipped lists, read from the repository: one per bundled language, single words,
-     * written in lower case, none listed twice once folded. A word with a space in it could
-     * never match a candidate, and a duplicate is a line somebody will edit in one place only.
+     * The shipped lists: one per bundled language, single words, written in lower case, none
+     * listed twice once folded.
      */
     @Test
     fun `every bundled language ships a well-formed list`() {
@@ -38,8 +37,7 @@ class OffensiveWordsTest {
             val file = File(directory, "$tag.txt")
             assertTrue("$tag has a list", file.isFile)
             val text = file.readText()
-            // REUSE-IgnoreStart -- the literal below is the tag this test looks for, not this
-            // file's own licence, and `reuse lint` reads every occurrence in the tree alike.
+            // REUSE-IgnoreStart
             assertTrue("$tag carries its licence header", text.startsWith("# SPDX-License-Identifier:"))
             // REUSE-IgnoreEnd
             val entries = text.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }

@@ -143,42 +143,22 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * The draft box, reached from a selection in *any* application rather than from inside the
- * keyboard.
- *
- * That distinction is the whole reason this screen exists. The keyboard's Compose quick action
- * can only be tapped while the software keyboard is on screen, which Android only shows over a
- * focused editable field -- so it can rewrite a message you are drafting, but never a paragraph
- * you are merely reading. `ACTION_PROCESS_TEXT` is Android's own mechanism for the second case:
- * an entry in every application's text-selection menu, offered for *any* selection, editable or
- * not, with no keyboard involved at all.
- *
- * One screen serves both. The quick action launches this activity too (`DraftProtocol`, see
- * [com.borderkeys.settings.SettingsActivity]), so there is a single draft box, typed into by
- * whatever keyboard is active while a plain Activity is on screen -- the in-keyboard view it
- * once had, drawn on the keyboard's own canvas and fed through a fake `InputConnection`, is
- * gone. What it shares with the keyboard underneath the drawing is [Composer], the pure version
- * graph, and [AssistClient], which was already `Context`-generic.
+ * The draft box, reached from a selection in any application through `ACTION_PROCESS_TEXT`, and
+ * from the keyboard's Compose quick action through `DraftProtocol`. Built on [Composer], the
+ * version graph, and [AssistClient].
  */
 @Composable
 fun ProcessTextScreen(
     text: String,
     readOnly: Boolean,
     modifier: Modifier = Modifier,
-    // On for the quick-draft path (see the LaunchedEffect below for why: a fresh task started
-    // from the service has no keyboard to inherit and no swipe to have discovered yet). Off for
-    // a real selection reached through the platform's PROCESS_TEXT menu -- there the box now
-    // opens closed by default, with the swipe hint below teaching the one way to open it, rather
-    // than a keyboard appearing over a paragraph the user may only have meant to read.
+    // Whether the field is focused on open: on for the quick-draft path, off for a selection from
+    // the PROCESS_TEXT menu.
     autoFocus: Boolean = true,
-    // Set only by SettingsActivity's dispatch on one of the four dedicated PROCESS_TEXT aliases
-    // (see its own comment on how it tells them apart) -- run once, automatically, on the
-    // incoming selection, landing on the result the same way tapping this task's button
-    // manually would, instead of waiting for a tap that already happened at the OS menu.
+    // Set by SettingsActivity for one of the four task aliases: run once, on open, on the incoming
+    // selection.
     autoRunTask: AssistTask? = null,
-    // Set only by the fifth alias, `.ProcessTextCustomAlias`: opens the same custom-action
-    // picker `SAVED_PROMPTS` already shows on the bar, immediately, rather than requiring that
-    // button to be found and tapped first.
+    // Set by the fifth alias, `.ProcessTextCustomAlias`: opens the custom-action picker on open.
     offerCustomActionPicker: Boolean = false,
 ) {
     val strings = LocalStrings.current
@@ -189,46 +169,21 @@ fun ProcessTextScreen(
     val preferences by themes.preferences
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
 
-    // This screen is reached from any application's selection menu, through the manifest alias,
-    // whether or not BorderKeys is the keyboard actually in use -- Android does not gate a
-    // PROCESS_TEXT entry on that. The box itself is the keyboard's own feature wearing a
-    // different host (see the class doc), so offering it while some other keyboard is the one
-    // in use would be a box that opens but belongs to nothing currently typing anything.
-    // Kept live the same way Setup's own step 2 is, sharing that implementation: this activity
-    // survives a trip to the system keyboard picker and back, and picking BorderKeys there
-    // doesn't even pause this one, so this needs the same picker-timing wait and the same poll
-    // that plain resume-tracking alone would miss -- not just re-reading on resume, which is
-    // all this used to do, and which is exactly the gap rememberBorderKeysDefaultState closes.
+    // Whether BorderKeys is the keyboard in use, kept live across a trip to the system picker.
     val isDefaultKeyboard by rememberBorderKeysDefaultState()
 
-    // The original is "the exact copy gathered from the initial page selection, nothing else"
-    // -- captured immediately, before a single keystroke can happen, the same as the in-keyboard
-    // composer does. text is never empty for a real PROCESS_TEXT selection, but the check keeps
-    // this correct even if some caller ever hands over an empty one.
-    //
-    // Markdown is the one canonical form here: it is what every version the composer holds is
-    // written in, what the model is asked to reply in, and what the editor parses and emits --
-    // so "the original" is the incoming text normalised once through that same parser, and a
-    // later toMarkdown() of an untouched document compares equal to it instead of reading as a
-    // phantom first edit.
+    // The original: the incoming text, captured before any keystroke and normalised once through
+    // the editor's Markdown parser. Every version is Markdown.
     val initialMarkdown = remember(text) { RichTextState().apply { setMarkdown(text) }.toMarkdown() }
-    // A plain remember, not rememberRichTextState: that helper is rememberSaveable-backed, and
-    // a document restored across an activity recreation while composer below reseeds from the
-    // intent would leave the two telling different stories. This activity recreates on rotation
-    // by design (see the manifest's own comment), and starting the draft over then is the deal
-    // this screen has always offered.
+    // A plain remember, not the saveable rememberRichTextState: the draft starts over when the
+    // activity is recreated, as the composer does.
     val richTextState = remember { RichTextState().apply { setMarkdown(initialMarkdown) } }
     val composer = remember { Composer().apply { if (initialMarkdown.isNotEmpty()) captureBeforeRun(initialMarkdown) } }
 
-    // Whether the field itself currently has focus -- not the same question as whether the
-    // keyboard is on screen (the two can drift apart for a moment around an animation), but the
-    // one the swipe hint below actually needs: once the field is focused there is nothing left
-    // for the hint to teach.
+    // Whether the field has focus.
     var isFocused by remember { mutableStateOf(false) }
 
-    // The editor viewport's scroll and the last layout the text produced -- held up here
-    // rather than beside the field because showKeyboard below steers the caret by where the
-    // view currently sits, which is a question of exactly these two.
+    // The editor viewport's scroll and the text's last layout, which showKeyboard reads.
     val scrollState = rememberScrollState()
     var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
 
@@ -242,9 +197,8 @@ fun ProcessTextScreen(
     var promptOpen by remember { mutableStateOf(false) }
     var promptText by remember { mutableStateOf("") }
     var pendingInstruction by remember { mutableStateOf("") }
-    // The span of `current` a running task was asked about, when it was asked about only part of
-    // it -- null when the whole text was sent. The task works on the substring; its answer goes
-    // back into exactly this range, leaving everything outside it untouched.
+    // The span a running task was sent, or null for the whole text; its answer replaces exactly
+    // this range.
     var pendingSpan by remember { mutableStateOf<TextRange?>(null) }
     var offeringSaveName by remember { mutableStateOf<String?>(null) }
     var offeringSaveIcon by remember { mutableStateOf(CustomIcon.DEFAULT) }
@@ -252,39 +206,24 @@ fun ProcessTextScreen(
     var translateMenuOpen by remember { mutableStateOf(false) }
     var toneMenuOpen by remember { mutableStateOf(false) }
     var savedMenuOpen by remember { mutableStateOf(false) }
-    // Insert and Share each offer the same two ways out -- markdown as written, or the plain
-    // rendering -- so each anchors a small picker of its own instead of committing on the tap.
+    // Insert and Share each open a picker: markdown as written, or plain text.
     var insertMenuOpen by remember { mutableStateOf(false) }
     var shareMenuOpen by remember { mutableStateOf(false) }
-    // A second way to open the same menu `savedMenuOpen` opens from the bar's own
-    // SAVED_PROMPTS button, triggered instead by `offerCustomActionPicker` -- kept separate so
-    // this screen does not have to assume that button is even on the user's bar to still honour
-    // "open with the custom-action picker showing" from the manifest's fifth alias.
+    // The custom-action menu opened by `offerCustomActionPicker`, whether or not SAVED_PROMPTS is
+    // on the bar.
     var externalCustomPickerOpen by remember { mutableStateOf(false) }
 
     val busy = requestId >= 0
 
-    // Requested once, on the first composition, when autoFocus asks for it -- see the parameter
-    // doc for which path that is and why. A launch from the keyboard's own Quick Action has no
-    // calling activity handing a result back and no field left focused anywhere -- unlike the
-    // platform's own PROCESS_TEXT toolbar, which starts this from inside a foreground activity,
-    // this one starts it from a service and needs FLAG_ACTIVITY_NEW_TASK to do it at all, and a
-    // fresh task does not inherit anyone's keyboard.
+    // Requested once, on the first composition, when autoFocus asks for it.
     val textFieldFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { if (autoFocus) textFieldFocus.requestFocus() }
 
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // The swipe-up/down gesture on the draft box itself, the same idea as the FastMap rules
-    // window's own swipe handle in VoxApps -- a drag decides it, nothing drawn for it. The
-    // cursor goes to the end of the text -- a swipe is "I want to keep writing" -- unless the
-    // end is scrolled out of sight: focusing a field always brings its caret into view, so a
-    // caret teleported below the viewport would drag the whole text down with it, breaking for
-    // the gesture's last instant the same "the text does not move for this swipe" promise the
-    // swipe itself keeps. With the text scrolled, the caret lands at the end of the topmost
-    // fully visible line instead -- writing continues from the line being read, and nothing on
-    // screen shifts, not even when the rising keyboard then shortens the viewport from below.
+    // Focuses the field for a swipe up on the box, without moving the text. The caret goes to the
+    // end of the text, or, while it is scrolled, to the end of the topmost fully visible line.
     fun showKeyboard() {
         val layout = textLayout
         val caret = if (layout == null || scrollState.maxValue <= 0 || scrollState.maxValue == Int.MAX_VALUE) {
@@ -298,13 +237,8 @@ fun ProcessTextScreen(
             layout.getLineEnd(line, visibleEnd = true)
         }
         richTextState.selection = TextRange(caret)
-        // The caret above is already on a visible line, so nothing needs revealing -- but the
-        // platform still tries: a freshly focused field is brought into view, and the rising
-        // keyboard's resize can ask again. Each of those is exactly the movement this gesture
-        // promised not to make, so the scroll is held shut for the whole handoff: launched
-        // before requestFocus so this holder owns the mutex first, at a priority every
-        // bring-into-view request loses to, with the position pinned back at release in case
-        // anything moved in the gap before the hold took effect.
+        // Holds the scroll through the focus handoff, at a priority every bring-into-view request
+        // loses to; launched before requestFocus, and the position restored on release.
         val anchor = scrollState.value
         scope.launch {
             scrollState.scroll(MutatePriority.PreventUserInput) {
@@ -325,9 +259,7 @@ fun ProcessTextScreen(
         rail = Rail(composer.size, composer.index, composer.canGoBack, composer.canGoForward, composer.atOriginal)
     }
 
-    // Only for arriving at a version that is not the one already on screen -- a model's result
-    // lands in the editor first and then registers with the composer, so that path never comes
-    // through here; this one is for navigation, where the composer is the side that moved.
+    // Loads the composer's current version into the editor, after navigation.
     fun loadFromComposer() {
         composer.current()?.let { richTextState.setMarkdown(it) }
         richTextState.selection = TextRange(richTextState.annotatedString.length)
@@ -335,18 +267,12 @@ fun ProcessTextScreen(
     }
 
     val assistClient = remember { AssistClient(context) }
-    // ChunkedAssistRunner owns assistClient's listener from here on -- see its own class doc for
-    // why a caller talks to it instead of the client directly.
+    // ChunkedAssistRunner owns assistClient's listener from here on.
     val assist = remember { ChunkedAssistRunner(assistClient) }
-    // Resolved once: whether the plus flavor's assistant is even present does not change while
-    // this screen is open, and asking again on every recomposition would be a PackageManager
-    // call for an answer that cannot have changed.
+    // Whether the plus flavor's assistant is present, resolved once.
     val assistAvailable = remember { assist.isAvailable() }
-    // The active model's own context window, for sizing chunks against -- see
-    // ChunkedAssistRunner.maxChunkChars's own doc for why this is asked for rather than assumed.
-    // A default rather than a wait for the first emission: the very first task run this screen
-    // ever sees can arrive before this flow has collected anything, and undersizing a chunk
-    // costs one extra request, not a wrong answer.
+    // The active model's context window, for sizing chunks; DEFAULT_CONTEXT_TOKENS until the flow
+    // emits.
     val activeModel by remember {
         DataGraph.assistModels.models
             .map { models -> models.firstOrNull { it.active } }
@@ -362,26 +288,20 @@ fun ProcessTextScreen(
                 truncated: Boolean,
             ) {
                 if (id != requestId) {
-                    // An answer to a request this screen has already moved past -- a second
-                    // action tapped before the first came back cancels it, and its answer
-                    // arriving late must not overwrite what replaced it.
+                    // An answer to a request already replaced.
                     return
                 }
                 requestId = -1
                 val span = pendingSpan
                 pendingSpan = null
                 if (span != null && span.max <= richTextState.annotatedString.length) {
-                    // Back into the range it came from, with everything outside it kept
-                    // exactly -- carved out of the live document and replaced in place, which
-                    // is what keeps formatting outside the span untouched. The reply is
-                    // Markdown (the instructions ask for it), parsed as it goes in.
+                    // The Markdown reply replaces the span in place; the rest is untouched.
                     val lengthBefore = richTextState.annotatedString.length
                     richTextState.removeTextRange(span)
                     richTextState.insertMarkdown(resultText, span.min)
                     val inserted =
                         richTextState.annotatedString.length - lengthBefore + span.max - span.min
-                    // Leave the replaced part selected -- it is what changed, and running
-                    // another action now works on it rather than on the whole line again.
+                    // The replaced part is left selected.
                     richTextState.selection = TextRange(span.min, span.min + inserted)
                 } else {
                     richTextState.setMarkdown(resultText)
@@ -411,21 +331,13 @@ fun ProcessTextScreen(
             override fun onAssistAvailability(available: Boolean, modelName: String?) = Unit
         }
         onDispose {
-            // Told to stop rather than merely let go of: a generation nobody will read is still
-            // seconds of the phone's own CPU, the same reasoning as the keyboard's composer.
             assist.cancel()
             assist.disconnect()
         }
     }
 
-    // The span a task will actually be sent -- a real selection grown out to whole words
-    // (unless that has been switched off), or null for "the whole field". One place, because
-    // runTask, keepSelection and the word-count gate all have to agree on what "the selection"
-    // means. A bare cursor (collapsed selection) is not a selection.
-    //
-    // Growing the ends: a selection that starts or ends inside a word ("st text este de sel")
-    // is not something a model can translate or correct sensibly, so each end that landed
-    // mid-word is pushed out to that word's edge.
+    // The span a task is sent: the selection with each end grown out to its word's edge (unless
+    // that is switched off), or null for the whole field. A collapsed selection is not one.
     fun resolveSpan(): TextRange? {
         val selection = richTextState.selection
         val plainText = richTextState.annotatedString.text
@@ -448,10 +360,7 @@ fun ProcessTextScreen(
         richTextState.annotatedString.text.substring(it.min, it.max) 
     } ?: richTextState.annotatedString.text
 
-    /**
-     * Drops everything but the selection, as a new version -- no model. The "carry just this
-     * part forward" step: after it, Insert and the next action work on the kept span alone.
-     */
+    /** Drops everything but the selection, as a new version, without a model. */
     fun keepSelection() {
         if (busy) {
             return
@@ -461,8 +370,7 @@ fun ProcessTextScreen(
         if (keptPlain.isEmpty() || keptPlain == richTextState.toText().trim()) {
             return
         }
-        // The selection's own markdown, not its plain text -- "carry just this part forward"
-        // includes however that part was formatted.
+        // The selection's markdown, formatting included.
         val keptMarkdown = richTextState.toMarkdown(span)
         composer.captureBeforeRun(richTextState.toMarkdown())
         richTextState.setMarkdown(keptMarkdown)
@@ -477,18 +385,13 @@ fun ProcessTextScreen(
             return
         }
         val span = resolveSpan()
-        // The field's own selection is moved to match the grown span, so what will be worked
-        // on is what is shown selected.
+        // The field's selection is moved to the grown span.
         if (span != null && (span.min != richTextState.selection.min || span.max != richTextState.selection.max)) {
             richTextState.selection = span
         }
-        // Sent as markdown, the same form the reply is asked for in -- what is already bold or
-        // a list goes to the model that way and comes back that way, instead of arriving
-        // flattened and returning restyled from nothing. The word gate below still counts the
-        // plain text, where a list's own "- " marks are not words.
+        // Sent as markdown; the word gate counts the plain text.
         val sent = if (span != null) richTextState.toMarkdown(span) else richTextState.toMarkdown()
-        // Below the task's own floor -- the button that started this is greyed out at the same
-        // threshold, so this catches only a bypass (a menu item, a saved prompt).
+        // Below the task's floor, where its button is greyed out.
         if (sent.isBlank() || composerWordCount(targetText()) < task.minWords) {
             return
         }
@@ -504,12 +407,8 @@ fun ProcessTextScreen(
         notice = workingLabel(strings, task)
     }
 
-    // Runs once, on the very first composition -- see autoRunTask/offerCustomActionPicker's own
-    // parameter docs for which of the five PROCESS_TEXT aliases sets either. A no-op for every
-    // other way this screen is reached (both stay at their defaults then). Placed after runTask
-    // is declared above, which it calls; Kotlin resolves a local function only from the point in
-    // the enclosing block where it is defined, unlike the autoFocus effect further up, which
-    // needs nothing declared this far down.
+    // Runs once, on the first composition, for autoRunTask and offerCustomActionPicker. Declared
+    // after runTask, which it calls.
     LaunchedEffect(Unit) {
         if (autoRunTask != null) {
             runTask(autoRunTask)
@@ -518,18 +417,12 @@ fun ProcessTextScreen(
         }
     }
 
-    // Which way the version transition below slides in from -- derived here, the one place
-    // every navigation path (the arrows, the rail, the horizontal swipe) already funnels
-    // through, rather than threaded in separately by each of them. Left at 0 until the first
-    // real navigation happens, which is also what tells the transition effect not to play on
-    // the box's very first appearance -- there is nothing to have slid in from yet.
+    // Which way the version transition slides in from, set by goTo; 0 until the first navigation,
+    // so the first appearance does not slide.
     var versionDirection by remember { mutableIntStateOf(0) }
 
-    // The two ends of the swipe-exclusion measurement: the outer ring Box and the editor's
-    // scroll viewport, as live coordinates rather than a cached rect -- the settle scale is a
-    // layer change that refires no position callback, and only mapping between the two at the
-    // moment a finger lands reads the box's actual on-screen footprint. See the exclusion
-    // lambda on the swipe modifier below.
+    // The outer ring Box's and the editor viewport's live coordinates, mapped between when a
+    // finger lands, for the swipe exclusion below.
     var outerCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var editorCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
@@ -537,9 +430,7 @@ fun ProcessTextScreen(
         if (busy) {
             return
         }
-        // Fold in whatever was edited by hand before moving -- and only then read the index:
-        // an edit made while standing on node 0 inserts a new node after it, which is itself a
-        // move this navigation has to measure from.
+        // A hand edit is folded in before the index is read; an edit on node 0 adds a node.
         if (!composer.isEmpty()) {
             composer.updateCurrent(richTextState.toMarkdown())
         }
@@ -550,23 +441,15 @@ fun ProcessTextScreen(
             versionDirection = if (moved > 0) 1 else -1
             loadFromComposer()
         } else {
-            // Landed on the node already shown -- the editor is already right, and a redundant
-            // setMarkdown would only throw away the caret and scroll position for nothing.
+            // Still on the node shown; the editor keeps its caret and scroll.
             refreshRail()
         }
     }
 
-    // A rectangle sitting above where the keyboard would be, not a page: the whole point of the
-    // in-keyboard draft box is that it is a bounded thing over the keys, not the keys' own
-    // screen. This is the same box wearing a different host. The Spacer rests it against the
-    // bottom of the screen when nothing else is claiming that space; imePadding lifts it clear
-    // of the real system keyboard the instant one rises (the text field below summons whatever
-    // keyboard is actually installed, which is not necessarily this one), so the box tracks the
-    // keyboard's top edge exactly the way it sits above the keys inside the IME.
+    // A box resting against the bottom of the screen, lifted by imePadding above whatever
+    // keyboard rises.
     val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
-    // No `label` argument: NoHardcodedTextTest reads every `label = "..."` as user-facing
-    // text, and Compose's animation label is Android Studio inspector tooling only -- never
-    // shown to anyone using the app.
+    // No `label` argument: NoHardcodedTextTest reads every `label = "..."` as user-facing text.
     val ring = rememberInfiniteTransition()
     val ringShift by ring.animateFloat(
         initialValue = 0f,
@@ -595,27 +478,13 @@ fun ProcessTextScreen(
         return
     }
 
-    // Both gestures' commit thresholds, in px once rather than re-derived on every drag event --
-    // read from the same Density both the live-drag callbacks below and the gesture detectors
-    // themselves use, so a swipe that visually looks like it crossed the line is exactly the one
-    // that did.
+    // Both gestures' commit thresholds, in px.
     val density = LocalDensity.current
     val swipeThresholdPx = with(density) { SWIPE_THRESHOLD.toPx() }
     val versionThresholdPx = with(density) { VERSION_SWIPE_THRESHOLD.toPx() }
 
-    // Tracks the drag itself, live -- 1f at rest, shrinking towards FOCUS_SETTLE_SCALE as the
-    // swipe crosses towards SWIPE_THRESHOLD, not a fixed pulse played back only once the finger
-    // has already lifted. The system's own keyboard slides up or down on its own timeline this
-    // application has no hold over at all, but the box that asked for it can still visibly
-    // follow the swipe that did, which is as close to "an effect on the keyboard" as reaching
-    // into a separate process's window is ever going to get.
-    //
-    // Also caught by a plain focus change that did not come from this drag at all -- tapping
-    // straight into the field skips the gesture below entirely, and this is what still gives
-    // that path the same small settle, landing on FOCUS_SETTLE_SCALE exactly where the drag's
-    // own live tracking already would have by the time a swipe actually commits (see
-    // SWIPE_THRESHOLD's relation to FOCUS_SETTLE_SCALE below), so the two meet without a visible
-    // jump between them.
+    // The box's scale: 1f at rest, following a swipe down to FOCUS_SETTLE_SCALE at
+    // SWIPE_THRESHOLD, and settling from FOCUS_SETTLE_SCALE on every focus change.
     val focusSettle = remember { Animatable(1f) }
     LaunchedEffect(isFocused) {
         focusSettle.snapTo(FOCUS_SETTLE_SCALE)
@@ -632,25 +501,15 @@ fun ProcessTextScreen(
                 .fillMaxWidth()
                 .imePadding()
                 .heightIn(max = 480.dp)
-                // Drawn before the clip, which is what puts it outside the rounded corners
-                // instead of underneath them.
+                // Before the clip, so the shadow falls outside the rounded corners.
                 .shadow(elevation = BOX_ELEVATION, shape = shape)
                 .clip(shape)
-                // The ring around the box, not a plain outline: the moving gradient is what
-                // says "a model may touch this" before anyone reads a word of the bar beneath
-                // it, the same way a coloured LED says a microphone is live.
+                // The moving gradient ring around the box.
                 .background(ringBrush(ringShift))
-                // Placed right against the gesture below so the two share one coordinate
-                // space by construction -- the exclusion rect is mapped between this node and
-                // the editor viewport's own coordinates at the moment a finger lands.
+                // Beside the gesture below, so the two share one coordinate space.
                 .onGloballyPositioned { outerCoords = it }
                 .swipeToToggleKeyboard(
-                    // The one region where a vertical drag means the text and not the
-                    // keyboard: a gesture that starts on the editor's scrollable viewport
-                    // belongs to its scroll, entirely. A pointer's targets are fixed at its
-                    // DOWN, so declining it here once is the whole separation -- the scroll
-                    // never sees a drag that started outside the viewport, and this never
-                    // claims one that started inside it.
+                    // A gesture that starts on the editor's scroll viewport belongs to its scroll.
                     exclusion = {
                         val outer = outerCoords
                         val editor = editorCoords
@@ -662,9 +521,7 @@ fun ProcessTextScreen(
                     },
                 ) { delta, released ->
                     if (!released) {
-                        // Live: the box eases towards FOCUS_SETTLE_SCALE as the drag
-                        // approaches swipeThresholdPx, following the finger rather than
-                        // waiting for it to lift.
+                        // The box eases towards FOCUS_SETTLE_SCALE as the drag nears the threshold.
                         val t = (kotlin.math.abs(delta) / swipeThresholdPx).coerceIn(0f, 1f)
                         focusSettle.snapTo(1f - t * (1f - FOCUS_SETTLE_SCALE))
                         return@swipeToToggleKeyboard
@@ -674,32 +531,20 @@ fun ProcessTextScreen(
                     } else if (delta >= swipeThresholdPx) {
                         hideKeyboardAndUnfocus()
                     } else {
-                        // Released short of the threshold -- nothing committed, so nothing but
-                        // this eases the box back; a real commit instead lets the
-                        // isFocused-driven effect above pick it up already this close to rest.
+                        // Released short of the threshold: eased back to rest.
                         focusSettle.animateTo(1f, tween(FOCUS_SETTLE_MILLIS, easing = FastOutSlowInEasing))
                     }
                 },
         ) {
-        // Surface, not a Column with a background modifier painted on: Surface is what sets
-        // LocalContentColor for everything inside it. A background modifier only paints a
-        // colour -- it does not say what reads against it -- so every icon below defaulted to
-        // Compose's own fallback of plain black, invisible against a dark surface in exactly
-        // the cases a background modifier cannot tell it apart from a light one.
+        // A Surface, which sets LocalContentColor for everything inside.
         Surface(
             modifier = Modifier.padding(RING_WIDTH).scale(focusSettle.value),
             shape = shape,
             color = MaterialTheme.colorScheme.surface,
         ) {
             Column {
-            // A Box, not a Row -- the hint below belongs truly centred between the title and the
-            // close button, not sharing a weight with either of them, which is what a Row of
-            // three weighted children would give instead. Its sides share FIELD_SIDE_GAP with
-            // the field underneath, and the close button shares the format bar's own square,
-            // so the title sits flush with the field's left edge and the cross on the same
-            // axis as Copy at its right -- one grid, not two rows that almost line up. No
-            // bottom padding of its own: the little air between this row and the field is the
-            // field's to keep, once, not stacked from both sides.
+            // The header: the title, the hint centred, and the close button. Its sides share
+            // FIELD_SIDE_GAP with the field, and the close button the format bar's square.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -717,7 +562,7 @@ fun ProcessTextScreen(
                         modifier = Modifier.align(Alignment.Center),
                     )
                 }
-                // Close top-right, per spec.
+                // Close, top right.
                 IconButton(
                     onClick = {
                         activity?.setResult(Activity.RESULT_CANCELED)
@@ -736,9 +581,6 @@ fun ProcessTextScreen(
                 Column {
                     Box(
                         modifier = Modifier.fillMaxWidth()
-                            // Tighter above than below: the header row already brings its own
-                            // height, so the field reads as hanging right under the title, and
-                            // the bar beneath keeps just enough air to stay its own strip.
                             .padding(start = FIELD_SIDE_GAP, end = FIELD_SIDE_GAP, top = 2.dp, bottom = 4.dp)
                             .weight(1f, fill = false)
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.shapes.medium)
@@ -761,11 +603,8 @@ fun ProcessTextScreen(
                         }
 
                         Column {
-                            // The strip the rich text grew across the field's top: what used
-                            // to be a copy notch cut into one corner is a full header now --
-                            // the style toggles on the left, the clipboard actions on the
-                            // right, one band the field's own border wraps together with the
-                            // text below it.
+                            // The format bar across the field's top: style toggles left,
+                            // clipboard actions right, inside the field's border.
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -778,9 +617,7 @@ fun ProcessTextScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    // Letter glyphs, not icons, for the two span styles: B and
-                                    // I drawn in themselves are the convention every editor
-                                    // shares, and each is its own preview of what it does.
+                                    // Bold and italic, drawn as a styled B and I.
                                     FormatToggle(
                                         active = richTextState.currentSpanStyle.fontWeight == FontWeight.Bold,
                                         description = strings[Keys.COMPOSER_FORMAT_BOLD],
@@ -813,20 +650,13 @@ fun ProcessTextScreen(
                                         )
                                     }
                                 }
-                                // Copy lives on the field itself, not the bar below: it takes
-                                // the text out as a document, where the bar's buttons ask a
-                                // model for a new version of it. No paste beside it -- putting
-                                // text IN is the keyboard's own job, and its quick actions row
-                                // already carries one.
+                                // Copy, on the field.
                                 IconButton(
                                     enabled = richTextState.annotatedString.text.isNotEmpty() && !busy,
                                     onClick = {
                                         val manager = context.getSystemService(Context.CLIPBOARD_SERVICE)
                                             as? ClipboardManager
-                                        // Both faces on one clip: the HTML side is what a rich
-                                        // editor pastes, the markdown side what a plain field
-                                        // gets. The formatting is never the thing Copy drops
-                                        // -- pasting somewhere plain is what flattens it.
+                                        // One clip with both faces: HTML and markdown.
                                         manager?.setPrimaryClip(
                                             ClipData.newHtmlText(
                                                 null,
@@ -852,12 +682,9 @@ fun ProcessTextScreen(
                                 thickness = 0.5.dp,
                             )
 
-                            // The scroll viewport, and the region the keyboard swipe above
-                            // excludes -- measured before anything else on this chain so the
-                            // rect covers the viewport exactly as laid out, padding included,
-                            // the transient version-slide offset not. weight(fill = false):
-                            // wrap the text while it is short, take what is left of the box's
-                            // cap once it is not, which is exactly where the scroll engages.
+                            // The scroll viewport, which the keyboard swipe excludes, measured
+                            // first so the rect leaves out the version-slide offset.
+                            // weight(fill = false): wraps short text, fills the box's cap after.
                             Box(
                                 modifier = Modifier
                                     .onGloballyPositioned { editorCoords = it }
@@ -873,19 +700,14 @@ fun ProcessTextScreen(
                                     enabled = !busy,
                                     textStyle = LocalTextStyle.current.copy(
                                         color = MaterialTheme.colorScheme.onSurface,
-                                        // A multiplier on the ambient size rather than a fixed
-                                        // sp value, so Small/Medium/Large still track a system
-                                        // font-size setting the same way the unscaled default
-                                        // already does.
+                                        // A multiplier on the ambient size.
                                         fontSize = LocalTextStyle.current.fontSize *
                                             composerFontScale(preferences.composerTextSize),
                                     ),
                                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                                     onTextLayout = { textLayout = it },
                                     decorationBox = { innerTextField ->
-                                        // The editor's own decoration slot, not a sibling
-                                        // stacked behind it: the hint shares the field's exact
-                                        // metrics and leaves with the first character typed.
+                                        // The empty-field hint, in the editor's decoration slot.
                                         Box {
                                             if (richTextState.annotatedString.text.isEmpty()) {
                                                 Text(
@@ -902,23 +724,13 @@ fun ProcessTextScreen(
                                     },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        // Room to land a finger on even while empty -- the
-                                        // text alone would be one line tall.
                                         .heightIn(min = EDITOR_MIN_HEIGHT)
                                         .focusRequester(textFieldFocus)
                                         .onFocusChanged { isFocused = it.isFocused }
-                                        // Left/right on the text itself steps through
-                                        // versions, the same move as the arrows at the bottom
-                                        // of the box or picking a node on the rail -- reaching
-                                        // either of those means looking away from what was
-                                        // just written to find them.
+                                        // A horizontal swipe on the text steps through versions.
                                         .swipeToChangeVersion { delta, released ->
                                             if (!released) {
-                                                // Live: the text follows the finger, capped at
-                                                // ±1 exactly at versionThresholdPx -- which is
-                                                // also where a commit below hands off to the
-                                                // rail.index effect above, so the two never
-                                                // visibly disagree about where the text is.
+                                                // The text follows the finger, ±1 at the threshold.
                                                 versionSlide.snapTo((delta / versionThresholdPx).coerceIn(-1f, 1f))
                                                 return@swipeToChangeVersion
                                             }
@@ -927,9 +739,7 @@ fun ProcessTextScreen(
                                             } else if (delta >= versionThresholdPx) {
                                                 goTo { composer.back() }
                                             } else {
-                                                // Released short of the threshold -- nothing
-                                                // navigated, so nothing but this eases the
-                                                // text back to where it started.
+                                                // Released short of the threshold: eased back.
                                                 versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
                                             }
                                         },
@@ -937,11 +747,8 @@ fun ProcessTextScreen(
                             }
                         }
 
-                        // Painted over the field, not laid out beside it: matchParentSize
-                        // keeps this Box out of the height negotiation entirely, which is what
-                        // lets the field stay wrap-content while the text is short -- a
-                        // fillMaxHeight child taking part in sizing would prop the field open
-                        // to its cap all by itself.
+                        // The scrollbar, painted over the field; matchParentSize keeps it out of
+                        // the field's measurement.
                         Box(
                             Modifier
                                 .matchParentSize()
@@ -957,11 +764,7 @@ fun ProcessTextScreen(
                             )
                         }
 
-                        // A model may be rewriting what's on screen, so what's on screen has to
-                        // stop being editable while it does -- typing into text that is about to
-                        // be replaced is a race the user cannot win. Cut to the field's own
-                        // outline: the same shape the border draws, so the "a model may touch
-                        // this" signal covers exactly the thing it is touching.
+                        // While a model runs, the field is covered, cut to its own outline.
                         if (busy) {
                             val pulse = rememberInfiniteTransition()
                             val workingAlpha by pulse.animateFloat(
@@ -984,11 +787,7 @@ fun ProcessTextScreen(
                                     ),
                             ) {
                                 Text(
-                                    // notice is exactly this task's label the whole time busy is
-                                    // true -- runTask is the only place that sets it before this
-                                    // reads it, and nothing touches it again until requestId (and
-                                    // so busy) goes false. Reading it rather than recomputing
-                                    // workingLabel keeps the two from disagreeing about the same run.
+                                    // The task's label, set by runTask for the whole run.
                                     notice,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = workingAlpha),
                                     style = MaterialTheme.typography.titleMedium,
@@ -1016,9 +815,7 @@ fun ProcessTextScreen(
                         )
                     }
 
-                    // While busy this would just repeat "Working" a second time -- the overlay
-                    // below already says it. An error notice (busy is false by the time one is
-                    // set; see onAssistError) still shows here as before.
+                    // Hidden while busy, when the overlay shows it.
                     if (notice.isNotEmpty() && !busy) {
                         Explanation(notice)
                     }
@@ -1042,10 +839,7 @@ fun ProcessTextScreen(
                             }
                             scope.launch {
                                 themes.updatePreferences { prefs ->
-                                    // Directly creating a first-class action from a prompt: the
-                                    // id is assigned here, once, so pinning it to the bar in the
-                                    // SAME update (rather than a second save) is what makes the
-                                    // toggle below actually one step, not two.
+                                    // Saved and, if asked, pinned to the bar in one update.
                                     val action = CustomAction(
                                         id = CustomAction.nextId(prefs.customActions),
                                         name = name,
@@ -1096,15 +890,8 @@ fun ProcessTextScreen(
                 }
             }
 
-            // One bar, arrows pinned to its ends -- the same shape as the in-keyboard composer's
-            // own control bar, not a page with buttons scattered across it. Insert/Copy lives in
-            // here too, as the last icon before the forward arrow, exactly where it sits in the
-            // keyboard's version: the one affirmative action on the bar, not a separate call to
-            // action bolted underneath it.
-            //
-            // Wrapped in a Box only so externalCustomPickerOpen has somewhere to anchor an
-            // AssistMenu regardless of whether SAVED_PROMPTS (which anchors its own copy of the
-            // same menu) happens to be on this user's bar at all -- see that state's own doc.
+            // The bar, with the arrows at its ends and Insert before the forward arrow. The Box
+            // anchors the menu externalCustomPickerOpen opens.
             Box {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
@@ -1122,15 +909,8 @@ fun ProcessTextScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (assistAvailable) {
-                        // In the user's own order -- the same preference the in-keyboard bar
-                        // used to read, ComposerAction.fromIds(preferences.composerBar), so
-                        // reordering it in Settings means the same thing here as it always did.
-                        // INSERT is skipped: it stays the fixed button at the bar's end, because
-                        // what it does (Insert vs Copy) already depends on how this screen was
-                        // reached in a way a reorderable slot does not fit.
-                        // Words in what an action would actually be sent -- the selection, grown
-                        // to whole words, or the whole field. Below a task's own floor its
-                        // button greys out: summarising three words is the three words back.
+                        // The actions in the user's order, without INSERT. A task whose minWords
+                        // is above the words it would be sent is greyed out.
                         val targetWords = composerWordCount(targetText())
                         for (item in ComposerBar.resolve(preferences.composerBar, preferences.customActions)) {
                             if (item is ComposerBarItem.Custom) {
@@ -1238,16 +1018,8 @@ fun ProcessTextScreen(
                         }
                     }
                 }
-                // Read-only (nowhere to write back to -- the selection came from a view that
-                // never offered to accept a replacement) has no affirmative action of its own
-                // any more: Copy is the badge on the field itself now, available either way this
-                // screen was reached, so there is nothing read-only still needs a bar button for.
-                // Both ways out of the box offer the same choice first: the markdown exactly
-                // as written (bold stays **bold**, the list keeps its dashes -- what survives
-                // a round trip back into this box or any markdown-aware target), or the plain
-                // rendering (toText: real line breaks, bullets as their glyph, no markers --
-                // what reads cleanly in a field that will never parse anything). Copy is the
-                // one that never asks: its clip carries both faces at once.
+                // Insert, only when the selection can be replaced, and Share each offer the
+                // markdown as written or the plain rendering (toText).
                 val hasText = richTextState.annotatedString.text.isNotEmpty()
                 if (!readOnly) {
                     Box {
@@ -1258,10 +1030,7 @@ fun ProcessTextScreen(
                             Icon(
                                 painter = painterResource(R.drawable.bk_composer_insert),
                                 contentDescription = strings[Keys.COMPOSER_INSERT],
-                                // Fixed, not the theme's colour -- see INSERT_GREEN's own doc. A
-                                // play button reads as "send" by its colour before its shape, and a
-                                // theme with a red or orange accent would otherwise tint the one
-                                // affirmative action on the bar to look like a stop.
+                                // A fixed green, not the theme's colour.
                                 tint = if (hasText && !busy) INSERT_GREEN else LocalContentColor.current,
                             )
                         }
@@ -1290,11 +1059,7 @@ fun ProcessTextScreen(
                         }
                     }
                 }
-                // Its own button rather than folded into Copy or Insert: sharing hands the text
-                // to another app entirely, neither the clipboard round trip Copy is nor the
-                // "send this screen's answer back to where the selection came from" Insert is,
-                // and available either way this screen was reached -- read-only or not, there is
-                // always somewhere else on the phone the current text could usefully go.
+                // Share, to another app.
                 Box {
                     IconButton(
                         enabled = hasText && !busy,
@@ -1315,9 +1080,7 @@ fun ProcessTextScreen(
                             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, result)
-                                // Alongside the text, not instead of it -- a target that
-                                // understands rich text reads this one, everything else
-                                // falls back to EXTRA_TEXT on its own.
+                                // HTML alongside the text, for a target that reads it.
                                 if (html != null) {
                                     putExtra(Intent.EXTRA_HTML_TEXT, html)
                                 }
@@ -1366,11 +1129,8 @@ fun ProcessTextScreen(
 }
 
 /**
- * What the box shows instead of itself when BorderKeys is not the keyboard in use.
- *
- * Same frame as the real box -- shape, ring and all -- so this reads as the draft box declining
- * to open rather than as a different screen. The one thing it can offer is the system's own
- * keyboard picker; it cannot switch the keyboard itself; see [openKeyboardPicker].
+ * What the box shows instead of itself when BorderKeys is not the keyboard in use: the same
+ * frame, offering the system keyboard picker ([openKeyboardPicker]).
  */
 @Composable
 private fun NotDefaultKeyboardBox(
@@ -1419,17 +1179,12 @@ private fun NotDefaultKeyboardBox(
     }
 }
 
-/** The same green as the keyboard's caps-lock light (KeyboardCanvasView's shiftLockLedPaint);
- *  kept as its own constant rather than shared across a Compose/Canvas boundary neither side has
- *  a reason to cross for one colour. */
+/** The green of the keyboard's caps-lock light (KeyboardCanvasView's shiftLockLedPaint). */
 private val INSERT_GREEN = Color(0xFF43A047)
 
 /**
- * The moving gradient around the box: purple, violet, red, blue, back to purple so the loop has
- * no seam. Diagonal offsets rather than a rotation, and deliberately not rotating the box itself
- * -- the shape's top corners are rounded and its bottom is not, and spinning a brush with that
- * asymmetry would spin the corners out of place with it. Sliding the gradient's own start and
- * end along the diagonal instead moves the colours without moving the shape.
+ * The moving gradient around the box, looping without a seam; [shift] slides its start and end
+ * along the diagonal.
  */
 private fun ringBrush(shift: Float, alpha: Float = 1f): Brush {
     val span = 900f
@@ -1447,15 +1202,12 @@ private val AI_RING_COLOURS = listOf(
     Color(0xFF3B82F6), // blue
     Color(0xFFEF4444), // red
     Color(0xFF6D28D9), // purple
-    Color(0xFF8B5CF6), // back to violet -- the loop has no seam
+    Color(0xFF8B5CF6), // violet again
 )
 
 /**
- * The context window assumed for chunk sizing before the active model's own row has been
- * collected from the database at least once. Smaller than every model KnownAssistModels.kt
- * currently ships (all 4096) rather than the middle of that range: undersizing a chunk here
- * costs one extra request the first time this runs in a session, oversizing it risks the
- * request this whole mechanism exists to avoid.
+ * The context window assumed for chunk sizing until the active model's row has been read; below
+ * every model in KnownAssistModels.
  */
 private const val DEFAULT_CONTEXT_TOKENS = 2048
 
@@ -1468,50 +1220,21 @@ private val RING_WIDTH = 2.5.dp
 /** The drop shadow both the draft box and the working overlay cast under their own frame. */
 private val BOX_ELEVATION = 16.dp
 
-/**
- * A vertical swipe on the draft box shows or hides the keyboard -- the same drag-decides-it
- * gesture as VoxApps' Commander/FastMap rules window, with no handle drawn for it here either.
- *
- * SWIPE_THRESHOLD is the distance a drag has to cross to *commit* (checked by the caller, in its
- * own onChange -- see where this is called), which is a separate question from [SWIPE_DEAD_ZONE]
- * below, the much smaller distance this claims the gesture at, past which it is already live and
- * following the finger rather than waiting for the commit line to be crossed.
- */
+/** How far a vertical swipe on the box must travel to show or hide the keyboard. */
 private val SWIPE_THRESHOLD = 56.dp
 
-/** A little more forgiving than [SWIPE_THRESHOLD] -- dragging across letters to select a word or
- *  a phrase is a common, legitimate horizontal drag on this field, and this stays clear of it. */
+/** How far a horizontal swipe on the text must travel to change version. */
 private val VERSION_SWIPE_THRESHOLD = 72.dp
 
-/**
- * How far a drag has to move, on its dominant axis, before either gesture below claims it and
- * starts reporting it live. Small on purpose, and the same for both: a tap to place the cursor
- * or a press on a button never reaches this distance at all, so neither gesture ever touches it,
- * but a real swipe is claimed early enough to visibly follow the finger well before it reaches
- * an actual commit threshold, which is what makes either one read as a live drag rather than an
- * effect that only appears once the finger has already lifted.
- */
+/** How far a drag must move on its dominant axis before either swipe claims it. */
 private val SWIPE_DEAD_ZONE = 12.dp
 
 /**
  * Claims a vertical drag once it clears [SWIPE_DEAD_ZONE] and is more vertical than horizontal,
  * then calls [onChange] with the running total on every further move (`released = false`) and
- * once more when the pointer lifts (`released = true`, total 0f if the drag was never claimed at
- * all). Deciding what a given total means -- committed, or short of the threshold -- is the
- * caller's job; see where this is used for that half of it.
- *
- * Read in [PointerEventPass.Initial] -- before anything beneath gets its own turn at the same
- * events in the Main pass -- so a swipe that passes over the header or a button is seen here
- * first. Only once it is claimed (past the dead zone) is anything actually consumed; everything
- * before that point is left unconsumed and reaches the button or the field exactly as if this
- * modifier were not here at all.
- *
- * [exclusion] is the one carve-out from "this box top to bottom": a gesture whose *down* lands
- * inside the returned rect (the editor's own scrollable viewport, in this node's coordinates)
- * is never watched at all, so its vertical drags belong to the text's scroll and nothing else.
- * A pointer's targets are fixed the moment it lands, which is what makes declining it here once
- * a complete separation rather than a tug-of-war -- read per gesture, not captured, so the rect
- * is always the current one even though the handler itself never restarts.
+ * once more on lift (`released = true`, total 0f if never claimed). Read in
+ * [PointerEventPass.Initial]; nothing is consumed before the claim. A gesture whose down lands in
+ * [exclusion]'s rect, read per gesture, is not watched.
  */
 private fun Modifier.swipeToToggleKeyboard(
     exclusion: () -> Rect? = { null },
@@ -1523,15 +1246,8 @@ private fun Modifier.swipeToToggleKeyboard(
     }
 
 /**
- * A horizontal swipe on the draft text steps through versions -- right for the previous one,
- * left for the next -- the same move as the back/forward arrows at the bottom of the box or a
- * node picked on the rail, reached without looking away from what was just written to find
- * either of those.
- *
- * Shares [awaitAxisSwipe] with [swipeToToggleKeyboard] above, axes swapped: a drag that commits
- * to horizontal is this gesture's, one that commits to vertical is that one's, and the same
- * "nothing claimed below the dead zone" rule is what leaves an ordinary tap or a drag to select
- * text in the field beneath reaching it untouched either way.
+ * [swipeToToggleKeyboard]'s horizontal counterpart, on the text: right for the previous version,
+ * left for the next.
  */
 private fun Modifier.swipeToChangeVersion(onChange: suspend (delta: Float, released: Boolean) -> Unit): Modifier =
     pointerInput(Unit) {
@@ -1540,13 +1256,9 @@ private fun Modifier.swipeToChangeVersion(onChange: suspend (delta: Float, relea
     }
 
 /**
- * The engine both directional swipes above share: track a drag until it clearly commits to one
- * axis past [deadZone] -- more of that axis's own movement than the other's -- claim the rest of
- * that one gesture once it does (consuming every further event, which is what keeps it from also
- * being read as a tap or a text selection by whatever is underneath), and report the running
- * signed total to [onChange] on every claimed move, then once more on release. A drag that never
- * crosses [deadZone] is never claimed at all, and reaches whatever is underneath exactly as if
- * this modifier were not there.
+ * Tracks a drag until it commits to one axis past [deadZone], then consumes the rest of the
+ * gesture and reports the running signed total to [onChange] on every move and once on release.
+ * A drag that never crosses [deadZone] is left unconsumed.
  */
 private suspend fun PointerInputScope.awaitAxisSwipe(
     deadZone: Float,
@@ -1555,20 +1267,11 @@ private suspend fun PointerInputScope.awaitAxisSwipe(
     exclusion: () -> Rect? = { null },
     onChange: suspend (delta: Float, released: Boolean) -> Unit,
 ) = coroutineScope {
-    // PointerInputScope is not itself a CoroutineScope (only Density), and
-    // awaitEachGesture's own scope permits awaiting only its own suspend functions
-    // (awaitPointerEvent and the like) -- onChange, an arbitrary suspend lambda that ends up
-    // calling Animatable.snapTo/animateTo, needs a real one to run as a child of, which is what
-    // wrapping this in coroutineScope actually provides. this@coroutineScope, not a bare
-    // launch, because the closest implicit receiver inside the block below is
-    // AwaitPointerEventScope, not this one. Each call is its own short-lived launch rather than
-    // a single long-running collector: a drag reports a handful of moves, not a stream worth a
-    // channel over.
+    // Each onChange call is launched in this coroutineScope: awaitEachGesture's own scope can
+    // await only its own suspend functions.
     awaitEachGesture {
         val down = awaitFirstDown(pass = PointerEventPass.Initial)
-        // A gesture born inside the excluded region is not this gesture at all -- returning
-        // here consumes nothing, so whatever is under it (the editor's scroll) handles the
-        // whole thing, and awaitEachGesture waits out the remaining pointers before rearming.
+        // A gesture that starts in the excluded region is left to what is under it.
         if (exclusion()?.contains(down.position) == true) {
             return@awaitEachGesture
         }
@@ -1600,22 +1303,12 @@ private suspend fun PointerInputScope.awaitAxisSwipe(
     }
 }
 
-/**
- * Whether the swipe hint has already played, for the lifetime of this process.
- *
- * Not saved anywhere, and deliberately not -- this is "have I already shown this once this
- * session," not a permanent "the user has seen onboarding" preference, and the two do not
- * belong in the same kind of storage. A fresh process is a fresh session; the same process
- * being backgrounded and brought back, even if the activity hosting it gets torn down and
- * recreated along the way (this device does that fairly readily), is not.
- */
+/** Whether the swipe hint has already played in this process; not saved. */
 private var swipeHintShown = false
 
 /**
- * One toggle on the field's format bar -- a small round chip that fills with the primary
- * colour while its style is active at the cursor, so the bar doubles as a readout of what the
- * text under the caret already is. What sits on the chip is [content]'s to draw (a styled
- * letter, an icon); [description] is the same fact for whoever is not looking at it.
+ * One toggle on the format bar: a round chip filled with the primary colour while its style is
+ * active at the cursor. [content] draws the chip; [description] is its accessibility label.
  */
 @Composable
 private fun FormatToggle(
@@ -1648,11 +1341,8 @@ private fun FormatToggle(
 }
 
 /**
- * The thin thumb along the field's edge while the text can scroll at all -- an indicator, not
- * a handle: on a phone the text itself is the scroll surface, and a strip this narrow that
- * also claimed touches would only eat taps meant for the words beside it. Rises with any
- * scroll movement and fades back out once the text has settled, the way the platform's own
- * scrollbars do.
+ * The thin thumb along the field's edge while the text can scroll: an indicator that takes no
+ * touches, shown on any scroll and faded out once the text has settled.
  */
 @Composable
 private fun VerticalScrollbar(
@@ -1664,9 +1354,7 @@ private fun VerticalScrollbar(
     val color = if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
     val visibility = remember { Animatable(0f) }
     LaunchedEffect(scrollState) {
-        // drop(1): the position collection starts on is not a movement, and the thumb should
-        // not flash once at open just because collection began. collectLatest, so a scroll
-        // still in motion keeps restarting the linger instead of fading mid-drag.
+        // drop(1): the first value is not a movement. collectLatest restarts the linger.
         snapshotFlow { scrollState.value }.drop(1).collectLatest {
             visibility.snapTo(1f)
             delay(SCROLLBAR_FADE_DELAY_MILLIS)
@@ -1697,48 +1385,22 @@ private fun VerticalScrollbar(
 }
 
 /**
- * "Swipe up for keyboard," rising and fading a handful of times and then gone -- the same idea
- * as the arrows a chat app pulses over its own input the first time it opens, teaching the
- * gesture above without a word of onboarding copy and without staying on screen once it has had
- * its chances to be seen.
- *
- * Plays once per process, [SWIPE_HINT_REPEAT_COUNT] times, via [swipeHintShown] above -- not
- * once per composition, which a naive `remember` would give for free right up until the first
- * thing that removes and re-adds this composable (a focus blip, a return from the background),
- * at which point it would play again. [focused] is read reactively instead, through
- * [rememberUpdatedState], so the caller can leave this mounted continuously and still have it
- * stop the moment focus actually happens, without either of them tearing the other down.
- *
- * Painted with [ringShift]'s own moving gradient rather than a flat theme colour -- the same
- * brush the box's border animates with, so the hint reads as coming from the border itself
- * ("this colour is what a swipe reaches for") instead of as an unrelated label sitting near it.
- *
- * One [progress] Animatable drives both position and opacity, rather than the two separately
- * timed ones this used to be -- a rise-then-snap-then-fade-in built from independently-timed
- * pieces reads as three small events, and a single value swept smoothly from 0 to 1 is what
- * makes it read as one: alpha follows a half sine of it ([kotlin.math.sin], peaking mid-flight),
- * so the text is already transparent at both ends of the sweep and the [Animatable.snapTo] that
- * starts the next cycle over at the bottom is invisible when it happens, not a visible jump --
- * which is the whole of what "finishes at the top, starts again at the bottom" needs, done in
- * one motion instead of stitched from several.
+ * "Swipe up for keyboard", rising and fading [SWIPE_HINT_REPEAT_COUNT] times, once per process
+ * ([swipeHintShown]), painted in [ringShift]'s gradient. One [progress] drives the rise and the
+ * alpha, a half sine of it, so each cycle starts and ends transparent. [focused] stops it.
  */
 @Composable
 private fun SwipeUpHint(ringShift: Float, focused: Boolean, modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val progress = remember { Animatable(0f) }
-    // A second, independent fader for focus alone -- progress keeps meaning "how far through
-    // this rise," and this is what actually hides the text the instant focus happens, whatever
-    // point of the rise it happened at. Multiplied together below rather than fighting over the
-    // same value.
+    // Hides the text once focus arrives, multiplied with the rise's alpha.
     val focusFade = remember { Animatable(1f) }
     val latestFocused = rememberUpdatedState(focused)
     LaunchedEffect(Unit) {
         if (swipeHintShown) {
             return@LaunchedEffect
         }
-        // Marked immediately, not after the loop below finishes -- an attempt interrupted by an
-        // early focus still counts as this session's one chance, the same as one that ran to
-        // its last rep untouched.
+        // Marked at the start, so an interrupted run counts.
         swipeHintShown = true
         repeat(SWIPE_HINT_REPEAT_COUNT) {
             if (latestFocused.value) {
@@ -1748,9 +1410,7 @@ private fun SwipeUpHint(ringShift: Float, focused: Boolean, modifier: Modifier =
             progress.animateTo(1f, tween(SWIPE_HINT_CYCLE_MILLIS, easing = FastOutSlowInEasing))
         }
     }
-    // Focus can happen mid-cycle (the user swiped before the hint finished its run) -- faded
-    // out right away rather than left to finish its current rise, since it would otherwise be
-    // sitting over a field the keyboard is now covering.
+    // Fades out at once when focus arrives mid-cycle.
     LaunchedEffect(focused) {
         if (focused) {
             focusFade.animateTo(0f, tween(SWIPE_HINT_FOCUS_FADE_MILLIS))
@@ -1769,24 +1429,21 @@ private fun SwipeUpHint(ringShift: Float, focused: Boolean, modifier: Modifier =
     )
 }
 
-/** The field's own side gap, in from the card -- smaller than it used to be, so the field itself
- *  reads as wider inside the same card rather than floating in a wide margin. */
+/** The field's side gap inside the card. */
 private val FIELD_SIDE_GAP = 12.dp
 
 private val MENU_CORNER_RADIUS = 14.dp
 private val MENU_SHADOW_ELEVATION = 10.dp
 private val MENU_BORDER_WIDTH = 1.5.dp
 
-/** The format bar across the field's top: style toggles left, clipboard actions right. Also
- *  the square size of each clipboard button on it, which is what centres their icons on the
- *  strip with no offsets of their own to place. */
+/** The format bar's height, and the square size of each clipboard button on it. */
 private val FORMAT_BAR_HEIGHT = 40.dp
 
 /** The round chip behind each style toggle, and how strongly it fills while active. */
 private val FORMAT_TOGGLE_SIZE = 32.dp
 private const val FORMAT_TOGGLE_ACTIVE_ALPHA = 0.15f
 
-/** Room to land a finger on while the box is still empty -- the text alone would be one line. */
+/** The editor's least height. */
 private val EDITOR_MIN_HEIGHT = 48.dp
 
 private val FIELD_BORDER_WIDTH = 1.dp
@@ -1802,29 +1459,26 @@ private const val SCROLLBAR_FADE_DELAY_MILLIS = 800L
 
 private const val SCROLLBAR_FADE_MILLIS = 300
 
-/** 70% of [MaterialTheme.typography.labelLarge]'s own size, doubled -- 1.4x in total. */
+/** The hint's size, as a multiple of [MaterialTheme.typography.labelLarge]'s. */
 private const val SWIPE_HINT_SIZE_MULTIPLIER = 1.4f
 
-/** How many times the hint rises and fades before it stops appearing for good, this process. */
+/** How many times the hint rises and fades, once per process. */
 private const val SWIPE_HINT_REPEAT_COUNT = 2
 
-/** A slow, deliberate float rather than a snap -- what "cursive" means for a one-shot nudge. */
+/** The hint's rise speed. */
 private const val SWIPE_HINT_SPEED_DP_PER_SECOND = 16f
 
 /** How far each rise travels. */
 private val SWIPE_HINT_DISTANCE = 22.dp
 
-/** [SWIPE_HINT_DISTANCE] at [SWIPE_HINT_SPEED_DP_PER_SECOND] -- computed from the two, rather
- *  than a duration guessed at and left to drift out of sync with either if one of them changes. */
+/** [SWIPE_HINT_DISTANCE] at [SWIPE_HINT_SPEED_DP_PER_SECOND]. */
 private val SWIPE_HINT_CYCLE_MILLIS =
     (SWIPE_HINT_DISTANCE.value / SWIPE_HINT_SPEED_DP_PER_SECOND * 1000).roundToInt()
 
-/** How quickly the hint gets out of the way once the field is actually focused -- quick, since
- *  by then it is sitting on top of what the keyboard is about to cover. */
+/** How quickly the hint fades once the field is focused. */
 private const val SWIPE_HINT_FOCUS_FADE_MILLIS = 150
 
-/** How far the field slides in from, on a version change -- a nudge, the same scale as the
- *  swipe hint's own rise, not a full page's worth of travel. */
+/** How far the field slides in from on a version change. */
 private val VERSION_TRANSITION_DISTANCE = 24.dp
 
 /** How much of the field's opacity the slide dips at its furthest point (versionSlide at ±1). */
@@ -1832,27 +1486,15 @@ private const val VERSION_TRANSITION_FADE = 0.6f
 
 private const val VERSION_TRANSITION_MILLIS = 220
 
-/** How far the box shrinks for its own settle, each time focus flips -- barely there on
- *  purpose: a hint that something changed, not a bounce that competes with the system
- *  keyboard's own slide for attention. */
+/** How far the box shrinks for its settle when focus flips. */
 private const val FOCUS_SETTLE_SCALE = 0.985f
 
 private const val FOCUS_SETTLE_MILLIS = 220
 
-/**
- * How long [showKeyboard]'s scroll hold outlasts the focus handoff -- long enough to cover the
- * focus-gain reveal and the keyboard's own resize on a slow device, short enough that a real
- * scroll gesture right after opening the keyboard is not noticeably ignored.
- */
+/** How long [showKeyboard]'s scroll hold outlasts the focus handoff. */
 private const val SHOW_KEYBOARD_SCROLL_HOLD_MILLIS = 900L
 
-/**
- * The busy overlay's two layers: the ring's own gradient over a surface-coloured scrim
- * underneath it. Scrim higher than surface -- more of the moving colour, less of the flat
- * tint -- is what keeps this reading as "the model is working," not "this box is disabled";
- * the surface tint under it still keeps the box legibly unavailable, in both light and dark
- * theme.
- */
+/** The busy overlay's two layers: the ring's gradient, and a surface-coloured layer inside it. */
 private const val WORKING_SCRIM_ALPHA = 0.55f
 private const val WORKING_SURFACE_ALPHA = 0.4f
 
@@ -1871,12 +1513,8 @@ private data class Rail(
 }
 
 /**
- * The dropdown a bar action with more than one target opens -- translate into which language,
- * which register, which saved prompt.
- *
- * Not a plain [DropdownMenu]: rounded, dropped well clear of the bar with a real shadow, and
- * edged with the same moving gradient the box's own ring is drawn in, so a menu the assistant
- * opens looks like it belongs to the assistant rather than to the platform.
+ * The dropdown a bar action with more than one target opens: rounded, shadowed, and edged with
+ * the ring's gradient.
  */
 @Composable
 private fun AssistMenu(
@@ -1897,7 +1535,7 @@ private fun AssistMenu(
     )
 }
 
-/** A hairline between two [AssistMenu] rows -- inset from the border so it does not run into it. */
+/** A hairline between two [AssistMenu] rows, inset from the border. */
 @Composable
 private fun AssistMenuDivider() {
     HorizontalDivider(
@@ -1907,17 +1545,13 @@ private fun AssistMenuDivider() {
     )
 }
 
-/** Whitespace-separated words in [text] -- the unit the draft box's per-task gate counts in. */
+/** Whitespace-separated words in [text], as the per-task gate counts them. */
 private fun composerWordCount(text: String): Int =
     text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
 
+/** A bar button: an icon with its [label] under it; the icon carries no description of its own. */
 @Composable
 private fun ActionIcon(icon: Int, label: String, disabled: Boolean, custom: Boolean = false, onClick: () -> Unit) {
-    // What an icon alone left to guessing: "the wand" told you nothing about grammar versus
-    // tone versus a saved prompt until you had pressed it once and remembered. The label is the
-    // same string the icon used to carry only as a screen reader's contentDescription -- now
-    // said once, out loud on the button itself, so the icon's own description is redundant and
-    // dropped rather than read twice.
     val alpha = if (disabled) DISABLED_ALPHA else 1f
     Column(
         modifier = Modifier
@@ -1933,9 +1567,7 @@ private fun ActionIcon(icon: Int, label: String, disabled: Boolean, custom: Bool
                 tint = LocalContentColor.current.copy(alpha = alpha),
                 modifier = Modifier.size(22.dp),
             )
-            // A dot rather than a second icon, the same mark QuickActionsView draws on its own
-            // bar for the same reason: the label already says this is a custom action, but a
-            // reader who has not looked yet should not have to.
+            // A dot marks a custom action, as on QuickActionsView's bar.
             if (custom) {
                 Box(
                     modifier = Modifier
@@ -1960,10 +1592,8 @@ private fun ActionIcon(icon: Int, label: String, disabled: Boolean, custom: Bool
 private const val DISABLED_ALPHA = 0.38f
 
 /**
- * The dots between the two arrows: one per version, the current one filled, the ends coloured
- * apart from the rest -- the same reading as the keyboard's own timeline, at a fraction of its
- * drawing complexity, because a full-screen Compose layout has no cramped strip to fit it into
- * and no reason to reproduce a drag gesture a tap already covers.
+ * The dots between the two arrows: one per version, the current one larger, the ends coloured
+ * apart. A tap goes to that version.
  */
 @Composable
 private fun VersionRail(rail: Rail, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
@@ -2029,9 +1659,7 @@ private fun SavePromptRow(
             Spacer(Modifier.width(4.dp))
             TextButton(onClick = onSkip) { Text(strings[Keys.COMPOSER_PROMPT_DISMISS]) }
         }
-        // Directly creating a first-class action from a prompt in one step, rather than saving
-        // it to the re-run list and pinning it to the bar as a second, separate trip through
-        // Settings afterwards.
+        // Pins the saved action to the bar in the same step.
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.clickable { onPinToBarChange(!pinToBar) },
@@ -2042,11 +1670,7 @@ private fun SavePromptRow(
     }
 }
 
-/**
- * A multiplier on the field's own ambient text size for [KeyboardPreferences.composerTextSize]'s
- * three steps -- Medium is exactly the size the field already had before this setting existed,
- * so nobody's box changes size until they actually reach for the new control.
- */
+/** The field's text-size multiplier for [KeyboardPreferences.composerTextSize]; Medium is 1. */
 private fun composerFontScale(step: Int): Float = when (step) {
     KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL -> 0.85f
     KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE -> 1.25f
@@ -2054,11 +1678,8 @@ private fun composerFontScale(step: Int): Float = when (step) {
 }
 
 /**
- * What the working overlay says while a request is in flight -- what it is actually doing,
- * not a generic "Working," and specific about which language or which tone rather than a bare
- * "Translating" or "Changing tone." An exhaustive `when` on purpose and no `else`: a task added
- * to AssistTask.kt without a line added here is a compile error, not a silent fallback to a
- * label that says nothing about what that new task does.
+ * What the working overlay says while a request runs, naming the task, its language or its tone.
+ * Exhaustive, with no `else`.
  */
 private fun workingLabel(strings: com.borderkeys.i18n.LanguageManager, task: AssistTask): String =
     when (task) {
@@ -2074,7 +1695,6 @@ private fun workingLabel(strings: com.borderkeys.i18n.LanguageManager, task: Ass
         AssistTask.REWRITE_FORMAL -> strings[Keys.COMPOSER_WORKING_TONE_FORMAL]
         AssistTask.REWRITE_CASUAL -> strings[Keys.COMPOSER_WORKING_TONE_CASUAL]
         AssistTask.REWRITE_DIRECT -> strings[Keys.COMPOSER_WORKING_TONE_DIRECT]
-        // Nothing fixed to name -- the instruction is whatever the user wrote.
         AssistTask.CUSTOM -> strings[Keys.COMPOSER_WORKING_CUSTOM]
     }
 
@@ -2097,7 +1717,7 @@ private fun toneLabel(strings: com.borderkeys.i18n.LanguageManager, task: Assist
         else -> ""
     }
 
-/** Every failure is a sentence somebody can act on. Mirrors BorderKeysService.assistErrorMessage. */
+/** The message for an assistant error; mirrors BorderKeysService.assistErrorMessage. */
 private fun assistErrorMessage(strings: com.borderkeys.i18n.LanguageManager, error: Int): String =
     when (error) {
         AssistProtocol.ERROR_NO_MODEL -> strings[Keys.ASSISTANT_NO_MODEL_IMPORTED_YET_SETTINGS_TEXT]

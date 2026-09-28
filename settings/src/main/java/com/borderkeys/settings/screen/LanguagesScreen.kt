@@ -56,11 +56,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * The language packs, their weights, and where a new one comes from.
- *
- * Several are active at once. There is no "current language" here and no switch to press mid
- * sentence, because writing Romanian and English in the same message is the normal case and a
- * keyboard that makes you announce which one you are using has already lost.
+ * The language packs, their weights, and where a new one comes from. Several are active at once.
  */
 @Composable
 fun LanguagesScreen(modifier: Modifier = Modifier) {
@@ -90,9 +86,7 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    // The engine consults at most MAX_ENABLED packs at once, and the bridge refuses a larger
-    // set outright rather than taking the first few -- so a fifth switch turned on here used to
-    // switch prediction off for all five. The switches stop at the limit instead, and say so.
+    // The switches stop at MAX_ENABLED packs, and say so.
     val atLimit = packs.count { it.enabled } >= LanguagePackRepository.MAX_ENABLED
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -124,14 +118,11 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
                     strings.getString(Keys.LANGUAGES_LIMIT_REACHED, LanguagePackRepository.MAX_ENABLED),
                 )
             }
-            // Once, under the packs, rather than on each row: the chips above are one choice
-            // between them, and repeating the paragraph beside every pack would read as though
-            // each had its own setting.
+            // Once, under the packs.
             if (packs.isNotEmpty()) {
                 Explanation(strings[Keys.LANGUAGES_PREFERRED_NOTE])
             }
-            // How the packs are weighed against each other while writing: about the packs
-            // above, and set once.
+            // How the packs are weighed against each other while writing.
             AdvancedSection(strings[Keys.LANGUAGES_ADVANCED_NOTE]) {
                 LanguageLock(preferences) { lock ->
                     scope.launch { DataGraph.themes.updatePreferences { it.copy(languageLock = lock) } }
@@ -141,8 +132,7 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
         val installable = BundledDictionaries.ALL.filter { candidate ->
             packs.none { it.tag.equals(candidate.tag, ignoreCase = true) }
         }
-        // Nothing to say once every bundled language is already installed: a card offering to
-        // add languages that are all already added is a card with nothing in it.
+        // Only while a bundled language is not installed.
         if (installable.isNotEmpty()) {
             SettingsSectionCard(strings[Keys.LANGUAGES_INCLUDED_WITH_THE_APP]) {
                 Explanation(
@@ -212,18 +202,8 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
 
 
 /**
- * Copies a chosen file into private storage, validates it, and records it -- or removes it.
- *
- * The three steps are one operation on purpose. Staging a pack and leaving it unregistered would
- * put a file on disk that nothing lists, nothing loads and nothing can delete through the UI,
- * which is what this screen used to do.
- *
- * The file is copied before it is validated rather than validated in place. A `content://` URI
- * is served by another application, which is free to rewrite what is behind it between the
- * moment it is checked and the moment it is mapped; the copy in private storage cannot be
- * rewritten by anyone, so the bytes that were validated are the bytes that get mapped.
- *
- * Returns the sentence to show under the button, whatever happened.
+ * Copies a chosen file into private storage, validates the copy, and records it or deletes it.
+ * Returns the sentence to show under the button.
  */
 private suspend fun importPack(
     strings: LanguageManager,
@@ -248,8 +228,7 @@ private suspend fun importPack(
 
     return when (val verdict = LanguagePackInspector.inspect(pack.file)) {
         is LanguagePackInspector.Result.Refused -> {
-            // Refused means refused: the file goes, so a pack that cannot be read cannot sit in
-            // private storage taking up space and waiting to be tried again.
+            // A refused file is deleted.
             pack.file.delete()
             strings.getString(Keys.LANGUAGES_REFUSED, strings.getString(verdict.reasonKey, verdict.reasonArgument))
         }
@@ -269,9 +248,7 @@ private suspend fun importPack(
                     importedAt = System.currentTimeMillis(),
                     enabled = room,
                     weight = 1f,
-                    // Nothing here can know the licence of a word list someone compiled
-                    // themselves, and inventing one would be worse than admitting it. The
-                    // packs the project publishes carry theirs in docs/licensing.md.
+                    // The licence of an imported pack is not known here.
                     licenseNote = strings[Keys.LANGUAGES_NOT_RECORDED_SET_BY_WHOEVER_BUILT],
                 ),
             )
@@ -295,12 +272,7 @@ private fun displayNameFor(tag: String): String {
 
 
 /**
- * Installs a dictionary that shipped inside the application.
- *
- * The same path a chosen file takes: copied into private storage, validated by the native
- * header checks, recorded in the same table. Nothing about it is special afterwards -- it can be
- * weighted, switched off and removed exactly like an imported one, and replacing it with a real
- * compiled corpus is an import away.
+ * Installs a dictionary shipped inside the application, through the same path as a chosen file.
  */
 private suspend fun installBundled(
     strings: LanguageManager,
@@ -322,8 +294,7 @@ private suspend fun installBundled(
     return when (val verdict = LanguagePackInspector.inspect(pack.file)) {
         is LanguagePackInspector.Result.Refused -> {
             pack.file.delete()
-            // A pack this application compiled itself failing its own validator is a build
-            // problem, not a user problem, and saying so is more use than "import failed".
+            // A shipped pack failing validation is reported as a build problem.
             strings.getString(
                 Keys.LANGUAGES_THE_BUNDLED_DICTIONARY_IS_NOT_VALID,
                 strings.getString(verdict.reasonKey, verdict.reasonArgument),
@@ -345,10 +316,8 @@ private suspend fun installBundled(
                     importedAt = System.currentTimeMillis(),
                     enabled = room,
                     weight = 1f,
-                    // What docs/licensing.md records for the six shipped packs: counts from
-                    // the Wortschatz Leipzig corpora under CC BY 4.0, compiled here. This used
-                    // to claim the list was written in this repository under the GPL, which
-                    // was true of the first hand-written starters and of nothing since.
+                    // As docs/licensing.md records for the shipped packs: counts from the
+                    // Wortschatz Leipzig corpora under CC BY 4.0.
                     licenseNote = strings[Keys.LANGUAGES_CC_BY_LEIPZIG],
                 ),
             )
@@ -359,21 +328,16 @@ private suspend fun installBundled(
 }
 
 /**
- * What an import says when the pack was recorded but not switched on: the limit was reached,
- * so switching it on is a choice the person makes by switching another off first -- see
- * [LanguagePackRepository.MAX_ENABLED].
+ * What an import says when the pack was recorded but not switched on, because
+ * [LanguagePackRepository.MAX_ENABLED] packs were on.
  */
 private fun switchedOffNote(strings: LanguageManager): String =
     strings.getString(Keys.LANGUAGES_ADDED_SWITCHED_OFF, LanguagePackRepository.MAX_ENABLED)
 
 /**
  * One installed pack. [canSwitchOn] is false once [LanguagePackRepository.MAX_ENABLED] packs are
- * on: a pack that is already on can always be switched off, one that is off cannot be switched
- * on until another goes.
- *
- * [preferred] is this pack's share of a single choice across all of them, so [onPreferred] is
- * given the whole new value -- this pack's tag to select it, empty to go back to no preference.
- * Tapping the chip that is already on is what clears it; there is no separate "none" to find.
+ * on. [onPreferred] gets the whole new preference: this pack's tag, or empty when the chip that
+ * is on is tapped again.
  */
 @Composable
 private fun PackRow(
@@ -409,9 +373,7 @@ private fun PackRow(
             range = 0.05f..4f,
             default = 1f,
         ) { value -> scope.launch { repository.setWeight(pack.id, value) } }
-        // Only for a pack that is on: preferring one that is switched off names no open
-        // dictionary, so the engine would read it as no preference at all and the chip would be
-        // a control that does nothing.
+        // Only for a pack that is on.
         if (pack.enabled) {
             Row(modifier = Modifier.padding(horizontal = 12.dp)) {
                 PickerChip(strings[Keys.LANGUAGES_PREFERRED], preferred) {
@@ -425,8 +387,7 @@ private fun PackRow(
             modifier = Modifier.padding(horizontal = 12.dp),
         ) { Text(strings[Keys.LANGUAGES_REMOVE]) }
         if (confirmingRemove) {
-            // Asked first: removing deletes the file. A bundled pack is one tap to add back; an
-            // imported one may not be on the phone any more.
+            // Asked first: removing deletes the file.
             AlertDialog(
                 onDismissRequest = { confirmingRemove = false },
                 title = { Text(strings[Keys.LANGUAGES_REMOVE_PACK_TITLE]) },
@@ -446,13 +407,8 @@ private fun PackRow(
 }
 
 /**
- * Which language the interface is written in.
- *
- * Offered as a list of what is actually shipped rather than of every language that exists, and
- * each is named in itself -- someone looking for Romanian is looking for "Română", not for
- * whatever English calls it. "Follow the phone" is first and is the default, because a phone
- * later switched to a language BorderKeys ships should pick it up without anyone coming back
- * here.
+ * Which language the interface is written in: "Follow the phone", the default, then each shipped
+ * language named in itself.
  */
 @Composable
 private fun InterfaceLanguage(preferences: KeyboardPreferences, update: (String) -> Unit) {
@@ -466,10 +422,7 @@ private fun InterfaceLanguage(preferences: KeyboardPreferences, update: (String)
     ) { update("") }
     for (code in available) {
         LanguageRow(
-            // Named in itself where the catalogue says so, and by its code where it does not.
-            // A missing entry comes back as its own key, which is the loader's way of making a
-            // gap visible -- useful on a settings row, useless on a list someone has to choose
-            // from, so here it becomes the code instead.
+            // Named in itself, or by its code when the catalogue returns the key itself.
             label = strings.getString(LANGUAGE_NAME_PREFIX + code)
                 .takeIf { it != LANGUAGE_NAME_PREFIX + code } ?: code,
             selected = preferences.uiLanguage == code,
@@ -497,25 +450,16 @@ private fun LanguageRow(label: String, selected: Boolean, onPick: () -> Unit) {
     }
 }
 
-/** `language_name_ro` holds "Română". Built from the code so adding a language adds no code. */
+/** The prefix of a language's catalogue name: `language_name_ro` holds "Română". */
 private const val LANGUAGE_NAME_PREFIX = "language_name_"
 
-/**
- * How readily the keyboard stops offering words from the languages you are not writing in.
- *
- * A choice rather than a constant because the right answer depends on how someone writes, and
- * the two ends are both reasonable: one person writes one language at a time and wants the
- * others out of the way; another writes two in the same sentence and would be actively harmed
- * by the keyboard picking a side.
- */
+/** How readily the keyboard stops offering words from the languages you are not writing in. */
 @Composable
 private fun LanguageLock(preferences: KeyboardPreferences, update: (Int) -> Unit) {
     val strings = LocalStrings.current
 
     SectionHeader(strings[Keys.LANGUAGES_STICK_TO_ONE_LANGUAGE])
-    // Two rows rather than one. Five chips of translated text do not fit across a phone, and a
-    // fifth one that runs off the edge is a setting nobody knows exists -- which is how Strict
-    // was shipped for exactly one build.
+    // Two rows of chips.
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
