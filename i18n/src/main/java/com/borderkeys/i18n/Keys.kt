@@ -1022,6 +1022,7 @@ object Keys {
     const val SWIPE_A_PREVIEW_OF_WORK_STILL_IN_PROGRESS = "swipe_a_preview_of_work_still_in_progress"
     const val SWIPE_A_REAL_FIELD_NOTHING_TYPED_INTO = "swipe_a_real_field_nothing_typed_into"
     const val SWIPE_ADVANCED_NOTE = "swipe_advanced_note"
+    const val SWIPE_ADVANCED_NOTE_DECODING = "swipe_advanced_note_decoding"
     const val SWIPE_ALL_OF_IT_RUNS_ON_THIS = "swipe_all_of_it_runs_on_this"
     const val SWIPE_BACKSPACE_WORD = "swipe_backspace_word"
     const val SWIPE_BACKSPACE_WORD_NOTE = "swipe_backspace_word_note"

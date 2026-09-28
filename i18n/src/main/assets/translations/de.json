@@ -833,6 +833,7 @@
   "radial_trusted_word": "Das erkannte Wort",
   "size_advanced_note": "Der Raum neben den Tasten: Hintergrund, Unschärfe und der Pfeil",
   "swipe_advanced_note": "Wie eine Wischgeste erkannt wird, und das neuronale Modell",
+  "swipe_advanced_note_decoding": "Wie eine Wischgeste erkannt wird",
   "swipe_backspace_word": "Rücktaste nach dem Wischen entfernt das ganze Wort",
   "swipe_backspace_word_note": "Aus: die Rücktaste löscht einen Buchstaben, und Tippen bearbeitet dann das gewischte Wort an Ort und Stelle. An: die erste Rücktaste nach dem Wischen entfernt das Wort und das Leerzeichen davor.",
   "radial_count": "%s Wörter um das Menü",

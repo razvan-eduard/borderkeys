@@ -833,6 +833,7 @@
   "radial_trusted_word": "Le mot décodé",
   "size_advanced_note": "L'espace à côté des touches : fond, flou et la flèche",
   "swipe_advanced_note": "Comment un glissé est décodé, et le modèle neuronal",
+  "swipe_advanced_note_decoding": "Comment un glissé est décodé",
   "swipe_backspace_word": "Retour arrière après un glissement supprime le mot entier",
   "swipe_backspace_word_note": "Désactivé : retour arrière supprime une lettre, et la frappe modifie ensuite le mot sur place. Activé : le premier retour arrière après un glissement supprime le mot et l'espace qui le précède.",
   "radial_count": "%s mots autour du menu",
