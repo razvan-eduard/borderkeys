@@ -19,6 +19,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(ENGINE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../keyboard/src/main/cpp)
 set(TOOLS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tools)
+set(ASSIST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../assist/src/main/cpp)
 
 # Exceptions and RTTI off, exactly as the shipped library is built. A test binary compiled with
 # a different language dialect than the code it tests is testing something else.
@@ -83,8 +84,11 @@ add_executable(borderkeys_tests
     test_gesture.cpp
     test_tcn.cpp
     test_fold.cpp
+    test_answer_cleanup.cpp
+    ${ASSIST_DIR}/answer_cleanup.cpp
 )
 add_dependencies(borderkeys_tests test_pack test_folds)
+target_include_directories(borderkeys_tests PRIVATE ${ASSIST_DIR})
 target_link_libraries(borderkeys_tests borderkeys_engine)
 target_compile_options(borderkeys_tests PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
 target_compile_definitions(borderkeys_tests PRIVATE
