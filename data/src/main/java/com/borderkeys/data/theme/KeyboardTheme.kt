@@ -6,20 +6,8 @@ package com.borderkeys.data.theme
 import kotlinx.serialization.Serializable
 
 /**
- * How the keyboard looks, as data.
- *
- * Deliberately not an Android theme. There are no XML style resources for the keyboard, no
- * `?attr/` lookups and no `TypedArray` reads at runtime, because every one of those is a
- * resource-table lookup and the draw path has four milliseconds for the whole invalidated
- * region. This is read once from a typed DataStore, compiled into `Paint` objects, and the draw
- * path only ever uses those.
- *
- * Colours are packed ARGB ints, the form `Paint.setColor` wants, so nothing is converted while
- * drawing.
- *
- * Defaults are a dark theme, because a keyboard is on screen next to whatever the user is
- * reading and a slab of white at the bottom of a dark app is the thing people complain about
- * first.
+ * How the keyboard looks, as data read from a typed DataStore and compiled into `Paint` objects.
+ * Colours are packed ARGB ints. The defaults are a dark theme.
  */
 @Serializable
 data class KeyboardTheme(
@@ -35,94 +23,46 @@ data class KeyboardTheme(
     val rowHeightDp: Float = 52f,
     val labelTextSizeSp: Float = 20f,
 
-    /**
-     * The corner hint's own size -- what holding a key would type, or an accent. Independent of
-     * [labelTextSizeSp] on purpose: the two used to be one slider, a fixed ratio of the other,
-     * and there was no way to make the main letters bigger without the corner hints growing
-     * with them. The default is what that ratio used to produce, so nothing changes size for
-     * an existing install; from here the two move separately.
-     */
+    /** The corner hint's size: what holding a key would type, or an accent. */
     val accentTextSizeSp: Float = 15.5f,
     val showKeyBorders: Boolean = false,
     val pressedElevation: Float = 2f,
     val swipeTrailColor: Int = 0xCC6EA8FE.toInt(),
     val swipeTrailWidthDp: Float = 4f,
 
-    // Particle effects' own colours moved to ParticleFillLayer/ParticleOutlineLayer in the new
-    // top-level ParticleEffectsSettings -- each layer now needs its own pair, not one shared
-    // pair per theme. See that class's own doc.
-
     /**
-     * A second background colour: a vertical gradient from the top of the keyboard to its
-     * bottom edge. Zero means there is no second colour and the background is flat.
-     *
-     * Zero rather than "the same as the background" as the off state, so that a preset which
-     * changes only [backgroundColor] -- every preset does -- cannot accidentally leave a
-     * gradient running from its new colour to the old one.
+     * A second background colour, for a vertical gradient from the top of the keyboard to its
+     * bottom edge. Zero means the background is flat.
      */
     val backgroundGradientColor: Int = 0,
 
     /**
-     * The patterns drawn over the background, as PATTERN_ constants, in the order given.
-     *
-     * A list rather than one choice, because they layer: dots over a grid is a third thing, and
-     * there is no reason for the keyboard to be the one deciding that two of them together are
-     * not allowed. Empty for a plain surface.
-     *
-     * This replaced a single `backgroundPattern` field; the serializer reads that older key and
-     * carries whichever pattern it named in as the one member of this list.
+     * The patterns drawn over the background, as PATTERN_ constants, in the order given; empty
+     * for a plain surface. The serializer reads the older single `backgroundPattern` key into it.
      */
     val backgroundPatterns: List<Int> = emptyList(),
 
-    // [ThemePalette.COLOURS]'s own first entry, computed rather than retyped as a second hex
-    // literal: the settings screen's swatch row rings whichever palette entry the current colour
-    // equals by RGB, and the previous default (0x1FFFFFFF) happened to equal the palette's
-    // *last* colour instead -- white, correctly ringed, but not the "first colour pre-selected"
-    // a default is supposed to read as. Low alpha kept as its own literal, since it is a drawing
-    // decision (how faint an untouched pattern tint should be) that has nothing to do with which
-    // hue the palette starts at.
+    // [ThemePalette.COLOURS]'s first entry, at a low alpha.
     val patternColor: Int = (ThemePalette.COLOURS.first() and 0x00FFFFFF) or (0x1F shl 24),
 
     /** The repeat of the pattern, edge to edge of one tile. */
     val patternScaleDp: Float = 24f,
 
     /**
-     * A picture behind the keys: the name of a file in this application's own directory, or
-     * empty.
-     *
-     * A name and not a path, because the two builds have different directories and a path
-     * copied from one would point at nothing in the other. Whoever draws it resolves the name.
+     * A picture behind the keys: the name, not the path, of a file in this application's own
+     * directory, or empty.
      */
     val backgroundImage: String = "",
 
-    /**
-     * How far the picture is darkened before anything is drawn on it, from 0 to 1.
-     *
-     * Not decoration. Key labels are one colour and a photograph is every colour, so without
-     * this the letters disappear over whichever part of the picture happens to be behind them.
-     * The default is heavy on purpose: a background that competes with the labels is a
-     * background that makes the keyboard worse.
-     */
+    /** How far the picture is darkened before anything is drawn on it, from 0 to 1. */
     val backgroundImageDim: Float = 0.55f,
 
-    /**
-     * Whether the background reaches the edges of the screen.
-     *
-     * On by default. A one-handed keyboard is narrower than the window, and with this off the
-     * space beside it is a hole showing the application underneath -- which is what the space
-     * used to be. With it on the keyboard reads as a surface that the keys sit on, and the
-     * pattern is worth having because there is somewhere for it to show.
-     */
+    /** Whether the background reaches the edges of the screen beside a narrowed keyboard. */
     val fullWidthBackground: Boolean = true,
 
     /**
      * Whether the background reaches into the strip kept clear along the bottom edge for the
-     * system's own navigation bar.
-     *
-     * On by default, the same as [fullWidthBackground]: the keyboard reads as one surface all
-     * the way to its true edge. Off leaves that strip unpainted, so whatever the system draws
-     * behind its own navigation bar shows there instead of this theme's colour or pattern
-     * reaching a little past the keys that actually needed the room.
+     * system's navigation bar.
      */
     val navigationBarBackground: Boolean = true,
 
@@ -135,39 +75,20 @@ data class KeyboardTheme(
 
     /**
      * How the suggestion strip marks the word a delimiter would apply: [APPLIED_HIGHLIGHT_OUTLINE]
-     * (a traced border, the chip's own surface showing through) or [APPLIED_HIGHLIGHT_BACKGROUND]
-     * (a filled chip, [appliedHighlightColor] painted behind the word).
-     *
-     * An int rather than a boolean for the same reason [backgroundPatterns] is: a third style
-     * added later reads as a value this build does not recognise rather than a schema change.
+     * (a traced border) or [APPLIED_HIGHLIGHT_BACKGROUND] (a filled chip). Clamped on read.
      */
     val appliedHighlightStyle: Int = APPLIED_HIGHLIGHT_OUTLINE,
 
-    /**
-     * The colour of that mark. Zero means unset -- [secondaryTextColor] is what draws, which is
-     * the outline's original colour and is what every theme already had before this existed.
-     * Picking a colour here is what turns it on; nothing else about a theme has to change.
-     */
+    /** The colour of that mark; zero means unset, see [appliedHighlightColorOrDefault]. */
     val appliedHighlightColor: Int = 0,
 
     /**
-     * Colours the user picked through the wheel, that are not one of [ThemePalette.COLOURS],
-     * kept so they survive being shown once -- one list per editable colour field, keyed by the
-     * `KEY_*` constants below, appended to in the order picked. Not `ThemeScreen`'s job to know
-     * this exists as anything but a slice: each `ColourRow` call site reads and writes only its
-     * own key's list, never another field's.
+     * Colours the user picked through the wheel that are not in [ThemePalette.COLOURS]: one list
+     * per editable colour field, keyed by the `KEY_*` constants below, in the order picked.
      */
     val customColours: Map<String, List<Int>> = emptyMap(),
 ) {
-    /**
-     * Clamps every dimension into a range that can actually be drawn.
-     *
-     * A theme file that parses is not the same as a theme file that makes sense. It can be hand
-     * edited, restored from an older version, or simply written by a future build with different
-     * bounds -- and a `rowHeightDp` of 40000 does not throw, it produces a keyboard taller than
-     * the screen with no way to reach the settings that would fix it. Clamping is applied on
-     * read, so a bad value cannot escape the repository.
-     */
+    /** Clamps every dimension into a range that can be drawn; applied on read. */
     fun sanitised(): KeyboardTheme = copy(
         keyCornerRadiusDp = keyCornerRadiusDp.coerceIn(0f, 32f),
         keyGapDp = keyGapDp.coerceIn(0f, 16f),
@@ -176,14 +97,12 @@ data class KeyboardTheme(
         accentTextSizeSp = accentTextSizeSp.coerceIn(6f, 32f),
         pressedElevation = pressedElevation.coerceIn(0f, 16f),
         swipeTrailWidthDp = swipeTrailWidthDp.coerceIn(1f, 24f),
-        // Read through the known list and de-duplicated: a stored file is not a trusted file,
-        // and the same pattern drawn twice is the same pattern drawn once, more slowly.
+        // Known patterns only, each once.
         backgroundPatterns = backgroundPatterns
             .filter { it in PATTERN_DOTS until PATTERN_COUNT }
             .distinct(),
         patternScaleDp = patternScaleDp.coerceIn(8f, 64f),
-        // A file name, never a path: anything with a separator in it is a way out of the
-        // directory this is supposed to name a file in.
+        // A file name, never a path.
         backgroundImage = if (backgroundImage.contains('/') || backgroundImage.contains('\\')) {
             ""
         } else {
@@ -198,10 +117,7 @@ data class KeyboardTheme(
         } else {
             APPLIED_HIGHLIGHT_OUTLINE
         },
-        // Exact de-duplication only -- whether two entries are "the same" once alpha is
-        // ignored is a per-field question only the caller (preserveAlpha or not) can answer,
-        // and belongs in ThemePalette.inserted, not here. Newest kept on overflow: the oldest
-        // pick is the one most likely already forgotten.
+        // Exact duplicates dropped; the newest kept on overflow.
         customColours = customColours
             .mapValues { (_, colours) -> colours.distinct().takeLast(ThemePalette.MAX_CUSTOM_COLOURS_PER_FIELD) }
             .filterValues { it.isNotEmpty() },
@@ -211,31 +127,12 @@ data class KeyboardTheme(
     fun gradientEnd(): Int =
         if (backgroundGradientColor == 0) backgroundColor else backgroundGradientColor
 
-    /**
-     * The colour for [appliedHighlightColor] when it is unset -- the accent, the colour already
-     * used for everything else on the strip that is not plain text.
-     *
-     * The same regardless of [appliedHighlightStyle], on purpose: this is also what the theme
-     * screen's swatch row rings to say "this is the colour," and a value that changed hue
-     * depending on the fill/outline switch made that row show a different ring for the same
-     * unset colour depending on which style happened to be selected -- indistinguishable from a
-     * bug, because functionally it was one: the picker looked like it forgot what was chosen.
-     * How much of this colour actually reaches the canvas -- a thin opaque line for the outline,
-     * a quarter-strength tint for the fill so a solid block does not sit on top of the word it
-     * marks -- is a drawing decision, made once in `ThemePaints.update`, and never surfaces here.
-     */
+    /** [appliedHighlightColor], or the accent when it is unset, whatever the style. */
     fun appliedHighlightColorOrDefault(): Int =
         if (appliedHighlightColor != 0) appliedHighlightColor else accentColor
 
     companion object {
-        /**
-         * The patterns, as indices rather than an enum.
-         *
-         * The theme is serialised to disk and read back by whatever version comes next; an int
-         * that falls outside the range is clamped to none by [sanitised], where an unknown enum
-         * name would be a parse failure that loses the whole theme.
-         */
-        /** No longer a value anything stores; kept because "none" is still a thing to say. */
+        /** The patterns, as indices; [sanitised] drops one out of range. NONE is never stored. */
         const val PATTERN_NONE = 0
         const val PATTERN_DOTS = 1
         const val PATTERN_GRID = 2
@@ -244,21 +141,19 @@ data class KeyboardTheme(
         const val PATTERN_STRIPES = 5
         const val PATTERN_COUNT = 6
 
-        /** Long enough for a generated name, short enough not to be a path in disguise. */
+        /** The longest background image name accepted. */
         const val MAX_IMAGE_NAME = 64
 
-        /** The least of the keyboard that may show; below this the keys cannot be found. */
+        /** The least [opacity]. */
         const val MIN_OPACITY = 0.3f
 
-        /** A traced border -- the chip's own surface, nothing painted behind the word. */
+        /** A traced border, nothing painted behind the word. */
         const val APPLIED_HIGHLIGHT_OUTLINE = 0
 
-        /** A filled chip -- [appliedHighlightColor] (or secondaryTextColor) behind the word. */
+        /** A filled chip behind the word. */
         const val APPLIED_HIGHLIGHT_BACKGROUND = 1
 
-        // Keys into [customColours]. Strings rather than the field references themselves,
-        // since a Map key has to be something a DataStore file can hold -- but named as
-        // constants so no call site retypes the field name as a literal a second time.
+        // Keys into [customColours].
         const val KEY_BACKGROUND = "background"
         const val KEY_KEY = "key"
         const val KEY_KEY_PRESSED = "keyPressed"

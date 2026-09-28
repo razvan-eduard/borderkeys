@@ -25,17 +25,7 @@ import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.theme.ThemePaints
 
-/**
- * The clipboard history, as a scrolling column of cards inside the keyboard.
- *
- * A panel rather than the suggestion strip, because the strip has room for a few words and the
- * history is a list someone reads: several lines of a copied paragraph, and a picture that can
- * only be recognised by looking at it.
- *
- * Drawn like the rest of the keyboard -- one View, one onDraw, arithmetic hit testing. A
- * RecyclerView would bring a layout manager, an adapter and view recycling into a process whose
- * whole design is that it has none of those.
- */
+/** The clipboard history, as a scrolling column of cards inside the keyboard. */
 @SuppressLint("ViewConstructor")
 class ClipboardPanelView(
     context: Context,
@@ -44,7 +34,7 @@ class ClipboardPanelView(
 ) : View(context) {
 
     interface Listener {
-        /** A card was tapped. Text or image is the service's business, not the panel's. */
+        /** A card was tapped. */
         fun onClipPicked(entry: ClipEntry)
 
         /** The card's pin control was tapped. */
@@ -105,14 +95,7 @@ class ClipboardPanelView(
     private val editLabel = strings[Keys.CLIPBOARD_EDIT]
     private val deleteLabel = strings[Keys.CLIPBOARD_DELETE]
 
-    /**
-     * Thumbnails, by entry id.
-     *
-     * Decoded once when the list arrives and held for as long as the list is shown. Bounded by
-     * the number of cards, which is bounded by the history size, and each is decoded down to
-     * the card's height rather than the image's own -- a screenshot is several megabytes as
-     * pixels and a few tens of kilobytes at the size it is drawn.
-     */
+    /** Thumbnails by entry id, decoded to the card's height and held while the list is shown. */
     private val thumbnails = HashMap<Long, Bitmap?>()
 
     private val scroller = OverScroller(context)
@@ -122,7 +105,7 @@ class ClipboardPanelView(
     private var dragging = false
     private var pressedCard = -1
 
-    /** The finger went down on the pinned header -- an up there without a drag is "close". */
+    /** The finger went down on the header; a lift there without a drag closes the panel. */
     private var pressedHeader = false
 
     private var cardHeightPx = 0f
@@ -130,7 +113,7 @@ class ClipboardPanelView(
     private var paddingPx = 0f
     private var contentHeight = 0
 
-    /** "Clipboard", drawn once a frame in the header; a String because [labelFor] draws that way too. */
+    /** The header's title. */
     private val title = strings[Keys.SCREEN_CLIPBOARD]
 
     private val cardRect = RectF()
@@ -147,10 +130,8 @@ class ClipboardPanelView(
     }
 
     /**
-     * Decodes a thumbnail for every image in [list], keyed by entry id -- on whatever thread
-     * calls it, which should not be the one that draws: this reads and decodes files, and used
-     * to do so inside [setEntries] on the main thread. The caller hands the result to
-     * [setEntries] afterwards.
+     * Decodes a thumbnail for every image in [list], keyed by entry id, for [setEntries]. Reads
+     * files; not for the UI thread.
      */
     fun decodeThumbnails(list: List<ClipEntry>): Map<Long, Bitmap?> {
         val decoded = HashMap<Long, Bitmap?>()
@@ -184,10 +165,7 @@ class ClipboardPanelView(
         invalidate()
     }
 
-    /**
-     * Decodes an image small enough to draw, or null when the grant that came with the clip is
-     * gone -- which is normal, and why a card without a thumbnail still says what it is.
-     */
+    /** Decodes an image at the card's size, or null when the clip's grant is gone. */
     private fun decodeThumbnail(entry: ClipEntry): Bitmap? {
         val uri = entry.uri ?: return null
         return runCatching {
@@ -242,8 +220,7 @@ class ClipboardPanelView(
             } else {
                 val step = cardHeightPx + paddingPx
                 val cardsTop = headerHeightPx + paddingPx
-                // Only the cards the viewport shows are drawn: a list that scrolls must not get
-                // slower the further down it goes.
+                // Only the cards in the viewport are drawn.
                 val first = (((scrollY - cardsTop) / step).toInt()).coerceAtLeast(0)
                 val last = (((scrollY + height - cardsTop) / step).toInt() + 1)
                     .coerceAtMost(entries.size - 1)
@@ -253,8 +230,7 @@ class ClipboardPanelView(
                 drawScrollbar(canvas, viewTop)
             }
 
-            // The header last and pinned: drawn at the top of whatever is on screen, not of the
-            // content, so "back" is reachable however far the list is scrolled.
+            // The header last, pinned to the top of the viewport.
             drawHeader(canvas, viewTop)
         } finally {
             Trace.endSection()
@@ -326,8 +302,7 @@ class ClipboardPanelView(
             drawActions(canvas, entry, top)
             return
         }
-        // The same decision the keys make. A theme with borders off and outlined cards would
-        // be one surface disagreeing with itself about whether this keyboard draws edges.
+        // Outlined when key outlines are on.
         if (paints.showKeyBorders) {
             canvas.drawRoundRect(
                 cardRect, paints.keyCornerRadiusPx, paints.keyCornerRadiusPx, paints.keyStroke,
@@ -351,9 +326,8 @@ class ClipboardPanelView(
             }
         }
 
-        // Aligned to where the text itself begins, unlike everything else this keyboard draws:
-        // the right edge for a text whose first strong letter reads right to left, the left
-        // edge otherwise, whichever way the panel runs.
+        // Aligned by the text's own direction: right for a text whose first strong letter reads
+        // right to left, else left.
         val label = labelFor(entry)
         val length = label.length.coerceAtMost(MAX_LABEL_CHARS)
         val textRightToLeft = TextDirectionHeuristics.FIRSTSTRONG_LTR.isRtl(label, 0, length)
@@ -370,9 +344,7 @@ class ClipboardPanelView(
         paints.label.textAlign = previous
 
         if (entry.isPinned) {
-            // A dot rather than a pin glyph: the panel has no icon set of its own, and the
-            // question a reader has is "does this one survive the timer", which a mark answers.
-            // At the corner opposite the start edge.
+            // A pinned card's dot, at the corner opposite the start edge.
             canvas.drawCircle(
                 if (rightToLeft) cardRect.left + inset else cardRect.right - inset,
                 top + inset + PIN_RADIUS_FRACTION * cardHeightPx,
@@ -397,7 +369,7 @@ class ClipboardPanelView(
 
     private fun actionCount(entry: ClipEntry): Int = if (entry.isImage) 2 else 3
 
-    /** Where action [zone] of [zones] sits, counted from the left edge: mirrored when [rightToLeft]. */
+    /** Where action [zone] of [zones] sits from the left edge, mirrored when [rightToLeft]. */
     private fun slotOf(zone: Int, zones: Int): Int = Mirror.slot(zone, zones, rightToLeft)
 
     private fun actionLabel(entry: ClipEntry, zone: Int): String = when {
@@ -555,22 +527,22 @@ class ClipboardPanelView(
         /** The pinned "back" bar, as a fraction of a key row. */
         const val HEADER_HEIGHT_ROWS = 0.66f
 
-        /** A left-pointing arrow, drawn rather than translated: it is a direction, not a word. */
+        /** The back arrow; not translated. */
         const val BACK_GLYPH = "←"
 
         /** The same arrow pointing right, for a header that runs from the right edge. */
         const val BACK_GLYPH_RTL = "→"
 
-        /** A card is this many key rows tall: enough for two lines of text beside a thumbnail. */
+        /** A card's height, in key rows. */
         const val CARD_HEIGHT_ROWS = 0.9f
 
         /** The gap around and between cards, as a fraction of a key row. */
         const val PADDING_ROWS = 0.12f
 
-        /** Never decode below this, however short the panel is when the list arrives. */
+        /** The smallest size a thumbnail is decoded to. */
         const val MIN_THUMBNAIL_PX = 96
 
-        /** Drawn text is clipped to the card, but a bound keeps a huge clip off the draw path. */
+        /** The most characters of a clip drawn on its card. */
         const val MAX_LABEL_CHARS = 120
 
         const val PIN_RADIUS_FRACTION = 0.08f

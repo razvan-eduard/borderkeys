@@ -4,34 +4,15 @@
 
 """Derives each language's apostrophe-dropped spellings from its own word counts.
 
-Nobody types the apostrophe in "don't" on a phone if they can avoid it, and the search cannot
-recover it: continuing a prefix costs nothing while any edit costs forty times its distance, so
-"cant" reaches "cantor", "canterbury" and "canton" and never "can't". Raising the apostrophe's
-price fixed the words that are not prefixes of anything -- "dont", "thats", "isnt" -- and can do
-nothing for the ones that are. This file is the answer for those: a plain mapping, applied when
-the word is committed, that does not go through the search at all.
-
-Which pairs are safe is decided from the counts rather than by hand
---------------------------------------------------------------------
-For every word holding an apostrophe, drop it and ask what the bare spelling is worth. Three
-things have to hold before a mapping is written:
+A plain mapping, applied when the word is committed, outside the search. A mapping is written for
+a word holding an apostrophe when:
 
   * the apostrophe spelling is used at all             (--min-count, default 50)
   * it beats the bare spelling by a wide margin        (--ratio, default 3)
   * the bare spelling is not a name                    (name rows are skipped)
 
-The margin is what keeps the dangerous pairs out, and it separates them cleanly. "cant" against
-"can't" is 108 to 3,713, a factor of 34, and "didnt" against "didn't" is 113 -- while "id"
-against "I'd" is 1.07 and "wed" against "we'd" is 2.0, and both of those stay out on purpose:
-"wed" is an ordinary verb and nobody should have it rewritten. "its", "were", "well" and "ill"
-never come close, because in each the bare word is the commoner one by far.
-
-Collisions with the other bundled languages
--------------------------------------------
-A bare spelling can be an ordinary word somewhere else -- and then rewriting it is wrong for
-anyone writing that language. Each entry therefore carries the tags of the other bundled
-languages whose own vocabulary holds it, and the keyboard drops the entry when one of those is
-switched on. Someone with a single language enabled is never affected by any of them.
+Each entry carries the tags of the other bundled languages whose own vocabulary holds the bare
+spelling; the keyboard drops the entry while one of those is switched on.
 
 Usage
 -----
@@ -111,11 +92,9 @@ def mappings(
 ) -> dict[str, tuple[str, int, int]]:
     """Bare spelling to the apostrophe spelling it should become, with both counts.
 
-    [others] are the remaining bundled languages' frequency tables. An apostrophe word some
-    other language knows an order of magnitude better is that language's, not this one's, and
-    writing a mapping for it would hand a Romanian writer "dont" -> "don't" because Romanian web
-    text quotes English. Same test drop_foreign.py applies to the vocabulary, for the same
-    reason and against the same margin.
+    [others] are the remaining bundled languages' frequency tables. An apostrophe word another
+    language knows an order of magnitude better is skipped, the test and margin drop_foreign.py
+    applies to the vocabulary.
     """
     best: dict[str, tuple[str, int, int]] = {}
     for word, count in counts.items():
@@ -145,15 +124,10 @@ def mappings(
     return best
 
 
-# Words a language always writes with a capital, whatever the corpus did.
-#
-# The corpus is lower-cased at intake, so a contraction built from it comes out "i'm" and "i've"
-# when English only ever writes "I'm" and "I've". Nothing automatic can tell this: a spell
-# checker accepts lower-case "i" as a letter, and frequency cannot separate a pronoun from a
-# letter either. So the pronoun is named, per language, the same way the single-letter words in
-# drop_unreachable.py are.
-# Value: who would object, because the same spelling is an ordinary word of theirs -- Italian
-# writes "i" as its plural article. Contractions.of drops an entry whose objector is also on.
+# Words a language always writes with a capital, whatever the corpus did, named per language
+# as the single-letter words in drop_unreachable.py are. Value: the languages for which the same
+# spelling is an ordinary word (Italian writes "i" as its plural article); Contractions.of drops
+# an entry while one of them is also on.
 ALWAYS_CAPITAL = {
     "en_US": {"i": ["it-IT"]},
 }
@@ -208,8 +182,7 @@ def main() -> int:
             if others:
                 clashing += 1
             lines.append(f"{key}\t{cased(written, tag)}\t{','.join(others)}")
-        # The pronoun on its own, not only inside its contractions: nothing in a corpus of
-        # lower-cased text can produce it, and it is the commonest word the rule applies to.
+        # The pronoun on its own, as well as inside its contractions.
         for word, objectors in sorted(ALWAYS_CAPITAL.get(tag, {}).items()):
             lines.append(f"{word}\t{word[:1].upper() + word[1:]}\t{','.join(objectors)}")
         print(f"{BUNDLED[tag]}: {len(table):,} mappings, {clashing:,} of them claimed by "

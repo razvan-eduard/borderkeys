@@ -6,8 +6,7 @@
 Each case repeats one letter that is neither the first nor the last, so reaching the intended
 word needs one deletion. Emitted as `mangled<TAB>intended`, read by `suggest_eval --autocorrect`.
 
-Cases whose mangled form is itself a dictionary word are skipped: the keyboard is right to leave
-those alone.
+Cases whose mangled form is itself a dictionary word are skipped.
 
     python3 tools/make_doubled_corpus.py dictionaries/en_US.tsv > out.tsv
 """

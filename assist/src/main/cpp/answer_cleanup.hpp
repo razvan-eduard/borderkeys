@@ -10,8 +10,7 @@ namespace borderkeys {
 
 /**
  * What applyChatTemplate wraps the text to transform in, and cleanResult strips from an answer
- * that echoed it back. One pair of constants rather than the same literal typed at both call
- * sites, so the two can never quietly drift out of agreement with each other.
+ * that echoed it back.
  */
 inline constexpr const char* kTextLabel = "\n\nText:\n";
 inline constexpr const char* kTextFence = "\"\"\"";

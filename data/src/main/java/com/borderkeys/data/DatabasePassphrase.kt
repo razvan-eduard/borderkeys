@@ -12,18 +12,9 @@ import java.io.RandomAccessFile
 import java.security.SecureRandom
 
 /**
- * Produces the SQLCipher passphrase, generating it on first run and keeping it afterwards.
- *
- * The chain is: 32 random bytes from [SecureRandom], stored base64 in an
- * [EncryptedSharedPreferences] file, which is itself encrypted with a key that never leaves the
- * Android Keystore. What that buys is that the database file is useless on its own -- pulled off
- * a backup, off a rooted filesystem, out of an ADB extraction -- because the key it needs is
- * held by hardware on one device and cannot be exported from it.
- *
- * What it does not buy, and is worth being clear about: an attacker who is running code as this
- * app, on this unlocked device, can ask the Keystore to decrypt for them. Keystore protects the
- * key against exfiltration, not against use. Everything in this database is protected against
- * the file being copied elsewhere, which is the realistic threat for a keyboard.
+ * Produces the SQLCipher passphrase, generating it on first run and keeping it afterwards: 32
+ * random bytes from [SecureRandom], stored base64 in an [EncryptedSharedPreferences] file whose
+ * key stays in the Android Keystore.
  */
 internal object DatabasePassphrase {
 
@@ -33,23 +24,14 @@ internal object DatabasePassphrase {
     private const val LOCK_FILE_NAME = "db_passphrase.lock"
 
     /**
-     * Returns a freshly allocated copy of the passphrase. The caller owns it and should zero it
-     * once SQLCipher has taken it; SQLCipher keeps its own copy.
-     *
-     * `:app` and `:assist` each open this database independently, in their own process, so the
-     * read-check-generate-write below runs behind a [FileLock] on a marker file both processes
-     * share -- an OS-level advisory lock (flock/fcntl), genuinely cross-process on one device,
-     * unlike a Kotlin `lazy` or a plain `synchronized`, which only serialize within the process
-     * that took them. Without it, two processes racing on first run can both see no passphrase
-     * stored yet, each generate a different one, and both `commit()` -- whichever loses can never
-     * open the database the winner's passphrase already encrypted it with.
+     * Returns a freshly allocated copy of the passphrase, which the caller zeroes once SQLCipher
+     * has taken it. The read-or-generate runs behind a cross-process [FileLock], since `:app` and
+     * `:assist` both open the database.
      */
     fun obtain(context: Context): ByteArray {
         val lockFile = File(context.applicationContext.filesDir, LOCK_FILE_NAME)
         RandomAccessFile(lockFile, "rw").use { raf ->
-            // Released explicitly by this `use`, before the RandomAccessFile's own `use` closes
-            // the channel underneath it -- a lock held on an already-closed channel is undefined,
-            // not just pointless.
+            // Released by this `use`, before the channel closes.
             raf.channel.lock().use {
                 return obtainLocked(context)
             }
@@ -72,9 +54,7 @@ internal object DatabasePassphrase {
         val existing = preferences.getString(PASSPHRASE_KEY, null)
         if (existing != null) {
             val decoded = Base64.decode(existing, Base64.NO_WRAP)
-            // A stored value of the wrong length means the file was tampered with or a previous
-            // write was truncated. Falling through to generate a new one would silently orphan
-            // the whole database, so this fails loudly instead.
+            // A stored value of the wrong length fails rather than being replaced.
             check(decoded.size == PASSPHRASE_BYTES) {
                 "stored database passphrase has ${decoded.size} bytes, expected $PASSPHRASE_BYTES"
             }
@@ -83,9 +63,7 @@ internal object DatabasePassphrase {
 
         val generated = ByteArray(PASSPHRASE_BYTES)
         SecureRandom().nextBytes(generated)
-        // commit(), not apply(). The passphrase must be on disk before the database it protects
-        // is created; an asynchronous write that loses a race with a process death would leave a
-        // database nothing can ever open again.
+        // commit(): on disk before the database is created.
         val stored = preferences.edit()
             .putString(PASSPHRASE_KEY, Base64.encodeToString(generated, Base64.NO_WRAP))
             .commit()

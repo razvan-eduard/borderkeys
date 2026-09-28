@@ -7,18 +7,7 @@ import android.content.res.AssetManager
 import org.json.JSONException
 import org.json.JSONObject
 
-/**
- * Reads a layout asset into a [KeyboardLayout].
- *
- * `org.json` because it is in the framework: no dependency, no annotation processor, nothing on
- * the classpath. It allocates while parsing, which is fine -- this runs once, at service start,
- * on a background thread, and the result is compiled into primitive arrays before anything is
- * drawn.
- *
- * Every failure returns the fallback rather than throwing. A malformed asset should mean a
- * plain QWERTY, not an input method that cannot draw -- because a keyboard that crashes on
- * start is one the user cannot replace without already having another one installed.
- */
+/** Reads a layout asset into a [KeyboardLayout]; any failure loads the fallback QWERTY. */
 object LayoutLoader {
 
     private const val DIRECTORY = "layouts"
@@ -57,9 +46,7 @@ object LayoutLoader {
         if (rows.isEmpty()) {
             throw JSONException("a layout needs at least one row with at least one key")
         }
-        // The asset's "label" is not read: nothing shows a layout's name, and the value the
-        // files carry is an English word, not a catalogue key -- the one place it could have
-        // been shown would have shown it untranslated.
+        // The asset's "label" is not read.
         return KeyboardLayout(
             id = root.optString("id", "unnamed"),
             languageTag = root.optString("languageTag", "und"),
@@ -68,8 +55,7 @@ object LayoutLoader {
     }
 
     private fun parseKey(json: JSONObject): KeyboardLayout.Key {
-        // Two spellings: "c" for a character key, which is the overwhelming majority, and
-        // "code" for a named action.
+        // "c" for a character key, "code" for a named action.
         val character = json.optString("c", "")
         val code = if (character.isNotEmpty()) {
             character.codePointAt(0)
@@ -90,31 +76,22 @@ object LayoutLoader {
         if (!KeyCodes.isCharacter(code)) {
             flags = flags or KeyFlags.MODIFIER
         }
-        // REPEATABLE, for backspace specifically: the long-press timer (380ms) always elapses
-        // before the character-repeat delay (400ms) would, so a held backspace goes straight to
-        // deleting a whole word rather than a character -- and once that first word is gone,
-        // KeyboardCanvasView's own longPressRepeatPointer/longPressRepeatRunnable is what keeps
-        // it going, one word at a time, for as long as the finger stays down. That mechanism
-        // only arms itself when this flag is set; without it a held backspace stops after
-        // exactly one word, which is the bug it exists to fix. See onKeyLongPress's
-        // KeyCodes.DELETE branch and onLongPressElapsed's REPEATABLE check.
+        // Delete and the modifier row's repeating keys repeat while held.
         if (code == KeyCodes.DELETE || KeyCodes.repeatsOnModifierRow(code)) {
             flags = flags or KeyFlags.REPEATABLE
         }
         if (alternatives.isNotEmpty()) {
             flags = flags or KeyFlags.HAS_ALTERNATIVES
         }
-        // "absorb": this key, not the space bar, takes the width of an optional key the layout
-        // drops -- see KeyFlags.ABSORBS_FREED_WIDTH for why a numpad page needs that.
+        // "absorb": this key, not the space bar, takes the width of a dropped optional key.
         if (json.optBoolean("absorb", false)) {
             flags = flags or KeyFlags.ABSORBS_FREED_WIDTH
         }
-        // "secondary": drawn in the modifier fill, so a digit block reads as one against the
-        // symbols around it.
+        // "secondary": drawn in the modifier fill.
         if (json.optBoolean("secondary", false)) {
             flags = flags or KeyFlags.SECONDARY_ROW
         }
-        // Punctuation is a character but not a letter: a swipe should not pass through a comma.
+        // Only letters take part in swipes.
         if (KeyCodes.isCharacter(code) && !Character.isLetter(code)) {
             flags = flags and KeyFlags.LETTER.inv()
         }

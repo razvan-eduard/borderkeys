@@ -7,8 +7,7 @@ Each case replaces the first letter with a QWERTY neighbour of it, so reaching t
 word needs one substitution at the position the geometry prices lowest. Emitted as
 `mangled<TAB>intended`, read by `suggest_eval --autocorrect`.
 
-Cases whose mangled form is itself a dictionary word are skipped: the keyboard is right to leave
-those alone.
+Cases whose mangled form is itself a dictionary word are skipped.
 
     python3 tools/make_firstletter_corpus.py dictionaries/en_US.tsv > out.tsv
 """

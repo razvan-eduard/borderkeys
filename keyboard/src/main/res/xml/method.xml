@@ -3,13 +3,9 @@
     SPDX-License-Identifier: GPL-3.0-or-later
     SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-    What the platform reads to describe this input method before ever binding to it.
-
-    settingsActivity is a string, not a class reference, and it names a class in :settings.
-    That is the one and only link pointing from :keyboard towards :settings, and it exists only
-    because the platform demands a name here. It creates no compile-time dependency and no
-    Compose on the keyboard's classpath - which is exactly why it is allowed to point that way
-    when nothing else may.
+    What the platform reads to describe this input method before binding to it.
+    settingsActivity names a class in :settings as a string; :keyboard has no other link to
+    :settings.
 -->
 <input-method xmlns:android="http://schemas.android.com/apk/res/android"
     android:settingsActivity="com.borderkeys.settings.SettingsActivity"
@@ -18,24 +14,14 @@
     android:supportsInlineSuggestions="true">
 
     <!--
-        Subtypes select the LAYOUT: which keys exist, where they are, which diacritics sit on
-        which long-press. They do not decide which dictionaries are active. The engine keeps up
-        to four language packs loaded at once and scores candidates from all of them (section
-        3.6), so a Romanian layout with ro, en and fr enabled is a normal configuration and
-        switching subtype does not switch what the keyboard knows.
+        Subtypes select the layout: which keys exist, where they are, which diacritics sit on
+        which long-press. They do not decide which dictionaries are active.
 
-        subtypeId is stated rather than derived. The platform otherwise hashes the subtype's
-        fields into an id, which means changing a label or an extra value silently produces a
-        *different* subtype - and the user's enabled-subtype selection, stored by id, is lost
-        on update.
+        subtypeId is stated, not derived: the enabled subtypes are stored by id.
 
-        isAsciiCapable tells the system this subtype can type a password or a URL, so it is not
-        skipped over when an app asks for a keyboard in an ASCII-only field. Both layouts are
-        QWERTY with the diacritics on long-press, so both are.
+        isAsciiCapable: the subtype can type a password or a URL.
 
-        The label is "%s": the framework substitutes the locale's display name, already
-        translated into whatever language the phone is set to. Hardcoding "Romanian" here would
-        print English on a Romanian phone.
+        The label "%s" becomes the locale's display name, in the phone's language.
     -->
     <subtype
         android:subtypeId="0x0B0DE001"
@@ -54,19 +40,10 @@
         android:imeSubtypeExtraValue="layout=en_qwerty" />
 
     <!--
-        Alternate physical layouts: the LETTERS move, the language does not change with them (see
-        the note above: these are still every bit as language-independent as the two QWERTY
-        subtypes). Their key positions come from swipe.futo.org's own published layout files
-        (MIT-licensed; see docs/licensing.md section 2.5 and tools/swipe_model/futo_to_layout.py,
-        which generated keyboard/src/main/assets/layouts/*.json from them), chosen because their
-        alphabets are exactly the 26 a-z letters this project's dictionaries already know: no
-        new accented characters, no new script.
-
-        android:label cannot be "%s" here: unlike the two subtypes above, a "%s" label would
-        substitute the SAME locale display name for several of these (most naturally carry an
-        English-typing locale) and the picker would show multiple identical entries with no way
-        to tell them apart. Each gets its own literal name instead: see the
-        subtype_label_* strings' own comment in res/values/strings.xml.
+        Alternate physical layouts of the letters a to z. Key positions from swipe.futo.org's
+        published layout files (MIT; docs/licensing.md section 2.5), turned into
+        keyboard/src/main/assets/layouts/*.json by tools/swipe_model/futo_to_layout.py. Each is
+        labelled with the layout's own name (the subtype_label_* strings).
     -->
     <subtype
         android:subtypeId="0x0B0DE003"
@@ -230,7 +207,7 @@
     <!--
         The scripts of their own: one layout each for Russian, Ukrainian, Bulgarian, Serbian,
         Macedonian, Greek, Armenian and Georgian, named by the locale's own display name the
-        way the two QWERTY subtypes are, since each is one language.
+        way the two QWERTY subtypes are.
     -->
     <subtype
         android:subtypeId="0x0B0DE016"

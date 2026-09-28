@@ -40,11 +40,8 @@ import kotlin.math.abs
 
 /**
  * The keyboard driven through a real input connection: keys tapped by their accessibility
- * nodes, the field read back through its own node. Every case here is a path a JVM test
- * cannot reach, because the editor on the other side of the connection is the framework's.
- *
- * The English pack is installed from the bundled assets and autocorrect is switched on before
- * the keyboard is selected, so each case starts from the same keyboard.
+ * nodes, the field read back through its own node. The English pack is installed from the
+ * bundled assets and autocorrect is switched on before the keyboard is selected.
  */
 @RunWith(AndroidJUnit4::class)
 class ImeSmokeTest {
@@ -372,8 +369,7 @@ class ImeSmokeTest {
     private fun focusProbe(mode: ProbeMode) {
         // The label carries the mode switch only while the field has focus.
         focusProbeField()
-        // Each tap waits until the field has moved to another mode before the next: a tap
-        // counted before the last one has redrawn the label would cycle past the mode.
+        // Each tap waits until the field has moved to another mode before the next.
         var taps = 0
         while (!device.hasObject(By.descStartsWith(mode.description)) && taps < ProbeMode.entries.size) {
             val label = device.wait(Until.findObject(By.textStartsWith(ProbeMode.BULLET)), KEY_TIMEOUT)
@@ -447,8 +443,7 @@ class ImeSmokeTest {
             fail("the settings probe field is not on screen; ${screenState()}")
         }
         device.waitForIdle(SETTLE_MILLIS)
-        // The activity is still settling when the field first appears, so a node found then
-        // can go stale before it is used; each step finds it afresh.
+        // Each step finds the node afresh; one found while the activity settles can go stale.
         repeat(ATTEMPTS) { attempt ->
             try {
                 val field = field()

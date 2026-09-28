@@ -51,10 +51,7 @@ import com.borderkeys.settings.rememberPreferencesUpdater
 
 /**
  * The draft box: whether it can be opened, what is on its bar, and which instructions were kept.
- *
- * The reordering is the quick-action bar's, arrows and all, for the reason given there: dragging
- * inside a scrolling column needs the list to own the scroll, and two buttons reach any order in
- * a list this short without a gesture that fights it.
+ * The bar is reordered with arrows, as the quick-action bar is.
  */
 @Composable
 fun ComposerScreen(modifier: Modifier = Modifier) {
@@ -79,8 +76,7 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.COMPOSER_SETTINGS_ENABLE_NOTE],
                 checked = preferences.composerEnabled,
             ) { value -> update { it.copy(composerEnabled = value) } }
-            // Everything below describes the box. With the box switched off it would be
-            // settings for something that cannot happen.
+            // The rest only while the box is switched on.
             if (preferences.composerEnabled) {
                 AdvancedSection(strings[Keys.COMPOSER_ADVANCED_NOTE]) {
                     SectionHeader(strings[Keys.COMPOSER_SETTINGS_TEXT_SIZE])
@@ -141,9 +137,8 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
                 )
             }
             Explanation(strings[Keys.COMPOSER_SETTINGS_BAR_NOTE])
-            // Insert is never on offer: it is the fixed button at the bar's end, drawn whatever
-            // this list says -- see ComposerBar.resolve. And the bar holds MAX_ITEMS, which the
-            // copy above has always said and nothing used to enforce.
+            // Insert is never offered: ComposerBar.resolve always draws it at the bar's end. The
+            // bar holds at most ComposerBar.MAX_ITEMS.
             val addableBuiltins = ComposerAction.entries.filterNot { builtin ->
                 builtin == ComposerAction.INSERT ||
                     chosen.any { it is ComposerBarItem.Builtin && it.action == builtin }
@@ -231,8 +226,7 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
                             .clickable { editingCustomAction = action },
                     ) {
                         Text(action.name, style = MaterialTheme.typography.bodyLarge)
-                        // The whole instruction, not a preview of it: a button whose contents
-                        // are a mystery is a button nobody presses twice.
+                        // The whole instruction, not a preview of it.
                         Text(
                             action.instruction,
                             style = MaterialTheme.typography.bodySmall,

@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-// Text assistant, consumed only by the `plus` flavor of :app. Runs in its own process so
-// that a multi-hundred-megabyte model can be loaded, used and dropped without the IME
-// process ever growing -- the IME has to stay small enough that the OS never kills it.
+// Text assistant, used only by the `plus` flavor of :app, in its own process.
 
 plugins {
     alias(libs.plugins.android.library)
@@ -28,9 +26,7 @@ android {
         }
         externalNativeBuild {
             cmake {
-                // c++_shared here, unlike :keyboard's c++_static. llama.cpp is several static
-                // libraries linking into one shared object, and a static STL in that
-                // configuration duplicates its symbols across them.
+                // c++_shared here, unlike :keyboard's c++_static.
                 arguments += listOf("-DANDROID_STL=c++_shared")
                 cppFlags += "-std=c++17"
             }

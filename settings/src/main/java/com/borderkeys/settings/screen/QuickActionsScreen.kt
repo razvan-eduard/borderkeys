@@ -59,18 +59,13 @@ import com.borderkeys.settings.rememberPreferencesUpdater
 /**
  * The quick-action bar: whether it is shown, what shape it takes, where it sits, and which
  * buttons are on it in what order.
- *
- * Grouped into cards rather than run as one list, because the four questions are independent
- * and a reader should be able to answer one without holding the other three.
  */
 @Composable
 fun QuickActionsScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val themes = remember { DataGraph.themes }
     val update = rememberPreferencesUpdater()
-    // The same appearance flow Size & Position previews from -- one preview core, not a second
-    // one that could drift from it. Only preferences are read below; theme and lightTheme ride
-    // along because KeyboardAppearance is what PlacementPreview takes.
+    // What PlacementPreview takes; only its preferences are read below.
     val appearance by themes.appearance
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentAppearance() })
     val preferences = appearance.preferences
@@ -83,8 +78,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
         chosen.none { it is QuickActionBarItem.Custom && it.action.id == action.id }
     }
 
-    // The preview is outside the scrolling column, so it stays on screen while the controls
-    // under it are scrolled -- the same reason Size & Position pins its own copy of it.
+    // The preview is outside the scrolling column, so it stays on screen.
     Column(modifier = modifier.fillMaxSize()) {
         PlacementPreview(appearance, Modifier.padding(vertical = 12.dp))
         Divider()
@@ -178,8 +172,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                             current.quickActions.filterNot { it == itemId }) } },
                     )
                 }
-                // Only once the list has actually moved away from it -- a button that is always
-                // there invites a tap that undoes a selection nobody meant to touch.
+                // Only once the list differs from the default.
                 if (preferences.quickActions != QuickAction.DEFAULT.map { it.id }) {
                     TextButton(
                         onClick = {
@@ -193,8 +186,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                 Explanation(strings[Keys.QUICK_BUTTONS_NOTE])
                 val addableBuiltins = QuickAction.entries.filterNot { builtin ->
                     chosen.any { it is QuickActionBarItem.Builtin && it.action == builtin } ||
-                        // Not offered while the draft box is switched off, or the bar would gain
-                        // a button for something that cannot open.
+                        // Not offered while the draft box is switched off.
                         (builtin == QuickAction.COMPOSE && !preferences.composerEnabled)
                 }
                 if (chosen.size < KeyboardPreferences.MAX_QUICK_ACTIONS &&
@@ -242,8 +234,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
 
             SettingsSectionCard(strings[Keys.QUICK_TIMESTAMP_TITLE]) {
                 Explanation(strings[Keys.QUICK_TIMESTAMP_NOTE])
-                // Typed into locally and stored once it can write a moment, so a half-typed
-                // pattern is not replaced by the default under the cursor.
+                // Typed into locally; stored only while it is a valid pattern.
                 var pattern by remember(preferences.timestampPattern) {
                     mutableStateOf(preferences.timestampPattern)
                 }
@@ -441,13 +432,7 @@ private fun barItemId(item: QuickActionBarItem): Int = when (item) {
     is QuickActionBarItem.Custom -> item.action.id
 }
 
-/**
- * One button, with its icon, and the controls that move it.
- *
- * Arrows rather than a drag handle: dragging inside a scrolling column needs the list to own
- * the scroll, and this screen is a plain column of cards. Two buttons -- to the front, and up
- * one -- reach any order in a list of ten without a gesture that fights the scroll.
- */
+/** One button, with its icon, and the arrows that move it: to the front, and up one. */
 @Composable
 private fun ButtonRow(
     item: QuickActionBarItem,
@@ -479,10 +464,7 @@ private fun ButtonRow(
 
 @Composable
 private fun ChipRow(content: @Composable () -> Unit) {
-    // Wraps, like every other chip group in the settings. A row of translated chips is wider
-    // than the English one it was measured against -- "Predeterminado, Grande, Más grande,
-    // Enorme" against "Default, Large, Larger, Huge" -- and a chip that runs off the edge is a
-    // setting nobody knows exists, which the language lock already learned the hard way.
+    // Wraps, like every other chip group in the settings.
     FlowRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -490,9 +472,7 @@ private fun ChipRow(content: @Composable () -> Unit) {
     ) { content() }
 }
 
-/** Not private: [IconPicker.kt]'s `CreateCustomQuickActionDialog` needs the same mapping for the
- *  step picker's list of built-in actions, and one file-scoped copy shared within this module
- *  beats a second one duplicating it. */
+/** The icon of a builtin [QuickAction]; IconPicker.kt's step list uses it too. */
 internal fun iconFor(action: QuickAction): Int = when (action) {
     QuickAction.COPY_PREVIOUS_WORD -> R.drawable.bk_action_copy_previous_word
     QuickAction.COPY_LINE -> R.drawable.bk_action_copy_line

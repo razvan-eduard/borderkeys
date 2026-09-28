@@ -16,24 +16,14 @@ void TcnDecoder::setLayout(const KeyGeometry& geometry) {
 }
 
 bool TcnDecoder::loadWeights(const uint8_t* data, size_t length) {
-    // Heap, not a local: TcnWeights is ~2.4 MB (629,601 floats), comfortably inside a desktop
-    // thread's default several-MB stack -- which is why this went unnoticed through every
-    // previous caller (native-tests/tcn_replay.cpp's own main thread) -- but this decoder's real
-    // caller is Android's dedicated prediction HandlerThread, sized far smaller, and a 2.4 MB
-    // local blew it outright: confirmed 2026-09-13 via a device tombstone reading "stack pointer
-    // is not in a rw map; likely due to stack overflow" the moment this ran for the first time
-    // on-device, not on a host build.
+    // On the heap, not the stack.
     auto candidate = std::make_unique<TcnWeights>();
     if (!candidate->loadFromBytes(data, length)) {
         return false;
     }
     weights_ = *candidate;
     encoder_.setWeights(&weights_);
-    // setLayout's key-embedding pass needs real weights to be worth anything, and setLayout
-    // ordinarily runs first -- layout is known at keyboard-measure time, long before this
-    // asynchronous read off disk finishes. Redoing it now, against the geometry already on file,
-    // is what corrects a basis this decoder may already have built from stale (uninitialised)
-    // weights, rather than leaving it wrong until the next unrelated layout change.
+    // Rebuilds the basis with the new weights, against the geometry already set.
     if (lastGeometry_ != nullptr) {
         ctcDecoder_.setLayout(*lastGeometry_, weights_);
     }

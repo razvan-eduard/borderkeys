@@ -46,9 +46,7 @@ class KeyboardThemeSerializerTest {
 
     @Test
     fun `negative and alpha-heavy colours survive as exact ints`() = runTest {
-        // Packed ARGB is signed once the top bit is set, and a serializer that went through a
-        // float or a string would quietly lose it. The whole point of storing an Int is that
-        // Paint.setColor gets the value back untouched.
+        // Packed ARGB is negative once the top bit is set.
         val original = KeyboardTheme(backgroundColor = -1, swipeTrailColor = Int.MIN_VALUE)
         val restored = read(write(original))
         assertEquals(-1, restored.backgroundColor)
@@ -57,15 +55,13 @@ class KeyboardThemeSerializerTest {
 
     @Test
     fun `an empty file reads as the default rather than failing`() = runTest {
-        // DataStore hands the serializer an empty stream for a file that does not exist yet,
-        // which is the first launch of the application.
+        // DataStore passes an empty stream for a file that does not exist yet.
         assertEquals(KeyboardTheme(), read(ByteArray(0)))
     }
 
     @Test
     fun `a truncated file is reported as corruption, not as an arbitrary exception`() {
-        // Only a CorruptionException reaches DataStore's replace handler. Anything else escapes
-        // to whoever was collecting the flow -- on the UI thread, while showing a keyboard.
+        // Only a CorruptionException reaches DataStore's replace handler.
         val truncated = write(KeyboardTheme()).copyOfRange(0, 20)
         assertThrows(CorruptionException::class.java) {
             kotlinx.coroutines.runBlocking { read(truncated) }
@@ -86,8 +82,7 @@ class KeyboardThemeSerializerTest {
 
     @Test
     fun `a file written by a newer build is read, not rejected`() = runTest {
-        // ignoreUnknownKeys is what stops a downgrade, or a settings screen from a newer
-        // version, from making the keyboard unable to read its own theme.
+        // A field this build does not know is ignored.
         val fromTheFuture = """{"backgroundColor":-16777216,"someFieldFromLater":42}"""
         val restored = read(fromTheFuture.encodeToByteArray())
         assertEquals(-16777216, restored.backgroundColor)
@@ -97,9 +92,6 @@ class KeyboardThemeSerializerTest {
 
     @Test
     fun `an out-of-range dimension is clamped on read`() = runTest {
-        // A theme file that parses is not a theme file that makes sense. A row height of 40000
-        // does not throw -- it produces a keyboard taller than the screen, with the settings
-        // that would fix it behind it.
         val absurd = """{"rowHeightDp":40000.0,"keyGapDp":-5.0,"labelTextSizeSp":900.0}"""
         val restored = read(absurd.encodeToByteArray())
         assertTrue(restored.rowHeightDp in 28f..96f)
@@ -132,8 +124,6 @@ class KeyboardThemeSerializerTest {
 
     @Test
     fun `the privacy-sensitive default is off`() {
-        // Per-app language memory stores a behavioural profile, however small and however local.
-        // If this default ever flips, it should flip in a diff that touches this test.
         assertEquals(false, KeyboardPreferences().perAppLanguageMemory)
         assertEquals(true, KeyboardPreferences().clipboardEnabled)
         assertEquals(60, KeyboardPreferences().clipboardRetentionMinutes)
@@ -152,8 +142,6 @@ class KeyboardThemeSerializerTest {
 
     @Test
     fun `patterns layer, but the same one twice is once`() {
-        // They are drawn in the order given and each is one shader; the same tile twice would
-        // be a second full-surface draw for a difference nobody can see.
         val doubled = KeyboardTheme(
             backgroundPatterns = listOf(
                 KeyboardTheme.PATTERN_GRID,
@@ -169,8 +157,6 @@ class KeyboardThemeSerializerTest {
 
     @Test
     fun `a picture name that could leave its directory is refused`() {
-        // The name is joined to this application's own directory to find the file. A stored
-        // value carrying a separator would be a path, and a path can point anywhere.
         assertEquals("", KeyboardTheme(backgroundImage = "../../databases/x").sanitised().backgroundImage)
         assertEquals("", KeyboardTheme(backgroundImage = "a\\b").sanitised().backgroundImage)
         assertEquals(

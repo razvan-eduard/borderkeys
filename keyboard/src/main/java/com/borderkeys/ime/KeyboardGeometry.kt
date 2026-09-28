@@ -4,16 +4,8 @@
 package com.borderkeys.ime
 
 /**
- * A compiled layout: where every key is, what it types, and which key a touch belongs to.
- *
- * Split out of the view and free of Android on purpose. Hit-testing and the arrangement of key
- * rectangles are the two things in the keyboard that are pure arithmetic and easy to get subtly
- * wrong -- a one-pixel gap between two keys is a touch that does nothing, and neither a device
- * nor a screenshot will show it. Here they can be tested for what they are.
- *
- * Everything is a parallel array of primitives indexed by key. There is no `Key` object and no
- * `List<Key>`: the draw path reads floats and the touch path reads ints, and neither
- * dereferences anything per key.
+ * A compiled layout, in parallel arrays indexed by key: where every key is, what it types, and
+ * which key a touch belongs to.
  */
 class KeyboardGeometry {
 
@@ -30,7 +22,7 @@ class KeyboardGeometry {
     var centerX = FloatArray(0); private set
     var centerY = FloatArray(0); private set
 
-    /** Every label's characters end to end, so no `String` is created while drawing. */
+    /** Every label's characters, end to end. */
     var labelChars = CharArray(0); private set
     var labelOffset = IntArray(0); private set
     var labelLength = IntArray(0); private set
@@ -49,12 +41,8 @@ class KeyboardGeometry {
     var viewHeight: Float = 0f; private set
 
     /**
-     * Lays the layout out into [width] by [height] pixels.
-     *
-     * Reallocates only when the number of keys changed, so a rotation or a window resize reuses
-     * every array. Rows are independent: each one divides the full width by its own total in
-     * units, which is what lets a row of ten keys and a row with a five-unit space bar both
-     * reach the edges exactly.
+     * Lays the layout out into [width] by [height] pixels, each row dividing the full width by its
+     * own units. Reallocates only when the key count changes.
      */
     fun compile(layout: KeyboardLayout, width: Float, height: Float, gapPx: Float) {
         val total = layout.keyCount
@@ -121,15 +109,8 @@ class KeyboardGeometry {
     }
 
     /**
-     * A uniform grid over the keyboard, every cell resolved to the key a touch in it belongs to.
-     *
-     * Built once so that [findKeyAt] is an array index rather than a scan over forty keys on
-     * every motion event -- and there are several of those per frame while a finger moves.
-     *
-     * Cells falling in the gap between keys are resolved here, at build time, to the nearest key
-     * by squared distance to its rectangle. So a finger landing between two keys still types,
-     * the fallback costs nothing at touch time, and there is no such thing as a dead pixel on
-     * this keyboard.
+     * A uniform grid over the keyboard, each cell resolved to the key containing its centre, or to
+     * the nearest key for a cell in a gap.
      */
     private fun buildHitGrid(layout: KeyboardLayout, width: Float, height: Float) {
         gridColumns = GRID_COLUMNS
@@ -149,7 +130,7 @@ class KeyboardGeometry {
         }
     }
 
-    /** Exact containment first, then nearest by squared distance. No square roots anywhere. */
+    /** The key containing ([x], [y]), else the nearest by squared distance. */
     fun nearestKey(x: Float, y: Float): Int {
         var best = NO_KEY
         var bestDistance = Float.MAX_VALUE
@@ -184,21 +165,9 @@ class KeyboardGeometry {
             y >= keyTop[index] && y < keyBottom[index]
 
     /**
-     * The key a touch at (x, y) belongs to. O(1), and exact.
-     *
-     * The grid alone is not exact, and the difference matters. A cell records the key containing
-     * its *centre*, so a point near a key boundary can sit in a different key than its cell's
-     * centre did -- by up to half a cell, which at the resolutions here is a band several pixels
-     * wide down the side of every key where the wrong character would be typed. Invisible in a
-     * screenshot, and exactly what "this keyboard is hard to type on" is made of.
-     *
-     * So the grid answer is verified against the key's actual rectangle, and on a miss the eight
-     * surrounding cells are checked. That is enough to be exact rather than approximate: cells
-     * are smaller than the smallest key, so a point and its cell centre are at most half a cell
-     * apart, and any key that could contain the point owns one of those nine cells.
-     *
-     * When nothing contains the point it is in the gap between keys, and the grid's answer is
-     * already the nearest key -- resolved at build time, so the fallback costs nothing here.
+     * The key a touch at ([x], [y]) belongs to, in constant time: the cell's key when its
+     * rectangle contains the point, else the key of one of the eight surrounding cells that does,
+     * else the cell's nearest key.
      */
     fun findKeyAt(x: Float, y: Float): Int {
         if (keyCount == 0 || gridKey.isEmpty()) {
@@ -263,12 +232,7 @@ class KeyboardGeometry {
 
     companion object {
         const val NO_KEY = -1
-        /**
-         * Chosen so a cell is always smaller than a key: the narrowest key on either shipped
-         * layout is one unit of ten, so 64 columns puts more than six cells across it, and six
-         * rows per key row does the same vertically. That is the precondition for the
-         * nine-cell search in [findKeyAt] being exhaustive rather than merely usually right.
-         */
+        /** Grid columns; [findKeyAt] is exact while a cell is smaller than the narrowest key. */
         private const val GRID_COLUMNS = 64
         private const val GRID_ROWS_PER_KEY_ROW = 6
     }

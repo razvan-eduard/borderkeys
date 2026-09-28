@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-// The only module in the repository that is allowed to know Compose exists. It runs in the
-// application process, not in the IME process, so its frame budget is irrelevant to typing.
+// The only module that uses Compose; it runs in the application process, not the IME's.
 
 plugins {
     alias(libs.plugins.android.library)
@@ -18,10 +17,8 @@ android {
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInt()
 
-        // This module has no flavors, but it depends on :keyboard which does. Without a
-        // strategy AGP cannot pick a variant of :keyboard when :settings is built on its own
-        // (unit tests, lint). When :app resolves the graph its own `engine` attribute wins,
-        // so the `plus` APK still gets the `plus` keyboard.
+        // The :keyboard variant used when :settings is built on its own (unit tests, lint);
+        // :app's own `engine` attribute wins in the APKs.
         missingDimensionStrategy("engine", "core")
     }
 
@@ -106,9 +103,8 @@ dependencies {
     implementation(project(":data"))
     implementation(project(":i18n"))
     implementation(project(":effects"))
-    // One direction only. The theme editor embeds the real KeyboardCanvasView in an
-    // AndroidView so that the preview and the keyboard cannot diverge; the keyboard never
-    // learns that this module exists.
+    // One direction only: the previews embed the keyboard's own views; :keyboard does not
+    // depend on this module.
     implementation(project(":keyboard"))
 
     testImplementation(libs.junit)

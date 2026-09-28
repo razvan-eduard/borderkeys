@@ -49,8 +49,7 @@ bool TemplateCache::build(Entry& entry, const uint32_t* letters, int letterCount
     for (int i = 0; i < letterCount; ++i) {
         const uint32_t* neighbourCodes = nullptr;
         const float* neighbourCosts = nullptr;
-        // Slot zero of the neighbour ring is the key itself, which is the cheapest way to ask
-        // "is this character on the keyboard, and where".
+        // Slot zero of the neighbour ring is the key itself.
         if (geometry_->neighbours(letters[i], &neighbourCodes, &neighbourCosts) <= 0) {
             return false;
         }
@@ -59,11 +58,7 @@ bool TemplateCache::build(Entry& entry, const uint32_t* letters, int letterCount
         if (!geometry_->centreOf(letters[i], &x, &y)) {
             return false;
         }
-        // Consecutive identical letters land on the same point, and arc-length resampling
-        // spends no length on a zero-distance step -- so this plain path reads as the same
-        // shape as the word with the double collapsed to one letter, which is exactly right for
-        // a gesture that just passes over the key once. `buildLoopVariant` below is the other
-        // half: the same letters, for a gesture that pauses there on purpose.
+        // A doubled letter lands on the same point; buildLoopVariant traces a loop there instead.
         if (written > 0 && pointsX[written - 1] == x && pointsY[written - 1] == y) {
             hasDoubledLetter = true;
         }
@@ -73,8 +68,7 @@ bool TemplateCache::build(Entry& entry, const uint32_t* letters, int letterCount
     }
 
     if (written == 1) {
-        // A one-letter word has no path. Fill both channels with the single point so the
-        // distance metrics stay defined rather than special-cased at every call site.
+        // A one-letter word's template is its single point, in both channels.
         for (int i = 0; i < kResampleCount; ++i) {
             entry.locationX[i] = pointsX[0];
             entry.locationY[i] = pointsY[0];
@@ -99,8 +93,7 @@ bool TemplateCache::build(Entry& entry, const uint32_t* letters, int letterCount
 
 bool TemplateCache::buildLoopVariant(Entry& entry, const float* pointsX, const float* pointsY,
                                      int written) const {
-    // In key widths: big enough to be a real detour the shape channel can see, small enough that
-    // it stays "at" the letter rather than wandering toward its neighbours.
+    // The loop's radius, in key widths.
     constexpr float kLoopRadiusFactor = 0.28f;
     const float keyWidth = geometry_->keyWidth();
     if (!(keyWidth > 0.f)) {
@@ -116,9 +109,7 @@ bool TemplateCache::buildLoopVariant(Entry& entry, const float* pointsX, const f
         const bool isDoubled =
             i > 0 && pointsX[i] == pointsX[i - 1] && pointsY[i] == pointsY[i - 1];
         if (isDoubled && loopWritten + 5 <= kMaxLoopPoints) {
-            // A small diamond around the key centre, traced before landing back on it -- a
-            // detour with real length, so arc-length resampling actually spends points on it
-            // instead of skipping straight through like it does for the coincident point alone.
+            // A small diamond around the key centre, traced before landing back on it.
             const float cx = pointsX[i];
             const float cy = pointsY[i];
             loopX[loopWritten] = cx - radius;

@@ -38,16 +38,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Somebody else's application is asking for this one's settings.
- *
- * Shown instead of the settings when the activity was started with a transfer request from a
- * build signed with the same certificate. The signature has already been checked by the time
- * this appears; what this screen adds is the half a signature cannot: that a person saw the
- * request, saw which application made it, and chose what to answer with.
- *
- * The answer never touches shared storage. It goes into this application's own cache and comes
- * back as a URI with a read grant that dies with the activity result, so there is nothing to
- * find afterwards and nothing to delete.
+ * Another application asking for this one's settings, shown instead of the settings when the
+ * activity was started with a transfer request from a build signed with the same certificate.
+ * The signature is already checked; the person sees which application asks and chooses what to
+ * answer with. The answer goes into this application's cache and back as a URI with a read grant
+ * that ends with the activity result.
  */
 @Composable
 fun TransferScreen(
@@ -109,13 +104,7 @@ fun TransferScreen(
     }
 }
 
-/**
- * Writes the answer into this application's cache and returns a URI for it.
- *
- * No passphrase. The file is never anywhere the user or another application could reach: it
- * lives in a private cache directory and is handed over as a grant that lasts one read. A
- * passphrase here would be a password to protect a room from its only two occupants.
- */
+/** Writes the answer, with no passphrase, to this application's cache and returns its URI. */
 private suspend fun writeAnswer(
     context: android.content.Context,
     backups: BackupRepository,

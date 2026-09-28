@@ -4,51 +4,10 @@
 
 """Removes another language's vocabulary from a word list.
 
-A corpus of Romanian web text is full of English. Film titles, band names, citation titles and
-quoted sentences all get counted as Romanian words by `make_pack.py`, which counts tokens and
-has no notion of what language any one of them belongs to. `docs/dictionaries.md` already says
-so, in those words, about the proper-name pipeline; this is the same filter applied to the
-vocabulary itself, which is where it actually matters.
-
-Why it matters beyond a slightly larger pack: the engine decides which language is being
-written by counting words that exactly one enabled dictionary knows (see
-`Engine::observeContextLanguage`). English words sitting in the Romanian pack are known by
-both, so they are evidence of nothing, and the most common English words are exactly the ones
-most likely to appear inside a quoted fragment -- so the overlap lands precisely where the
-traffic is. Measured on a phone with both packs on: seven ordinary English words produced zero
-evidence and the language verdict never changed, which left every feature built on it inert.
-
-Nothing here is a judgement about loanwords. "mouse", "internet", "weekend" and "hot" are
-Romanian words now, and the rule below keeps all four. What it removes is "the", "of", "and",
-"there", "life" and "service" -- words no Romanian dictionary would list, present only because
-they were counted out of English text.
-
-The rule
---------
-One accusation and two chances to answer it. A word goes only if it is accused and neither
-witness speaks for it.
-
-The accusation is relative frequency: a word is *suspect* when some other language knows it as
-genuinely common (Zipf above --floor) and knows it better than this language by more than
---margin Zipf points. One point is a factor of ten, which is a wide moat on purpose -- a word a
-language really uses will not be ten times rarer in it than somewhere else. On its own this is
-badly wrong for related languages: Romanian shares "e", "el", "le", "da", "sus" and "place"
-with Italian, Spanish and French, which all weight them more heavily, and every one of those is
-core Romanian vocabulary.
-
-The first witness is the language's own spell checker, asked in lower case. That answers for
-most of them, and for Romanian it rescues 1,724 of 6,599 suspects.
-
-The second witness is the language's own treebank (`<tag>.pos`), and it exists because the
-first one cannot answer for German. German capitalises every noun, so its dictionary refuses
-the lower-cased "mai", "million" and "tempo" that these lists are written in, while asking the
-capitalised form instead readmits "New", "City" and "San". A treebank tag says what the word
-was *doing* in running text: "mai" is NN and "city" is NE. It settles Romanian's last false
-positive in the same stroke, where "sua" (the USA) is tagged Yn, an abbreviation.
-
-Zipf is computed from the word lists themselves rather than an external frequency package, so
-this stays standard library only like everything else in tools/. That is self-consistent by
-construction: every pack is measured on the same scale, against the same six corpora.
+A word is suspect when another bundled language knows it as common (Zipf above --floor) and
+better than this language by more than --margin Zipf points. A suspect is removed unless the
+language's own spell checker accepts it in lower case or its treebank (`<tag>.pos`) tagged it as
+one of its ordinary words. Zipf is computed from the word lists themselves.
 
 Usage
 -----
@@ -73,24 +32,17 @@ BUNDLED += tuple(
     for manifest in sorted((Path(__file__).resolve().parent / "languages").glob("*.json"))
 )
 
-# A word has to be genuinely common somewhere else before its absence here means anything. Below
-# this, the other language's own count is too thin to be evidence of where the word belongs.
+# How common, in Zipf, a word has to be in another language before that language can own it.
 DEFAULT_FLOOR = 3.0
 
-# One Zipf point is a factor of ten. A narrower margin starts taking real loanwords: "hot" sits
-# 0.84 apart between Romanian and English, "mouse" 0.75, and both belong in Romanian.
+# In Zipf points; one is a factor of ten.
 DEFAULT_MARGIN = 1.0
 
 
 def read_list(path: Path) -> tuple[dict[str, int], int, set[str]]:
     """A `word<TAB>count[<TAB>name]` file: its counts, the total, and which rows are names.
 
-    The third column is `make_pack.py --names` output, merged in after the frequency cutoffs
-    and flagged so the pack capitalises it. Names are counted towards the total -- they are
-    real occurrences -- but never removed: they come from a separate, deliberately-chosen
-    source with its own cross-language handling (`make_names.py`, and the `.names-ordinary` /
-    `.names-exclude` files beside these lists), and a rule about vocabulary has no business
-    second-guessing it. "John" belongs in every pack.
+    Names count towards the total and are never removed.
     """
     counts: dict[str, int] = {}
     names: set[str] = set()
@@ -121,29 +73,9 @@ def zipf_table(counts: dict[str, int], total: int) -> dict[str, float]:
 def accepted_by(words: list[str], dictionary: Path) -> set[str]:
     """Which of [words] the language's own spell checker accepts.
 
-    `hunspell -l` prints the words it does *not* know, so what it stays silent about is what
-    the language vouches for. Acceptance rather than `make_ordinary.py`'s headword test
-    (`hunspell -s`) on purpose: an inflected form is still the language's own word, and this
-    gate is asking "is this word Romanian at all", not "is this the dictionary's citation
-    form".
-
-    This gate is not optional. The frequency rule on its own flags every short word Romanian
-    shares with Italian, Spanish or French -- "e", "el", "le", "da", "sus", "place" -- because
-    those corpora weight them more heavily. Every one of them is a core Romanian word, and
-    every one is rescued here. Measured on Spanish, where a dictionary was to hand: 6,463
-    suspect, 969 rescued, and the rescues are "le", "e", "da", "sur", "di", "dato", "sale".
-
-    The word is asked exactly as the list spells it, which is lower case, and no other case is
-    tried. That is not an oversight, and `make_ordinary.py` states the same rule beside its own
-    hunspell call: a lower-case entry accepts both spellings, a capitalised one only its own, so
-    a lower-case question is what makes the answer mean "an ordinary word of this language".
-
-    Trying the capitalised form was measured and rejected. These dictionaries do refuse
-    capitalised nonsense, so it is not a blanket loophole, but they carry real proper-noun
-    entries for name particles -- Romanian hunspell rejects "the" and accepts "The", "City",
-    "San" and "New", because those appear in names it knows. Rescuing on those put every one of
-    them straight back into the Romanian pack. The cost of the stricter question is a German
-    noun whose lower-cased form its dictionary will not vouch for; `--allow` is for those.
+    `hunspell -l` prints the words it does not know; the rest are accepted, inflected forms
+    included. The word is asked exactly as the list spells it, in lower case. `--allow` covers a
+    word this refuses wrongly.
     """
     if not words:
         return set()
@@ -155,14 +87,9 @@ def accepted_by(words: list[str], dictionary: Path) -> set[str]:
     return {word for word in words if word not in rejected}
 
 
-# Which treebank tags are *not* evidence that the language owns a word, per tagset. Proper
-# nouns are the loophole the spell checkers fall through -- Romanian's dictionary knows "The",
-# "City" and "San" because they appear inside names it lists -- and each tagset's own foreign or
-# residual marker says outright that the token was not the language's own. Everything else is.
-#
-# Spelled out per language rather than pattern-matched: these are four different tagsets and the
-# same letters mean different things in them. Romanian's "Sp..." is a preposition ("sub", "la")
-# while Italian's "SP" is a proper noun, so a prefix rule would quietly gut Romanian.
+# Which treebank tags are not evidence that the language owns a word, per tagset: proper nouns,
+# and each tagset's foreign or residual marker. Spelled out per language; the same letters mean
+# different things in different tagsets.
 POS_NOT_EVIDENCE: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
     "en_US": (("NNP",), frozenset({"FW"})),          # Penn: NNP/NNPS proper, FW foreign
     "de_DE": (("NE",), frozenset({"FM", "XY"})),     # STTS: NE proper, FM foreign material
@@ -176,16 +103,7 @@ POS_NOT_EVIDENCE: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
 def treebank_vouches(tag: str, words: list[str], pos_directory: Path) -> set[str]:
     """Which of [words] this language's own treebank tagged as one of its ordinary words.
 
-    The third witness, and the one that settles German. German capitalises every noun, so its
-    spell checker holds "Mai", "Million" and "Tempo" while these lists are lower-cased -- the
-    lower-case question its dictionary is asked therefore refuses real German nouns. Asking the
-    capitalised form instead is no good either, because that readmits "New", "City" and "San".
-    The treebank separates them on what the word was actually *doing* in running text: "mai" is
-    tagged NN and "city" NE, so one is kept and the other is not.
-
-    It settles Romanian's remaining false positive too: "sua" (the USA) is tagged Yn, an
-    abbreviation, while "the", "city" and "san" are all Np. One rule, both languages, no
-    per-language script.
+    A tag in POS_NOT_EVIDENCE does not vouch.
     """
     path = pos_directory / f"{tag}.pos"
     if tag not in POS_NOT_EVIDENCE or not path.is_file():
@@ -329,8 +247,7 @@ def main() -> int:
         print(f"{tag}: {flagged:,} flagged, {oracle_note}, "
               f"{len(verdict):,} removed of {vocabulary:,} vocabulary words "
               f"({share:.1f}%), {kept:,} kept, names untouched")
-        # Heaviest first: the ones that were doing the most damage, and the ones a mistake in
-        # the rule would be most visible in.
+        # Heaviest first.
         worst = sorted(verdict.items(), key=lambda item: -counts[tag][item[0]])
         for word, (other, other_zipf, own_zipf) in worst[:arguments.sample]:
             print(f"    {word:<20} {counts[tag][word]:>9,}  "

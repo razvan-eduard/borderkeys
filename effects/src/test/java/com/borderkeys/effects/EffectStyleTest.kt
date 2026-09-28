@@ -14,11 +14,6 @@ class EffectStyleTest {
     private val travel = 400f
     private val steps = (0..20).map { it / 20f }
 
-    /**
-     * The curve the accepted-word animation had before it became a style, kept to the letter:
-     * this is the one effect that already shipped, and a refactor that quietly changed how it
-     * looks would be a redesign nobody asked for.
-     */
     @Test
     fun `rise and fade is what the accepted word always did`() {
         for (p in steps) {

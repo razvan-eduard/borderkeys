@@ -10,11 +10,8 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Which of the five claims a delimiter honours, and under which switch.
- *
- * The order is the contract: a shortcut outranks the map, the map outranks the possessive, and
- * autocorrect only gets the word none of them wanted. Each gate is asserted on its own, because
- * a rewrite that fires with its switch off is the broken promise this keyboard exists to avoid.
+ * Which claim a delimiter honours, and under which switch: a shortcut, then the apostrophe map,
+ * then the possessive, then autocorrect.
  */
 class WordCommitTest {
 

@@ -2,32 +2,18 @@
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
 /**
- * What the strip would offer, measured against a corpus instead of by eye.
- *
- * Every scoring constant in engine.cpp carries a comment naming a case it was set to fix, and
- * every one of those was found by typing something and looking. That works until two of them
- * pull against each other: raising the edit penalty to stop a frequent word replacing a rare
- * real one is the same change that buries "the" under "tehachapi" when someone types "teh",
- * and no amount of looking at one example tells you the cost of the other.
- *
- * So this is the other half of `gesture_replay`, for typed words rather than gestures, and it
- * follows the same contract deliberately: a corpus in, a measurement out, no verdict. It does
- * not assert and it is not a test. `borderkeys_tests` says whether the engine is correct; this
- * says how good its answers are, which is a number that moves rather than a line that passes.
+ * What the strip would offer, measured against a corpus. A measurement, not a test: it does not
+ * assert.
  *
  * Corpus format, one case per line, `#` comments and blank lines ignored:
  *
  *     typed<TAB>expected
  *
- * `expected` is what the strip ought to put first. A case where the right answer is to leave
- * the word alone is written with the typed word as its own expectation -- "snobul" against
- * "snobul" -- because "offers nothing better than what I wrote" is a result worth measuring,
- * and it is the result the guards in AutoCorrection exist to produce.
+ * `expected` is what the strip ought to put first; a case where the word should be left alone
+ * names the typed word itself.
  *
- * Two heaps, two questions, two corpus forms. The bare form asks where the *strip* ranks the
- * right word; `--autocorrect` asks what the *space bar* commits, which is a different heap and
- * can disagree completely -- "believ" ranked "believe" second and committed "belief", a word the
- * same search put seventh. A measurement that only ever read the strip could not see that.
+ * The bare form measures where the strip ranks the expected word; `--autocorrect` measures what
+ * the space bar commits, which is a different heap.
  *
  * Usage:
  *     suggest_eval <dict dir> <corpus.tsv> [tag ...]
@@ -35,20 +21,13 @@
  *     suggest_eval <dict dir> --explain <typed> <candidate> [tag ...]
  *     suggest_eval <dict dir> --reachable <dictionary.tsv> <tag> [budget]
  *
- * `--reachable` asks the one question the rest of the suite never asks: every word compiled into
- * a shipped pack must be retrievable from that pack as itself. It reads the source `.tsv` and
- * queries the real pack built from it, so it measures the shipped vocabulary rather than a
- * synthetic fixture.
+ * Packs are named by tag (default en-US). The corpus form prints per-case ranks, then rank-1
+ * accuracy, top-3 accuracy, and the mean rank of the cases it found at all. The explain form
+ * prints where one candidate's score came from.
  *
- * `budget` is the number of unreachable rows tolerated, and exit status is non-zero above it.
- * It is a defect count on its way to zero, not a property of the language: a folded trie key
- * holds one spelling, so a language whose words differ only by diacritic loses every spelling
- * but the most frequent one. Omit it to require zero.
- *
- * with the packs named by tag (default en-US). The corpus form prints per-case ranks and then
- * rank-1 accuracy, top-3 accuracy, and the mean rank of the cases it found at all. The explain
- * form prints where one candidate's score came from, which is the question every scoring change
- * starts with and the one a list of ranked words cannot answer.
+ * `--reachable` checks that every word compiled into a shipped pack is retrievable from that
+ * pack as itself: it reads the source `.tsv` and queries the pack built from it. `budget` is the
+ * number of unreachable rows tolerated, zero when omitted; the exit status is non-zero above it.
  */
 
 #include <cstdio>
@@ -137,7 +116,7 @@ int main(int argc, char** argv) {
     }
     const char* const directory = argv[1];
     // `--autocorrect <corpus>` measures what the space bar commits; the bare corpus form
-    // measures where the strip ranks the right word. Both, because they are separate heaps.
+    // measures where the strip ranks the right word.
     const bool autocorrectMode = std::strcmp(argv[2], "--autocorrect") == 0;
     if (autocorrectMode && argc < 4) {
         std::printf("usage: suggest_eval <dict dir> --autocorrect <corpus.tsv> [tag ...]\n");
@@ -187,14 +166,10 @@ int main(int argc, char** argv) {
     engine.setActiveLanguages(tagPointers.data(), weights.data(),
                               static_cast<int>(tagPointers.size()));
 
-    // Undecided on purpose: a corpus case is one word with no sentence around it, so there is no
-    // evidence for the detector to work from and pinning it to one pack would measure a
-    // different engine than the one a person types into on their first word.
+    // Undecided, as on the first word typed.
     engine.setLanguageLock(0.0f, false);
 
-    // Without this KeyGeometry::isSet() is false and the walk never leaves exact-match mode --
-    // no substitution, deletion, transposition or insertion at all. A harness missing it
-    // measures prefix completion and reports it as the whole engine.
+    // Key geometry; without it the walk never leaves exact-match mode.
     borderkeys_test::TestLayout layout;
     if (!engine.setKeyGeometry(layout.codes, layout.xs, layout.ys, layout.count, layout.keyWidth,
                                layout.keyHeight)) {
@@ -208,11 +183,7 @@ int main(int argc, char** argv) {
             std::printf("no rows read from %s\n", corpusPath);
             return 1;
         }
-        // Case is not part of the question. A pack keeps one spelling of "Warren"/"warren" and
-        // the keyboard capitalises for itself from the proper-noun flag and the shift state, so
-        // a row that comes back in the other casing is reachable. Only the ASCII letters are
-        // lowered, which is every row this applies to; a word the pack holds under a different
-        // *spelling* is what this is meant to catch.
+        // A row that comes back in another casing is reachable; a different spelling is not.
         std::vector<std::string> unreachable;
         for (const Case& row : rows) {
             Engine::ScoreParts parts;
@@ -220,10 +191,7 @@ int main(int argc, char** argv) {
                                     row.typed.size(), &parts)) {
                 continue;
             }
-            // Which casing the pack kept depends on which was the more frequent, so the row may
-            // be lower where the pack is capitalised as easily as the other way round. Only the
-            // leading byte is touched when it is ASCII, so a multi-byte first character is left
-            // alone rather than cut in half.
+            // Tried lower-cased and capitalised; only ASCII letters change case.
             std::string lowered = row.typed;
             for (char& c : lowered) {
                 if (c >= 'A' && c <= 'Z') {
@@ -308,10 +276,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // What the space bar would commit, rather than where the strip ranks a word. A different
-    // question and a different heap, and the two have disagreed badly enough in practice to be
-    // worth measuring apart: the strip ranked "believe" second for "believ" while autocorrect
-    // committed "belief", which the same strip ranked seventh and sixty points worse.
+    // What the space bar would commit, rather than where the strip ranks a word.
     if (autocorrectMode) {
         int right = 0;
         int wrong = 0;
@@ -322,11 +287,8 @@ int main(int argc, char** argv) {
             engine.suggest(item.typed.c_str(), item.typed.size(), nullptr, 0, nullptr, 0,
                            scratch, Engine::kMaxCandidates);
             std::string applied;
-            // The one guard from AutoCorrection.correctionFor that changes what this measures:
-            // a word the dictionaries already spell is never replaced, whatever the heap offers.
-            // Without it the harness reports "it's" corrected to "its" and would credit a fix
-            // for work the guard already does -- it would be measuring the engine's proposal
-            // rather than what reaches a field. Same call PredictionEngine makes for knownWord.
+            // AutoCorrection.correctionFor's known-word guard: a word the dictionaries already
+            // spell is never replaced. The same call PredictionEngine makes for knownWord.
             char spelling[128];
             const int spelled = engine.knownSpelling(item.typed.c_str(), item.typed.size(),
                                                      spelling, sizeof(spelling) - 1);

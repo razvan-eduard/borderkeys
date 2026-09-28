@@ -17,19 +17,10 @@ struct llama_sampler;
 namespace borderkeys {
 
 /**
- * A single loaded language model, and the one operation this application asks of it.
- *
- * Everything about this class is shaped by where it runs: a separate process, started when the
- * user asks for something and killed shortly afterwards. It is not a service, it holds no
- * queue, and it has no concept of a conversation. The user selects text, picks an action, gets
- * one answer, and the model goes away again.
+ * A single loaded language model, and the one operation this application asks of it: one
+ * instruction over one piece of text, one answer, no conversation.
  *
  * Not thread safe. One request at a time, from the service's worker thread.
- *
- * One exception to "no concept of a conversation": [run]'s `reuseSharedPrefix` lets consecutive
- * calls share the part of the prompt neither one needed to recompute -- see [run]'s own doc. This
- * is not state carried between actions; it is one action's own chunks of one long selection,
- * decided entirely by the caller.
  */
 class TextAssist {
 public:
@@ -43,21 +34,16 @@ public:
         kErrDecode = -6,
         kErrBusy = -7,
         kErrArgument = -8,
-        /** A C++ exception was caught at the JNI boundary instead of being let cross it -- see
-         *  assist_jni.cpp's try/catch around load and run. Distinct from every error above so it
-         *  shows up as itself in logs rather than masquerading as one of them. */
+        /** A C++ exception was caught at the JNI boundary, in assist_jni.cpp's load or run. */
         kErrException = -9,
     };
 
     ~TextAssist();
 
     /**
-     * Loads a GGUF model from an absolute path.
-     *
-     * The caller has already verified the file's SHA-256 against the known-model registry; this
-     * takes the path on that basis and does not re-check. `contextTokens` is clamped to what the
-     * model was trained for, because asking for more silently produces nonsense rather than an
-     * error.
+     * Loads a GGUF model from an absolute path whose SHA-256 the caller has already checked
+     * against the known-model registry. `contextTokens` is clamped to what the model was trained
+     * for.
      */
     int32_t load(const char* path, int contextTokens, int threads);
 
@@ -69,57 +55,37 @@ public:
     int contextTokens() const { return contextTokens_; }
 
     /**
-     * This model's own chars-per-token ratio, measured against a fixed sample at [load] rather
-     * than assumed -- the "four characters to a token" rule of thumb [ChunkedAssistRunner] falls
-     * back to before this is ever known is a guess averaged across many tokenisers, and any one
-     * model's real vocabulary can sit meaningfully off it. 0 before a model has been loaded.
+     * This model's chars-per-token ratio, measured against a fixed sample at [load]; 0 before a
+     * model has been loaded.
      */
     float charsPerToken() const { return charsPerToken_; }
 
     /**
-     * Replaces the sampler's temperature and nucleus (top-p) with the given values, clamping
-     * anything out of range rather than rejecting it -- the caller is a stored preference, not a
-     * one-off argument, and a bad file should not mean requests silently do nothing.
-     *
-     * Safe to call before [load] (the values are simply remembered for when the chain is first
-     * built) or any time after (the chain is freed and rebuilt on the spot, no model reload).
-     * The fixed sampler seed is untouched either way -- see kSamplerSeed in text_assist.cpp.
+     * Replaces the sampler's temperature and nucleus (top-p); an out-of-range value becomes the
+     * default. Safe before [load] (the values are kept for when the chain is built) or after (the
+     * chain is rebuilt, with no model reload). The sampler seed does not change.
      */
     void setSamplingParams(float temperature, float topP);
 
     /**
-     * Runs one instruction over one piece of text and returns the whole answer.
+     * Runs one instruction over one piece of text and returns the whole answer, not streamed.
      *
-     * Streaming is deliberately absent. The result is shown in a sheet with a Replace button
-     * next to it, so a half-finished answer has nothing to be done with -- and a token-by-token
-     * callback across a process boundary would cost an IPC per token.
+     * `cleanFormatting` gates the part of cleanResult's cleanup that can contradict the
+     * instruction.
      *
-     * `cleanFormatting` gates the half of cleanResult's cleanup that can disagree with what was
-     * actually asked for -- see that function's own doc for why a custom, user-written
-     * instruction is the one case this needs to be off for.
-     *
-     * `outputRatio` and `minOutputTokens` come from the task being run --
-     * [com.borderkeys.data.assist.AssistTask.outputRatio] and its `minOutputTokens`, the same
-     * pair that class's own doc describes -- and `maxOutputTokensCeiling` is that class's shared
-     * `MAX_OUTPUT_TOKENS`. The actual token budget for this request is computed from these
-     * against the prompt's exact tokenised size, not guessed from the input's character count.
-     * When `useRemainingContext` is true that budget is only a floor: the exact number of tokens
-     * actually left in the context window is at least as large (or this call would already have
-     * been refused) and generation is allowed to run to that instead, so `outputRatio` guessing
-     * low cannot cut a correct answer off mid-sentence. When false, the computed budget is the
-     * real stop -- see [com.borderkeys.data.assist.AssistTask.usesRemainingContext]'s own doc for
-     * which tasks want which.
+     * `outputRatio` and `minOutputTokens` are the task's
+     * ([com.borderkeys.data.assist.AssistTask]), and `maxOutputTokensCeiling` is its
+     * `MAX_OUTPUT_TOKENS`; the token budget is computed from them against the prompt's tokenised
+     * size. With `useRemainingContext` that budget is a floor and generation may run to the end of
+     * the context window; without it, the budget is the stop.
      *
      * `outTruncated`, when not null, is set on a [kOk] return to whether generation stopped for
-     * a reason other than the model itself choosing to end the answer -- exhausting the token
-     * budget, or [requestCancel]. Left untouched on every other return, since only a [kOk] answer
-     * is something a truncation flag describes.
+     * a reason other than the model ending the answer (the token budget, or [requestCancel]). It
+     * is left untouched on every other return.
      *
      * `reuseSharedPrefix` is true only for a chunk after the first within one
-     * [com.borderkeys.assist.ChunkedAssistRunner] job -- see this class's own doc for what it
-     * changes about how the prompt is decoded, and [com.borderkeys.assist.ChunkedAssistRunner]'s
-     * for why chunks of one job are the one case two requests may share anything of each other's
-     * state at all.
+     * [com.borderkeys.assist.ChunkedAssistRunner] job: the start this prompt shares with the
+     * previous one stays in the context and is not decoded again.
      */
     int32_t run(const char* instruction, const char* text, float outputRatio,
                 int minOutputTokens, int maxOutputTokensCeiling, bool useRemainingContext,
@@ -127,10 +93,8 @@ public:
                 bool* outTruncated);
 
     /**
-     * Asks the current run to stop at the next token boundary. Safe from another thread -- and
-     * only actually safe because [cancelRequested_] is `std::atomic`: this is the one field on
-     * this otherwise single-threaded class written from a thread other than the worker thread
-     * that owns everything else here, so it is the one field that has to be.
+     * Asks the current run to stop at the next token boundary. Safe from another thread:
+     * [cancelRequested_] is the one atomic field.
      */
     void requestCancel() { cancelRequested_ = true; }
 
@@ -147,15 +111,11 @@ private:
     float charsPerToken_ = 0.0f;
     std::atomic<bool> cancelRequested_{false};
     bool running_ = false;
-    // The exact tokens the context's memory currently holds as a prompt, in the positions
-    // decoding them originally put them at -- empty whenever that is not true of anything in the
-    // memory (nothing loaded yet, or the last attempt to establish it failed partway through).
-    // The one thing run's reuseSharedPrefix compares a new prompt against; see that parameter's
-    // own doc and its implementation in text_assist.cpp for why emptying this before a decode
-    // attempt and only restoring it after that attempt succeeds is what keeps it trustworthy.
+    // The tokens the context's memory holds as a prompt, at the positions they were decoded at,
+    // or empty when nothing in memory is known to be one. Cleared before a decode, restored only
+    // after it succeeds.
     std::vector<int32_t> lastPromptTokens_;
-    // Low temperature and a tight nucleus by default -- see rebuildSampler's own reasoning in
-    // text_assist.cpp for why.
+    // Low temperature and a tight nucleus by default.
     float temperature_ = 0.3f;
     float topP_ = 0.9f;
 };

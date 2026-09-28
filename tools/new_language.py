@@ -50,9 +50,7 @@ USER_AGENT = "BorderKeys-tools (https://github.com/razvan-eduard/borderkeys)"
 
 STEPS = ("fetch", "overlay", "names", "grammar", "corpus", "ordinary", "pack", "clean", "compile", "check")
 
-# Rows per Wikidata query, and where the queries go: the QLever mirror answers a page of
-# twenty thousand rows in seconds where Wikidata's own endpoint rate-limits the query into
-# failure, and each page costs the same fixed time whatever its size.
+# Rows per Wikidata query, and where the queries go: the QLever mirror.
 NAMES_PAGE_SIZE = 20000
 NAMES_ENDPOINT = "https://qlever.cs.uni-freiburg.de/api/wikidata"
 

@@ -8,11 +8,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The two-state pause/resolve state machine kept separate from the view and the input
- * connection it drives -- the same reason [LanguageSwitchCorrectorTest] tests its own class
- * this way.
- */
+/** The pause/resolve state machine, without the view or the input connection it drives. */
 class SwipeRadialControllerTest {
 
     @Test

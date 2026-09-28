@@ -3,22 +3,13 @@
 
 package com.borderkeys.ime
 
-/**
- * The two case edits the quick-action bar offers, on text alone -- no InputConnection here, so
- * both are testable and neither can move a cursor. [BorderKeysService] reads the field, asks
- * this what it should become, and writes back only what differs.
- */
+/** The quick-action bar's two case edits, on text alone. */
 object SentenceCase {
 
-    /** The marks that close a sentence -- the same set [AutoShift] decides a sentence start by. */
+    /** The marks that close a sentence, as in [AutoShift]. */
     private const val SENTENCE_ENDINGS = ".!?…。！？"
 
-    /**
-     * "apple" becomes "Apple", "Apple" becomes "apple", and a word whose first character has
-     * no case ("42", "élan" in a script without one) comes back as it was. The rest of the
-     * word is never touched: "iPhone" toggles to "IPhone", not "Iphone", because the button
-     * says one letter and means it.
-     */
+    /** [word] with its first character's case toggled and the rest untouched. */
     fun toggleInitial(word: String): String {
         if (word.isEmpty()) {
             return word
@@ -33,10 +24,8 @@ object SentenceCase {
     }
 
     /**
-     * The word the caret at [caret] is inside or touching, as a start/end pair -- the word's
-     * characters are what [isWord] says they are. A caret between two words takes the one
-     * before it, the same word "copy previous word" copies; null when there is no word at all
-     * before or at the caret.
+     * The range of the word the caret at [caret] is inside or touching, else of the word before
+     * it; null when there is none. [isWord] says which characters belong to words.
      */
     fun wordAt(text: CharSequence, caret: Int, isWord: (Int) -> Boolean): IntRange? {
         val at = caret.coerceIn(0, text.length)
@@ -66,17 +55,9 @@ object SentenceCase {
     }
 
     /**
-     * [text] with the first letter of every sentence capitalised and nothing else changed:
-     * the first word, and the first word after a sentence mark or a line break. Same length
-     * in, same length out -- a character is only ever swapped for its own capital -- which is
-     * what lets the caller keep the caret exactly where it was.
-     *
-     * A sentence mark only ends a sentence when whitespace follows it, the rule [AutoShift]
-     * applies while typing: "3.5 apples" and "www.example.com" keep their lower case after
-     * the dot, "hello there. i am here" gets its I -- and so does "e.g. this", the same as
-     * typing it would, since nothing here knows an abbreviation from a sentence. Quotes and
-     * brackets between the mark and the next word ("he left." she said) are looked through,
-     * the way a sentence start is looked for through them.
+     * [text] with the first letter of every sentence capitalised and nothing else changed, same
+     * length in and out. A sentence starts the text, follows a line break, or follows a sentence
+     * mark and whitespace, with quotes and brackets looked through.
      */
     fun capitaliseSentences(text: String): String {
         val out = StringBuilder(text.length)

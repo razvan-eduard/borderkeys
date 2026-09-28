@@ -10,17 +10,13 @@
 
     <!--
         Substituted by the framework with the subtype's locale display name, in the phone's
-        language. Not translatable: there is nothing here to translate.
+        language.
     -->
     <string name="subtype_language_label" translatable="false">%s</string>
 
     <!--
-        Named alternate-layout subtypes: the label the system's language/input picker shows
-        cannot be "%s" for these the way subtype_language_label is above, because several of them
-        would then all read identically as whatever English locale they carry (see method.xml's
-        own comment on why): there is no keyboard-specific text to substitute into, only the
-        locale name, so the layout's own name has to BE the label. Proper nouns, none translated,
-        for the same reason "QWERTY" itself never appears in the i18n catalogue.
+        The alternate-layout subtypes' labels: each layout's own name, a proper noun, not
+        translated.
     -->
     <string name="subtype_label_azerty" translatable="false">AZERTY</string>
     <string name="subtype_label_dvorak" translatable="false">Dvorak</string>

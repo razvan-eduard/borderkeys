@@ -19,11 +19,8 @@ plugins {
 }
 
 // ---------------------------------------------------------------------------------------
-// Source provenance, required by GPL section 6.
-//
-// The binary has to be able to point at the exact source it was built from. The About
-// screen renders these two values; the app never fetches anything to do it, it hands an
-// ACTION_VIEW intent to whatever browser the user already has.
+// Source provenance, required by GPL section 6: the commit and the source URL the About screen
+// shows.
 // ---------------------------------------------------------------------------------------
 
 val borderkeysGitCommit: String = runCatching {
@@ -54,11 +51,8 @@ extra["borderkeysRepoUrl"] = borderkeysRepoUrl
 extra["borderkeysReleasesUrl"] = borderkeysReleasesUrl
 
 // ---------------------------------------------------------------------------------------
-// Verification tasks.
-//
-// Every promise this project makes about itself -- no network, no forbidden dependency, no
-// Compose inside the keyboard -- is checked mechanically here. A promise a build cannot
-// falsify is not a promise, it is a README sentence.
+// Verification tasks: no network permission, no forbidden dependency, no Compose inside the
+// keyboard.
 // ---------------------------------------------------------------------------------------
 
 /**
@@ -71,20 +65,19 @@ val forbiddenDependencyGroups = listOf(
     "com.google.firebase",
     "com.google.android.gms",
     "com.google.android.datatransport",
-    // On-device ML shipped as a prebuilt AAR; step 7 compiles inference from source instead.
+    // On-device ML shipped as a prebuilt AAR.
     "com.google.mediapipe",
-    // HTTP clients. An app with no INTERNET permission that still links one is an app whose
-    // next maintainer will add the permission.
+    // HTTP clients.
     "com.squareup.okhttp",
     "com.squareup.okhttp3",
     "com.squareup.retrofit",
     "com.squareup.retrofit2",
     "io.ktor",
     "com.android.volley",
-    // Dependency injection containers. Wiring is a single `object AppGraph` with `lazy`.
+    // Dependency injection containers.
     "com.google.dagger",
     "io.insert-koin",
-    // Reflection-heavy or oversized helpers that the hot path must never depend on.
+    // Reflection-heavy or oversized helpers.
     "io.reactivex",
     "com.squareup.moshi",
     "com.jakewharton.timber",
@@ -93,19 +86,9 @@ val forbiddenDependencyGroups = listOf(
     "io.coil-kt",
 )
 
-// Deliberately absent from the list above: com.google.code.gson.
-//
-// It is on the project's written blacklist, but it arrives transitively and unavoidably
-// through a dependency that is on the *whitelist*:
+// com.google.code.gson is not on the list: it arrives through
 //     androidx.security:security-crypto -> com.google.crypto.tink:tink-android -> gson
-// Tink stores its keyset as JSON, and EncryptedSharedPreferences -- which holds the
-// SQLCipher passphrase -- stores its keyset through Tink. Listing gson here would make the
-// build fail on a dependency the specification asks for, which turns a gate into noise.
-//
-// The way to actually remove it is to drop androidx.security:security-crypto and wrap the
-// passphrase with an AES-256-GCM key from the Android Keystore directly (roughly sixty lines
-// in :data, and Jetpack Security is deprecated upstream anyway). That is a step 4 decision,
-// recorded in docs/licensing.md so it does not quietly become permanent.
+// (docs/licensing.md).
 
 /** Compose in any form. Checked only against `:keyboard`. */
 val composeDependencyGroups = listOf(
@@ -124,13 +107,7 @@ val assistantOnlyComponents = listOf(
     "com.borderkeys.settings.ProcessTextCustomAlias",
 )
 
-/**
- * Fails the build when a merged manifest declares a networking permission.
- *
- * Reads the merged artifact rather than the module's own manifest on purpose: the module
- * manifest is trivially clean, and the interesting failure is a library injecting the
- * permission during the merge, where nobody would notice it.
- */
+/** Fails the build when a merged manifest declares a networking permission. */
 abstract class VerifyNoInternetPermission : DefaultTask() {
 
     @get:InputFiles
@@ -138,10 +115,8 @@ abstract class VerifyNoInternetPermission : DefaultTask() {
     abstract val mergedManifests: ConfigurableFileCollection
 
     /**
-     * Component names that must not appear in these manifests -- the assistant's PROCESS_TEXT
-     * entries, for the core flavor. :settings declares them for both flavors, since a library
-     * manifest cannot tell flavors apart; app/src/core/AndroidManifest.xml removes them again;
-     * this is what notices if that removal ever stops matching what :settings declares.
+     * Component names that must not appear in these manifests: the assistant's PROCESS_TEXT
+     * entries, for the core flavor (app/src/core/AndroidManifest.xml).
      */
     @get:Input
     abstract val forbiddenComponents: ListProperty<String>
@@ -165,9 +140,7 @@ abstract class VerifyNoInternetPermission : DefaultTask() {
             }
             PERMISSION_ELEMENT.findAll(text).forEach { match ->
                 val element = match.value
-                // `tools:node="remove"` is a request to delete a permission, not to declare
-                // one. The merger normally strips these before the output we read, but an
-                // intermediate artifact may still carry one and it must not be misread.
+                // `tools:node="remove"` deletes a permission rather than declaring one.
                 val isRemoval = element.contains("tools:node", ignoreCase = true) &&
                     element.contains("remove", ignoreCase = true)
                 if (isRemoval) return@forEach
@@ -214,11 +187,8 @@ abstract class VerifyNoInternetPermission : DefaultTask() {
 
 /**
  * Walks a resolved runtime classpath and fails on any component whose group matches a
- * forbidden prefix.
- *
- * Takes the resolution *result* as a lazy `Property` rather than holding a `Configuration`:
- * that is the only shape that both keeps the configuration cache valid and defers the
- * actual resolution to execution time.
+ * forbidden prefix. Takes the resolution result as a lazy `Property`, not a `Configuration`,
+ * for the configuration cache.
  */
 abstract class VerifyDependencyGroups : DefaultTask() {
 
@@ -244,9 +214,7 @@ abstract class VerifyDependencyGroups : DefaultTask() {
         val components = sortedSetOf<String>()
         val violations = sortedSetOf<String>()
 
-        // Breadth-first over the whole graph, transitive dependencies included: a banned
-        // artifact that arrives three levels down is exactly as present in the APK as one
-        // written into a build script.
+        // Breadth-first over the whole graph, transitive dependencies included.
         val queue = ArrayDeque<ResolvedComponentResult>()
         queue += rootComponent.get()
         while (queue.isNotEmpty()) {
@@ -292,8 +260,7 @@ fun String.capitalized(): String =
     replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
 
 allprojects {
-    // Reproducible archives. F-Droid rebuilds the APK and byte-compares it; a zip entry
-    // timestamp or a filesystem-dependent entry order is enough to fail that comparison.
+    // Reproducible archives, for F-Droid's byte-for-byte rebuild.
     tasks.withType<AbstractArchiveTask>().configureEach {
         isPreserveFileTimestamps = false
         isReproducibleFileOrder = true
@@ -322,11 +289,9 @@ project(":app") {
                     "verifyNoInternetPermission$suffix",
                     VerifyNoInternetPermission::class.java,
                 ) {
-                    // Resolves to build/intermediates/merged_manifests/<variant>/AndroidManifest.xml,
-                    // but asking the artifact API for it also wires the producer dependency.
+                    // Through the artifact API, which also wires the producer dependency.
                     mergedManifests.from(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
-                    // The assistant's own PROCESS_TEXT entries must not survive the merge into
-                    // the core build -- see app/src/core/AndroidManifest.xml.
+                    // The assistant's PROCESS_TEXT entries, for the core build.
                     forbiddenComponents.set(
                         if (variant.flavorName == "core") assistantOnlyComponents else emptyList(),
                     )
@@ -338,8 +303,7 @@ project(":app") {
                 }
                 verifyManifests.configure { dependsOn(manifestCheck) }
 
-                // Finalizer on the manifest processing tasks, so the check also runs when
-                // somebody builds a manifest without going through `assemble`.
+                // Also a finalizer on the manifest processing tasks.
                 app.tasks.matching {
                     it.name.startsWith("process") &&
                         it.name.endsWith("Manifest") &&
@@ -348,9 +312,7 @@ project(":app") {
 
                 app.tasks.matching { it.name == "assemble$suffix" }.configureEach {
                     dependsOn(manifestCheck)
-                    // The keyboard module's own gate, pulled in from here so that the two
-                    // shipped commands -- assembleCoreRelease and assemblePlusRelease -- are
-                    // enough to enforce every rule.
+                    // The keyboard module's own gate, run by assemble as well.
                     dependsOn(":keyboard:verifyKeyboardHasNoCompose$suffix")
                 }
 

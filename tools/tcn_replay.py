@@ -2,17 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-"""Measures the trained TCN swipe decoder's accuracy over the same recorded corpus
-gesture_replay.py measures Shark2 against -- the two are comparable numbers only because they
-replay the identical gestures.
-
-Sibling to gesture_replay.py rather than a mode of it: unlike Shark2, a TCN decode needs a
-*weights* file as well as a language pack (see native-tests/tcn_replay.cpp's own note on why),
-so the CLI contract genuinely differs, and the two decoders are compared against separate
-baselines (docs/gesture-accuracy.json vs. docs/gesture-accuracy-tcn.json) -- folding them into one
-script's argparse would hide that difference rather than express it. Layout/corpus parsing is
-imported from gesture_replay.py rather than copied, so the two never drift apart on what a
-recording looks like.
+"""Measures the trained TCN swipe decoder's accuracy over the recorded corpus gesture_replay.py
+measures Shark2 against. A TCN decode needs a weights file as well as a language pack, and is
+compared against its own baseline, docs/gesture-accuracy-tcn.json. Layout and corpus parsing
+are imported from gesture_replay.py.
 
 Usage
 -----
@@ -37,9 +30,8 @@ BASELINE = REPOSITORY_ROOT / "docs" / "gesture-accuracy-tcn.json"
 
 
 def replay(binary: Path, pack: Path, weights: Path, layout: Path, corpus: Path) -> dict:
-    """Same `word<TAB>rank` contract gesture_replay.replay() parses, from a binary that also
-    takes a weights file -- see the module doc for why that is one more required argument here
-    than gesture_replay.py's own `replay()` takes."""
+    """The `word<TAB>rank` output gesture_replay.replay() parses, from a binary that also takes
+    a weights file."""
     result = subprocess.run(
         [str(binary), str(pack), str(weights), str(layout), str(corpus)],
         capture_output=True, text=True, check=False,
@@ -98,13 +90,11 @@ def main(argv: list[str]) -> int:
           f"{sum(len(g.samples) for g in gestures)} samples, from {arguments.corpus}")
 
     if not arguments.binary.is_file():
-        # Mirrors gesture_replay.py's own notice: a check that silently does nothing reads
-        # exactly like a check that passed, so it says why instead of staying quiet.
+        # Reported, as in gesture_replay.py.
         print(f"::notice::{arguments.binary} not built — accuracy not measured, nothing compared")
         return 0
     if arguments.weights is None or not arguments.weights.is_file():
-        # Training runs for hours and this script must not fail a build in the meantime -- the
-        # weights file existing at all is the signal that a real evaluation is possible yet.
+        # No trained weights yet: reported, not failed.
         print(f"::notice::no trained weights at {arguments.weights} — accuracy not measured, "
               f"nothing compared")
         return 0
@@ -136,9 +126,7 @@ def main(argv: list[str]) -> int:
             print(f"::notice::{BASELINE} does not exist — nothing to compare against")
             return 0
         baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
-        # Same tolerance as gesture_replay.py's own regression gate, for the same reason: the
-        # corpus is fixed and decoding is deterministic, so any real drop should fail the build,
-        # but a cross-platform rounding difference should not.
+        # The same tolerance as gesture_replay.py's regression gate.
         tolerance = 0.5
         if measured["top1"] + tolerance < baseline["top1"]:
             print(f"::error::top-1 fell from {baseline['top1']}% to {measured['top1']}%")

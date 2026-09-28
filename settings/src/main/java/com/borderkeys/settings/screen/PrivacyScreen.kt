@@ -21,11 +21,8 @@ import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SettingRow
 
 /**
- * What is stored, where, and what is not.
- *
- * The permission list is read from the package manager at runtime rather than written here. A
- * screen that claims "no permissions" from a hardcoded string is a screen that will still claim
- * it after somebody adds one.
+ * What is stored, where, and what is not. The permission list is read from the package manager
+ * at runtime.
  */
 @Composable
 fun PrivacyScreen(modifier: Modifier = Modifier) {

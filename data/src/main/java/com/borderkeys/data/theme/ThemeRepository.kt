@@ -13,13 +13,8 @@ import kotlinx.coroutines.runBlocking
 import java.util.UUID
 
 /**
- * The keyboard's appearance and behaviour, as the rest of the application sees them.
- *
- * Exposes flows and suspending updates, and never the [DataStore] itself. That keeps the
- * DataStore and serialization types off the compile classpath of everything that consumes this
- * module, and it enforces the project's rule about state: a caller writes to the store and waits
- * for the flow to re-emit. There is no second copy of the truth held in a `mutableStateOf`
- * somewhere, so what is on screen is always what was written.
+ * The keyboard's appearance and behaviour, as flows and suspending updates; the [DataStore]
+ * itself is not exposed. A caller writes and waits for the flow to re-emit.
  */
 class ThemeRepository internal constructor(
     private val themeStore: DataStore<KeyboardTheme>,
@@ -40,15 +35,11 @@ class ThemeRepository internal constructor(
     /** Themes the user built and named themselves, newest last -- see [CustomThemeEntry]. */
     val customThemes: Flow<List<CustomThemeEntry>> = customThemeLibraryStore.data.map { it.themes }
 
-    /** Whole (outline, fill) looks the user built and named themselves -- the same idea as
-     *  [customThemes], one level down: applying one sets every region to match, rather than
-     *  being scoped to whichever region happened to be open when it was saved. */
+    /** Whole (outline, fill) looks the user built and named; applying one sets every region. */
     val customEffectsPresets: Flow<List<CustomEffectsPresetEntry>> =
         customEffectsPresetLibraryStore.data.map { it.presets }
 
-    /** [theme], [lightTheme], [preferences] and [particleEffects], combined -- see
-     *  [KeyboardAppearance]. What anything that draws or previews the keyboard should collect,
-     *  rather than the four flows above separately. */
+    /** [theme], [lightTheme], [preferences] and [particleEffects] as one [KeyboardAppearance]. */
     val appearance: Flow<KeyboardAppearance> =
         combine(theme, lightTheme, preferences, particleEffects, ::KeyboardAppearance)
 
@@ -76,11 +67,8 @@ class ThemeRepository internal constructor(
      * Saves [theme] under [name] as a new entry, or -- when [id] names an entry that already
      * exists -- overwrites that entry's theme and name in place rather than adding a second one.
      *
-     * @param createdAt when the entry was first saved, for a caller that already knows -- a
-     *   backup restore, replaying the timestamp the file carries rather than stamping the
-     *   moment of the restore itself. Left null for the ordinary "save what I just built" call,
-     *   which keeps an overwritten entry's original timestamp and stamps a new one only for a
-     *   genuinely new entry.
+     * @param createdAt when the entry was first saved, from a backup restore; null keeps an
+     *   overwritten entry's timestamp and stamps a new entry now.
      * @return the saved entry's id, or null if the library is already at
      *   [CustomThemeLibrary.MAX_CUSTOM_THEMES] and [id] does not match an existing entry.
      */
@@ -158,11 +146,8 @@ class ThemeRepository internal constructor(
     }
 
     /**
-     * Folds the "custom outline presets" an earlier build kept in a file of their own into "My
-     * presets": one outline layer each, saved before a preset meant an (outline, fill) pair.
-     * Read once, then the file goes -- a preset someone saved and named must not vanish because
-     * the feature grew a second layer underneath it. The fill is the default one, exactly as a
-     * fresh region would get; the id and timestamp are kept, so importing twice cannot duplicate.
+     * Folds the outline presets an earlier build kept in [file] into "My presets", each with the
+     * default fill and its own id and timestamp, then deletes the file.
      */
     suspend fun importLegacyOutlinePresets(file: File) {
         if (!file.isFile) {
@@ -203,18 +188,13 @@ class ThemeRepository internal constructor(
         customEffectsPresetLibraryStore.updateData { current ->
             current.copy(presets = current.presets.filterNot { it.id == id })
         }
-        // A deleted preset cannot stay the applied one: the picker would have nothing to show
-        // as selected and nothing to name in "unsaved changes since ...".
+        // A deleted preset stops being the applied one.
         particleEffectsStore.updateData { current ->
             if (current.appliedPresetId == id) current.copy(appliedPresetId = "") else current
         }
     }
 
-    /**
-     * Records [id] as the preset the regions currently come from -- after saving one, so the
-     * chip just created reads as selected rather than the one it was saved on top of. Only
-     * the id changes; the regions are exactly as they were.
-     */
+    /** Records [id] as the preset the regions come from, changing nothing else. */
     suspend fun markEffectsPresetApplied(id: String) {
         particleEffectsStore.updateData { current -> current.copy(appliedPresetId = id).sanitised() }
     }
@@ -223,33 +203,18 @@ class ThemeRepository internal constructor(
 
     fun currentCustomEffectsPresets(): List<CustomEffectsPresetEntry> = runBlocking { customEffectsPresets.first() }
 
-    /** The blocking-read counterpart to [currentPreferences], for the same "must already be
-     *  correct on the very first frame" reason. */
+    /** [lightTheme], read on the calling thread. */
     fun currentLightTheme(): KeyboardTheme = runBlocking { lightTheme.first() }
 
-    /** The blocking-read counterpart to [currentPreferences], for [particleEffects]. */
+    /** [particleEffects], read on the calling thread. */
     fun currentParticleEffects(): ParticleEffectsSettings = runBlocking { particleEffects.first() }
 
-    /** The blocking-read counterpart to [appearance], seeding a screen that shows a preview
-     *  before the flow has had a chance to emit. */
+    /** [appearance], read on the calling thread. */
     fun currentAppearance(): KeyboardAppearance = runBlocking { appearance.first() }
 
     /**
-     * The stored preferences, read on the calling thread.
-     *
-     * The sanctioned blocking read, for whatever has to be right on the very first frame drawn.
-     * Collecting a preference as a flow instead means that first frame shows this class's own
-     * defaults, correcting a moment later once the flow delivers what is actually stored --
-     * invisible for most of what a settings screen draws, but not for a `Switch`: Material's own
-     * sliding animation plays whenever the value changes, so a preference whose default differs
-     * from what the user actually has stored visibly slides from the wrong position to the right
-     * one the instant the screen opens. A screen that seeds `collectAsStateWithLifecycle` with
-     * this instead of a bare `KeyboardPreferences()` is spared that -- wrapped in `remember` at
-     * the call site, so it is read once per composition rather than on every recomposition.
-     * DataStore is a small file that is already open and cached well before any settings screen
-     * can be reached, so this is one fast, already-resident read, not a disk access -- reserved
-     * for exactly this "must already be correct" moment, not a substitute for collecting
-     * [preferences] everywhere else.
+     * The stored preferences, read on the calling thread, to seed what must be right on the first
+     * frame drawn.
      */
     fun currentPreferences(): KeyboardPreferences = runBlocking { preferences.first() }
 }

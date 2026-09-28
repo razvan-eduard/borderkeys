@@ -70,20 +70,14 @@ class DictionaryRepository internal constructor(
     suspend fun topBigrams(limit: Int = MAX_BIGRAMS_IN_MEMORY): List<UserBigram> =
         userBigrams.topPairs(limit)
 
-    /** How many pairs are remembered. Shown in Settings, because it should be visible. */
+    /** How many pairs are remembered. */
     suspend fun bigramCount(): Int = userBigrams.count()
 
     /** The three-word sequences pushed into the native engine at service start. */
     suspend fun topTrigrams(limit: Int = MAX_TRIGRAMS_IN_MEMORY): List<UserTrigram> =
         userTrigrams.topTriples(limit)
 
-    /**
-     * Applies a batch of learning updates in one transaction.
-     *
-     * Batched because this is the flush of an in-memory buffer, not a per-keystroke write. A
-     * single INSERT on the path of a key press would put a disk write, an encryption pass and a
-     * transaction inside a two-millisecond budget.
-     */
+    /** Applies a batch of learning updates in one transaction. */
     suspend fun applyLearned(updates: List<LearnedWord>) {
         if (updates.isEmpty()) {
             return
@@ -108,15 +102,9 @@ class DictionaryRepository internal constructor(
 
     /**
      * Halves the stored count of every word, pair and triple nobody has written in a
-     * [PersonalWordDecay.HALF_LIFE_MILLIS] or longer.
-     *
-     * Called occasionally from the learning flush, not on every one -- see the call site for the
-     * throttle. This is the half of decay that actually shrinks what is on disk; the other half
-     * ([PersonalWordDecay.decayed], applied to [topWords]/[topBigrams]/[topTriples] when they are
-     * pushed into the native model) makes the influence of a stale entry correct on every load
-     * even between sweeps, but never rewrites the row it read. Without this one, a count that
-     * stopped being touched years ago would still occupy one of the limited slots the native
-     * model or [topWords]'s own `LIMIT` keeps room for, crowding out something written last week.
+     * [PersonalWordDecay.HALF_LIFE_MILLIS] or longer, then deletes the words written once before
+     * [PersonalWordDecay.UNCONFIRMED_LIFE_MILLIS] and those past [MAX_WORDS_IN_MEMORY], with
+     * their phrases.
      */
     suspend fun decayStaleEntries(now: Long = System.currentTimeMillis()) {
         val cutoff = now - PersonalWordDecay.HALF_LIFE_MILLIS
@@ -125,21 +113,12 @@ class DictionaryRepository internal constructor(
             userWords.decayStale(cutoff, now)
             userBigrams.decayStale(cutoff, now)
             userTrigrams.decayStale(cutoff, now)
-            // And then the rows halving can never reach: written once, never again, and
-            // otherwise kept for the life of the install. Their phrases go with them for the
-            // reason [forget] gives -- a word predicted through a pair after the word itself
-            // is gone is the dictionary appearing not to work in the most alarming way.
             for (word in userWords.unconfirmedBefore(unconfirmedCutoff)) {
                 userBigrams.deleteInvolving(word)
                 userTrigrams.deleteInvolving(word)
             }
             userWords.deleteUnconfirmedBefore(unconfirmedCutoff)
 
-            // And a ceiling, so the table cannot outgrow what the engine will ever read from it.
-            // [MAX_WORDS_IN_MEMORY] limits the query that loads the model, not the store behind
-            // it, so without this the rows past that limit are kept for the life of the install
-            // while being permanently invisible -- cost with no benefit. Keeping exactly what is
-            // loadable is what makes the two numbers one decision instead of two.
             for (word in userWords.wordsBeyond(MAX_WORDS_IN_MEMORY)) {
                 userBigrams.deleteInvolving(word)
                 userTrigrams.deleteInvolving(word)
@@ -148,15 +127,9 @@ class DictionaryRepository internal constructor(
         }
     }
 
-    /**
-     * Forgets a word, and every phrase it was part of.
-     *
-     * The pairs go with it. Keeping them would leave the word being predicted through a phrase
-     * after the user deleted it from their dictionary, which is the setting appearing not to
-     * work in the most alarming possible way.
-     */
     suspend fun findIgnoreCase(word: String): UserWord? = userWords.findIgnoreCase(word)
 
+    /** Forgets a word and every phrase it was part of. */
     suspend fun forget(word: String) {
         database.withTransaction {
             userWords.delete(word)
@@ -190,13 +163,7 @@ class DictionaryRepository internal constructor(
         edited()
     }
 
-    /**
-     * Refuses a word permanently and removes whatever was learned about it.
-     *
-     * Both halves matter. Blocking without deleting leaves a count the user asked to be rid of;
-     * deleting without blocking means the word comes back from the language pack the next time
-     * it is typed, which reads as the setting not having worked.
-     */
+    /** Refuses a word permanently and removes whatever was learned about it. */
     suspend fun block(word: String) {
         database.withTransaction {
             blockedWords.insert(BlockedWord(word))
@@ -212,21 +179,13 @@ class DictionaryRepository internal constructor(
         edited()
     }
 
-    /**
-     * The personal dictionary as CSV.
-     *
-     * The only form of "sync" an application with no network can offer, and it is entirely the
-     * user's: they export a file, they move it, they carry it, they import it. Nothing leaves
-     * the device unless a person carries it. The format lives in [DictionaryCsv], where it can
-     * be tested without a database.
-     */
+    /** The personal dictionary as CSV, in the format [DictionaryCsv] defines. */
     suspend fun exportCsv(): CsvExport {
         val words = userWords.topWords(Int.MAX_VALUE)
         return CsvExport(DictionaryCsv.encode(words), words.size)
     }
 
-    /** The CSV text and how many words it carries -- the count a screen reports is this one,
-     *  not the length of whichever (searched, capped) list happened to be showing. */
+    /** The CSV text and how many words it carries. */
     class CsvExport(val csv: String, val words: Int)
 
     /**
@@ -242,10 +201,7 @@ class DictionaryRepository internal constructor(
     private companion object {
         const val MAX_WORDS_IN_MEMORY = 20_000
 
-        /**
-         * Matches UserModel::kMaxBigrams on the native side, which is where they end up.
-         * Reading more rows than that would be reading them to discard them.
-         */
+        /** Matches UserModel::kMaxBigrams. */
         const val MAX_BIGRAMS_IN_MEMORY = 4_096
 
         /** Matches UserModel::kMaxTrigrams. */

@@ -4,11 +4,10 @@
 # Palabras que el teclado nunca sugiere, completa ni aprende mientras «Bloquear palabras
 # ofensivas» está activado. Escritas letra a letra quedan intactas. Una palabra por línea; las
 # mayúsculas y las tildes no importan (cada entrada y cada candidata se reducen a la misma forma
-# antes de compararse); una línea que empieza por «#» es un comentario. Las formas flexionadas
-# son palabras distintas para el motor, así que cada una figura.
+# antes de compararse); una línea que empieza por «#» es un comentario. Cada forma flexionada
+# figura por separado.
 #
-# Solo vulgaridades e insultos contra grupos. La anatomía, la medicina y las palabras suaves
-# siguen siendo sugeribles a propósito.
+# Solo vulgaridades e insultos contra grupos.
 
 bollera
 bolleras

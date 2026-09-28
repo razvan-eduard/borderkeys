@@ -8,11 +8,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The pure pieces of chunking: where a long selection is cut, and how big one chunk is allowed
- * to be for a given model. Neither touches the service or the client, so neither needs one to be
- * tested.
- */
+/** Where a long selection is cut, and how big one chunk may be for a given model. */
 class ChunkedAssistRunnerTest {
 
     @Test
@@ -29,9 +25,7 @@ class ChunkedAssistRunnerTest {
         for (chunk in chunks) {
             assertTrue("$chunk exceeds the chunk size", chunk.length <= 30)
         }
-        // Every chunk but a trailing fragment ends where a sentence actually ended -- rejoining
-        // with spaces and comparing the words is what proves nothing was cut mid-sentence,
-        // since the split points themselves consumed the original spacing between sentences.
+        // Rejoined with spaces, the chunks are the text.
         assertEquals(text, chunks.joinToString(" "))
     }
 

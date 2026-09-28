@@ -3,10 +3,8 @@
     SPDX-License-Identifier: GPL-3.0-or-later
     SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-    The same four shapes in one colour, for the themed icons Android 13 introduced. The
-    system tints this layer from the wallpaper and ignores the fill declared here, so only
-    the silhouette matters: which is why the accent bar is not distinguished from the caps.
-    At a single tint it cannot be, and pretending otherwise would only muddy the shapes.
+    The same four shapes in one colour, for themed icons; the system tints this layer and
+    ignores the fill declared here.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"

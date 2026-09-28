@@ -4,18 +4,10 @@
 
 """The coordinated trajectory+layout augmentation from "FUTO Swipe: Layout-Agnostic Neural Swipe
 Decoding" -- the same random scale/shear/flip/rotation/translation applied to the swipe AND to the
-layout's key centres together, every training step. This is the actual mechanism that teaches the
-encoder to read a gesture's shape relative to the keys under it rather than memorising either the
-gesture's or the keyboard's absolute position -- without it, the model would need real training
-data from every layout it should ever generalise to, which does not exist.
+layout's key centres together, every training step.
 
-One deliberate deviation from the paper, noted where it happens below: step 6 (translation) is a
-rescale-and-refit rather than the paper's own rejection-sampling scheme, because the exact
-rejection criterion is not specified in the source this was reconstructed from. Both achieve the
-same goal -- the transform's scale and rotation are never free to place the gesture or the keys
-outside the visible keyboard -- so this is not expected to matter for the encoder's ability to
-generalise, but it is a deviation, not a verified match, and worth re-checking against real
-training curves in Phase 3.
+Step 6 (translation) is a rescale-and-refit rather than the paper's rejection sampling; either
+keeps the gesture and the keys inside the visible keyboard.
 """
 
 from __future__ import annotations
@@ -70,10 +62,7 @@ def augment_trajectory_and_layout(
     if reversed_time:
         new_points = new_points[::-1]
 
-    # Every intermediate step above is float64 (numpy's default for a Python-float literal
-    # array), but the model and the C++ side this must match are both float32 throughout --
-    # cast once, here, at the boundary, rather than lose precision silently at an arbitrary
-    # later point.
+    # Computed in float64; cast once to the float32 the model and the C++ side use.
     return (new_points[:, 0].astype(np.float32).copy(),
            new_points[:, 1].astype(np.float32).copy(),
            new_keys.astype(np.float32), reversed_time)

@@ -33,13 +33,9 @@ import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 
 /**
- * The effects that answer an *event* -- a word learned, a correction applied -- as opposed to
- * the particle cards below, which decorate a *surface*.
- *
- * One card per event, each the same three questions: which animation, what colour, how often.
- * A card whose animation is Off dims and stops taking input, the same treatment a particle
- * region gets when its own switch is off, and for the same reason: colour and frequency are
- * about how it looks when it plays, and it does not play.
+ * The effects that answer an event (a word learned, a correction applied), one card per event:
+ * which animation, what colour, how often. A card whose animation is Off dims and stops taking
+ * input.
  */
 @Composable
 fun EventEffectsSection(
@@ -104,8 +100,7 @@ private fun EventEffectCard(
                     }
                 }
 
-                // Colour and frequency describe how it plays, so they follow the animation
-                // being chosen at all rather than sitting live above an Off card.
+                // Colour and frequency, locked while the animation is Off.
                 Box {
                     Box(modifier = Modifier.alpha(if (setting.enabled) 1f else EVENT_LOCKED_ALPHA)) {
                         Column {
@@ -166,13 +161,7 @@ private fun EventEffectCard(
 /** Material's own disabled-content alpha, the same the particle cards dim to. */
 private const val EVENT_LOCKED_ALPHA = 0.38f
 
-/**
- * What each style is called, in the user's own language.
- *
- * A `when` over the enum rather than a list of names: the chips are built from
- * [EffectStyle.entries], so a style added to the module makes this stop compiling until it has
- * a label, instead of appearing as a chip with a missing string or not appearing at all.
- */
+/** The catalogue key naming each style. */
 private fun labelKeyFor(style: EffectStyle): String = when (style) {
     EffectStyle.RiseFade -> Keys.EFFECTS_STYLE_RISE_FADE
     EffectStyle.Slide -> Keys.EFFECTS_STYLE_SLIDE

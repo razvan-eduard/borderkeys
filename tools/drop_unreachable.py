@@ -3,24 +3,12 @@
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 """Removes corpus rows that are not words of the language the list belongs to.
 
-Two rules, both about what the keyboard can actually produce.
+**A word must be reachable by typing.** A word is kept when every one of its characters folds
+into the language's own alphabet: a-z, the letters that language's long-press overlay offers,
+and the three joiners that live inside words. Folded, not literal: "naïve" folds to "i" and is
+kept.
 
-**A word must be reachable by typing.** The corpus tokeniser admits any script -- its character
-class is "any Unicode letter-ish" -- so a body of text that quotes Greek, Devanagari or Thai
-turns those into vocabulary, and unit superscripts, ordinals and mojibake come with them. A word
-is kept when every one of its characters folds into the language's own alphabet: a-z, the letters
-that language's long-press overlay offers, and the three joiners that live inside words.
-
-Folded, not literal: "naïve" is an English word and no English overlay carries "ï", but it folds
-to "i" and is typed that way. The same keeps "Bjørn", "François" and every other name spelled
-with a letter this keyboard reaches through folding. What it drops is a character that folds to
-itself and is not on the overlay -- Greek alpha, Devanagari kha, a superscript two.
-
-**A bare letter must be a word.** One letter is a complete match for the tokeniser, so every
-letter that ever stood alone in the corpus is an entry: initials, list markers, table cells,
-spaced-out text. A handful are real words and the rest are debris, and nothing separates them
-automatically -- Hunspell lists letters as headwords for spell-checking, and frequency puts
-Romanian "i" and "m" a factor of two apart. So the real ones are named here, per language.
+**A bare letter must be a word.** The single-letter words are named here, per language.
 
     python3 tools/drop_unreachable.py dictionaries/ro_RO.tsv [--dry-run]
 """
@@ -33,15 +21,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# Word-internal characters that are not letters. The same three tools/make_pack.py's own
-# tokeniser admits between letters, and leaving them out of the alphabet deletes every
-# contraction and hyphenation the corpus holds -- "it's", "c'est", "într-o".
+# Word-internal characters that are not letters: the three tools/make_pack.py's tokeniser admits
+# between letters.
 JOINERS = "'’-"
 
-# Single letters that are complete words, lower-cased because make_pack.py lower-cases every
-# token it counts. Declared rather than derived: the automatic sources disagree with the
-# languages -- Hunspell offers "k", "l" and "x" for English and omits Romanian "a" -- and the
-# frequencies of the real ones and the debris overlap.
+# Single letters that are complete words, lower-cased as make_pack.py counts every token.
 SINGLE_LETTER_WORDS = {
     "en_US": "aio",      # a; I; O, the vocative
     "ro_RO": "aeo",      # a, the infinitive marker; e, informal "este"; o, the feminine article
@@ -79,9 +63,8 @@ def layout_letters(layout):
 def alphabet_of(tag, fold_code_point):
     """Every folded code point a word of [tag] may be built from.
 
-    Read from the keyboard's own layout and accent overlay rather than declared again here:
-    what the keyboard offers is what the dictionary may hold, and two lists of the same
-    letters drift. A language whose manifest names no layout types on QWERTY.
+    Read from the keyboard's own layout and accent overlay. A language whose manifest names no
+    layout types on QWERTY.
     """
     letters = layout_letters(LAYOUT.get(tag, "qwerty")) | set(JOINERS)
     name = OVERLAY.get(tag)
@@ -94,14 +77,8 @@ def alphabet_of(tag, fold_code_point):
     return {fold_code_point(ord(character)) for character in letters}
 
 
-# The letters each language admits beyond a-z, checked by --selftest.
-#
-# Only a letter that folds to *itself* can be here, and only those decide anything: "ț" folds to
-# "t" and "é" to "e", so taking either off an overlay changes nothing -- the words stay reachable
-# by typing the bare letter. "ß", "æ" and "œ" have no such twin, so their place on an overlay is
-# the only reason "Straße" and "cœur" are words. An overlay is a decision about long-press
-# ergonomics; for those three it is also a decision about vocabulary, and trimming one would
-# delete words with nothing to say so.
+# The letters each language admits beyond a-z that fold to themselves ("ß", "æ", "œ"), checked
+# by --selftest.
 EXPECTED_BEYOND_ASCII = {
     "en_US": [],
     "ro_RO": [],

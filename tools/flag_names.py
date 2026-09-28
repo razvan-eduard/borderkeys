@@ -4,40 +4,9 @@
 
 """Marks the proper nouns already sitting in a pack's ordinary vocabulary.
 
-`make_names.py` asks Wikidata for given names and family names. Persons, and only persons, so
-companies, places and brands were never candidates -- `paribas`, `softbank`, `ubisoft`,
-`fuerteventura` and thousands more sit in the vocabulary rows of every pack with no flag on
-them. A whole further class is outside Wikidata's model altogether: `friday`, `april`,
-`american`, `british`, `maoist` and `newtonian` are capitalised in English and are not proper
-*names*, so no widening of that query would ever reach them.
-
-An unflagged name costs three things. It is never auto-capitalised. It is not covered by the
-proper-noun guard in `AutoCorrection.correctionFor`, so a surname can be corrected into
-something else. And it is indistinguishable from a misspelling to any dictionary-cleaning rule,
-which is why `drop_misspellings.py` had to be made review-only.
-
-The rule
---------
-**A word its own spell checker refuses in lower case and accepts capitalised is a name.**
-
-That is the exact inverse of what `make_ordinary.py` already asks, and it inherits each
-language's conventions for free: English flags `friday` and `april`, Romanian does not, because
-Romanian does not capitalise them. Nothing here encodes a rule about weekdays.
-
-The obvious alternative is wrong and was measured to be. The treebank tags `president`,
-`states`, `united` and `court` as proper nouns, because they occur inside multi-word names, and
-Italian's `del`, `dal` and `nello` likewise; flagging on that tag would be worse than the gap.
-The spell checker refuses all of them for the right reason -- they are ordinary lower-case words
-of the language.
-
-What it cannot reach is a name no dictionary holds in any case, `softbank` and `bytedance` among
-them. That is the Wikidata query's job, not this one's.
-
-Review
-------
-`dictionaries/<tag>.names-exclude` is read and honoured, and is where a wrong flag goes. It
-already holds `south`, `north`, `court`, `park`, `bank` and `king` for this exact purpose, from
-the Wikidata side of the same problem.
+A word its spell checkers all refuse in lower case, and at least one accepts capitalised, is a
+name. Not run on a language that capitalises every noun (CAPITALISES_EVERY_NOUN).
+`dictionaries/<tag>.names-exclude` is read and honoured.
 
 Usage
 -----
@@ -54,21 +23,10 @@ from pathlib import Path
 
 BUNDLED = ("en_US", "ro_RO", "de_DE", "es_ES", "fr_FR", "it_IT")
 
-# Below this there is not enough word to judge. Two-letter tokens are overwhelmingly
-# abbreviations and particles, and a spell checker's verdict on them says more about its own
-# abbreviation list than about the language.
+# The shortest word judged.
 MIN_LENGTH = 3
 
-# Languages this rule cannot be used on, and why.
-#
-# German capitalises every noun, so its spell checker refuses "haus", "jahr", "stadt", "kind" and
-# "arbeit" in lower case and accepts all of them capitalised -- exactly the signature of a name.
-# The asymmetry the rule reads carries no information there, and running it would flag the entire
-# German noun vocabulary. Measured, not assumed.
-#
-# German's own treebank does separate the two (NE against NN, so "berlin" against "haus"), which
-# is the opposite of English where the treebank is the unreliable witness and the spell checker
-# the good one. That is a different tool.
+# Languages this rule is not run on: German capitalises every noun.
 CAPITALISES_EVERY_NOUN = {"de_DE"}
 
 
@@ -101,13 +59,7 @@ def refused(words: list[str], dictionary: Path) -> set[str]:
 
 
 def looks_like_a_name(words: list[str], dictionaries: list[Path]) -> set[str]:
-    """Refused in lower case by every dictionary, accepted capitalised by at least one.
-
-    Both halves are needed and they are asymmetric on purpose. *Every* dictionary has to refuse
-    the lower-case form, so a word that is ordinary in British but not American English is not
-    called a name. *One* accepting the capitalised form is enough, because a name known to any
-    of them is a name.
-    """
+    """Refused in lower case by every dictionary, accepted capitalised by at least one."""
     refused_lower = None
     accepted_capital: set[str] = set()
     capitals = [word.capitalize() for word in words]
@@ -201,8 +153,7 @@ def main() -> int:
             print(f"    review written: {out}")
 
         if arguments.apply:
-            # Only the third column changes. No row is added, removed or reordered, so a diff
-            # of this file is exactly the set of words whose classification moved.
+            # Only the third column changes; no row is added, removed or reordered.
             written = []
             for word, line, is_name in rows:
                 written.append(f"{line}\tname" if (word in found and not is_name) else line)

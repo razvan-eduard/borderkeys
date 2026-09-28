@@ -13,17 +13,8 @@ import java.io.InputStream
 import java.security.MessageDigest
 
 /**
- * Importing, verifying and enumerating language packs.
- *
- * The single most dangerous operation in the application. A keyboard with no permissions that
- * maps a file the user was given becomes a parser of untrusted input doing pointer arithmetic
- * inside the process that sees every character typed on the device. The native side treats the
- * bytes as hostile; this side makes sure the bytes cannot change underneath it.
- *
- * The order is not negotiable: **copy first, then validate, then map.** A `content://` URI is
- * never mapped directly, because the app on the other end of it can rewrite the file between the
- * moment it is validated and the moment it is used -- and the gap between what was checked and
- * what was mapped is exactly the class of bug the validation exists to prevent.
+ * Importing, verifying and enumerating language packs. A pack is copied into private storage,
+ * then validated, then mapped, in that order; a `content://` URI is never mapped directly.
  */
 class LanguagePackRepository internal constructor(
     private val dao: LanguagePackDao,
@@ -37,27 +28,14 @@ class LanguagePackRepository internal constructor(
     /** How many packs are switched on -- what the [MAX_ENABLED] limit is checked against. */
     suspend fun enabledCount(): Int = dao.enabledPacks().size
 
-    /**
-     * Every installed pack, enabled or not.
-     *
-     * The repair path needs this: a pack that failed its integrity check has already been
-     * switched off, so looking only at the enabled ones is looking everywhere except where the
-     * problem is.
-     */
+    /** Every installed pack, enabled or not. */
     suspend fun allPacks(): List<LanguagePackEntry> = packs.first()
 
     fun fileFor(entry: LanguagePackEntry): File = File(packsDirectory, entry.fileName)
 
     /**
-     * The SHA-256 of every pack file hashed in this process, keyed by path and remembered with
-     * the size and modification time it was hashed at.
-     *
-     * A pack is tens of megabytes and is asked about more than once: the repair pass at start,
-     * the integrity sweep after it, and both again whenever the pack list changes. Hashing each
-     * file once per process is the whole difference between a start that reads every pack once
-     * and one that reads it three times. The size and time in the entry are what notice a file
-     * rewritten in place; [stage] seeds the entry for what it just wrote, since it already
-     * hashed the bytes on the way through.
+     * The SHA-256 of every pack file hashed in this process, keyed by path, with the size and
+     * modification time it was hashed at. [stage] seeds the entry for the file it writes.
      */
     private val hashes = HashMap<String, CachedHash>()
 
@@ -91,12 +69,8 @@ class LanguagePackRepository internal constructor(
     }
 
     /**
-     * Copies [source] into private storage and hashes it on the way through.
-     *
-     * The size cap is enforced while copying, not from a length the caller reported: a stream
-     * can claim any length it likes, and the only number that means anything is how many bytes
-     * actually arrived. The temporary file is deleted on any failure, so a refused import leaves
-     * nothing behind.
+     * Copies [source] into private storage, hashing it on the way. The size cap applies to the
+     * bytes that arrive; the temporary file is deleted on any failure.
      */
     fun stage(source: InputStream, fileName: String): Result<StagedPack> {
         if (!packsDirectory.exists() && !packsDirectory.mkdirs()) {
@@ -158,13 +132,7 @@ class LanguagePackRepository internal constructor(
         return existing.id
     }
 
-    /**
-     * Replaces the record of a pack that was rewritten in place.
-     *
-     * An update rather than an insert, because staging writes over the file of the same name:
-     * the row still describes the right file, it just describes the old contents of it. Insert
-     * was tried first and failed on the primary key, which is the database being right.
-     */
+    /** Updates the record of a pack that was rewritten in place. */
     suspend fun replace(entry: LanguagePackEntry) = dao.update(entry)
 
     /** True when a pack for this language is already installed, whatever it came from. */
@@ -180,15 +148,8 @@ class LanguagePackRepository internal constructor(
     }
 
     /**
-     * Re-hashes every enabled pack and disables any whose contents changed.
-     *
-     * Run at start, before anything is mapped. The file is in private storage, but private is a
-     * statement about other applications -- not about a restore that substituted it, a
-     * filesystem that corrupted it, or a device where the boundary does not hold. A pack that
-     * fails switches itself off and records when, so Settings can say what happened rather than
-     * the language quietly ceasing to produce suggestions.
-     *
-     * Returns the packs that failed.
+     * Re-hashes every enabled pack and disables any whose contents changed, recording when. Run
+     * at start, before anything is mapped. Returns the packs that failed.
      */
     suspend fun verifyEnabled(): List<LanguagePackEntry> {
         val failed = ArrayList<LanguagePackEntry>()
@@ -204,17 +165,12 @@ class LanguagePackRepository internal constructor(
     }
 
     companion object {
-        /** Matches kMaxPackBytes in bkd_format.hpp. Checked on both sides, on purpose. */
+        /** Matches kMaxPackBytes in bkd_format.hpp; checked on both sides. */
         const val MAX_PACK_BYTES: Long = 64L * 1024L * 1024L
 
         /**
-         * How many packs may be switched on at once. Matches `Engine::kMaxPacks` in
-         * engine.hpp -- LanguagePackLimitTest reads that header and fails if the two drift.
-         *
-         * Enforced here, in Settings and in the keyboard's own load, because the native bridge
-         * refuses more tags than the engine has slots for outright: six dictionaries ship, and
-         * a fifth one switched on used to leave the keyboard with no prediction at all and no
-         * word on screen about why.
+         * How many packs may be switched on at once. Matches `Engine::kMaxPacks` in engine.hpp,
+         * checked by LanguagePackLimitTest.
          */
         const val MAX_ENABLED = 4
 

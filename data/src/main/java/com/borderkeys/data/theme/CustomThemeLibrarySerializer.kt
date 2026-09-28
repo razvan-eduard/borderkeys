@@ -9,8 +9,7 @@ import kotlinx.serialization.SerializationException
 import java.io.InputStream
 import java.io.OutputStream
 
-/** Reads and writes [CustomThemeLibrary] as JSON for the typed DataStore, the same shape as
- *  [KeyboardThemeSerializer] and for the same reasons. */
+/** Reads and writes [CustomThemeLibrary] as JSON for the typed DataStore. */
 object CustomThemeLibrarySerializer : Serializer<CustomThemeLibrary> {
 
     private val json = PERSISTED_JSON

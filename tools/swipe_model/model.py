@@ -9,9 +9,8 @@ match. Reimplements the architecture of "FUTO Swipe: Layout-Agnostic Neural Swip
 see docs/licensing.md section 2.5. Nothing in this file loads or was derived from FUTO's own
 released weights, which are under a non-free licence.
 
-Every width and count below has a same-named counterpart in TcnEncoder/TcnWeights; if one changes,
-the other two must change with it, and `export_weights.py --selftest` is what catches the case
-where they didn't.
+Every width and count below has a same-named counterpart in TcnEncoder/TcnWeights, and
+`export_weights.py --selftest` checks that they agree.
 """
 
 from __future__ import annotations
@@ -21,8 +20,7 @@ import math
 import torch
 from torch import nn
 
-# The shape lives in architecture.py so that export_weights.py can read a .bkw header without
-# importing torch. Re-exported here because this module is what the rest of the pipeline imports.
+# The shape lives in architecture.py, which needs no torch; re-exported here.
 from architecture import (  # noqa: E402
     ADAPTER_CHANNELS, ADAPTER_KERNEL, BATCHNORM_EPSILON, BLOCK_CHANNELS, DCT_RESOLUTION,
     DILATIONS, EXPANDED_CHANNELS, GRN_EPSILON, INPUT_FEATURES, KERNEL_SIZE, KEY_EMBED_HIDDEN,
@@ -32,9 +30,8 @@ from architecture import (  # noqa: E402
 
 class GlobalResponseNorm(nn.Module):
     """ConvNeXt V2's GRN: each channel is rescaled by how large its own response is (an L2 norm
-    over the whole gesture) relative to the average response across every channel -- see
-    TcnEncoder::runBlock's own comment for the same description in the inference code this must
-    match."""
+    over the whole gesture) relative to the average response across every channel, as in
+    TcnEncoder::runBlock."""
 
     def __init__(self, channels: int):
         super().__init__()
@@ -133,14 +130,8 @@ class TcnEncoder(nn.Module):
 def dct_basis(key_centers_uv: torch.Tensor) -> torch.Tensor:
     """Phi[k, (u,v)] = cos(pi*u*u_k) * cos(pi*v*v_k) -- the same basis
     TcnCtcDecoder::setLayout builds from KeyGeometry, built here from normalised [0,1]^2 key
-    centres for training-time loss computation (the model never sees a layout directly; only the
-    trainer, which needs per-key logits to compute the CTC loss, does).
-
-    Batched over any number of leading dimensions, so a per-sample augmented layout (B, K, 2) and
-    a single shared one (K, 2) both work without the caller branching on which it has -- the
-    batched case is what makes training tractable at all: augmentation perturbs every sample's
-    key centres independently, and doing that one sample at a time in a Python loop over a
-    thousand-sample batch is the difference between an epoch and an afternoon.
+    centres for the training loss. Batched over any number of leading dimensions: (B, K, 2) and
+    (K, 2) both work.
 
     `key_centers_uv`: (..., K, 2) in [0,1]^2. Returns (..., K, SPECTRAL_DIM).
     """
@@ -158,18 +149,8 @@ class KeyEmbedding(nn.Module):
     """Maps a key's own (u,v) position plus its fixed 8x8 cosine features into a learned
     SPECTRAL_DIM-wide embedding through a small shared MLP.
 
-    Fixes a real, measured defect the raw cosine basis has on its own: at the 26 canonical
-    QWERTY key centres, `dct_basis`'s 8x8 matrix has **rank 23, not 26** (confirmed 2026-09-13 by
-    SVD on this project's own layout) -- three emission directions are structurally unreachable
-    regardless of training data, width, depth or epoch count, because a fixed *linear* basis can
-    never exceed the rank of its own input. The same rank defect has been found and fixed the
-    same way independently, on a different basis, which is what says it is structural rather
-    than a quirk of this layout: keep the cosine features as an input, not the final answer, and
-    let a nonlinearity between two learned layers re-spread them into a full-rank output. Adding
-    more DCT frequencies would only push the same ceiling to a different key count.
-
-    See `TcnCtcDecoder::setLayout`'s own comment for the matching inference code -- this and that
-    must produce the same numbers, checked by `export_weights.py --selftest`.
+    `TcnCtcDecoder::setLayout` must produce the same numbers; `export_weights.py --selftest`
+    checks it.
     """
 
     def __init__(self):

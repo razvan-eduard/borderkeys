@@ -10,11 +10,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The version line, where the feature can destroy work.
- *
- * Every one of these is a rule a user was promised: the original is always reachable, an edit
- * never costs you a version, and running the model from the middle costs you exactly the
- * versions that came after it and no others.
+ * The version line: the original is always reachable, an edit never costs a version, and running
+ * the model from the middle discards exactly the versions after it.
  */
 class ComposerTest {
 
@@ -128,8 +125,7 @@ class ComposerTest {
 
         composer.flip()
         assertTrue(composer.atOriginal)
-        // Stepping forward by hand is not "come back from the flip"; the next flip should behave
-        // as if it were pressed here.
+        // The next flip behaves as if pressed here.
         assertEquals("v1", composer.forward())
         assertEquals("v0", composer.flip())
         assertEquals("v1", composer.flip())
@@ -175,16 +171,13 @@ class ComposerTest {
         )
     }
 
-    // The original is a promise: "the exact copy gathered from the initial page selection,
-    // nothing else." A hand edit made while standing on it -- before the first run, or after
-    // walking back to it -- must never be what that promise ends up meaning.
+    // A hand edit made while standing on the original never replaces it.
 
     @Test
     fun `a hand edit before the first run does not become the original`() {
         val composer = Composer()
         composer.captureBeforeRun("the selection")
-        // Typed over before any model action -- this is openComposer's own sequence: seed the
-        // graph, then whatever the user does before tapping a button.
+        // Typed over before any model action, as openComposer allows.
         composer.updateCurrent("the selection, fixed")
 
         assertEquals(2, composer.size)
@@ -205,8 +198,7 @@ class ComposerTest {
 
         assertEquals("the original is untouched", "the selection", composer.versionAt(0))
         assertEquals("the edit became its own node", "the selection, fixed", composer.versionAt(1))
-        // Discards nothing, the same rule as every other hand edit: what used to be reachable
-        // from the original is still there, just one position further along.
+        // Nothing is discarded; the later versions move one position along.
         assertEquals("v1", composer.versionAt(2))
         assertEquals("v2", composer.versionAt(3))
         assertEquals(4, composer.size)

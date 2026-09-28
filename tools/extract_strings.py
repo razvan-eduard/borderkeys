@@ -3,9 +3,8 @@
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 """Lift user-facing text out of Kotlin sources into the translation catalogue.
 
-Run once per batch of screens, then read the diff: this is a mechanical aid, not an authority.
-It rewrites the call sites it recognises and leaves everything else alone, so a literal it does
-not understand stays in the source where the no-hardcoded-text test will find it.
+Run once per batch of screens, then read the diff. It rewrites the call sites it recognises and
+leaves everything else alone.
 """
 
 import json
@@ -71,8 +70,7 @@ def read_expression(text, start):
             if STRING.match(text, k):
                 i = k
                 continue
-        # Stop after the last literal, never after a `+` whose right side is not one: swallowing
-        # that `+` turns `"a " + b` into `strings[...] b`, which does not parse.
+        # Stops after the last literal, never after a `+` whose right side is not one.
         return i, parts
 
 

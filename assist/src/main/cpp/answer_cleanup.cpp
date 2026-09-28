@@ -11,33 +11,19 @@
 namespace borderkeys {
 namespace {
 
-/** Below this many characters of input, cleanResult's "the model failed, hand the text back"
- *  fallback is not applied: a legitimate rewrite of a few words can be several times their
- *  length without anything being wrong. */
+/** Below this many characters of input, cleanResult never falls back to the input. */
 constexpr size_t kNarrationFallbackMinInputChars = 40;
 
 /** A length-preserving task answered with more than this many times the input is a failure. */
 constexpr size_t kNarrationFallbackLengthFactor = 4;
 
-/**
- * A tag pair a model may wrap part of its output in without being asked to.
- *
- * A plain open/close string pair rather than anything smarter -- these are not XML and nothing
- * here needs to parse them as a document, only find and remove one kind of thing a small model
- * does that a task instruction did not ask for.
- */
+/** A tag pair a model may wrap part of its output in without being asked to. */
 struct WrapTag {
     const char* open;
     const char* close;
 };
 
-/**
- * Every reasoning-block spelling this application has reason to expect. `<think>` is what Qwen3
- * and SmolLM3 -- the reasoning-tuned families in KnownAssistModels.kt; EuroLLM, the third, has
- * no thinking phase -- actually emit; the other two are the same idea under the names used
- * elsewhere in the wider GGUF ecosystem. Kept as a list a model addition might extend, rather
- * than one pair hardcoded to today's families.
- */
+/** Reasoning-block spellings: `<think>`, which Qwen3 and SmolLM3 emit, and two others. */
 constexpr WrapTag kReasoningTags[] = {
     {"<think>", "</think>"},
     {"<thinking>", "</thinking>"},
@@ -56,14 +42,8 @@ std::string trimmed(const std::string& text) {
 }
 
 /**
- * Removes every closed instance of `tag` from `text`, and truncates at the first one that never
- * closes.
- *
- * A closed block is cut out whole, tags included -- the text before and after it is what the
- * model meant as its answer. An opened-but-never-closed block (generation stopped, by the output
- * budget or by cancellation, before the model finished) is cut from the opening tag to the end:
- * there is no answer inside an unfinished thought, and a fragment of one is worse to show than
- * nothing.
+ * Removes every closed instance of `tag` from `text`, tags included, and cuts from the first one
+ * that never closes to the end.
  */
 std::string stripTag(std::string text, const WrapTag& tag) {
     for (;;) {
@@ -81,17 +61,8 @@ std::string stripTag(std::string text, const WrapTag& tag) {
 }
 
 /**
- * Peels one delimiter pair off `text`, but only when it wraps the *whole* trimmed string.
- *
- * A translation that happens to start and end with a quotation mark as part of its own content
- * is legitimate, ordinary text -- only the whole-string case, the entire answer quoted or
- * fenced as if it were being handed over rather than written, is presentation formatting nobody
- * asked for, and the whole-string check is what tells the two apart in the common case: a
- * sentence that legitimately opens with a quote almost never also happens to close the string
- * with one. It is not a perfect test -- a real answer that is itself one short quoted phrase,
- * start to end, looks identical to the model's own wrapping and gets peeled the same way -- but
- * a model reflexively quoting a plain translation nobody asked to have quoted is the case this
- * was actually seen doing, and the rarer one it trades away is a smaller cost than that.
+ * Peels one delimiter pair off `text`, only when it wraps the whole trimmed string. An answer
+ * that is itself one quoted phrase is peeled too.
  */
 std::string unwrapWhole(const std::string& text, const std::string& open,
                         const std::string& close) {
@@ -113,7 +84,10 @@ constexpr size_t kMaxLabelChars = 40;
 /** The most words a label at the start of the first line can have. */
 constexpr int kMaxLabelWords = 4;
 
-/** Up to this many words, a label is removed when the answer after it opens with a capital or a quotation mark. */
+/**
+ * Up to this many words, a label is removed when the answer after it opens with a capital or a
+ * quotation mark.
+ */
 constexpr int kMaxLooseLabelWords = 2;
 
 /** An ASCII letter, or any byte of a character outside ASCII. */
@@ -220,8 +194,7 @@ std::string toLower(std::string s) {
 /**
  * Phrases a model only writes when it is describing the task rather than doing it: "The rewritten
  * sentence is:", "Here is the corrected text:", "The original sentence was:". Lowercased, matched
- * as substrings. A built-in task's real answer is the transformed text and nothing else, so any
- * of these appearing in one is the model narrating.
+ * as substrings.
  */
 const char* const kNarrationMarkers[] = {
     "the rewritten", "the corrected", "the revised", "the translated",
@@ -241,13 +214,9 @@ bool looksLikeNarration(const std::string& lower) {
 }
 
 /**
- * When a model has narrated instead of answering, recovers the answer it buried.
- *
- * Two shapes, both seen: the answer as the last thing put in quotes ("...is: \"<answer>\""), and
- * the answer as everything after the last narration line. Neither is guaranteed -- a model that
- * narrates is already off the rails -- so this only ever returns something cleaner than it was
- * handed, never something worse: if it cannot find a plausible answer it returns the text
- * unchanged and cleanResult's own fallback decides what to do with it.
+ * When a model has narrated instead of answering, recovers the answer it buried: the last thing
+ * put in quotes ("...is: \"<answer>\""), or everything after the last narration line. Returns the
+ * text unchanged when neither is found.
  */
 std::string salvageFromNarration(const std::string& text) {
     const std::string lower = toLower(text);
@@ -294,24 +263,8 @@ std::string salvageFromNarration(const std::string& text) {
 }  // namespace
 
 /**
- * Turns whatever a small instruction-tuned model actually generated into the answer a task
- * asked for.
- *
- * None of this is guaranteed by the prompt -- kNoThink is asked for up front, and even that is a
- * request, not a contract -- it is what stays true after asking nicely. Each cleanup here is
- * independent and narrow rather than one pattern tuned to today's two model families, because a
- * future model added to KnownAssistModels.kt is not obliged to behave like the ones this list
- * was written against.
- *
- * `cleanFormatting` splits these into two different kinds of claim. Reasoning-tag stripping is
- * unconditional: nothing a task or a custom instruction legitimately asks for looks like a leaked
- * `<think>` block, so there is nothing it could be disagreeing with. The fence and quote
- * unwrapping are the opposite -- both are guesses about what the *task* asked for, and a task
- * built into this application never asks for either, but AssistTask.CUSTOM carries whatever the
- * user actually typed, and "wrap the answer in quotes" is a perfectly reasonable thing to type.
- * Peeling quotes off a result that were requested on purpose is not a smaller version of the bug
- * this was added for -- it is the opposite of it -- so the caller passes false for a custom
- * instruction and this leaves that half alone.
+ * Turns whatever a small instruction-tuned model generated into the answer a task asked for.
+ * Reasoning blocks are always removed; every later step runs only with `cleanFormatting`.
  */
 std::string cleanResult(const std::string& raw, const std::string& input, bool cleanFormatting) {
     std::string text = trimmed(raw);
@@ -322,42 +275,25 @@ std::string cleanResult(const std::string& raw, const std::string& input, bool c
     if (!cleanFormatting) {
         return text;
     }
-    // Before the label and fence stripping below: a model that has narrated the task rather than
-    // done it ("The rewritten sentence is: \"...\"") has usually buried the answer inside quotes
-    // or after the narration, and recovering that is what leaves a plain answer for the rest of
-    // this to tidy.
+    // An answer buried in narration, before the label and fence stripping below.
     text = trimmed(salvageFromNarration(text));
-    // Ahead of the fence and quote stripping below: a labelled preamble is often followed by
-    // the answer wrapped in one of those too ("Traducere:\n\"...\"", seen verbatim), and the
-    // label has to come off first for what is left to be the plain wrapped answer those steps
-    // already know how to handle.
+    // A leading label, before the fence and quote stripping below.
     text = stripLeadingLabel(text, input);
-    // A plain-text answer to "translate this" or "correct this" is never legitimately fenced --
-    // there is no task here whose real answer starts and ends with three backticks -- so this
-    // one is removed unconditionally.
+    // A code fence around the whole answer.
     text = unwrapWhole(text, "```\n", "\n```");
     text = unwrapWhole(text, "```", "```");
     text = trimmed(text);
-    // The same fence applyChatTemplate now wraps the input text in, echoed back around the
-    // answer -- a small model mirroring the shape of what it just read is exactly the kind of
-    // thing this whole function exists to undo. Its own pass, ahead of the single-quote unwrap
-    // below: that one only peels a single quote off each end, which would leave a triple-quote
-    // echo as "" rather than gone.
+    // The input's own fence echoed around the answer, before the single-quote unwrap below.
     text = unwrapWhole(text, std::string(kTextFence) + "\n", std::string("\n") + kTextFence);
     text = unwrapWhole(text, kTextFence, kTextFence);
     text = trimmed(text);
-    // Seen doing this on a plain translation with nothing quoted in the source at all -- Translate
-    // wrapped in quote marks reads as "here is the translation," presentation the task never
-    // asked for. See unwrapWhole's own doc for the one case this can be wrong about.
+    // Quote marks around the whole answer.
     text = unwrapWhole(text, "\"", "\"");
     text = unwrapWhole(text, "'", "'");
     text = trimmed(text);
 
-    // Last resort. If narration survived every attempt above to lift the answer out of it, or
-    // the model answered a length-preserving task with something several times longer than it
-    // was given, the model has failed -- and the text the user selected, handed straight back,
-    // is a better outcome than the model's monologue in place of it. Skipped for a very short
-    // input, where "several times longer" is a handful of words and means nothing.
+    // Last resort: the input itself, when narration survived or the answer is several times the
+    // input's length. Not for a very short input.
     if (input.size() >= kNarrationFallbackMinInputChars &&
         (looksLikeNarration(toLower(text)) ||
          text.size() > input.size() * kNarrationFallbackLengthFactor)) {

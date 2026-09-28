@@ -4,43 +4,14 @@
 
 """Writes the list of corpus words a language's spelling dictionary accepts in lower case.
 
-`make_pack.py --names` decides, word by word, whether a name from Wikidata may capitalise itself
-every time it is typed. Its first witness is the treebank behind `dictionaries/<tag>.pos`, and
-that witness has a blind spot: it keeps one tag per word, the one the treebank used most, and
-a treebank of web text meets "Apple", "Cloud" and "Hidden" (the brand, the service, the valley)
-more often than the fruit, the sky and the adjective. Every one of those came out flagged, and
-so did several thousand words past the treebank's own vocabulary that Wikidata knows a single
-person by ("thunder", "needle", "wage" are all somebody's family name).
-
-A spelling dictionary is the second witness: Hunspell lists the ordinary words of a language
-in the case they are written, so a lower-case "cloud" is accepted and a lower-case "sadoveanu"
-is not. Not every acceptance counts, though. Hunspell also accepts a word it can build from a
-headword with an affix rule, and the rules are generous: Romanian "maria" is a form of the
-verb "a maria", "popescu" is "popesc" (priestly) with an article, Spanish "patricia" is a form
-of "patricio". What this script writes is the corpus words that ARE a lower-case headword
-("cloud", "needle", "wage"), read by `hunspell -s` (print each word's stems): the word itself
-among its stems. Everything else Hunspell merely tolerates stays a name -- including a
-headword's inflections, on purpose: half of Romania's surnames are an ordinary word with the
-article on the end ("lupu", "ciobanu", "moraru", "rotaru" -- wolf, shepherd, miller,
-wheelwright), and a rule that read "wages" as a form of "wage" read every one of them as a
-word too. The few English plurals that slip through this way ("wages", "trucks") go in the
-hand-kept exclude list.
-
+A word is listed when it is a lower-case headword of one of the dictionaries given, read by
+`hunspell -s` (the word itself among its stems); a form Hunspell only builds with an affix rule
+is not. Several dictionaries can be given, English beside the language's own.
 `make_pack.py --names-ordinary` reads the list and refuses the flag to a word on it that the
-treebank does not know: where the treebank has met the word, its own verdict stands, and a
-treebank that met "Dan" and "Ion" mostly as names outranks a dictionary that also knows a
-martial-arts rank and a charged particle.
+treebank does not know.
 
-Several dictionaries can be given, and the English one belongs beside every other language's:
-a corpus of Romanian, German or Spanish web text is full of English -- "hot", "life",
-"service", "happy", "end" -- that the language's own dictionary has never heard of, its
-treebank has no tag for, and Wikidata has a family name for. Every one of those was flagged.
-A word any of the dictionaries given lists in lower case is an ordinary word.
-
-Restricted to the words the name list could touch (corpus words that are also in the fetch),
-so the committed file stays a few thousand lines rather than the whole vocabulary. Needs the
-`hunspell` binary on PATH and a .dic/.aff pair per dictionary -- LibreOffice ships one per
-language; nothing from them is copied, only the yes/no per word.
+Restricted to the corpus words that are also in the name list. Needs the `hunspell` binary on
+PATH and a .dic/.aff pair per dictionary; only the yes/no per word is kept.
 
     python3 tools/make_ordinary.py --words dictionaries/ro_RO.tsv --names names_ro.tsv \\
         --dictionary /path/to/ro_RO /path/to/en_US --out dictionaries/ro_RO.names-ordinary
@@ -72,9 +43,7 @@ def spelled_lower_case(words: list[str], dictionary: Path) -> set[str]:
     """The words that are a lower-case headword of the dictionary.
 
     `hunspell -s` prints "word stem" for every analysis it has and the bare word for one it
-    cannot analyse; the stem comes back in the dictionary's own case, so "Maria" never
-    answers for "maria". A lower-case input is what makes the answer mean "an ordinary word":
-    a lower-case entry accepts both spellings, a capitalised one only its own."""
+    cannot analyse; the stem comes back in the dictionary's own case."""
     result = subprocess.run(
         ["hunspell", "-d", str(dictionary), "-i", "utf-8", "-s"],
         input="\n".join(words) + "\n", capture_output=True, text=True, check=True,

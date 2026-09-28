@@ -10,19 +10,10 @@
 namespace borderkeys {
 
 /**
- * The trained [TcnEncoder]'s weights, as a fixed set of named arrays.
- *
- * One call site writes them in this exact declaration order (`tools/swipe_model/
- * export_weights.py`), one reads them back ([loadFromBytes] below), and there is no third format
- * anywhere -- no ONNX, no protobuf, nothing this project doesn't already read and write on its
- * own for the dictionary pack format (`bkd_format.hpp`). Every constant here has a named
- * counterpart in `TcnEncoder`; the two must never drift, which is why `tools/swipe_model/
- * model.py` -- not this file -- is the single source of truth both sides are generated to match.
- *
- * The `.bkw` file is an 8-byte header (magic, version, both little-endian u32) followed by every
- * array below, concatenated in declaration order, as little-endian float32. Fixed total size
- * rather than a section table the way `.bkd` needs one: nothing here has a length that depends on
- * the data, unlike a dictionary's word count, because the architecture is fixed at compile time.
+ * The trained [TcnEncoder]'s weights as a fixed set of named arrays, matching
+ * `tools/swipe_model/model.py`. A `.bkw` file is a header followed by every array below in
+ * declaration order, as little-endian float32, the order `tools/swipe_model/export_weights.py`
+ * writes them in.
  */
 class TcnWeights {
 public:
@@ -38,8 +29,7 @@ public:
     static constexpr int kSpectralDim = 64;        // == TcnEncoder::kSpectralDim
     static constexpr int kKeyEmbedHidden = 96;     // == model.py's KEY_EMBED_HIDDEN
 
-    /** One dilated ConvNeXt-style block's weights -- see TcnEncoder's own doc for the pipeline
-     *  each of these feeds into, in this same order. */
+    /** One dilated ConvNeXt-style block's weights, in TcnEncoder's pipeline order. */
     struct Block {
         float depthwiseWeight[kKernelSize * kTrunk];
         float depthwiseBias[kTrunk];
@@ -70,25 +60,16 @@ public:
     float spectralBias[kSpectralDim];
 
     /**
-     * The learned key-embedding MLP: `(u, v, 64 fixed cosine features)` -> `Linear(66,96)` ->
-     * GELU -> `Linear(96,64)` -> the spatial-scoring vector `TcnCtcDecoder::keyLogProbsFor` uses
-     * in place of the raw cosine basis. Exists because that raw basis, alone, has rank 23 of 26
-     * at the canonical QWERTY key centres -- confirmed by SVD, and independently found and fixed
-     * the same way elsewhere, on a different basis -- so three
-     * emission directions were structurally unreachable no matter how this was trained. See
-     * `TcnCtcDecoder::setLayout`'s own comment for the inference code this feeds.
+     * The key-embedding MLP: `(u, v, 64 cosine features)` -> `Linear(66,96)` -> GELU ->
+     * `Linear(96,64)`, the per-key vector `TcnCtcDecoder::keyLogProbsFor` scores against.
      */
     float keyEmbedHiddenWeight[(2 + kSpectralDim) * kKeyEmbedHidden];
     float keyEmbedHiddenBias[kKeyEmbedHidden];
     float keyEmbedOutputWeight[kKeyEmbedHidden * kSpectralDim];
     float keyEmbedOutputBias[kSpectralDim];
 
-    static constexpr uint32_t kMagic = 0x3157424Bu;  // 'B' 'K' 'W' '1', little-endian -- same
-                                                      // convention as bkd_format.hpp's kBkdMagic
-    // Bumped from 1: the key-embedding MLP above is a new, mandatory section, and a v1 file has
-    // neither the bytes for it nor a model.py that could produce them -- rejecting it outright is
-    // the same "wrong-shaped weight" case loadFromBytes's own comment already treats as fatal.
-    // Bumped from 2: the header now carries the architecture it was exported for.
+    static constexpr uint32_t kMagic = 0x3157424Bu;  // 'B' 'K' 'W' '1', little-endian
+    // The weights format version; any other is refused.
     static constexpr uint32_t kVersion = 3u;
 
     /** The architecture a file was exported for, written by `tools/swipe_model/export_weights.py`
@@ -98,41 +79,20 @@ public:
     /** Header: magic, version, the descriptor, the payload's float count, one reserved word. */
     static constexpr size_t kHeaderBytes = sizeof(uint32_t) * (2 + kDescriptorFields + 2);
 
-    /**
-     * Why the header names the shape rather than the loader inferring it.
-     *
-     * The payload is read positionally -- one `memcpy` into this struct -- so a file whose arrays
-     * were reordered or reshaped at the same total size would load as a different model with no
-     * error. `seReduceWeight` is `[trunk * seReduced]` and `seExpandWeight` is
-     * `[seReduced * trunk]`: identical sizes, opposite meanings. A length check cannot tell them
-     * apart and a version number only catches the mismatches somebody remembered to bump it for.
-     *
-     * So the exporter states the shape and this checks it. What that does not cover is two
-     * same-shaped arrays swapped; `test_tcn.cpp`'s golden vector covers that.
-     */
+    /** What in `data` does not match this architecture's header, or null when nothing. */
     static const char* describeMismatch(const uint8_t* data, size_t length);
 
-    /** Writes the header this architecture expects into [kHeaderBytes] of `out`. The exporter is
-     *  the only thing that writes a real file; this exists so a test can build a canonical one
-     *  and corrupt a single field of it. */
+    /** Writes the header this architecture expects into [kHeaderBytes] of `out`. */
     static void writeHeader(uint8_t* out);
 
     /**
-     * Reads a whole `.bkw` file's bytes into this object.
-     *
-     * Returns false for anything [describeMismatch] names -- never a partial or best-effort load.
-     * A wrong-shaped weight is not "worse suggestions": every read of it downstream has to stay
-     * either correct or bounds-safe, and rejecting anything but an exact match is the one check
-     * that keeps that true, the same rule `bkd_format.hpp` states for the dictionary format.
+     * Reads a whole `.bkw` file's bytes into this object; false, with nothing loaded, for
+     * anything [describeMismatch] names.
      */
     bool loadFromBytes(const uint8_t* data, size_t length);
 };
 
-/** Every float in [TcnWeights], in one number: it holds nothing else, so `sizeof / sizeof(float)`
- *  is exactly the count a `.bkw` file must carry after its header, by construction rather than by
- *  a maintained constant that could drift from the struct it is meant to describe. Declared after
- *  the class rather than inside it -- a static member's initialiser cannot take the `sizeof` of
- *  its own still-incomplete enclosing type. */
+/** How many floats a `.bkw` file carries after its header: every float in [TcnWeights]. */
 inline constexpr size_t kTcnWeightsFloatCount = sizeof(TcnWeights) / sizeof(float);
 
 }  // namespace borderkeys

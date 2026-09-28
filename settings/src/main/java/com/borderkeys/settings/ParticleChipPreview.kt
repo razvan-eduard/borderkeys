@@ -34,25 +34,12 @@ import com.borderkeys.ime.fx.ParticlePreviewView
 import com.borderkeys.ime.fx.applyParticleLayer
 
 /**
- * The real particle engine, sized and positioned by the caller -- typically to sit directly
- * behind whichever chip is currently selected in [com.borderkeys.settings.screen.EffectsScreen],
- * so a style reads as itself rather than as a name and a colour swatch someone has to imagine
- * moving. The same [SuggestionStripPreview] already embeds the real `SuggestionStripView` rather
- * than a second, separately-drawn approximation, one level down: [ParticlePreviewView] is that
- * same idea, scaled to chip size.
+ * The real particle engine, sized and positioned by the caller, usually behind the selected chip
+ * in [com.borderkeys.settings.screen.EffectsScreen].
  *
- * [shape] must be the exact same [Shape] value the real chip behind this preview is drawn with
- * -- [PickerChip]'s own [shape] parameter -- not a guessed corner radius: an unstyled Material3
- * chip's real shape has changed under this preview once already (see [PickerChip]'s own doc),
- * and reading whichever [Shape] the chip is *actually* using, rather than assuming a number that
- * matched it once, is what stops the two from being able to disagree again. [Outline
- * .toParticleGeometry] converts whatever that shape resolves to (rectangle, rounded rectangle,
- * or something this app has no closed-form model for) into a [ParticleGeometry] once this view's
- * own measured size is known -- `null` (nothing drawn yet) until then.
- *
- * Exactly one of [outline]/[fill] is expected non-null per call site: an outline style traces
- * this shape's own perimeter, a fill style spawns inside it, and the other layer is left at its
- * own `NONE` so nothing extra draws behind a chip that is not previewing it.
+ * [shape] must be the [Shape] the chip behind it is drawn with ([PickerChip]'s `shape`). It
+ * becomes a [ParticleGeometry] once this view is measured, `null` until then. One of [outline]
+ * and [fill] is non-null per call site; the other layer stays at `NONE`.
  */
 @Composable
 fun ParticleChipPreview(
@@ -61,11 +48,8 @@ fun ParticleChipPreview(
     outline: ParticleOutlineLayer? = null,
     fill: ParticleFillLayer? = null,
     /**
-     * How far past the chip's own bounds the preview may draw, on every side. Every outline
-     * style radiates *outward* from the element (see `ParticleOutlineStylePresets`), so a
-     * preview sized exactly to the chip would show none of it -- the whole effect happens just
-     * outside the shape it traces. The view is laid out this much larger than the chip and the
-     * chip's geometry is placed at the matching offset inside it.
+     * How far past the chip's bounds the preview may draw, on every side; the chip's geometry sits
+     * at this offset inside the view.
      */
     bleed: Dp = 28.dp,
 ) {
@@ -95,12 +79,8 @@ fun ParticleChipPreview(
             view.geometry = outlineGeometry
             view.retrace()
         },
-        // Laid out `bleed` larger than the chip on every side and placed so the chip sits in its
-        // middle -- see the parameter's own doc. Purely decorative, drawn on top of the chip it
-        // belongs to so fill particles are actually visible -- without the semantics below, a
-        // real View covering a Compose sibling's bounds reads to an accessibility service as
-        // occluding it, and the chip's own label would stop being announced for whichever style
-        // is currently selected.
+        // `bleed` larger than the chip on every side, with the chip in its middle; drawn on top of
+        // the chip and hidden from accessibility services.
         modifier = modifier
             .layout { measurable, constraints ->
                 val placeable = measurable.measure(
@@ -116,12 +96,9 @@ fun ParticleChipPreview(
 }
 
 /**
- * [Outline.Rectangle]/[Outline.Rounded] have a closed form [com.borderkeys.ime.fx
- * .ParticleSimulation] already knows how to trace a stroke around *and* spawn particles along --
- * [ParticleGeometry.RoundedRect]. Anything else ([Outline.Generic] -- a shape this app has no
- * closed-form model for) still traces exactly via the real [Path][androidx.compose.ui.graphics
- * .Path], with particles falling back to spawning along its own bounding rectangle instead of
- * nowhere -- see [ParticleGeometry.Exact].
+ * [Outline.Rectangle] and [Outline.Rounded] become [ParticleGeometry.RoundedRect]; anything else
+ * becomes [ParticleGeometry.Exact], traced along its path, with particles spawned along its
+ * bounding rectangle.
  */
 private fun Outline.toParticleGeometry(offsetX: Float, offsetY: Float): ParticleGeometry = when (this) {
     is Outline.Rectangle -> rect.toRoundedRect(cornerRadiusPx = 0f, offsetX, offsetY)

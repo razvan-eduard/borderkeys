@@ -6,13 +6,10 @@
 `futo_to_corpus.py` converts the held-out split against a layout file that already exists.
 This covers the case where it does not: `swipe-5` is FUTO's multi-layout collection, and nothing
 in `native-tests/data` describes azerty, qwertz, dvorak, german or spanish. Both outputs are
-written from the same canvas, so the gesture coordinates and the key centres land in one pixel
-space and `tools/gesture_replay.py` measures the decoder rather than a coordinate mismatch.
+written from the same canvas, in one pixel space.
 
-Key size comes from the column pitch measured inside a row and the row pitch across rows, not
-from the smallest gap between any two keys: keyboard rows are staggered, so that gap is half a
-key. On `qwerty` this reproduces the hand-written `native-tests/data/qwerty_1080.layout` at
-108x160 px, which is what says the two agree.
+Key size comes from the column pitch measured inside a row and the row pitch across rows. On
+`qwerty` this reproduces `native-tests/data/qwerty_1080.layout` at 108x160 px.
 
     python3 tools/swipe_model/futo_layout_corpus.py german \\
         --dataset german.jsonl --out-layout german.layout --out-corpus german.csv \\
@@ -35,9 +32,8 @@ from futo_layout import load_futo_layout  # noqa: E402
 
 CANVAS_WIDTH, CANVAS_HEIGHT = 1080.0, 480.0
 
-# Written at the top of every generated layout. Kept as a block with each tag ending its own
-# line, the same shape tools/gen_keys.py uses: `reuse lint` reads a tag wherever it appears,
-# so one built inline with the newline escape trailing it is read as a malformed expression.
+# Written at the top of every generated layout, each SPDX tag ending its own line for
+# `reuse lint`.
 LAYOUT_HEADER = """# BorderKeys replay layout: FUTO {name}, {width} px canvas.
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors

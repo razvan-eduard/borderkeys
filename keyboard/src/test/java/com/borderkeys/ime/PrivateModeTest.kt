@@ -10,9 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Private mode is a security requirement, so it is tested as one: every input type the platform
- * defines is enumerated, and the ones that must trigger it are named individually rather than
- * covered by a rule that could quietly stop matching.
+ * Every input type the platform defines, the ones that trigger private mode named individually.
  */
 class PrivateModeTest {
 
@@ -57,8 +55,6 @@ class PrivateModeTest {
     @Test
     fun `a numeric variation is not confused with a text variation`() {
         // TYPE_TEXT_VARIATION_PASSWORD is 0x80 and TYPE_NUMBER_VARIATION_PASSWORD is 0x10.
-        // Comparing a variation without its class is how a phone number ends up private and a
-        // PIN field does not.
         val textWithNumberPasswordBits =
             InputType.TYPE_CLASS_TEXT or InputType.TYPE_NUMBER_VARIATION_PASSWORD
         assertFalse(PrivateMode.isPasswordField(textWithNumberPasswordBits))
@@ -70,8 +66,6 @@ class PrivateModeTest {
 
     @Test
     fun `no personalized learning triggers private mode on an ordinary field`() {
-        // An application saying "do not remember this" about a field that is not a password:
-        // an incognito search box, a medical form, a disappearing message.
         assertTrue(
             PrivateMode.isPrivate(
                 InputType.TYPE_CLASS_TEXT,
@@ -87,7 +81,6 @@ class PrivateModeTest {
 
     @Test
     fun `an unknown editor is treated as private`() {
-        // Nothing is known about the field, so the careful answer is the only defensible one.
         assertTrue(PrivateMode.isPrivate(null))
     }
 

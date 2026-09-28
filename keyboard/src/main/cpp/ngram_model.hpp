@@ -10,29 +10,17 @@
 
 namespace borderkeys {
 
-// The pair and triple tables, read in place from the mapping.
-//
-// Pairs are a successor index: for every word, and for the sentence start, the words the corpus
-// wrote after it, sorted by index, each with its quantised conditional log-probability. A pair
-// lookup is a binary search within one list, and the list itself can be walked, which is what
-// the next-word search does when nothing has been typed.
-//
-// Triples hang off the pairs: for every pair, by its position in the successor index, the words
-// the corpus wrote after that pair, sorted by index, each with its own quantised conditional
-// log-probability. A triple lookup is the pair's binary search and then one more inside the
-// pair's own list. A triple whose pair the pack does not hold has nowhere to live, which is
-// also the one triple the engine never asks about.
-//
-// Values are quantised natural log-probabilities in one byte: q = round(-logProb * scale),
-// saturating at 255.
+// The pair and triple tables, read in place from the mapping. Pairs are a successor index: for
+// every word, and for the sentence start, the words the corpus wrote after it, sorted by index.
+// Triples are the same for every pair, by its position in the successor index. Each entry holds a
+// quantised natural log-probability in one byte: q = round(-logProb * scale), saturating at 255.
 class NgramModel {
 public:
-    // Positive: log-probabilities are always <= 0, so any positive value is unambiguously
-    // "no entry" without a second return channel.
+    // No entry; any positive value, since log-probabilities are at most 0.
     static constexpr float kNoEntry = 1.0f;
 
-    // The context "a sentence began here". Outside any word index; the index keeps its list
-    // after the last word's, at position wordCount. Mirrors tools/build_dict.py.
+    // The context "a sentence began here", whose list follows the last word's, at position
+    // wordCount; the same as tools/build_dict.py's.
     static constexpr uint32_t kSentenceStartContext = 0xFFFFFFFEu;
 
     bool bind(const uint8_t* base, uint64_t mappedBytes, const BkdHeader& header);

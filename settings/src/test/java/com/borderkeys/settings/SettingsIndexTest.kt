@@ -14,8 +14,8 @@ import org.junit.Test
  * The generated index against the screen sources it was generated from, and the search over
  * it against the English catalogue.
  *
- * The first test is the same scan tools/gen_settings_index.py runs, so a row added to a screen
- * without the script being run again fails here, with the regeneration command in the message.
+ * The first test is the same scan tools/gen_settings_index.py runs; a stale index fails it, with
+ * the regeneration command in the message.
  */
 class SettingsIndexTest {
 

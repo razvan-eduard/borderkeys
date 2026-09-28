@@ -16,12 +16,8 @@ import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.theme.ThemePaints
 
 /**
- * The answer to "why this word?": a title naming the word and what was typed, then one line
- * per term of the engine's own account of its score, and a Close control.
- *
- * Takes the keys' place the way the clipboard and emoji panels do, because it is a few lines
- * somebody reads rather than an offer beside live keys. Drawn like the rest of the keyboard:
- * one View, one onDraw, arithmetic hit testing, nothing allocated on the draw path.
+ * The answer to "why this word?", in the keys' place: a title naming the word and what was
+ * typed, one line per term of the engine's score, and a Close control.
  */
 @SuppressLint("ViewConstructor")
 class ExplainPanelView(

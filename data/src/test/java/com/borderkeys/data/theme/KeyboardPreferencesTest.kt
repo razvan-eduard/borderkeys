@@ -62,10 +62,6 @@ class KeyboardPreferencesTest {
         )
     }
 
-    /**
-     * A hand-edited or corrupted file must not be able to produce a keyboard the user cannot
-     * reach the settings through -- one scaled to nothing, or pushed off the screen.
-     */
     @Test
     fun sanitisingClampsEverySizeAndPosition() {
         val absurd = KeyboardPreferences(
@@ -99,13 +95,6 @@ class KeyboardPreferencesTest {
         assertEquals(reasonable, reasonable.sanitised())
     }
 
-    /**
-     * Applying a suggestion on space is opt-in, and taking it back is not.
-     *
-     * The pair is the whole argument for offering autocorrect at all: the objection to it is
-     * that undoing a wrong correction costs more than typing the word did. A build that shipped
-     * the first switch on, or the second off, would be the thing this keyboard argues against.
-     */
     @Test
     fun autoCorrectIsOffByDefaultAndItsUndoIsOn() {
         val defaults = KeyboardPreferences()
@@ -128,8 +117,6 @@ class KeyboardPreferencesTest {
         )
     }
 
-    /** Manual by default, and an unrecognised stored value falls back to manual rather than
-     *  being carried through -- there are only ever two valid modes. */
     @Test
     fun `theme mode defaults to manual and rejects anything but the two real modes`() {
         assertEquals(KeyboardPreferences.THEME_MODE_MANUAL, KeyboardPreferences().themeMode)
@@ -148,10 +135,7 @@ class KeyboardPreferencesTest {
         )
     }
 
-    /**
-     * The learning speed is one number applied to two curves, so the three settings have to be
-     * ordered and the middle one has to be the identity.
-     */
+    /** The three factors are ordered, and the default is 1. */
     @Test
     fun theLearningSpeedsAreOrderedAroundTheDefault() {
         val cautious = KeyboardPreferences.learningSpeedFactor(KeyboardPreferences.LEARNING_CAUTIOUS)
@@ -164,8 +148,7 @@ class KeyboardPreferencesTest {
         assertEquals("the default must not scale anything", 1f, balanced, 0f)
         assertTrue("a speed must never be zero or negative", cautious > 0f)
 
-        // An unknown value, from a hand-edited file or a future version, is the default rather
-        // than nothing: a keyboard that silently stopped learning would be hard to diagnose.
+        // An unknown value reads as the default.
         assertEquals(1f, KeyboardPreferences.learningSpeedFactor(99), 0f)
         assertEquals(1f, KeyboardPreferences.learningSpeedFactor(-1), 0f)
     }
@@ -183,10 +166,6 @@ class KeyboardPreferencesTest {
         )
     }
 
-    /**
-     * The strip's buffers are sized for the maximum, so the range has to stay inside it or a
-     * stored value would index past the end of an array on the keyboard's draw path.
-     */
     @Test
     fun theSuggestionCountIsClampedToWhatTheStripCanDraw() {
         assertEquals(3, KeyboardPreferences.MIN_SUGGESTIONS)
@@ -217,18 +196,11 @@ class KeyboardPreferencesTest {
         assertEquals(0f, defaults.horizontalOffsetDp, 0f)
         assertEquals(KeyboardPreferences.LEARNING_BALANCED, defaults.learningSpeed)
         assertEquals(KeyboardPreferences.DEFAULT_SUGGESTIONS, defaults.suggestionCount)
-        // Two-word suggestions are the one prediction feature that can be confidently wrong
-        // about something the user did not write, so they are opt-in like autocorrect.
         assertFalse(defaults.phraseSuggestions)
-        // The arrow costs nothing and answers a problem the settings screen answers badly, so
-        // it is on. The blur costs a compositor pass per frame, so it is not.
         assertTrue(defaults.edgeArrows)
         assertFalse(defaults.blurBehindKeyboard)
         assertEquals(defaults, defaults.sanitised())
     }
-    /** Tier B decodes 76.2% of recorded traces against tier A's 51.6%, so it is what a `plus`
-     *  build swipes with unless someone turns it off. A `core` build compiles no tier B, and the
-     *  preference does nothing there. */
     @Test
     fun `the neural swipe model defaults on`() {
         assertTrue(KeyboardPreferences().experimentalSwipeModelEnabled)
@@ -317,15 +289,11 @@ class KeyboardPreferencesTest {
         )
     }
 
-    /** On by default, unlike blurBehindKeyboard -- see radialBlurBackground's own doc for why:
-     *  this one only runs while the ring itself is up, not every frame the window is visible. */
     @Test
     fun `blurring behind the ring defaults on`() {
         assertTrue(KeyboardPreferences().radialBlurBackground)
     }
 
-    /** A lower ceiling than the strip's own -- see [KeyboardPreferences.radialSuggestionCount]'s
-     *  own doc for why a wedge tolerates fewer of them than a row does. */
     @Test
     fun `the radial suggestion count is clamped tighter than the strip`() {
         assertEquals(3, KeyboardPreferences.MIN_RADIAL_SUGGESTIONS)
@@ -354,8 +322,7 @@ class KeyboardPreferencesTest {
             KeyboardPreferences.MIN_RADIAL_PAUSE_DWELL_MILLIS,
             KeyboardPreferences(radialPauseDwellMillis = -1).sanitised().radialPauseDwellMillis,
         )
-        // 0 is not a below-range value to repair -- it is the deliberate bypass (see the
-        // property's own doc) and must survive sanitising exactly as given.
+        // 0 survives sanitising.
         assertEquals(
             0,
             KeyboardPreferences(radialPauseDwellMillis = 0).sanitised().radialPauseDwellMillis,
@@ -385,8 +352,7 @@ class KeyboardPreferencesTest {
             KeyboardPreferences.MIN_RADIAL_MIN_PATH_LETTERS,
             KeyboardPreferences(radialMinPathLetters = -1f).sanitised().radialMinPathLetters, 0f,
         )
-        // 0 removes the guard entirely (see the property's own doc) -- a real, supported value,
-        // not something sanitising should push back up to some floor.
+        // 0 survives sanitising.
         assertEquals(
             0f, KeyboardPreferences(radialMinPathLetters = 0f).sanitised().radialMinPathLetters, 0f,
         )
@@ -502,8 +468,6 @@ class KeyboardPreferencesTest {
         assertTrue("patient should be the largest threshold", balanced < patient)
     }
 
-    /** No preferred language is the default, and it is a real choice rather than an unset one:
-     *  it is what restores consulting every dictionary until the evidence decides. */
     @Test
     fun `no preferred language by default`() {
         assertEquals("", KeyboardPreferences().preferredLanguageTag)
@@ -516,8 +480,6 @@ class KeyboardPreferencesTest {
             "ro-RO",
             KeyboardPreferences(preferredLanguageTag = "ro-RO").sanitised().preferredLanguageTag,
         )
-        // A corrupt file must not be able to carry an arbitrarily long string into the engine,
-        // which copies it into a fixed buffer.
         val long = "x".repeat(KeyboardPreferences.MAX_LANGUAGE_TAG * 4)
         assertEquals(
             KeyboardPreferences.MAX_LANGUAGE_TAG,
@@ -605,10 +567,6 @@ class KeyboardPreferencesTest {
         assertEquals(60, steps[KeyboardPreferences.nearestStep(steps, 50)])
     }
 
-    /**
-     * The history is on by default and images are not, which is the whole point of the switch:
-     * a copied word and a picture of someone's screen are not the same thing to remember.
-     */
     @Test
     fun `images are off even though the history is on`() {
         val defaults = KeyboardPreferences()
@@ -616,12 +574,6 @@ class KeyboardPreferencesTest {
         assertFalse("images should be asked for", defaults.clipboardImages)
     }
 
-    /**
-     * The typing conveniences default on and the noisy one defaults off.
-     *
-     * Held together in one test because the difference is the rule: something that changes what
-     * you get is on, something that makes the phone do a thing it was not doing is off.
-     */
     @Test
     fun `typing helps are on and the sound is not`() {
         val defaults = KeyboardPreferences()
@@ -650,9 +602,6 @@ class KeyboardPreferencesTest {
             defaults.composerSnapSelectionToWords,
         )
         val bar = ComposerAction.fromIds(defaults.composerBar)
-        // Insert is the fixed button at the bar's end, drawn by the box itself, not a list
-        // entry -- see ComposerBar.resolve. A default that listed it was a row Settings offered
-        // that moved nothing.
         assertFalse("insert is not a bar entry", bar.contains(ComposerAction.INSERT))
         assertTrue(
             "the sanitised default is the default",
@@ -666,8 +615,7 @@ class KeyboardPreferencesTest {
 
     @Test
     fun `a bar written by a later build opens rather than failing`() {
-        // 8 is Insert's id, which an earlier build did write into the bar: dropped like an
-        // unknown id rather than kept, since the bar no longer lists it.
+        // 8 is Insert's id.
         val fromLater = KeyboardPreferences(composerBar = listOf(8, 9999, 1, 1))
         val kept = fromLater.sanitised().composerBar
         assertEquals(
@@ -720,8 +668,6 @@ class KeyboardPreferencesTest {
             KeyboardPreferences(symbolsNumberPosition = KeyboardPreferences.SYMBOLS_NUMBER_RIGHT)
                 .sanitised().symbolsNumberPosition,
         )
-        // The long-press delay is clamped to a range a deliberate tap never trips and a hold
-        // never feels stuck in.
         assertEquals(
             KeyboardPreferences.MIN_LONG_PRESS_MILLIS,
             KeyboardPreferences(longPressMillis = 1).sanitised().longPressMillis,
@@ -798,9 +744,7 @@ class KeyboardPreferencesTest {
         assertEquals(1, first.size)
         assertTrue("a backfilled id must not be the 0 sentinel", first[0].id != 0)
 
-        // sanitised() must be idempotent: the SAME list, sanitised twice, gets the SAME id both
-        // times -- a fresh random id on every call would silently unpin anything already on the
-        // bar the moment preferences are re-saved.
+        // The same list sanitised twice gets the same id.
         val second = KeyboardPreferences(customActions = first).sanitised().customActions
         assertEquals(first[0].id, second[0].id)
     }

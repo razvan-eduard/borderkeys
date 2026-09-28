@@ -3,18 +3,15 @@
     SPDX-License-Identifier: GPL-3.0-or-later
     SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-    The application module declares the <application> element and nothing else. Every
-    component is declared by the module that owns it, so each module stays self-contained
-    and a component cannot outlive the module it belongs to.
+    The application module declares the <application> element and nothing else; every
+    component is declared by the module that owns it.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        Not a declaration: a removal. If any library ever merges INTERNET in, the merger
-        deletes it here and the resulting APK cannot open a socket. verifyNoInternetPermission
-        then still fails the build, because a library that asked for network access contains
-        code that expected to have it, and silently disarming that code is not a fix.
+        Removals, not declarations: a library that merges either in loses it here, and
+        verifyNoInternetPermission still fails the build.
     -->
     <uses-permission
         android:name="android.permission.INTERNET"
@@ -24,20 +21,10 @@
         tools:node="remove" />
 
     <!--
-        androidx.core declares a signature-level permission of its own so that
-        ContextCompat.registerReceiver can emulate RECEIVER_NOT_EXPORTED below API 33. It
-        grants nothing to anyone outside our own signature, but it is still a line in
-        `aapt2 dump permissions`, and "this app requests no permissions at all" has to be
-        true as printed, not true with a footnote.
-
-        The trade is explicit: nothing in this app may register a dynamic BroadcastReceiver
-        through ContextCompat with RECEIVER_NOT_EXPORTED, because on API 30-32 that call
-        throws the moment this permission is missing: it did, and took the input method down
-        in onCreate. The one dynamic receiver there is, BorderKeysService's wallpaper
-        listener, goes through the platform's own registerReceiver instead: with
-        RECEIVER_NOT_EXPORTED from API 33, where the platform enforces the flag itself, and
-        plain below that, where the broadcast it listens for is a protected system broadcast
-        nothing but the platform can send.
+        androidx.core's signature-level permission for ContextCompat.registerReceiver, removed.
+        Without it, ContextCompat.registerReceiver with RECEIVER_NOT_EXPORTED throws on API 30
+        to 32, so no receiver may be registered that way; BorderKeysService's wallpaper listener
+        uses the platform's registerReceiver.
     -->
     <permission
         android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
@@ -47,17 +34,10 @@
         tools:node="remove" />
 
     <!--
-        There is no <uses-permission> of any kind below this line, and there never will be.
-        Haptic feedback goes through View.performHapticFeedback(KEYBOARD_TAP), which needs no
-        VIBRATE permission. Nothing in the design needs QUERY_ALL_PACKAGES, storage access or
-        an accessibility service.
+        No <uses-permission> of any kind below this line. Haptic feedback goes through
+        View.performHapticFeedback(KEYBOARD_TAP), which needs no VIBRATE permission.
     -->
 
-    <!--
-        No android:roundIcon. It exists for devices below API 26 that wanted a circular
-        raster of their own; minSdk is 30, every device here resolves the adaptive icon, and
-        the launcher's own mask decides the shape.
-    -->
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"

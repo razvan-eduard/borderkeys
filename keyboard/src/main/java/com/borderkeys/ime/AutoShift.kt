@@ -6,23 +6,10 @@ package com.borderkeys.ime
 import android.text.InputType
 
 /**
- * What shift should be, from a field's request and what the platform says about the text before
- * the cursor.
- *
- * Its own object, for the same reason as [AutoCorrection]: the decision is worth being able to
- * test without an editor, an input connection or a real field. Returns the same three states
- * [BorderKeysService] itself uses -- 0 off, 1 on for one character, 2 locked -- so the caller
- * needs no translation, only its own named constants for readability at the call site.
- *
- * [capsMode] is a callback rather than a plain value because it is the one part of the answer
- * that genuinely needs a live connection
- * ([android.view.inputmethod.InputConnection.getCursorCapsMode]), and it is called only on the
- * one branch that needs it -- a field asking for no capitalisation, one with something already
- * composing, or one that is not text at all never reaches it.
- *
- * [forceCapitaliseSentences] answers the case [capsMode] cannot: a field that asked for no
- * capitalisation at all gets none from the platform either, by construction, so overriding that
- * decision is judged from [textBeforeCursor] alone rather than deferred to [capsMode].
+ * What shift should be, 0 off, 1 for one character or 2 locked, from a field's request and the
+ * text before the cursor. `capsMode` is asked only for a text field that requested capitals and
+ * has nothing composing; `forceCapitaliseSentences` reads sentence starts from the text in a
+ * field that requested none.
  */
 internal object AutoShift {
     fun stateFor(
@@ -36,11 +23,7 @@ internal object AutoShift {
         if (!autoCapitaliseEnabled) {
             return OFF
         }
-        // Gated on the class before anything else: a field that is not text -- a number pad, a
-        // phone field -- can have those same bit positions set for its own unrelated reasons,
-        // and reading them without this check is how such a field could be misread as wanting
-        // capitals. The force override changes what happens when a text field asks for nothing,
-        // not what counts as a text field.
+        // Only a text field gets capitals.
         if ((inputType and InputType.TYPE_MASK_CLASS) != InputType.TYPE_CLASS_TEXT) {
             return OFF
         }
@@ -50,35 +33,22 @@ internal object AutoShift {
         val words = (inputType and InputType.TYPE_TEXT_FLAG_CAP_WORDS) != 0
         val sentences = (inputType and InputType.TYPE_TEXT_FLAG_CAP_SENTENCES) != 0
         if (!words && !sentences) {
-            // Nor an address: an e-mail or a URL is not made of sentences, and a field that
-            // asked for neither capitals nor sentences and is one of those is not asking
-            // quietly -- it is telling.
+            // Never forced in a password or an address field.
             if (!forceCapitaliseSentences || isPasswordVariation(inputType) || AddressField.isAddress(inputType)) {
                 return OFF
             }
-            // The field asked for nothing, so there is no reqModes bit for the platform's own
-            // capsMode() to answer against -- it is parameterised by this same inputType, and
-            // would report 0 at every position no matter what is actually at the cursor. "Is
-            // this a sentence start" has to be answered from the text itself instead, the same
-            // check used below for the one case the platform's own answer gets wrong, plus the
-            // start of the field, which that check alone does not cover.
+            // Forced: a sentence start is read from the text, the start of the field included.
             if (!composingIsEmpty) {
                 return OFF
             }
             val before = textBeforeCursor()
             return if (before.isNullOrEmpty() || sentenceEndsBeforeCursor(before)) ON else OFF
         }
-        // The composing region is text the user is in the middle of; if there is any, they are
-        // inside a word and nothing should be capitalised.
+        // No capital inside a word being composed.
         if (!composingIsEmpty) {
             return OFF
         }
-        // The platform's own answer is the primary one: it knows the start of a field and the
-        // start of a line, it does not have a 64-character window to see past, and it correctly
-        // holds off on "end." until a space follows the full stop. Only when it says no is the
-        // text checked directly, for the one case it gets wrong -- it stops at the ")" of a ":)"
-        // or the last code point of an emoji and calls that mid-sentence, when a full stop with
-        // only emoji, emoticons and spaces after it is still the end of a sentence.
+        // The platform's answer, else a sentence mark followed by emoji, emoticons and spaces.
         if (capsMode() != 0) {
             return ON
         }
@@ -86,15 +56,8 @@ internal object AutoShift {
     }
 
     /**
-     * Whether the text before the cursor ends in a sentence mark followed only by whitespace,
-     * emoji, emoticons and other non-letters -- the case the platform's own check gets wrong.
-     *
-     * By exclusion rather than by a list of what an emoji is: anything that is not sentence
-     * content -- a smiley, an emoji, a bracket, a dash -- is walked past, and only a letter or a
-     * digit stops the walk. A digit in particular, so that "3.14 " is a number rather than a
-     * sentence that ended at the "3". There has to be at least one space after the mark: "end."
-     * with the cursor against the full stop is not a new sentence yet, the same rule the
-     * platform applies.
+     * Whether the text before the cursor ends in a sentence mark followed by at least one space
+     * and nothing but characters that are neither letters nor digits.
      */
     private fun sentenceEndsBeforeCursor(before: CharSequence?): Boolean {
         if (before.isNullOrEmpty()) {
@@ -118,9 +81,7 @@ internal object AutoShift {
     /** The marks that close a sentence: ASCII, the single-character ellipsis, and the CJK set. */
     private const val SENTENCE_ENDINGS = ".!?…。！？"
 
-    /** Whether [inputType] is one of the three password variations, checked only by the force
-     *  override -- overriding what a field asks for is one thing, silently changing what gets
-     *  typed into a password is another. */
+    /** Whether [inputType] is one of the three password variations. */
     private fun isPasswordVariation(inputType: Int): Boolean {
         val variation = inputType and InputType.TYPE_MASK_VARIATION
         return variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||

@@ -4,15 +4,9 @@
 package com.borderkeys.assist
 
 /**
- * The JNI surface of the assistant, and the only Kotlin that touches llama.cpp.
- *
- * Loaded in the `:assist` process and nowhere else. The keyboard process never links this
- * library, never maps a model, and has no way to: the class does not exist in the free build at
- * all, and in the `plus` build it lives behind a process boundary.
- *
- * Every call blocks. [nativeRun] blocks for as long as generation takes, which is seconds. It is
- * called from the service's worker thread, never from a binder thread and never from a main
- * looper.
+ * The JNI surface of the assistant, loaded in the `:assist` process only. Every call blocks,
+ * [nativeRun] for as long as generation takes; all are called from the service's worker thread,
+ * never from a binder thread or a main looper.
  */
 internal object AssistNative {
 
@@ -24,22 +18,16 @@ internal object AssistNative {
 
     external fun nativeDestroy(handle: Long)
 
-    /**
-     * Maps a GGUF model. Returns 0 on success, or a negative status.
-     *
-     * The caller has already re-hashed the file. This is the point of no return: after it, the
-     * process holds hundreds of megabytes and is the largest thing on the device.
-     */
+    /** Maps a GGUF model the caller has already re-hashed. Returns 0, or a negative status. */
     external fun nativeLoad(handle: Long, path: String, contextTokens: Int, threads: Int): Int
 
     /**
-     * Replaces the sampler's temperature and nucleus (top-p). Safe before or after [nativeLoad]
-     * -- see `TextAssist::setSamplingParams`'s own doc, in text_assist.hpp, for what each case
-     * does. Out-of-range values fall back to the built-in default rather than being rejected.
+     * Replaces the sampler's temperature and nucleus (top-p); safe before or after [nativeLoad].
+     * An out-of-range value becomes the built-in default.
      */
     external fun nativeSetSamplingParams(handle: Long, temperature: Float, topP: Float)
 
-    /** Frees the model. Called on the idle timeout, so a finished session costs nothing. */
+    /** Frees the model. Called on the idle timeout. */
     external fun nativeUnload(handle: Long)
 
     external fun nativeIsLoaded(handle: Long): Boolean
@@ -47,43 +35,25 @@ internal object AssistNative {
     external fun nativeContextTokens(handle: Long): Int
 
     /**
-     * The loaded model's own chars-per-token ratio, measured against a fixed sample at load
-     * time, or 0 before anything has been loaded -- see `TextAssist::charsPerToken`'s own doc for
-     * why this beats a fixed guess.
+     * The loaded model's chars-per-token ratio, measured against a fixed sample at load time, or 0
+     * before anything has been loaded.
      */
     external fun nativeCharsPerToken(handle: Long): Float
 
     /**
      * Runs one instruction over one piece of text. Returns null on failure, with the reason in
-     * `outStatus[0]`.
+     * `outStatus[0]`. `outTruncated[0]`, meaningful only with a non-null result, is set to whether
+     * the answer was cut short of where the model would have stopped.
      *
-     * `outTruncated[0]`, meaningful only when a non-null result comes back, is set to whether the
-     * answer was cut short of where the model itself would have stopped rather than reaching it.
-     * A separate array from `outStatus` on purpose -- a status code and a truncation flag are
-     * different kinds of thing, and sharing one array by position is how a later change quietly
-     * breaks what a given slot means. Both travel back through their own caller-supplied array
-     * rather than a second call, so neither can be separated from the request that produced it.
-     *
-     * `cleanFormatting` should be false for [com.borderkeys.data.assist.AssistTask.CUSTOM] and
-     * true for every built-in task -- see `TextAssist::cleanResult`'s own doc, in text_assist.cpp,
-     * for why a custom instruction is the one case the native side's own formatting cleanup has
-     * to stay out of.
-     *
-     * `outputRatio`, `minOutputTokens` and `maxOutputTokensCeiling` should be the task's own
-     * [com.borderkeys.data.assist.AssistTask.outputRatio], `minOutputTokens` and the shared
-     * `MAX_OUTPUT_TOKENS` -- the native side turns these into an actual token budget against the
-     * request's exact tokenised size, which nothing on this side of the JNI boundary can compute.
-     * `useRemainingContext` should be the task's `usesRemainingContext` -- see that property's
-     * own doc for which tasks want the real space left in the context window to govern
-     * generation instead of that budget.
-     *
-     * `reuseSharedPrefix` should be true only for a chunk after the first within one
-     * [com.borderkeys.assist.ChunkedAssistRunner] job -- see `TextAssist::run`'s own doc, in
-     * text_assist.hpp, for what it changes about how the prompt is decoded.
+     * `cleanFormatting` is false for [com.borderkeys.data.assist.AssistTask.CUSTOM] and true for
+     * every built-in task. `outputRatio`, `minOutputTokens`, `maxOutputTokensCeiling` and
+     * `useRemainingContext` are the task's; the native side turns them into a token budget.
+     * `reuseSharedPrefix` is true only for a chunk after the first within one
+     * [com.borderkeys.assist.ChunkedAssistRunner] job.
      */
     external fun nativeRun(
         handle: Long,
-        /** UTF-8 bytes, not a String, in both directions -- see TextAssistService's call site. */
+        /** UTF-8 bytes, not a String, in both directions. */
         instruction: ByteArray,
         text: ByteArray,
         outputRatio: Float,

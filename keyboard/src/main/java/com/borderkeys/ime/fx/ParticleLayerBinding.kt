@@ -7,14 +7,8 @@ import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.data.theme.ParticleRegionSettings
 
 /**
- * Pushes one region's stored settings onto its own [ParticleSurface] -- the one function
- * [com.borderkeys.ime.BorderKeysService]'s real wiring and
- * [com.borderkeys.settings.SuggestionStripPreview]'s settings-screen preview both call, so the
- * preview can never quietly drift from what the keyboard itself would actually show.
- *
- * Both layers are additionally gated on their own type not being the "None" value for that
- * catalogue ([ParticleEffectsSettings.FILL_NONE]/[ParticleEffectsSettings.OUTLINE_NONE]) -- not
- * a real style, so a region can be `enabled` with only one of the two layers actually running.
+ * Pushes one region's stored settings onto its [ParticleSurface], for the keyboard and the
+ * settings preview alike. A layer whose type is its catalogue's "None" stays off.
  */
 fun applyParticleLayer(surface: ParticleSurface, region: ParticleRegionSettings) {
     val fill = surface.fill

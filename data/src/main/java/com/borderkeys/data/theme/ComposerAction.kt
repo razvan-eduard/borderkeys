@@ -4,21 +4,9 @@
 package com.borderkeys.data.theme
 
 /**
- * A button on the draft box's control bar, in the order the user put them.
- *
- * The same shape as [QuickAction] and for the same reasons: stable ids because the order is
- * written to disk, and a `fromIds` that drops what it does not recognise so a bar written by a
- * later build opens rather than failing.
- *
- * The two arrows that walk the version graph are deliberately not here. They are pinned to the
- * ends of the bar, because a control that moves is a control you have to look for, and walking
- * back through versions is the one thing you do without looking -- the same argument that keeps
- * backspace where it is.
- *
- * Everything here except [INSERT] needs the assistant -- and [INSERT] is not a bar item at all
- * any more: it is the fixed button at the bar's end, drawn by the box itself, and
- * [ComposerBar.resolve] drops it from the list. In a build without the assistant the bar is
- * empty, which is honest: the box is still a place to write that the application cannot see.
+ * A button on the draft box's control bar, stored by [id]; `fromIds` drops an id this build does
+ * not know. The version arrows are fixed at the bar's ends, and [INSERT] is the fixed button the
+ * box draws itself, dropped by [ComposerBar.resolve]. Everything else needs the assistant.
  */
 enum class ComposerAction(val id: Int) {
 
@@ -34,12 +22,12 @@ enum class ComposerAction(val id: Int) {
     /** The same text in fewer words. Not a summary. */
     SHORTEN(4),
 
-    /** A short summary of the text. Needs enough text to be worth it -- see [AssistTask.minWords]. */
+    /** A short summary of the text; see [AssistTask.minWords]. */
     SUMMARISE(9),
 
     /**
-     * Drops everything but the selected span, as a new version -- no model. Shown only while
-     * something is selected: it is the "carry just this part forward" step.
+     * Drops everything but the selected span, as a new version, without a model. Shown only while
+     * something is selected.
      */
     KEEP_SELECTION(10),
 
@@ -50,11 +38,8 @@ enum class ComposerAction(val id: Int) {
     SAVED_PROMPTS(6),
 
     /**
-     * Flips between the original and wherever you are standing.
-     *
-     * Not "go to the first version" -- it is a toggle, and it returns you to the node you were
-     * reading rather than to the newest one, which is what makes it usable from the middle of a
-     * chain.
+     * Flips between the original and the version you are on, returning to that version rather
+     * than to the newest.
      */
     SHOW_ORIGINAL(7),
 
@@ -67,11 +52,8 @@ enum class ComposerAction(val id: Int) {
 
     companion object {
         /**
-         * What a new install starts with.
-         *
-         * Everything except the saved prompts, which are empty on a new install and would be a
-         * button that opens an empty list -- it appears the first time one is saved -- and
-         * except [INSERT], which is not a bar entry at all (see [ComposerBar.resolve]).
+         * What a new install starts with: everything except the saved prompts, which appear once
+         * one is saved, and [INSERT].
          */
         val DEFAULT: List<ComposerAction> = listOf(
             CORRECT, TRANSLATE, TONE, SHORTEN, SUMMARISE, KEEP_SELECTION, PROMPT, SHOW_ORIGINAL,

@@ -5,11 +5,8 @@
 """Exports a trained TcnEncoder checkpoint to the `.bkw` binary format
 keyboard/src/main/cpp/gesture/tcn_weights.{hpp,cpp} loads.
 
-Same discipline as tools/build_dict.py: a magic number, a version, and a `--selftest` mode that
-round-trips a freshly built model through this exporter and a Python-side reader, so a drift
-between this file and tcn_weights.hpp is caught here rather than as a crash on a phone. There is
-no third-party serialisation format anywhere in this path -- no ONNX, no protobuf, no pickle in
-the output file, only a flat little-endian float32 dump this project's own two readers understand.
+A magic number, a version, and a flat little-endian float32 payload. `--selftest` round-trips a
+freshly built model through this exporter and a Python-side reader.
 """
 
 from __future__ import annotations
@@ -42,8 +39,7 @@ def header_bytes() -> bytes:
     """Magic, version, the architecture descriptor, the payload's float count, one reserved word.
 
     TcnWeights::describeMismatch checks every field against its own constant and names the first
-    that differs, so a model exported for another shape is refused by name rather than loading as
-    a different network.
+    that differs.
     """
     words = [MAGIC, VERSION]
     words += [value for _name, value in DESCRIPTOR_FIELDS]
@@ -133,9 +129,7 @@ def golden_layout():
     TcnCtcDecoder::setLayout normalises them: divided by the key area's extent, which is the
     largest centre plus half a key on each axis.
 
-    Both sides have to build the same keyboard for the embedding comparison to mean anything.
-    The count travels in the golden header and the test checks it, so the two going out of step
-    fails rather than passes quietly.
+    The count travels in the golden header, and the test checks it.
     """
     rows = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
     indents = (0.0, 0.5, 1.5)
@@ -152,8 +146,7 @@ def golden_input():
     """The fixed feature block both encoders are run on.
 
     A smooth synthetic path through the key field, resampled and passed through the same
-    build_features the training and evaluation paths use, so every channel carries the scale it
-    carries at inference rather than an arbitrary one.
+    build_features the training and evaluation paths use.
     """
     import numpy as np  # noqa: PLC0415 -- see the import note at the top
     import torch  # noqa: PLC0415 -- see the import note at the top
@@ -172,16 +165,8 @@ def write_golden(model, key_embedding, out_path: Path) -> None:
     """Writes the input above and this model's output for it, for native-tests/test_tcn.cpp.
 
     Header: magic, version, and the four shapes the payload's lengths follow from. Then the
-    features, the intention track and the spectral track, each little-endian float32.
-
-    The payload of a `.bkw` is read positionally, so two same-shaped arrays written in the wrong
-    order load as a different network at the same byte length and pass every header check. This
-    is the one thing that separates them: the reference output comes from `model.py`, the
-    comparison from the C++ encoder, and only weights in the right places make the two agree.
-
-    The key-embedding MLP is a separate module the encoder's forward pass never calls, so its
-    four arrays -- about 2% of the payload -- need their own reference output or nothing covers
-    them. That is the fourth block written here.
+    features, the intention track, the spectral track and the key-embedding MLP's output, each
+    little-endian float32.
     """
     import torch  # noqa: PLC0415 -- see the import note at the top
 
@@ -203,8 +188,7 @@ def write_golden(model, key_embedding, out_path: Path) -> None:
 
 def read_bkw(path: Path) -> tuple[int, int, int]:
     """A minimal reader for --selftest: returns (magic, version, float_count) without knowing
-    anything about the architecture, the same "can a second implementation agree with the first"
-    check tools/build_dict.py's PackReader performs for the dictionary format."""
+    anything about the architecture."""
     data = path.read_bytes()
     magic, version = struct.unpack_from("<II", data, 0)
     remaining = len(data) - len(header_bytes())
@@ -216,10 +200,8 @@ def read_bkw(path: Path) -> tuple[int, int, int]:
 def upgrade(path: Path, out_path: Path) -> int:
     """Rewrites an older file's header for the current version, keeping its payload byte for byte.
 
-    The payload has not changed shape since version 2, so the weights carry across untouched --
-    which is what makes this safe without the checkpoint that produced them, and why it needs
-    neither torch nor a training environment. A file whose float count does not match this
-    architecture is refused rather than relabelled.
+    The payload has not changed shape since version 2. Needs neither torch nor a training
+    environment. A file whose float count does not match this architecture is refused.
     """
     data = path.read_bytes()
     magic, version = struct.unpack_from("<II", data, 0)

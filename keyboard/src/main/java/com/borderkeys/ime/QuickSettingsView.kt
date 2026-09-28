@@ -14,22 +14,8 @@ import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.i18n.Keys
 
 /**
- * The settings you want while typing, drawn over the keys.
- *
- * Size and position are the settings nobody wants to leave the keyboard to change. Deciding
- * whether it is too tall, or whether one-handed mode helps, means looking at the keyboard while
- * you adjust it -- and the moment you have to open an application to do that, you are no longer
- * looking at the thing you are adjusting, in the app where it felt wrong.
- *
- * Canvas, like everything else in this module: `:keyboard` cannot see Compose, and the gate that
- * enforces that is the reason the typing surface stays fast. The arithmetic is the same as the
- * keyboard's -- rows and columns laid out into arrays once per size change, touches resolved by
- * comparing against them rather than by walking a view tree.
- *
- * It writes nothing itself. Every control calls back to the service, which writes to the same
- * DataStore the settings application writes to, and the change arrives back through the same
- * flow that already redraws the keyboard. So the panel cannot drift from the settings screen:
- * there is one place the value lives and neither of them holds a second copy.
+ * Size and position settings, drawn over the keys. The panel writes nothing: its controls call
+ * back to the service, and it draws the state it is given.
  */
 @SuppressLint("ViewConstructor")
 class QuickSettingsView(
@@ -38,20 +24,14 @@ class QuickSettingsView(
     private val strings: LanguageManager,
 ) : View(context) {
 
-    /** Resolved once, so nothing on the draw path does a map lookup. */
+    /** The chip labels, resolved once. */
     private val chipLabels = Array(CHIP_LABEL_KEYS.size) { strings[CHIP_LABEL_KEYS[it]] }
 
     /** Which mode chip a row of chips is offering. Mirrors KeyboardPreferences. */
     enum class Placement { DOCKED, LEFT, RIGHT, FLOATING }
 
     interface Listener {
-        /**
-         * Size the keyboard by dragging it, rather than by a slider.
-         *
-         * A slider asks you to guess a number, look at the result and guess again, with the
-         * keyboard you are sizing hidden behind the panel holding the slider. The handles are
-         * on the keyboard itself, so the size is the thing you are dragging.
-         */
+        /** Resize was tapped: the handles go on the keyboard. */
         fun onStartResize()
         fun onPlacementChanged(placement: Placement)
         fun onNumberRowChanged(enabled: Boolean)
@@ -64,12 +44,7 @@ class QuickSettingsView(
     private var placement = Placement.DOCKED
     private var numberRow = false
 
-    /**
-     * The state to draw, pushed from the service whenever the preferences flow emits.
-     *
-     * The panel never holds the truth. It is told what the stored values are and it reports
-     * taps; if a write fails or is clamped, what comes back is what is drawn.
-     */
+    /** The state to draw, pushed from the service whenever the preferences flow emits. */
     fun setState(placement: Placement, numberRow: Boolean) {
         if (this.placement == placement && this.numberRow == numberRow) {
             return
@@ -79,14 +54,7 @@ class QuickSettingsView(
         invalidate()
     }
 
-    /**
-     * The panel's own text paints, sized from the panel rather than from the keys.
-     *
-     * ThemePaints exists for a keyboard: its label paint is sized so a letter fills a key, which
-     * on a settings panel comes out as a headline running off the edge -- which is exactly what
-     * the first version of this did. The colours are still the theme's, so the panel matches the
-     * keyboard it is covering; only the sizes are its own.
-     */
+    /** The panel's text paints: the theme's colours, sized from the panel. */
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val secondaryPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -109,8 +77,7 @@ class QuickSettingsView(
 
     // ---- geometry ------------------------------------------------------------------------------
     //
-    // Laid out once per size change into these fields rather than per frame or per touch. Six
-    // rows, evenly spaced, with the sliders and chips positioned inside their row.
+    // Evenly spaced rows, laid out once per size change.
 
     private var rowHeight = 0f
     private var padding = 0f
@@ -170,8 +137,7 @@ class QuickSettingsView(
         canvas.drawText(strings[Keys.PANEL_CLOSE], w - padding - accentPaint.measureText(strings[Keys.PANEL_CLOSE]),
             rowHeight * 0.5f + labelBaseline, accentPaint)
 
-        // The one control that used to be two sliders. Tapping it closes the panel and puts
-        // handles on the keyboard itself.
+        // Resize closes the panel and puts handles on the keyboard.
         val resizeLabel = strings[Keys.PANEL_RESIZE]
         canvas.drawRoundRect(padding, resizeTop, w - padding, resizeBottom, radius, radius,
             paints.keyFill)
@@ -187,15 +153,11 @@ class QuickSettingsView(
             canvas.drawRoundRect(left, chipTop, left + chipWidth, chipBottom, radius, radius,
                 if (selected) paints.keyPressedFill else paints.keyFill)
             if (selected) {
-                // Selection is an outline, not a text colour. The label always uses the primary
-                // colour, which the theme guarantees is readable on a key fill -- that is what
-                // the keyboard itself relies on. Dimming the unselected labels instead left
-                // three of the four chips unreadable on a dark theme.
+                // The selected chip gets the accent outline; every label keeps the primary colour.
                 canvas.drawRoundRect(left, chipTop, left + chipWidth, chipBottom, radius, radius,
                     outlinePaint)
             } else if (paints.showKeyBorders) {
-                // The keys' own hairline on the chips that are not selected: the selected one
-                // keeps the accent outline above, which is what marks it.
+                // The other chips get the keys' hairline.
                 canvas.drawRoundRect(left, chipTop, left + chipWidth, chipBottom, radius, radius,
                     paints.keyStroke)
             }
@@ -204,8 +166,7 @@ class QuickSettingsView(
                 (chipTop + chipBottom) / 2f + labelBaseline, labelPaint)
         }
 
-        // One toggle, drawn as a chip that is filled when on: a switch track and thumb would be
-        // three more shapes for a control that has two states and one word.
+        // The number-row toggle: a chip, filled when on.
         val toggleLabel = strings[Keys.PANEL_NUMBER_ROW]
         canvas.drawRoundRect(padding, toggleTop, padding + chipWidth * 2f, toggleBottom,
             radius, radius, if (numberRow) paints.keyPressedFill else paints.keyFill)
@@ -269,10 +230,7 @@ class QuickSettingsView(
     }
 
     private companion object {
-        /**
-         * Catalogue keys, not text: a companion object is built when the class is first
-         * touched, which is before any instance has a catalogue to read from.
-         */
+        /** The chip labels' catalogue keys. */
         val CHIP_LABEL_KEYS = arrayOf(
             Keys.PANEL_DOCK, Keys.PANEL_LEFT, Keys.PANEL_RIGHT, Keys.PANEL_FLOAT,
         )

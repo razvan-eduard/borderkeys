@@ -9,14 +9,8 @@
 
 #include "text_assist.hpp"
 
-// The JNI surface of the assistant process. Registered through JNI_OnLoad like the keyboard's
-// bridge, for the same reason: a signature that drifted from its Kotlin declaration fails when
-// the library loads rather than when the user first asks for a summary.
-//
-// Unlike the keyboard's bridge, this one is allowed to allocate. It runs in :assist, on a worker
-// thread, once per user action -- there is no frame budget here and the strings involved are
-// kilobytes. Pretending otherwise would mean copying the user's selected text through a stack
-// buffer for no reason.
+// The JNI surface of the assistant process, registered through JNI_OnLoad: a signature that
+// drifted from its Kotlin declaration fails when the library loads. It may allocate.
 
 namespace {
 
@@ -50,10 +44,7 @@ jint nativeLoad(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring path, jint 
     if (utf == nullptr) {
         return TextAssist::kErrArgument;
     }
-    // A C++ exception crossing back into the JVM's JNI call frame is undefined behaviour, not a
-    // Kotlin catch block's problem to handle -- caught here instead, which is also where a fault
-    // loading a corrupt or truncated model file is most likely to originate, from llama.cpp's own
-    // allocation and file-parsing code.
+    // No C++ exception may cross back into the JVM's JNI call frame.
     const jint status = [&]() -> jint {
         try {
             return assist->load(utf, contextTokens, threads);
@@ -99,26 +90,8 @@ jfloat nativeCharsPerToken(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
 }
 
 /**
- * Runs one instruction and returns the answer, or null with a status in `outStatus[0]`.
- *
- * `outTruncated[0]`, meaningful only when a non-null result comes back, is set to whether the
- * answer was cut short of where the model itself would have stopped -- see `TextAssist::run`'s
- * `outTruncated` doc. A second caller-supplied array of its own kind rather than a second slot
- * in `outStatus`: the two say different kinds of thing, and a status code that happens to share
- * an array with an unrelated flag is a status code future output stops meaning what its name
- * says. Both travel back through arrays rather than a second call, so neither can be separated
- * from the request that produced it. See `TextAssist::run`'s own doc for how `outputRatio`,
- * `minOutputTokens`, `maxOutputTokensCeiling` and `useRemainingContext` together decide the
- * token budget, and for `reuseSharedPrefix`.
- */
-/**
- * Copies a Java byte array into a NUL-terminated std::string. False when it is absent or the
- * copy raised.
- *
- * Bytes rather than a jstring: GetStringUTFChars produces JNI's "modified UTF-8", which writes
- * a supplementary character -- an emoji -- as two encoded surrogates. That is not UTF-8, and the
- * tokenizer received every emoji in a selection as garbage. The Kotlin side encodes real UTF-8
- * and decodes the answer the same way.
+ * Copies a Java byte array of UTF-8 into a NUL-terminated std::string. False when it is absent or
+ * the copy raised.
  */
 bool copyBytes(JNIEnv* env, jbyteArray array, std::string* out) {
     if (array == nullptr) {
@@ -136,6 +109,11 @@ bool copyBytes(JNIEnv* env, jbyteArray array, std::string* out) {
     return true;
 }
 
+/**
+ * Runs one instruction and returns the answer as UTF-8 bytes, or null with a status in
+ * `outStatus[0]`. `outTruncated[0]`, meaningful only with a non-null result, is set to whether the
+ * answer was cut short; `TextAssist::run` describes the other parameters.
+ */
 jbyteArray nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jbyteArray instruction,
                      jbyteArray text, jfloat outputRatio, jint minOutputTokens,
                      jint maxOutputTokensCeiling, jboolean useRemainingContext,
@@ -166,8 +144,7 @@ jbyteArray nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jbyteArray ins
     }
 
     std::string answer;
-    // Same reasoning as nativeLoad's try/catch: generation is the other call that allocates and
-    // runs llama.cpp's own code over data this process did not produce.
+    // Caught here, as in nativeLoad.
     status = [&]() -> jint {
         try {
             return assist->run(instructionUtf8.c_str(), textUtf8.c_str(),
@@ -187,8 +164,7 @@ jbyteArray nativeRun(JNIEnv* env, jobject /*thiz*/, jlong handle, jbyteArray ins
     if (status != TextAssist::kOk) {
         return nullptr;
     }
-    // Real UTF-8 back too: NewStringUTF would have needed modified UTF-8 and mangled an emoji
-    // the model wrote the same way GetStringUTFChars mangled one it was given.
+    // UTF-8 bytes back as well, not NewStringUTF's modified UTF-8.
     const jsize size = static_cast<jsize>(answer.size());
     jbyteArray out = env->NewByteArray(size);
     if (out == nullptr) {

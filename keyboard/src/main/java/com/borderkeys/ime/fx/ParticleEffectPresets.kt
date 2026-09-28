@@ -4,18 +4,8 @@
 package com.borderkeys.ime.fx
 
 /**
- * The five selectable looks, ported from a sibling project's calendar "today" cell decoration and
- * retuned down for this project's own use: a brief burst on a key press or an accepted
- * suggestion, or a small ambient glow around a chip or wedge -- not an always-on background
- * decoration on screen for minutes at a time. Every number below is a tuned starting point, not a
- * requirement; adjust by eye against a real device.
- *
- * `:keyboard` has no dependency on `:data`, so this deliberately takes and returns a raw `Int` in
- * [forSetting] rather than `ParticleEffectsSettings`' own type -- the mapping (0=None, 1=Fire,
- * 2=Glow, 3=Waves, 4=Rainbow, 5=Neon Pulse) matches `ParticleEffectsSettings.FILL_*` by
- * convention, not by a shared reference. If either list is ever reordered, the other must move
- * with it. This is Fill's own catalogue -- Outline has its own, separate, three-preset catalogue,
- * see [ParticleOutlineStylePresets].
+ * The fill layer's looks. [forSetting] takes a `ParticleEffectsSettings.FILL_*` value: 1 Fire,
+ * 2 Glow, 3 Waves, 4 Rainbow, 5 Neon Pulse.
  */
 object ParticleEffectPresets {
 
@@ -87,12 +77,7 @@ object ParticleEffectPresets {
         pulseFrequencyHz = 2.5f,
     )
 
-    /** [preset] is `ParticleEffectsSettings.FILL_*` by convention -- see this object's own doc
-     *  for why that is a convention rather than a shared reference. `FILL_NONE`/an out-of-range
-     *  value fall back to [GLOW] rather than crashing, the same defensiveness
-     *  `ParticleFillLayer.sanitised()` already applies to the stored setting itself; in practice
-     *  a caller never asks for a preset when the type is None -- see [applyParticleLayer]'s own
-     *  gating. */
+    /** The preset for a `ParticleEffectsSettings.FILL_*` [preset]; [GLOW] for any other value. */
     fun forSetting(preset: Int): ParticleEffectPreset = when (preset) {
         1 -> FIRE
         2 -> GLOW

@@ -12,13 +12,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The file somebody's dictionary travels in.
- *
- * Worth testing at this level because every failure here is quiet on a device: a file that
- * imports as rubbish, a passphrase that is not really protecting anything, and a wrong
- * passphrase reported as a damaged file all look the same from the outside.
- */
+/** The backup file: its payload, its encryption, and each way reading it can fail. */
 class BackupFileTest {
 
     private val sensitive = BackupPayload(
@@ -61,9 +55,7 @@ class BackupFileTest {
             ),
             payload?.customThemes,
         )
-        // Which model was active, not the model itself -- a hash and a name are not a body of
-        // learned or copied text, so this travels with settings rather than needing its own
-        // sensitivity check.
+        // Which model was active, not the model itself.
         assertEquals(listOf(BackupModel("model.gguf", "abc123", true)), payload?.models)
     }
 
@@ -120,8 +112,7 @@ class BackupFileTest {
     @Test
     fun `a tampered payload is caught rather than decrypted into rubbish`() {
         val text = BackupFile.write(sensitive, passphrase = "correct horse")
-        // One character flipped inside the ciphertext. AES-GCM authenticates before it
-        // decrypts, so this has to fail rather than produce something that parses.
+        // One character flipped inside the ciphertext.
         val start = text.indexOf("\"payload\":\"") + 11
         val tampered = text.substring(0, start) +
             (if (text[start] == 'A') 'B' else 'A') + text.substring(start + 1)

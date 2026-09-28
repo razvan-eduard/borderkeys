@@ -14,17 +14,12 @@
 #include "engine.hpp"
 #include "gesture/tcn_decoder.hpp"
 
-// tools/tcn_replay.py's sibling to gesture_replay.cpp: same layout/corpus formats and the same
-// `word<TAB>rank` output contract, so the two scripts' comparison-against-baseline logic does
-// not need to be written twice. The two binaries differ only in which GestureDecoder they drive
-// -- this one constructs a TcnDecoder directly rather than going through Engine::create(), which
-// still only ever builds Shark2Decoder (see engine.cpp; that routing decision is Phase 3's,
-// deferred until real accuracy numbers exist -- this binary is how they get produced).
+// The binary tools/tcn_replay.py drives: gesture_replay.cpp's layout and corpus formats and its
+// `word<TAB>rank` output, with a TcnDecoder constructed directly.
 //
 //   tcn_replay <pack.bkd> <weights.bkw> <layout> <gestures.csv>
 //
-// A pack is still required: TcnCtcDecoder's beam search is lexicon-constrained the same way
-// Shark2Decoder's is (see tcn_ctc_decoder.hpp), so it needs a trie to walk, not just weights.
+// A pack is required: TcnCtcDecoder's beam search is lexicon-constrained (tcn_ctc_decoder.hpp).
 
 namespace {
 

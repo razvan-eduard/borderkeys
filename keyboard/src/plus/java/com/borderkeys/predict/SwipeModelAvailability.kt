@@ -3,7 +3,10 @@
 
 package com.borderkeys.predict
 
-/** See the `core`-flavor copy at `keyboard/src/core/java/.../SwipeModelAvailability.kt`. */
+/**
+ * Whether tier B (the trained swipe decoder) is compiled into this build, mirroring
+ * `BORDERKEYS_NEURAL_SWIPE` in `keyboard/src/main/cpp/CMakeLists.txt`. One copy per flavor.
+ */
 object SwipeModelAvailability {
     val neuralSwipeModelSupported: Boolean = true
 }

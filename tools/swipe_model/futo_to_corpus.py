@@ -7,15 +7,10 @@
 `tools/tcn_replay.py` read `id,word,x,y,t` in the pixel space of a replay layout. This maps one
 to the other so both shipped decoders can be measured on the same recorded traces.
 
-The scale comes from the layout file, not from a constant: FUTO normalises to [0,1] across the
-keyboard, and a layout's own extent is `max(centre) + half a key` on each axis. For
-`native-tests/data/qwerty_1080.layout` that is 1080 x 480, which reproduces FUTO's own key
-centres to within 0.31 px -- a third of one percent of a key.
+The scale comes from the layout file: FUTO normalises to [0,1] across the keyboard, and a
+layout's own extent is `max(centre) + half a key` on each axis.
 
-Timestamps keep their real spacing and are rebased to zero per gesture -- the recordings carry
-absolute epoch milliseconds, which do not fit the replay format's integer. Both decoders
-resample on time, so synthesising the spacing would measure the synthesiser rather than the
-decoder.
+Timestamps keep their real spacing and are rebased to zero per gesture.
 
     python3 tools/swipe_model/futo_to_corpus.py data/test.jsonl \\
         --layout ../../native-tests/data/qwerty_1080.layout --limit 2000 > out.csv

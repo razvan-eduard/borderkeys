@@ -28,15 +28,9 @@ import com.borderkeys.keyboard.R
 import com.borderkeys.theme.ThemePaints
 
 /**
- * A row of buttons for the things that are otherwise several gestures.
- *
- * Drawn rather than composed, like everything else in the keyboard process: icons are vector
- * drawables loaded once and drawn into bounds computed on layout, so the draw path sets no
- * state and allocates nothing.
- *
- * Two shapes. Open, it is the whole row. Collapsed, it is one button that opens the row and
- * closes it again as soon as an action is chosen -- which is the point of collapsing it, since
- * the alternative is a row that costs height on every screen for a button pressed twice a day.
+ * A row of buttons for the things that are otherwise several gestures, with icons loaded once and
+ * placed on layout. Collapsible, it shows one button that opens the row and closes it again once
+ * an action is chosen.
  */
 @SuppressLint("ViewConstructor")
 class QuickActionsView(
@@ -61,41 +55,23 @@ class QuickActionsView(
             invalidate()
         }
 
-    /**
-     * Whether each button also says what it is, in small text under its icon -- the same idea
-     * as the labels under the draft box's own action bar. The label band is extra thickness on
-     * top of [sizeLevel]'s, so the icons stay exactly the size the level chose. A vertical bar
-     * has no room under an icon at all and ignores this entirely.
-     */
+    /** Whether each button shows its name under its icon; a vertical bar ignores this. */
     var showLabels: Boolean = false
         set(value) {
             if (field != value) {
                 field = value
-                // Thickness changes with the label band -- the same first-frame reasoning as
-                // sizeLevel's setter, which this follows.
                 layoutButtons()
                 requestLayout()
                 invalidate()
             }
         }
 
-    /**
-     * Whether the bar shows as one button until it is opened.
-     *
-     * Held separately from [expanded] so that closing the bar after an action returns it to the
-     * shape the user chose rather than to whatever it was showing a moment ago.
-     */
+    /** Whether the bar shows as one button until it is opened. */
     var collapsible: Boolean = true
         set(value) {
             if (field != value) {
                 field = value
                 expanded = false
-                // requestLayout() alone does not do this: the bar's own width and height do not
-                // change when the button count behind them does, so the framework never calls
-                // onSizeChanged again and layoutButtons() -- the only other place button centres
-                // are computed -- would otherwise not run again until a button was pressed. Set
-                // from applyQuickActions on every keyboard show, after [items] on the same
-                // call, so this was also the one write the bar's very first frame depended on.
                 layoutButtons()
                 requestLayout()
                 invalidate()
@@ -105,23 +81,12 @@ class QuickActionsView(
     /** True while a collapsible bar is open. Always true when the bar is not collapsible. */
     private var expanded = false
 
-    /**
-     * How much room each button gets, as one of [SIZE_THICKNESS_FRACTION]'s indices.
-     *
-     * Thickness grows at each step and the icon's *share* of it stays the same -- [ICON_FRACTION]
-     * does not vary by level -- so the icon grows right along with the bar, not against it: an
-     * icon and the gap around it both come from the same multiple of the same thickness, which is
-     * what keeps them direct proportional to each other rather than trading one for the other.
-     */
+    /** How much room each button gets, as an index into [SIZE_THICKNESS_FRACTION]. */
     var sizeLevel: Int = 0
         set(value) {
             val clamped = value.coerceIn(0, SIZE_THICKNESS_FRACTION.lastIndex)
             if (field != clamped) {
                 field = clamped
-                // Same reasoning as collapsible's setter: thickness does change here, so
-                // requestLayout() would eventually reach onSizeChanged on its own -- but not
-                // before a frame draws with the old positions at the new thickness, which is
-                // its own visible glitch for the one frame it lasts.
                 layoutButtons()
                 requestLayout()
                 invalidate()
@@ -145,28 +110,21 @@ class QuickActionsView(
     /** What each button is called, resolved with [items]; custom actions use their own name. */
     private val labels = arrayOfNulls<String>(MAX_BUTTONS)
 
-    /** [labels], wrapped to what a slot actually fits -- up to two tight lines, ellipsised only
-     *  if even that overflows -- recomputed with the geometry on layout, never on a draw. */
+    /** [labels], wrapped to their slots on layout. */
     private val labelLayouts = arrayOfNulls<StaticLayout>(MAX_BUTTONS)
 
-    // Left, not centre: StaticLayout does its own per-line centring via ALIGN_CENTER below, and
-    // a paint that also centred would offset every line a second time on top of that.
+    // Left-aligned; the layouts centre each line.
     private val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
     private var labelLayoutWidth = 0
     private var labelTopY = 0f
 
-    /** Where the tallest label on the bar ends -- the near edge of a bottom-attached tab, so
-     *  every button reaches the same point whether its own label took one line or two. */
+    /** Where the tallest label on the bar ends. */
     private var labelBandBottomY = 0f
 
-    /** One slot's width along the bar, the tab's own width. */
+    /** One slot's width along the bar. */
     private var slotPx = 0f
 
-    /**
-     * Which edge of the bar meets the keyboard: the side every button's tab is flat against,
-     * its other three corners rounded, so the buttons read as bookmarks growing out of the
-     * keyboard rather than boxes floating in a strip. Set from the bar's placement by the host.
-     */
+    /** Which edge of the bar meets the keyboard; each button's tab is flat against it. */
     var attachedEdge: Int = EDGE_BOTTOM
         set(value) {
             if (field != value) {
@@ -178,41 +136,31 @@ class QuickActionsView(
     private val tabPath = android.graphics.Path()
     private val tabRadii = FloatArray(8)
 
-    /** The width onMeasure was last given, so the label band can be measured against the slots
-     *  the labels will actually wrap in before the view has its final width. */
+    /** The width onMeasure was last given, for measuring the label band before layout. */
     private var measuredWidthHint = 0
 
-    /** Button centres, in view coordinates. Recomputed on layout, never per frame. */
+    /** Button centres, in view coordinates, computed on layout. */
     private val centreX = FloatArray(MAX_BUTTONS)
     private val centreY = FloatArray(MAX_BUTTONS)
     private var buttonSizePx = 0
 
     private var pressedIndex = -1
 
-    /** Both particle layers for the bar -- the same "structurally a key" treatment
-     *  [KeyboardCanvasView.particles] gives the keys beside it. Exposed non-private so
-     *  [BorderKeysService] can push the user's particle-effect settings directly. */
+    /** The bar's particle layers: a burst in a pressed button. */
     val particles = ParticleSurface(FILL_PARTICLE_POOL_CAPACITY, OUTLINE_PARTICLE_POOL_CAPACITY) { invalidate() }
 
-    /** The pressed button, as the element the engine reads its shape from: exactly the pressed
-     *  highlight square [onDraw] paints under it -- see [pressedBounds]. */
+    /** The pressed button's tab, as a particle shape. */
     private val buttonElement = RoundedRectElement()
 
     /**
-     * The one definition of a button's surface -- what a press lights, what the outline traces,
-     * and what [pressButton] hands particles: a tab. Most of the slot along the bar, flat
-     * against [attachedEdge] where it meets the keyboard, and a quarter of an icon past the
-     * icon (or the label, with labels on) on the free side. Its width does not change with
-     * labels -- only its height does, to take the label in.
+     * A button's tab, what a press lights and the outline traces: most of its slot along the bar,
+     * flat against [attachedEdge], a small gap in from the free edge.
      */
     private fun pressedBounds(index: Int, out: android.graphics.RectF) {
         val gap = buttonSizePx * TAB_FREE_GAP_FRACTION
         val alongHalf = slotPx * TAB_ALONG_FRACTION / 2f
         val cx = centreX[index]
         val cy = centreY[index]
-        // Flush against the attached edge -- the two square corners meet the keyboard -- and a
-        // small gap in from the free edge, so the tab's rounded top does not run into the top
-        // of the bar.
         when (attachedEdge) {
             EDGE_TOP -> out.set(cx - alongHalf, 0f, cx + alongHalf, height - gap)
             EDGE_LEFT -> out.set(0f, cy - alongHalf, width - gap, cy + alongHalf)
@@ -223,8 +171,8 @@ class QuickActionsView(
 
     /**
      * [rect] as a path with the keys' corner radius on the free corners and none on the two
-     * against [attachedEdge], so the tab is flat where it meets the keyboard. The radii array
-     * runs top-left, top-right, bottom-right, bottom-left, two floats each.
+     * against [attachedEdge]. The radii run top-left, top-right, bottom-right, bottom-left, two
+     * floats each.
      */
     private fun tabPath(rect: android.graphics.RectF): android.graphics.Path {
         val radius = paints.keyCornerRadiusPx.coerceAtMost(minOf(rect.width(), rect.height()) / 2f)
@@ -307,7 +255,7 @@ class QuickActionsView(
         is QuickActionBarItem.Custom -> item.action.name
     }
 
-    /** The same catalogue entry every other surface calls this action by. */
+    /** The catalogue key naming [action]. */
     private fun labelKey(action: QuickAction): String = when (action) {
         QuickAction.COPY_PREVIOUS_WORD -> Keys.ACTION_COPY_PREVIOUS_WORD
         QuickAction.COPY_LINE -> Keys.ACTION_COPY_LINE
@@ -333,7 +281,7 @@ class QuickActionsView(
         QuickAction.TIMESTAMP -> Keys.ACTION_TIMESTAMP
     }
 
-    /** Labels need a band under the icons; a vertical bar has nowhere to put one. */
+    /** Whether labels are drawn: on, on a horizontal bar. */
     private fun labelsActive(): Boolean = showLabels && !vertical
 
     private fun iconFor(action: QuickAction): Int = when (action) {
@@ -361,13 +309,7 @@ class QuickActionsView(
         QuickAction.TIMESTAMP -> R.drawable.bk_action_timestamp
     }
 
-    /**
-     * Whether to paint the surface, or leave it to whatever is behind.
-     *
-     * False inside the keyboard, where the host paints one surface across the whole of it: this
-     * row painting its own would restart a gradient or re-crop a picture at its own edges, and
-     * the seam would run across the top of the keyboard.
-     */
+    /** Whether this view paints the surface behind itself; off under [KeyboardHostView]. */
     var drawsBackground: Boolean = true
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -381,10 +323,7 @@ class QuickActionsView(
     }
 
     private fun barThicknessPx(): Int {
-        // The bar wraps its content with a small even margin rather than reserving a tall band
-        // the icon floats in: a margin, the icon, and with labels a gap and the tallest label,
-        // then the same margin again. So the icon sits close to both edges instead of adrift in
-        // empty space, and a bar with no labels is markedly shorter.
+        // A margin, the icon, with labels a gap and the tallest label, then the margin again.
         val icon = barIconPx()
         val margin = icon * EDGE_MARGIN_FRACTION
         val h = if (labelsActive()) {
@@ -395,26 +334,22 @@ class QuickActionsView(
         return h.toInt().coerceAtLeast(1)
     }
 
-    /** The nominal thickness the size level names, before margins -- the icon is a share of it. */
+    /** The nominal thickness of the size level, before margins; the icon is a share of it. */
     private fun barBasePx(): Float {
         val row = if (paints.rowHeightPx > 0f) paints.rowHeightPx else DEFAULT_THICKNESS_PX
         return row * BAR_HEIGHT_FRACTION * SIZE_THICKNESS_FRACTION[sizeLevel]
     }
 
-    /** The icon's own size, from the level -- unchanged by whether labels are shown. */
+    /** The icon's size, from the level. */
     private fun barIconPx(): Float = barBasePx() * ICON_FRACTION
 
     /**
-     * The tallest label's height, once every label is wrapped to the slot the bar's [widthPx]
-     * gives it. Leaves [labelLayouts] and [labelLayoutWidth] built for [layoutButtons] to draw
-     * from -- wrapped once per geometry, never on a draw. Two lines before an ellipsis: a slot
-     * too narrow even for "Copy line" is rarer than one word cut to three dots.
+     * The tallest label's height, with each label wrapped to its slot of [widthPx] in at most
+     * [LABEL_MAX_LINES] lines; builds [labelLayouts] and [labelLayoutWidth].
      */
     private fun labelBandPx(widthPx: Int): Float {
         val shown = shownCount()
-        // Sized off the nominal thickness, not the label's own band, so it does not shrink as
-        // the bar tightens. Bold, because a caption this small reads better with more ink and
-        // is the one text in the bar competing with an icon.
+        // Bold, sized from the nominal thickness.
         labelPaint.textSize = barBasePx() * LABEL_TEXT_FRACTION
         labelPaint.typeface = Typeface.create(paints.labelSecondary.typeface, Typeface.BOLD)
         val oneLine = labelPaint.fontMetrics.let { it.descent - it.ascent }
@@ -442,13 +377,7 @@ class QuickActionsView(
         layoutButtons()
     }
 
-    /**
-     * Spreads the buttons evenly along the bar and fixes the icon size from the short side.
-     *
-     * Icons are square and sized from the thickness rather than from the spacing, so a bar with
-     * two buttons and a bar with eight draw the same size icon -- a button that grows because
-     * it has fewer neighbours is a button that moves when the bar is edited.
-     */
+    /** Spreads the buttons evenly along the bar; the icon size comes from the size level. */
     private fun layoutButtons() {
         val shown = shownCount()
         if (shown <= 0 || width == 0 || height == 0) {
@@ -457,10 +386,7 @@ class QuickActionsView(
         val along = if (vertical) height else width
         val step = along.toFloat() / shown
         slotPx = step
-        // A margin, the icon, then (with labels) a gap and the label, and the same margin
-        // again -- the icon centred a margin from the free edge, close to it rather than lost
-        // in a tall band. labelBandPx wrapped the layouts during measure; re-run here for the
-        // real width.
+        // The icon sits a margin from the free edge; the labels are re-wrapped for the real width.
         val icon = barIconPx()
         buttonSizePx = icon.toInt().coerceAtLeast(1)
         val margin = icon * EDGE_MARGIN_FRACTION
@@ -506,8 +432,7 @@ class QuickActionsView(
                     pressedBounds(index, pressedBoundsScratch)
                     canvas.drawPath(tabPath(pressedBoundsScratch), paints.keyPressedFill)
                 }
-                // Each button traced as a tab, flat against the keyboard, with the keys' own
-                // corner radius and hairline -- gated by the theme's own "outline the keys".
+                // With key outlines on, each button's tab is outlined.
                 if (paints.showKeyBorders) {
                     pressedBounds(index, pressedBoundsScratch)
                     canvas.drawPath(tabPath(pressedBoundsScratch), paints.keyStroke)
@@ -516,25 +441,17 @@ class QuickActionsView(
                 val icon = if (collapsedOpener) moreIcon else icons[index]
                 if (icon != null) {
                     icon.setBounds(cx - half, cy - half, cx + half, cy + half)
-                    // Tinted to the label colour so the bar belongs to the theme rather than to
-                    // whatever colour the drawable was authored in.
                     icon.setTint(paints.label.color)
                     icon.draw(canvas)
                 }
-                // A dot rather than a second icon: the bar has no room to also spell out "this
-                // one is yours", and a mark in the corner answers the only question a glance
-                // needs to -- the same reasoning ClipboardPanelView's own pin dot is drawn on.
-                // Never on the collapsed opener button, which draws [moreIcon] regardless of
-                // what items[index] itself is.
+                // A dot marks a custom action, except on the collapsed opener.
                 if (!collapsedOpener && items.getOrNull(index) is QuickActionBarItem.Custom) {
                     canvas.drawCircle(
                         (cx + half).toFloat(), (cy - half).toFloat(),
                         CUSTOM_DOT_RADIUS_FRACTION * buttonSizePx, paints.accent,
                     )
                 }
-                // Never under the collapsed opener: it draws [moreIcon], not items[0], and a
-                // label naming a button it is not would be worse than none. Colour follows
-                // labelSecondary per draw, the same way the icons above take label's tint.
+                // No label under the collapsed opener.
                 if (labelsActive() && !collapsedOpener) {
                     val labelLayout = labelLayouts[index]
                     if (labelLayout != null) {
@@ -568,10 +485,7 @@ class QuickActionsView(
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        // Overriding onTouchEvent skips the base View's own isEnabled check, so nothing else
-        // was stopping a tap here from flipping expanded and showing a press -- harmless on its
-        // own, since a settings preview wires no listener, but not what "read-only" means for a
-        // control sitting beside a keyboard a preview otherwise sets isEnabled = false on too.
+        // A disabled bar takes no touches.
         if (!isEnabled) {
             return false
         }
@@ -603,8 +517,7 @@ class QuickActionsView(
                     return true
                 }
                 if (collapsible && !expanded) {
-                    // The opener. Nothing happens beyond opening: a button that both opens the
-                    // bar and fires its first action would fire it every time it is opened.
+                    // The opener only opens the bar.
                     expanded = true
                     layoutButtons()
                     requestLayout()
@@ -613,7 +526,7 @@ class QuickActionsView(
                 }
                 val item = items.getOrNull(index)
                 if (collapsible) {
-                    // Closes as soon as one is chosen, which is what "collapsed" was asked for.
+                    // A collapsible bar closes once an action is chosen.
                     expanded = false
                     requestLayout()
                 }
@@ -649,76 +562,53 @@ class QuickActionsView(
     }
 
     companion object {
-        /** The format's own cap; the preferences clamp to the same number. */
+        /** The most buttons; the preferences clamp to the same number. */
         const val MAX_BUTTONS = 10
 
-        /** [MAX_BUTTONS] could each in principle be pressed in quick succession -- sized for one
-         *  preset's own burst count (10) plus a little headroom, not for all ten buttons' bursts
-         *  landing in the same frame. */
+        /** The most fill and outline particles alive at once. */
         const val FILL_PARTICLE_POOL_CAPACITY = 24
         const val OUTLINE_PARTICLE_POOL_CAPACITY = 32
 
-        /** The bar is a little shorter than a key row: it is a tool strip, not another row. */
+        /** The bar's base thickness, as a fraction of a key row. */
         const val BAR_HEIGHT_FRACTION = 0.82f
 
-        /**
-         * [barThicknessPx]'s multiplier at each [sizeLevel], indexed by
-         * [KeyboardPreferences.QUICK_ACTIONS_SIZE_DEFAULT] and up. 1 is [BAR_HEIGHT_FRACTION]
-         * untouched -- today's bar, unchanged by a setting nobody has picked yet.
-         *
-         * [ICON_FRACTION] does not have a matching per-level table: it stays one constant share
-         * of thickness at every level, which is what makes the icon and the gap around it both
-         * grow by exactly this same multiple -- direct proportional to each other, and to the
-         * level chosen, rather than one growing at the other's expense on a thickness that held
-         * still.
-         */
+        /** [barBasePx]'s multiplier at each [sizeLevel]. */
         val SIZE_THICKNESS_FRACTION = floatArrayOf(1.00f, 1.25f, 1.55f, 1.90f)
 
-        /** How much of the bar's thickness an icon takes, leaving a touch margin around it. */
+        /** How much of the nominal thickness an icon takes. */
         const val ICON_FRACTION = 0.52f
 
-        /** The label's text size, as a share of the icon band -- the size level's own
-         *  thickness, not the label's own band, so the text does not shrink as the band does. */
+        /** The label's text size, as a share of the nominal thickness. */
         const val LABEL_TEXT_FRACTION = 0.19f
 
-        /** How much of a slot's width a label may take before it wraps, and then ellipsises.
-         *  Inside [TAB_ALONG_FRACTION] with room to spare, so a full label sits clear of the
-         *  tab's own outline. */
+        /** How much of a slot's width a label may take before it wraps. */
         const val LABEL_WIDTH_FRACTION = 0.84f
 
-        /** How much of a slot a button's tab takes along the bar -- what a press lights and
-         *  the outline traces -- leaving a gap between neighbours like the keys' own. */
+        /** How much of a slot a button's tab takes along the bar. */
         const val TAB_ALONG_FRACTION = 0.94f
 
-        /** The gap the tab leaves in from the bar's free edge -- the rounded side -- as a share
-         *  of the icon's size, so the rounded top does not touch the top of the bar. */
+        /** The gap between the tab and the bar's free edge, as a share of the icon's size. */
         const val TAB_FREE_GAP_FRACTION = 0.14f
 
-        /** Which edge of the bar meets the keyboard -- see [attachedEdge]. */
+        /** Which edge of the bar meets the keyboard; see [attachedEdge]. */
         const val EDGE_TOP = 0
         const val EDGE_BOTTOM = 1
         const val EDGE_LEFT = 2
         const val EDGE_RIGHT = 3
 
-        /** A label wraps to a second line before it is ellipsised -- a short label cut to
-         *  "Copy…" says less than the same word on two lines would. Never a third: past two
-         *  lines a label is competing with the icon above it for the same glance. */
+        /** The most lines a label wraps to before it is ellipsised. */
         const val LABEL_MAX_LINES = 2
 
-        /** Tighter than a normal line, on purpose -- two lines of a caption, not a paragraph. */
+        /** The label's line spacing multiplier. */
         const val LABEL_LINE_SPACING_MULTIPLIER = 0.9f
 
-        /** The gap between the icon and its label, as a fraction of the bar's whole thickness --
-         *  see [layoutButtons]'s own comment for why the icon+label group is centred as a unit
-         *  rather than either one pinned to an edge. */
+        /** The gap between the icon and its label, as a share of the icon's size. */
         const val ICON_LABEL_GAP_FRACTION = 0.12f
 
-        /** The margin the bar keeps around its content on the free edge and the attached one,
-         *  as a share of the icon -- small, so the bar wraps the icon and label tightly. */
+        /** The margin around the bar's content, as a share of the icon's size. */
         const val EDGE_MARGIN_FRACTION = 0.28f
 
-        /** The custom-action dot's radius, as a fraction of the icon's own size -- see
-         *  ClipboardPanelView's PIN_RADIUS_FRACTION, the same idea at the same rough scale. */
+        /** The custom-action dot's radius, as a fraction of the icon's size. */
         const val CUSTOM_DOT_RADIUS_FRACTION = 0.14f
 
         const val DEFAULT_THICKNESS_PX = 132f

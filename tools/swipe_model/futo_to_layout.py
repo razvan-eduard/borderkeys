@@ -3,25 +3,15 @@
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
 """Converts one of FUTO's published key layouts into a BorderKeys layout asset
-(keyboard/src/main/assets/layouts/<name>.json) -- one JSON, read by both the app (rows/indent,
-via LayoutLoader.kt) and by this ML tooling (the added `cx`/`cy` per letter key), rather than two
-separate representations of the same physical keyboard that could drift apart.
+(keyboard/src/main/assets/layouts/<name>.json), read by the app (rows and indent, through
+LayoutLoader.kt) and by this tooling (the added `cx`/`cy` per letter key).
 
-`cx`/`cy` are FUTO's own verbatim normalised centres (swipe-5/layouts/<name>.json, MIT), added as
-extra, OPTIONAL fields on the existing `{"c": "<letter>"}` key objects. LayoutLoader.kt's JSON
-parsing is field-by-field with `optString`/`optDouble` (confirmed by reading it before writing
-this) -- unknown fields are silently ignored, so this is additive: the app's own rendering is
-completely unaffected by their presence, and `futo_layout.py`'s HTTP fetch becomes unnecessary
-for any layout this script has already generated -- read the same file the app ships instead.
+`cx`/`cy` are FUTO's normalised centres (swipe-5/layouts/<name>.json, MIT), added as optional
+fields on the `{"c": "<letter>"}` key objects; LayoutLoader.kt ignores them.
 
-The row/indent/width fields (what the app actually renders from) are a best-effort geometric
-reconstruction, not a byte-for-byte reproduction of swipe.futo.org's own renderer: keys are
-clustered into rows by y-position, each row is centred by the same half-key-width-indent
-convention the hand-authored qwerty.json already uses for ITS OWN staggered rows (accepting the
-same minor cross-row key-size variation that convention already implies -- this is not a defect
-introduced here). The bottom action row (symbols/language/comma/emoji/space/period/enter) and the
-shift/delete keys flanking the last letter row are reused verbatim from qwerty.json's own
-template, since FUTO's data has no equivalent -- it only ever recorded letter positions.
+The rows are reconstructed geometrically: keys are clustered into rows by y-position and each
+row is centred with half the slack on the left, as qwerty.json's staggered rows are. The bottom
+action row and the shift and delete keys flanking the last letter row come from qwerty.json.
 """
 
 from __future__ import annotations
@@ -32,18 +22,13 @@ from pathlib import Path
 
 from futo_layout import LAYOUT_NAMES, load_futo_layout
 
-# Every layout whose alphabet is a-z-only or a subset of it -- see eval_layouts.py's own note on
-# why german/spanish/lithuanian_qwerty/shavian are excluded: they need CTC vocabulary this
-# project's model does not have, and converting their KEY LAYOUT is a separate question from
-# whether the model can usefully swipe on them, but shipping a layout nobody can usefully swipe on
-# yet is not this script's job to decide -- it only converts what is unambiguously ready.
+# Every layout whose alphabet is a-z or a subset of it (eval_layouts.py).
 CONVERTIBLE_LAYOUTS = ("azerty", "dvorak", "qwertz", "clearflow", "kasroz", "toki_pona")
 
 ROW_CLUSTER_TOLERANCE = 0.03  # in normalised cy units; FUTO's own rows are >0.1 apart
 
-# Reused verbatim from qwerty.json: the fourth row is layout-independent (it types no letters),
-# and the shift/delete pair flanking the last letter row is this project's own established
-# convention for where those two keys go, not something FUTO's data has an opinion on.
+# Reused verbatim from qwerty.json: the fourth row, and the shift/delete pair flanking the last
+# letter row.
 BOTTOM_ACTION_ROW = {
     "keys": [
         {"code": "symbols", "w": 1.5},
@@ -78,9 +63,7 @@ def build_layout_json(name: str) -> dict:
 
     row_objects = []
     for row_index, row in enumerate(rows):
-        # Centred by the same convention qwerty.json's own staggered rows already use: half the
-        # slack on the left. This does not perfectly size-match every row to the widest one (see
-        # module doc) -- neither does qwerty.json's existing 0.5 indent on its own middle row.
+        # Half the slack on the left, as qwerty.json's staggered rows.
         indent = (widest - len(row)) / 2.0
         keys = [{"c": letter, "cx": cx, "cy": cy} for letter, cx, cy in row]
         if row_index == len(rows) - 1:

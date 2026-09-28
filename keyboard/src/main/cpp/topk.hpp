@@ -8,18 +8,9 @@
 
 namespace borderkeys {
 
-// Fixed-capacity min-heap that keeps the K highest-scoring items seen.
-//
-// Non-owning: the caller supplies the storage, which in practice is allocated once at engine
-// creation and reused for every request. A search that walks tens of thousands of trie nodes
-// calls offer() for each candidate it reaches, so this has to be branch-light and allocation
-// free; a sorted insert or a std::priority_queue would be neither.
-//
-// The heap is a *min*-heap on purpose. The root is the worst item currently kept, which is the
-// one comparison that decides whether a new candidate is worth keeping at all -- and once the
-// heap is full that comparison rejects the overwhelming majority of candidates in one branch.
-//
-// T must expose a `float score` member. Larger is better.
+// A fixed-capacity min-heap keeping the K highest-scoring items seen, in storage the caller
+// supplies; the root is the worst item kept. T must expose a `float score` member, larger being
+// better.
 template <typename T>
 class TopK {
 public:
@@ -32,8 +23,7 @@ public:
     int size() const { return size_; }
     bool empty() const { return size_ == 0; }
 
-    // The score a candidate has to beat to be worth constructing in full. Callers use it to
-    // skip work, not just to skip an insertion.
+    // The score a candidate has to beat to be kept.
     float worstScore() const {
         return (size_ < capacity_) ? -3.0e38f : items_[0].score;
     }
@@ -55,14 +45,11 @@ public:
         siftDown(0);
     }
 
-    // Direct access for the caller's own de-duplication pass. The heap holds at most sixteen
-    // items, so scanning it is cheaper than any auxiliary set would be to maintain -- and a
-    // suggestion strip that shows the same word twice is a bug the user sees immediately.
+    // Direct access for the caller's de-duplication pass.
     T* data() { return items_; }
     const T* data() const { return items_; }
 
-    // Replaces an item already in the heap and restores the invariant. A min-heap only needs
-    // one direction: a score that went up sinks, a score that went down rises.
+    // Replaces an item already in the heap and restores the invariant.
     void replaceAt(int index, const T& item) {
         if (index < 0 || index >= size_) {
             return;
@@ -76,8 +63,7 @@ public:
         }
     }
 
-    // Empties the heap into `out`, best first. Destroys the heap, which is what the caller
-    // wants: a request is done with it by the time it reads the results.
+    // Empties the heap into `out`, best first.
     int drainSorted(T* out, int maxOut) {
         int written = 0;
         while (size_ > 0 && written < maxOut) {

@@ -14,8 +14,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 
-/** "My presets" -- [ThemeRepositoryCustomThemesTest]'s own shape, one level down, for a whole
- *  (outline, fill) look rather than a whole [KeyboardTheme]. */
+/** "My presets": saved (outline, fill) looks. */
 class ThemeRepositoryCustomParticlePresetsTest {
 
     @get:Rule
@@ -60,8 +59,7 @@ class ThemeRepositoryCustomParticlePresetsTest {
         assertEquals(-26624, entry.outline.primaryColor)
         assertEquals(ParticleFillLayer(), entry.fill)
         assertEquals(false, legacy.exists())
-        // A second import of the same file would find it gone; a second copy with the same id
-        // is not added again either.
+        // A second copy with the same id is not added again.
         legacy.writeText("""{"presets":[{"id":"abc","name":"Renamed","layer":{"type":2}}]}""")
         repo.importLegacyOutlinePresets(legacy)
         assertEquals(1, repo.currentCustomEffectsPresets().size)
@@ -82,8 +80,7 @@ class ThemeRepositoryCustomParticlePresetsTest {
         assertEquals(outline, applied.radial.outline)
         assertEquals(fill, applied.strip.fill)
         assertEquals(true, entry.matches(applied))
-        // A region that drifted from the pair no longer matches -- the comparison used to read
-        // each region against itself and say yes to everything.
+        // A region that drifted from the pair no longer matches.
         val drifted = applied.copy(strip = applied.strip.copy(fill = fill.copy(speed = 0.5f)))
         assertEquals(false, entry.matches(drifted))
         assertEquals(false, entry.matches(ParticleEffectsSettings()))

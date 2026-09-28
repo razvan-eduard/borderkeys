@@ -8,21 +8,9 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
- * The particle pool's actual state and physics -- everything in [ParticleField] except owning a
- * real frame clock and landing on a `Canvas`.
- *
- * Split out on purpose so it stays plain-JVM testable: `:keyboard`'s `build.gradle.kts` turns on
- * `unitTests.isReturnDefaultValues`, under which an unmocked `android.*` call returns a default
- * rather than throwing -- for `android.view.Choreographer.getInstance()` (a static method
- * returning an object type) that default is `null`, and this project's tests do not reach for
- * Robolectric to work around that (see [RadialSuggestionMenuViewTest] for the existing plain-
- * JUnit4 convention). [ParticleField] is therefore the only thing here that ever imports
- * `android.view.Choreographer`; this class does not import anything from `android.*` at all.
- *
- * A particle is `spawnX`/`spawnY`/`ageSeconds`/`spawnRadius` and nothing else -- [ParticleMotion]
- * is closed-form in age, so there is no "current position" to carry between frames the way the
- * sibling project this was ported from carries one (as an immutable data class, replaced via
- * `.copy()` every frame). Nothing here allocates past construction.
+ * The particle pool's state and physics: [ParticleField] without the frame clock and the canvas,
+ * and nothing from `android.*`. A particle is its spawn point, age and radius, since
+ * [ParticleMotion] is closed-form in age. Nothing allocates past construction.
  */
 class ParticleSimulation(val capacity: Int) {
 
@@ -32,27 +20,24 @@ class ParticleSimulation(val capacity: Int) {
     private val ageSeconds = FloatArray(capacity)
     private val spawnRadius = FloatArray(capacity)
 
-    /** The outline's outward unit normal where the particle spawned, or zero for a particle
-     *  spawned inside a shape or at a point. Two things read it: every outline particle is
-     *  pushed out along it by its own radius so it sits tangent to the edge, wholly outside the
-     *  element, and [ParticleMotionKind.OUTWARD] moves along it. */
+    /**
+     * The outline's outward unit normal where the particle spawned, zero inside a shape or at a
+     * point: an outline particle is pushed out along it by its radius, and
+     * [ParticleMotionKind.OUTWARD] moves along it.
+     */
     private val normalX = FloatArray(capacity)
     private val normalY = FloatArray(capacity)
 
-    /** Reused by the perimeter spawns for [EmitterShape.roundedRectPerimeterSample] and friends
-     *  -- x, y, normalX, normalY -- never allocated per spawn. */
+    /** Scratch for a perimeter sample: x, y, normalX, normalY. */
     private val sampleScratch = FloatArray(4)
 
     var preset: ParticleEffectPreset = ParticleEffectPresets.GLOW
     var speedMultiplier: Float = 1f
 
-    /** Scales how many particles an ambient trickle keeps alive and how fast a burst's own
-     *  count is, both at once -- a denser trace along a perimeter reads as visually thicker
-     *  without a separate axis just for that. */
+    /** Scales how many particles an ambient keeps alive and how many a burst spawns. */
     var densityMultiplier: Float = 1f
 
-    /** Scales [ParticleEffectPreset.minRadiusPx]/[ParticleEffectPreset.maxRadiusPx] -- Outline's
-     *  own separate thickness knob; Fill layers leave this at its harmless default of `1f`. */
+    /** Scales [ParticleEffectPreset.minRadiusPx] and [ParticleEffectPreset.maxRadiusPx]. */
     var widthMultiplier: Float = 1f
 
     private enum class AmbientKind {
@@ -64,17 +49,14 @@ class ParticleSimulation(val capacity: Int) {
         private set
     private var ambientKind = AmbientKind.POINT
 
-    /** 0..1, wrapping -- a traveling emission point's current position along the perimeter/arc,
-     *  advanced in [advance] at [ParticleEffectPreset.travelLoopsPerSecond]. Whether the current
-     *  [preset] travels at all rather than re-rolling a random point on every spawn is read
-     *  directly off `preset.travelLoopsPerSecond > 0f` wherever this is used -- not a separate
-     *  flag a caller has to remember to pass, since the preset already knows. */
+    /**
+     * A travelling emission point's position along the outline, 0..1 and wrapping, advanced in
+     * [advance] at [ParticleEffectPreset.travelLoopsPerSecond].
+     */
     private var ambientPhase01 = 0f
 
-    // POINT/RECTANGLE/RECTANGLE_PERIMETER read these as left/top/right/bottom (or x/y for
-    // POINT, X1/Y1 unused). ANNULAR_WEDGE_PERIMETER reads X0/Y0/X1/Y1 as
-    // centerX/centerY/innerRadius/outerRadius -- reusing the same six floats rather than adding
-    // a second set that would only ever be live for one kind at a time.
+    // Rectangle kinds: left, top, right, bottom (a point: x, y). Wedge kinds: centerX, centerY,
+    // innerRadius, outerRadius, then the start and sweep angles.
     private var ambientX0 = 0f
     private var ambientY0 = 0f
     private var ambientX1 = 0f
@@ -82,10 +64,7 @@ class ParticleSimulation(val capacity: Int) {
     private var ambientStartDeg = 0f
     private var ambientSweepDeg = 0f
 
-    /** RECTANGLE_PERIMETER only: the corner radius the traced shape is actually drawn with, so
-     *  both the spawn walk ([EmitterShape.roundedRectPerimeterX]) and the stroke
-     *  [ParticleField] draws read the one value the caller gave -- the two can never disagree
-     *  about where a corner is. `0f` is a sharp rectangle. */
+    /** The rounded rectangle's corner radius; `0f` is a sharp rectangle. */
     private var ambientCornerRadius = 0f
     private var spawnAccumulator = 0f
 
@@ -129,17 +108,10 @@ class ParticleSimulation(val capacity: Int) {
         ambientY1 = bottom
     }
 
-    /** A random point along the perimeter is picked fresh on every spawn when the current
-     *  [preset] does not travel ([ParticleEffectPreset.travelLoopsPerSecond] `<= 0f` -- Pulse,
-     *  Sparkle); a preset that does travel (Comet) instead uses the one shared [ambientPhase01]
-     *  this instance continuously advances in [advance]. [ambientPhase01] always resets to 0
-     *  here regardless, so a later traveling call never inherits a stale position left over
-     *  from wherever a previous ambient (on a different rect, or a non-traveling preset) last
-     *  put it.
-     *
-     *  [cornerRadius] is the radius the shape is *drawn* with: spawn points walk the rounded
-     *  outline itself, corners included, never the sharp bounding box -- see
-     *  [EmitterShape.roundedRectPerimeterX] for why that distinction is visible. */
+    /**
+     * An ambient along a rounded rectangle's outline, corners included: a random point per spawn,
+     * or the travelling point for a preset that travels, which starts again from 0.
+     */
     fun setAmbientRectanglePerimeter(left: Float, top: Float, right: Float, bottom: Float, cornerRadius: Float = 0f) {
         ambientActive = true
         ambientKind = AmbientKind.RECTANGLE_PERIMETER
@@ -151,9 +123,7 @@ class ParticleSimulation(val capacity: Int) {
         ambientCornerRadius = cornerRadius.coerceAtLeast(0f)
     }
 
-    /** The fill-layer counterpart of [setAmbientRectanglePerimeter]: an ambient trickle spawning
-     *  uniformly *inside* the rounded rectangle -- see [EmitterShape.roundedRectInteriorX] for
-     *  how the rounded corners are respected. */
+    /** An ambient spawning uniformly inside a rounded rectangle. */
     fun setAmbientRoundedRectInterior(left: Float, top: Float, right: Float, bottom: Float, cornerRadius: Float = 0f) {
         ambientActive = true
         ambientKind = AmbientKind.ROUNDED_RECT_INTERIOR
@@ -165,8 +135,7 @@ class ParticleSimulation(val capacity: Int) {
         ambientCornerRadius = cornerRadius.coerceAtLeast(0f)
     }
 
-    /** The fill-layer counterpart of [setAmbientAnnularWedgePerimeter]: an ambient trickle
-     *  spawning uniformly by area inside the wedge -- see [EmitterShape.annularWedgeInteriorX]. */
+    /** An ambient spawning uniformly by area inside an annular wedge. */
     fun setAmbientAnnularWedgeInterior(
         centerX: Float,
         centerY: Float,
@@ -186,10 +155,7 @@ class ParticleSimulation(val capacity: Int) {
         ambientSweepDeg = sweepDeg
     }
 
-    /** A one-shot burst spawned uniformly inside a rounded rectangle -- a key going down, a row
-     *  picked. [count] is scaled by the shape's own area the same way an ambient's rate is (see
-     *  [ambientExtentFactor]), so a big element gets a visibly bigger burst than a small one
-     *  rather than the same ten dots lost in it. */
+    /** A burst spawned uniformly inside a rounded rectangle, [count] scaled by its area. */
     fun spawnBurstInRoundedRect(left: Float, top: Float, right: Float, bottom: Float, cornerRadius: Float, count: Int) {
         val factor = extentFactorForArea(EmitterShape.roundedRectArea(left, top, right, bottom, cornerRadius))
         repeat(scaledCount(count, factor)) {
@@ -221,11 +187,7 @@ class ParticleSimulation(val capacity: Int) {
         }
     }
 
-    /** Same idea as [setAmbientRectanglePerimeter], for the one shape in this app that is
-     *  neither a rectangle nor a full circle -- the radial suggestion ring's own highlighted
-     *  wedge. See [ParticleGeometry.AnnularWedge] for what each parameter means;
-     *  [EmitterShape.annularWedgePerimeterX]/[EmitterShape.annularWedgePerimeterY] do the actual
-     *  perimeter-length sampling this feeds into [spawnFromAmbient]. */
+    /** An ambient along an annular wedge's outline; see [ParticleGeometry.AnnularWedge]. */
     fun setAmbientAnnularWedgePerimeter(
         centerX: Float,
         centerY: Float,
@@ -249,22 +211,14 @@ class ParticleSimulation(val capacity: Int) {
         ambientActive = false
     }
 
-    /** Which shape [currentAmbientOutlineShape] just filled -- only the ambient kinds a drawn
-     *  stroke ever traces; a plain point/rectangle *fill* is never asked to. */
+    /** The ambient kinds with an outline to trace. */
     enum class AmbientOutlineShape { RECTANGLE_PERIMETER, ANNULAR_WEDGE_PERIMETER }
 
     /**
-     * Fills [out] with the current ambient's own shape, for [ParticleField.draw] to trace as a
-     * real stroke -- left/top/right/bottom/cornerRadius for
-     * [AmbientOutlineShape.RECTANGLE_PERIMETER][0..4], or
-     * centerX/centerY/innerRadius/outerRadius/startDeg/sweepDeg for
-     * [AmbientOutlineShape.ANNULAR_WEDGE_PERIMETER][0..5]. Returns null (leaving [out] untouched)
-     * while ambient is off, or is a kind with no border to trace.
-     *
-     * A plain `FloatArray` out-parameter rather than an `android.graphics.RectF`/similar, the
-     * same reasoning [ParticleField.computeLiveBounds] doesn't live here either -- see this
-     * class's own doc on staying free of every `android.*` import so it stays plain-JVM
-     * testable.
+     * Fills [out] with the current ambient's outline: left, top, right, bottom and corner radius
+     * for [AmbientOutlineShape.RECTANGLE_PERIMETER]; centerX, centerY, innerRadius, outerRadius,
+     * startDeg and sweepDeg for [AmbientOutlineShape.ANNULAR_WEDGE_PERIMETER]. Null, leaving
+     * [out] untouched, while no ambient with an outline is active.
      */
     fun currentAmbientOutlineShape(out: FloatArray): AmbientOutlineShape? {
         if (!ambientActive) {
@@ -301,15 +255,9 @@ class ParticleSimulation(val capacity: Int) {
     }
 
     /**
-     * Advances every live particle and the ambient spawn accumulator by [rawDeltaSeconds] of
-     * real time. Returns whether the caller should keep asking for frames (something is still
-     * live, or the ambient emitter is still active) -- exactly the condition
-     * [ParticleField]'s own frame-scheduling decision needs.
-     *
-     * [rawDeltaSeconds] reaches the spawn accumulator unclamped, so a stall (the view not
-     * drawing for a while) does not thicken the ambient trickle's long-run rate -- only
-     * [MAX_DELTA_SECONDS] of it reaches age (and a traveling ambient's own phase advance), so
-     * already-live particles do not jump by the whole gap in one frame.
+     * Advances every live particle and the ambient spawn accumulator by [rawDeltaSeconds]. The
+     * accumulator takes the whole delta; ages and the travelling phase take at most
+     * [MAX_DELTA_SECONDS] of it. Returns whether anything is live or the ambient is active.
      */
     fun advance(rawDeltaSeconds: Float): Boolean {
         val scaledDeltaSeconds = min(rawDeltaSeconds, MAX_DELTA_SECONDS) * speedMultiplier
@@ -321,9 +269,7 @@ class ParticleSimulation(val capacity: Int) {
             }
         }
 
-        // A preset's numbers describe a key-sized element; a shape several times that size gets
-        // proportionally more dots, or a long outline reads as a handful of specks and a wide
-        // wedge's fill as empty -- see ambientExtentFactor.
+        // A shape larger than a key gets proportionally more particles.
         val extent = ambientExtentFactor()
         val effectiveMaxParticles = (preset.maxParticles * densityMultiplier * extent).roundToInt().coerceIn(1, capacity)
         if (ambientActive && liveCount < effectiveMaxParticles) {
@@ -360,10 +306,7 @@ class ParticleSimulation(val capacity: Int) {
 
     fun radiusAt(slot: Int): Float = radiusAt(slot, ageSeconds[slot])
 
-    /** Every preset's own colour function returns its "natural" colour -- opaque, or (Neon
-     *  Pulse) already carrying its own flicker alpha -- and the particle's life is applied
-     *  uniformly on top of all of them here, so every preset fades out at the end of its life
-     *  without each colour function having to remember to do that itself. */
+    /** The preset's colour for [slot], its alpha scaled by the particle's remaining life. */
     fun colorAt(slot: Int, primaryColor: Int, secondaryColor: Int): Int {
         val life = lifeFractionAt(slot)
         val age = ageSeconds[slot]
@@ -384,12 +327,9 @@ class ParticleSimulation(val capacity: Int) {
         (count * densityMultiplier * extentFactor).roundToInt().coerceAtLeast(1)
 
     /**
-     * How much bigger than a reference key-sized element the current ambient shape is -- 1 for
-     * anything that size or smaller, rising to [MAX_EXTENT_FACTOR] for the largest shapes this
-     * app draws (the ring's wedge, a full strip row). Perimeter kinds compare their length to
-     * [REFERENCE_PERIMETER_PX], interior kinds their area to [REFERENCE_AREA_PX]; a point has no
-     * extent. Recomputed per frame from the shape's own numbers rather than cached per setter,
-     * so it can never go stale against them -- a handful of multiplications, nothing more.
+     * How much bigger than a key-sized element the current ambient shape is, from 1 to
+     * [MAX_EXTENT_FACTOR]: its perimeter against [REFERENCE_PERIMETER_PX], or its area against
+     * [REFERENCE_AREA_PX].
      */
     private fun ambientExtentFactor(): Float = when (ambientKind) {
         AmbientKind.POINT -> 1f
@@ -417,8 +357,7 @@ class ParticleSimulation(val capacity: Int) {
     private fun spawnAt(x: Float, y: Float, nx: Float = 0f, ny: Float = 0f) {
         val slot = liveFlags.indexOf(false)
         if (slot < 0) {
-            // Pool full. Same policy as KeyboardCanvasView.startPress's own full-pool branch:
-            // drop the newest rather than evict something already live.
+            // With the pool full, the new particle is dropped.
             return
         }
         liveFlags[slot] = true
@@ -433,10 +372,8 @@ class ParticleSimulation(val capacity: Int) {
     }
 
     /**
-     * Spawns one particle on the current perimeter ambient, at [sampleScratch]'s point and
-     * normal, unless the preset's emission cone rejects that point -- in which case up to
-     * [EMIT_CONE_TRIES] fresh random points are tried before giving up on this spawn. A
-     * traveling preset (Comet) ignores the cone: its emission point is where the head is.
+     * Spawns one particle on the current perimeter ambient, trying up to [EMIT_CONE_TRIES] random
+     * points for one inside the preset's emission cone; a travelling preset ignores the cone.
      */
     private fun spawnOnPerimeter(sample: (Float) -> Unit) {
         val traveling = preset.travelLoopsPerSecond > 0f
@@ -490,10 +427,7 @@ class ParticleSimulation(val capacity: Int) {
         }
     }
 
-    /** A perimeter particle's origin is its spawn point pushed out along the outline's normal by
-     *  its own radius, so the whole dot sits outside the element, tangent to the edge -- an
-     *  outline effect is never seen inside; that is the fill layer's job. Zero for anything
-     *  spawned inside a shape or at a point, where there is no normal. */
+    /** A particle's origin: its spawn point pushed out along its normal by its radius. */
     private fun originX(slot: Int): Float = spawnX[slot] + normalX[slot] * spawnRadius[slot]
 
     private fun originY(slot: Int): Float = spawnY[slot] + normalY[slot] * spawnRadius[slot]
@@ -534,38 +468,22 @@ class ParticleSimulation(val capacity: Int) {
     companion object {
         const val MAX_DELTA_SECONDS = 0.1f
 
-        /** A key-sized element's outline, roughly: every preset's spawn rate and particle cap
-         *  were tuned against one, and [ambientExtentFactor] scales up from here. */
+        /** A key-sized element's perimeter, the presets' rates and caps are for. */
         const val REFERENCE_PERIMETER_PX = 400f
 
-        /** A key-sized element's area, the fill layer's counterpart of [REFERENCE_PERIMETER_PX]. */
+        /** A key-sized element's area, the presets' rates and caps are for. */
         const val REFERENCE_AREA_PX = 12_000f
 
-        /** How many random outline points [spawnOnPerimeter] tries before conceding that the
-         *  preset's emission cone has nothing to offer this frame -- a half-plane cone accepts
-         *  roughly half the outline, so this is plenty. */
+        /** How many random outline points [spawnOnPerimeter] tries for one inside the cone. */
         const val EMIT_CONE_TRIES = 6
 
-        /** The ceiling on [ambientExtentFactor]: past three keys' worth of outline or area, a
-         *  shape gets no denser, so the largest surfaces stay an accent rather than a wall of
-         *  dots -- and stay within every host's own pool capacity. */
+        /** The most [ambientExtentFactor] scales a shape's particle count by. */
         const val MAX_EXTENT_FACTOR = 3f
 
-        /** Below this, a *shrinking* [ParticleMotionKind.RISE_AND_SHRINK] particle is treated as
-         *  fully faded and its slot freed -- an end-of-life threshold, not a "still legible" one.
-         *  See [MIN_LEGIBLE_SIZE_PX] for the floor that keeps a particle visible in the first
-         *  place; the two stay far apart on purpose so a particle can still shrink through a wide
-         *  range before this cull point ever triggers. */
+        /** The radius below which a shrinking particle is freed. */
         const val MIN_VISIBLE_RADIUS_PX = 0.5f
 
-        /** Floor applied to a spawned particle's radius ([spawnAt]) and, via
-         *  [ParticleField.drawAmbientStroke], an outline stroke's width -- both *after*
-         *  [widthMultiplier] scales them down. [ParticleEffectsSettings.MIN_WIDTH] (0.5x) halving
-         *  an already-small base radius (Sparkle's 1.5px) would otherwise shrink it to a
-         *  sub-pixel speck that reads as "this style stopped working" rather than "this style is
-         *  thinner now." Set to the smallest base radius any preset already uses at its own
-         *  default (1x) width, so the floor never looks bigger than a preset's normal size --
-         *  only the low end of the Width slider's range stops disappearing. */
+        /** The smallest particle radius and outline stroke width after [widthMultiplier]. */
         const val MIN_LEGIBLE_SIZE_PX = 1.5f
     }
 }

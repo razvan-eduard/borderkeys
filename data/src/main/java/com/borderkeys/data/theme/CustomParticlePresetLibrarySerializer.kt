@@ -9,8 +9,7 @@ import kotlinx.serialization.SerializationException
 import java.io.InputStream
 import java.io.OutputStream
 
-/** Reads and writes [CustomEffectsPresetLibrary] as JSON for the typed DataStore, the same shape
- *  as [CustomThemeLibrarySerializer] and for the same reasons. */
+/** Reads and writes [CustomEffectsPresetLibrary] as JSON for the typed DataStore. */
 object CustomEffectsPresetLibrarySerializer : Serializer<CustomEffectsPresetLibrary> {
 
     private val json = PERSISTED_JSON

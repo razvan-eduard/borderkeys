@@ -18,11 +18,6 @@ class RunningTextTest {
         assertTrue("the first word of a field has nothing in front of it", admits("hello", null))
     }
 
-    /**
-     * The case this exists for. Each of these reaches autocorrect as a bare run of letters,
-     * because the character that gives it away was committed a keystroke earlier and is not in
-     * the composing region at all.
-     */
     @Test
     fun `a word that continues an address or a path is left alone`() {
         assertFalse("user@example", admits("example", '@'))
@@ -41,10 +36,6 @@ class RunningTextTest {
         assertFalse(admits("v2"))
     }
 
-    /**
-     * The two marks deliberately left out. Both sit inside ordinary words, and refusing to
-     * correct after either would switch autocorrect off across most of French and Italian.
-     */
     @Test
     fun `an apostrophe or a hyphen in front of a word does not block it`() {
         assertTrue("l'homme", admits("homme", '\''))
@@ -58,18 +49,6 @@ class RunningTextTest {
         assertTrue(admits("acum", ';'))
     }
 
-    /**
-     * The deliberate trade. A full stop, a colon and a question mark each end a sentence *and*
-     * open a path, a port or a query string, and nothing in the character alone tells the two
-     * apart. Blocking is the cheaper mistake: a word after "example." or "8080:" is far more
-     * often part of an address than the start of a sentence, and the sentence case costs only a
-     * correction not offered.
-     *
-     * It also barely arises. `spaceAfterPunctuation` ships on, so typing one of these puts a
-     * space after it, and the next word sees the space rather than the mark. This rule is
-     * reached when that setting is off, or when the caret has been moved into text that was
-     * pasted or written elsewhere -- which is exactly where an address is likeliest to be.
-     */
     @Test
     fun `punctuation that also opens an address blocks, on purpose`() {
         assertFalse(admits("Apoi", '.'))

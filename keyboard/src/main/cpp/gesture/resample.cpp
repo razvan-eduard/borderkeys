@@ -10,8 +10,7 @@
 namespace borderkeys {
 namespace {
 
-// Quadratic fit over seven samples. Denominator 21. The negative tails are what preserve a
-// corner: a moving average would use seven equal weights and round it off.
+// Quadratic fit over seven samples; denominator 21.
 constexpr int kWindow = 7;
 constexpr int kHalfWindow = kWindow / 2;
 constexpr float kCoefficients[kWindow] = {-2.f, 3.f, 6.f, 7.f, 6.f, 3.f, -2.f};
@@ -27,9 +26,7 @@ void savitzkyGolaySmooth(const float* in, int count, float* out) {
         std::memcpy(out, in, static_cast<size_t>(count) * sizeof(float));
         return;
     }
-    // The first and last three samples have no full window. Clamping to the edge rather than
-    // shrinking the window keeps the endpoints where the finger actually started and stopped,
-    // and the endpoints are what the first pruning stage tests.
+    // The window is clamped to the edges for the first and last three samples.
     for (int i = 0; i < count; ++i) {
         float sum = 0.f;
         for (int k = -kHalfWindow; k <= kHalfWindow; ++k) {
@@ -71,7 +68,7 @@ bool resamplePath(const float* xs, const float* ys, int count,
             outX[i] = xs[0];
             outY[i] = ys[0];
         }
-        return false;  // a tap is not a gesture, however well it resamples
+        return false;  // no length
     }
 
     const float total = pathLength(xs, ys, count);
@@ -100,8 +97,7 @@ bool resamplePath(const float* xs, const float* ys, int count,
             ++segment;
             continue;
         }
-        // A single segment can contain several output points when the finger moved fast, so
-        // this consumes as many as fit before advancing.
+        // One segment can hold several output points.
         while (travelled + segmentLength >= target && written < outCount - 1) {
             const float ratio = (target - travelled) / segmentLength;
             outX[written] = xs[segment - 1] + ratio * dx;
@@ -113,8 +109,7 @@ bool resamplePath(const float* xs, const float* ys, int count,
         ++segment;
     }
 
-    // Floating point accumulation can leave the last slot or two unfilled; the endpoint is
-    // exact by construction rather than by arithmetic.
+    // Any slot left unfilled at the end takes the exact endpoint.
     while (written < outCount) {
         outX[written] = xs[count - 1];
         outY[written] = ys[count - 1];
@@ -144,8 +139,7 @@ void normaliseShape(const float* xs, const float* ys, int count, float* outX, fl
     const float centreX = sumX / static_cast<float>(count);
     const float centreY = sumY / static_cast<float>(count);
 
-    // The longer side, so an aspect ratio is preserved. Scaling each axis independently would
-    // make a horizontal swipe and a vertical one the same shape.
+    // Scaled by the longer side, keeping the aspect ratio.
     float extent = (maxX - minX) > (maxY - minY) ? (maxX - minX) : (maxY - minY);
     if (!(extent > 1e-4f)) {
         extent = 1.f;

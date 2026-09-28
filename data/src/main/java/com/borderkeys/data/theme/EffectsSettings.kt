@@ -6,13 +6,8 @@ package com.borderkeys.data.theme
 import kotlinx.serialization.Serializable
 
 /**
- * How often an effect plays for the same word.
- *
- * Carries an [id] and is persisted as that id, never as its name or its ordinal -- the same rule
- * [QuickAction] and [ComposerAction] already follow, and for the same reason: a value no build
- * knows is read back as the default rather than failing the whole file. A backup exists to cross
- * versions, so an enum written into one has to survive a later build that reordered or dropped a
- * case.
+ * How often an effect plays for the same word, stored by [id]; an id this build does not know
+ * reads back as the default.
  */
 enum class EffectFrequency(val id: Int) {
 
@@ -32,15 +27,8 @@ enum class EffectFrequency(val id: Int) {
 }
 
 /**
- * One event's effect: how it moves, what colour it is, and how often it plays.
- *
- * [style] is an `EffectStyle` name rather than the enum itself, because `:data` does not depend
- * on `:effects` and a stored setting outlives the build that wrote it: a style removed in a
- * later version reads back as an empty string here rather than as a crash, and an empty string
- * already means off.
- *
- * [colour] is an ARGB value, or 0 for the theme's own label colour -- the same "nothing chosen"
- * convention the particle layers use for their swatches.
+ * One event's effect: how it moves, what colour it is, and how often it plays. [style] is an
+ * `EffectStyle` name, empty for off; [colour] is an ARGB value, or 0 for the theme's label colour.
  */
 @Serializable
 data class EffectSetting(
@@ -62,25 +50,17 @@ data class EffectSetting(
         /** No style chosen: the event passes silently. */
         const val OFF = ""
 
-        /** What the accepted-word animation has always used, and what a new effect starts as. */
+        /** The style a new effect starts as. */
         const val DEFAULT_STYLE = "RiseFade"
 
-        /** [EffectFrequency.DEFAULT]'s id, spelled out because a constructor default may not
-         *  read a companion of a type declared below it. Pinned by EffectsSettingsTest. */
+        /** [EffectFrequency.DEFAULT]'s id, as a constant; EffectsSettingsTest checks they agree. */
         const val DEFAULT_FREQUENCY_ID = 2
     }
 }
 
 /**
- * Every effect the keyboard can play, and the one switch that silences all of them.
- *
- * Separate from [ParticleEffectsSettings]: particles decorate a *surface* -- the keys, the ring,
- * the strip -- while these are about an *event*, and say what happened rather than where. They
- * share the colour swatches and nothing else.
- *
- * Only [swipeAccepted] is on by default, because it is the one that already shipped. The rest
- * start off: an effect on a frequent event is a decision someone should make deliberately, not
- * something that appears after an update.
+ * Every event effect the keyboard can play, and the one switch that silences all of them. Only
+ * [swipeAccepted] is on by default.
  */
 @Serializable
 data class EffectsSettings(
@@ -91,7 +71,7 @@ data class EffectsSettings(
     val correctionReverted: EffectSetting = EffectSetting(),
     val suggestionPicked: EffectSetting = EffectSetting(),
 ) {
-    /** The setting for [event], or null when this build does not know that name. */
+    /** The setting for [event]. */
     fun forEvent(event: EffectEvent): EffectSetting = when (event) {
         EffectEvent.SwipeAccepted -> swipeAccepted
         EffectEvent.LearnedWord -> learnedWord
@@ -110,13 +90,7 @@ data class EffectsSettings(
     }
 }
 
-/**
- * The moments the keyboard has something to say.
- *
- * An enum rather than a map key, so adding one is a compiler error everywhere it has to be
- * handled -- the settings row, the two accessors above -- rather than a card that silently never
- * appears.
- */
+/** The moments the keyboard has something to say. */
 enum class EffectEvent {
     SwipeAccepted,
     LearnedWord,

@@ -13,17 +13,9 @@ import java.io.IOException
 import java.io.InputStream
 
 /**
- * Importing and verifying the text assistant's model.
- *
- * The same shape as [LanguagePackRepository] and for the same reason: copy into private storage
- * first, hash what actually arrived, and only then decide. A `content://` URI is never opened by
- * the runtime, because the app on the other end can change the file between the check and the
- * use.
- *
- * The difference is what happens after hashing. A language pack is validated structurally and
- * accepted on its own terms; a model is accepted only if its hash is one this application knows.
- * A GGUF file is weights and metadata that a runtime maps and executes in a process holding the
- * user's selected text, and "it had the right extension" is not a basis for that.
+ * Importing and verifying the text assistant's model: copied into private storage, hashed, and
+ * accepted only if [KnownAssistModels] knows the hash. A `content://` URI is never opened by the
+ * runtime.
  */
 class AssistModelRepository internal constructor(
     private val dao: AssistModelDao,
@@ -42,11 +34,8 @@ class AssistModelRepository internal constructor(
     }
 
     /**
-     * Copies a candidate in, hashes it, and accepts it only if the registry recognises it.
-     *
-     * The size is checked against the registry entry as well as the hash. That is not
-     * redundancy for its own sake: a size mismatch means the copy was truncated, and reporting
-     * that as "unknown model" would send the user looking for the wrong problem.
+     * Copies a candidate in, hashes it, and accepts it only if the registry recognises it; a size
+     * mismatch is reported apart from an unknown hash.
      */
     suspend fun import(source: InputStream, suggestedName: String): ImportResult {
         if (!modelsDirectory.exists() && !modelsDirectory.mkdirs()) {
@@ -78,8 +67,6 @@ class AssistModelRepository internal constructor(
         val hash = digest.digest().toHexString()
         val known = KnownAssistModels.bySha256(hash)
         if (known == null || known.sizeBytes != total) {
-            // Deleted rather than kept for the user to "approve later". A file this application
-            // has decided not to load has no reason to occupy half a gigabyte of their storage.
             temporary.delete()
             return ImportResult.UnknownModel(hash, total)
         }
@@ -106,13 +93,7 @@ class AssistModelRepository internal constructor(
         return ImportResult.Accepted(entry.copy(id = id))
     }
 
-    /**
-     * The model to load, if there is one whose bytes still match what was imported.
-     *
-     * Re-hashed here rather than trusted, every time, before the file is mapped. Hashing a
-     * gigabyte costs a couple of seconds, which is a fraction of loading it -- and this is the
-     * last point at which a substituted file can be caught before it is executed.
-     */
+    /** The model to load, re-hashed before every load, if its bytes still match the import. */
     suspend fun activeVerifiedModel(): AssistModelEntry? = verified(dao.activeModel())
 
     /**
@@ -142,11 +123,7 @@ class AssistModelRepository internal constructor(
         return entry
     }
 
-    /**
-     * Makes [entry] the model [activeVerifiedModel] and the service load. Exactly one model is
-     * ever active -- see [com.borderkeys.data.dao.AssistModelDao.setActive]'s own doc -- so this
-     * both activates [entry] and deactivates whichever one held that place before.
-     */
+    /** Makes [entry] the one active model, deactivating the previous one. */
     suspend fun activate(entry: AssistModelEntry) {
         dao.setActive(entry.id)
     }
@@ -154,10 +131,7 @@ class AssistModelRepository internal constructor(
     suspend fun remove(entry: AssistModelEntry) {
         fileFor(entry).delete()
         dao.delete(entry)
-        // Removing the active model must not leave none active while another, perfectly usable
-        // one is still sitting there imported -- the assistant would report "no model" for a
-        // reason nothing in the UI explains. The most recently imported survivor takes the place
-        // the removed one held, the same choice import() itself already makes for a fresh one.
+        // Removing the active model activates the most recently imported one left.
         if (entry.active) {
             dao.observeAll().first().firstOrNull()?.let { dao.setActive(it.id) }
         }

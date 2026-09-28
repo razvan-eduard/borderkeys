@@ -6,18 +6,8 @@ package com.borderkeys.data.theme
 import kotlinx.serialization.Serializable
 
 /**
- * Size and position, as one value -- so the keyboard can hold two of them, one per orientation.
- *
- * [KeyboardPreferences]'s own `heightScale`/`widthScale`/`positionMode`/`bottomOffsetDp`/
- * `horizontalOffsetDp` are portrait's copy of exactly these fields, kept flat
- * rather than moved in here, so an existing install's portrait sizing survives this change
- * without a migration: the stored file already has those keys at the top level, and
- * `ignoreUnknownKeys`/defaults mean a landscape object that was never there before just
- * appears, defaulted, the first time this build reads an older file.
- *
- * Landscape's own default height is smaller than portrait's 1f, not equal to it -- a landscape
- * screen is a third the height of a portrait one, and a keyboard sized as if it were not is
- * exactly the "unacceptable" size this exists to fix.
+ * Size and position as one value, one per orientation. Portrait's copy is kept as flat fields of
+ * [KeyboardPreferences]; this class is landscape's, with a smaller default height.
  */
 @Serializable
 data class KeyboardPlacement(
@@ -27,20 +17,13 @@ data class KeyboardPlacement(
     val bottomOffsetDp: Float = 0f,
     val horizontalOffsetDp: Float = 0f,
 ) {
-    /**
-     * A file that parses is not a file that makes sense -- the same reasoning
-     * [KeyboardPreferences.sanitised] and [KeyboardTheme.sanitised] apply to their own fields,
-     * applied here so a corrupt or hand-edited landscape object cannot escape the repository
-     * either.
-     */
+    /** Clamps every field; applied on read. */
     fun sanitised(): KeyboardPlacement = copy(
         heightScale = heightScale.coerceIn(
             KeyboardPreferences.MIN_HEIGHT_SCALE, KeyboardPreferences.MAX_HEIGHT_SCALE,
         ),
         widthScale = widthScale.coerceIn(KeyboardPreferences.MIN_WIDTH_SCALE, 1f),
-        // Docked to floating, and nothing past it: a split mode once held the next value, was
-        // never drawn by anything, and a hand-edited file selecting it got a keyboard that
-        // silently fell back to being centred. It now falls back to docked, on purpose.
+        // Docked to floating; anything else reads as docked.
         positionMode = if (positionMode in KeyboardPreferences.MODE_DOCKED..KeyboardPreferences.MODE_FLOATING) {
             positionMode
         } else {

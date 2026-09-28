@@ -71,23 +71,8 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
- * Bursts and glows, ported from a calendar app's own "today" decoration and retuned for a
- * keyboard: one card per surface, each with its own master switch and its own independent
- * Outline (traces the surface's own border or arc) and Fill (the original "inside particles"
- * ambient/burst) layers.
- *
- * Neither layer's own controls are hidden behind the region's master switch -- the whole point
- * is dialling in a look and only then deciding whether to switch the region on, the same
- * reasoning the live preview on the Suggestion Strip's own card already followed in the first
- * release.
- *
- * "My presets" ([MyPresetsCard], at the top) is a different thing from any one region's own
- * picker: one saved (outline, fill) combination, under a name the user chose, applied to *every*
- * region at once -- a common look across the whole keyboard in one tap, the way
- * [ThemeScreen][com.borderkeys.settings.screen.ThemeScreen]'s own "My Themes" already sets the
- * entire [com.borderkeys.data.theme.KeyboardTheme] in one tap rather than one field at a time.
- * Per-region customisation below is untouched and still fully independent; a saved preset is a
- * fast starting point for all five, not a replacement for dialling in one on its own.
+ * Particle effects: [MyPresetsCard], whose presets apply to every region at once, then one card
+ * per surface with its own switch and its Outline and Fill layers.
  */
 @Composable
 fun EffectsScreen(modifier: Modifier = Modifier) {
@@ -108,19 +93,14 @@ fun EffectsScreen(modifier: Modifier = Modifier) {
     val customEffectsPresets by repository.customEffectsPresets
         .collectAsStateWithLifecycle(initialValue = remember { repository.currentCustomEffectsPresets() })
 
-    // Which "save"/"rename"/"delete" dialog (if any) is open right now -- the same shape
-    // ThemeScreen's own savingCurrentTheme/renaming/deleting already are. Saving needs to ask
-    // which region's look to copy -- see ParticleSavePresetDialog -- so it only needs a flag
-    // here, not a captured pair the way it once did.
+    // Which save, rename or delete dialog is open.
     var savingEffectsPreset by remember { mutableStateOf(false) }
     var renamingEffectsPreset by remember { mutableStateOf<CustomEffectsPresetEntry?>(null) }
     var deletingEffectsPreset by remember { mutableStateOf<CustomEffectsPresetEntry?>(null) }
     var presetNotice by remember { mutableStateOf("") }
 
     val baseline = baselineFor(particleEffects, customEffectsPresets)
-    // Off applied, and still exactly Off: every region card is greyed out and takes no input.
-    // Nothing can be changed while everything is off -- a preset is the way in -- so "custom"
-    // never has to mean "off, but with something dialled in underneath".
+    // Off applied and unchanged: every region card is greyed out and takes no input.
     val locked = baseline.id == BuiltInEffectsPresets.OFF.id && baseline.matches(particleEffects)
 
     val presetActions = EffectsPresetActions(
@@ -143,8 +123,7 @@ fun EffectsScreen(modifier: Modifier = Modifier) {
     )
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        // Above the particle cards: an effect answers an event, a particle decorates a surface,
-        // and the first is the smaller idea to meet first.
+        // Event effects, above the particle cards.
         EventEffectsSection(
             effects = appearance.preferences.effects,
             customColours = theme.customColours,
@@ -236,9 +215,7 @@ fun EffectsScreen(modifier: Modifier = Modifier) {
                     if (id == null) {
                         presetNotice = strings[Keys.PARTICLE_EFFECTS_PRESET_LIMIT_REACHED]
                     } else {
-                        // The preset just saved is the one the regions now count as coming
-                        // from -- not the one they were built on top of. Regions other than
-                        // the one it was copied from may still differ, and the card says so.
+                        // The preset just saved becomes the applied one.
                         repository.markEffectsPresetApplied(id)
                     }
                 }
@@ -271,9 +248,8 @@ fun EffectsScreen(modifier: Modifier = Modifier) {
 }
 
 /**
- * The preset everything on the screen is measured against: the chip shown selected, whether the
- * card reports unsaved changes, and which layers wear a "Custom" badge -- one meaning of
- * "custom" (not what the applied preset gave it) at every level, not one per level.
+ * The preset everything on the screen is measured against: the chip shown selected, the
+ * unsaved-changes notice, and each layer's "Custom" badge.
  */
 private sealed class Baseline(val id: String) {
     class BuiltIn(val preset: BuiltInEffectsPreset) : Baseline(preset.id)
@@ -284,7 +260,7 @@ private sealed class Baseline(val id: String) {
         is Saved -> entry.matches(settings)
     }
 
-    /** What this preset gave the region [key] -- see [RegionCard] for what differing from it means. */
+    /** What this preset gave the region [key]. */
     fun lookFor(key: String): ParticleRegionLook = when (this) {
         is Saved -> ParticleRegionLook(entry.outline, entry.fill)
         is BuiltIn -> preset.lookFor(key)
@@ -292,11 +268,8 @@ private sealed class Baseline(val id: String) {
 }
 
 /**
- * [ParticleEffectsSettings.appliedPresetId] resolved to the preset it names. When nothing has
- * been applied yet -- or the saved preset it named was deleted since -- a preset the regions
- * happen to match exactly is taken, and failing that Off: every install starts there, and Off
- * is a preset with the same weight as any named one, so whatever was changed since is exactly
- * the change from it the card and the layer badges should show.
+ * [ParticleEffectsSettings.appliedPresetId] resolved to its preset; when none is applied, or it
+ * was deleted, a preset the regions match exactly, and failing that Off.
  */
 private fun baselineFor(settings: ParticleEffectsSettings, saved: List<CustomEffectsPresetEntry>): Baseline {
     val applied = settings.appliedPresetId
@@ -307,19 +280,13 @@ private fun baselineFor(settings: ParticleEffectsSettings, saved: List<CustomEff
     return Baseline.BuiltIn(BuiltInEffectsPresets.OFF)
 }
 
-/** One region's own current (outline, fill), for [MyPresetsCard]'s region selector -- read-only
- *  here, since a preset saved from this region is not scoped back to it and applying one writes
- *  to every region at once regardless of which is selected when the tap happens. */
+/** One region's current (outline, fill), for the save dialog's region selector. */
 private class RegionSlot(val key: String, val title: String, val region: ParticleRegionSettings)
 
-/** [MyPresetsCard]'s own saved-preset library plus the actions its controls trigger -- bundled
- *  into one object rather than loose callback parameters. Neither apply action is scoped to a
- *  single region: [onApplyCustom] writes [CustomEffectsPresetEntry.outline]/[.fill] to every
- *  region identically, and [onApplyBuiltIn] writes [BuiltInEffectsPreset]'s own five, one per
- *  region. [onSave] only opens the save dialog -- see [ParticleSavePresetDialog] for where the
- *  region to snapshot is actually chosen. See
- *  [com.borderkeys.data.theme.ThemeRepository.saveCustomEffectsPreset] for what save/rename/
- *  delete actually do. */
+/**
+ * [MyPresetsCard]'s saved presets and actions: [onApplyCustom] writes one pair to every region,
+ * [onApplyBuiltIn] a built-in preset's five, and [onSave] opens [ParticleSavePresetDialog].
+ */
 private class EffectsPresetActions(
     val saved: List<CustomEffectsPresetEntry>,
     val onApplyCustom: (CustomEffectsPresetEntry) -> Unit,
@@ -329,10 +296,7 @@ private class EffectsPresetActions(
     val onDelete: (CustomEffectsPresetEntry) -> Unit,
 )
 
-/** [BuiltInEffectsPreset.id] carries no display text of its own -- `:data` does not depend on
- *  `:i18n` -- so this is the one place that maps its stable slug to a translated string, the
- *  same way [FillLayerSection] already maps [ParticleEffectsSettings.FILL_FIRE] to
- *  [Keys.PARTICLE_PRESET_FIRE]. */
+/** The catalogue key of a [BuiltInEffectsPreset.id]'s display name. */
 private fun builtInPresetNameKey(id: String): String = when (id) {
     "off" -> Keys.PARTICLE_EFFECTS_BUILTIN_OFF
     "ice" -> Keys.PARTICLE_EFFECTS_BUILTIN_ICE
@@ -343,18 +307,9 @@ private fun builtInPresetNameKey(id: String): String = when (id) {
 }
 
 /**
- * One card, at the top of the screen. Two rows of chips: [BuiltInEffectsPresets.ALL] first, then
- * whatever the user has saved themselves -- both apply to every region at once. The selected
- * chip is the preset the regions were last given ([ParticleEffectsSettings.appliedPresetId],
- * stored with them), whether or not they have been tweaked since; tweaked, the pulsing text at
- * the bottom of this card says what they drifted from. Highlighting used to depend on the five
- * regions still matching a preset exactly, which held only until the first slider moved, and the
- * drift notice on a value this composable alone remembered, which held only until the screen
- * was left -- so a look built on Fire showed no preset and no warning at all. [baseline] is
- * what both are measured against now; see [baselineFor] for how it is chosen when nothing has
- * been applied yet. Nothing here is scoped to one region -- picking which region's look to copy
- * only comes up inside [ParticleSavePresetDialog], and only because saving a new preset still
- * needs one unambiguous source, not because this card is organised by region.
+ * The top card: [BuiltInEffectsPresets.ALL], then the user's saved presets, each applying to
+ * every region. The selected chip is [baseline]; while the regions differ from it, a pulsing
+ * notice names it.
  */
 @Composable
 private fun MyPresetsCard(
@@ -395,8 +350,7 @@ private fun MyPresetsCard(
                     Text(strings[Keys.THEME_DELETE], color = MaterialTheme.colorScheme.error)
                 }
             }
-            // Beside the button it is asking to be pressed, not under it: the notice and the
-            // action it wants are one thought, and a line of its own read as a separate remark.
+            // The notice, beside the save button.
             if (!baseline.matches(particleEffects)) {
                 val name = when (baseline) {
                     is Baseline.BuiltIn -> strings[builtInPresetNameKey(baseline.preset.id)]
@@ -419,9 +373,7 @@ private fun MyPresetsCard(
     }
 }
 
-/** "Unsaved changes since Fire" -- fades in and out rather than sitting still, since it is meant
- *  to be noticed once and then acted on (save, or pick a different preset), not read as a static
- *  label the way everything else on this card is. */
+/** "Unsaved changes since Fire", fading in and out. */
 @Composable
 private fun PulsingUnsavedText(text: String, modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition()
@@ -442,11 +394,8 @@ private fun PulsingUnsavedText(text: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * One surface's whole card: its own master switch, an optional live [preview] (only the
- * Suggestion Strip's card passes one), and its two independent layers.
- *
- * [regionKey] names this region in the custom-colour-swatch keys [ColourRow] persists under --
- * see [particleColourKey].
+ * One surface's card: its switch, an optional live [preview], and its two layers. [regionKey]
+ * names the region in the custom-colour keys; see [particleColourKey].
  */
 @Composable
 private fun RegionCard(
@@ -460,9 +409,7 @@ private fun RegionCard(
     onRegionChange: ((ParticleRegionSettings) -> ParticleRegionSettings) -> Unit,
     preview: @Composable (() -> Unit)? = null,
 ) {
-    // "Custom" on a layer means one thing only: it is not what the applied preset gave this
-    // region -- see baselineFor. Off is a preset like any other here, with stock looks of its
-    // own to differ from.
+    // "Custom": not what the applied preset gave this region.
     val outlineCustom = region.outline != baseline.outline
     val fillCustom = region.fill != baseline.fill
     Box {
@@ -473,8 +420,7 @@ private fun RegionCard(
             )
         }
         if (locked) {
-            // Eats taps over the whole card, and only taps: a clickable does not claim drags, so
-            // the page still scrolls across it. No ripple, since nothing here is a target.
+            // Takes taps over the whole card, not drags, without a ripple.
             Box(
                 modifier = Modifier
                     .matchParentSize()
@@ -484,7 +430,7 @@ private fun RegionCard(
     }
 }
 
-/** How dim a locked region card is drawn -- Material's own disabled-content alpha. */
+/** How dim a locked region card is drawn: Material's disabled-content alpha. */
 private const val LOCKED_ALPHA = 0.38f
 
 @Composable
@@ -499,11 +445,8 @@ private fun RegionCardContent(
     onRegionChange: ((ParticleRegionSettings) -> ParticleRegionSettings) -> Unit,
     preview: @Composable (() -> Unit)?,
 ) {
-    // Every change below is a transform applied to whatever is *stored* at the moment the write
-    // runs, never a snapshot of the region this composition was last handed: the store answers
-    // asynchronously, and a snapshot written from a composition that has not caught up yet
-    // silently reverted the change before it -- switch the region on, tap a style before the
-    // switch has echoed back, and the switch flipped itself off again.
+    // Every change below transforms what is stored when the write runs, not this composition's
+    // copy of the region.
     val strings = LocalStrings.current
     SettingsSectionCard(title) {
         SwitchRow(
@@ -512,9 +455,7 @@ private fun RegionCardContent(
             checked = region.enabled,
         ) { value -> onRegionChange { it.copy(enabled = value) } }
 
-        // Everything under the switch is about how this region looks when it is on, so it dims
-        // and stops taking input when it is off -- the same treatment a locked card gets, for
-        // the same reason. The switch itself stays live, because it is the way back.
+        // Dimmed and not taking input while the region is off; the switch stays live.
         Box {
             Box(modifier = Modifier.alpha(if (region.enabled) 1f else LOCKED_ALPHA)) {
                 Column {
@@ -552,8 +493,7 @@ private fun RegionCardContent(
     }
 }
 
-/** The section label, with a "Custom" badge trailing it exactly when [custom] -- shared shape
- *  for both [OutlineLayerSection] and [FillLayerSection] rather than written out twice. */
+/** A layer's section label, with a "Custom" badge when [custom]. */
 @Composable
 private fun LayerSectionHeader(title: String, custom: Boolean) {
     val strings = LocalStrings.current
@@ -573,26 +513,14 @@ private fun LayerSectionHeader(title: String, custom: Boolean) {
     }
 }
 
-/** [layer]'s own outline style, live, traced around the chip while it is the selected one --
- *  see [ParticleChipPreview]'s own doc for why this is the real particle engine rather than a
- *  second, separately-drawn animation. Never wrapped for a chip that is not currently selected:
- *  nothing has been "set" for a style nobody has picked yet, so there is nothing truthful to
- *  preview there.
- *
- *  [FilterChipDefaults.shape] is read once, here, and handed to both [PickerChip] and
- *  [ParticleChipPreview] -- the one real shape, not a corner radius this composable guesses at
- *  and that [PickerChip]'s own chip could quietly stop matching later (see [PickerChip]'s own
- *  doc for why that already happened once).
- *
- *  Drawn *over* [PickerChip], not behind it: fill spawns everywhere inside the shape, not just
- *  its edge, and a chip's own container is opaque, so a preview sitting behind it would show
- *  only the sliver of each particle that happens to escape past the corners. The chip is a plain
- *  `FilterChip` with no click handling of its own added on top, so the tap still reaches it
- *  through the particle view above -- confirmed on-device, not just assumed. */
+/**
+ * [layer]'s outline style traced live around the chip while it is the selected one, drawn over
+ * the chip in [FilterChipDefaults.shape]; the tap still reaches the chip.
+ */
 @Composable
 private fun OutlineTypeChip(label: String, layer: ParticleOutlineLayer, selected: Boolean, onClick: () -> Unit) {
     PreviewedChip(label, selected, onClick) { shape ->
-        // Not clipped to the chip: every outline style draws just outside it now.
+        // Not clipped: outline styles draw just outside the chip.
         ParticleChipPreview(shape = shape, outline = layer, modifier = Modifier.matchParentSize())
     }
 }
@@ -606,15 +534,8 @@ private fun FillTypeChip(label: String, layer: ParticleFillLayer, selected: Bool
 }
 
 /**
- * A [PickerChip] whose layout box is exactly its visible surface, with [preview] laid over it
- * when [selected]. Material's chip pads its own layout out to the 48dp minimum touch target
- * while drawing a 32dp surface -- so a preview sized to "the chip" was sized to the touch
- * target, and the traced outline ran 8dp outside the surface on every side. The particle
- * element has to be the drawn shape, nothing else (see [com.borderkeys.ime.fx.ParticleElement]),
- * so the minimum is switched off for these chips and the box the preview fills *is* the surface.
- * Applied to every chip in these rows -- unselected ones, and the "None" chip that never
- * previews anything ([selected] false, [highlighted] true) -- so no chip in a row is taller
- * than its neighbours and selecting one never shifts the row.
+ * A [PickerChip] whose layout box is exactly its visible surface, without Material's 48dp minimum
+ * touch target, with [preview] laid over it when [selected]. Every chip in these rows uses it.
  */
 @Composable
 private fun PreviewedChip(
@@ -638,11 +559,8 @@ private fun PreviewedChip(
 }
 
 /**
- * Outline's own type picklist (None plus its three styles), and -- only while a real style is
- * chosen, since None has nothing to colour or pace -- its colours, speed, density and width.
- *
- * [custom] is the caller's verdict on whether this layer still is what the applied preset gave
- * it -- see [RegionCard]; the badge here only shows it.
+ * Outline's type picklist and, while a style other than None is chosen, its colours, speed,
+ * density and width. [custom] shows the "Custom" badge.
  */
 @Composable
 private fun OutlineLayerSection(
@@ -740,10 +658,8 @@ private fun OutlineLayerSection(
 }
 
 /**
- * Fill's own type picklist -- None plus the original five presets. Otherwise the same shape as
- * [OutlineLayerSection], minus the width axis Fill has no equivalent for: picking None hides
- * colour/speed/density the same way it does for Outline, and a region can now run with only its
- * Outline layer showing.
+ * Fill's type picklist and, while a style other than None is chosen, its colours, speed and
+ * density.
  */
 @Composable
 private fun FillLayerSection(
@@ -833,8 +749,7 @@ private fun FillLayerSection(
     }
 }
 
-/** Renaming an existing preset needs nothing beyond a name -- unlike saving a new one, it is
- *  never ambiguous which look is being renamed. */
+/** Renames a saved preset. */
 @Composable
 private fun ParticlePresetNameDialog(
     title: String,
@@ -868,13 +783,7 @@ private fun ParticlePresetNameDialog(
     )
 }
 
-/**
- * Saving a *new* preset is not just a name: a custom preset is one (outline, fill) pair, so
- * saving one still has to ask which region's pair to copy -- the one piece of per-region choice
- * this feature has left, deliberately confined to this dialog rather than sitting in
- * [MyPresetsCard] itself, where it would read as "presets are still organised by region" when
- * they are not.
- */
+/** Saves a new preset: a name, and which region's (outline, fill) pair to copy. */
 @Composable
 private fun ParticleSavePresetDialog(
     regionSlots: List<RegionSlot>,
@@ -942,14 +851,10 @@ private fun ParticlePresetDeleteDialog(name: String, onConfirm: () -> Unit, onDi
     )
 }
 
-/** One region+layer+slot's own custom-colour-swatch key --
- *  [com.borderkeys.data.theme.KeyboardTheme.customColours] is a flat, generically-keyed map
- *  shared by every colour picker in the app, not something this screen owns, so a key needs
- *  building rather than a pre-declared constant per region. */
+/** The [com.borderkeys.data.theme.KeyboardTheme.customColours] key of a region, layer and slot. */
 private fun particleColourKey(regionKey: String, layerKey: String, slot: String): String =
     "particle_${regionKey}_${layerKey}_$slot"
 
-/** Every speed/density/width slider shares the same 0.5..2 range in 0.25 stops -- five stops
- *  between the ends, the same formula the first release's single speed slider already used. */
+/** The steps of every speed, density and width slider: 0.5..2 in 0.25 stops. */
 private val PARTICLE_SLIDER_STEPS =
     ((ParticleEffectsSettings.MAX_SPEED - ParticleEffectsSettings.MIN_SPEED) / 0.25f).roundToInt() - 1

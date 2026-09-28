@@ -3,13 +3,8 @@
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 """Turns Unicode's emoji-test.txt into the panel's two assets.
 
-The groups in that file are the ones every emoji keyboard uses, in the order the Unicode
-consortium recommends for exactly this purpose, so the panel gets its categories from the
-source rather than from someone's idea of which face belongs where. The same file carries each
-emoji's name, which becomes the search index: one `emoji<TAB>name` line per emoji.
-
-Skin-tone and hair variants are dropped. They multiply the list by six for a choice the panel
-has no room to offer, and the base emoji is what the modifier modifies.
+The panel's categories are that file's groups, in its order. Each emoji's name becomes the
+search index: one `emoji<TAB>name` line per emoji. Skin-tone and hair variants are dropped.
 
     python3 tools/build_emoji.py --source emoji-test.txt \\
         --out keyboard/src/main/assets/emoji/emoji.txt \\
@@ -35,8 +30,8 @@ LANGUAGES = ("en", "de", "es", "fr", "it", "ro")
 # emoji-test.txt's fully-qualified form does. Both sides are compared without it.
 PRESENTATION_SELECTOR = "\ufe0f"
 
-# The keyboard shows eight tabs. Unicode's "Component" group is modifiers on their own, which
-# are not emoji anyone inserts, and People & Body is folded into Smileys as every keyboard does.
+# The keyboard's eight tabs: Unicode's "Component" group is left out, and People & Body is folded
+# into Smileys.
 GROUPS = {
     "Smileys & Emotion": "smileys",
     "People & Body": "smileys",
@@ -93,9 +88,7 @@ def main():
         buckets[GROUPS[group]].append(emoji)
         names.append((emoji, match.group(3).lower()))
 
-    # One line per category: the name, a tab, then the emoji separated by spaces. No emoji
-    # contains a space or a tab, so this needs no parser -- which keeps a JSON library out of
-    # the keyboard process for a file that is a list of lists of strings.
+    # One line per category: the name, a tab, then the emoji separated by spaces.
     lines = [name + "\t" + " ".join(buckets[name]) for name in order]
     arguments.out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     if arguments.names_out is not None:

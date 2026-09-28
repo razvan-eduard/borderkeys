@@ -2,25 +2,15 @@
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
 #
 # R8 runs only here, in the application module. Library modules contribute rules through
-# their consumer-rules.pro; nothing below duplicates those.
+# their consumer-rules.pro.
 
-# Stack traces are only ever read locally -- there is no crash reporter and no network -- so
-# keep them legible instead of uploading a mapping file somewhere.
+# Legible stack traces, without a mapping file.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
 
 # --- JNI ------------------------------------------------------------------------------
-# JNI_OnLoad resolves classes and methods by name through RegisterNatives. Renaming either
-# turns a link error into a crash on the first keystroke, at which point the keyboard is
-# already on screen.
-#
-# Without members, not just -keepclasseswithmembernames: "names" only stops R8 renaming a
-# native method that survives shrinking, it does not stop the method being shrunk away in the
-# first place. AssistNative.nativeContextTokens has no Kotlin caller (its only use is the C++
-# side's own RegisterNatives table, invisible to R8's reachability analysis) and R8 correctly
-# read that as dead code -- removing it from the release DEX while the native library still
-# tried to bind it, which is JNI_ERR at JNI_OnLoad, a crash before the assistant's first
-# request rather than the first keystroke this comment already worried about.
+# JNI_OnLoad resolves classes and methods by name through RegisterNatives, so every native
+# method is kept, unrenamed and with its class, including one with no Kotlin caller.
 -keepclasseswithmembers,includedescriptorclasses class * {
     native <methods>;
 }
@@ -31,14 +21,8 @@
 -dontwarn net.zetetic.database.**
 
 # --- Tink, via androidx.security:security-crypto -----------------------------------------
-# Tink is compiled against Error Prone's annotations and JSR-305, both of which are
-# compile-time only and are not on the runtime classpath by design. R8 refuses to build once
-# Tink becomes reachable -- which happened the moment the IME service started opening the
-# database -- unless it is told that their absence is expected.
-#
-# Discarding them is correct: they carry no behaviour, only static-analysis contracts. It is
-# also the third thing this one dependency has cost, after gson and Tink itself; see
-# docs/licensing.md section 1.6 for the alternative.
+# Tink is compiled against Error Prone's annotations and JSR-305, which are compile-time only
+# and absent at runtime.
 -dontwarn com.google.errorprone.annotations.**
 -dontwarn javax.annotation.**
 -dontwarn javax.annotation.concurrent.**
@@ -71,6 +55,5 @@
 }
 
 # --- Absent by design -------------------------------------------------------------------
-# No rules for reflection frameworks, DI containers, HTTP clients or serialisers other than
-# the one above, because none of those are on the classpath. verifyNoForbiddenDependencies
-# fails the build if that ever stops being true.
+# No rules for reflection frameworks, DI containers, HTTP clients or other serialisers: none
+# are on the classpath, and verifyNoForbiddenDependencies fails the build if one is.

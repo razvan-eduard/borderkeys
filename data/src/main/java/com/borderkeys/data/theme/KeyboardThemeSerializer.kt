@@ -11,14 +11,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import java.io.InputStream
 import java.io.OutputStream
 
-/**
- * Reads and writes [KeyboardTheme] as JSON for the typed DataStore.
- *
- * Typed rather than preferences-backed. A string-keyed bag would turn every field rename into a
- * silent default at runtime, and there is no compiler anywhere in that path; here a rename is a
- * compile error, and `ignoreUnknownKeys` means a file written by a newer build is read by an
- * older one instead of throwing.
- */
+/** Reads and writes [KeyboardTheme] as JSON for the typed DataStore. */
 object KeyboardThemeSerializer : Serializer<KeyboardTheme> {
 
     private val json = PERSISTED_JSON
@@ -36,25 +29,17 @@ object KeyboardThemeSerializer : Serializer<KeyboardTheme> {
                 .withLegacyPattern(text)
                 .sanitised()
         } catch (error: SerializationException) {
-            // Translated rather than propagated. DataStore only recognises CorruptionException,
-            // and only a CorruptionException reaches the replace handler that rewrites the file
-            // with a default -- anything else surfaces on the caller's collector, on the UI
-            // thread, as a crash while showing a keyboard.
+            // Only a CorruptionException reaches DataStore's replace handler.
             throw CorruptionException("the keyboard theme file could not be parsed", error)
         } catch (error: IllegalArgumentException) {
-            // decodeToString rejects malformed UTF-8, which is what a truncated or partially
-            // overwritten file looks like.
+            // decodeToString rejects malformed UTF-8.
             throw CorruptionException("the keyboard theme file is not valid UTF-8", error)
         }
     }
 
     /**
-     * Carries a theme written before patterns could layer.
-     *
-     * The single `backgroundPattern` became a list. `ignoreUnknownKeys` would drop the old key
-     * without a word, so the one that was chosen is read out of the raw text and becomes the
-     * only member of the new list. Read from the JSON rather than kept as a field on the class,
-     * so nothing writes the dead key back out.
+     * Reads an older file's single `backgroundPattern` key from [text] into [backgroundPatterns],
+     * when that list is empty.
      */
     private fun KeyboardTheme.withLegacyPattern(text: String): KeyboardTheme {
         if (backgroundPatterns.isNotEmpty()) {

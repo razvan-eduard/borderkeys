@@ -28,43 +28,17 @@ import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
 
 /**
- * Where the keyboard actually sits, not how wide the preview column happens to be.
- *
- * [KeyboardHostView] does its own placement arithmetic in [KeyboardHostView.setPlacement] --
- * width, which edge, how far off the bottom -- the same class and the same call the input method
- * makes from `BorderKeysService.applyPlacement`. Handing it the real preferences is what lets
- * one-handed, floating and a resized dock actually look like what they are, rather than being
- * described in words above a keyboard that ignores all of them. Every caller of this composable
- * gets the same real placement, on purpose: a Theme preview that showed a keyboard sitting
- * somewhere other than where it actually sits would just be a second, contradicting answer to
- * "where is my keyboard" next to Size's own.
- *
- * Height is the one exception, and it is the same exception everywhere this is called: fed
- * [PREVIEW_HEIGHT_FRACTION] of a *standard* keyboard's height -- a fresh
- * `KeyboardPreferences().placementFor(isLandscape)`, the same "standard" `SizeScreen`'s own
- * reset button resets to -- rather than whatever `heightScale` the real preferences hold. A
- * keyboard someone has dragged tall or short is still worth showing at that real height on the
- * screen that changes it; every other screen embedding this preview has no reason to grow or
- * shrink because of a slider on a different one.
- *
- * Sized to exactly what [KeyboardHostView] measures itself at otherwise: nothing here sets a
- * height, so the surrounding [Box] wraps to whatever height the real view -- number row, quick
- * action bar and all -- actually comes out to for the preferences it was just handed, the same
- * way it would in the keyboard itself.
- *
- * Takes one [KeyboardAppearance] rather than a theme and a set of preferences as two loose
- * parameters -- see [KeyboardAppearance] for why: this preview once composed the keyboard's
- * layout from nothing but the raw asset, ignoring every one of [KeyboardAppearance.preferences]
- * that says which keys should even be there, simply because preferences were something the
- * caller had to remember to also pass and also apply.
+ * The keyboard where it actually sits: width, edge and offsets come from the real placement,
+ * through [KeyboardHostView.setPlacement] as in the input method. The height is always
+ * [PREVIEW_HEIGHT_FRACTION] of a standard keyboard's; nothing here sets a height, so the [Box]
+ * wraps to what [KeyboardHostView] measures.
  */
 @Composable
 fun PlacementPreview(
     appearance: KeyboardAppearance,
     modifier: Modifier = Modifier,
     layoutId: String = "qwerty",
-    /** Which of [KeyboardPreferences.placementFor]'s two answers to preview -- the tab picked
-     *  on screen, not necessarily which way the phone is actually held right now. */
+    /** Which of [KeyboardPreferences.placementFor]'s two answers to preview. */
     isLandscape: Boolean = false,
 ) {
     val context = LocalContext.current
@@ -81,9 +55,7 @@ fun PlacementPreview(
     ) {
         AndroidView(
             factory = { viewContext ->
-                // Wrapped so the host can be narrower or offset from either edge, and gravity
-                // on its own FrameLayout cell is what lets it be, without Compose needing an
-                // opinion about one-handed mode.
+                // Wrapped so the host can be narrower or offset from either edge.
                 FrameLayout(viewContext).apply {
                     addView(
                         KeyboardHostView(viewContext, paints, strings).apply {
@@ -109,8 +81,7 @@ fun PlacementPreview(
                     effectiveTheme, context.resources.displayMetrics,
                     standardHeightScale * PREVIEW_HEIGHT_FRACTION, context,
                 )
-                // The same three settings the input method composes, in the same order, so a
-                // key the keyboard does not have is not a key this preview shows either.
+                // The same three settings the input method composes, in the same order.
                 var composed = layout
                 if (!preferences.emojiKey) {
                     composed = composed.withoutEmojiKey()
@@ -123,10 +94,7 @@ fun PlacementPreview(
                 }
                 view.keyboard.setLayout(composed)
 
-                // A fourth setting the input method composes -- BorderKeysService.applyQuickActions
-                // does the same three steps, gated the same way. Missing here, the bar was left at
-                // View's own default visibility, showing a collapsed "more" button that opens onto
-                // nothing beside a strip this screen otherwise renders correctly.
+                // The quick action bar, as BorderKeysService.applyQuickActions sets it.
                 if (preferences.quickActionsEnabled) {
                     val chosen = QuickActionBar.resolve(preferences.quickActions, preferences.customQuickActions)
                         .filterNot {
@@ -157,15 +125,11 @@ fun PlacementPreview(
                 view.onThemeChanged()
                 view.requestLayout()
             },
-            // Width only -- no height() or fillMaxHeight() anywhere in this Box, so the AndroidView
-            // measures KeyboardHostView with its own real height and both it and the Box wrap to
-            // exactly that, rather than a guess at how tall a keyboard configuration might get.
+            // Width only: the Box wraps to the height KeyboardHostView measures.
             modifier = Modifier.fillMaxWidth(),
         )
     }
 }
 
-/** Every call site of [PlacementPreview] shows the keyboard at this fraction of a standard
- *  height -- see the class doc for why it is a fraction of *standard* rather than of whatever
- *  the real preferences hold, and why it is the same fraction everywhere this is used. */
+/** The preview's height, as a fraction of a standard keyboard's. */
 private const val PREVIEW_HEIGHT_FRACTION = 0.75f

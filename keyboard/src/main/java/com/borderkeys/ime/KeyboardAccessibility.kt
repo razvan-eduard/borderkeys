@@ -15,25 +15,9 @@ import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.i18n.Keys
 
 /**
- * Makes a keyboard drawn on a Canvas usable with a screen reader.
- *
- * Drawing the keys instead of building a view per key is what keeps `onDraw` under four
- * milliseconds, and it is also what makes the keyboard invisible to TalkBack: there is nothing
- * in the view tree to explore. Nothing about that trade is inevitable, but it has to be paid
- * back deliberately, and this is the payment -- a virtual view hierarchy served from the same
- * compiled geometry the drawing and the hit-testing use, so a key that is drawn is a key that
- * can be explored and there is no second layout to fall out of step.
- *
- * Written against `AccessibilityNodeProvider` from the framework rather than
- * `ExploreByTouchHelper`, which does the same job with less code but lives in
- * `androidx.customview` -- a dependency this module does not have, and one that would be added
- * for convenience rather than for a capability the framework lacks.
- *
- * How exploration works, since it drives every decision below: with a screen reader on, a
- * finger dragged across the keyboard produces hover events rather than touches. Each hover
- * moves accessibility focus to the key under it and the reader speaks that key. A double tap
- * anywhere then sends `ACTION_CLICK` to the focused key, and that is what types it. So the two
- * things that must be right are the bounds of every key and what each one is called.
+ * The keyboard's virtual view hierarchy for a screen reader, served from the compiled geometry.
+ * A hover moves accessibility focus to the key under it; a double tap sends `ACTION_CLICK` to the
+ * focused key, which types it.
  */
 class KeyboardAccessibility(
     private val host: View,
@@ -60,13 +44,7 @@ class KeyboardAccessibility(
     private val bounds = Rect()
     private val screenOffset = IntArray(2)
 
-    /**
-     * True when something is actually listening.
-     *
-     * Checked before every event is built, because building one allocates and the overwhelming
-     * majority of sessions have no screen reader running. This is the only concession the
-     * feature makes to the hot path, and it is a single boolean read.
-     */
+    /** True while an accessibility service is listening; checked before any event is built. */
     private val isActive: Boolean
         get() = manager?.isEnabled == true && manager.isTouchExplorationEnabled
 
@@ -126,13 +104,7 @@ class KeyboardAccessibility(
             }
     }
 
-    /**
-     * Routes a hover to the key under it.
-     *
-     * Returns true when it was consumed, which the view reports back to the framework. Without
-     * this the reader has no way to tell which key a finger is over, and exploration reads the
-     * whole keyboard as one object.
-     */
+    /** Routes a hover to the key under it; returns whether it was consumed. */
     fun dispatchHoverEvent(event: MotionEvent): Boolean {
         if (!isActive || geometry.keyCount == 0) {
             return false
@@ -212,11 +184,8 @@ class KeyboardAccessibility(
     }
 
     /**
-     * What a key is called out loud.
-     *
-     * The label is right for a letter and useless for everything else: a screen reader saying
-     * "shift" is helpful and one saying the name of a glyph nobody can see is not. Keys that
-     * carry alternates say so, because a long press is otherwise undiscoverable without sight.
+     * What a key is called out loud: a name for a function key, the label for the rest, and a
+     * mention of its alternates when it has any.
      */
     private fun describe(index: Int): CharSequence {
         val code = geometry.keyCode[index]
@@ -279,8 +248,7 @@ class KeyboardAccessibility(
         const val HOST_ID = AccessibilityNodeProvider.HOST_VIEW_ID
         const val NO_KEY = KeyboardCanvasView.NO_KEY
 
-        // The classes a screen reader recognises as a keyboard and a key, which is what makes it
-        // announce them the way it announces every other keyboard rather than as generic views.
+        // The class names a screen reader announces as a keyboard and a key.
         const val KEYBOARD_CLASS = "android.inputmethodservice.Keyboard"
         const val KEY_CLASS = "android.inputmethodservice.Keyboard\$Key"
     }

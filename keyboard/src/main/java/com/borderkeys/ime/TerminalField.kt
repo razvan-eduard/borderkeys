@@ -8,19 +8,9 @@ import android.view.inputmethod.EditorInfo
 import com.borderkeys.data.TerminalApps
 
 /**
- * Whether the field being typed into is a terminal: a view with a buffer of its own, which
- * shows what is committed to it the moment it is committed and never a composing region, and
- * which deletes by the key events it is sent rather than by the text around a caret it does not
- * have.
- *
- * Two independent signs, either enough:
- *
- *  * **A field of no class.** `InputType.TYPE_NULL` is what a terminal declares, being no kind
- *    of text field at all; an ordinary editor always declares a class.
- *  * **An app known to be a terminal**, or one the person added, for the ones that declare a
- *    text class anyway: [TerminalApps].
- *
- * Pure, so the test suite can enumerate the input types the platform defines.
+ * Whether the field being typed into is a terminal, which shows commits at once and deletes by
+ * key events: a field of no class (`TYPE_NULL`), or an app in [TerminalApps] or added by the
+ * person.
  */
 internal object TerminalField {
 

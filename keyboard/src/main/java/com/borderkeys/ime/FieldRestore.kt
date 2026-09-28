@@ -4,18 +4,8 @@
 package com.borderkeys.ime
 
 /**
- * The smallest edit that turns one string into another.
- *
- * Its own object, tested without an editor or an `InputConnection`, for the same reason
- * [AutoCorrection] and [AutoShift] are: undo/redo on the real field could rewrite a paragraph
- * nobody touched, and the policy for not doing that is worth being able to check on its own.
- *
- * The field belongs to whatever application is behind the keyboard, not to us the way the draft
- * box's own buffer does. Replacing all of it on every step back or forward would be a bigger
- * edit than the user asked for, and one visible as a flicker or a fight with the app's own
- * cursor and spellcheck state. Trimming to the shared prefix and shared suffix and touching only
- * what is left between them is the same principle [AutoCorrection]'s revert already applies at
- * word scale: never touch more than actually changed.
+ * The smallest edit that turns one string into another: what lies between their shared prefix
+ * and shared suffix.
  */
 internal object FieldRestore {
 

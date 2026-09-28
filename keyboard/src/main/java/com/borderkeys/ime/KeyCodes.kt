@@ -4,14 +4,8 @@
 package com.borderkeys.ime
 
 /**
- * What a key on the keyboard is, as an int.
- *
- * Character keys carry their own Unicode code point, so the common case -- the one that runs on
- * every key press -- needs no lookup at all: the code *is* the character to commit. Actions are
- * negative, which makes "is this a character?" a sign test rather than a set membership check.
- *
- * Space is 32 rather than an action code, because it is a character and behaves like one
- * everywhere except that it also ends a word.
+ * What a key is, as an int: a character key's code point, space included, or a negative action
+ * code.
  */
 object KeyCodes {
     const val SPACE = ' '.code
@@ -89,10 +83,7 @@ object KeyCodes {
     }
 }
 
-/**
- * Per-key bit flags, packed into one int so the draw and touch paths read a primitive array
- * rather than dereferencing an object per key.
- */
+/** Per-key bit flags. */
 object KeyFlags {
     const val NONE = 0
 
@@ -102,7 +93,7 @@ object KeyFlags {
     /** Repeats while held: delete and the arrow keys. */
     const val REPEATABLE = 1 shl 1
 
-    /** Participates in swipe typing. Letters only: a gesture across shift means nothing. */
+    /** Participates in swipe typing: letters only. */
     const val LETTER = 1 shl 2
 
     /** Has long-press alternatives. */
@@ -111,19 +102,10 @@ object KeyFlags {
     /** Shows a preview bubble on press. Suppressed for modifiers and for space. */
     const val PREVIEW = 1 shl 4
 
-    /** Drawn in the modifier fill without being a modifier: the number row, set apart from the
-     *  letters the way a physical keyboard's function row is. */
+    /** Drawn in the modifier fill without being a modifier: the number row. */
     const val SECONDARY_ROW = 1 shl 5
 
-    /**
-     * Takes the width of an optional key the layout drops, instead of the space bar.
-     *
-     * Only the numpad symbol pages set it, and only on the key that sits between the space bar
-     * and the digits. Everywhere else the space bar absorbs, which is right: it is the key that
-     * gave the width up when the emoji or globe key took it, and it has no column to keep.
-     * A digit block does: the `0` is under the `1` only while nothing between them has moved,
-     * and giving the freed width to the space bar slid every key on its side of the row.
-     */
+    /** Takes the width of an optional key the layout drops, instead of the space bar. */
     const val ABSORBS_FREED_WIDTH = 1 shl 6
 
     fun has(flags: Int, flag: Int): Boolean = (flags and flag) != 0

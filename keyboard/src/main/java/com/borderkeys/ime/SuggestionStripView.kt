@@ -19,15 +19,8 @@ import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.predict.Candidate
 
 /**
- * The band above the keys: three candidates, or a note that nothing is being learned here.
- *
- * A `View` that draws, not a `RecyclerView` with three rows. A recycler brings a layout manager,
- * an adapter, view holders and a diff pass to lay out three pieces of text whose positions are
- * `width / 3` -- and it does that on the frame after every keystroke.
- *
- * Suggestions arrive as strings from JNI, which is the one place a string is unavoidable. They
- * are copied into a preallocated `CharArray` once, on arrival, so the draw path itself creates
- * nothing.
+ * The band above the keys: the candidates and the clipboard chip, or a note that nothing is being
+ * learned here. Words are copied into preallocated buffers on arrival; drawing allocates nothing.
  */
 @SuppressLint("ViewConstructor")
 class SuggestionStripView(
@@ -36,28 +29,20 @@ class SuggestionStripView(
     private val strings: LanguageManager,
 ) : View(context) {
 
-    /**
-     * Whether this view paints the surface behind itself.
-     *
-     * The keyboard host paints one background across the whole window, so that a pattern is
-     * continuous instead of restarting at every child's top-left corner and showing a seam
-     * where they meet. It turns this off. The settings preview has no host, so it stays on.
-     */
+    /** Whether this view paints the surface behind itself; off under [KeyboardHostView]. */
     var drawsBackground: Boolean = true
 
-    /** Mirrors [com.borderkeys.data.theme.KeyboardPreferences.hapticFeedback] -- the same tap
-     *  every key already gives, for picking, forgetting or pasting a chip instead of a letter. */
+    /** Mirrors [com.borderkeys.data.theme.KeyboardPreferences.hapticFeedback]. */
     var hapticEnabled: Boolean = true
 
-    /** The class the keys play -- see [HapticStrength] -- so a chip feels like a key. */
+    /** The [HapticFeedbackConstants] class a chip plays, the same as the keys'. */
     var hapticConstant: Int = HapticFeedbackConstants.KEYBOARD_TAP
 
     init {
         isHapticFeedbackEnabled = true
     }
 
-    /** The same tap every key already gives -- picking a suggestion, forgetting one, or pasting
-     *  the clipboard chip is as much a keystroke as any letter. */
+    /** Plays the keys' tap for a chip. */
     private fun tapHaptic() {
         if (hapticEnabled) {
             performHapticFeedback(hapticConstant)
@@ -70,38 +55,23 @@ class SuggestionStripView(
         /** The private row's Show or Hide was tapped. */
         fun onPrivateRevealToggled()
 
-        /**
-         * A suggestion held down rather than tapped.
-         *
-         * The gesture for "not this one, ever": it offers to forget the word. Held rather than
-         * tapped because tapping is how a suggestion is accepted, and the two must not be one
-         * slip apart.
-         */
+        /** A suggestion held down rather than tapped. */
         fun onSuggestionLongPressed(index: Int, word: String)
 
-        /**
-         * One of the strip's own action chips was tapped -- today only the "Forget / Cancel"
-         * pair a held suggestion turns the row into ([actionMode]). The assistant's actions
-         * lived here once; they are reached through the draft box now and never from the strip.
-         */
+        /** One of the action chips of [actionMode] was tapped. */
         fun onActionPicked(index: Int)
 
-        /** The clipboard chip was tapped. What is pasted is the service's decision, not ours. */
+        /** The clipboard chip was tapped. */
         fun onClipboardPicked()
     }
 
-    /** True while the strip is showing action chips (the forget-this-word question) rather than
-     *  word suggestions. */
+    /** True while the strip is showing action chips rather than word suggestions. */
     var actionMode: Boolean = false
         private set
 
     var listener: Listener? = null
 
-    /**
-     * Shown instead of suggestions when the editor is a password field or has asked for no
-     * personalised learning. Visible, because a user is entitled to know when the keyboard has
-     * stopped remembering -- and because silence looks identical to the feature being broken.
-     */
+    /** Whether the private row replaces the suggestions: a password field, or no learning asked. */
     var privateMode: Boolean = false
         set(value) {
             if (field != value) {
@@ -119,8 +89,7 @@ class SuggestionStripView(
             }
         }
 
-    /** The field's text, drawn while [privateReveal] is on. Copied into a fixed buffer here,
-     *  so onDraw reads characters and allocates nothing. */
+    /** The field's text, drawn while [privateReveal] is on; copied into a fixed buffer. */
     var privateText: CharSequence? = null
         set(value) {
             field = value
@@ -143,14 +112,7 @@ class SuggestionStripView(
         textAlign = android.graphics.Paint.Align.LEFT
     }
 
-    /**
-     * Whether the field behind the keyboard is empty.
-     *
-     * The idle line is an answer to "what is this row for", which is only a question before the
-     * first keystroke. Once there is text, an empty strip means the engine had nothing to offer
-     * for this particular word, and telling someone mid-sentence to start typing is worse than
-     * saying nothing at all.
-     */
+    /** Whether the field behind the keyboard is empty; the idle line shows only then. */
     var editorEmpty: Boolean = true
         set(value) {
             if (field != value) {
@@ -161,10 +123,7 @@ class SuggestionStripView(
             }
         }
 
-    /**
-     * Shown while a swipe is still being decoded, and only if that takes long enough to notice.
-     * A strip that simply goes blank reads as the gesture having been ignored.
-     */
+    /** Shows the decoding notice while a swipe is still being decoded. */
     var decoding: Boolean = false
         set(value) {
             if (field != value) {
@@ -173,14 +132,7 @@ class SuggestionStripView(
             }
         }
 
-    /**
-     * A chip offering what is on the clipboard, or null when there is nothing to offer.
-     *
-     * Occupies the first slot and pushes the suggestions along. First rather than last because
-     * it is the one chip whose content the user already knows they want -- they copied it --
-     * and because a chip that moves as the number of suggestions changes is a chip nobody can
-     * aim at.
-     */
+    /** A chip offering what is on the clipboard, in the first slot, or null. */
     var clipboardChip: String? = null
         set(value) {
             if (field != value) {
@@ -191,25 +143,13 @@ class SuggestionStripView(
             }
         }
 
-    /**
-     * The chip's text, laid out over two lines.
-     *
-     * Two because one is not enough: a copied sentence at the strip's text size runs past its
-     * slot and over the suggestion beside it, and shrinking it far enough to fit on one line
-     * makes it unreadable. Two lines at a slightly smaller size shows about five words, which
-     * is enough to recognise what you copied.
-     */
+    /** The chip's text, laid out over [CHIP_LINES] lines. */
     private val chipLines = Array(CHIP_LINES) { CharArray(MAX_WORD_CHARS) }
     private val chipLineLength = IntArray(CHIP_LINES)
     private var chipLineCount = 0
     private var chipTextSize = 0f
 
-    /**
-     * The paste mark, drawn before the text.
-     *
-     * An icon rather than quotation marks. Quotes read as part of what was copied -- and the
-     * first thing anyone asked about this chip was why their text had gained a pair.
-     */
+    /** The paste mark, drawn before the chip's text. */
     private val pasteIcon: android.graphics.drawable.Drawable? =
         androidx.core.content.ContextCompat.getDrawable(context, com.borderkeys.keyboard.R.drawable.bk_action_paste)
 
@@ -217,14 +157,7 @@ class SuggestionStripView(
     private val chipOffset: Int
         get() = if (clipboardChip != null) 1 else 0
 
-    /**
-     * The slot holding exactly what was typed, or -1 when nothing does.
-     *
-     * Drawn in italic rather than outlined. The whole value of the verbatim word is knowing, at
-     * a glance and without reading, which chip leaves your spelling alone -- and a reader who
-     * has to compare it letter by letter against what they wrote has been given nothing. The
-     * outline went to [appliedIndex], which is the chip that acts on its own.
-     */
+    /** The slot holding exactly what was typed, drawn in italic, or -1. */
     var typedIndex: Int = -1
         set(value) {
             if (field != value) {
@@ -233,14 +166,7 @@ class SuggestionStripView(
             }
         }
 
-    /**
-     * The slot holding the correction a delimiter would apply, or -1 when there is none.
-     *
-     * The outline goes here and only here: the one chip that would change your word for you if
-     * you pressed space without tapping anything. When there is nothing to correct -- the word
-     * is known, auto-correction is off, or the word is too short to guess at -- there is no
-     * correction and no outline, and the typed word stands alone in italic.
-     */
+    /** The slot holding the correction a delimiter would apply, outlined, or -1. */
     var appliedIndex: Int = -1
         set(value) {
             if (field != value) {
@@ -253,34 +179,22 @@ class SuggestionStripView(
     private val chars = Array(MAX_SUGGESTIONS) { CharArray(MAX_WORD_CHARS) }
     private val charCount = IntArray(MAX_SUGGESTIONS)
 
-    /**
-     * The text size each slot is drawn at, so a long word in a narrow slot shrinks instead of
-     * running into its neighbour.
-     *
-     * Computed when the words change, when the strip is resized and when the number of slots
-     * changes -- never per frame. It is the same approach the keys use for "?123" on a key one
-     * and a half units wide, and for the same reason: measureText on the draw path is a cost
-     * paid sixty times a second for an answer that changes when a suggestion arrives.
-     */
+    /** Each slot's text size, fitted when the words, the size or the slot count change. */
     private val slotTextSize = FloatArray(MAX_SUGGESTIONS)
     private var count = 0
 
     private var pressedIndex = -1
 
-    /** Reused so the outline around the applied chip allocates nothing on the draw path. */
+    /** The applied chip's outline rectangle, reused. */
     private val appliedRect = android.graphics.RectF()
 
-    /** Both particle layers for the strip: the applied chip and the decoding notice are *held*
-     *  (ambient inside, outline traced) for as long as they are on screen, and whichever chip
-     *  is actually tapped is *pressed* (a burst inside it). Exposed non-private so
-     *  [BorderKeysService] can push the user's particle-effect settings directly, the same way
-     *  [KeyboardCanvasView.particles] already is. */
+    /**
+     * The strip's particle layers: held around the applied chip and the decoding notice, and a
+     * burst in a tapped chip.
+     */
     val particles = ParticleSurface(FILL_PARTICLE_POOL_CAPACITY, OUTLINE_PARTICLE_POOL_CAPACITY) { invalidate() }
 
-    /** The three things on this strip particles can affect, as elements the engine reads their
-     *  shapes from -- see [com.borderkeys.ime.fx.ParticleElement]. Each is exactly the rounded
-     *  rectangle the strip itself draws (or, for the decoding notice, the pill around the
-     *  glyph), re-set every frame it is on screen so it can never drift from the drawing. */
+    /** The particles' shapes: the applied chip, the decoding notice's pill and a tapped slot. */
     private val appliedChip = RoundedRectElement()
     private val decodingNotice = RoundedRectElement()
     private val tappedSlot = RoundedRectElement()
@@ -298,14 +212,10 @@ class SuggestionStripView(
         }
     }
 
-    /** Set when a hold has already acted, so the lift does not also accept the suggestion. */
+    /** Set when a hold has acted; the lift then accepts nothing. */
     private var longPressFired = false
 
-    /**
-     * How many slots the user asked for. The engine is asked for this many, so `count` is
-     * normally already within it; the clamp is for the frame between the setting changing and
-     * the next request coming back.
-     */
+    /** How many slots the user asked for, 1 to [MAX_SUGGESTIONS]. */
     var visibleLimit: Int = 3
         set(value) {
             val clamped = value.coerceIn(1, MAX_SUGGESTIONS)
@@ -316,17 +226,9 @@ class SuggestionStripView(
             }
         }
 
-    /**
-     * Replaces what is shown. Called on the UI thread from the prediction result callback.
-     *
-     * Copies rather than retaining the array it is given: the caller reuses that array for the
-     * next request, and holding it would mean the strip and the engine race over the same slots.
-     */
+    /** Replaces what is shown, copying the words. Called on the UI thread. */
     fun setSuggestions(source: List<Candidate>) {
-        // A fresh row of words is never the "forget this word?" question, and carries none of
-        // the previous row's marks: the question used to survive an ordinary push, so a later
-        // tap on a word could forget a different one or blank the row, and the italic/outline
-        // slots of the last row stayed on whatever the caller did not overwrite.
+        // A new row leaves action mode and clears the typed and applied marks.
         val wasActionMode = actionMode
         actionMode = false
         typedIndex = -1
@@ -354,15 +256,7 @@ class SuggestionStripView(
         }
     }
 
-    /**
-     * Fixes each slot's text size so its word fits between the dividers.
-     *
-     * Shrinking rather than ellipsising: a suggestion is chosen by reading it, and "differe…"
-     * is not something anyone can choose confidently. There is a floor, below which the word is
-     * left to overflow -- at that point the slot is too narrow for any legible text and the
-     * honest answer is that the count is too high for this screen, which the preview in the
-     * settings screen is there to show before it is chosen.
-     */
+    /** Fixes each slot's text size so its word fits between the dividers, down to a floor. */
     private fun measureSlots() {
         val label = paints.label.textSize
         val base = label * SLOT_TEXT_SCALE
@@ -388,11 +282,8 @@ class SuggestionStripView(
     }
 
     /**
-     * Breaks the chip's text into at most two lines that fit beside the icon.
-     *
-     * Word by word, falling back to a hard break for a single word longer than the slot -- a
-     * copied URL is one word and would otherwise take the whole chip and still not fit. The
-     * last line ends in an ellipsis when there is more text than lines.
+     * Breaks the chip's text into at most [CHIP_LINES] lines beside the icon, word by word, with a
+     * hard break for a word longer than a line and an ellipsis when text is left over.
      */
     private fun layoutChipText() {
         chipLineCount = 0
@@ -428,7 +319,7 @@ class SuggestionStripView(
             } else if (lastBreak > start) {
                 end = lastBreak
             } else if (end == start) {
-                // One character does not fit; take it anyway rather than loop forever.
+                // A character that does not fit on its own is taken anyway.
                 end = start + 1
             }
             var line = text.substring(start, end)
@@ -444,7 +335,7 @@ class SuggestionStripView(
         paint.textSize = previous
     }
 
-    /** The paste mark is square and sized from the strip, like every other icon here. */
+    /** The paste mark's side, from the strip's height. */
     private fun iconSizePx(): Float = height * CHIP_ICON_FRACTION
 
     /** [base], shrunk until [length] characters fit in [available], with a floor. */
@@ -461,19 +352,14 @@ class SuggestionStripView(
         }
     }
 
-    /** Switches the strip to the assistant's actions for the current selection. */
+    /** Shows action chips instead of words: a held suggestion's Forget, Cancel and Why. */
     fun setActions(labels: List<Candidate>) {
         setSuggestions(labels)
         actionMode = true
         invalidate()
     }
 
-    /**
-     * How many slots a row of words can fill right now: the visible limit less the clipboard
-     * chip's own slot. The service arranges its row against this rather than the bare setting,
-     * so the correction a delimiter applies is never placed in a slot the chip pushed off the
-     * strip.
-     */
+    /** How many slots a row of words can fill: the visible limit less the clipboard chip's. */
     val wordSlotLimit: Int
         get() = (visibleLimit - chipOffset).coerceAtLeast(0)
 
@@ -509,10 +395,7 @@ class SuggestionStripView(
             }
 
             if (privateMode) {
-                // Deliberately no particle draw call here at all, and the ambient trickle is
-                // stopped rather than left ticking silently behind a notice it would never
-                // reach the canvas from: private mode is meant to stay austere, not sprout
-                // effects the moment a password field is left.
+                // No particles on the private row.
                 particles.release()
                 drawPrivateRow(canvas)
                 return
@@ -524,17 +407,12 @@ class SuggestionStripView(
                 return
             }
             if (count == 0 && chipOffset == 0) {
-                // An empty strip with nothing drawn in it reads as a dead row rather than an
-                // idle one, so say what the row is waiting for -- but only while there is
-                // nothing to be about. Suppressed in action mode, where an empty strip means
-                // the assistant simply offered nothing.
+                // The idle line, while the editor is empty and not in action mode.
                 particles.release()
                 if (!actionMode && editorEmpty) {
                     drawNotice(canvas, idleNoticeChars, idleNotice.length)
                 }
-                // Still drawn, not skipped: a burst from the very suggestion that was just
-                // accepted -- the tap that emptied this row in the first place -- must still
-                // get to finish animating rather than vanish the instant the row goes idle.
+                // A burst from the accepted suggestion finishes on the empty row.
                 particles.draw(canvas, paints.particlePaint)
                 return
             }
@@ -548,9 +426,7 @@ class SuggestionStripView(
                 if (pressedIndex == 0) {
                     canvas.drawRect(chipLeft, 0f, chipLeft + slotWidth, height.toFloat(), paints.keyPressedFill)
                 }
-                // Drawn in the accent colour rather than the label colour: it is the one chip
-                // that inserts something the user did not type, and it should not be possible
-                // to tap it by muscle memory while aiming at a word.
+                // The chip is drawn in the accent colour.
                 val paint = paints.accentLabel
                 val previous = paint.textSize
                 val previousAlign = paint.textAlign
@@ -568,8 +444,7 @@ class SuggestionStripView(
                     icon.draw(canvas)
                     textLeft = chipLeft + CHIP_GAP_PX * 2f + side
                 }
-                // Both lines centred vertically around the middle of the strip, so a chip with
-                // one line and a chip with two sit on the same axis as the words beside them.
+                // The lines are centred vertically on the strip.
                 val lineHeight = chipTextSize * CHIP_LINE_SPACING
                 val first = height / 2f + paints.labelBaselineOffsetPx -
                     lineHeight * (chipLineCount - 1) / 2f
@@ -594,26 +469,13 @@ class SuggestionStripView(
                     continue
                 }
                 val left = slotLeft(slot, slotWidth)
-                // Compared against the drawn slot, not the word index: slotAt returns a slot,
-                // and with the clipboard chip present the two differ by one -- which lit the
-                // chip next to the one under the finger.
+                // pressedIndex is a slot, not a word index.
                 if (slot == pressedIndex) {
                     canvas.drawRect(left, 0f, left + slotWidth, height.toFloat(),
                         paints.keyPressedFill)
                 }
-                // The outline marks the correction -- the word a delimiter would put in place
-                // of what you typed. It is the only chip that acts without being touched, and
-                // it is present only when the service decided a correction applies; with
-                // nothing to correct there is no outline and the typed word stands alone. See
-                // handleCharacter and AutoCorrection in BorderKeysService: the decision is made
-                // there and arrives here already made.
+                // The correction a delimiter would apply gets the theme's outline or fill.
                 if (index == appliedIndex) {
-                    // An outline or a fill, whichever the theme says -- it has to be
-                    // distinguishable from the chips beside it without shouting. It never lands
-                    // on the italic typed chip -- a correction is by definition a different
-                    // word, in a different slot. paints.appliedHighlight is its own Paint,
-                    // compiled from the theme once at update() time -- not keyStroke, which
-                    // several other views also share and mutate for their own drawing.
                     appliedRect.set(
                         left + slotWidth * APPLIED_INSET,
                         height * APPLIED_INSET,
@@ -622,17 +484,13 @@ class SuggestionStripView(
                     )
                     val radius = height * APPLIED_CORNER
                     canvas.drawRoundRect(appliedRect, radius, radius, paints.appliedHighlight)
-                    // The one chip that would act on its own, without a tap -- held, so the
-                    // ambient glow says "this is what happens if you do nothing" the same way
-                    // the outline above already does, just in motion. The element is the very
-                    // rounded rect drawn one line up.
+                    // Particles are held around the applied chip.
                     appliedChip.set(appliedRect.left, appliedRect.top, appliedRect.right, appliedRect.bottom, radius)
                     particles.hold(appliedChip)
                     appliedRectDrawnThisFrame = true
                 }
-                // Italic for what was typed, the full label colour for what would be applied,
-                // and the secondary colour for the rest. By meaning rather than by position:
-                // the first slot stopped being the engine's answer when the typed word took it.
+                // Italic for what was typed, the full label colour for the correction, the
+                // secondary colour for the rest.
                 val paint = when (index) {
                     typedIndex -> paints.labelTyped
                     appliedIndex -> paints.label
@@ -645,23 +503,11 @@ class SuggestionStripView(
                 }
                 // Centred on the strip at the size this word is drawn at.
                 val wordBaseline = height / 2f - (paint.ascent() + paint.descent()) / 2f
-                // Contained, because [measureSlots] stops shrinking at a floor and a word past
-                // it used to be drawn centred and overflowing -- spilling across both dividers
-                // and leaving three slots illegible rather than one. That floor is right: below
-                // it no text is readable anyway. What was wrong was letting the overflow land
-                // on the neighbours. One learned word is enough to cause it; "autocorrect" and
-                // a class name typed once are both 20-odd characters against a slot a quarter
-                // of the screen wide.
-                //
-                // Clipped to its own slot, and started from the left edge rather than centred,
-                // so what survives is the beginning of the word. That is the part a reader
-                // recognises a word by, and it is what a centred clip would have thrown away.
+                // A word wider than its slot is clipped to it, drawn from its reading start.
                 if (paint.measureText(chars[index], 0, length) > slotWidth) {
                     val previousAlign = paint.textAlign
                     canvas.save()
                     canvas.clipRect(left, 0f, left + slotWidth, height.toFloat())
-                    // From the slot's reading start, so what survives the clip is the word's
-                    // own beginning: its right end for a language read from the right.
                     paint.textAlign = if (rightToLeft) android.graphics.Paint.Align.RIGHT else android.graphics.Paint.Align.LEFT
                     val start = if (rightToLeft) left + slotWidth else left
                     canvas.drawText(chars[index], 0, length, start, wordBaseline, paint)
@@ -689,9 +535,8 @@ class SuggestionStripView(
     }
 
     /**
-     * The private field's row: the notice and a Show, or the field's own text and a Hide. The
-     * text is drawn from its end when it is wider than the room, since the end is what is being
-     * typed.
+     * The private field's row: the notice and a Show, or the field's text and a Hide; text wider
+     * than the room shows its end.
      */
     private fun drawPrivateRow(canvas: Canvas) {
         val toggleChars = if (privateReveal) privateHideChars else privateShowChars
@@ -732,17 +577,12 @@ class SuggestionStripView(
         )
     }
 
-    /** A still "…" reads as the gesture having been ignored, the same lesson a stalled camera
-     *  overlay teaches: something visibly alive here says the delay is the decode actually
-     *  running, not the strip having missed the swipe entirely. Centred on the same point
-     *  [drawNotice] draws the glyph itself at. */
+    /** Holds particles in an undrawn pill around the decoding notice's glyph. */
     private fun syncDecodingAmbient() {
         val centerX = width / 2f
         val halfWidth = width * DECODING_GLOW_WIDTH_FRACTION / 2f
         val top = height * 0.25f
         val bottom = height * 0.75f
-        // A pill around the glyph -- nothing is actually drawn for it, so the element is the
-        // shape the glow is meant to read as, fully rounded rather than a bare box.
         decodingNotice.set(centerX - halfWidth, top, centerX + halfWidth, bottom, (bottom - top) / 2f)
         particles.hold(decodingNotice)
     }
@@ -766,8 +606,7 @@ class SuggestionStripView(
                 pressedIndex = slotAt(event.x)
                 longPressFired = false
                 invalidate()
-                // The chip has no hold behaviour: there is one thing on the clipboard and one
-                // thing to do with it.
+                // The clipboard chip has no long press.
                 if (pressedIndex > chipOffset - 1 && pressedIndex >= 0) {
                     postDelayed(longPressRunnable, KeyboardCanvasView.LONG_PRESS_MILLIS)
                 }
@@ -775,7 +614,7 @@ class SuggestionStripView(
             MotionEvent.ACTION_MOVE -> {
                 val slot = slotAt(event.x)
                 if (slot != pressedIndex) {
-                    // The finger moved to another slot, so the hold starts again from there.
+                    // The hold restarts on the new slot.
                     removeCallbacks(longPressRunnable)
                     pressedIndex = slot
                     invalidate()
@@ -794,12 +633,7 @@ class SuggestionStripView(
                 pressedIndex = -1
                 invalidate()
                 if (slot >= 0) {
-                    // One hook for every kind of chip -- clipboard, action or plain suggestion
-                    // -- rather than one per listener call below: whichever slot was actually
-                    // tapped is what just got used, regardless of which branch resolves it.
-                    // Deliberately not hooked to onSuggestionPicked itself: BorderKeysService
-                    // also calls that directly from the radial ring's own resolution path,
-                    // which never touched this view at all.
+                    // Every tapped chip gets a burst.
                     val slotWidth = width.toFloat() / shownCount()
                     val left = slotWidth * slot
                     tappedSlot.set(left, 0f, left + slotWidth, height.toFloat())
@@ -830,13 +664,7 @@ class SuggestionStripView(
         return true
     }
 
-    /** How many slots are on screen. Hit-testing has to agree with drawing, not with `count`. */
-    /**
-     * How many slots are drawn.
-     *
-     * The chip takes one of the slots the user asked for rather than adding one, so turning it
-     * on does not silently narrow every target on the row.
-     */
+    /** How many slots are drawn, the clipboard chip's included. */
     private fun shownCount(): Int {
         val total = count + chipOffset
         return if (total < visibleLimit) total else visibleLimit
@@ -876,9 +704,7 @@ class SuggestionStripView(
         particles.cancel()
     }
 
-    // Resolved once, here, rather than on every frame: a lookup returns an existing String but
-    // copying it into the CharArray onDraw reads does allocate, and onDraw must not. The view is
-    // rebuilt when the language changes, so there is nothing to invalidate.
+    // The notices as character arrays, resolved once per view.
     private val privateNotice = strings[Keys.STRIP_PRIVATE]
     private val privateNoticeChars =
         CharArray(privateNotice.length).also { privateNotice.toCharArray(it, 0, 0, it.size) }
@@ -901,29 +727,16 @@ class SuggestionStripView(
         /** The Show or Hide label's side padding, as a share of the row's height. */
         const val PRIVATE_PADDING_FRACTION = 0.35f
 
-        /**
-         * The most the strip can ever hold, which is what its buffers are sized for. How many
-         * are actually shown is [visibleLimit], a setting; this is the ceiling that lets the
-         * setting change without reallocating anything. Read from
-         * [KeyboardPreferences.MAX_SUGGESTIONS] rather than a second literal 8: that is the same
-         * ceiling from the other side, the highest [visibleLimit] is ever allowed to ask for, so
-         * the two cannot drift into a setting the buffers here are too small for.
-         */
+        /** The most the strip can hold, which its buffers are sized for. */
         const val MAX_SUGGESTIONS = KeyboardPreferences.MAX_SUGGESTIONS
 
-        /** Sized for one preset's own burst count (10, see
-         *  [com.borderkeys.ime.fx.ParticleEffectPresets]) scaled up for a whole slot's area
-         *  (see [com.borderkeys.ime.fx.ParticleSimulation.MAX_EXTENT_FACTOR]) plus the applied
-         *  chip's own ambient trickle running at the same time -- not [MAX_SUGGESTIONS], which
-         *  would size this for every slot bursting at once. */
+        /** The most fill particles alive at once. */
         const val FILL_PARTICLE_POOL_CAPACITY = 48
 
-        /** A chip's outline is long -- Comet's own cap (18) scaled up for it. */
+        /** The most outline particles alive at once. */
         const val OUTLINE_PARTICLE_POOL_CAPACITY = 56
 
-        /** How wide the decoding notice's ambient glow is, as a fraction of the strip's own
-         *  width -- centred, not edge to edge, so it reads as glowing around the glyph rather
-         *  than filling the row. */
+        /** The decoding notice's glow width, as a fraction of the strip's width. */
         const val DECODING_GLOW_WIDTH_FRACTION = 0.3f
 
         /** How far the applied-word outline sits inside its slot, as a fraction of the slot. */
@@ -936,7 +749,7 @@ class SuggestionStripView(
         const val CHIP_LINES = 2
         const val CHIP_LINE_SPACING = 1.05f
 
-        /** The chip's text is smaller than a suggestion's: it is a preview, not a candidate. */
+        /** The chip's text size, relative to the theme's key label size. */
         const val CHIP_TEXT_SCALE = 0.62f
 
         /** The paste mark's share of the strip's height, and the gap around it. */
@@ -944,19 +757,16 @@ class SuggestionStripView(
         const val CHIP_GAP_PX = 10f
         private const val MAX_WORD_CHARS = 48
 
-        /** How much of a slot a word may occupy before it is shrunk, leaving room for a gap. */
+        /** How much of a slot a word may occupy before it is shrunk. */
         private const val SLOT_TEXT_FRACTION = 0.80f
 
         /** A word on the strip, relative to the theme's key label size. */
         private const val SLOT_TEXT_SCALE = 1.2f
 
-        /** Past this the text is too small to read, so the word is allowed to overflow instead. */
+        /** The smallest a word is shrunk to, relative to its slot's base size. */
         private const val MIN_TEXT_SCALE = 0.62f
 
-        /**
-         * An ellipsis, not a sentence -- nothing to translate. Drawn from a fixed `CharArray`
-         * on a path that must not allocate.
-         */
+        /** The decoding notice: an ellipsis, not translated. */
         private const val DECODING_NOTICE = "…"
     }
 }

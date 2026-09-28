@@ -61,9 +61,8 @@ void TcnEncoder::runBlock(int blockIndex, float* trunk) {
     const int dilation = kDilations[blockIndex];
     constexpr int kHalfKernel = kKernelSize / 2;
 
-    // Dilated depthwise conv1d, zero-padded so the time axis stays kTcnTimesteps: each channel
-    // has its own kKernelSize taps, independent of every other channel -- the "depthwise" half of
-    // a depthwise-separable convolution, matching the ConvNeXt block this is patterned on.
+    // Dilated depthwise conv1d, zero-padded to keep kTcnTimesteps: each channel has its own
+    // kKernelSize taps.
     for (int t = 0; t < kTcnTimesteps; ++t) {
         float* const out = depthwiseOut_ + t * kTrunkChannels;
         for (int c = 0; c < kTrunkChannels; ++c) {
@@ -80,17 +79,14 @@ void TcnEncoder::runBlock(int blockIndex, float* trunk) {
                 out[c] += source[c] * taps[c];
             }
         }
-        // Batch normalisation folded to a single affine transform: this is an inference-only
-        // engine, so there is no running mean/variance to track, only the scale and bias
-        // tools/swipe_model/export_weights.py folds them into at export time.
+        // Batch normalisation, as the scale and bias export_weights.py folds it into.
         for (int c = 0; c < kTrunkChannels; ++c) {
             out[c] = out[c] * block.bnScale[c] + block.bnBias[c];
         }
     }
 
-    // 1x1 expand (trunk -> 4x trunk) then GLU halves it back down: gated[g] = A[g] * sigmoid(B[g])
-    // where A is the first half of the expansion and B the second -- the standard split, and the
-    // one tools/swipe_model/model.py must produce weights in.
+    // 1x1 expand (trunk -> 4x trunk), then GLU halves it: gated[g] = A[g] * sigmoid(B[g]), A the
+    // first half of the expansion and B the second.
     for (int t = 0; t < kTcnTimesteps; ++t) {
         const float* const in = depthwiseOut_ + t * kTrunkChannels;
         float* const expanded = expanded_ + t * kExpandedChannels;
@@ -110,11 +106,8 @@ void TcnEncoder::runBlock(int blockIndex, float* trunk) {
         }
     }
 
-    // Global response normalisation (ConvNeXt V2): each channel's activation is rescaled by how
-    // large its own response is (an L2 norm over the whole gesture) relative to the AVERAGE
-    // response across every channel -- a channel that is unusually active for this particular
-    // swipe is amplified, one that is unusually quiet is damped, both relative to its peers
-    // rather than to a fixed running statistic.
+    // Global response normalisation (ConvNeXt V2): each channel scaled by its L2 norm over the
+    // gesture relative to the mean norm across channels.
     float channelNorm[kBlockChannels];
     for (int g = 0; g < kBlockChannels; ++g) {
         channelNorm[g] = 0.f;
@@ -156,10 +149,8 @@ void TcnEncoder::runBlock(int blockIndex, float* trunk) {
         }
     }
 
-    // Squeeze-excite: squeeze by average-pooling across the whole gesture, reduce, expand back to
-    // a per-channel gate, apply before the residual sum -- letting the block learn to weight some
-    // channels more than others for this particular swipe, cheaply, since the bottleneck is a
-    // quarter of the trunk width.
+    // Squeeze-excite: average-pool over the gesture, reduce, expand to a per-channel gate,
+    // applied before the residual sum.
     float pooled[kTrunkChannels];
     for (int c = 0; c < kTrunkChannels; ++c) {
         pooled[c] = 0.f;

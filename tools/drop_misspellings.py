@@ -4,42 +4,9 @@
 
 """Removes a corpus's own misspellings from a word list.
 
-The packs are built by counting real text, which is what gives them every inflection anyone
-actually writes without needing a lemma list. It also gives them every misspelling anyone
-actually writes. `teh`, `recieve`, `seperate` and `definately` are all words of our English
-dictionary, and a word in the dictionary is a word the keyboard defends: typing `recieve` offers
-`recieve` first and `receive` second, because an exact match is not something a correction is
-allowed to outrank.
-
-Why not simply ask the spell checker about everything
------------------------------------------------------
-Measured, that removes 56,476 of 114,252 English rows -- 49.4%. Hunspell holds `American`,
-`Friday`, `April`, `British` and `York` capitalised while these lists are lower-cased, so half
-the vocabulary comes back rejected. A blanket gate is not usable and this is not one.
-
-Why this does not delete anything on its own
---------------------------------------------
-It was written to, and the measurements said no. The rule is: rare, rejected by the spell
-checker in every case form, and one edit from something much commoner that the spell checker
-accepts. That finds `teh`, `recieve`, `seperate` and `adn`. It also finds, at every threshold
-tried:
-
-  ratio 10    collectables, hypothesised, practises   British spellings
-              impedances, recognitions                valid plurals
-  ratio 100   starks, handley, mathers, keyes, vick   surnames
-  ratio 1000  fong, leong, yue, zain, houser, eason   surnames
-              publix, neem                            a brand, a plant
-
-Tightening does not clear them out. A surname the names pipeline missed is *exactly* the same
-shape as a typo -- a rare string one edit from a common word that no spell checker knows -- and
-no threshold separates `teh` from `fong`, because there is nothing in the data that differs.
-The treebank cannot arbitrate either: it is built from the same corpus and holds the typos as
-words, tagging `teh` as a determiner and `recieve` as a verb, while `theo` is absent from it
-altogether. It would keep the errors and delete the name.
-
-So this prints a review, and removal takes a list somebody has read. That is also what the one
-comparable implementation does, arrived at here independently and only after trying the
-automatic version and measuring what it would have deleted.
+A candidate is rare, rejected by the spell checker in every case form, and one edit from
+something much commoner that the spell checker accepts. Candidates are printed for review;
+removal takes a reviewed list, and removes only what is both on it and a candidate.
 
 Usage
 -----
@@ -57,22 +24,14 @@ from pathlib import Path
 
 BUNDLED = ("en_US", "ro_RO", "de_DE", "es_ES", "fr_FR", "it_IT")
 
-# Below this a word has too few letters for "one edit away" to mean anything: at two characters
-# almost every other two-character word is one edit away, and the ratio test alone would start
-# rewriting real words. Three keeps `teh`, which is the case this was written for.
+# The shortest word considered.
 DEFAULT_MIN_LENGTH = 3
 
-# How much commoner the correction has to be. Ten is deliberately wide: a genuine misspelling is
-# orders of magnitude rarer than the word it fails to spell (`teh` against `the` is far past
-# this), while two real words one edit apart -- `their`/`there`, `form`/`from` -- sit close
-# enough that neither can delete the other.
+# How much commoner the correction has to be.
 DEFAULT_RATIO = 10.0
 
 # How common a word may be before it stops looking like a typo, in Zipf (log10 of occurrences per
-# billion tokens). A misspelling that reached a corpus at all is rare in absolute terms, not
-# merely rare next to the word it fails to spell -- and that distinction is the whole difficulty
-# here, because "the" is so common that every three-letter string one edit from it clears any
-# ratio test. `teh` sits at 2.62 and `theo`, a name, at 3.33; without this the rule deletes both.
+# billion tokens).
 DEFAULT_MAX_ZIPF = 3.0
 
 
@@ -109,13 +68,8 @@ def hunspell_rejects(words: list[str], dictionary: Path) -> set[str]:
 
 
 def rejected_by_all(words: list[str], dictionaries: list[Path]) -> set[str]:
-    """The words every one of [dictionaries] disowns, in every case form.
-
-    Several per language, because one is not the language. Asking only en_US calls `collectables`,
-    `hypothesised`, `practises`, `organised` and `analysed` errors -- they are British spellings,
-    and en_GB holds all of them. A word has to be refused by every dictionary given before it is
-    even a candidate, so adding one can only ever shrink the list, never grow it.
-    """
+    """The words every one of [dictionaries] disowns, in every case form. Several may be given
+    for one language, en_GB beside en_US."""
     refused = None
     for dictionary in dictionaries:
         here = rejected_in_every_case(words, dictionary)
@@ -126,12 +80,7 @@ def rejected_by_all(words: list[str], dictionaries: list[Path]) -> set[str]:
 
 
 def rejected_in_every_case(words: list[str], dictionary: Path) -> set[str]:
-    """The words the language disowns however they are capitalised.
-
-    Asking only about the lower-case form is what made a blanket gate unusable: `american` and
-    `friday` are refused in that form and accepted capitalised, because that is how the
-    dictionary stores them. A word is only a candidate here if no case form is accepted.
-    """
+    """The words the language disowns however they are capitalised."""
     forms: list[str] = []
     for word in words:
         forms.append(word)
@@ -264,8 +213,7 @@ def main() -> int:
                 line.split("#", 1)[0].strip()
                 for line in arguments.remove_list.read_text(encoding="utf-8").splitlines()
             }
-            # The intersection, never the file alone: a reviewed list is a filter on what this
-            # found, so a typing slip in it cannot delete a word the detector never suspected.
+            # The intersection with what this found, never the reviewed list alone.
             agreed = {w for w in removals if w in reviewed}
             missing = sorted(w for w in reviewed if w and w not in removals)
             lines = [line for line in path.read_text(encoding="utf-8").splitlines()

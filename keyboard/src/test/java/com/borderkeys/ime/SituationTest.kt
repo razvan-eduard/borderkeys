@@ -10,11 +10,6 @@ import org.junit.Test
 /**
  * One case per [AutoCorrection.Situation], including the two that are exceptions to the rule
  * above them.
- *
- * These used to be reachable only through a chain of early returns, where a test could say the
- * answer was null but never which of six reasons produced it -- so a guard could stop working
- * and another could cover for it, and the suite would stay green. Naming them is what makes
- * that impossible.
  */
 class SituationTest {
 
@@ -42,7 +37,6 @@ class SituationTest {
         assertEquals(Situation.NothingOffered, situation("teh", ""))
     }
 
-    /** The engine answers by posting back, so an answer can describe a word already finished. */
     @Test
     fun `an answer about a different word is refused before anything else is asked`() {
         assertEquals(Situation.StaleAnswer,
@@ -60,7 +54,7 @@ class SituationTest {
     fun `a name may correct only its own letters`() {
         assertEquals(Situation.NameMismatch,
             situation("everyone", "everton", isProperNoun = true))
-        // ...whatever the capitalisation preference says, which gates the capital and not this.
+        // With the capitalisation preference off too.
         assertEquals(Situation.NameMismatch,
             situation("everyone", "everton", isProperNoun = true, capitaliseNames = false))
     }
@@ -73,7 +67,7 @@ class SituationTest {
     @Test
     fun `too short to guess about, unless an accent is being restored`() {
         assertEquals(Situation.TooShort, situation("ab", "abc", minimumLength = 3))
-        // "in" to "în" is two real words that differ by an accent, not a coin toss.
+        // An accent restored below the minimum length.
         assertEquals(Situation.Correctable, situation("in", "în", minimumLength = 3))
     }
 
@@ -82,13 +76,11 @@ class SituationTest {
         assertEquals(Situation.KnownWord, situation("put", "out", knownWord = "put"))
     }
 
-    /** The exception: for a name, knownWord matching is *why* there is something to do -- the
-     *  dictionary is offering the same word with a capital, not a different word. */
     @Test
     fun `a name being recased is correctable though the dictionaries spell it`() {
         assertEquals(Situation.Correctable,
             situation("ana", "ana", knownWord = "ana", isProperNoun = true))
-        // With the capital switched off there is no capital to apply, so nothing changes.
+        // With the capital switched off, nothing changes.
         assertEquals(Situation.NoChange,
             situation("ana", "ana", knownWord = "ana", isProperNoun = true,
                       capitaliseNames = false))

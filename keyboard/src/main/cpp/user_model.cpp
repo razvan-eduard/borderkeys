@@ -54,8 +54,7 @@ int32_t UserModel::childOfOrCreate(int32_t node, uint32_t folded) {
         return it->second;
     }
     const int32_t created = static_cast<int32_t>(nodes_.size());
-    // Recorded before emplace_back: growing the vector can move it, and `children` above is a
-    // reference into the old buffer.
+    // Recorded before emplace_back, which can move `children`.
     const size_t position = static_cast<size_t>(it - children.begin());
     nodes_.emplace_back();
     nodes_[node].children.insert(nodes_[node].children.begin() + position,
@@ -101,14 +100,12 @@ int32_t UserModel::learn(const char* word, size_t length, bool deliberateCapital
         return -1;
     }
     Entry& entry = entries_[static_cast<size_t>(index)];
-    // The display form of the last spelling wins, so that a user who starts writing "masina"
-    // and later picks "mașina" ends up with the accented form in their own dictionary.
+    // The last spelling committed is the display form.
     entry.text.assign(word, length);
     if (entry.count < UINT32_MAX) {
         ++entry.count;
     }
-    // Never decremented: see this field's own doc on why one lower-case commit later does not
-    // undo an earlier deliberate one.
+    // Never decremented.
     if (deliberateCapital && entry.deliberateCapitals < UINT32_MAX) {
         ++entry.deliberateCapitals;
     }
@@ -142,8 +139,7 @@ void UserModel::learnBigram(int32_t previousIndex, int32_t nextIndex) {
     const int32_t entryCount = static_cast<int32_t>(entries_.size());
     if (previousIndex < 0 || nextIndex < 0 || previousIndex >= entryCount ||
         nextIndex >= entryCount || previousIndex == nextIndex) {
-        // A word following itself is almost always a stutter or a repeated tap, and learning it
-        // would suggest the same word twice in a row for ever after.
+        // A word following itself is not learned.
         return;
     }
     for (Bigram& bigram : bigrams_) {
@@ -186,8 +182,7 @@ void UserModel::learnTrigram(int32_t previous2Index, int32_t previous1Index,
         nextIndex >= entryCount) {
         return;
     }
-    // The same refusal the pair store makes: a word following itself is a stutter, and a triple
-    // whose last two words are equal would predict one.
+    // Nor a triple whose last two words are equal.
     if (previous1Index == nextIndex) {
         return;
     }
@@ -387,9 +382,7 @@ void UserModel::bulkLoadBigrams(const char* const* previous, const size_t* previ
         if (counts[i] <= 0) {
             continue;
         }
-        // Both halves have to be words this model already knows. They will be: every word the
-        // keyboard commits is learned, so a pair can only have been recorded after both of its
-        // words were. A pair whose words have since been forgotten is simply dropped.
+        // Both words must be known; a pair with a forgotten word is dropped.
         const int32_t previousIndex = entryIndexFor(previous[i], previousLengths[i]);
         const int32_t nextIndex = entryIndexFor(next[i], nextLengths[i]);
         if (previousIndex < 0 || nextIndex < 0 || previousIndex == nextIndex) {

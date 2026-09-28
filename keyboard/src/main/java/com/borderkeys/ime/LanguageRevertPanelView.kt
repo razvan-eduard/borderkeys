@@ -15,15 +15,9 @@ import com.borderkeys.ime.fx.RoundedRectElement
 import com.borderkeys.theme.ThemePaints
 
 /**
- * The offer `Ask` mode makes: a short list of words that may have been autocorrected under the
- * wrong language, each with what it currently reads and what the newly-dominant language would
- * spell it as, one tap to apply.
- *
- * Takes the suggestion strip's own slot rather than the clipboard/emoji panels' -- those replace
- * the keys because they are a screen someone reads; this is a handful of short rows beside keys
- * that stay live and typeable, closer kin to the strip it displaces than to a panel. An offer,
- * not a modal: ignoring it (typing on, or the explicit dismiss) costs nothing, and the words it
- * named stay exactly as they were unless one is actually tapped.
+ * The offer `Ask` mode makes, in the suggestion strip's place: the words that may have been
+ * corrected under the wrong language, each with its current and its new spelling, one tap to
+ * apply. The keys stay live.
  */
 @SuppressLint("ViewConstructor")
 class LanguageRevertPanelView(
@@ -43,26 +37,19 @@ class LanguageRevertPanelView(
 
     private var rows: List<LanguageSwitchCorrector.Replacement> = emptyList()
 
-    /** What [drawRow] paints for each of [rows], built when the rows are set rather than
-     *  concatenated afresh on every frame -- the draw path allocates nothing. */
+    /** The text [drawRow] paints for each of [rows], built when the rows are set. */
     private var rowTexts: List<String> = emptyList()
     private var pressedRow = -1
     private var pressedDismiss = false
     private var rowHeightPx = 0f
 
-    /** Both particle layers for the panel: the row actually picked is pressed (a burst inside
-     *  it, its outline traced) -- exposed non-private so [BorderKeysService] can push the user's
-     *  particle-effect settings directly, the same way [KeyboardCanvasView.particles] already
-     *  is. See the `ACTION_UP` handler below for why the trace needs a timed release here. */
+    /** The panel's particle layers: a burst and a traced outline in the picked row. */
     val particles = ParticleSurface(FILL_PARTICLE_POOL_CAPACITY, OUTLINE_PARTICLE_POOL_CAPACITY) { invalidate() }
 
-    /** The picked row, as the element the engine reads its shape from -- the same rect
-     *  [drawRow] paints. */
+    /** The picked row, as a particle shape. */
     private val rowElement = RoundedRectElement()
 
-    /** Releases the picked row ~500ms after the tap -- there is no hover/hold state on this
-     *  view to hook a natural start/stop pair to, unlike every other particle-owning view in
-     *  this package, since a row is removed right after being tapped. */
+    /** Releases the picked row's particles [OUTLINE_STOP_DELAY_MILLIS] after the tap. */
     private val stopOutlineRunnable = Runnable { particles.release() }
 
     init {
@@ -70,7 +57,7 @@ class LanguageRevertPanelView(
         isHapticFeedbackEnabled = true
     }
 
-    /** Replaces the offered list -- always the whole thing, since one flip is checked once. */
+    /** Replaces the offered list. */
     fun offer(replacements: List<LanguageSwitchCorrector.Replacement>) {
         setRows(replacements.take(MAX_SHOWN))
     }
@@ -101,10 +88,7 @@ class LanguageRevertPanelView(
         Trace.beginSection("LanguageRevertPanelView.onDraw")
         try {
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paints.background)
-            // Not an early return on an empty list any more: picking the last row empties it on
-            // this same tap, and a burst just spawned on it must still get to draw itself out
-            // over however many frames are left, same reasoning as
-            // RadialSuggestionMenuView.onDraw's own restructuring.
+            // A burst keeps animating after the last row is removed.
             if (rows.isNotEmpty()) {
                 val dismissWidth = rowHeightPx
                 for (index in rows.indices) {
@@ -171,14 +155,11 @@ class LanguageRevertPanelView(
                 if (pressedDismiss) {
                     listener?.onLanguageRevertDismissed()
                 } else if (pressedRow >= 0) {
-                    // Only the row actually picked -- never the dismiss control, which discards
-                    // rather than accepts.
+                    // A picked row gets particles; the dismiss control does not.
                     val top = pressedRow * rowHeightPx
                     val right = width - rowHeightPx
                     val bottom = top + rowHeightPx
-                    // No hover/hold state exists to hook a natural stop to (the row is gone the
-                    // instant this listener call returns) -- so the trace gets a fixed, timed
-                    // window instead, long enough to actually be seen.
+                    // The trace stops after a fixed delay.
                     removeCallbacks(stopOutlineRunnable)
                     rowElement.set(0f, top, right, bottom)
                     particles.press(rowElement)
@@ -207,24 +188,19 @@ class LanguageRevertPanelView(
     }
 
     private companion object {
-        /** More than this and the offer is no longer "a couple of words," it is a list -- shown
-         *  once, in commit order, rather than scrolled. */
+        /** The most rows shown, in commit order. */
         const val MAX_SHOWN = 4
 
-        /** A row is a wide element -- sized for one preset's own burst count (10) scaled up for
-         *  its area (see [com.borderkeys.ime.fx.ParticleSimulation.MAX_EXTENT_FACTOR]), not for
-         *  all [MAX_SHOWN] rows at once. */
+        /** The most fill particles alive at once. */
         const val FILL_PARTICLE_POOL_CAPACITY = 32
         const val OUTLINE_PARTICLE_POOL_CAPACITY = 56
 
-        /** How long the picked row stays pressed after the tap -- see [stopOutlineRunnable]'s
-         *  own doc for why this view needs a timer at all. */
+        /** How long the picked row's outline is traced after the tap. */
         const val OUTLINE_STOP_DELAY_MILLIS = 500L
 
         const val ARROW = "→"
 
-        /** A plain glyph rather than translated text, the same call [ClipboardPanelView]'s own
-         *  BACK_GLYPH already makes: dismissing this is not a word in any one language. */
+        /** The dismiss glyph; not translated. */
         const val DISMISS_GLYPH = "×"
 
         const val DEFAULT_ROW_PX = 132f

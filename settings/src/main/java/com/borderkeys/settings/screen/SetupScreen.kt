@@ -54,16 +54,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Getting the keyboard switched on, in order.
- *
- * Each step is locked until the one above it is done, and turns green when it is. Not decoration:
- * the steps genuinely depend on each other, and two of them are destructive in the wrong order --
- * removing the old application before its settings have been brought across loses them, and
- * removing it while it is still the keyboard in use leaves the phone with none.
- *
- * The first two cannot be done for the user. Enabling an input method and choosing it are system
- * decisions by design, because an application that could make itself the keyboard unasked would
- * be a keylogger. All this screen does is say which step is outstanding and open the right dialog.
+ * Getting the keyboard switched on, in order. Each step is locked until the one above it is done,
+ * and turns green when it is.
  */
 @Composable
 fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
@@ -74,21 +66,12 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
     var transferred by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
 
-    // Re-read whenever this screen comes back to the front. Both answers live in system
-    // settings, and every button here sends the user out to change them -- a screen that read
-    // them once at composition would show the state they were in before the user did the thing
-    // it asked for, and the step below would stay locked after being finished.
+    // Re-read whenever this screen comes back to the front.
     val resumed by rememberResumedCount()
     val enabled = remember(resumed) { isBorderKeysEnabled(context) }
     val isDefault = remember(resumed) { isBorderKeysDefault(context) }
 
-    /**
-     * Whether the other build is on this device and this one is the newcomer.
-     *
-     * Only interesting in that direction. Somebody installing the assistant build beside one
-     * they have used for months has a dictionary worth carrying; the reverse is a fresh install
-     * being offered something from an application it is not sure exists.
-     */
+    // The core build's package from the plus build, or null: the transfer runs one way only.
     val sibling = remember { siblingPackage(context) }
     val canTransfer = sibling != null && isInstalled(context, sibling)
 
@@ -175,8 +158,7 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
             ) {
                 Explanation(strings[Keys.SETUP_IMPORT_NOTE])
                 Button(
-                    // One tap: the other build is asked directly and answers with the data,
-                    // rather than the user writing a file, finding it, and deleting it after.
+                    // Asks the other build directly for its data.
                     onClick = {
                         take.launch(
                             Intent()
@@ -186,8 +168,7 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                     },
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                 ) { Text(strings[Keys.SETUP_TAKE_SETTINGS]) }
-                // The long way round, for a phone where the other build is not installed any
-                // more but its file is.
+                // From a backup file, for when the other build is no longer installed.
                 Button(
                     onClick = { open(Screen.Backup) },
                     modifier = Modifier.padding(horizontal = 20.dp),
@@ -200,16 +181,13 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
             Step(
                 title = strings[Keys.SETUP_STEP_REMOVE],
                 done = false,
-                // Only after the settings are here, and only once this keyboard is the one in
-                // use. Removing the other application while it is still the current keyboard
-                // would leave the phone with none at all.
+                // Only after the transfer, and once this keyboard is the one in use.
                 unlocked = transferred && isDefault,
             ) {
                 Explanation(strings[Keys.SETUP_REMOVE_NOTE])
                 Button(
                     onClick = {
-                        // The system asks for confirmation and does the removing. No
-                        // application can uninstall another one on its own, which is right.
+                        // The system confirms and uninstalls.
                         context.startActivity(
                             Intent(Intent.ACTION_DELETE, "package:$sibling".toUri())
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
@@ -243,11 +221,8 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
 }
 
 /**
- * One step: a tick when it is done, and nothing to press until the one above it is.
- *
- * A locked step is shown rather than hidden. Hiding it would make the screen shorter and the
- * process longer -- somebody who cannot see what comes next cannot tell whether they are nearly
- * finished, and a screen that grows a new card each time you look away is unsettling.
+ * One step: a tick when it is done, and nothing to press until the one above it is. A locked step
+ * is shown, not hidden.
  */
 @Composable
 private fun Step(
@@ -285,23 +260,12 @@ private fun Step(
     }
 }
 
-/**
- * Green, in both themes.
- *
- * The scheme has no "finished" colour -- primary means "press this" and would say the opposite
- * of what a completed step means. Two constants, because one green that reads on a white card
- * is a green that disappears on a dark one.
- */
+/** The green of a finished step, one shade per theme. */
 @Composable
 private fun doneColour(): Color =
     if (isSystemInDarkTheme()) Color(0xFF81C784) else Color(0xFF2E7D32)
 
-/**
- * Whether a package is on this device.
- *
- * Needs a <queries> entry in the manifest since API 30, which is a declaration of what this
- * application may look for and not a permission: nothing is requested and nothing is granted.
- */
+/** Whether a package is on this device; from API 30 it needs a <queries> entry in the manifest. */
 private fun isInstalled(context: Context, packageName: String): Boolean = runCatching {
     context.packageManager.getPackageInfo(packageName, 0)
 }.isSuccess

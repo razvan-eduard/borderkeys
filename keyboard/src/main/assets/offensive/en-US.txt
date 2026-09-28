@@ -4,9 +4,9 @@
 # Words the keyboard never suggests, completes or learns while "Block offensive words" is on.
 # Typing one letter by letter is untouched. One word per line; case and accents do not matter
 # (every entry and every candidate is folded before they are compared); a line starting with
-# "#" is a comment. Inflections are separate words to the engine, so each is listed.
+# "#" is a comment. Every inflection is listed.
 #
-# Profanity and slurs only. Anatomy, medicine and mild words stay suggestible on purpose.
+# Profanity and slurs only.
 
 apeshit
 arse

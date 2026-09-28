@@ -7,22 +7,9 @@ import androidx.room.Entity
 import androidx.room.Index
 
 /**
- * A pair of words this device has seen written one after the other, and how often.
- *
- * What turns a keyboard that knows your words into one that knows your phrases: after "vreau" it
- * can offer "să" because that is what you write, not because a corpus says so. The language
- * pack's own n-grams answer the same question for the language in general; this answers it for
- * you, and it is the only part of the model that grows with use.
- *
- * It is also the most revealing thing this application stores. A list of words says which words
- * you know; a list of pairs says how you put them together, which is closer to a record of what
- * you have written. So it lives in the same SQLCipher database, is excluded from backup along
- * with everything else, is never recorded in a private field, and is deleted by the same
- * "forget everything" that clears the words -- a keyboard that kept your phrases after you asked
- * it to forget your words would have missed the point of being asked.
- *
- * The two words are the primary key together, for the same reason [UserWord] uses the word: one
- * row per pair, enforced rather than assumed.
+ * A pair of words this device has seen written one after the other, and how often. Never
+ * recorded in a private field; deleted with either of its words. One row per pair: the two words
+ * are the primary key.
  */
 @Entity(
     tableName = "user_bigrams",
@@ -42,7 +29,7 @@ data class UserBigram(
 ) {
 
     companion object {
-        /** The word a pair names as its context when the word opened a sentence. No key types its first byte. */
+        /** The context of a pair whose word opened a sentence; no key types its first byte. */
         const val SENTENCE_START = "\u0002start"
     }
 }

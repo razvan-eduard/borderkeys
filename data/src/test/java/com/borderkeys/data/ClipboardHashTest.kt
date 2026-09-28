@@ -27,9 +27,7 @@ class ClipboardHashTest {
 
     @Test
     fun `inputs that collide under String hashCode do not collide here`() {
-        // "Aa" and "BB" are the canonical String.hashCode collision. Under a hashCode-based
-        // unique index the second one would silently never be stored -- the user copies
-        // something and it does not appear in the history, with nothing anywhere saying why.
+        // "Aa" and "BB" share a String.hashCode.
         assertEquals("Aa".hashCode(), "BB".hashCode())
         assertNotEquals(
             ClipboardRepository.contentHash("Aa"),

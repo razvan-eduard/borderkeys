@@ -4,23 +4,9 @@
     SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
     A row of three keys over a space bar, drawn the way the keyboard draws its own: rounded
-    rectangles, the pale label colour on the caps, the accent on the bar.
-
-    Three caps rather than two, and one row rather than two, because both ends of that trade
-    were rendered and looked at. Two wide caps read as a pair of dashes; two rows of three
-    are the most obviously a keyboard at full size and merge into texture by the time a
-    folder or the recents strip shrinks the icon to about 56 pixels. Three caps survive both.
-
-    A vector rather than PNGs at five densities. minSdk is 30, so the adaptive icon is always
-    available and no legacy raster fallback is needed; that leaves the icon as text the
-    repository can diff, review and license, with no binary asset and no .license sidecar.
-
-    Sizing is the part that is easy to get wrong. The 108dp viewport is the adaptive-icon
-    canvas, of which a launcher shows about the middle 72dp and guarantees only the middle
-    66dp. This mark occupies x 31..77 and y 36..72, so its farthest corner sits 29 of the
-    permitted 36 units from the centre. A first attempt drew it at 60x60, inside the safe
-    zone by the letter of the specification, and still wrong: scaled up to fill the mask it
-    ran to the edges and read as an abstract flag rather than as a keyboard.
+    rectangles, the pale label colour on the caps, the accent on the bar. On the 108-unit
+    adaptive-icon canvas the mark occupies x 31..77 and y 36..72, inside the middle 66 units a
+    launcher guarantees.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"

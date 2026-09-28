@@ -9,36 +9,15 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * The dictionaries that ship inside the application.
- *
- * They are in the APK, not on a server: this application has no `INTERNET` permission and a
- * build gate that fails the build if one ever appears, so "download a language" cannot mean what
- * it means elsewhere. Choosing a language here copies a file out of the APK into private
- * storage, which is the same install path a file the user picked goes through -- the pack is
- * validated by the same native code, recorded in the same table, and can be weighted, disabled
- * and removed the same way.
- *
- * Each one is word and pair counts from the Wortschatz Leipzig corpora (CC BY 4.0; what and how
- * much is recorded in `docs/licensing.md` section 2.1) compiled in this repository -- a licence
- * question with a written answer, which is what lets a corpus-sized pack be bundled at all.
- * Replacing one with a pack built from another corpus is an import away, and the entry
- * disappears from the list once its language is installed.
+ * The dictionaries that ship inside the application: word and pair counts from the Wortschatz
+ * Leipzig corpora (CC BY 4.0; see `docs/licensing.md` section 2.1). Choosing one copies it out of
+ * the APK through the same install path as a file the user picks.
  */
 object BundledDictionaries {
 
     /**
-     * One dictionary in the APK.
-     *
-     * [wordCount] is recorded here rather than read from the pack: the list is shown before
-     * anything is opened, and opening a pack to fill in a label would checksum a megabyte to
-     * draw a line of text. The build compiles these from the `.tsv` files in `dictionaries`, so a number that
-     * drifted would be a stale constant rather than a wrong pack.
-     *
-     * [sizeBytes] is the compiled size, for the same label. It used to be what told an
-     * installed copy apart from the pack this build ships, until two lists whose words only
-     * gained or lost name flags compiled to the same count and, by section alignment, the same
-     * size; [contentCrc] is that check now. The build prints both numbers; they are copied
-     * here together.
+     * One dictionary in the APK. [wordCount] and [sizeBytes] are the compiled pack's, for its
+     * label; [contentCrc] tells an installed copy apart from it.
      */
     data class Entry(
         val tag: String,
@@ -50,24 +29,7 @@ object BundledDictionaries {
     )
 
     val ALL: List<Entry> = listOf(
-        // Recounted after tools/drop_foreign.py removed each list's foreign vocabulary: between
-        // 4% and 6% of every pack was another language's words, counted as this one's because
-        // the corpus they came from quotes them (see docs/dictionaries.md). Nothing the language
-        // itself uses went with them -- loanwords like "mouse" and "weekend" stayed, and so did
-        // every name. The counts here are read from the compiled headers, not estimated; they
-        // have to match, because repairBundledPacks treats a pack whose recorded count or size
-        // differs as stale and re-copies it on every start.
-        // Recounted again after tools/drop_unreachable.py removed what no keystroke can produce
-        // and the bare letters that are not words. German lost 4.7 MB of the 4.75 MB total, and
-        // not because it lost words -- it lost 65. A pack is indexed by its own alphabet, and
-        // German's held 73 folded code points: fifteen Greek letters, six Cyrillic, three
-        // Hebrew, six Vietnamese, the unit superscripts and "µ ½ ¼ æ ð œ ə ʿ". Thirty remain,
-        // and the double-array shrank with them.
-        // Recounted again for format version 4, where a folded key carries every spelling that
-        // reaches it instead of only the most frequent. The counts rise by what used to be
-        // discarded -- Romanian by 6,306, "ca" beside "că" and "sau" beside "său".
-        // Sizes from format version 6, which stores the pairs as a successor index and the
-        // triples as a continuation index hung off it, in place of two hash tables.
+        // Read from the compiled headers; BundledPackMetadataTest checks them.
         Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 112_197, 8_432_908),
         Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 125_817, 10_056_288),
         Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 99_828, 8_127_252),
@@ -81,11 +43,8 @@ object BundledDictionaries {
 
     /**
      * The CRC a pack's header carries over everything past the header (`contentCrc32` in
-     * `bkd_format.hpp`), read from the first bytes of [stream] without opening the pack. This
-     * is what tells an installed copy apart from the pack this build ships: two editions of a
-     * word list can compile to the same word count and the same size -- the German and Italian
-     * lists did, when only name flags changed -- and never to the same CRC. Null for a stream
-     * too short to be a pack or one without the magic; the install path validates properly.
+     * `bkd_format.hpp`), read from the first bytes of [stream]. Null for a stream too short to be
+     * a pack or one without the magic.
      */
     fun contentCrc(stream: InputStream): Int? {
         val header = ByteArray(HEADER_PREFIX_BYTES)

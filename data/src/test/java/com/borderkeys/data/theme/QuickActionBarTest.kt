@@ -8,12 +8,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The macro-specific half of the quick-action bar: expanding one into the steps that actually
- * run, and refusing one that would refer back to itself. [KeyboardPreferencesTest] covers the
- * sanitising this backs (dropping an ineligible or cyclic step from a persisted file); this is
- * the logic itself, on data [KeyboardPreferences.sanitised] never has to construct.
- */
+/** Expanding a macro into the steps that run, and refusing one that refers back to itself. */
 class QuickActionBarTest {
 
     @Test
@@ -47,8 +42,7 @@ class QuickActionBarTest {
 
     @Test
     fun `flatten does not recurse forever on a cycle that reached it anyway`() {
-        // hasCycle is what normally keeps this out of a saved file -- this is the defence for
-        // the file already existing with one anyway (hand-edited, or written before hasCycle).
+        // A cycle already in a stored file.
         val a = CustomQuickAction(id = 1000, name = "a", steps = listOf(1001))
         val b = CustomQuickAction(id = 1001, name = "b", steps = listOf(1000))
         val result = QuickActionBar.flatten(a, listOf(a, b))
@@ -77,8 +71,7 @@ class QuickActionBarTest {
 
     @Test
     fun `hasCycle checks the candidate's new steps, not its old ones`() {
-        // b existing in the list is the OLD version of the id being edited; hasCycle must judge
-        // the candidate replacing it, not find a false cycle against the entry it is replacing.
+        // The list holds the old version of the macro being edited.
         val oldA = CustomQuickAction(id = 1000, name = "a", steps = emptyList())
         val candidateA = CustomQuickAction(id = 1000, name = "a", steps = listOf(QuickAction.CUT.id))
         assertFalse(QuickActionBar.hasCycle(candidateA, listOf(oldA)))

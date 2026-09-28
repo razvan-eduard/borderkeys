@@ -8,12 +8,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Hand-rolled colour arithmetic, checked against known values -- deliberately never calling
- * `android.graphics.Color`, so these stay meaningful under `:keyboard`'s own
- * `unitTests.isReturnDefaultValues` (see [ParticleColor]'s own doc for why that matters: an
- * unmocked `Color.*` call would silently return `0` here instead of a real answer).
- */
+/** [ParticleColor]'s arithmetic against known values, without `android.graphics.Color`. */
 class ParticleColorTest {
 
     private val black = 0xFF000000.toInt()

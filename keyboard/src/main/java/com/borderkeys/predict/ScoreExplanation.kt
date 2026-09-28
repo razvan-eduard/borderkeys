@@ -4,11 +4,9 @@
 package com.borderkeys.predict
 
 /**
- * The engine's own account of one candidate's score, term by term: what `Engine::explainScore`
- * fills, carried across JNI as [SLOTS] floats in the order [fromSlots] reads them.
- *
- * The terms are natural log-probabilities and penalties, so a higher total ranks higher and
- * every term is at most zero apart from the personal boost.
+ * One candidate's score, term by term, as `Engine::explainScore` fills it: [SLOTS] floats in the
+ * order [fromSlots] reads them. Terms are natural log-probabilities and penalties; a higher total
+ * ranks higher.
  */
 class ScoreExplanation(
     val total: Float,

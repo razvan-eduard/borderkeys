@@ -2,14 +2,8 @@
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
 // How something is shown when the keyboard has news: a word that was learned, a correction that
-// was applied, a word a swipe settled on. The stage knows when, a style knows where, and a
-// content knows what -- so a style can be chosen in settings and a word, an emoji or an icon can
-// play through the same animation.
-//
-// Depends on nothing but the framework, on purpose. :keyboard owns ThemePaints and :keyboard
-// depends on this, so taking a paint from there would be a cycle; the stage is handed a Paint
-// instead and never learns what a theme is. That is also what keeps the module reusable and its
-// styles testable on the host.
+// was applied, a word a swipe settled on. Depends on nothing but the framework; the stage is
+// handed a Paint.
 
 plugins {
     alias(libs.plugins.android.library)

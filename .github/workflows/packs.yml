@@ -5,8 +5,7 @@ name: Language packs
 
 # The downloadable packs: every word list in dictionaries/extra compiled with the same
 # tools/build_dict.py the bundled packs go through, and published on one rolling release
-# tagged `packs`, replaced in full on every run. Started by hand: the lists change rarely, and
-# a pack is a decision to publish, not a side effect of a push.
+# tagged `packs`, replaced in full on every run. Started by hand.
 on:
   workflow_dispatch:
 

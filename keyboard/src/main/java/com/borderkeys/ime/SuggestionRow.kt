@@ -6,24 +6,8 @@ package com.borderkeys.ime
 import com.borderkeys.predict.Candidate
 
 /**
- * Where each word sits on the suggestion strip, and which two of them are marked.
- *
- * Two chips on that row are not suggestions in the ordinary sense, and the arrangement exists to
- * keep them findable without reading:
- *
- *  - **What was typed**, first and always first. It is the one chip whose text the user already
- *    knows, so it is the one they should never have to search for -- and a chip that moves as
- *    the number of candidates changes is a chip nobody can aim at.
- *  - **The correction**, in the middle, outlined -- the word a delimiter would put in place of
- *    what you typed. Present only when there is a correction to apply; the typed word itself is
- *    never outlined. The ends are the worst place for it, one being the typed word and the
- *    other being the slot nobody reads.
- *
- * Its own object, and pure, for the same reason as [AutoCorrection]: this is a decision, not a
- * drawing detail, and a decision is worth testing without a view, an editor or a dictionary.
- *
- * Not thread safe and does not need to be: written and read on the UI thread, once per round of
- * suggestions. Reused rather than returned fresh, so a keystroke allocates nothing here.
+ * Where each word sits on the suggestion strip: what was typed first, the correction in the
+ * middle. Not thread safe; used on the UI thread.
  */
 internal class SuggestionRow {
 
@@ -31,36 +15,15 @@ internal class SuggestionRow {
     var typedIndex: Int = -1
         private set
 
-    /**
-     * The slot holding the correction a delimiter would apply, or -1 when there is none.
-     *
-     * Always a correction, never the typed word: what was typed is [typedIndex], italic and
-     * unmarked. -1 whenever nothing is being corrected -- the word is known, auto-correction is
-     * off, the word is too short, or the row is too narrow to hold the correction behind the
-     * typed word.
-     */
+    /** The slot holding the correction a delimiter would apply, or -1. */
     var appliedIndex: Int = -1
         private set
 
     /**
-     * The row as it should be drawn: the typed word first, the correction outlined in the
-     * middle, and the engine's own order behind them.
-     *
-     * [correction] is the exact text a delimiter would commit -- [AutoCorrection]'s own answer,
-     * already cased -- or null when nothing would be replaced. The word itself and not a flag,
-     * because the two cannot be derived from each other: autocorrect reads the corrections heap
-     * and this row is the ranked one, and a word can top either without appearing in the other
-     * at all. This took "putem" outlined on the row while the space bar committed "out", a word
-     * that was never on it -- the row promising one thing and the delimiter doing another.
-     *
-     * So the outlined chip is placed from this value rather than found by position, and is
-     * inserted when the row does not already carry it. Passing the word makes the two agree by
-     * construction; passing a boolean made them agree only by coincidence.
-     *
-     * [revertable] is the word a correction just replaced, while that correction can still be
-     * put back -- the one keystroke a pending correction lives. With nothing typed it takes the
-     * first slot as the typed chip, so tapping it is the revert; it is ignored once a new word
-     * is in progress.
+     * The row as drawn: the typed word first, the correction in the middle, the engine's order
+     * behind them. [correction] is the text a delimiter would commit, already cased, or null; it
+     * is inserted when the row does not carry it. [revertable] is the word a pending correction
+     * replaced; with nothing typed it takes the first slot as the typed chip.
      */
     fun arrange(
         candidates: List<Candidate>,
@@ -71,8 +34,6 @@ internal class SuggestionRow {
     ): List<Candidate> {
         typedIndex = -1
         appliedIndex = -1
-        // A list has no capacity to bound against the way the reused array did; the caller's
-        // limit is already the smaller of the setting and the slots the strip can draw.
         val cap = limit
         if (cap <= 0) {
             return emptyList()
@@ -82,8 +43,7 @@ internal class SuggestionRow {
                 typedIndex = 0
                 return listOf(Candidate(revertable)) + candidates.take(cap - 1)
             }
-            // Predictions for what comes next rather than candidates for a word in progress:
-            // nothing was typed, so nothing is marked and the engine's order stands.
+            // Nothing typed: next-word predictions in the engine's order, nothing marked.
             return withoutDoubles(candidates).take(cap)
         }
 
@@ -92,8 +52,7 @@ internal class SuggestionRow {
         if (at >= 0) {
             row.add(0, row.removeAt(at))
         } else {
-            // Not offered, so it is added, pushing the rest along and dropping whatever falls
-            // off the end. The engine's best is never what falls off: it moves to slot one.
+            // The typed word, when not offered, is added first.
             row.add(0, Candidate(typed))
             while (row.size > cap) {
                 row.removeAt(row.size - 1)
@@ -102,13 +61,10 @@ internal class SuggestionRow {
         typedIndex = 0
 
         if (correction == null) {
-            // No correction, no outline. A delimiter commits what was typed letter for letter,
-            // and the typed chip -- italic, first -- is the whole of what the row has to say.
+            // No correction, no outline.
             return row
         }
-        // The middle, because the ends are the worst place for it: one is the typed word and the
-        // other is the slot nobody reads. A one-slot row has no middle, so the correction is
-        // simply not shown -- and nothing is outlined, rather than the wrong thing being.
+        // The correction goes in the middle; a one-slot row shows none.
         val middle = (cap / 2).coerceAtMost(row.size.coerceAtLeast(2) - 1)
         if (middle < 1) {
             return row
@@ -119,9 +75,8 @@ internal class SuggestionRow {
     }
 
     /**
-     * The candidates with each text once, in their order: the first of a text stays, and it
-     * takes the correction mark if a later copy carried it. Two spellings of one word can
-     * reach the row as the same text once they are cased for display.
+     * The candidates with each text once, in order; the first copy takes a later copy's
+     * correction mark.
      */
     fun withoutDoubles(candidates: List<Candidate>): List<Candidate> {
         val kept = ArrayList<Candidate>(candidates.size)
@@ -137,14 +92,8 @@ internal class SuggestionRow {
     }
 
     /**
-     * Puts the correction in [slot], carrying [text] -- what a delimiter will actually commit.
-     *
-     * Found by [Candidate.isCorrection], which the engine set, rather than by looking for [text]
-     * among the words: the row is cased for display and the two rankings behind it do not share
-     * an identity, so a word could match by meaning and not by letters. Moved when the row
-     * already carries it and inserted when it does not -- and it often does not, because the
-     * corrections heap is not this list. Inserting grows the row by one where there is room and
-     * otherwise drops whatever was last, which is the slot nobody reads.
+     * Puts the correction, carrying [text], in [slot]: moved there when the row carries it, else
+     * inserted, dropping the last word when the row is full.
      */
     private fun placeCorrection(
         row: ArrayList<Candidate>,
@@ -152,10 +101,7 @@ internal class SuggestionRow {
         slot: Int,
         cap: Int,
     ) {
-        // By the engine's mark first, and by the letters second. The two rankings do not share
-        // an identity, so the engine can leave nothing marked -- its choice need not be in the
-        // strip's own sixteen -- while the row already carries that very word from the other
-        // heap. Inserting then drew the same word twice, one chip outlined and one not.
+        // Found by the engine's mark, else by its letters.
         var at = row.indexOfFirst { it.isCorrection }
         if (at < 0) {
             at = row.indexOfFirst { it.text == text }
@@ -166,8 +112,7 @@ internal class SuggestionRow {
             return
         }
         if (at == 0) {
-            // The typed chip is itself what a delimiter commits, so there is nothing to outline
-            // elsewhere and nothing to add: a second chip here would repeat slot zero.
+            // The typed chip already carries the correction's text.
             return
         }
         row.add(slot, Candidate(text, isCorrection = true))

@@ -13,22 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-/**
- * The one feature in this keyboard that edits text the cursor has already moved past, measured.
- *
- * It has been argued about twice and never tested: `LanguageSwitchCorrector` had no test at all,
- * because half of what it needs is a native answer -- which language the conversation turned out
- * to be in, and what *that* pack would have spelled the word as. Both cross JNI, so the whole
- * feature was reachable only by typing two languages into a phone and watching.
- *
- * All of it is reachable here. The corrector holds no InputConnection and makes no native calls
- * of its own -- its own doc says so, and this is what that buys. The one thing left on the
- * service is reading the field to confirm the tracked word is still where it was, which is
- * supplied directly below; everything that decides anything is the shipping code.
- *
- * Two packs, and real evidence: dominance is not set, it is accumulated by committing words the
- * way `observeContextLanguage` sees them.
- */
+/** [LanguageSwitchCorrector] against two shipped packs, with evidence from committed words. */
 class LanguageSwitchPipelineTest {
 
     private lateinit var pipeline: Pipeline
@@ -37,7 +22,7 @@ class LanguageSwitchPipelineTest {
     @Before
     fun open() {
         Pipeline.require()
-        // Romanian first, so slot 0 is ro-RO and slot 1 en-US; the corrector deals in slots.
+        // Slot 0 is ro-RO, slot 1 en-US.
         pipeline = Pipeline.open("ro-RO", "en-US")
         corrector = LanguageSwitchCorrector()
     }
@@ -49,26 +34,7 @@ class LanguageSwitchPipelineTest {
         }
     }
 
-    /**
-     * The premise the whole feature rests on -- that writing one language and then another
-     * moves the verdict -- and what it costs, which turns out to be the more useful half.
-     *
-     * The count is asserted rather than the mere fact of a flip, because the count is what
-     * decides whether the feature is reachable at all. It is six English words to overturn a
-     * settled Romanian verdict, against the twenty *corrections* LanguageSwitchCorrector keeps
-     * -- and since most words are not corrected, that is a good deal more than twenty words of
-     * headroom. So a word corrected under the wrong language is still in hand when the verdict
-     * turns. Were the count to drift past the window the revert would silently stop firing with
-     * nothing failing, which is the shape of bug this file exists to catch.
-     *
-     * The mechanism, should this line ever need re-deriving: every observation multiplies all
-     * evidence by kLanguageEvidenceDecay and awards up to 1.0 to the pack that knows the word
-     * best, and a verdict needs kLanguageDominanceShare of the running total. So the old
-     * language is not outvoted, it is outlasted -- which is why the count depends on how
-     * settled Romanian was, and why the fixture words are checked to be one-sided.
-     *
-     * The measured trail across the English run is [0, 0, -1, -1, -1, 1, 1, 1, 1, 1].
-     */
+    /** A settled Romanian verdict turns English at the sixth English word. */
     @Test
     fun `the verdict moves when the language does, and this is what it costs`() {
         pipeline.languageLock(BALANCED_EVIDENCE)
@@ -92,12 +58,6 @@ class LanguageSwitchPipelineTest {
         )
     }
 
-    /**
-     * The verdict never crosses straight from one language to the other: the old evidence has
-     * to decay below the 70% share before the new can reach it, and in between nothing is
-     * dominant. Worth pinning because that gap is the safe state -- a correction applied during
-     * it is applied by no pack in particular, and the revert has nothing to revert.
-     */
     @Test
     fun `the verdict passes through undecided rather than jumping`() {
         pipeline.languageLock(BALANCED_EVIDENCE)
@@ -113,8 +73,6 @@ class LanguageSwitchPipelineTest {
         )
     }
 
-    /** Only a flip is worth spending anything on. Reading the field and asking the engine both
-     *  cost more than an int comparison, which is why this gate exists at all. */
     @Test
     fun `nothing is revisited while the language holds steady`() {
         pipeline.languageLock(BALANCED_EVIDENCE)
@@ -128,15 +86,7 @@ class LanguageSwitchPipelineTest {
         assertFalse("nor three times", corrector.observeDominantPack(settled))
     }
 
-    /**
-     * The whole loop, end to end: a word corrected under one language, the conversation turning
-     * out to be in another, and the correction revisited.
-     *
-     * "in" is the case this feature was built for. Typed in an English sentence it is an English
-     * word; under a Romanian verdict the Romanian pack spells it "în", and that is what gets
-     * applied. Once enough English follows, the verdict moves and the word is asked about again
-     * -- this time of the English pack, which says "in".
-     */
+    /** "in", corrected under a Romanian verdict, is asked about again once the verdict turns. */
     @Test
     fun `a word corrected under the wrong language is offered back`() {
         pipeline.languageLock(BALANCED_EVIDENCE)
@@ -145,9 +95,7 @@ class LanguageSwitchPipelineTest {
         assertEquals("Romanian has to be the verdict for this to mean anything",
                      ROMANIAN_PACK, romanianPack)
 
-        // What the service records the moment it applies a correction: what was typed, what
-        // landed, and where. The offsets are the field's, and are not read back here -- the
-        // service verifies the text is still there before any of this runs.
+        // What the service records when it applies a correction.
         val applied = pipeline.candidateForPack(romanianPack, "in")
         assertNotNull(
             "the Romanian pack must offer something for \"in\" -- this was an assumption, which " +
@@ -181,8 +129,6 @@ class LanguageSwitchPipelineTest {
         )
     }
 
-    /** A pack that agrees with what is already there proposes nothing. Half of `resolve`'s job
-     *  is refusing to offer a replacement that would change nothing. */
     @Test
     fun `a pack that agrees proposes no replacement`() {
         corrector.recordCorrection(
@@ -190,11 +136,10 @@ class LanguageSwitchPipelineTest {
         )
         val tracked = corrector.snapshot()
         assertTrue(corrector.resolve(tracked, listOf("care")).isEmpty())
-        // ...and case alone is not a disagreement worth showing anyone.
+        // Nor one that differs only in case.
         assertTrue(corrector.resolve(tracked, listOf("Care")).isEmpty())
     }
 
-    /** A new field is a new conversation, and an offset from the last one means nothing here. */
     @Test
     fun `a new field forgets what it was tracking`() {
         corrector.recordCorrection(
@@ -207,9 +152,7 @@ class LanguageSwitchPipelineTest {
                    corrector.observeDominantPack(0))
     }
 
-    /** The verdict after each word of [phrase], the words chained the way a sentence is --
-     *  evidence accrues from the word *before* the one being asked about, so a word committed
-     *  with no predecessor is never weighed at all. */
+    /** The verdict after each word of [phrase], each word committed after the one before it. */
     private fun verdictTrail(phrase: String): List<Int> {
         var previous: String? = null
         return phrase.split(' ').filter { it.isNotEmpty() }.map { word ->
@@ -219,20 +162,14 @@ class LanguageSwitchPipelineTest {
     }
 
     private companion object {
-        /** The Languages screen's own default, so this measures the keyboard people have. */
+        /** The Languages screen's default. */
         const val BALANCED_EVIDENCE = 1.8f
 
-        /** Pipeline.open's argument order: the corrector deals in slots, not tags. */
+        /** Slots, in Pipeline.open's argument order. */
         const val ROMANIAN_PACK = 0
         const val ENGLISH_PACK = 1
 
-        // Words each language holds and the other does not, checked against both shipped
-        // dictionaries -- observeContextLanguage awards nothing for a word both packs know, and
-        // a fixture word that quietly enters the other pack would weaken this suite silently.
-        //
-        // The English run is long deliberately: six words is not enough to turn a settled
-        // verdict, and an English phrase of six left the verdict undecided and every assertion
-        // below unreachable. The length is the measurement, not padding.
+        // Words only one of the two shipped packs holds.
         const val ROMANIAN = "acesta trebuie foarte despre pentru"
         const val ENGLISH =
             "through because another thought between however people water number system"

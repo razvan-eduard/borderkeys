@@ -3,8 +3,7 @@
     SPDX-License-Identifier: GPL-3.0-or-later
     SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
-    Romanian translations of the OS-facing strings in values/strings.xml: see that file's own
-    comment for why these are plain Android resources rather than the :i18n catalogue.
+    Romanian translations of the OS-facing strings in values/strings.xml.
 -->
 <resources>
 

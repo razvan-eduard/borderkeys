@@ -3,96 +3,42 @@
 
 package com.borderkeys.data.assist
 
-/**
- * What the text assistant can be asked to do, and exactly how it is asked.
- *
- * A closed list of transformations, plus one entry -- [CUSTOM] -- that carries an instruction the
- * user wrote. That is a deliberate reversal of what this file used to promise, and it is worth
- * being clear about what was traded. The old rule was that a user could be told precisely what is
- * sent to the model, because every instruction was a constant here. With a custom prompt, half of
- * the instruction is theirs. What has not changed is that the model runs on this device and the
- * text goes nowhere, so the cost is predictability rather than privacy: a prompt someone writes
- * badly gets a bad answer, and that is the whole of it.
- *
- * The user's words never become the whole instruction. [CUSTOM_PREFIX] is glued in front of them,
- * so the model is always told what kind of job this is and what shape the answer must take. That
- * matters most when the text came from a clipboard -- somebody else's writing, which can contain
- * something that reads like an instruction.
- *
- * The instructions are written flat and imperative rather than as a persona. Small
- * instruction-tuned models follow a concrete request far more reliably than a role, and several
- * of the candidate models have no system turn at all -- the native side builds one user turn
- * (see text_assist.cpp), so a "system prompt" would have nowhere to go.
- */
-/**
- * What is glued in front of an instruction the user wrote. See [AssistTask.customInstruction].
- */
+/** What is put in front of an instruction the user wrote. See [AssistTask.customInstruction]. */
 private const val CUSTOM_PREFIX =
     "Apply the following instruction to the text below. Change only the text. " +
         "Do not answer questions about it, do not comment on it, do not add a preamble. " +
         "Use Markdown formatting (like bullet points or bold text) if it helps clarity. " +
         "Reply with the resulting text and nothing else."
 
+/**
+ * What the text assistant can be asked to do, and the instruction it is given: a closed list of
+ * transformations, plus [CUSTOM], which carries an instruction the user wrote behind
+ * [CUSTOM_PREFIX].
+ */
 enum class AssistTask(
     val id: Int,
     val instruction: String,
     /**
-     * How much longer than the input the answer is allowed to be, as a multiplier, and a floor.
-     * A summary is shorter than its source; a translation is about the same length; a correction
-     * is almost exactly the same length.
-     *
-     * Multiplied against the request's own exact tokenised size -- `TextAssist::run` computes
-     * this against `needed`, not a guess from the input's character count, since neither Kotlin
-     * side of the process boundary ever tokenises anything itself. For [SUMMARISE] and [SHORTEN]
-     * the result is the actual ceiling generation stops at -- less than the input is the correct
-     * answer for both, so a small model that loses the thread and keeps going needs a real stop
-     * that is not "however much room the context window has." For every other task
-     * [usesRemainingContext] is true instead, and this ratio only sets the starting budget before
-     * the real ceiling can take over; see that property's own doc for why.
+     * How long the answer may be, as a multiple of the request's tokenised size, with
+     * [minOutputTokens] as the floor. The ceiling for a task without [usesRemainingContext]; the
+     * starting budget for the others.
      */
     val outputRatio: Float,
     val minOutputTokens: Int,
-    /**
-     * Whether splitting the input into chunks and running each one separately still produces a
-     * correct answer, joined back together.
-     *
-     * True for anything that transforms each sentence roughly on its own terms -- a translation,
-     * a correction, a register change -- where chunk two never needed to know what chunk one
-     * said. False for [SUMMARISE], where that is the entire point: three summaries of three
-     * chunks are three summaries, not one summary of the whole, and stitching them together
-     * would read as a summary that repeats itself once per chunk. False for [CUSTOM] too, for
-     * the same reason -- an instruction someone wrote by hand could easily be a summarising one,
-     * and nothing here can tell the two apart to know it should refuse chunking anyway.
-     */
+    /** Whether the input may be split into chunks, each run on its own, and the answers joined. */
     val isChunkable: Boolean = false,
     /**
-     * Whether the native side is free to let generation run up to the real space left in the
-     * model's context window, rather than stopping at [outputRatio]'s budget.
-     *
-     * [outputRatio] is still only a multiplier chosen ahead of time for the task in general, not
-     * for what a specific answer turns out to need -- a translation into a language that expands,
-     * a formal rewrite that adds a clause, or a correction that fills in a missing word can all
-     * legitimately outgrow it, and stopping there cuts a correct answer off mid-sentence rather
-     * than protecting against anything. True for those tasks: the real ceiling is
-     * `TextAssist::run`'s exact prompt token count subtracted from the context window, so it is
-     * never smaller than the room [ChunkedAssistRunner] already reserved when it decided how big
-     * a chunk could be. False for [SUMMARISE] and [SHORTEN], where less than the input is what a
-     * correct answer looks like, so [outputRatio]'s budget is a deliberate ceiling rather than a
-     * truncation risk.
+     * Whether generation may run up to the space left in the model's context window rather than
+     * stopping at [outputRatio]'s budget.
      */
     val usesRemainingContext: Boolean = false,
     /**
-     * Which kind of model does this task best. When more than one model is imported, each
-     * category can be pointed at a different one -- a translation-tuned model translates, a
-     * chat-tuned model rewrites -- so a task runs on whichever is set for its category rather
-     * than always on the one active model. See [AssistCategory].
+     * Which kind of model does this task best; with more than one model imported, each category
+     * can run on its own. See [AssistCategory].
      */
     val category: AssistCategory = AssistCategory.WRITE,
     /**
-     * The fewest words of input this task does anything useful with. Summarising three words is
-     * the three words back; shortening or changing the register of one needs a phrase to work
-     * on. A correction or a translation is worth running on a single word, so most tasks leave
-     * this at 1. The draft box greys the button out below it -- see ProcessTextScreen.
+     * The fewest words of input this task runs on; the draft box greys the button out below it.
      */
     val minWords: Int = 1,
 ) {
@@ -146,10 +92,7 @@ enum class AssistTask(
         category = AssistCategory.TRANSLATE,
     ),
 
-    // The remaining four languages the application itself speaks. One entry per target rather
-    // than one entry with a language argument, because the id is what crosses the process
-    // boundary and a task that means different things depending on a second field is a task
-    // whose log line cannot be read.
+    // The other four languages the application speaks, one entry per target.
     TRANSLATE_TO_GERMAN(
         id = 6,
         instruction = "Translate the following text into German. " +
@@ -212,14 +155,7 @@ enum class AssistTask(
         minWords = 3,
     ),
 
-    /**
-     * Fewer words for the same content, which is not what [SUMMARISE] does.
-     *
-     * A summary is a different text about the original; this is the original with the padding
-     * taken out. The instruction says so twice because a small model asked to shorten something
-     * will summarise it given the slightest excuse -- and the ratio below is the only one under
-     * 1.0, which is the other half of saying it.
-     */
+    /** Fewer words for the same content, every point kept; not a summary. */
     SHORTEN(
         id = 12,
         instruction = "Rewrite the following text using fewer words, keeping its meaning and " +
@@ -232,19 +168,12 @@ enum class AssistTask(
     ),
 
     /**
-     * The user's own instruction, carried in the request rather than stored here.
-     *
-     * [instruction] is the prefix alone; the service appends what the user wrote. Every other
-     * entry's instruction is complete on its own, and this one is deliberately not -- sending
-     * this task without a written instruction is a bug, and the service refuses it.
+     * The user's own instruction, carried in the request. [instruction] is the prefix alone; the
+     * service appends what the user wrote and refuses the task without it.
      */
     CUSTOM(
         id = 13,
         instruction = CUSTOM_PREFIX,
-        // No way to know what was asked for, so the same starting allowance a translation gets --
-        // and, same as a translation, the real ceiling below governs what it can grow into, since
-        // a handwritten instruction ("make this twice as long") can need far more than any guess
-        // from the input's own length would give it.
         outputRatio = 1.5f,
         minOutputTokens = 64,
         usesRemainingContext = true,
@@ -252,25 +181,15 @@ enum class AssistTask(
     ;
 
     companion object {
-        /** The shared ceiling every task's ratio-derived budget is clamped under in `TextAssist::run`. */
+        /** The ceiling every task's ratio-derived budget is clamped under in `TextAssist::run`. */
         const val MAX_OUTPUT_TOKENS = 512
 
-        /** As many characters of instruction as a person will type on a phone, and no more. */
+        /** The longest instruction a user may write. */
         const val MAX_INSTRUCTION_CHARS = 400
 
         fun fromId(id: Int): AssistTask? = entries.firstOrNull { it.id == id }
 
-        /**
-         * The whole instruction for a prompt the user wrote.
-         *
-         * The prefix does two jobs. It tells the model this is a text transformation and not a
-         * conversation, which is what stops "Sure! Here is your text rewritten:" from ending up
-         * in somebody's message. And it puts the real instruction ahead of the text, so that
-         * text arriving from a clipboard -- somebody else's writing -- reads as material rather
-         * than as orders. That is a mitigation and not a fence: a small model can still be
-         * talked out of its instruction, and the answer is that nothing leaves the device and
-         * every version is one tap from being undone.
-         */
+        /** The whole instruction for a prompt the user wrote: [CUSTOM_PREFIX], then [written]. */
         fun customInstruction(written: String): String =
             CUSTOM_PREFIX + " Instruction: " + written.trim()
     }

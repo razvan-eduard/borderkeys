@@ -4,20 +4,9 @@
 package com.borderkeys.ime
 
 /**
- * The draft box's versions, and the rules for moving between them.
- *
- * Its own class, with no Android in it, because this is where the feature can be got wrong in a
- * way nobody notices until work has been destroyed. The same argument as [AutoCorrection]: the
- * policy is worth being able to test without a view, an editor and a model.
- *
- * The shape is a line of nodes with a finger on one of them:
- *
- *  - node 0 is the original -- the text taken from the selection, or, for a box opened empty,
- *    whatever was in it when the model was first asked to do something;
- *  - a model's answer is appended, and running the model from a node that is not the last one
- *    **discards everything after it**. That is the only thing that destroys a version;
- *  - editing by hand changes the node you are standing on and discards nothing, so walking back
- *    to read something and fixing a typo while you are there does not cost you the rest.
+ * The draft box's versions, a line of nodes with one showing. Node 0 is the original. A model's
+ * answer is appended after the node it was asked from, discarding the nodes beyond it; an edit by
+ * hand changes the node showing, or on the original inserts a node after it.
  */
 class Composer {
 
@@ -27,17 +16,12 @@ class Composer {
     var index: Int = 0
         private set
 
-    /**
-     * Where the flip returns to.
-     *
-     * The flip is a toggle between the original and the node you were reading -- not the newest
-     * one, because reading node n-3 and flipping twice should put you back on node n-3.
-     */
+    /** The node [flip] returns to from the original. */
     private var flippedFrom: Int = -1
 
     val size: Int get() = versions.size
 
-    /** True once the model has produced at least one version, which is when the line appears. */
+    /** True once the model has produced at least one version. */
     val hasHistory: Boolean get() = versions.size > 1
 
     val atOriginal: Boolean get() = versions.isNotEmpty() && index == 0
@@ -50,7 +34,7 @@ class Composer {
 
     fun current(): String? = versions.getOrNull(index)
 
-    /** Nothing has been asked of the model yet; the box is just a box. */
+    /** True until the model has been asked for anything. */
     fun isEmpty(): Boolean = versions.isEmpty()
 
     fun clear() {
@@ -60,14 +44,8 @@ class Composer {
     }
 
     /**
-     * Records what the text looked like before a model run, and returns the node it is at.
-     *
-     * Called with the box's live contents at the moment an action is tapped. The first call
-     * establishes the original -- unless the caller already has, which is the normal case: a
-     * selection seeds node 0 the moment the box opens, before anything can be typed into it, so
-     * that a box opened empty is the only time this call is the one doing the establishing.
-     * Later calls fold in whatever was edited by hand since the node was last written, through
-     * [updateCurrent] and its rule about node 0.
+     * Records the box's text before a model run and returns its node: the original on the first
+     * call, else through [updateCurrent].
      */
     fun captureBeforeRun(text: String): Int {
         if (versions.isEmpty()) {
@@ -80,12 +58,7 @@ class Composer {
         return index
     }
 
-    /**
-     * Adds a model's answer after the node it was asked from, discarding anything beyond it.
-     *
-     * Running the model from the middle of the line is a decision to take that version forward,
-     * and the versions that used to follow it are no longer reachable from anywhere.
-     */
+    /** Adds a model's answer after the node it was asked from, discarding anything beyond it. */
     fun addResult(result: String) {
         if (versions.isEmpty()) {
             versions.add(result)
@@ -101,18 +74,7 @@ class Composer {
         trim()
     }
 
-    /**
-     * Keeps an edit made by hand.
-     *
-     * Every node but the original updates in place, discarding nothing -- reading an old
-     * version and fixing a typo while you are there should not cost you the rest of the line.
-     * The original is the one thing this class promises never changes: "the exact copy
-     * gathered from the initial page selection, nothing else." Standing on it and typing does
-     * not get to be the exception, so the edit opens a new node right after it instead of
-     * overwriting it -- an insert, not the truncate-and-append a model result does from the
-     * middle of the line, so whatever already followed the original keeps following, now one
-     * position further along, rather than being taken as the thing this edit is replacing.
-     */
+    /** Keeps an edit made by hand: in place, or, on the original, as a new node right after it. */
     fun updateCurrent(text: String) {
         if (versions.isEmpty() || text == versions[index]) {
             return
@@ -156,12 +118,7 @@ class Composer {
         return current()
     }
 
-    /**
-     * Shows the original, or returns from it to wherever the flip was pressed.
-     *
-     * A toggle rather than a jump to the start: the point is to compare, and a comparison you
-     * cannot come back from is a one-way trip.
-     */
+    /** Shows the original, or returns from it to the node the flip was pressed on. */
     fun flip(): String? {
         if (versions.isEmpty()) {
             return null
@@ -177,12 +134,7 @@ class Composer {
         return text
     }
 
-    /**
-     * Drops the oldest version that is not the original when the line gets too long.
-     *
-     * Node 0 is never dropped. It is the one a user is promised they can always get back to, and
-     * a promise that expires after twenty rewrites is not one worth making.
-     */
+    /** Drops the oldest versions after the original while there are more than [MAX_VERSIONS]. */
     private fun trim() {
         while (versions.size > MAX_VERSIONS) {
             versions.removeAt(1)
@@ -194,21 +146,12 @@ class Composer {
     }
 
     companion object {
-        /** Twenty full copies of a bounded text is nothing; twenty dots in a row is already a lot. */
+        /** The most versions kept, the original included. */
         const val MAX_VERSIONS = 20
 
         /**
-         * A short name for a prompt, from the prompt itself.
-         *
-         * A button is about a dozen characters and no instruction worth writing fits in one, so
-         * something has to be dropped. The leading verb goes first -- every prompt starts with
-         * "rewrite", "make", "turn" -- and then the words that carry no meaning on their own, and
-         * what is left is usually the two words that say what the prompt is for: "rewrite this as
-         * a polite refusal" becomes "polite refusal".
-         *
-         * Deliberately not a job for the model. It would cost a few seconds, come back wrong
-         * often enough to matter, and the user would want to edit it anyway -- which is what the
-         * field this fills is for.
+         * A short name for a prompt: up to [NAME_WORDS] of its words after a leading verb, filler
+         * words skipped, cut to [MAX_NAME_CHARS].
          */
         fun suggestedName(prompt: String): String {
             val words = prompt.lowercase()
@@ -228,21 +171,20 @@ class Composer {
                 index += 1
             }
             if (kept.isEmpty()) {
-                // Nothing survived the filter, which means the prompt is all short words. Take
-                // it as written rather than hand back an empty name.
+                // With every word filtered out, the first words as written.
                 kept.addAll(words.take(NAME_WORDS))
             }
             return kept.joinToString(" ").take(MAX_NAME_CHARS).trim()
         }
 
-        /** Mirrors CustomAction.MAX_NAME_CHARS; duplicated so this stays free of :data. */
+        /** Same as CustomAction.MAX_NAME_CHARS. */
         const val MAX_NAME_CHARS = 24
 
         private const val NAME_WORDS = 3
 
         private val NAME_SEPARATORS = charArrayOf(' ', '\n', '\t', ',', '.', ';', ':', '!', '?')
 
-        /** What a prompt almost always opens with, and what therefore says nothing about it. */
+        /** Verbs dropped from the start of a prompt. */
         private val LEADING_VERBS = setOf(
             "rewrite", "write", "make", "turn", "change", "convert", "fix", "correct",
             "translate", "shorten", "summarise", "summarize", "reword", "rephrase", "put",

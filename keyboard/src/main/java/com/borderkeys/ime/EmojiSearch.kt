@@ -14,8 +14,6 @@ import java.text.Normalizer
  * equals or begins a word of, then a name that merely contains it, then a keyword that does;
  * within an order the index's own order stands, which is the palette order. Case and accents
  * are folded on both sides.
- *
- * Pure, so the ranking is testable without a view.
  */
 internal object EmojiSearch {
 

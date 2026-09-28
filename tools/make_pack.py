@@ -4,48 +4,30 @@
 
 """Turns a real corpus or frequency list into a BorderKeys language pack.
 
-`build_dict.py` takes a word list that already has frequencies and n-gram counts on a consistent
-scale. Nothing produces those by hand at any useful size, and nothing should: the data exists,
-freely licensed, and the work is getting it into shape. That is what this does.
+Produces the frequencies and n-gram counts `build_dict.py` takes, on one scale. Standard
+library only, and it downloads nothing: it reads files you fetched. `docs/dictionaries.md` names
+the free sources and their terms.
 
-Standard library only, like everything else in tools/. It downloads nothing -- point it at files
-you fetched yourself, so the licence of what goes into a pack is a decision you made rather than
-one a script made for you. `docs/dictionaries.md` names the free sources and their terms.
+Input, best first
+-----------------
+  --corpus FILE...      plain text. Words and their pairs are counted from the same text, so
+                        both are on one scale.
 
-Input, in order of how good the result is
------------------------------------------
-  --corpus FILE...      plain text. Words and their pairs are counted from the same text, which
-                        is the only way the two are guaranteed to be on the same scale -- see the
-                        note on backoff below. This is the best input and usually the easiest to
-                        find: any large body of writing in the language will do.
-
-  --frequencies FILE    "word count" or "word<TAB>count", one per line. The format the
-                        OpenSubtitles and Wortschatz lists come in. Gives good unigrams and no
-                        context, so the keyboard corrects well and predicts the next word badly.
+  --frequencies FILE    "word count" or "word<TAB>count", one per line, as the OpenSubtitles
+                        and Wortschatz lists come. Unigrams only.
 
   --ngram-counts FILE   "w1 w2 count" or "w1<TAB>w2<TAB>count", and the same with three words.
                         Combine with --frequencies when the two come from the same corpus.
 
-  --wordlist FILE       bare words, no counts, one per line -- a Hunspell expansion or a spell
-                        checker's list. Every word gets the same frequency, which means the
-                        keyboard knows the words and nothing about which are common. Accepted
-                        because coverage with no ranking still beats no dictionary, and refused
-                        silently would be worse than warned about loudly.
+  --wordlist FILE       bare words, no counts, one per line: a Hunspell expansion or a spell
+                        checker's list. Every word gets the same frequency, with a warning.
 
-  --names FILE          a make_names.py output: proper names, flagged in the compiled pack so
-                        the keyboard always capitalises them (see build_dict.py's
-                        WORD_FLAG_PROPER_NOUN) regardless of typed case or sentence position.
-                        Merged in after the frequency-based cutoffs below, not subject to them --
-                        a name absent from a corpus is not evidence it is rare, only that it is a
-                        name, which is exactly the case this file exists to cover.
+  --names FILE          a make_names.py output: proper names, flagged in the compiled pack
+                        (build_dict.py's WORD_FLAG_PROPER_NOUN). Merged in after the
+                        frequency-based cutoffs below, not subject to them.
 
-Why the scales have to match
-----------------------------
-The engine backs off with the usual rule: if a bigram is known it uses P(w2|w1), otherwise
-0.4 * P(w2). Those two are only comparable when the counts come from the same body of text. Mix a
-frequency list from one corpus with n-gram counts from another and every bigram will look either
-impossibly likely or impossibly rare, and the context model quietly stops working. Counting both
-from one corpus is why --corpus is the recommended path.
+The engine backs off from P(w2|w1) to 0.4 * P(w2), which compares only counts from one body of
+text.
 """
 
 from __future__ import annotations
@@ -68,8 +50,7 @@ class Alphabet:
     """What the keyboard for one language can type, and which bare letters are words there.
 
     Read from tools/drop_unreachable.py, which builds it from the long-press overlay the keys
-    themselves are drawn from, so the corpus and the keyboard cannot disagree about which
-    letters a language has.
+    are drawn from.
     """
 
     def __init__(self, tag: str, rules, build_dict):
@@ -93,30 +74,24 @@ def alphabet_for(tag: str) -> Alphabet | None:
 
 
 # A word is letters, plus the marks that belong to them, plus the apostrophes and hyphens that
-# appear inside words. Deliberately not \w: that admits digits and underscores, and a dictionary
-# full of "covid19" and "foo_bar" predicts nothing anyone types. Every apostrophe a word holds is
-# written as the plain one on the way in, and the Hebrew and Arabic vowel marks, which the fold
-# drops, are left out of the spelling.
+# appear inside words; no digits or underscores. Every apostrophe a word holds is written as the
+# plain one on the way in, and the Hebrew and Arabic vowel marks, which the fold drops, are left
+# out of the spelling.
 LETTER = r"(?:[^\W\d_]|[֑-ׇً-ٰٟۖ-ۭ])"
 WORD = re.compile(rf"{LETTER}+(?:['’‘ʼ׳-]{LETTER}+)*", re.UNICODE)
 
 
 # Sequences that only appear when UTF-8 has been decoded as Latin-1 somewhere upstream: "dacă"
-# arriving as "dacÄƒ". Real corpora carry some of this, it survives every frequency cutoff
-# because the mis-encoding is consistent, and it reaches the suggestion strip looking like a
-# word. Cheaper to refuse here than to explain later.
+# arriving as "dacÄƒ". Refused.
 MOJIBAKE = re.compile(r"[ÂÃÄÅ][\u0080-\u00bf\u0192\u2020-\u203a]")
 
 
 def admits(word: str, alphabet: Alphabet | None) -> bool:
     """Whether [word] is a word of the language [alphabet] describes.
 
-    [WORD] matches letters of any script and matches a single one of them, because a regular
-    expression is the wrong place to know which letters a language has. That belongs to the
-    keyboard, which is the thing that has to be able to type the word: see
-    drop_unreachable.alphabet_of, reading the same long-press overlay the keys are drawn from.
-    Without an alphabet -- a tag this project ships no overlay decision for -- every token is
-    admitted, which is what this did for every corpus counted before now.
+    [WORD] matches letters of any script, a single one included; the alphabet
+    (drop_unreachable.alphabet_of) decides which of them the language has. Without an alphabet
+    every token is admitted.
     """
     if alphabet is None:
         return True
@@ -158,9 +133,7 @@ def count_corpus(paths: list[Path], order: int,
                     words[token] += 1
                     if first:
                         # What a sentence opens with, counted as a pair with a marker that is
-                        # not a word. Raw frequency is a bad answer to "what might you write
-                        # next" on an empty field: the most common words in any language are
-                        # the ones that join clauses, and nobody starts a message with "de".
+                        # not a word.
                         bigrams[(SENTENCE_START, token)] += 1
                         first = False
                     if previous1 is not None:
@@ -169,8 +142,7 @@ def count_corpus(paths: list[Path], order: int,
                             trigrams[(previous2, previous1, token)] += 1
                     previous2 = previous1
                     previous1 = token
-                # A line break ends a context. Without this the last word of one line predicts
-                # the first of the next, which in a corpus of subtitles or paragraphs is noise.
+                # A line break ends a context.
                 previous1 = None
                 previous2 = None
     return words, bigrams, trigrams
@@ -184,11 +156,8 @@ def read_frequencies(path: Path) -> Counter:
             if len(parts) < 2:
                 continue
             word = parts[0].lower()
-            # A row ending in the literal "name" is this project's own proper-noun tag (see
-            # build_dict.py's load_words), not an external frequency list's own trailing column --
-            # its frequency sits second-to-last, not last. Reading it as parts[-1] silently threw
-            # away every name-flagged row (int("name") raises, caught below, row dropped) the
-            # first time a dictionary already containing one was fed back in as --frequencies.
+            # A row ending in the literal "name" is this project's proper-noun tag (build_dict.py's
+            # load_words); its frequency is second to last.
             frequency_index = -2 if len(parts) >= 3 and parts[-1] == "name" else -1
             try:
                 counts[word] += int(parts[frequency_index])
@@ -241,12 +210,8 @@ def is_ordinary(name: str, ordinary: "OrdinaryWords", frequencies: dict[str, int
     """Whether a name from the list is really one of the language's ordinary words.
 
     An exact match on the lower-cased spelling is one. So is a match once accents are stripped
-    from both sides -- the compiler folds accents away too, so "Sá" (a Portuguese surname) lands
-    on the same trie entry as "să" (Romanian "to"), the flag is OR'd across the spellings that
-    fold together, and every "sa" anyone typed came out "Să" -- but only when the ordinary word
-    is at least as frequent in the corpus as the name is: "și" outweighs "si" and refuses it,
-    while "măria" (41 uses) must not refuse "Maria" (7,149), which is what an accent-blind rule
-    did. A name the corpus does not know at all counts as frequency zero, so any real word wins.
+    from both sides, when the ordinary word is at least as frequent in the corpus as the name. A
+    name the corpus does not know counts as frequency zero.
     """
     lowered = name.lower()
     if lowered in ordinary.exact:
@@ -277,42 +242,20 @@ class OrdinaryWords:
         return OrdinaryWords(set(), {}, set(), set())
 
 
-# How many real people Wikidata has to know by a name before a word that common in the corpus
-# may capitalise itself every time it is typed: (rank ceiling, people needed). A word among the
-# language's 300 most frequent is almost never written as a name -- "president", "states" and
-# "red" are all somebody's name to Wikidata, and every one of them would have come out
-# capitalised -- so it takes thousands of people to overturn that; a word past the 8,000 most
-# frequent is rare enough that a single recorded person is evidence. Read off the Romanian
-# corpus against the fetch: at ranks 300-1000 the real first names carry 400-800 people
-# ("Mihai" 692, "Vasile" 799, "Iulia" 637) where the words that must not be flagged carry under
-# 200 ("satu" 182, "tine" 49); past rank 1000 a surname is a small family ("Trump" 82,
-# "Dumitrescu" 137, "Năstase" 28) and the threshold has to drop with it. The counts are of
-# people whose name item carries a label in the language, so they run low for names spelled
-# the same everywhere, which is why the lower tiers are single digits.
+# How many people Wikidata has to know by a name before a word that common in the corpus may
+# carry the proper-noun flag: (rank ceiling, people needed). The counts are of people whose name
+# item carries a label in the language.
 NAME_EVIDENCE_TIERS = ((300, 2000), (1000, 400), (3000, 8), (8000, 3))
 
-# A word among this many most frequent that the treebank has no tag for at all is not a word
-# the treebank never met -- it is one it splits before tagging ("del", "au", "zur" are all
-# multiword tokens in Universal Dependencies) -- and never a name. Only the very top: past it,
-# a treebank simply has not seen every real first name ("Iulia", "Dana", "Klaus").
+# Among this many most frequent words, one the treebank has no tag for is never a name.
 UNTAGGED_FREQUENT_RANK = 300
 
-# Past its own vocabulary a treebank says nothing at all, the tiers below ask a single person of
-# a rare word, and Wikidata knows one person named "Thunder", "Needle" and "Wage" each: several
-# thousand ordinary English words came out flagged that way. The spelling dictionary is the
-# second witness (make_ordinary.py) for exactly those words -- the ones the treebank never met.
-# Where it has met a word, its verdict stands either way: a treebank that saw "Dan" and "Ion"
-# mostly as names outranks a dictionary that also knows a martial-arts rank and a charged
-# particle, and one that saw "will" mostly as a verb has already refused it. What that leaves
-# is the treebank's own blind spot -- one tag per word, and a treebank of web text meets
-# "Apple" and "Hidden" (the company, the valley) more often than the fruit and the adjective --
-# which is what dictionaries/<tag>.names-exclude is for.
+# For a word the treebank never met, the spelling dictionary (make_ordinary.py) is the second
+# witness; where the treebank has met a word, its verdict stands. dictionaries/<tag>.names-exclude
+# lists the words both get wrong.
 
 # A name the corpus never wrote down is added at the flat frequency only with this many people
-# behind it -- the family-name floor the first bundled lists were built with, which kept them
-# to roughly a tenth of the corpus's own size. Lower, and the given-name tail alone (over a
-# hundred thousand labels a language, most of them a handful of people each) would double the
-# pack and offer names nobody in the language writes.
+# behind it.
 NAME_ADD_MIN_USES = 50
 
 
@@ -349,9 +292,8 @@ def read_word_list(path: Path) -> set[str]:
 
 
 def read_names(path: Path) -> list[tuple[str, int, int]]:
-    """A make_names.py output: (name, flat frequency, people) per row. Files written before
-    the people count existed carry three columns; those names count as backed by one person,
-    which the tiers above read as "rare word or nothing"."""
+    """A make_names.py output: (name, flat frequency, people) per row. A row without the people
+    column counts as one person."""
     rows = []
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -366,16 +308,9 @@ def read_names(path: Path) -> list[tuple[str, int, int]]:
 
 
 def common_words(grammar: Path, frequencies: dict[str, int] | None = None) -> OrdinaryWords:
-    """Words the language's own treebank tags as something other than a proper noun.
-
-    A name list from Wikidata is a classification source (see make_names.py) with no idea that
-    "in", "to", "of", "said" and "will" are also names of real people in its database -- enough of
-    them, in fact, to pass the family-name threshold. Flagged, those words were then capitalised
-    every time they were typed, which is a worse keyboard than one that never heard of names at
-    all. The treebank behind the `.pos` grammar has already decided what each common word is; a
-    word it calls a preposition, a verb or an adjective is not flagged, however many people are
-    called that. A word it has never seen ("sadoveanu") keeps the flag: absence from a treebank is
-    not evidence of anything.
+    """Words the language's own treebank tags as something other than a proper noun, read from
+    the `.pos` grammar. Such a word is not flagged, however many people carry it as a name; a word
+    the treebank has never seen keeps the flag.
     """
     data = json.loads(grammar.read_text(encoding="utf-8"))
     tagset = data["tagset"]
@@ -389,11 +324,7 @@ def common_words(grammar: Path, frequencies: dict[str, int] | None = None) -> Or
             continue
         lowered = word.lower()
         exact.add(lowered)
-        # The spelling without accents too: people type "si" for "și" and "cat" for "cât", the
-        # corpus holds both, the treebank only the accented one -- and Wikidata has a family
-        # named Si. Folded with Unicode's own decomposition, which is enough to tell "the same
-        # word without its accents" from a different word; the engine's own stricter fold
-        # (proximity.cpp) is not needed for that. Weighed, not applied blindly -- see is_ordinary.
+        # The spelling without accents too, by Unicode decomposition; is_ordinary weighs it.
         stripped = strip_accents(lowered)
         if stripped != lowered:
             current = folded.get(stripped)
@@ -461,8 +392,8 @@ def main() -> int:
     bigrams: Counter = Counter()
     trigrams: Counter = Counter()
 
-    # What this language's keyboard can type, which is what its dictionary may hold. None for a
-    # tag with no declared alphabet, and then every token is counted as it always was.
+    # What this language's keyboard can type, which is what its dictionary may hold; None for a
+    # tag with no declared alphabet, and then every token is counted.
     alphabet = alphabet_for(arguments.tag)
     if alphabet is None:
         print(f"no alphabet declared for {arguments.tag}: counting every script the corpus "
@@ -495,14 +426,9 @@ def main() -> int:
     ranked = sorted(kept.items(), key=lambda item: (-item[1], item[0]))[:arguments.max_words]
     vocabulary = {w for w, _ in ranked}
 
-    # Merged in after max_words rather than before: a name is not competing for one of the
-    # corpus's own ranked slots, since names.tsv's flat frequency (see make_names.py) is not on
-    # the same scale as a real corpus count and would either always lose that ranking (if the
-    # flat value is low) or crowd out real words (if it is not) -- neither is the point. A word
-    # that is ALREADY in the corpus (a name that also happens to be a common word, e.g. "Will")
-    # keeps its own real frequency and just gains the flag, rather than being duplicated --
-    # compared lower-case, since the corpus is lower-cased on the way in and the name list is
-    # not; the flag is what makes the compiled word capitalise, not the spelling written here.
+    # Merged in after max_words, outside the corpus's ranking. A name already in the corpus keeps
+    # its own frequency and gains the flag; compared lower-case, as the corpus is lower-cased on
+    # the way in.
     proper_nouns: set[str] = set()
     excluded = read_word_list(arguments.names_exclude) if arguments.names_exclude else set()
     included = read_word_list(arguments.names_include) if arguments.names_include else set()
@@ -540,8 +466,7 @@ def main() -> int:
                 gained += 1
         print(f"names: {gained} corpus words gained the flag from --names-flag-only", file=sys.stderr)
 
-    # An n-gram naming a word that did not survive the cutoff cannot be looked up, and the writer
-    # would drop it anyway. Filtering here keeps the intermediate files honest.
+    # An n-gram naming a word that did not survive the cutoff is dropped here.
     def survives(key: tuple) -> bool:
         # The sentence marker is not a word and will never be in the vocabulary; it is resolved
         # to a reserved index by the pack compiler instead.

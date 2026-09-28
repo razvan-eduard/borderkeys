@@ -46,24 +46,19 @@ import com.borderkeys.settings.siblingPackage
 fun HomeScreen(query: String, modifier: Modifier = Modifier, open: (Screen) -> Unit) {
     val strings = LocalStrings.current
     val context = LocalContext.current
-    // Re-read whenever this screen comes back to the front, the same way Setup does: both
-    // answers live in system settings, the setup card sends the person out to change them, and
-    // a card that asked only once kept saying "not enabled" after they had enabled it.
+    // Re-read whenever this screen comes back to the front.
     val resumed by rememberResumedCount()
     val enabled = remember(resumed) { isBorderKeysEnabled(context) }
     val isDefault = remember(resumed) { isBorderKeysDefault(context) }
-    // Resolving the service is the only honest way to ask "is this the plus build": the class is
-    // simply absent otherwise, and a BuildConfig flag would be a claim rather than a fact.
+    // Whether this is the plus build: the assistant service resolves only there.
     val hasAssistant = remember(context) {
         val intent = android.content.Intent()
             .setClassName(context.packageName, AssistProtocol.SERVICE_CLASS)
         context.packageManager.resolveService(intent, 0) != null
     }
 
-    // Shown while anything in the setup is outstanding -- including, in the assistant build,
-    // the settings still sitting in the other one. Without that last condition the card would
-    // vanish the moment the keyboard was switched on, taking the transfer step with it, and the
-    // one thing somebody most wants right after installing would become unreachable.
+    // The setup card stays while anything is outstanding, including, in the plus build, a core
+    // build to transfer from.
     val sibling = remember(context) { siblingPackage(context) }
     val canTransfer = remember(context, sibling) {
         sibling != null && runCatching {
@@ -125,8 +120,7 @@ fun HomeScreen(query: String, modifier: Modifier = Modifier, open: (Screen) -> U
                 strings[Keys.HOME_QUICK_ACTIONS],
                 strings[Keys.HOME_QUICK_ACTIONS_NOTE],
             ) { open(Screen.QuickActions) }
-            // Shown in both builds, unlike the assistant's own row: the box is worth having
-            // without a model, and the screen says which of its buttons need one.
+            // In both builds; the screen says which of its buttons need a model.
             SettingRow(
                 strings[Keys.SCREEN_DRAFT_BOX],
                 strings[Keys.HOME_DRAFT_BOX],
@@ -155,14 +149,7 @@ fun HomeScreen(query: String, modifier: Modifier = Modifier, open: (Screen) -> U
             ) { open(Screen.Effects) }
         }
         SettingsSectionCard(strings[Keys.SHORTCUTS_TITLE]) {
-            // Listed because a gesture nobody is told about is a gesture nobody uses. Holding
-            // enter to reach this screen was added in the same change as this card, and would
-            // otherwise be discoverable only by accident.
-            //
-            // Each row leads with the actual key it is about instead of naming it in text --
-            // "the globe key" and "the settings key" are the same physical key wearing whichever
-            // icon the layout gives it, and a drawing of it is unambiguous where the two names
-            // are not.
+            // The gestures, each row led by a drawing of its key.
             ShortcutRow(R.drawable.bk_action_newline, strings[Keys.SHORTCUTS_ENTER])
             ShortcutRow(R.drawable.bk_icon_globe, strings[Keys.SHORTCUTS_GLOBE])
             ShortcutRow(R.drawable.bk_icon_space_bar, strings[Keys.SHORTCUTS_SPACE_HOLD])

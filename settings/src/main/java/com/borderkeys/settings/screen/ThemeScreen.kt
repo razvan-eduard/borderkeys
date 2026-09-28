@@ -71,11 +71,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * The theme editor, with the real keyboard above it.
- *
- * There is no apply button and no preview state. A swatch writes to the DataStore, the flow
- * re-emits, and the keyboard above redraws -- the same keyboard the input method shows, from the
- * same object. That is the whole reason `:settings` is allowed to depend on `:keyboard`.
+ * The theme editor, with the real keyboard above it: a swatch writes to the DataStore and the
+ * keyboard redraws from the flow.
  */
 @Composable
 fun ThemeScreen(modifier: Modifier = Modifier) {
@@ -96,9 +93,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            // Copied and shrunk off the main thread: a photograph straight off a camera is
-            // several thousand pixels across, and this runs while a settings screen is on
-            // screen.
+            // Copied and shrunk off the main thread.
             val name = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 BackgroundImages.import(context, uri)
             }
@@ -157,27 +152,16 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    // The preview is outside the scrolling column, so it stays on screen while the controls
-    // under it are scrolled. A preview that scrolls away is a preview you cannot see while you
-    // are changing the thing it previews, which is the only moment it is for.
+    // The preview stays above the scrolling controls.
     Column(modifier = modifier.fillMaxSize()) {
-        // The real, live appearance -- including the auto dark/light switch, since editing is
-        // disabled while it is on (see the Theme card below) and there is nothing left for a
-        // preview to show except what is actually showing.
-        // Real placement, same as every other screen embedding this preview -- see
-        // PlacementPreview's own doc for why only its height is fixed to a standard fraction,
-        // not its width or anything else about where the keyboard actually sits.
+        // The live appearance, auto dark/light included, in its real placement.
         PlacementPreview(appearance, Modifier.padding(vertical = 12.dp))
         Divider()
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             SettingsSectionCard(strings[Keys.SCREEN_THEME]) {
-                // Greyed out and untouchable while auto is on: the point of auto is that dark
-                // and light are decided for you, so a preset row that still looked pickable
-                // would be a control that lied about doing something.
+                // Greyed out and untouchable while auto is on.
                 Disableable(disabled = auto) {
-                    // Grouped by category rather than one long row: fifteen presets in a single
-                    // scroll is a row nobody scrolls to the end of, and a category label says
-                    // what family of look is coming before the colours do.
+                    // Grouped by category.
                     for (category in ThemeCategory.entries) {
                         val presetsInCategory = PRESETS.filter { it.category == category }
                         if (presetsInCategory.isEmpty()) continue
@@ -194,14 +178,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             for (preset in presetsInCategory) {
-                                // showKeyBorders is excluded from what a preset overwrites: it is
-                                // a shape choice a preset happens to carry a value for, not a
-                                // colour the preset is actually about, and only a few of the
-                                // presets ever bothered to set it -- so picking any of the others
-                                // used to turn borders off as a side effect of colours nobody
-                                // asked to change. Comparing and applying with it carried over
-                                // from what is already showing is what keeps that one switch a
-                                // switch, not a coin flip of which preset was tapped last.
+                                // showKeyBorders is carried over; a preset does not change it.
                                 val presetTheme = preset.theme.copy(showKeyBorders = theme.showKeyBorders)
                                 PresetCard(
                                     name = strings[preset.nameKey],
@@ -218,11 +195,8 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                     subtitle = strings[Keys.THEME_AUTO_FOLLOW_SYSTEM_NOTE],
                     checked = auto,
                 ) { value ->
-                    // The light half of the switch, seeded once: without this, turning auto on
-                    // for the first time would show this theme's own colours for "light" too,
-                    // since the light store starts out equal to the plain default -- indistinguish
-                    // -able from never having been set. Only the first time; a light theme the
-                    // user has actually customised is never overwritten.
+                    // The light theme is seeded when auto is turned on while it still holds the
+                    // default.
                     if (value && lightTheme == KeyboardTheme()) {
                         scope.launch { repository.updateLightTheme { LIGHT_THEME } }
                     }
@@ -248,9 +222,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 if (customThemes.isEmpty()) {
                     Explanation(strings[Keys.THEME_NO_CUSTOM_THEMES])
                 } else {
-                    // Greyed out while auto is on, exactly like the presets above: a saved
-                    // theme is a preset the user made, and tapping one here used to write the
-                    // dark store while the light theme was what the auto switch was showing.
+                    // Greyed out while auto is on, like the presets.
                     Disableable(disabled = auto) {
                         Row(
                             modifier = Modifier
@@ -260,8 +232,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             for (entry in customThemes) {
-                                // Same carry-over as a preset: showKeyBorders is a shape choice,
-                                // not part of what makes this the theme the user saved.
+                                // showKeyBorders is carried over, as for a preset.
                                 val entryTheme = entry.theme.copy(showKeyBorders = theme.showKeyBorders)
                                 PresetCard(
                                     name = entry.name,
@@ -283,9 +254,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                         Text(strings[Keys.THEME_IMPORT_THEME])
                     }
                 }
-                // Acts on whichever saved theme is the one actually showing right now -- the
-                // same equality a preset card's own ring already uses, so the buttons below track
-                // the ring rather than a second, separate idea of "which one is selected".
+                // The saved theme showing now, by the equality the cards' ring uses.
                 val active = customThemes.firstOrNull {
                     it.theme.copy(showKeyBorders = theme.showKeyBorders) == theme
                 }
@@ -401,9 +370,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                         .padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    // Chips that toggle rather than a row where one wins. They layer -- dots
-                    // over a grid is a third thing -- and "none" is the state of having chosen
-                    // none of them rather than a choice of its own.
+                    // Chips that toggle: patterns layer, and none selected means none.
                     for (index in KeyboardTheme.PATTERN_DOTS until KeyboardTheme.PATTERN_COUNT) {
                         val selected = theme.backgroundPatterns.contains(index)
                         FilterChip(
@@ -436,8 +403,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ) {
                     update { t -> t.copy(patternScaleDp = it) }
                 }
-                // A picture is not an alternative to a pattern. Both are layers on the same
-                // surface, and choosing one has never been a reason to be refused the other.
+                // The picture, a layer with the patterns.
                 Text(
                     strings[Keys.THEME_PICTURE],
                     style = MaterialTheme.typography.bodyMedium,
@@ -465,8 +431,8 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                     ) { update { t -> t.copy(backgroundImageDim = it / 100f) } }
                     Explanation(strings[Keys.THEME_PICTURE_DIM_NOTE])
                 }
-                // Shown as the background's own colour when there is no second one, so the row
-                // has something ringed and picking that same colour is how a gradient is removed.
+                // The background's own colour when there is no second one; picking it removes the
+                // gradient.
                 ColourRow(
                     strings[Keys.THEME_SECOND_COLOUR],
                     theme.gradientEnd(),
@@ -480,8 +446,6 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ) { update { t -> t.copy(opacity = it / 100f) } }
                 Explanation(strings[Keys.THEME_OPACITY_NOTE])
                 AdvancedSection(strings[Keys.THEME_ADVANCED_NAVIGATION_NOTE]) {
-                    // "Background across the whole width" lives on the Size screen now, in the
-                    // same card as the blur it gates -- see that screen's own comment.
                     SwitchRow(
                         title = strings[Keys.THEME_NAVIGATION_BAR_BACKGROUND],
                         subtitle = strings[Keys.THEME_NAVIGATION_BAR_BACKGROUND_NOTE],
@@ -514,9 +478,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 ) {
                     update { t -> t.copy(labelTextSizeSp = it) }
                 }
-                // The finer dials: the hint text's own size, how far a pressed key sinks, and
-                // the swipe trail's width -- its one home now that the Typing screen no longer
-                // carries a second slider for the same value.
+                // The hint text's size, how far a pressed key sinks, and the swipe trail's width.
                 AdvancedSection(strings[Keys.THEME_ADVANCED_TEXT_NOTE]) {
                     ThemeSlider(
                         strings[Keys.THEME_ACCENT_SIZE], theme.accentTextSizeSp, 6f..32f,
@@ -539,8 +501,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                 }
                 Button(
                     onClick = {
-                        // KeyboardTheme's own defaults, not a second copy of them: seven
-                        // literals here used to have to match seven there by hand.
+                        // KeyboardTheme's own defaults.
                         val defaults = KeyboardTheme()
                         update {
                             it.copy(
@@ -562,11 +523,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
                     subtitle = strings[Keys.THEME_A_HAIRLINE_BORDER_HELPS_WHEN_THE],
                     checked = theme.showKeyBorders,
                 ) { value ->
-                    // Written to both stores, not just the one "theme" edits: it is a shape
-                    // choice, not a colour, the same reasoning the preset picker above already
-                    // carries it through unchanged for. Without this, switching it on while
-                    // auto mode is showing the *light* theme changed a value nothing on screen
-                    // was reading, and the toggle looked broken.
+                    // Written to both the dark and the light theme.
                     update { it.copy(showKeyBorders = value) }
                     scope.launch { repository.updateLightTheme { it.copy(showKeyBorders = value) } }
                 }
@@ -625,8 +582,7 @@ fun ThemeScreen(modifier: Modifier = Modifier) {
     }
 }
 
-/** A short name, asked for and handed back -- "save this as" and "rename this" are the same
- *  dialog with a different title, confirm label and starting text. */
+/** Asks for a short name, for "save this as" and "rename this". */
 @Composable
 private fun ThemeNameDialog(
     title: String,
@@ -659,12 +615,7 @@ private fun ThemeNameDialog(
     )
 }
 
-/**
- * The pattern names, as catalogue keys in the order of the PATTERN_ constants.
- *
- * Keys rather than text: this is a file-level value, built before any composition has a
- * catalogue to read from.
- */
+/** The pattern names, as catalogue keys in the order of the PATTERN_ constants. */
 private val PATTERN_LABELS = arrayOf(
     Keys.THEME_PATTERN_NONE,
     Keys.THEME_PATTERN_DOTS,
@@ -674,12 +625,7 @@ private val PATTERN_LABELS = arrayOf(
     Keys.THEME_PATTERN_STRIPES,
 )
 
-/**
- * One preset, drawn as what it looks like.
- *
- * The three dots are the background, the keys and the accent, which is enough to tell the
- * presets apart at a glance and is the same information the name is standing in for.
- */
+/** One preset, drawn as three dots: its background, its keys and its accent. */
 @Composable
 private fun PresetCard(
     name: String,
@@ -716,8 +662,7 @@ private fun PresetCard(
         Text(
             name,
             style = MaterialTheme.typography.labelMedium,
-            // The preset's own label colour, on the preset's own background: the card is a
-            // sample of the theme, so reading it is the same test the keyboard has to pass.
+            // The preset's label colour, on its own background.
             color = Color(preset.textColor),
             modifier = Modifier.padding(top = 6.dp),
         )
@@ -727,13 +672,7 @@ private fun PresetCard(
 /** A preset, the catalogue key for its name, and the family of look it belongs to. */
 internal class Preset(val nameKey: String, val theme: KeyboardTheme, val category: ThemeCategory)
 
-/**
- * The families the preset row groups by, in the order the row shows them.
- *
- * A pure presentation grouping -- nothing else reads [category], and a theme itself has no
- * notion of which family it is in, so this stays in `:settings` rather than beside
- * [KeyboardTheme] in `:data`.
- */
+/** The families the preset row groups by, in the order the row shows them. */
 internal enum class ThemeCategory(val labelKey: String) {
     CLASSIC(Keys.THEME_CATEGORY_CLASSIC),
     COOL(Keys.THEME_CATEGORY_COOL),
@@ -770,9 +709,7 @@ internal val LIGHT_THEME = KeyboardTheme(
     modifierKeyColor = 0xFFD4D4DE.toInt(),
     textColor = 0xFF14141A.toInt(),
     secondaryTextColor = 0xFF5A5A6E.toInt(),
-    // Darker than the dark theme's blue. The accent is text on the suggestion strip, and the
-    // lighter blue read at three to one on a pale background, which is a colour you can see
-    // and a word you cannot.
+    // Darker than the dark theme's blue.
     accentColor = 0xFF1D4ED8.toInt(),
     swipeTrailColor = 0xCC1D4ED8.toInt(),
 )
@@ -780,9 +717,7 @@ internal val LIGHT_THEME = KeyboardTheme(
 internal val HIGH_CONTRAST = KeyboardTheme(
     backgroundColor = 0xFF000000.toInt(),
     keyColor = 0xFF000000.toInt(),
-    // Not white. The label is white and is drawn over the pressed fill, so a white pressed key
-    // made the letter vanish exactly while the finger was on it -- the one moment it is being
-    // looked at. Dark enough to keep the label, light enough to be obviously pressed.
+    // A grey the white label stays readable on.
     keyPressedColor = 0xFF5A5A6E.toInt(),
     modifierKeyColor = 0xFF000000.toInt(),
     textColor = 0xFFFFFFFF.toInt(),
@@ -792,12 +727,7 @@ internal val HIGH_CONTRAST = KeyboardTheme(
     swipeTrailColor = 0xCCF59E0B.toInt(),
 )
 
-/**
- * A deep blue that is dark without being black, with a faint grid over it.
- *
- * The pattern is part of the preset, not something to apply afterwards: a preset is what the
- * keyboard looks like, and half of these look like nothing without their surface.
- */
+/** A deep blue, dark without being black, with a faint grid over it. */
 internal val MIDNIGHT = KeyboardTheme(
     backgroundColor = 0xFF0B1020.toInt(),
     keyColor = 0xFF161E36.toInt(),
@@ -857,8 +787,7 @@ internal val PAPER = KeyboardTheme(
     modifierKeyColor = 0xFFE2D8C4.toInt(),
     textColor = 0xFF2B2419.toInt(),
     secondaryTextColor = 0xFF6B5E48.toInt(),
-    // Darker than it looks like it wants to be: the accent is text on the suggestion strip,
-    // and a warm mid-brown on cream reads at three to one, which is not enough to read.
+    // A dark brown.
     accentColor = 0xFF8A5410.toInt(),
     swipeTrailColor = 0xCC8A5410.toInt(),
     keyCornerRadiusDp = 4f,
@@ -868,8 +797,7 @@ internal val PAPER = KeyboardTheme(
 )
 
 internal val MONO = KeyboardTheme(
-    // The keys are the same colour as what is behind them; the outline is what separates
-    // them. Nothing else in the set does that, which is the point of having it.
+    // Keys the colour of the background, separated by their outlines.
     backgroundColor = 0xFF161616.toInt(),
     keyColor = 0xFF161616.toInt(),
     keyPressedColor = 0xFF2E2E2E.toInt(),
@@ -898,9 +826,7 @@ internal val NEON = KeyboardTheme(
 )
 
 internal val GLACIER = KeyboardTheme(
-    // The one light entry among the cool presets: Midnight and Ocean are both night water,
-    // and a category of nothing but dark blues is a category where the third card looks like
-    // a mistake rather than a choice.
+    // The light one among the cool presets.
     backgroundColor = 0xFFE3F1F6.toInt(),
     keyColor = 0xFFFFFFFF.toInt(),
     keyPressedColor = 0xFFB9DCE8.toInt(),
@@ -938,9 +864,7 @@ internal val CLAY = KeyboardTheme(
 )
 
 internal val SLATE = KeyboardTheme(
-    // Mono is the keys vanishing into the background with the outline left to separate them;
-    // this is the opposite move -- keys that read as their own surface, one step lighter than
-    // the background rather than the same colour as it.
+    // Keys one step lighter than the background.
     backgroundColor = 0xFF1C1E23.toInt(),
     keyColor = 0xFF2B2E36.toInt(),
     keyPressedColor = 0xFF3E424C.toInt(),
@@ -968,11 +892,8 @@ internal val AURORA = KeyboardTheme(
 )
 
 /**
- * Fifteen of them, grouped by [ThemeCategory] in the order the row shows the groups, and within
- * each group in the order the row shows the cards.
- *
- * The first three are where the application started and stay first, because someone who has
- * been using one of them should not have to hunt for it after an update.
+ * The fifteen presets, grouped by [ThemeCategory] in the order the row shows the groups, and
+ * within each group in the order it shows the cards.
  */
 internal val PRESETS = listOf(
     Preset(Keys.THEME_DARK, KeyboardTheme(), ThemeCategory.CLASSIC),

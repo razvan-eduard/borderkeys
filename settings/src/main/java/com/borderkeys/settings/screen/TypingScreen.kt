@@ -49,16 +49,8 @@ import com.borderkeys.settings.rememberThemeUpdater
 import kotlin.math.roundToInt
 
 /**
- * How typing itself behaves: what the strip offers, what corrects itself, and how a gesture is
- * read -- everything about the act of typing, one screen rather than two.
- *
- * The default is that nothing is corrected silently: a delimiter commits your letters and a
- * suggestion is applied only when you tap it. That is the behaviour this keyboard argues for,
- * and it is why the switch in "Correcting as you type" starts off rather than on.
- *
- * The swipe probe field itself lives in [com.borderkeys.settings.SettingsActivity]'s own
- * `bottomBar`, not here -- it rides along on every screen, not just this one, since a setting
- * worth trying immediately (a theme colour, a key size) is rarely on the Typing screen itself.
+ * How typing behaves: what the strip offers, what corrects itself, and how a gesture is read. The
+ * probe field is in [com.borderkeys.settings.SettingsActivity]'s bottom bar.
  */
 @Composable
 fun TypingScreen(modifier: Modifier = Modifier) {
@@ -71,10 +63,8 @@ fun TypingScreen(modifier: Modifier = Modifier) {
     val (theme, _, preferences) = appearance
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        // Everything about what the strip offers and how much of it: on/off, how many slots,
-        // the clipboard as an extra source, two-word phrases, and the words it must never offer
-        // -- one card rather than several, since all of them are the same question ("what shows
-        // up in that row") from different angles, not separate decisions.
+        // What the strip offers: on or off, how many slots, the clipboard, two-word phrases, and
+        // the words it never offers.
         SettingsSectionCard(strings[Keys.CORRECTIONS_SUGGESTIONS]) {
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_SHOW_THE_SUGGESTION_STRIP],
@@ -108,20 +98,15 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             ) { value -> update { it.copy(blockOffensiveWords = value) } }
         }
 
-        // Punctuation/capitals and autocorrect-as-you-type folded into one card: both are edits
-        // the keyboard makes to what was just typed, and the mechanical ones (spacing, capitals)
-        // read fine ahead of the judgement-call ones (correction strictness) under one heading,
-        // with the inline sub-heading below marking where the second half starts -- the same
-        // pattern the strictness/length sliders already use for themselves.
+        // Spacing and capitals, then autocorrect under its own sub-heading.
         SettingsSectionCard(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE]) {
             Text(
                 strings[Keys.CORRECTIONS_PUNCTUATION_AND_CAPITALS],
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
-            // One choice, three answers, over two stored switches: "capitalise for me" and
-            // "even fields that don't ask" were dependent -- the second did nothing without the
-            // first -- and read as two decisions when they are one.
+            // One choice of three, over the two stored switches autoCapitalise and
+            // forceCapitaliseSentences.
             Text(
                 strings[Keys.CORRECTIONS_CAPITALISE],
                 style = MaterialTheme.typography.bodyLarge,
@@ -146,10 +131,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 ) { update { it.copy(autoCapitalise = true, forceCapitaliseSentences = true) } }
             }
             Explanation(strings[Keys.CORRECTIONS_CAPITALISE_MODE_NOTE])
-            // Beside the sentence capitals rather than with the dictionaries: from where the
-            // user sits this is the same question -- "when does this keyboard put a capital in
-            // for me" -- and the fact that the answer comes from a flag in a language pack is
-            // an implementation detail they should not need to know to find the switch.
+            // Name capitals, beside the sentence capitals.
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_CAPITALISE_NAMES],
                 subtitle = strings[Keys.CORRECTIONS_CAPITALISE_NAMES_NOTE],
@@ -222,9 +204,8 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.CORRECTIONS_A_CORRECTION_IS_ONLY_LEARNED_ONCE],
             )
-            // The knobs behind the choices above: how a habit-space after an automatic one is
-            // treated, the space before punctuation, and the two finer autocorrect dials that
-            // sit under "how different a correction may be" -- the one level most people set.
+            // The space typed after an automatic one, the space before punctuation, and the two
+            // finer autocorrect dials.
             AdvancedSection(strings[Keys.CORRECTIONS_ADVANCED_NOTE]) {
                 Text(
                     strings[Keys.CORRECTIONS_AUTO_SPACE_HABIT],
@@ -298,10 +279,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // Its own card rather than folded into the one above: this is not another correction-as-
-        // you-type knob, it is a decision about text already committed, several words back --
-        // which is exactly what the warning below it exists to say plainly rather than bury in a
-        // subtitle.
+        // Revisiting text already committed, with its warning.
         SettingsSectionCard(strings[Keys.LANGUAGES_SWITCH_TITLE]) {
             CautionNote(strings[Keys.LANGUAGES_SWITCH_WARNING])
             Row(
@@ -329,12 +307,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             Explanation(strings[Keys.LANGUAGES_SWITCH_EXPLANATION])
         }
 
-        // Swipe typing, folded in from what used to be its own screen, and its trail width, the
-        // decoding explanation, and the experimental model toggle folded into the same card
-        // rather than four: every one of them is a fact about the one feature (swipe), not a
-        // separate decision, and each keeps its own inline sub-heading so the card still reads
-        // as sections rather than one long unbroken list. The live probe field is not among
-        // them any more -- see this file's own top-level doc for where it moved.
+        // Swipe typing, its decoding notes and the neural model, each under its own sub-heading.
         SettingsSectionCard(strings[Keys.SWIPE_SWIPE_TYPING]) {
             SwitchRow(
                 title = strings[Keys.SWIPE_SWIPE_TYPING],
@@ -347,8 +320,8 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 checked = preferences.swipeBackspaceDeletesWord,
             ) { value -> update { it.copy(swipeBackspaceDeletesWord = value) } }
 
-            // The trail's width and colour live together on the Theme screen; the decoding
-            // notes and the experimental model are for whoever wants to know how it works.
+            // The decoding notes and the neural model; the trail's width and colour are on the
+            // Theme screen.
             AdvancedSection(
                 strings[
                     if (SwipeModelAvailability.neuralSwipeModelSupported) {
@@ -373,10 +346,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     Explanation(strings[Keys.SWIPE_SWIPE_TYPING_IS_CURRENTLY_OFF_SO])
                 }
 
-                // `plus`-only: a `core` build compiles no tier B at all, so this section does
-                // not exist there rather than existing and doing nothing. See
-                // SwipeModelAvailability's own doc for why this is a compile-time check, not a
-                // runtime one.
+                // `plus` only.
                 if (SwipeModelAvailability.neuralSwipeModelSupported) {
                     Text(
                         strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
@@ -384,14 +354,9 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                     )
                     CautionNote(strings[Keys.SWIPE_A_PREVIEW_OF_WORK_STILL_IN_PROGRESS])
-                    // Turning this on is not a flag: it reads two and a half megabytes of
-                    // weights and runs the model once before the first real swipe can use it,
-                    // and turning it off frees them again. The row says which of those is
-                    // happening rather than pretending the switch settled instantly.
+                    // Loading or freeing the weights, shown on the row while it runs.
                     val loadState by SwipeModelLoad.state.collectAsStateWithLifecycle()
-                    // The stored flag, not just the live one: a failure has to survive a restart,
-                    // and the keyboard that recorded it may be long gone by the time this screen
-                    // is opened again.
+                    // The stored failure flag as well as the live state.
                     val failed = preferences.swipeModelFailed ||
                         loadState == SwipeModelLoad.State.Failed
                     when {
@@ -408,9 +373,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                         }
 
                         loadState == SwipeModelLoad.State.Loading -> {
-                            // A spinner in the switch's own place, rather than the full-width
-                            // bar this module uses for an import: what is busy is this one
-                            // control, and it is busy for well under a second.
+                            // A spinner in the switch's place.
                             Disableable(disabled = true) {
                                 SettingRow(
                                     title = strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
@@ -435,10 +398,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // A separate card from Swipe typing above rather than folded into it: this is an
-        // alternative to the strip, not another fact about how a swipe is decoded, and the three
-        // sliders only matter once the switch itself is on -- the same "nothing to tune while
-        // it's off" shape the Correcting-as-you-type card already uses for its own toggles.
+        // The radial menu, an alternative to the strip.
         SettingsSectionCard(strings[Keys.RADIAL_TITLE]) {
             SwitchRow(
                 title = strings[Keys.RADIAL_TITLE],
@@ -470,10 +430,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 }
                 DefaultableSlider(
                     label = strings.getString(
-                        // The auto-apply/auto-cancel wording follows what "if nothing is chosen"
-                        // is actually set to -- a slider labelled "auto-apply" while it is
-                        // configured to cancel would be describing the wrong outcome entirely,
-                        // not just using an imprecise word for the right one.
+                        // The wording follows radialTimeoutDefault.
                         if (preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) {
                             Keys.RADIAL_PICK_TIMEOUT_CANCEL_S
                         } else {
@@ -487,21 +444,13 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     default = KeyboardPreferences.DEFAULT_RADIAL_PICK_TIMEOUT_MILLIS / 1000f,
                     steps = (KeyboardPreferences.MAX_RADIAL_PICK_TIMEOUT_MILLIS -
                         KeyboardPreferences.MIN_RADIAL_PICK_TIMEOUT_MILLIS) / 100 - 1,
-                    // Has nothing left to apply or cancel once radialLiftKeepsOpen is on: the ring
-                    // never resolves on its own then, at any point in its lifetime -- see that
-                    // field's own doc. Shown disabled rather than hidden, so the setting is still
-                    // there, at its last value, for whenever the switch below is turned back off.
+                    // Disabled while radialLiftKeepsOpen is on.
                     enabled = !preferences.radialLiftKeepsOpen,
                 ) { value ->
                     update { it.copy(radialPickTimeoutMillis = (value * 1000f).roundToInt()) }
                 }
-                // The two are sequential, not competing for the same instant (pause dwell runs
-                // before the ring opens; the pick timeout only starts counting once it has), so
-                // this is a usability smell rather than a real conflict -- but a pause set as
-                // long as or longer than the reaction window it is immediately followed by is
-                // one anybody would want to know about before finding out by hand. Moot, along
-                // with the slider above, once radialLiftKeepsOpen turns that reaction window off
-                // entirely.
+                // A note when the pause dwell is at least the pick timeout, unless
+                // radialLiftKeepsOpen is on.
                 if (!preferences.radialLiftKeepsOpen &&
                     preferences.radialPauseDwellMillis >= preferences.radialPickTimeoutMillis
                 ) {
@@ -512,9 +461,8 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     subtitle = strings[Keys.RADIAL_LIFT_KEEPS_OPEN_NOTE],
                     checked = preferences.radialLiftKeepsOpen,
                 ) { value -> update { it.copy(radialLiftKeepsOpen = value) } }
-                // Sits under the switch above because the two decide the same thing between
-                // them: whether a swipe that needed no pause shows a ring at all, and what is
-                // in it. "Keep it and close" has nothing to act on while that switch is off.
+                // Under the switch above; together they decide whether a swipe without a pause
+                // shows a ring, and what is in it.
                 Text(
                     strings[Keys.RADIAL_TRUSTED_WORD],
                     style = MaterialTheme.typography.bodyLarge,
@@ -602,8 +550,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                         preferences.radialMenuSize == KeyboardPreferences.RADIAL_SIZE_LARGE,
                     ) { update { it.copy(radialMenuSize = KeyboardPreferences.RADIAL_SIZE_LARGE) } }
                 }
-                // The dials behind the ring: how many words, how a pause is detected, and
-                // what closes it -- set once, if ever.
+                // How many words, how a pause is detected, and what closes the ring.
                 AdvancedSection(strings[Keys.RADIAL_ADVANCED_NOTE]) {
                     DefaultableSlider(
                         label = strings.getString(Keys.RADIAL_COUNT, preferences.radialSuggestionCount),
@@ -614,10 +561,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                         steps = KeyboardPreferences.MAX_RADIAL_SUGGESTIONS -
                             KeyboardPreferences.MIN_RADIAL_SUGGESTIONS - 1,
                     ) { value -> update { it.copy(radialSuggestionCount = value.toInt()) } }
-                    // Shown and stepped in tenths of a second, not milliseconds -- a hundred-odd
-                    // possible millisecond values is a false precision nobody can actually feel or
-                    // aim for on a slider; the underlying KeyboardPreferences fields stay
-                    // millisecond Ints regardless, since that's what Handler.postDelayed wants.
+                    // Shown and stepped in tenths of a second; stored in milliseconds.
                     DefaultableSlider(
                         label = strings.getString(
                             Keys.RADIAL_PAUSE_DWELL_S,
@@ -676,7 +620,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                         subtitle = strings[Keys.RADIAL_CLOSE_ON_EDITOR_MOVE_NOTE],
                         checked = preferences.radialCloseOnEditorMove,
                     ) { value -> update { it.copy(radialCloseOnEditorMove = value) } }
-                    // Debug builds only -- see KeyboardPreferences.debugForceRadialRing's own doc.
+                    // Debug builds only.
                     val debuggable = LocalContext.current.applicationInfo.flags and
                         android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
                     if (debuggable) {
@@ -703,10 +647,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
 
 /**
  * [preferences] with every field this screen's suggestion and correction cards control put back
- * to [KeyboardPreferences]'s own default -- theme, swipe, language and everything outside those
- * cards untouched. Swipe has no reset of its own here: its two switches are not the kind of
- * setting someone tunes past usefulness and needs a way back from the way the correction knobs
- * above it are, and the trail's width lives with its colour on the Theme screen.
+ * to its default; nothing else changes.
  */
 private fun resetCorrectionDefaults(preferences: KeyboardPreferences): KeyboardPreferences {
     val defaults = KeyboardPreferences()

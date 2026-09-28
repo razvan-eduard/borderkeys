@@ -8,17 +8,7 @@ import java.io.File
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The word the space bar commits is the word the row outlines, over every corpus.
- *
- * The engine answers twice from one walk: the strip ranks what is probably being written, the
- * corrections heap what was probably meant, and the two disagree by design -- typing "teh" ranks
- * "tehran" first and commits "the". [SuggestionRow.arrange] is what reconciles them, inserting
- * the correction when the strip did not rank it. Nothing asserted that it always does.
- *
- * This is the test "put" would have failed: the strip showed "put | putem | can" and the space
- * bar committed "out", which was on no row anyone saw.
- */
+/** Over every corpus, the word the space bar commits is the word the row outlines. */
 class StripAgreementTest {
 
     @Test

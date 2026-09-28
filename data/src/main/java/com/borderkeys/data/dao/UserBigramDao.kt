@@ -12,22 +12,11 @@ import com.borderkeys.data.entity.UserBigram
 @Dao
 interface UserBigramDao {
 
-    /**
-     * The read that happens once at service start and is pushed straight into the native model.
-     *
-     * Capped for the same reason the words are: these are held in RAM in the IME process, and
-     * the native side has its own cap of four thousand pairs. Asking for more than it will keep
-     * would be reading rows to throw them away.
-     */
+    /** The pairs pushed into the native model at service start, most used first. */
     @Query("SELECT * FROM user_bigrams ORDER BY count DESC LIMIT :limit")
     suspend fun topPairs(limit: Int): List<UserBigram>
 
-    /**
-     * Adds [delta] to a pair's count, inserting it if it is new.
-     *
-     * An upsert for the same reason as the words: the learning flush and the settings screen are
-     * two writers and a read-modify-write between them loses an update.
-     */
+    /** Adds [delta] to a pair's count, inserting it if it is new, in one statement. */
     @Query(
         """
         INSERT INTO user_bigrams (previousWord, word, count, lastUsedAt)
@@ -46,8 +35,7 @@ interface UserBigramDao {
         }
     }
 
-    /** The pair equivalent of [UserWordDao.decayStale] -- see there for why this is a plain
-     *  conditional `UPDATE` rather than a read-modify-write. */
+    /** [UserWordDao.decayStale], for pairs. */
     @Query(
         """
         UPDATE user_bigrams SET count = MAX(1, count / 2), lastUsedAt = :now
@@ -56,13 +44,7 @@ interface UserBigramDao {
     )
     suspend fun decayStale(cutoff: Long, now: Long)
 
-    /**
-     * Forgets every pair a word takes part in, on either side.
-     *
-     * Called when the word itself is forgotten or blocked. Leaving the pairs behind would keep
-     * predicting a word the user has just asked never to see again, reached through a phrase
-     * instead of through the dictionary.
-     */
+    /** Forgets every pair a word takes part in, on either side. */
     @Query("DELETE FROM user_bigrams WHERE previousWord = :word OR word = :word")
     suspend fun deleteInvolving(word: String)
 

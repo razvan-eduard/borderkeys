@@ -18,16 +18,8 @@ data class EffectTransform(
 )
 
 /**
- * How an effect moves, as a function of how far through it is.
- *
- * Pure, and separate from the view, for the reason the keyboard's own pure rules are:
- * a curve is worth testing on the JVM and a `View` needs a `Context`, a frame clock and a canvas
- * in the way of doing that. It also means a new style is a few lines here rather than another
- * copy of the drawing code -- which is the whole point of there being a list to choose from.
- *
- * `travel` is the distance the effect has to play with, in pixels: the key area's own height.
- * Styles are written against it rather than against absolute numbers so the same curve reads the
- * same way on a small phone and a tablet.
+ * How an effect moves, as a pure function of how far through it is. `travel` is the distance the
+ * effect has to play with, in pixels: the key area's height.
  */
 enum class EffectStyle {
 
@@ -81,7 +73,7 @@ enum class EffectStyle {
 
     companion object {
 
-        /** The style a swipe's accepted word has always used, and the default for a new effect. */
+        /** The default, and the style a swipe's accepted word uses. */
         val DEFAULT = RiseFade
 
         /** Ease in and out, the curve the composer's own swipe hint uses. */

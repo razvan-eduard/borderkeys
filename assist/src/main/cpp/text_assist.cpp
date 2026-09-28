@@ -27,45 +27,23 @@ constexpr int kMinContextTokens = 512;
 constexpr int kMaxContextTokens = 8192;
 
 /**
- * Left unclaimed when `run`'s `useRemainingContext` raises the output cap to the real space left
- * in the window, rather than filling every last token of it.
- *
- * The prompt's own token count comes from two separate `llama_tokenize` calls (one to size the
- * buffer, one to fill it) that are expected to agree but are not proven to by anything this file
- * checks -- a small, fixed reserve is cheaper than a mismatch between them turning into a decode
- * past the context's actual capacity.
+ * Left unclaimed when `run`'s `useRemainingContext` raises the output cap to the space left in
+ * the window.
  */
 constexpr int kOutputSafetyMarginTokens = 16;
 
-/**
- * Fixed, so that the same selection and the same action give the same answer.
- *
- * A user who taps "correct this" twice and gets two different corrections has been handed a
- * slot machine rather than a tool.
- */
+/** Fixed, so that the same selection and the same action give the same answer. */
 constexpr uint32_t kSamplerSeed = 0xB0DE4Eu;
 
-/** See the comment at its one call site, in applyChatTemplate. */
+/** Asks a reasoning-tuned model to skip its thinking phase. */
 constexpr const char* kNoThink = "/no_think";
 
-/**
- * Tokenised once at load to measure this model's real chars-per-token ratio. Ordinary mixed-case
- * prose with regular punctuation and spacing, long enough that a token or two of rounding error
- * does not swing the result -- not a pangram or a word list, which tokenise differently from what
- * a selection actually looks like.
- */
+/** Tokenised once at load to measure this model's chars-per-token ratio: ordinary prose. */
 constexpr const char* kCalibrationSample =
     "The quick brown fox jumps over the lazy dog. Please review this paragraph and let me "
     "know what you think, including any changes you would suggest for tomorrow's meeting.";
 
-/**
- * Silences llama.cpp's own logging.
- *
- * It writes model architecture, tensor names and token counts to the log by default. None of
- * that is secret, but this process is handed the user's selected text and the less it says
- * about what it is doing with it, the smaller the surface for something to end up in a bug
- * report. Errors are still surfaced, as return codes.
- */
+/** Silences llama.cpp's own logging; errors are still surfaced, as return codes. */
 void quietLog(ggml_log_level level, const char* text, void* /*userData*/) {
     if (level == GGML_LOG_LEVEL_ERROR) {
         __android_log_print(ANDROID_LOG_ERROR, kTag, "%s", text);
@@ -86,13 +64,9 @@ int32_t TextAssist::load(const char* path, int contextTokens, int threads) {
     llama_backend_init();
 
     llama_model_params modelParams = llama_model_default_params();
-    // No GPU offload. A keyboard's assistant must not compete with the foreground app for the
-    // GPU, and the Vulkan backend is not built here anyway.
+    // No GPU offload.
     modelParams.n_gpu_layers = 0;
-    // Mapped rather than read, and explicitly not locked. A 600 MB model used once and dropped
-    // should be page cache the kernel can reclaim under pressure, not an allocation this process
-    // is charged for -- and mlock in a background process on a phone is a way to get the whole
-    // process killed instead of a few pages evicted.
+    // Mapped, not read, and not locked.
     modelParams.load_mode = LLAMA_LOAD_MODE_MMAP;
 
     model_ = llama_model_load_from_file(path, modelParams);
@@ -100,9 +74,7 @@ int32_t TextAssist::load(const char* path, int contextTokens, int threads) {
         return kErrLoadFailed;
     }
 
-    // Clamped to what the model was actually trained for. Asking for a longer context than the
-    // training length does not fail -- it quietly produces worse output the further past it you
-    // go, which is the least useful failure mode there is.
+    // Clamped to what the model was trained for.
     const int trained = llama_model_n_ctx_train(model_);
     int requested = contextTokens;
     if (requested <= 0) {
@@ -128,15 +100,10 @@ int32_t TextAssist::load(const char* path, int contextTokens, int threads) {
         return kErrContext;
     }
 
-    // Low temperature and a tight nucleus by default. Every task here is a transformation of
-    // text the user wrote -- summarise it, correct it, make it formal -- and none of them wants
-    // invention. Greedy would be defensible; a little sampling avoids the degenerate repetition
-    // that pure argmax falls into on small models. Both are adjustable -- see setSamplingParams.
+    // Low temperature and a tight nucleus by default; setSamplingParams changes both.
     rebuildSampler();
 
-    // No add_special/parse_special: this measures how the tokeniser splits ordinary content
-    // alone, the same thing chunk and budget sizing use it for, without a BOS or template
-    // overhead of a handful of tokens skewing a short sample's ratio.
+    // No add_special/parse_special: the content alone, without BOS or template tokens.
     const llama_vocab* const vocab = llama_model_get_vocab(model_);
     const auto sampleLength = static_cast<int32_t>(std::strlen(kCalibrationSample));
     const int32_t sampleTokens = -llama_tokenize(vocab, kCalibrationSample, sampleLength, nullptr,
@@ -155,15 +122,8 @@ void TextAssist::rebuildSampler() {
     }
     llama_sampler_chain_params chainParams = llama_sampler_chain_default_params();
     sampler_ = llama_sampler_chain_init(chainParams);
-    // A mild penalty against repeating a recent token, ahead of top-p/temperature in the chain
-    // -- the order llama.cpp's own reference sampler uses, and the order that matters: this has
-    // to see the raw logits before top-p narrows them down to the tokens it can still choose
-    // between. Without it, a low temperature and a fixed seed -- both deliberate, see below --
-    // can walk a small model into a short loop it never breaks out of on its own: asked to
-    // translate a paragraph, it echoed a mistranslation of its own instruction's last sentence
-    // twice in a row instead of ever reaching the actual text. 1.15 is a light touch, enough to
-    // break a loop without visibly changing a correct answer; 64 tokens of lookback is long
-    // enough to catch the kind of short phrase that repeated here.
+    // A mild penalty against repeating any of the last 64 tokens, ahead of top-p and temperature
+    // in the chain so that it sees the raw logits.
     if (model_ != nullptr) {
         const llama_vocab* const vocab = llama_model_get_vocab(model_);
         llama_sampler_chain_add(
@@ -172,22 +132,16 @@ void TextAssist::rebuildSampler() {
     }
     llama_sampler_chain_add(sampler_, llama_sampler_init_top_p(topP_, 1));
     llama_sampler_chain_add(sampler_, llama_sampler_init_temp(temperature_));
-    // A fixed seed, so the same selection and the same action give the same answer. A user who
-    // taps the action twice and gets two different rewrites has been given a slot machine.
-    // Unaffected by setSamplingParams -- temperature and top-p change how the model gambles,
-    // not whether the same gamble always lands the same way.
+    // A fixed seed, which setSamplingParams does not change.
     llama_sampler_chain_add(sampler_, llama_sampler_init_dist(kSamplerSeed));
 }
 
 void TextAssist::setSamplingParams(float temperature, float topP) {
-    // Clamped rather than trusted: this crosses JNI from a stored preference. Out of either
-    // range, the request would not fail -- llama.cpp does not validate these -- it would just
-    // quietly produce garbage or nothing but the single most likely token, forever.
+    // An out-of-range value becomes the default; llama.cpp does not validate these.
     temperature_ = (temperature > 0.0f && temperature <= 2.0f) ? temperature : 0.3f;
     topP_ = (topP > 0.0f && topP <= 1.0f) ? topP : 0.9f;
     if (context_ == nullptr) {
-        // Not loaded yet. load() reads temperature_ and topP_ when it builds the chain, so
-        // there is nothing further to do until then.
+        // Not loaded yet; load() builds the chain from temperature_ and topP_.
         return;
     }
     rebuildSampler();
@@ -208,40 +162,21 @@ void TextAssist::unload() {
     }
     contextTokens_ = 0;
     charsPerToken_ = 0.0f;
-    // Whatever this claimed about the context's memory is meaningless once that memory is gone.
+    // The memory it described is gone.
     lastPromptTokens_.clear();
 }
 
 std::string TextAssist::applyChatTemplate(const char* instruction, const char* text) const {
-    // Instruction and text are kept as one user turn rather than a system prompt plus a user
-    // turn: small instruction-tuned models follow a single concrete request far more reliably
-    // than they follow a persona, and half the candidate models have no system role at all.
+    // Instruction and text as one user turn, with no system prompt.
     std::string content;
     content.reserve(std::strlen(instruction) + std::strlen(text) + 24 + std::strlen(kNoThink));
     content += instruction;
-    // Qwen3 and SmolLM3 -- the reasoning-tuned families in KnownAssistModels.kt -- read a literal
-    // "/no_think" anywhere in the last turn as a request to skip their extended-thinking phase;
-    // EuroLLM has no such phase, and for it the token is a few characters of prompt it was never
-    // trained to react to.
-    // Without it, a reasoning-tuned model spends the entire (small, task-sized) output budget
-    // narrating its reasoning and never reaches the actual answer -- which reads as "translate
-    // does nothing" rather than as a formatting problem, because nothing resembling an answer
-    // ever arrives. Placed right after the instruction and before the user's own text, not at
-    // the very end of the turn: appended after the text, it would sit inside the very thing a
-    // task like Translate or Correct is asked to transform, and become one more word to answer
-    // for instead of a switch outside the content being processed.
+    // "/no_think" between the instruction and the text: Qwen3 and SmolLM3 read it anywhere in
+    // the last turn as a request to skip their thinking phase.
     content += " ";
     content += kNoThink;
-    // Labelled and fenced rather than just a blank line before it: seen once with a short,
-    // ordinary paragraph -- three sentences, a couple of line breaks carried over from where it
-    // was written, no quotation marks or code of its own -- where the model answered with a
-    // translation of the instruction's own last sentence instead of the paragraph, twice, then
-    // stopped. Nothing marked where the instruction ended and the text nobody asked it to touch
-    // began; a blank line is not a boundary a small model reliably respects, especially once the
-    // text itself has line breaks in it that read the same way. A labelled, fenced block is an
-    // unambiguous one: everything between the two `"""` is data to transform, never part of the
-    // request, whatever it contains -- including a `"""` of its own, since text_assist only ever
-    // reads up to the end of generation, not up to a closing fence it went looking for.
+    // The text under a label, between two `"""` fences. The answer is read to the end of
+    // generation, not to a fence.
     content += kTextLabel;
     content += kTextFence;
     content += "\n";
@@ -251,9 +186,7 @@ std::string TextAssist::applyChatTemplate(const char* instruction, const char* t
 
     const char* templateText = llama_model_chat_template(model_, nullptr);
     if (templateText == nullptr) {
-        // No template in the GGUF metadata. Passing the raw text is the honest fallback: it is
-        // what a base model expects, and inventing a chat format the model was not trained on
-        // produces worse output than none.
+        // No template in the GGUF metadata: the raw text.
         return content;
     }
 
@@ -274,15 +207,7 @@ std::string TextAssist::applyChatTemplate(const char* instruction, const char* t
 
 namespace {
 
-/**
- * Sets a flag for exactly as long as the scope it lives in.
- *
- * TextAssist::run used to write `running_ = false` by hand before each of its returns, which
- * covered every return and not the one exit that is not a return: a C++ exception, thrown from
- * inside llama.cpp and caught at the JNI boundary in assist_jni.cpp. One of those left the flag
- * set for the life of the process, and every request after it was answered kErrBusy until the
- * idle timeout killed the service. A destructor runs on that exit too.
- */
+/** Sets a flag for exactly as long as the scope it lives in, including an exit by exception. */
 class RunningGuard {
 public:
     explicit RunningGuard(bool& flag) : flag_(flag) { flag_ = true; }
@@ -311,8 +236,7 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
     }
     const size_t textLength = std::strlen(text);
     if (textLength == 0 || textLength > kMaxInputChars) {
-        // Refused with a code the UI turns into a sentence, rather than allowed through to
-        // fail as an allocation error somewhere inside the runtime.
+        // Refused with a code the UI turns into a sentence.
         return kErrTooLong;
     }
 
@@ -331,10 +255,7 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
         return kErrTokenise;
     }
 
-    // outputRatio and minOutputTokens describe the task, not this specific request; needed is
-    // this request's exact prompt size, known only now that it has actually been tokenised. No
-    // guess from the input's character count is involved -- the budget below is arithmetic on a
-    // real number, not an estimate of one.
+    // The task's ratio and floor, against this prompt's exact token count.
     int32_t maxOutputTokens = std::clamp(
         static_cast<int32_t>(static_cast<float>(needed) * outputRatio), minOutputTokens,
         maxOutputTokensCeiling);
@@ -344,12 +265,7 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
         return kErrTooLong;
     }
     if (useRemainingContext) {
-        // The real room left for the answer can only be at least as large as maxOutputTokens
-        // above (the check just made already refused anything smaller), so raising the cap to it
-        // cannot admit a request that would otherwise have been refused -- it only stops
-        // outputRatio's guess about how long the answer will be, which is the one thing about
-        // this request that genuinely cannot be known in advance, from cutting a correct answer
-        // off mid-sentence.
+        // At least maxOutputTokens: anything smaller was refused above.
         const int32_t remaining = contextTokens_ - static_cast<int32_t>(needed) -
                                   kOutputSafetyMarginTokens;
         if (remaining > maxOutputTokens) {
@@ -363,36 +279,22 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
         return kErrTokenise;
     }
 
-    // A fresh window for every request, unless the caller has said this one may share the start
-    // of the previous request's prompt: reuseSharedPrefix is true only for a chunk after the
-    // first within one ChunkedAssistRunner job, where the shared start is the same task's fixed
-    // instruction and template wrapper, identical for every chunk of that job by construction --
-    // never another selection's text, and never another action's. Leaving an unrelated request's
-    // tokens in the cache would let one selection influence the answer to the next, which is
-    // both wrong and a small information leak between two things the user thought were separate;
-    // this reuses only what was never that in the first place.
+    // A fresh window for every request, except that with reuseSharedPrefix the start this prompt
+    // shares with the previous one is kept.
     size_t commonLen = 0;
     if (reuseSharedPrefix && !lastPromptTokens_.empty()) {
-        // Capped one short of the whole prompt: sampling the first generated token needs logits
-        // from a decode that actually just happened, and reusing every last token would leave
-        // nothing freshly decoded to produce them from.
+        // One short of the whole prompt: the first generated token needs logits from a decode.
         const size_t limit = std::min(lastPromptTokens_.size(), tokens.size() - 1);
         while (commonLen < limit && lastPromptTokens_[commonLen] == tokens[commonLen]) {
             ++commonLen;
         }
     }
-    // Invalidated the instant the memory is about to change -- restored below only once the
-    // decode it would describe has actually succeeded, so a failure here never leaves this
-    // claiming content a later request could wrongly try to build on.
+    // Cleared before the memory changes; restored below only once the decode has succeeded.
     lastPromptTokens_.clear();
 
     llama_memory_t memory = llama_get_memory(context_);
     if (commonLen > 0) {
-        // Keeps [0, commonLen) -- the shared prefix -- and drops everything from there on: the
-        // rest of the previous prompt that did not match this one, and whatever was generated
-        // after it. Positions for what gets decoded next are assigned automatically by
-        // llama_decode, continuing from wherever the memory now actually ends -- exactly
-        // commonLen, once this call returns.
+        // Keeps [0, commonLen) and drops the rest; llama_decode continues from commonLen.
         llama_memory_seq_rm(memory, 0, static_cast<llama_pos>(commonLen), -1);
     } else {
         llama_memory_clear(memory, true);
@@ -428,9 +330,7 @@ int32_t TextAssist::run(const char* instruction, const char* text, float outputR
             return kErrDecode;
         }
     }
-    // Not just the token-budget case: a cancelled request also leaves here with less than the
-    // whole answer, and the caller telling the two apart from the text alone has nothing to go
-    // on -- both look like an answer that simply stops.
+    // Set for a cancelled request as well as for an exhausted budget.
     if (outTruncated != nullptr) {
         *outTruncated = !endedNaturally;
     }

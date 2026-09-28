@@ -50,11 +50,8 @@ import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlinx.coroutines.launch
 
 /**
- * The clipboard history, and how long it lives.
- *
- * The most sensitive table in the application: what people copy on a phone is routinely a
- * password, a code or an address. The default retention is an hour, expiry is a DELETE rather
- * than a filter, and there is a button here that empties it now.
+ * The clipboard history, and how long it lives: an hour by default, expired rows are deleted, and
+ * a button here empties it now.
  */
 @Composable
 fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
@@ -93,18 +90,15 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
             checked = preferences.clipboardEnabled,
         ) { value -> update { it.copy(clipboardEnabled = value) } }
 
-        // The chip on the suggestion strip, here with the rest of the clipboard rather than
-        // on the Typing screen: it is the clipboard showing up somewhere, not a suggestion.
+        // The clipboard chip on the suggestion strip.
         SwitchRow(
             title = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD],
             subtitle = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD_NOTE],
             checked = preferences.clipboardSuggestion,
         ) { value -> update { it.copy(clipboardSuggestion = value) } }
 
-        // Every hygiene policy in one fold. They are independent on purpose -- one withdraws
-        // the chip's offer, one empties the system clipboard, one removes the history row, one
-        // empties the history on close -- and each one's own doc in KeyboardPreferences says
-        // why it is not the one beside it.
+        // The hygiene policies, each independent: one withdraws the chip's offer, one empties
+        // the system clipboard, one removes the history row, one empties the history on close.
         AdvancedSection(strings[Keys.CLIPBOARD_ADVANCED_NOTE]) {
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE],
@@ -118,8 +112,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
             ) { value ->
                 scope.launch {
                     themes.updatePreferences { it.copy(clipboardImages = value) }
-                    // Turning it off forgets what it collected. A switch that stops collecting
-                    // and keeps the collection is not the switch anyone thought they turned off.
+                    // Turning it off forgets what it collected.
                     if (!value) {
                         DataGraph.clipboard.deleteImages()
                     }
@@ -260,8 +253,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
         )
     }
 
-    // Asked first: pinned entries are the ones somebody chose to keep, and this is the one
-    // action here that takes them too.
+    // Asked first: this removes pinned entries too.
     if (confirmingDeleteAll) {
         AlertDialog(
             onDismissRequest = { confirmingDeleteAll = false },
@@ -298,14 +290,7 @@ private fun formatRetention(strings: LanguageManager, minutes: Int): String {
     }
 }
 
-/**
- * A slider that moves between named values rather than across a range.
- *
- * The useful span for both of these settings covers three orders of magnitude, and a linear
- * slider over that cannot be aimed: most of the travel lands on differences nobody can tell
- * apart, and the interesting end is a few pixels wide. Stepping through a short list of the
- * answers someone actually has makes every position mean something.
- */
+/** A slider that moves between named values rather than across a range. */
 @Composable
 private fun StepSlider(
     label: String,
