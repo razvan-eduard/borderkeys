@@ -17,53 +17,18 @@ import com.borderkeys.data.entity.UserWord
 import com.borderkeys.ime.WordStems
 
 /**
- * Owns the native engine, the thread it runs on, and the rule that the UI never waits for it.
- *
- * Three things this class exists to guarantee:
- *
- *  * **The handle cannot outlive the engine.** It is read and written under one lock and set to
- *    zero on release, so a request that arrives while the service is being destroyed returns
- *    nothing instead of calling into freed memory. Every native call goes through [withHandle].
- *  * **The UI thread never blocks on JNI.** Requests are posted to a dedicated thread and
- *    answered on the main looper. There is no path from a touch event into the engine.
- *  * **Only the newest request matters.** [PredictionRequestQueue] keeps one pending request and
- *    a generation number; a slow answer that arrives after a newer one is dropped rather than
- *    shown, which is what stops the strip flickering back to a stale word.
- *
- * A dedicated [HandlerThread], not `Dispatchers.Default`. The native engine is single-writer by
- * construction -- a bump allocator, no locks -- so it needs one thread that is always the same
- * thread. A shared pool would give it a different one per call and would put prediction behind
- * whatever else the application had queued.
+ * Owns the native engine and the one thread it runs on. Every native call goes through
+ * [withHandle] on that thread, answers are delivered on the main looper, and an answer older
+ * than the newest request is dropped.
  */
 class PredictionEngine(
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
 ) {
-    /**
-     * Delivered on the UI thread. Filtered for staleness against a field switch -- [clear] --
-     * but not against a keystroke: a request already computed and posted here can still lose a
-     * race against the very next character, and [query] is what lets the caller catch that case
-     * itself (compare it against whatever it currently considers "the word being typed"; a
-     * mismatch means this answer is about a moment that has already passed).
-     */
+    /** Receives the engine's answers on the UI thread. */
     interface ResultListener {
         /**
-         * [query] is the composing text this whole answer -- [words] and [knownWord] alike -- is
-         * about, exactly as it was asked. Not necessarily what is on screen by the time this
-         * runs: the engine has one thread and the UI thread does not wait for it, so a keystroke
-         * typed while this was being computed reaches the screen first and this answer arrives
-         * after, still describing the word before it.
-         *
-         * [knownWord] is the word this answer is about when the dictionaries spell it, folded
-         * for case and diacritics, and empty otherwise.
-         *
-         * The word rather than a flag, so the caller can tell whether the answer is about what
-         * is on screen now: the question is only asked at the moment a delimiter is pressed,
-         * and by then a newer request may have been made.
-         *
-         * It travels with the answer because the engine has one thread, and a delimiter is not
-         * a moment to be blocking on it.
-         *
-         * Each candidate carries its own proper-noun bit -- see [Candidate].
+         * [query] is the composing text the answer is about, as it was asked. [knownWord] is the
+         * dictionaries' spelling of [query], or empty when they do not hold it.
          */
         fun onSuggestions(
             candidates: List<Candidate>,
@@ -73,23 +38,16 @@ class PredictionEngine(
             inflection: Boolean,
         )
 
-        /**
-         * A decoded swipe, best first. Separate from [onSuggestions] because the service treats
-         * it differently: the first candidate is committed immediately rather than offered.
-         */
+        /** A decoded swipe, best first. */
         fun onGestureCandidates(candidates: List<Candidate>)
 
-        /**
-         * A decode of a swipe still in progress, from [decodeGesturePreview] -- see that method's
-         * own doc for why it is a fully separate path from [onGestureCandidates] rather than a
-         * reuse of it.
-         */
+        /** A decode of a swipe still in progress, from [decodeGesturePreview]. */
         fun onGesturePreviewCandidates(candidates: List<Candidate>)
     }
 
     var listener: ResultListener? = null
 
-    /** How long the engine took over the last swipe, in microseconds. Read after the answer. */
+    /** How long the engine took over the last swipe, in microseconds. */
     @Volatile
     var lastGestureDecodeMicros: Long = 0L
 
@@ -110,8 +68,7 @@ class PredictionEngine(
     /** The last answered query when the dictionaries know it, else empty. Guarded by resultLock. */
     private var nativeKnownWord = ""
 
-    /** Autocorrect's own answer for the request being served -- see Engine::bestCorrection for
-     *  why it is not simply the first entry of the strip's own ranking. */
+    /** The possessive rewrite for the request being served, or null. */
     private var nativePossessive: String? = null
 
     /** [WordStems.shields]'s answer for the query and the correction being served. */
@@ -119,6 +76,8 @@ class PredictionEngine(
 
     /** The tags handed to [setActiveLanguages], read on the worker for [WordStems]. */
     private var activeTags: List<String> = emptyList()
+
+    /** Autocorrect's answer for the request being served, or null. */
     private var nativeCorrection: String? = null
     private var nativeCorrectionIsName = false
 
@@ -128,38 +87,32 @@ class PredictionEngine(
     /** The composing text the current [nativeKnownWord]/[nativeCount] answer is about. */
     private var nativeQuery = ""
 
-    // Written by the prediction thread, copied out by the UI thread under [resultLock]. Both
-    // are allocated once: the suggestion path may not allocate per keystroke, and JNI fills
-    // these in place. The search itself writes the prediction thread's own scratch below and
-    // never these, so the lock is held for a copy of sixteen entries and never for a search.
+    // Written by the prediction thread and copied out by the UI thread under [resultLock].
     private val resultLock = Any()
     private val nativeWords = arrayOfNulls<String>(MAX_RESULTS)
     private val nativeScores = FloatArray(MAX_RESULTS)
     private val nativeProperNoun = BooleanArray(MAX_RESULTS)
     private var nativeCount = 0
 
-    // The prediction thread's scratch: JNI fills these, without any lock, and the answer is
-    // copied into the shared buffers above under [resultLock] once it is complete.
+    // The prediction thread's scratch, filled by JNI and copied into the buffers above under
+    // [resultLock].
     private val searchWords = arrayOfNulls<String>(MAX_RESULTS)
     private val searchScores = FloatArray(MAX_RESULTS)
     private val searchProperNoun = BooleanArray(MAX_RESULTS)
 
-    /** Which entry of [searchWords] the corrections heap settled on, or -1 when it settled on a
-     *  word the ranking does not carry. Filled by nativeSuggest, by pack and word index rather
-     *  than by comparing text. */
+    /** Which entry of [searchWords] the corrections heap settled on, or -1 when none of them. */
     private val searchCorrectionIndex = IntArray(1)
 
-
-    private val blocked = HashSet<String>()
+    /** Words dropped from every answer. */
+    @Volatile
+    private var refused: RefusedWords = RefusedWords.NONE
 
     /** Scratch for pushing key geometry down. Sized once for the largest layout. */
     private val geometryCodes = IntArray(MAX_KEYS)
     private val geometryX = FloatArray(MAX_KEYS)
     private val geometryY = FloatArray(MAX_KEYS)
 
-    // The gesture is copied out of the view's capture buffers before it crosses threads: the
-    // view reuses those arrays for the next swipe, and the finger can start one while the
-    // decoder is still working on the last.
+    // A copy of the view's capture buffers, taken before the gesture crosses threads.
     private val gestureX = FloatArray(MAX_GESTURE_POINTS)
     private val gestureY = FloatArray(MAX_GESTURE_POINTS)
     private val gestureTime = LongArray(MAX_GESTURE_POINTS)
@@ -169,10 +122,7 @@ class PredictionEngine(
     private val workerLoop = Runnable { serveRequests() }
     private val publishResults = Runnable { publish() }
 
-    // The finished swipe's own result buffers. Never [nativeWords]/[nativeCount]: a typed
-    // request and a gesture decode each post their own publish, and sharing the buffer let one
-    // read the other's words -- a swipe candidate became the autocorrect for a typed word, or a
-    // typed prediction was committed as the swiped word.
+    // The finished swipe's result buffers, separate from the typed ones.
     private val gestureResultLock = Any()
     private val gestureNativeWords = arrayOfNulls<String>(MAX_RESULTS)
     private val gestureNativeScores = FloatArray(MAX_RESULTS)
@@ -185,18 +135,12 @@ class PredictionEngine(
     private val decodeScores = FloatArray(MAX_RESULTS)
     private val decodeProperNoun = BooleanArray(MAX_RESULTS)
 
-    /** Same rule and same thread as [previewGeneration]: a decode that answers after the field
-     *  changed, or after the service cancelled, is dropped rather than composed into the new
-     *  field. */
+    /** Bumped when the field changes or the service cancels; an older decode is dropped. */
     private var gestureGeneration = 0
 
     // ---- swipe-preview path (radial menu) --------------------------------------------------
     //
-    // Fully parallel to the gesture fields above, deliberately never sharing a buffer with them:
-    // a preview decode can still be in flight when the real gesture resumes or lifts, and mixing
-    // its state with decodeGesture's own would mean a stale preview answer could show up over,
-    // or be clobbered by, the answer that actually matters. See decision 2 of the radial-menu
-    // plan for the fuller reasoning.
+    // Its own buffers, separate from the gesture fields above.
     private val previewGestureX = FloatArray(MAX_GESTURE_POINTS)
     private val previewGestureY = FloatArray(MAX_GESTURE_POINTS)
     private val previewGestureTime = LongArray(MAX_GESTURE_POINTS)
@@ -206,20 +150,11 @@ class PredictionEngine(
     private val previewResultLock = Any()
     private val previewNativeWords = arrayOfNulls<String>(MAX_RESULTS)
     private val previewNativeScores = FloatArray(MAX_RESULTS)
-    /** Parallel to the words, the same name bit the final decode carries: the preview's top
-     *  candidate composes into the field at pause time exactly as a final decode's does, so it
-     *  needs the flag for the same reason -- a swiped name is capitalised from it. */
+    /** The proper-noun bit of each preview word. */
     private val previewNativeProperNoun = BooleanArray(MAX_RESULTS)
     private var previewNativeCount = 0
 
-    /**
-     * Touched only from the UI thread -- every call site ([decodeGesturePreview],
-     * [cancelPendingPreview], and the posted publish below) is a [KeyboardCanvasView.Listener]
-     * callback or something driven directly by one, never the prediction thread. A preview
-     * whose generation has moved on by the time its answer comes back is dropped rather than
-     * shown, the same "only the newest matters" rule [PredictionRequestQueue] states, sized for
-     * what is, at most, one in-flight preview request at a time.
-     */
+    /** UI thread only. A preview answer from an older generation is dropped. */
     private var previewGeneration = 0
 
     fun start(): Boolean {
@@ -234,11 +169,8 @@ class PredictionEngine(
     }
 
     /**
-     * Releases the native engine.
-     *
-     * The handle is zeroed under the lock before anything is freed, so a call already in flight
-     * on the prediction thread finishes against a live engine and any call after this one sees
-     * zero and returns. The thread is stopped after, not before, for the same reason.
+     * Releases the native engine: zeroes the handle under the lock, then destroys the engine and
+     * stops the thread from the prediction thread.
      */
     fun shutdown() {
         val toDestroy: Long
@@ -263,11 +195,7 @@ class PredictionEngine(
             NativePredictor.nativeDestroy(toDestroy)
         }
         mainHandler.removeCallbacks(publishResults)
-        // Not a removeCallbacks: the gesture and preview publishes are a fresh lambda per call,
-        // not a shared Runnable field, precisely so a stale generation check inside it -- not
-        // object identity -- is what decides whether it still matters. Bumping the generations
-        // here covers the one case worker.removeCallbacksAndMessages(null) above cannot: a
-        // decode that was already running on the worker thread at the moment of this call.
+        // Drops the gesture and preview answers still in flight.
         previewGeneration++
         gestureGeneration++
     }
@@ -294,8 +222,7 @@ class PredictionEngine(
                     weight,
                 )
                 pendingPackLoadMillis += android.os.SystemClock.elapsedRealtime() - started
-                // The mapping keeps the file alive on its own, so the descriptor is ours to
-                // close either way; leaving it open would leak one per language pack.
+                // The mapping keeps the file open; the descriptor is closed either way.
                 runCatching { descriptor.close() }
                 if (status != 0) {
                     lastLoadStatus = status
@@ -324,7 +251,7 @@ class PredictionEngine(
 
     /**
      * Whether [query] is a regular inflection of a word the engine holds that [correction] is
-     * not built on -- see [WordStems]. Asked on the worker, beside the answer it belongs to.
+     * not built on. Runs on the worker.
      */
     private fun inflectionOf(query: String, correction: String?): Boolean {
         if (correction == null) {
@@ -345,12 +272,7 @@ class PredictionEngine(
         return WordStems.shields(query, correction, knownStems, activeTags)
     }
 
-    /**
-     * Pushes the key geometry so the engine can correct finger slips.
-     *
-     * Called after every layout pass. The engine learns key centres and a key size; it never
-     * learns that a Canvas exists, and the view never learns that a trie does.
-     */
+    /** Pushes the key centres and the key size to the engine. */
     fun setKeyGeometry(count: Int, keyWidth: Float, keyHeight: Float, fill: (IntArray, FloatArray, FloatArray) -> Int) {
         val written = fill(geometryCodes, geometryX, geometryY)
         if (written <= 0 || keyWidth <= 0f || keyHeight <= 0f) {
@@ -363,8 +285,6 @@ class PredictionEngine(
                 )
             }
         }
-        // `count` is the caller's own idea of how many keys it has; the fill function is the
-        // authority and its return value is what was used.
         if (count != written) {
             lastGeometryKeyCount = written
         }
@@ -374,9 +294,8 @@ class PredictionEngine(
     var lastGeometryKeyCount: Int = 0
         private set
 
+    /** Replaces the engine's personal words, also with an empty list. */
     fun loadUserWords(words: List<UserWord>) {
-        // An empty list is pushed too: forgetting the last remembered words has to reach the
-        // engine, which replaces what it holds with what it is given.
         val texts = Array(words.size) { words[it].word }
         val counts = IntArray(words.size) { words[it].count }
         val deliberateCapitals = IntArray(words.size) { words[it].deliberateCapitals }
@@ -391,12 +310,10 @@ class PredictionEngine(
     }
 
     /**
-     * Pushes the remembered word pairs. Posted after [loadUserWords] on the same single-threaded
-     * worker, which is what guarantees the words are in place before the pairs that name them.
+     * Replaces the engine's personal word pairs, also with an empty list. Call after
+     * [loadUserWords].
      */
     fun loadUserBigrams(pairs: List<UserBigram>) {
-        // An empty list is pushed too: forgetting the last remembered pairs has to reach the
-        // engine, which replaces what it holds with what it is given.
         val previous = Array(pairs.size) { pairs[it].previousWord }
         val next = Array(pairs.size) { pairs[it].word }
         val counts = IntArray(pairs.size) { pairs[it].count }
@@ -407,7 +324,7 @@ class PredictionEngine(
         }
     }
 
-    /** Applied whenever the preference changes, not only at start. */
+    /** Sets how readily the user's own words outrank the dictionaries. */
     fun setLearningSpeed(speed: Float) {
         worker.post {
             withHandle(Unit) { current ->
@@ -416,7 +333,7 @@ class PredictionEngine(
         }
     }
 
-    /** Applied whenever the preference changes, not only at start. See KeyboardPreferences. */
+    /** Sets how much evidence an edit needs before it outranks a word spelled as typed. */
     fun setCorrectionStrictness(scale: Float) {
         worker.post {
             withHandle(Unit) { current ->
@@ -437,13 +354,7 @@ class PredictionEngine(
         }
     }
 
-    /**
-     * Which language answers while the engine has not recognised one yet. Empty means none.
-     *
-     * Only ever consulted before the evidence decides, so it changes where detection starts and
-     * never what outranks what -- see `Engine::setPreferredLanguage`. Nothing here reaches the
-     * scoring path, which is what separates it from a pack's weight.
-     */
+    /** Which language answers while the engine has not recognised one yet. Empty means none. */
     fun setPreferredLanguage(tag: String) {
         worker.post {
             withHandle(Unit) { current ->
@@ -461,12 +372,7 @@ class PredictionEngine(
         }
     }
 
-    /**
-     * The pack the conversation is currently considered written in, delivered on the UI thread
-     * like every other answer from this class -- never read directly, since that would be a
-     * blocking JNI call from the thread that must never make one. Posted once per completed
-     * word by [LanguageSwitchCorrector]'s caller, not on the per-keystroke suggestion path.
-     */
+    /** The pack the conversation is currently considered written in, delivered on the UI thread. */
     fun dominantPack(onResult: (Int) -> Unit) {
         worker.post {
             val pack = withHandle(-1) { current -> NativePredictor.nativeDominantPack(current) }
@@ -476,9 +382,7 @@ class PredictionEngine(
 
     /**
      * What [dominantPack] alone would spell each of [words] as, in the same order, null where it
-     * had nothing different to say -- one round trip to the prediction thread for the whole list
-     * rather than one per word, since this only ever runs on the rare event of a detected
-     * language switch, not per keystroke.
+     * has nothing different. Delivered on the UI thread.
      */
     fun candidatesForPack(dominantPack: Int, words: List<String>, onResult: (List<String?>) -> Unit) {
         if (words.isEmpty()) {
@@ -495,10 +399,11 @@ class PredictionEngine(
         }
     }
 
-    /** Posted after [loadUserBigrams], so the words a triple names are already held. */
+    /**
+     * Replaces the engine's personal three-word sequences, also with an empty list. Call after
+     * [loadUserBigrams].
+     */
     fun loadUserTrigrams(triples: List<UserTrigram>) {
-        // An empty list is pushed too: forgetting the last remembered triples has to reach the
-        // engine, which replaces what it holds with what it is given.
         val previous2 = Array(triples.size) { triples[it].previousWord2 }
         val previous1 = Array(triples.size) { triples[it].previousWord1 }
         val next = Array(triples.size) { triples[it].word }
@@ -519,19 +424,8 @@ class PredictionEngine(
     }
 
     /**
-     * Loads tier B's trained weights, warms the model with them, and reports whether it worked.
-     *
-     * [bytes] is a `.bkw` file's full content -- see NativePredictor.nativeLoadSwipeWeights for
-     * why this is a byte array, not a descriptor. A `core` build calling this is harmless: the
-     * native side is a no-op there and [onResult] is called with false.
-     *
-     * Load and warm-up are one posted task on purpose. The caller's whole reason for wanting the
-     * answer is to tell the user the model is ready, and a model that has not run once yet is
-     * ready only in the sense that the first swipe will find out. [onResult] therefore arrives
-     * after both, on the main thread.
-     *
-     * The result used to be discarded at every layer, which is how a corrupt `model.bkw` could
-     * leave the preference reading "on" while the geometric decoder quietly did all the work.
+     * Loads tier B's weights from a `.bkw` file's bytes and warms the model, then reports on the
+     * main thread whether they loaded. Always false in a `core` build.
      */
     fun loadSwipeWeights(bytes: ByteArray, onResult: (Boolean) -> Unit) {
         worker.post {
@@ -539,8 +433,6 @@ class PredictionEngine(
                 if (!NativePredictor.nativeLoadSwipeWeights(current, bytes)) {
                     false
                 } else {
-                    // Best effort: false here only means there was no layout to trace a stroke
-                    // across yet, which costs the first swipe its warm-up and nothing else.
                     NativePredictor.nativeWarmSwipeModel(current)
                     true
                 }
@@ -549,12 +441,7 @@ class PredictionEngine(
         }
     }
 
-    /**
-     * Applied whenever the "experimental swipe model" preference changes. See KeyboardPreferences.
-     *
-     * Turning it off frees the weights natively, so turning it back on means calling
-     * [loadSwipeWeights] again rather than only flipping this back.
-     */
+    /** Switches tier B on or off. Off frees its weights; on again needs [loadSwipeWeights]. */
     fun setSwipeModelEnabled(enabled: Boolean) {
         worker.post {
             withHandle(Unit) { current ->
@@ -563,23 +450,25 @@ class PredictionEngine(
         }
     }
 
-    /**
-     * What is never offered: the words the user refused, and the offensive-word list while its
-     * switch is on. Already folded by the caller ([WordFold]); the two filters below fold each
-     * candidate the same way before looking it up.
-     */
-    fun setBlockedWords(words: Set<String>) {
-        synchronized(blocked) {
-            blocked.clear()
-            blocked.addAll(words)
-        }
+    /** Sets the words dropped from every answer. */
+    fun setRefusedWords(words: RefusedWords) {
+        refused = words
     }
 
     /**
-     * Whether the personal dictionary is consulted at all -- off for a private field, see
-     * `Engine::setPersonalModelEnabled`. Applied per field from `onStartInputView`, the same
-     * place learning is switched off for it.
+     * Sets the words the engine treats as absent from every dictionary, also an empty list:
+     * matched exactly, case aside.
      */
+    fun setBlockedWords(words: Collection<String>) {
+        val texts = words.toTypedArray()
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeSetBlockedWords(current, texts)
+            }
+        }
+    }
+
+    /** Whether the personal dictionary is consulted; off for a private field. */
     fun setPersonalModelEnabled(enabled: Boolean) {
         worker.post {
             withHandle(Unit) { current ->
@@ -588,11 +477,7 @@ class PredictionEngine(
         }
     }
 
-    /**
-     * [dominantPack] as a language tag rather than a slot, delivered on the UI thread the same
-     * way. Null while the engine is undecided. Posted once per completed word, like
-     * [dominantPack] itself -- never on the per-keystroke path.
-     */
+    /** [dominantPack] as a language tag, or null while undecided. Delivered on the UI thread. */
     fun dominantLanguageTag(onResult: (String?) -> Unit) {
         worker.post {
             val tag = withHandle<String?>(null) { current ->
@@ -602,10 +487,10 @@ class PredictionEngine(
         }
     }
 
-    /** Asks the engine why [candidate] scores as it does for [typed]; the text, or null when
-     *  the word is not offered at all, arrives on the UI thread. */
-    /** The engine's own account of [candidate]'s score for [typed], or null when the word is
-     *  not offered for it at all. Answered on the main thread. */
+    /**
+     * The engine's account of [candidate]'s score for [typed], or null when it is not offered.
+     * Delivered on the UI thread.
+     */
     fun explain(typed: String, candidate: String, onResult: (ScoreExplanation?) -> Unit) {
         worker.post {
             val slots = FloatArray(ScoreExplanation.SLOTS)
@@ -635,12 +520,7 @@ class PredictionEngine(
 
     // ---- the suggestion path ----------------------------------------------------------------
 
-    /**
-     * Asks for suggestions. Returns immediately; the answer arrives on the UI thread.
-     *
-     * Called from a touch event, so it does nothing but record the request and possibly post a
-     * runnable.
-     */
+    /** Asks for suggestions. Returns immediately; the answer arrives on the UI thread. */
     fun requestSuggestions(composing: String, previous1: String?, previous2: String?) {
         if (queue.submit(composing, previous1, previous2)) {
             worker.post(workerLoop)
@@ -653,23 +533,17 @@ class PredictionEngine(
         gestureGeneration++
     }
 
-    /**
-     * Drops a swipe decode that has not answered yet -- the field changed under it -- so it
-     * cannot compose its word into whatever field comes next. The generation check in the
-     * posted publish is the whole mechanism, as for [cancelPendingPreview].
-     */
+    /** Drops a swipe decode that has not answered yet. */
     fun cancelPendingGesture() {
         gestureGeneration++
     }
 
-    /** Requests superseded before being served. Exposed for tracing and tests. */
+    /** Requests superseded before being served. */
     val droppedRequests: Int get() = queue.droppedRequests
 
     /**
-     * Decodes a swipe. Returns immediately; the answer arrives on the UI thread.
-     *
-     * The samples are copied under a lock rather than handed over, because they belong to the
-     * view and the view will overwrite them on the next gesture.
+     * Decodes a swipe from a copy of its samples. Returns immediately; the answer arrives on the
+     * UI thread.
      */
     fun decodeGesture(
         xs: FloatArray,
@@ -721,19 +595,12 @@ class PredictionEngine(
         }
     }
 
-    /** Copies the swipe's answer out under its own lock and drops refused words, the same
-     *  filter [copyAndFilterResults] applies to typed suggestions. */
+    /** Delivers the swipe's answer to the listener. */
     private fun publishGestureResult() {
         listener?.onGestureCandidates(copyAndFilterGesture())
     }
 
-    /**
-     * The swipe's answer, copied out under its own lock and with refused words dropped -- the
-     * same filter [copyAndFilterResults] applies to typed suggestions.
-     *
-     * Each word leaves with its own flags attached rather than as one of three arrays a caller
-     * has to keep aligned by hand; see [Candidate].
-     */
+    /** The swipe's answer, copied out under its lock, with refused words dropped. */
     private fun copyAndFilterGesture(): List<Candidate> {
         val out = ArrayList<Candidate>(MAX_RESULTS)
         synchronized(gestureResultLock) {
@@ -744,20 +611,14 @@ class PredictionEngine(
                 )
             }
         }
-        synchronized(blocked) {
-            if (blocked.isNotEmpty()) {
-                out.removeAll { WordFold.fold(it.text) in blocked }
-            }
+        val refusedNow = refused
+        if (!refusedNow.isEmpty) {
+            out.removeAll { refusedNow.refuses(it.text) }
         }
         return out
     }
 
-    /**
-     * Decodes a swipe still in progress -- the buffer exactly as it stands right now, not a
-     * finished gesture. Same shape as [decodeGesture] and the same native entry point, but its
-     * own buffers, its own lock and its own generation counter throughout: see this class's
-     * "swipe-preview path" fields for why a preview must never share state with the final decode.
-     */
+    /** Decodes a swipe still in progress, through its own buffers, lock and generation. */
     fun decodeGesturePreview(
         xs: FloatArray,
         ys: FloatArray,
@@ -796,9 +657,6 @@ class PredictionEngine(
                 previewNativeCount = found
             }
             mainHandler.post {
-                // A newer preview was requested, or the gesture resumed/lifted, while this one
-                // was decoding: whatever it found is already stale, and showing it would be a
-                // preview flashing up a beat after the finger has already moved on.
                 if (generation == previewGeneration) {
                     publishGesturePreviewResult()
                 }
@@ -806,11 +664,7 @@ class PredictionEngine(
         }
     }
 
-    /**
-     * Drops a preview decode that has not answered yet, so it cannot land after the gesture has
-     * already resumed or lifted. Bumping the generation is the whole mechanism: the posted
-     * publish in [decodeGesturePreview] already checks it before calling the listener.
-     */
+    /** Drops a preview decode that has not answered yet. */
     fun cancelPendingPreview() {
         previewGeneration++
     }
@@ -822,6 +676,10 @@ class PredictionEngine(
                 val word = previewNativeWords[index] ?: continue
                 out.add(Candidate(word, previewNativeProperNoun[index], previewNativeScores[index]))
             }
+        }
+        val refusedNow = refused
+        if (!refusedNow.isEmpty) {
+            out.removeAll { refusedNow.refuses(it.text) }
         }
         listener?.onGesturePreviewCandidates(out)
     }
@@ -851,20 +709,11 @@ class PredictionEngine(
                 (android.os.SystemClock.elapsedRealtimeNanos() - searchStarted) / 1_000_000.0,
             )
 
-            // A newer request landed while this one was running: its answer is the one that
-            // matters, and showing this one would be a visible flicker backwards.
             if (!queue.isCurrent(generation)) {
                 continue
             }
-            // Asked on this thread, beside the answer it belongs to. The word is the one the
-            // engine was just asked about, so the two can never disagree.
-            // Asked on this thread, beside the answer it belongs to, so the two can never be
-            // about different words.
             val query = queue.currentComposing
-            // The dictionary's own spelling, compared with what was typed. Equal but for case
-            // means the word is spelled the way it is written, and a word spelled the way it is
-            // written is not something to correct. Differing otherwise -- "Daca" against "dacă"
-            // -- is a correction worth making, so it does not count as known.
+            // The query is known when the dictionaries spell it the same, ignoring case.
             val spelling = if (query.isEmpty()) {
                 null
             } else {
@@ -872,11 +721,6 @@ class PredictionEngine(
                     NativePredictor.nativeKnownSpelling(current, query)
                 }
             }
-            // Autocorrect's own answer, read here because it describes the request that just
-            // ran. Not words[0]: the strip is ranked for "what are you writing", where a longer
-            // word carrying on from these letters belongs, and autocorrect is asking "what did
-            // you mean", where it does not. See Engine::bestCorrection.
-            // The productive possessive, asked for beside the other two per-request answers.
             val possessive = if (query.isEmpty()) {
                 null
             } else {
@@ -915,11 +759,7 @@ class PredictionEngine(
         }
     }
 
-    /**
-     * Runs on the UI thread. Copies the shared buffer into the display buffer under the lock --
-     * sixteen references, uncontended -- so the prediction thread can start overwriting it the
-     * moment this returns.
-     */
+    /** Runs on the UI thread and delivers the last answer to the listener. */
     private fun publish() {
         val known: String
         val possessive: String?
@@ -934,17 +774,7 @@ class PredictionEngine(
         listener?.onSuggestions(copyAndFilterResults(), known, query, possessive, inflection)
     }
 
-    /**
-     * Moves the shared buffer into the display buffer and drops refused words.
-     *
-     * The copy happens under the lock -- sixteen references, uncontended -- so the prediction
-     * thread can start overwriting the moment this returns. Blocked words are filtered here
-     * rather than in the engine: the native side has no notion of a word the user refused, and
-     * this is a set lookup on at most sixteen strings, once per answer. Each is folded first,
-     * so "Shit" at a sentence start and "căcat" with its accents are the same refusal as their
-     * plain spellings; the fold hands a plain lower-case word straight back, which is nearly
-     * every candidate, so the common case still allocates nothing.
-     */
+    /** The last answer, copied out under [resultLock], with refused words dropped. */
     private fun copyAndFilterResults(): List<Candidate> {
         val out = ArrayList<Candidate>(MAX_RESULTS)
         var correction: Candidate? = null
@@ -959,20 +789,16 @@ class PredictionEngine(
                     ),
                 )
             }
-            // The corrections heap settled on a word the ranking does not carry, which is the
-            // ordinary case: "teh" ranks tehran and nine more above "the". It joins the list so
-            // that the answer to "which of these would a delimiter commit" is always in the list
-            // rather than something the caller has to reconcile against it.
+            // Adds the correction when the ranking does not carry it.
             val text = nativeCorrection
             if (nativeCorrectionAt < 0 && text != null) {
                 correction = Candidate(text, nativeCorrectionIsName, isCorrection = true)
             }
         }
         correction?.let { out.add(it) }
-        synchronized(blocked) {
-            if (blocked.isNotEmpty()) {
-                out.removeAll { WordFold.fold(it.text) in blocked }
-            }
+        val refusedNow = refused
+        if (!refusedNow.isEmpty) {
+            out.removeAll { refusedNow.refuses(it.text) }
         }
         return out
     }

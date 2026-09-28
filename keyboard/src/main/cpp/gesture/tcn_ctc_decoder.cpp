@@ -14,15 +14,11 @@ namespace {
 
 constexpr float kPi = 3.14159265358979323846f;
 
-// How the beam's path evidence, the word's length and its frequency combine into one score.
+// How the beam's path evidence, the word's length and its frequency combine into one score:
 //
 //   score = ctc / max(letters,1)^kLengthNormalisation
 //         + kLengthBonus * letters
 //         + kFrequencyWeight * contextLogProb
-//
-// A CTC path accumulates log-probability per character, so without the first term a long word
-// is penalised for being long. The third weighs how far the language model may override what
-// the finger drew.
 constexpr float kLengthNormalisation = 0.0f;
 constexpr float kLengthBonus = 3.0f;
 constexpr float kFrequencyWeight = 0.5f;
@@ -36,13 +32,12 @@ float logSumExp(float a, float b) {
     return hi + std::log1p(std::exp(lo - hi));
 }
 
-/** log(sigmoid(x)), the numerically stable way: never exponentiates a large positive number. */
+/** log(sigmoid(x)), computed without exponentiating a large positive number. */
 float logSigmoid(float x) {
     return x < 0.f ? x - std::log1p(std::exp(x)) : -std::log1p(std::exp(-x));
 }
 
-/** The exact (erf-based) GELU, matching PyTorch's `F.gelu` default (`approximate="none"`) --
- *  `model.py`'s `KeyEmbedding` never asks for the tanh approximation, so neither does this. */
+/** The exact (erf-based) GELU, as PyTorch's `F.gelu` computes it by default. */
 float gelu(float x) {
     return 0.5f * x * (1.f + std::erf(x * 0.70710678118654752440f));  // 1/sqrt(2)
 }
@@ -56,11 +51,8 @@ void TcnCtcDecoder::setLayout(const KeyGeometry& geometry, const TcnWeights& wei
         keyCount_ = KeyGeometry::kMaxKeys;
     }
 
-    // The key-area extent both the trajectory (tcn_decoder.cpp, via resampleUniformTime) and this
-    // basis are normalised against. Origin stays at (0,0) -- the same key-area-local frame every
-    // decoder in this directory already shares -- rather than re-deriving one from the tightest
-    // bounding box, so a gesture and a key position measured against the same geometry are always
-    // comparable even before either is normalised.
+    // The key-area extent, from the origin, that the trajectory and this basis are both
+    // normalised against.
     float maxX = 0.f;
     float maxY = 0.f;
     for (int slot = 0; slot < keyCount_; ++slot) {
@@ -78,11 +70,8 @@ void TcnCtcDecoder::setLayout(const KeyGeometry& geometry, const TcnWeights& wei
     areaWidth_ = (maxX > 0.f) ? maxX : 1.f;
     areaHeight_ = (maxY > 0.f) ? maxY : 1.f;
 
-    // Phi[slot] = keyEmbed(u, v, cos(pi*du*u)*cos(pi*dv*v) for every du,dv) -- the raw 2D cosine
-    // features feed a small trained MLP (TcnWeights::keyEmbed*) rather than being the final
-    // basis themselves; see this class's own doc for why a bare cosine basis is not enough.
-    // Rebuilt here and only here: the encoder never sees a key position, this matrix is the
-    // entire layout-agnosticism mechanism.
+    // Phi[slot] = keyEmbed(u, v, cos(pi*du*u)*cos(pi*dv*v) for every du, dv), through the trained
+    // MLP (TcnWeights::keyEmbed*).
     for (int slot = 0; slot < keyCount_; ++slot) {
         const uint32_t codePoint = geometry.codeAt(slot);
         float cx = 0.f;
@@ -166,7 +155,7 @@ int TcnCtcDecoder::addOrMergeHypothesis(Hypothesis* hyps, int count, int32_t nod
         cell = (cell + 1) & static_cast<uint32_t>(kMergeTableSize - 1);
     }
     if (count >= kMaxBeamWidth * 4) {
-        return count;  // dropped: the array is already carrying more than pruneToBeamWidth keeps
+        return count;  // dropped: the array is full
     }
     hyps[count] = Hypothesis{node,       lastSymbol,           lastSlot,
                              blankContribution, nonBlankContribution, letters};
@@ -175,9 +164,7 @@ int TcnCtcDecoder::addOrMergeHypothesis(Hypothesis* hyps, int count, int32_t nod
 }
 
 int TcnCtcDecoder::pruneToBeamWidth(Hypothesis* hyps, int count) const {
-    // Small, fixed-size selection sort by total log-probability descending -- count is bounded by
-    // kMaxBeamWidth*4, so this is at most a few hundred comparisons, cheaper than the bookkeeping
-    // a heap would need for a beam this size.
+    // Selection sort by total log-probability, descending.
     const int kept = (count < kMaxBeamWidth) ? count : kMaxBeamWidth;
     float scores[kMaxBeamWidth * 4];
     for (int i = 0; i < count; ++i) {
@@ -280,7 +267,12 @@ int TcnCtcDecoder::decode(const float* intention, const float* spectral, const P
     Candidate heapStorage[16];
     heap.reset(heapStorage, static_cast<int>(sizeof(heapStorage) / sizeof(heapStorage[0])));
     for (int i = 0; i < currentCount; ++i) {
-        const int32_t wordIndex = trie.terminalWordIndex(current[i].node);
+        const int32_t firstIndex = trie.terminalWordIndex(current[i].node);
+        if (firstIndex < 0) {
+            continue;
+        }
+        const int32_t wordIndex =
+            scorer.offeredSpelling(packIndex, static_cast<uint32_t>(firstIndex));
         if (wordIndex < 0) {
             continue;
         }

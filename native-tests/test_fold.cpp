@@ -21,7 +21,7 @@ constexpr uint32_t kTableSize = 0x2000;
  * tools/build_dict.py's own fold table, as `--dump-folds --out` wrote it at build time: one
  * `XXXX<TAB>YYYY` line per code point the Python side folds to something other than itself.
  * Everything not listed folds to itself. Returns false when the file is missing or malformed,
- * which is a build problem rather than a fold problem and is reported as its own failure.
+ * which is reported as its own failure.
  */
 bool readPythonFolds(std::vector<uint32_t>& out) {
     const std::string text = readFile(BORDERKEYS_TEST_FOLDS);
@@ -55,8 +55,7 @@ bool readPythonFolds(std::vector<uint32_t>& out) {
     return true;
 }
 
-/** Whether a Latin Extended-A code point is the capital of its pair -- the fold's own rule,
- *  restated here so the sweep below does not trust the function it is checking. */
+/** Whether a Latin Extended-A code point is the capital of its pair, restated independently. */
 bool isLatinExtendedACapital(uint32_t codePoint) {
     if (codePoint == 0x138u || codePoint == 0x149u) {
         return false;  // kra and 'n have no capital
@@ -72,8 +71,7 @@ bool isLatinExtendedACapital(uint32_t codePoint) {
 void runFoldTests() {
     section("character folding");
     {
-        // The pairs the single-parity fold got wrong: 0x139..0x148 and 0x179..0x17E put the
-        // capital on the odd code point, so "ł" used to fold to "Ń" and "Ź" to itself.
+        // 0x139..0x148 and 0x179..0x17E put the capital on the odd code point.
         check(foldCodePoint(0x141u) == 'l' && foldCodePoint(0x142u) == 'l', "Ł and ł fold to l");
         check(foldCodePoint(0x2019u) == '\'' && foldCodePoint(0x2018u) == '\'' && foldCodePoint(0x2BCu) == '\'',
               "the typographic apostrophes fold onto the plain one");
@@ -123,6 +121,10 @@ void runFoldTests() {
         check(foldCodePoint(0x3C2u) == 0x3C3u && foldCodePoint(0x3A3u) == 0x3C3u, "ς and Σ fold to σ");
         check(foldCodePoint(0x390u) == 0x3B9u && foldCodePoint(0x3ABu) == 0x3C5u, "ΐ folds to ι and Ϋ to υ");
         check(lowerCodePoint(0x386u) == 0x3ACu, "Ά lowers to ά and keeps its tonos");
+        check(lowerCodePoint(0x218u) == 0x219u && lowerCodePoint(0x21Au) == 0x21Bu,
+              "Ș and Ț lower to ș and ț");
+        check(sameSpellingIgnoringCase("\xC8\x98tefan", 7, "\xC8\x99tefan", 7),
+              "Ștefan and ștefan are one spelling, case aside");
         // Cyrillic: the three case rules, the marked е and и, and the short и that stays.
         check(foldCodePoint(0x410u) == 0x430u && foldCodePoint(0x401u) == 0x435u && foldCodePoint(0x451u) == 0x435u,
               "А folds to а, Ё and ё to е");
@@ -139,7 +141,7 @@ void runFoldTests() {
         check(foldCodePoint(0x179u) == 'z' && foldCodePoint(0x17Au) == 'z', "Ź and ź fold to z");
         check(foldCodePoint(0x17Bu) == 'z' && foldCodePoint(0x17Cu) == 'z', "Ż and ż fold to z");
         check(foldCodePoint(0x17Du) == 'z' && foldCodePoint(0x17Eu) == 'z', "Ž and ž fold to z");
-        // The pairs the old test happened to get right stay right.
+        // Pairs with the capital on the even code point.
         check(foldCodePoint(0x102u) == 'a' && foldCodePoint(0x103u) == 'a', "Ă and ă fold to a");
         check(foldCodePoint(0x15Eu) == 's' && foldCodePoint(0x15Fu) == 's', "Ş and ş fold to s");
         check(foldCodePoint(0x162u) == 't' && foldCodePoint(0x163u) == 't', "Ţ and ţ fold to t");
@@ -151,9 +153,7 @@ void runFoldTests() {
         check(foldCodePoint(0x149u) == 'n', "'n, which has no capital, folds to n");
         check(foldCodePoint(0x14Au) == 'n' && foldCodePoint(0x14Bu) == 'n', "Ŋ and ŋ fold to n");
 
-        // Every capital in the block folds to what its lowercase folds to: a capital that
-        // reached the table unfolded was the whole bug, and this catches any pair the checks
-        // above did not name.
+        // Every capital in the block folds to what its lowercase folds to.
         bool everyPairAgrees = true;
         for (uint32_t upper = 0x100u; upper <= 0x17Eu; ++upper) {
             if (!isLatinExtendedACapital(upper)) {
@@ -170,10 +170,8 @@ void runFoldTests() {
 
     section("character folding agrees with tools/build_dict.py");
     {
-        // The trie is indexed on folded forms, and the pack compiler folds in Python while the
-        // engine folds in C++. A disagreement between the two is not a warning, it is a word the
-        // engine can never reach -- so the two tables are diffed here, code point by code point,
-        // against the dump the Python side wrote when this test binary was built.
+        // The pack compiler folds in Python and the engine in C++: the two tables are diffed
+        // code point by code point, against the dump the Python side wrote at build time.
         std::vector<uint32_t> python;
         const bool readable = readPythonFolds(python);
         check(readable, "the Python fold table was dumped at build time");

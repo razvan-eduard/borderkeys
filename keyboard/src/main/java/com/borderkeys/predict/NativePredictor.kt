@@ -4,26 +4,11 @@
 package com.borderkeys.predict
 
 /**
- * The Kotlin side of the JNI boundary, and nothing else.
+ * The Kotlin side of the JNI boundary. Every declaration has a counterpart in `kMethods` in
+ * `jni_bridge.cpp`, bound through `RegisterNatives` in `JNI_OnLoad`.
  *
- * Every declaration here has an exact counterpart in `kMethods` in `jni_bridge.cpp`. The native
- * side binds them through `RegisterNatives` in `JNI_OnLoad`, so a signature that drifts out of
- * sync fails at [System.loadLibrary] -- at service creation, in the open -- rather than as an
- * `UnsatisfiedLinkError` on the first keystroke with the keyboard already on screen.
- *
- * An `object` rather than a class: there is exactly one native library in the process and
- * loading it twice is not a thing that can happen, so the singleton initialiser is the correct
- * place for [System.loadLibrary] and there is no instance state to justify anything else.
- *
- * **Threading.** The engine is not thread safe, deliberately: it is a single-writer structure
- * with a bump allocator and no locks, because a lock on the suggestion path would be paid on
- * every keystroke to protect against a second caller that does not exist. Everything below must
- * be called from one thread -- the dedicated prediction thread created in step 5 -- with the
- * single exception of [nativeCreate] and [nativeDestroy], which the service calls from its own
- * lifecycle callbacks while no request is in flight.
- *
- * **Allocation.** [nativeSuggest] fills arrays the caller owns and reuses. The only objects it
- * creates are the result strings, which only the VM can make, and it runs off the UI thread.
+ * Not thread safe: every call except [nativeCreate], [nativeDestroy] and [nativeInspectPack]
+ * runs on the prediction thread.
  */
 internal object NativePredictor {
 
@@ -34,21 +19,12 @@ internal object NativePredictor {
     /** Returns an opaque handle, or 0 if the engine could not be created. */
     external fun nativeCreate(): Long
 
-    /**
-     * Releases the engine and everything it mapped. The caller must guarantee no other native
-     * call is in flight or will follow; the handle is dangling afterwards.
-     */
+    /** Releases the engine and everything it mapped. No native call may be in flight or follow. */
     external fun nativeDestroy(handle: Long)
 
     /**
-     * Maps and validates a `.bkd` language pack from an open file descriptor.
-     *
-     * The descriptor is not taken over -- the mapping keeps the file alive on its own, so the
-     * caller closes it either way. `offset` and `length` describe a window, which is what lets a
-     * pack be read straight out of the APK's asset region without being copied out first.
-     *
-     * Returns 0 on success, or a negative `BkdStatus` code. Failure is a returned value, not an
-     * exception: the native side is built with exceptions disabled.
+     * Maps and validates a `.bkd` language pack from a window of an open file descriptor, which
+     * the caller keeps and closes. Returns 0, or a negative `BkdStatus` code.
      */
     external fun nativeLoadLanguage(
         handle: Long,
@@ -60,34 +36,16 @@ internal object NativePredictor {
     ): Int
 
     /**
-     * Describes a `.bkd` without loading it into an engine.
-     *
-     * Fills [out] with `{ status, formatVersion, wordCount }` and returns the pack's BCP-47
-     * language tag, or null when the pack was refused -- in which case `out[0]` carries the
-     * negative `BkdStatus` saying why. The same validation the engine applies before it will
-     * read a pack: magic, version, header checksum, every section offset against the real file
-     * size, and the content checksum.
-     *
-     * Unlike everything else here this touches no engine, so it has no handle and no thread
-     * restriction beyond not being called on the UI thread -- it checksums the whole file.
+     * Validates a `.bkd` without loading it. Fills [out] with `{ status, formatVersion,
+     * wordCount }` and returns the pack's language tag, or null when the pack was refused.
+     * Not for the UI thread.
      */
     external fun nativeInspectPack(fd: Int, offset: Long, length: Long, out: IntArray): String?
 
-    /**
-     * Sets which of the loaded packs take part in scoring, and with what weight.
-     *
-     * All of them at once, not one "current language". Someone writing Romanian and English in
-     * the same sentence is the normal case; a keyboard that makes them switch has already lost.
-     */
+    /** Sets which loaded packs take part in scoring, and with what weight. */
     external fun nativeSetActiveLanguages(handle: Long, tags: Array<String>, weights: FloatArray)
 
-    /**
-     * Pushes the physical layout down to the engine so that it can correct finger slips.
-     *
-     * This is the whole of what the engine knows about how the keyboard is drawn: key centres
-     * and a key size, in the same pixel space the view uses. It never learns that a Canvas
-     * exists, and the view never learns that a trie does.
-     */
+    /** Pushes the key centres and the key size, in the view's pixels. */
     external fun nativeSetKeyGeometry(
         handle: Long,
         codes: IntArray,
@@ -98,16 +56,9 @@ internal object NativePredictor {
     )
 
     /**
-     * Fills [outWords], [outScores] and [outProperNoun] with the best candidates and returns
-     * how many were written, best first.
-     *
-     * All three arrays are allocated once by the caller and reused for every request. An empty
-     * [composing] is legitimate and asks for a next-word prediction from the context alone.
-     *
-     * [outProperNoun] is true for a candidate that should always render capitalised -- a name
-     * from the dictionary, not a sentence-start or a shift-state accident (see
-     * PackedTrie::isProperNoun in packed_trie.hpp for where this bit actually lives). The caller
-     * applies it instead of, not in addition to, the usual typed-case/shift-state rule.
+     * Fills [outWords], [outScores] and [outProperNoun] with the best candidates, best first, and
+     * returns how many were written. An empty [composing] asks for the next word.
+     * [outCorrectionIndex] receives the entry the corrections heap settled on, or -1.
      */
     external fun nativeSuggest(
         handle: Long,
@@ -121,19 +72,9 @@ internal object NativePredictor {
     ): Int
 
     /**
-     * Records that the user committed [word] in this context.
-     *
-     * This is the entire learning rule of the project: a count goes up. Nothing is retrained and
-     * no gradient exists. [asserted] is whether the word was chosen on purpose -- picked from
-     * the strip, or put back after a correction. A word no dictionary holds is offered, and
-     * protected from correction, only once asserted or written `kMinPersonalEvidence` effective
-     * times (engine.cpp).
-     *
-     * [deliberateCapital] is whether the word's first letter was upper case because the user
-     * pressed shift for it themselves, never because auto-capitalise applied it -- see
-     * BorderKeysService's own capture of the distinction. Enough of those, and the word is
-     * suggested capitalised from then on regardless of how it is typed the next time (see
-     * `outProperNoun` on [nativeSuggest]).
+     * Records that the user committed [word] after [prev1] and [prev2]. [asserted] is whether it
+     * was picked on the strip or put back after a correction; [deliberateCapital] is whether its
+     * capital was typed with shift.
      */
     external fun nativeLearn(
         handle: Long,
@@ -145,16 +86,8 @@ internal object NativePredictor {
     )
 
     /**
-     * Decodes a swipe into candidates, best first, and returns how many were written.
-     *
-     * The arrays carry the raw touch samples in view pixels, exactly as the driver reported
-     * them -- including the historical samples inside each motion event, which are the ones
-     * carrying the curvature. Smoothing and resampling happen on the native side so the
-     * geometric and neural tiers cannot disagree about how the features were produced.
-     *
-     * [outWords], [outScores] and [outProperNoun] are the same kind of reused buffers the tap
-     * path uses -- [outProperNoun] parallel to [outWords], the same name bit [nativeSuggest]
-     * reports; this runs on the prediction thread, never on the UI thread.
+     * Decodes a swipe from its raw touch samples, in view pixels, into the output buffers, best
+     * first, and returns how many were written.
      */
     external fun nativeDecodeGesture(
         handle: Long,
@@ -169,9 +102,7 @@ internal object NativePredictor {
         outProperNoun: BooleanArray,
     ): Int
 
-    /** Replaces the in-memory personal dictionary. Called once at start, from Room.
-     *  [deliberateCapitals] and [asserted] are the parallel per-word counts [nativeLearn]'s own
-     *  doc describes. */
+    /** Replaces the personal dictionary's words, with their per-word counts. */
     external fun nativeLoadUserWords(
         handle: Long,
         words: Array<String>,
@@ -181,92 +112,76 @@ internal object NativePredictor {
     )
 
     /**
-     * Replaces the remembered word pairs. Called right after [nativeLoadUserWords], from the
-     * same read, so that both halves of every pair are words the model already holds.
+     * Replaces the blocked words: spellings no search offers, corrects to or counts as known,
+     * each matched exactly, case aside. An empty array clears them.
      */
-    /**
-     * How readily what the user writes outranks the dictionary. A multiplier; 1 is the default.
-     */
+    external fun nativeSetBlockedWords(handle: Long, words: Array<String>)
+
+    /** How readily the user's words outrank the dictionaries. A multiplier; 1 is the default. */
     external fun nativeSetLearningSpeed(handle: Long, speed: Float)
 
     /**
      * How much evidence an edit needs before it outranks a word spelled as typed. A multiplier;
-     * 1 is the calibrated default, below it corrects more readily, above it less.
+     * 1 is the default, below it corrects more readily, above it less.
      */
     external fun nativeSetCorrectionStrictness(handle: Long, scale: Float)
 
-    /** Zero, or less, keeps every dictionary in play whatever the sentence looks like. */
+    /** How much evidence stops the other dictionaries being searched; zero or less never does. */
     external fun nativeSetLanguageLock(
         handle: Long,
         minimumEvidence: Float,
         strict: Boolean,
     )
 
-    /** The language consulted before anything has been recognised. Null or empty means none,
-     *  which is the default and restores the behaviour of searching every dictionary. */
+    /** The language consulted before anything has been recognised. Null or empty means none. */
     external fun nativeSetPreferredLanguage(handle: Long, tag: String?)
 
-    /** Forgets which language the conversation is in. See Engine::resetLanguageEvidence. */
+    /** Forgets which language the conversation is in. */
     external fun nativeResetLanguageEvidence(handle: Long)
 
-    /** Whether a suggestion may be two words. See KeyboardPreferences.phraseSuggestions. */
+    /** Whether a suggestion may be two words. */
     external fun nativeSetPhraseSuggestions(handle: Long, enabled: Boolean)
 
-    /**
-     * Loads tier B's trained weights (a `.bkw` file's full bytes, ~2.5 MB) and returns whether
-     * they were valid. Always false in a `core` build -- see Engine::loadSwipeWeights.
-     */
+    /** Loads tier B's weights from a `.bkw` file's bytes. False when invalid or in `core`. */
     external fun nativeLoadSwipeWeights(handle: Long, weights: ByteArray): Boolean
 
-    /**
-     * The "experimental swipe model" preference. Off by default; a no-op in a `core` build. Safe
-     * to call before [nativeLoadSwipeWeights] finishes -- tier B is only used once both this is
-     * true and weights have loaded successfully.
-     *
-     * Turning it off **frees** the weights rather than only ignoring them, so turning it back on
-     * means loading them again. See Engine::setSwipeModelEnabled.
-     */
+    /** Switches tier B on or off; off frees its weights. A no-op in `core`. */
     external fun nativeSetSwipeModelEnabled(handle: Long, enabled: Boolean)
 
     /** Whether the last gesture decode went through the neural decoder. */
     external fun nativeLastDecodeUsedNeural(handle: Long): Boolean
 
     /**
-     * Decodes one synthetic gesture through tier B and discards it, so the first swipe a person
-     * makes is not also the first pass through the network. False means there was nothing to
-     * warm: no weights, no layout pushed down yet, or a `core` build.
+     * Decodes one synthetic gesture through tier B and discards it. False when there is nothing
+     * to warm.
      */
     external fun nativeWarmSwipeModel(handle: Long): Boolean
 
     /**
-     * How the dictionaries spell this word, or null when none of them has it.
-     *
-     * The lookup folds case and diacritics, because that is how the trie is keyed, but what
-     * comes back is the stored spelling: "Daca" answers "dacă", which is a correction worth
-     * making, and "cana" answers "cana", which is a word to leave alone. One trie descent per
-     * active language.
+     * The best word the last [nativeSuggest] reached by an edit, and in [nameOut][0] whether it
+     * is a name. Valid only right after [nativeSuggest].
      */
-    /** The best word the last request reached by an edit, and whether it is a name in
-     *  [nameOut][0]. Autocorrect's answer, which is a different question from the strip's --
-     *  see Engine::bestCorrection. Valid only immediately after [nativeSuggest], same thread. */
     external fun nativeBestCorrection(handle: Long, nameOut: BooleanArray): String?
 
-    /** "Maria's" for "marias", or null when the word is not a name missing its apostrophe.
-     *  See Engine::possessiveFor for the three conditions. */
+    /** The possessive of a name missing its apostrophe, or null. */
     external fun nativePossessive(handle: Long, word: String): String?
 
+    /** How the dictionaries spell [word], or null when none holds it. */
     external fun nativeKnownSpelling(handle: Long, word: String): String?
 
-    /** Marks in [outKnown] which of [stems] may stand as the stem of a regular inflection --
-     *  see Engine::vouchesForStem. Returns how many. At most [MAX_STEMS_QUERY] stems. */
+    /**
+     * Marks in [outKnown] which of [stems] may stand as the stem of a regular inflection, and
+     * returns how many. At most [MAX_STEMS_QUERY] stems.
+     */
     external fun nativeKnownStems(handle: Long, stems: Array<String>, outKnown: BooleanArray): Int
 
     /** The bridge's cap on one [nativeKnownStems] call. */
     const val MAX_STEMS_QUERY = 64
 
-    /** The score of [candidate] as an answer to [typed], term by term, into [out] -- see
-     *  Engine::explainScore and [ScoreExplanation] for the slots. False when the word is not
-     *  offered for [typed] at all. */
+    /**
+     * The score of [candidate] for [typed], term by term, into [out] (see [ScoreExplanation]).
+     * False when the word is not offered.
+     */
     external fun nativeExplainScore(
         handle: Long,
         typed: String,
@@ -274,7 +189,7 @@ internal object NativePredictor {
         out: FloatArray,
     ): Boolean
 
-    /** Replaces the remembered three-word sequences. Called after the pairs, same reason. */
+    /** Replaces the personal three-word sequences. */
     external fun nativeLoadUserTrigrams(
         handle: Long,
         previous2: Array<String>,
@@ -283,6 +198,7 @@ internal object NativePredictor {
         counts: IntArray,
     )
 
+    /** Replaces the personal word pairs. */
     external fun nativeLoadUserBigrams(
         handle: Long,
         previous: Array<String>,
@@ -290,21 +206,15 @@ internal object NativePredictor {
         counts: IntArray,
     )
 
-    /**
-     * Whether the personal dictionary is consulted at all -- off for a private field, see
-     * `Engine::setPersonalModelEnabled`'s own doc. The model stays loaded either way.
-     */
+    /** Whether the personal dictionary is consulted; it stays loaded either way. */
     external fun nativeSetPersonalModelEnabled(handle: Long, enabled: Boolean)
 
     /** The language tag of [nativeDominantPack]'s pack, or null while the engine is undecided. */
     external fun nativeDominantLanguageTag(handle: Long): String?
 
     /**
-     * What [packIndex] alone would spell [word] as, ignoring whichever pack the engine currently
-     * treats as dominant, or null when that pack has nothing better than [word] itself. No
-     * sentence context -- see `Engine::candidateForPack`'s own doc for why. Never called on the
-     * per-keystroke suggestion path: this is the on-demand check for a language switch found
-     * after the fact, in `LanguageSwitchCorrector`.
+     * What [packIndex] alone would spell [word] as, or null when that pack has nothing better
+     * than [word].
      */
     external fun nativeCandidateForPack(handle: Long, packIndex: Int, word: String): String?
 

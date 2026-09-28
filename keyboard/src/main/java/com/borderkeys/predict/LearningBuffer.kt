@@ -9,19 +9,10 @@ import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.LearnedWord
 
 /**
- * Accumulates what the user confirms, so that the database is written on a debounce rather than
- * on a keystroke.
+ * Holds committed words, pairs and triples in memory until they are flushed to the database,
+ * when the buffer is old enough, full enough, or the input session ends.
  *
- * A key press has two milliseconds to reach `InputConnection`. An INSERT is a transaction, a
- * disk write and an encryption pass, and putting one on that path would blow the budget on every
- * word. So confirmations land here, in memory, and are flushed to Room and to the native
- * snapshot when the buffer is old enough, full enough, or the input session ends.
- *
- * Deliberately free of Android and of coroutines: it is a counter with a clock passed in, which
- * makes the debounce and the eviction testable on the JVM instead of on a device.
- *
- * Not thread safe. It is written and drained on the main thread, by BorderKeysService alone;
- * the prediction thread never sees it.
+ * Not thread safe; written and drained on the main thread by BorderKeysService.
  */
 class LearningBuffer(
     private val debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS,
@@ -31,15 +22,11 @@ class LearningBuffer(
     private val pendingPairs = LinkedHashMap<PairKey, Entry>()
     private val pendingTriples = LinkedHashMap<TripleKey, Entry>()
     private var oldestRecordedAt = 0L
-    private var blocked: Set<String> = emptySet()
+    private var refusedWords: RefusedWords = RefusedWords.NONE
 
     /**
-     * Whether anything is recorded at all.
-     *
-     * Set to false for a password field or when the editor asks for no personalised learning.
-     * The service also refuses to call [record] there, so this is the second of two independent
-     * checks -- which is the right number for a rule whose failure mode is a password ending up
-     * in the personal dictionary.
+     * Whether anything is recorded. False for a password field or a field that asks for no
+     * personalised learning.
      */
     var enabled: Boolean = true
 
@@ -47,27 +34,14 @@ class LearningBuffer(
 
     fun isEmpty(): Boolean = pending.isEmpty()
 
-    /**
-     * Words that are never learned, however often they are typed: the ones the user refused,
-     * and the offensive-word list while its switch is on. Every entry arrives already folded
-     * ([WordFold]), and a candidate is folded the same way before it is looked up, so "Shit"
-     * at a sentence start is the same refusal as "shit".
-     */
-    fun setBlockedWords(words: Set<String>) {
-        blocked = words
+    /** Words that are never learned. */
+    fun setRefusedWords(words: RefusedWords) {
+        refusedWords = words
     }
 
-    private fun refused(word: String): Boolean =
-        blocked.isNotEmpty() && WordFold.fold(word) in blocked
+    private fun refused(word: String): Boolean = refusedWords.refuses(word)
 
-    /**
-     * Records that [word] followed [previousWord], if both are things worth remembering.
-     *
-     * Kept apart from [record] because the two fail independently: the word is always worth
-     * learning, the pair only when the word before it is one this dictionary would also hold.
-     * A pair whose halves are not both learnable would name a word the native model cannot
-     * resolve, and would be dropped at the next start anyway.
-     */
+    /** Records that [word] followed [previousWord]. Returns true if it was accepted. */
     fun recordPair(previousWord: String, word: String, nowMillis: Long): Boolean {
         if (!enabled || previousWord.isEmpty() || word.isEmpty()) {
             return false
@@ -128,12 +102,8 @@ class LearningBuffer(
     }
 
     /**
-     * Records one committed word. Returns true if it was accepted.
-     *
-     * A word is committed when the user types a delimiter after it, swipes it, or picks it from
-     * the suggestion strip. Nothing is learned from what is merely on screen. [deliberateCapital]
-     * and [asserted] travel with the count -- see `UserWord` -- and either one, once seen in a
-     * window, is kept for it.
+     * Records one committed word. Returns true if it was accepted. [deliberateCapital] and
+     * [asserted] are kept for the word once either is seen.
      */
     fun record(
         word: String,
@@ -161,9 +131,6 @@ class LearningBuffer(
             return true
         }
         if (pending.size >= maxEntries) {
-            // Full before the debounce elapsed, which means the user is typing fast. Drop the
-            // least recently added rather than growing: the flush is about to happen anyway, and
-            // an unbounded buffer in the IME process is a memory leak with a nice name.
             val oldest = pending.keys.first()
             pending.remove(oldest)
         }
@@ -177,18 +144,12 @@ class LearningBuffer(
     /** True when the buffer should be written out. */
     fun isDue(nowMillis: Long): Boolean {
         if (pending.isEmpty()) {
-            // The pairs ride along with the words. A pair is only ever recorded next to a word,
-            // so an empty word buffer means there is nothing to write either.
             return false
         }
         return pending.size >= maxEntries || nowMillis - oldestRecordedAt >= debounceMillis
     }
 
-    /**
-     * Empties the buffer and returns what it held.
-     *
-     * Returns an empty list rather than null when there is nothing, so the caller has one path.
-     */
+    /** Empties the buffer and returns what it held. */
     fun drain(): List<LearnedWord> {
         if (pending.isEmpty()) {
             return emptyList()
@@ -209,7 +170,7 @@ class LearningBuffer(
         return drained
     }
 
-    /** Empties the pair buffer and returns what it held. Drained in the same flush as the words. */
+    /** Empties the pair buffer and returns what it held. */
     fun drainPairs(): List<LearnedBigram> {
         if (pendingPairs.isEmpty()) {
             return emptyList()
@@ -227,7 +188,7 @@ class LearningBuffer(
         return drained
     }
 
-    /** Empties the triple buffer. Drained in the same flush as the words and the pairs. */
+    /** Empties the triple buffer and returns what it held. */
     fun drainTriples(): List<LearnedTrigram> {
         if (pendingTriples.isEmpty()) {
             return emptyList()
@@ -246,7 +207,7 @@ class LearningBuffer(
         return drained
     }
 
-    /** Discards everything without writing it. Used when entering private mode mid-session. */
+    /** Discards everything without writing it. */
     fun discard() {
         pending.clear()
         pendingPairs.clear()
@@ -275,21 +236,10 @@ class LearningBuffer(
         const val DEFAULT_DEBOUNCE_MILLIS = 4_000L
         const val DEFAULT_MAX_ENTRIES = 64
 
-        /** Read from [DictionaryCsv.MAX_WORD_LENGTH]: the same ceiling on the way in as on the
-         *  way back out through an import, so raising or lowering what counts as a plausible
-         *  word is one edit rather than two kept in sync by hand. */
+        /** The longest word recorded, the same as [DictionaryCsv.MAX_WORD_LENGTH]. */
         const val MAX_WORD_LENGTH = DictionaryCsv.MAX_WORD_LENGTH
 
-        /**
-         * Below this a word is not worth a row of its own.
-         *
-         * Every one-letter word anyone writes -- "a" and "I" in English, "a" and "o" in
-         * Romanian -- is already in the bundled dictionary, so learning it personally adds
-         * nothing and can only take a slot from something that is not. What it does instead is
-         * accumulate: a stray letter committed by a delimiter is indistinguishable here from a
-         * word, and the personal dictionary keeps whatever it is given for the life of the
-         * install.
-         */
+        /** The shortest word recorded. */
         const val MIN_WORD_LENGTH = 2
     }
 }

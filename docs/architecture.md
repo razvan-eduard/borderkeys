@@ -350,8 +350,15 @@ device learned from its owner must not be offered back into a field that asked t
 The model stays loaded and untouched.
 
 `OffensiveWords` keeps its list out of suggestions, corrections and learning while the switch is
-on. `LearningBuffer.setBlockedWords` also holds every word the user has refused; entries are
-folded through `WordFold`, so `Shit` at a sentence start is the same refusal as `shit`.
+on; entries are folded through `WordFold`, so `Shit` at a sentence start is the same refusal as
+`shit`.
+
+A word the user blocked is matched by its exact spelling, case aside: blocking `maine` blocks
+`Maine` and leaves `mâine` alone. The engine treats a blocked spelling as absent from every
+dictionary (`Engine::setBlockedWords`). It is never offered, on the strip, as a next word or
+from a swipe, and the next candidate takes its slot. It is never a correction, and it is not a
+known word, so autocorrect may replace it when typed: `maine` becomes `mâine`. `RefusedWords`
+keeps both lists out of learning.
 
 ---
 
