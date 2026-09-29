@@ -1117,6 +1117,7 @@
   "dictionary_heatmap_needs_learning": "Dafür muss Lernen eingeschaltet sein.",
   "dictionary_heatmap_taps": "Aus %s Berührungen gelernt",
   "dictionary_heatmap_nothing_yet": "Noch nichts gelernt",
+  "dictionary_heatmap_preview_note": "Jedes Leuchten sitzt dort, wo deine Berührungen auf dieser Taste landen, und breitet sich so weit aus wie sie. Ein blasser Kreis ist eine Taste, die noch auf die übliche Weise gelesen wird.",
   "dictionary_heatmap_off_title": "Heatmap ausschalten?",
   "dictionary_heatmap_off_text": "Wo deine Berührungen auf jeder Taste landen, wird vergessen, und nichts wird aufgezeichnet, bis sie wieder eingeschaltet ist.",
   "dictionary_heatmap_advanced_note": "Wie stark deine Berührungen zählen, und wie lange",

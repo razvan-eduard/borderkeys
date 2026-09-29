@@ -1117,6 +1117,7 @@
   "dictionary_heatmap_needs_learning": "Needs Learning to be on.",
   "dictionary_heatmap_taps": "Learned from %s taps",
   "dictionary_heatmap_nothing_yet": "Nothing learned yet",
+  "dictionary_heatmap_preview_note": "Each glow sits where your taps on that key land, and spreads as they spread. A faint circle is a key still read the default way.",
   "dictionary_heatmap_off_title": "Switch the heatmap off?",
   "dictionary_heatmap_off_text": "Where your taps land on each key is forgotten, and nothing is recorded until it is switched on again.",
   "dictionary_heatmap_advanced_note": "How much your taps count, and for how long",

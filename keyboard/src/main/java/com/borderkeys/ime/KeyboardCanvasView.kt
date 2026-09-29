@@ -8,8 +8,10 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.RenderNode
+import android.graphics.Shader
 import android.os.Trace
 import android.view.Choreographer
 import android.view.HapticFeedbackConstants
@@ -584,6 +586,68 @@ class KeyboardCanvasView(
     /** The id of the layout on the keys. */
     val layoutId: String get() = layout.id
 
+    /** Where taps land on each letter key, drawn over the keys; null draws nothing. */
+    var touchGlows: TouchGlows? = null
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val glowCodes = IntArray(MAX_GLOW_KEYS)
+    private val glowXs = FloatArray(MAX_GLOW_KEYS)
+    private val glowYs = FloatArray(MAX_GLOW_KEYS)
+
+    /** Each letter key's glow from [glows], or the faint default circle for a key without one. */
+    private fun drawTouchGlows(canvas: Canvas, glows: TouchGlows) {
+        val count = geometry.exportGeometry(glowCodes, glowXs, glowYs)
+        val width = geometry.averageKeyWidth
+        val height = geometry.averageKeyHeight
+        if (count <= 0 || width <= 0f || height <= 0f) {
+            return
+        }
+        for (i in 0 until count) {
+            val slot = glows.codes.indexOf(glowCodes[i])
+            val strength = if (slot >= 0) glows.strength[slot] else 0f
+            if (strength > 0f) {
+                drawGlow(
+                    canvas,
+                    glowXs[i] + glows.meanX[slot] * width,
+                    glowYs[i] + glows.meanY[slot] * height,
+                    GlowEllipse.of(
+                        glows.varianceX[slot] * width * width,
+                        glows.varianceY[slot] * height * height,
+                        glows.covariance[slot] * width * height,
+                        MIN_GLOW_RADIUS_PX,
+                    ),
+                    GLOW_ALPHA * strength,
+                    glows.color,
+                )
+            } else {
+                val spread = DEFAULT_GLOW_SPREAD * DEFAULT_GLOW_SPREAD
+                drawGlow(
+                    canvas, glowXs[i], glowYs[i],
+                    GlowEllipse.of(spread * width * width, spread * height * height, 0f, MIN_GLOW_RADIUS_PX),
+                    FAINT_GLOW_ALPHA, glows.color,
+                )
+            }
+        }
+    }
+
+    /** A soft glow at ([x], [y]), fading to nothing at [GLOW_SIGMAS] times [ellipse]'s radii. */
+    private fun drawGlow(canvas: Canvas, x: Float, y: Float, ellipse: GlowEllipse, alpha: Float, color: Int) {
+        val centre = (color and 0x00FFFFFF) or ((alpha * 255f).toInt().coerceIn(0, 255) shl 24)
+        glowPaint.shader = RadialGradient(
+            0f, 0f, 1f, intArrayOf(centre, color and 0x00FFFFFF), null, Shader.TileMode.CLAMP,
+        )
+        canvas.save()
+        canvas.translate(x, y)
+        canvas.rotate(ellipse.degrees)
+        canvas.scale(GLOW_SIGMAS * ellipse.major, GLOW_SIGMAS * ellipse.minor)
+        canvas.drawCircle(0f, 0f, 1f, glowPaint)
+        canvas.restore()
+    }
+
     /** Average key size, for the native engine. Zero before the first layout pass. */
     val averageKeyWidth: Float get() = geometry.averageKeyWidth
 
@@ -832,6 +896,8 @@ class KeyboardCanvasView(
                 drawLabel(canvas, index)
             }
             paints.keyPressedFill.alpha = 255
+
+            touchGlows?.let { drawTouchGlows(canvas, it) }
 
             if (gestureActive) {
                 drawGestureTrail(canvas)
@@ -1416,6 +1482,22 @@ class KeyboardCanvasView(
         const val NO_KEY = KeyboardGeometry.NO_KEY
 
         private const val MAX_POINTERS = 16
+
+        /** The letter keys a glow is drawn for, at most. */
+        private const val MAX_GLOW_KEYS = 64
+
+        /** A glow fades to nothing at this many standard deviations. */
+        private const val GLOW_SIGMAS = 2f
+
+        /** A glow's opacity at its centre at full strength, and the default circle's. */
+        private const val GLOW_ALPHA = 0.8f
+        private const val FAINT_GLOW_ALPHA = 0.22f
+
+        /** The default circle's spread in key units, TouchModel::kReferenceSpread. */
+        private const val DEFAULT_GLOW_SPREAD = 0.3f
+
+        /** The least radius a glow is drawn with. */
+        private const val MIN_GLOW_RADIUS_PX = 2f
         private const val PRESS_POOL = 10
 
         /** The most fill particles alive at once. */

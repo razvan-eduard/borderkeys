@@ -16,6 +16,10 @@ interface KeyTouchDao {
     @Query("SELECT COALESCE(SUM(taps), 0) FROM key_touches")
     fun observeTaps(): Flow<Double>
 
+    /** Every bucket's totals, kept live by Room. */
+    @Query("SELECT * FROM key_touches")
+    fun observeAll(): Flow<List<KeyTouch>>
+
     @Query("SELECT * FROM key_touches WHERE bucket = :bucket")
     suspend fun inBucket(bucket: String): List<KeyTouch>
 
