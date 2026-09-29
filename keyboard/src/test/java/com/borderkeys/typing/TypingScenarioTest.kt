@@ -289,6 +289,25 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `undo takes back the word typed since the last step, and redo puts it back`() {
+        rig.type("hello world")
+        undo()
+        assertEquals("hello ", rig.editor.text)
+        redo()
+        assertEquals("hello world", rig.editor.text)
+    }
+
+    @Test
+    fun `text typed after an undo is kept, not replaced by redo`() {
+        rig.type("hello world ")
+        undo()
+        assertEquals("hello ", rig.editor.text)
+        rig.type("x")
+        redo()
+        assertEquals("hello x", rig.editor.text)
+    }
+
+    @Test
     fun `enter learns the word it ends`() {
         rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true))
         rig.startField()
@@ -310,6 +329,18 @@ class TypingScenarioTest {
         rig.type("a")
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
         assertTrue(rig.store.batches.flatMap { it.updates }.any { it.word == "the" })
+    }
+
+    /** The Undo quick action. */
+    private fun undo() {
+        rig.orchestrator.undo()
+        rig.settle()
+    }
+
+    /** The Redo quick action. */
+    private fun redo() {
+        rig.orchestrator.redo()
+        rig.settle()
     }
 
     /** A decode of [words], best first, cased as the orchestrator cases a swipe. */
