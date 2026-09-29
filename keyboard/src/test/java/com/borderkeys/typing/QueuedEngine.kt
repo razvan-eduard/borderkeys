@@ -43,8 +43,8 @@ internal class QueuedEngine(
     /** The taps sent with each of [queries], x and y per code point, or null for none. */
     val tapsAsked = mutableListOf<Pair<List<Float>, List<Float>>?>()
 
-    /** How the touch model was last set: on or off, the weight, and the taps a key needs. */
-    data class TouchModelSetting(val enabled: Boolean, val weight: Float, val minTaps: Int)
+    /** How the touch model was last set: whether learned patterns count, the weight, the taps a key needs. */
+    data class TouchModelSetting(val learned: Boolean, val weight: Float, val minTaps: Int)
 
     var touchModel: TouchModelSetting? = null
         private set
@@ -98,10 +98,10 @@ internal class QueuedEngine(
         tasks.addLast(Task(request = false) { NativePredictor.nativeSetPersonalModelEnabled(handle, enabled) })
     }
 
-    override fun setTouchModel(enabled: Boolean, weight: Float, minTaps: Int) {
-        touchModel = TouchModelSetting(enabled, weight, minTaps)
+    override fun setTouchModel(learned: Boolean, weight: Float, minTaps: Int) {
+        touchModel = TouchModelSetting(learned, weight, minTaps)
         tasks.addLast(
-            Task(request = false) { NativePredictor.nativeSetTouchModel(handle, enabled, weight, minTaps) },
+            Task(request = false) { NativePredictor.nativeSetTouchModel(handle, learned, weight, minTaps) },
         )
     }
 

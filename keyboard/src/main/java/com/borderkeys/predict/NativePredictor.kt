@@ -217,10 +217,10 @@ internal object NativePredictor {
     external fun nativeSetPersonalModelEnabled(handle: Long, enabled: Boolean)
 
     /**
-     * Whether the touch model prices substitutions from taps, how far it moves them from the key
-     * geometry's costs, and how many taps a key needs first.
+     * Whether the learned touch patterns count, how far they move a substitution's cost from the
+     * default patterns' cost, and how many taps a key needs first.
      */
-    external fun nativeSetTouchModel(handle: Long, enabled: Boolean, weight: Float, minTaps: Int)
+    external fun nativeSetTouchModel(handle: Long, learned: Boolean, weight: Float, minTaps: Int)
 
     /** The language tag of [nativeDominantPack]'s pack, or null while the engine is undecided. */
     external fun nativeDominantLanguageTag(handle: Long): String?

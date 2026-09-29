@@ -89,11 +89,17 @@ struct LoadedEngine {
         return status;
     }
 
-    /** The score `expected` carries among the suggestions for `composing`, or 0 if absent. */
-    float scoreOf(const char* composing, const char* expected) {
+    /**
+     * The score `expected` carries among the suggestions for `composing`, or 0 if absent; each
+     * letter of the ASCII `composing` tapped at `xs` and `ys` when they are given.
+     */
+    float scoreOf(const char* composing, const char* expected, const float* xs = nullptr,
+                  const float* ys = nullptr) {
         Candidate out[Engine::kMaxCandidates];
-        const int found = engine.suggest(composing, std::strlen(composing), nullptr, 0, nullptr,
-                                         0, out, Engine::kMaxCandidates);
+        const size_t length = std::strlen(composing);
+        const int found = engine.suggest(composing, length, nullptr, 0, nullptr, 0, xs, ys,
+                                         xs != nullptr ? static_cast<int>(length) : 0, out,
+                                         Engine::kMaxCandidates);
         for (int i = 0; i < found; ++i) {
             uint32_t length = 0;
             const char* const text = engine.candidateText(out[i], &length);
@@ -252,32 +258,6 @@ void runEngineTests() {
         KeyGeometry geometry;
         geometry.set(layout.codes, layout.xs, layout.ys, layout.count, layout.keyWidth,
                      layout.keyHeight);
-        // Every key a pattern centred on it, at the reference spread, with fifty taps.
-        int32_t codes[64];
-        float taps[64];
-        float meanX[64];
-        float meanY[64];
-        float varianceX[64];
-        float varianceY[64];
-        float covariance[64];
-        const float variance = TouchModel::kReferenceSpread * TouchModel::kReferenceSpread;
-        int hSlot = -1;
-        for (int i = 0; i < layout.count; ++i) {
-            codes[i] = layout.codes[i];
-            taps[i] = 50.f;
-            meanX[i] = 0.f;
-            meanY[i] = 0.f;
-            varianceX[i] = variance;
-            varianceY[i] = variance;
-            covariance[i] = 0.f;
-            if (layout.codes[i] == 'h') {
-                hSlot = i;
-            }
-        }
-        TouchModel centred;
-        centred.set(codes, taps, meanX, meanY, varianceX, varianceY, covariance, layout.count);
-        centred.configure(true, 1.f, 30);
-
         float gx = 0.f;
         float gy = 0.f;
         float hx = 0.f;
@@ -285,49 +265,79 @@ void runEngineTests() {
         layout.centreOf('g', &gx, &gy);
         layout.centreOf('h', &hx, &hy);
         const float geometryCost = geometry.substitutionCost('g', 'h');
-        checkNear(centred.substitutionCost(geometry, 'g', 'h', gx, gy, geometryCost), geometryCost,
-                  0.01f,
-                  "a centred pattern at the reference spread prices a tap on its key's centre as "
-                  "the geometry does");
-        checkNear(centred.substitutionCost(geometry, 'g', 'h', (gx + hx) / 2.f, gy, geometryCost),
+        const float towardsH = gx + 0.3f * layout.keyWidth;
+
+        TouchModel defaults;
+        check(defaults.substitutionCost(geometry, 'g', 'h', gx, gy, geometryCost) == geometryCost,
+              "a tap on the typed key's centre costs the geometry's centre distance");
+        checkNear(defaults.substitutionCost(geometry, 'g', 'h', (gx + hx) / 2.f, gy, geometryCost),
                   KeyGeometry::kMinSubstitutionCost, 0.001f,
                   "a tap halfway between two keys costs the least a substitution may");
+        const float defaultCost =
+            defaults.substitutionCost(geometry, 'g', 'h', towardsH, gy, geometryCost);
+        check(defaultCost < defaults.substitutionCost(geometry, 'g', 'h',
+                                                      gx - 0.3f * layout.keyWidth, gy,
+                                                      geometryCost),
+              "a tap towards the intended key costs less than one away from it");
         const float none = std::numeric_limits<float>::quiet_NaN();
-        check(centred.substitutionCost(geometry, 'g', 'h', none, none, geometryCost) ==
+        check(defaults.substitutionCost(geometry, 'g', 'h', none, none, geometryCost) ==
                   geometryCost,
               "a tap with no point is priced by the geometry");
 
-        TouchModel off;
-        off.set(codes, taps, meanX, meanY, varianceX, varianceY, covariance, layout.count);
-        off.configure(false, 1.f, 30);
-        check(off.substitutionCost(geometry, 'g', 'h', gx, gy, geometryCost) == geometryCost,
-              "switched off, the geometry prices every tap");
+        // One learned pattern with fifty taps: h's taps land 0.2 key widths left of its centre,
+        // towards g.
+        const int32_t hCode = 'h';
+        const float fifty = 50.f;
+        const float leftOfCentre = -0.2f;
+        const float zero = 0.f;
+        const float variance = TouchModel::kReferenceSpread * TouchModel::kReferenceSpread;
+        TouchModel leaning;
+        leaning.set(&hCode, &fifty, &leftOfCentre, &zero, &variance, &variance, &zero, 1);
+        leaning.configure(true, 1.f, 30);
+        const float leaningCost =
+            leaning.substitutionCost(geometry, 'g', 'h', towardsH, gy, geometryCost);
+        check(leaningCost < defaultCost,
+              "a key whose taps lean towards the typed one is cheaper to reach from that side");
+        check(leaningCost >= KeyGeometry::kMinSubstitutionCost,
+              "and never cheaper than the least a substitution may cost");
+
+        TouchModel half;
+        half.set(&hCode, &fifty, &leftOfCentre, &zero, &variance, &variance, &zero, 1);
+        half.configure(true, 0.5f, 30);
+        checkNear(half.substitutionCost(geometry, 'g', 'h', towardsH, gy, geometryCost),
+                  (defaultCost + leaningCost) / 2.f, 0.001f,
+                  "at weight one half a learned pattern moves the cost halfway");
+
+        TouchModel ignored;
+        ignored.set(&hCode, &fifty, &leftOfCentre, &zero, &variance, &variance, &zero, 1);
+        ignored.configure(false, 1.f, 30);
+        check(ignored.substitutionCost(geometry, 'g', 'h', towardsH, gy, geometryCost) ==
+                  defaultCost,
+              "while learned patterns do not count, the default patterns price every tap");
 
         TouchModel sparse;
-        sparse.set(codes, taps, meanX, meanY, varianceX, varianceY, covariance, layout.count);
+        sparse.set(&hCode, &fifty, &leftOfCentre, &zero, &variance, &variance, &zero, 1);
         sparse.configure(true, 1.f, 100);
-        check(sparse.substitutionCost(geometry, 'g', 'h', gx, gy, geometryCost) == geometryCost,
-              "a key with fewer taps than the minimum is priced by the geometry");
+        check(sparse.substitutionCost(geometry, 'g', 'h', towardsH, gy, geometryCost) ==
+                  defaultCost,
+              "a key with fewer taps than the minimum is priced by its default pattern");
 
         TouchModel unweighted;
-        unweighted.set(codes, taps, meanX, meanY, varianceX, varianceY, covariance, layout.count);
+        unweighted.set(&hCode, &fifty, &leftOfCentre, &zero, &variance, &variance, &zero, 1);
         unweighted.configure(true, 0.f, 30);
-        check(unweighted.substitutionCost(geometry, 'g', 'h', gx + 0.3f * layout.keyWidth, gy,
-                                          geometryCost) == geometryCost,
-              "at weight zero the geometry prices every tap");
+        check(unweighted.substitutionCost(geometry, 'g', 'h', towardsH, gy, geometryCost) ==
+                  defaultCost,
+              "at weight zero the learned patterns change nothing");
 
-        // h's taps land 0.6 key widths left of its centre, towards g.
-        meanX[hSlot] = -0.6f;
-        TouchModel leaning;
-        leaning.set(codes, taps, meanX, meanY, varianceX, varianceY, covariance, layout.count);
-        leaning.configure(true, 1.f, 30);
-        const float nearEdgeX = gx + 0.3f * layout.keyWidth;
-        check(leaning.substitutionCost(geometry, 'g', 'h', nearEdgeX, gy, geometryCost) <
-                  centred.substitutionCost(geometry, 'g', 'h', nearEdgeX, gy, geometryCost),
-              "a key whose taps lean towards the typed one is cheaper to reach from that side");
-        check(leaning.substitutionCost(geometry, 'g', 'h', nearEdgeX, gy, geometryCost) >=
-                  KeyGeometry::kMinSubstitutionCost,
-              "and never cheaper than the least a substitution may cost");
+        // g's own taps land 0.3 key widths right of its centre, where this tap is.
+        const int32_t gCode = 'g';
+        const float rightOfCentre = 0.3f;
+        TouchModel typedLeaning;
+        typedLeaning.set(&gCode, &fifty, &rightOfCentre, &zero, &variance, &variance, &zero, 1);
+        typedLeaning.configure(true, 1.f, 30);
+        check(typedLeaning.substitutionCost(geometry, 'g', 'h', towardsH, gy, geometryCost) >
+                  defaultCost,
+              "a typed key whose taps usually land there is dearer to read as its neighbour");
     }
 
     section("folding keeps each code point's source");
@@ -341,11 +351,10 @@ void runEngineTests() {
               "a mark that folds to nothing leaves no entry, and the next keeps its own source");
     }
 
-    section("an empty touch model changes no answer");
+    section("taps at the key centres answer as no taps do");
     {
         LoadedEngine loaded;
         check(loaded.open(), "the engine loads the test pack");
-        loaded.engine.setTouchModel(true, 1.f, 30);
         const char word[] = "keyboarf";
         const int length = static_cast<int>(sizeof(word) - 1);
         float xs[8];
@@ -363,35 +372,13 @@ void runEngineTests() {
             same = plain[i].packIndex == tapped[i].packIndex &&
                    plain[i].wordIndex == tapped[i].wordIndex && plain[i].score == tapped[i].score;
         }
-        check(same, "taps at the key centres with no patterns answer as no taps do");
+        check(same, "the same words at the same scores");
     }
 
-    section("a tapped substitution is priced by the touch model");
+    section("a tapped substitution is priced by where the tap landed");
     {
         LoadedEngine loaded;
         check(loaded.open(), "the engine loads the test pack");
-        // Every key a pattern centred on it, at the reference spread, with fifty taps.
-        int32_t codes[64];
-        float taps[64];
-        float meanX[64];
-        float meanY[64];
-        float varianceX[64];
-        float varianceY[64];
-        float covariance[64];
-        const float variance = TouchModel::kReferenceSpread * TouchModel::kReferenceSpread;
-        for (int i = 0; i < loaded.layout.count; ++i) {
-            codes[i] = loaded.layout.codes[i];
-            taps[i] = 50.f;
-            meanX[i] = 0.f;
-            meanY[i] = 0.f;
-            varianceX[i] = variance;
-            varianceY[i] = variance;
-            covariance[i] = 0.f;
-        }
-        loaded.engine.setTouchPatterns(codes, taps, meanX, meanY, varianceX, varianceY, covariance,
-                                       loaded.layout.count);
-        loaded.engine.setTouchModel(true, 1.f, 30);
-
         // The d of "thede" is beside the s of "these" and diagonally below the r of "there".
         const char word[] = "thede";
         float xs[5];
@@ -402,22 +389,34 @@ void runEngineTests() {
         const std::string untapped = loaded.answer(word, nullptr, nullptr);
         check(untapped.rfind("these:", 0) == 0 && untapped.find("| these") != std::string::npos,
               "untapped, these ranks first and autocorrect takes it");
-        check(loaded.answer(word, xs, ys) == untapped,
-              "taps at the key centres on centred patterns answer as no taps do");
+        const float none = std::numeric_limits<float>::quiet_NaN();
+        const float nowhere[5] = {none, none, none, none, none};
+        check(loaded.answer(word, nowhere, nowhere) == untapped,
+              "taps with no point answer as no taps do");
 
         // The d tapped at its upper right, towards r.
-        xs[3] += 0.3f * loaded.layout.keyWidth;
-        ys[3] -= 0.45f * loaded.layout.keyHeight;
+        const float upX = 0.3f;
+        const float upY = -0.45f;
+        xs[3] += upX * loaded.layout.keyWidth;
+        ys[3] += upY * loaded.layout.keyHeight;
         const std::string towardsR = loaded.answer(word, xs, ys);
         check(towardsR.rfind("there:", 0) == 0 && towardsR.find("| there") != std::string::npos,
               "a d tapped towards r ranks there first, and autocorrect takes it");
 
+        // d's learned taps usually land at that upper right.
+        const int32_t dCode = 'd';
+        const float fifty = 50.f;
+        const float zero = 0.f;
+        const float variance = TouchModel::kReferenceSpread * TouchModel::kReferenceSpread;
+        loaded.engine.setTouchPatterns(&dCode, &fifty, &upX, &upY, &variance, &variance, &zero,
+                                       1);
+        const float unlearned = loaded.scoreOf(word, "there", xs, ys);
+        loaded.engine.setTouchModel(true, 1.f, 30);
+        check(loaded.scoreOf(word, "there", xs, ys) < unlearned,
+              "a d whose taps usually land there makes the same tap dearer to read as r");
         loaded.engine.setTouchModel(true, 1.f, 100);
-        check(loaded.answer(word, xs, ys) == untapped,
-              "with fewer taps than the minimum, the same taps answer as no taps do");
-        loaded.engine.setTouchModel(false, 1.f, 30);
-        check(loaded.answer(word, xs, ys) == untapped,
-              "switched off, the same taps answer as no taps do");
+        check(loaded.scoreOf(word, "there", xs, ys) == unlearned,
+              "with fewer taps than the minimum, the default patterns price it");
     }
 
     section("suggestions");

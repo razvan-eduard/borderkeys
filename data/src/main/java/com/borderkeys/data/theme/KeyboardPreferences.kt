@@ -57,12 +57,12 @@ data class KeyboardPreferences(
     val learningSpeed: Int = LEARNING_BALANCED,
 
     /**
-     * Whether where the taps land on each key is learned and used to tell which key was meant;
-     * only while [learningEnabled] is on, and never in a private field.
+     * Whether where the taps land on each key is learned, and the learned patterns used to tell
+     * which key was meant; only while [learningEnabled] is on, and never in a private field.
      */
     val heatmapEnabled: Boolean = true,
 
-    /** How far the heatmap moves a substitution's cost from the keys' own positions. */
+    /** How far the heatmap moves a substitution's cost from the default tap model's. */
     val heatmapWeight: Float = DEFAULT_HEATMAP_WEIGHT,
 
     /** How many taps a key needs before its pattern counts. */
@@ -816,7 +816,7 @@ data class KeyboardPreferences(
         const val MIN_HEATMAP_MIN_TAPS = 10
         const val MAX_HEATMAP_MIN_TAPS = 100
         const val HEATMAP_MIN_TAPS_STEP = 10
-        const val DEFAULT_HEATMAP_MIN_TAPS = 10
+        const val DEFAULT_HEATMAP_MIN_TAPS = 30
 
         /** [heatmapHalfLifeDays]' range and default. */
         const val MIN_HEATMAP_HALF_LIFE_DAYS = 7

@@ -10,41 +10,42 @@
 
 namespace borderkeys {
 
-// Where one person's taps land on each letter key of the current bucket: per key, how many taps,
-// and their mean offset from the key's centre and its covariance, in key units (x in key widths,
-// y in key heights). Prices a substitution from a tap once both keys have enough taps.
+// Prices a substitution from where the tap landed. Every key has a default pattern: taps centred
+// on it at the reference spread, the same for everyone. Learned patterns, per letter key of the
+// current bucket (how many taps, their mean offset from the key's centre and their covariance,
+// in key units: x in key widths, y in key heights), take a key's place while they count and the
+// key has enough taps.
 class TouchModel {
 public:
     static constexpr int kMaxKeys = KeyGeometry::kMaxKeys;
 
-    // The spread, in key units, at which a key's pattern centred on the key prices a tap at its
-    // own centre exactly as KeyGeometry's centre distance does.
+    // The default pattern's spread, in key units, and the scale a log-likelihood ratio is priced
+    // on: a tap on the typed key's centre costs KeyGeometry's centre distance.
     static constexpr float kReferenceSpread = 0.3f;
 
-    // The least variance a pattern is given, in key units squared.
+    // The least variance a learned pattern is given, in key units squared.
     static constexpr float kMinVariance = 0.01f;
 
     void clear() { count_ = 0; }
 
-    // Replaces the patterns: `count` keys, each a folded code, its tap count, the mean offset and
-    // the covariance. Keys past kMaxKeys, repeated codes and non-positive tap counts are dropped.
+    // Replaces the learned patterns: `count` keys, each a folded code, its tap count, the mean
+    // offset and the covariance. Keys past kMaxKeys, repeated codes and non-positive tap counts
+    // are dropped.
     void set(const int32_t* codes, const float* taps, const float* meanX, const float* meanY,
              const float* varianceX, const float* varianceY, const float* covariance, int count);
 
-    // Whether the model prices anything: switched on and not empty. [weight] scales how far the
-    // model moves a substitution's cost from the geometry's; [minTaps] is how many taps a key
-    // needs before its pattern counts.
-    void configure(bool enabled, float weight, int minTaps);
-    bool active() const { return enabled_ && count_ > 0; }
+    // Whether the learned patterns count, how far they move a substitution's cost from the
+    // default patterns' cost, and how many taps a key needs before its own pattern counts.
+    void configure(bool learned, float weight, int minTaps);
 
     int keyCount() const { return count_; }
 
     // The cost of reading a tap at (`x`, `y`), in the keyboard view's pixels, on `typed` as
-    // `intended`: the log-likelihood ratio of the two keys' patterns for the tap, as the centre
-    // distance an equally telling tap would be under the reference spread, moved from
-    // `geometryCost` by the weight, and never below KeyGeometry::kMinSubstitutionCost.
-    // `geometryCost` itself when the model is inactive, the tap has no point, or either key has
-    // fewer taps than the minimum.
+    // `intended`: from the default patterns, √(intended² − typed²) of the tap's distances from
+    // the two centres in key units; with a learned pattern on either key, moved by the weight
+    // towards the two patterns' log-likelihood ratio priced on the reference spread. Never below
+    // KeyGeometry::kMinSubstitutionCost; `geometryCost` when the tap has no point or either key
+    // is not on the geometry.
     float substitutionCost(const KeyGeometry& geometry, uint32_t typed, uint32_t intended,
                            float x, float y, float geometryCost) const;
 
@@ -59,7 +60,12 @@ private:
         float covariance;
     };
 
+    static const Pattern kDefault;
+
     const Pattern* find(uint32_t folded) const;
+
+    // `folded`'s learned pattern while learned patterns count and it has enough taps, or null.
+    const Pattern* learned(uint32_t folded) const;
 
     // The log of the pattern's density at an offset from its key's centre, without the 2π term,
     // which cancels in a ratio.
@@ -67,9 +73,9 @@ private:
 
     Pattern patterns_[kMaxKeys] = {};
     int count_ = 0;
-    bool enabled_ = false;
+    bool learned_ = false;
     float weight_ = 1.0f;
-    float minTaps_ = 0.0f;
+    float minTaps_ = 1.0f;
 };
 
 }  // namespace borderkeys

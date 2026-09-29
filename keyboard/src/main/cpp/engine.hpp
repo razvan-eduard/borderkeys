@@ -133,10 +133,10 @@ public:
                         int count, float keyWidth, float keyHeight);
 
     /**
-     * Whether the touch model prices substitutions, how far it moves them from the geometry's
-     * costs, and how many taps a key needs first; see TouchModel.
+     * Whether the learned touch patterns count, how far they move a substitution's cost from the
+     * default patterns' cost, and how many taps a key needs first; see TouchModel.
      */
-    void setTouchModel(bool enabled, float weight, int minTaps);
+    void setTouchModel(bool learned, float weight, int minTaps);
 
     /** Replaces the touch model's key patterns; see TouchModel::set. */
     void setTouchPatterns(const int32_t* codes, const float* taps, const float* meanX,
@@ -185,7 +185,8 @@ public:
                 Candidate* out, int maxOut);
 
     // suggest, with where each code point of `composing` was tapped, in the keyboard view's
-    // pixels: `tapCount` entries, NaN for none. The touch model prices substitutions from them.
+    // pixels: `tapCount` entries, NaN for none. The touch model prices each tapped letter's
+    // substitutions from them.
     int suggest(const char* composing, size_t composingLength, const char* previous1,
                 size_t previous1Length, const char* previous2, size_t previous2Length,
                 const float* tapX, const float* tapY, int tapCount, Candidate* out, int maxOut);

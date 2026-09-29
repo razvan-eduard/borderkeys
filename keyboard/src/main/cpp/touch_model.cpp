@@ -8,6 +8,13 @@
 
 namespace borderkeys {
 
+const TouchModel::Pattern TouchModel::kDefault = {
+    0u, 0.0f, 0.0f, 0.0f,
+    TouchModel::kReferenceSpread * TouchModel::kReferenceSpread,
+    TouchModel::kReferenceSpread * TouchModel::kReferenceSpread,
+    0.0f,
+};
+
 void TouchModel::set(const int32_t* codes, const float* taps, const float* meanX,
                      const float* meanY, const float* varianceX, const float* varianceY,
                      const float* covariance, int count) {
@@ -37,8 +44,8 @@ void TouchModel::set(const int32_t* codes, const float* taps, const float* meanX
     }
 }
 
-void TouchModel::configure(bool enabled, float weight, int minTaps) {
-    enabled_ = enabled;
+void TouchModel::configure(bool learned, float weight, int minTaps) {
+    learned_ = learned;
     weight_ = weight;
     minTaps_ = static_cast<float>(std::max(minTaps, 1));
 }
@@ -50,6 +57,14 @@ const TouchModel::Pattern* TouchModel::find(uint32_t folded) const {
         }
     }
     return nullptr;
+}
+
+const TouchModel::Pattern* TouchModel::learned(uint32_t folded) const {
+    if (!learned_) {
+        return nullptr;
+    }
+    const Pattern* const pattern = find(folded);
+    return (pattern != nullptr && pattern->taps >= minTaps_) ? pattern : nullptr;
 }
 
 float TouchModel::logDensity(const Pattern& pattern, float offsetX, float offsetY) {
@@ -66,13 +81,7 @@ float TouchModel::logDensity(const Pattern& pattern, float offsetX, float offset
 
 float TouchModel::substitutionCost(const KeyGeometry& geometry, uint32_t typed, uint32_t intended,
                                    float x, float y, float geometryCost) const {
-    if (!active() || std::isnan(x) || std::isnan(y)) {
-        return geometryCost;
-    }
-    const Pattern* const typedPattern = find(typed);
-    const Pattern* const intendedPattern = find(intended);
-    if (typedPattern == nullptr || intendedPattern == nullptr || typedPattern->taps < minTaps_ ||
-        intendedPattern->taps < minTaps_) {
+    if (std::isnan(x) || std::isnan(y)) {
         return geometryCost;
     }
     float typedX = 0.0f;
@@ -85,11 +94,24 @@ float TouchModel::substitutionCost(const KeyGeometry& geometry, uint32_t typed, 
     }
     const float width = geometry.keyWidth();
     const float height = geometry.keyHeight();
-    const float ratio =
-        logDensity(*typedPattern, (x - typedX) / width, (y - typedY) / height) -
-        logDensity(*intendedPattern, (x - intendedX) / width, (y - intendedY) / height);
-    const float modelCost = kReferenceSpread * std::sqrt(2.0f * std::max(ratio, 0.0f));
-    const float cost = geometryCost + weight_ * (modelCost - geometryCost);
+    const float typedDx = (x - typedX) / width;
+    const float typedDy = (y - typedY) / height;
+    const float intendedDx = (x - intendedX) / width;
+    const float intendedDy = (y - intendedY) / height;
+    const float typedSquared = typedDx * typedDx + typedDy * typedDy;
+    const float intendedSquared = intendedDx * intendedDx + intendedDy * intendedDy;
+    float cost = std::sqrt(std::max(intendedSquared - typedSquared, 0.0f));
+
+    const Pattern* const typedPattern = learned(typed);
+    const Pattern* const intendedPattern = learned(intended);
+    if (typedPattern != nullptr || intendedPattern != nullptr) {
+        const float ratio =
+            logDensity(typedPattern != nullptr ? *typedPattern : kDefault, typedDx, typedDy) -
+            logDensity(intendedPattern != nullptr ? *intendedPattern : kDefault, intendedDx,
+                       intendedDy);
+        const float learnedCost = kReferenceSpread * std::sqrt(2.0f * std::max(ratio, 0.0f));
+        cost += weight_ * (learnedCost - cost);
+    }
     return std::max(cost, KeyGeometry::kMinSubstitutionCost);
 }
 

@@ -683,13 +683,13 @@ void nativeSetPersonalModelEnabled(JNIEnv* /*env*/, jobject /*thiz*/, jlong hand
     engine->setPersonalModelEnabled(enabled == JNI_TRUE);
 }
 
-void nativeSetTouchModel(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jboolean enabled,
+void nativeSetTouchModel(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jboolean learned,
                          jfloat weight, jint minTaps) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr) {
         return;
     }
-    engine->setTouchModel(enabled == JNI_TRUE, weight, minTaps);
+    engine->setTouchModel(learned == JNI_TRUE, weight, minTaps);
 }
 
 jstring nativeDominantLanguageTag(JNIEnv* env, jobject /*thiz*/, jlong handle) {

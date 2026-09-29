@@ -725,15 +725,14 @@ class TypingScenarioTest {
     }
 
     @Test
-    fun `with Learning and the Heatmap on, each request carries where the word's letters were tapped`() {
-        startWithSwitches(learning = true, heatmap = true)
+    fun `each request carries where the word's letters were tapped, no point for a key pressed without a tap`() {
         rig.tap('t'.code, 4, 11f, 12f)
         rig.type("h")
         assertEquals(listOf(11f, Float.NaN) to listOf(12f, Float.NaN), rig.engine.tapsAsked.last())
     }
 
     @Test
-    fun `with Learning or the Heatmap off, in a private field or a terminal, no request carries taps`() {
+    fun `with Learning or the Heatmap off, and in a private field, requests still carry the taps`() {
         val fields = listOf<() -> Unit>(
             { startWithSwitches(learning = false, heatmap = true) },
             { startWithSwitches(learning = true, heatmap = false) },
@@ -741,34 +740,38 @@ class TypingScenarioTest {
                 startWithSwitches(learning = true, heatmap = true)
                 rig.startField(privateField = true)
             },
-            {
-                startWithSwitches(learning = true, heatmap = true)
-                rig.startField(terminalField = true)
-            },
         )
         for (field in fields) {
             field()
-            rig.engine.tapsAsked.clear()
             rig.tap('t'.code, 4, 11f, 12f)
             rig.tap('h'.code, 16, 21f, 22f)
-            assertTrue(rig.engine.tapsAsked.isNotEmpty())
-            assertTrue(rig.engine.tapsAsked.all { it == null })
+            assertEquals(listOf(11f, 21f) to listOf(12f, 22f), rig.engine.tapsAsked.last())
         }
     }
 
     @Test
-    fun `the touch model is on while the heatmap is allowed, at the weight and minimum set`() {
+    fun `a terminal's requests carry no taps`() {
+        rig.startField(terminalField = true)
+        rig.engine.tapsAsked.clear()
+        rig.tap('t'.code, 4, 11f, 12f)
+        rig.tap('h'.code, 16, 21f, 22f)
+        assertTrue(rig.engine.tapsAsked.isNotEmpty())
+        assertTrue(rig.engine.tapsAsked.all { it == null })
+    }
+
+    @Test
+    fun `the learned patterns count while the heatmap is allowed, at the weight and minimum set`() {
         rig.orchestrator.applySettings(
             SMOKE_SETTINGS.copy(learningEnabled = true, heatmapWeight = 1.5f, heatmapMinTaps = 40),
         )
         rig.startField()
         assertEquals(QueuedEngine.TouchModelSetting(true, 1.5f, 40), rig.engine.touchModel)
         rig.startField(privateField = true)
-        assertEquals(false, rig.engine.touchModel?.enabled)
+        assertEquals(false, rig.engine.touchModel?.learned)
         rig.startField()
-        assertEquals(true, rig.engine.touchModel?.enabled)
+        assertEquals(true, rig.engine.touchModel?.learned)
         rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true, heatmapEnabled = false))
-        assertEquals(false, rig.engine.touchModel?.enabled)
+        assertEquals(false, rig.engine.touchModel?.learned)
     }
 
     // ---- swipes and the ring ------------------------------------------------------------------

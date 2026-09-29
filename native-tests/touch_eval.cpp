@@ -10,11 +10,10 @@
  * meant one sample, its offset from that key's centre in key units, dropped beyond one key unit
  * and weighted down by `--half-life-taps` (0 keeps every tap at full weight). The
  * `--test-words` words from the tap `--test-from-taps`, or else right after the training, are
- * the test. For each one typed with a slip into a string no dictionary
- * spells, at least three letters long, it records what autocorrect commits and where the strip
- * ranks the word meant: with the model off; with every key a pattern centred on it at the
- * reference spread, which uses where the tap landed and nothing learned; and with the learned
- * patterns at each weight and minimum.
+ * the test. For each one typed with a slip into a string no dictionary spells, at least three
+ * letters long, it records what autocorrect commits and where the strip ranks the word meant:
+ * with no taps, priced by the key geometry; with the taps and the default patterns alone; and
+ * with the learned patterns at each weight and minimum.
  *
  * Usage:
  *     touch_eval <dict dir> <tag> <layout> <taps.tsv> [--train-taps N] [--test-words N]
@@ -33,7 +32,6 @@
 #include <vector>
 
 #include "engine.hpp"
-#include "touch_model.hpp"
 
 using namespace borderkeys;
 
@@ -313,17 +311,6 @@ int main(int argc, char** argv) {
     }
     engine.setTouchPatterns(codes, taps, meanX, meanY, varianceX, varianceY, covariance, patterns);
 
-    int32_t neutralCodes[64];
-    float neutralTaps[64];
-    float neutralMean[64];
-    float neutralSpread[64];
-    for (int i = 0; i < layout.count; ++i) {
-        neutralCodes[i] = layout.codes[i];
-        neutralTaps[i] = 1.0e6f;
-        neutralMean[i] = 0.0f;
-        neutralSpread[i] = TouchModel::kReferenceSpread * TouchModel::kReferenceSpread;
-    }
-
     std::printf("trained on %ld taps (%zu words): %ld samples, %ld beyond one key unit dropped, "
                 "%d keys\n",
                 tapIndex, next, samples, dropped, patterns);
@@ -335,21 +322,20 @@ int main(int argc, char** argv) {
         std::printf("  %d keys with at least %.0f taps\n", ready, minimum);
     }
 
-    // The settings measured: the model off, the neutral patterns, then each weight at each
-    // minimum on the learned ones.
+    // The settings measured: no taps, the default patterns, then each weight at each minimum on
+    // the learned ones.
     struct Setting {
-        bool enabled;
-        bool neutral;
+        bool tapped;
+        bool learned;
         float weight;
         int minimum;
     };
-    std::vector<Setting> settings = {{false, false, 0.0f, 0}, {true, true, 1.0f, 1}};
+    std::vector<Setting> settings = {{false, false, 1.0f, 1}, {true, false, 1.0f, 1}};
     for (const float minimum : minimums) {
         for (const float weight : weights) {
-            settings.push_back({true, false, weight, static_cast<int>(minimum)});
+            settings.push_back({true, true, weight, static_cast<int>(minimum)});
         }
     }
-    bool neutralSet = false;
     std::vector<Tally> tallies(settings.size());
 
     for (; next < words.size() && tapIndex < testFromTaps; ++next) {
@@ -375,21 +361,13 @@ int main(int argc, char** argv) {
         }
         ++slipped;
         for (size_t s = 0; s < settings.size(); ++s) {
-            if (settings[s].neutral != neutralSet) {
-                neutralSet = settings[s].neutral;
-                if (neutralSet) {
-                    engine.setTouchPatterns(neutralCodes, neutralTaps, neutralMean, neutralMean,
-                                            neutralSpread, neutralSpread, neutralMean,
-                                            layout.count);
-                } else {
-                    engine.setTouchPatterns(codes, taps, meanX, meanY, varianceX, varianceY,
-                                            covariance, patterns);
-                }
-            }
-            engine.setTouchModel(settings[s].enabled, settings[s].weight, settings[s].minimum);
+            const Setting& setting = settings[s];
+            engine.setTouchModel(setting.learned, setting.weight, setting.minimum);
             const int found = engine.suggest(
-                word.typed.c_str(), word.typed.size(), nullptr, 0, nullptr, 0, word.xs.data(),
-                word.ys.data(), static_cast<int>(word.xs.size()), out, Engine::kMaxCandidates);
+                word.typed.c_str(), word.typed.size(), nullptr, 0, nullptr, 0,
+                setting.tapped ? word.xs.data() : nullptr,
+                setting.tapped ? word.ys.data() : nullptr, static_cast<int>(word.xs.size()), out,
+                Engine::kMaxCandidates);
             Tally& tally = tallies[s];
             const Candidate* const best = engine.bestCorrection();
             std::string applied;
@@ -430,10 +408,10 @@ int main(int argc, char** argv) {
                 "other", "first", "top3");
     for (size_t s = 0; s < settings.size(); ++s) {
         const Tally& tally = tallies[s];
-        if (settings[s].neutral) {
-            std::printf("%-7s %6s %5s", "neutral", "1.00", "-");
-        } else if (settings[s].enabled) {
+        if (settings[s].learned) {
             std::printf("%-7s %6.2f %5d", "learned", settings[s].weight, settings[s].minimum);
+        } else if (settings[s].tapped) {
+            std::printf("%-7s %6s %5s", "default", "-", "-");
         } else {
             std::printf("%-7s %6s %5s", "off", "-", "-");
         }

@@ -427,10 +427,10 @@ class PredictionEngine(
         }
     }
 
-    override fun setTouchModel(enabled: Boolean, weight: Float, minTaps: Int) {
+    override fun setTouchModel(learned: Boolean, weight: Float, minTaps: Int) {
         worker.post {
             withHandle(Unit) { current ->
-                NativePredictor.nativeSetTouchModel(current, enabled, weight, minTaps)
+                NativePredictor.nativeSetTouchModel(current, learned, weight, minTaps)
             }
         }
     }

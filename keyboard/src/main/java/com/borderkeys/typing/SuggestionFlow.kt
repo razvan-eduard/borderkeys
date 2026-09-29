@@ -38,8 +38,8 @@ class SuggestionFlow(
 
     /**
      * Asks the engine about [query] after [context], with [taps], where each of its code points
-     * was typed, while the field allows the heatmap. A private field's text is re-read into the
-     * strip first, and nothing is asked where the field allows no suggestions.
+     * was typed. A private field's text is re-read into the strip first, and nothing is asked
+     * where the field allows no suggestions.
      */
     fun request(query: String, context: WordContext, taps: TapTrail) {
         lastQuery = query
@@ -50,7 +50,7 @@ class SuggestionFlow(
             return
         }
         requestedAt = clock.uptimeMillis()
-        val tapped = session.policy.heatmapAllowed && taps.size > 0
+        val tapped = taps.size > 0
         engine.requestSuggestions(
             query, context.previous1, context.previous2,
             if (tapped) taps.copyXs() else null, if (tapped) taps.copyYs() else null,
