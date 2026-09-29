@@ -10,6 +10,8 @@ import org.junit.AssumptionViolatedException
 import java.io.File
 import java.io.FileDescriptor
 import java.io.FileInputStream
+import java.io.PrintWriter
+import java.util.Locale
 
 /**
  * The engine, the JNI bridge and [WordCommit] run off a device against the shipped packs, with
@@ -93,6 +95,24 @@ internal class Pipeline private constructor(
         return (0 until n).mapNotNull { words[it] }
     }
 
+    /**
+     * [outcome] as one tab-separated line: typed, committed or `-`, reason, then the engine's
+     * ranking for the typed word, each entry `word:score`, a name marked `word*:score`.
+     */
+    fun readingLine(outcome: Outcome): String {
+        val words = arrayOfNulls<String>(MAX_CANDIDATES)
+        val scores = FloatArray(MAX_CANDIDATES)
+        val properNoun = BooleanArray(MAX_CANDIDATES)
+        val n = NativePredictor.nativeSuggest(
+            handle, outcome.typed, null, null, words, scores, properNoun, IntArray(1),
+        )
+        val ranking = (0 until n).joinToString(" ") { index ->
+            val name = if (properNoun[index]) "*" else ""
+            "${words[index]}$name:" + String.format(Locale.ROOT, "%.4f", scores[index])
+        }
+        return "${outcome.typed}\t${outcome.committed ?: "-"}\t${outcome.reason}\t$ranking"
+    }
+
     /** The ranked words for [typed], and the index of the engine's correction among them, or -1. */
     fun stripWithCorrection(typed: String, previous: String? = null): CorrectionView {
         val words = arrayOfNulls<String>(MAX_CANDIDATES)
@@ -155,6 +175,16 @@ internal class Pipeline private constructor(
 
         /** KeyboardPreferences.CORRECTION_DISTANCE_NORMAL, the shipped default. */
         private const val DEFAULT_DISTANCE = 1
+
+        /**
+         * A writer for the readings file [name] in the `borderkeys.readings` directory, or null
+         * when that property is unset.
+         */
+        fun readings(name: String): PrintWriter? {
+            val directory = System.getProperty("borderkeys.readings")?.let(::File) ?: return null
+            directory.mkdirs()
+            return File(directory, name).printWriter()
+        }
 
         /** Where the compiled packs are, or null when they have not been built. */
         fun packDirectory(): File? =

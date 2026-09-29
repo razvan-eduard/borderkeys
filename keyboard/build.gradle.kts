@@ -89,6 +89,10 @@ android {
                 )
                 // For FileDescriptor's private fd field, which the tests hand nativeLoadLanguage.
                 it.jvmArgs("--add-opens", "java.base/java.io=ALL-UNNAMED")
+                // The directory the pipeline tests write one line per case into; unset writes none.
+                providers.gradleProperty("borderkeys.readings").orNull?.let { directory ->
+                    it.systemProperty("borderkeys.readings", directory)
+                }
             }
         }
     }
