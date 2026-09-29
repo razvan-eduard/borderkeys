@@ -4,9 +4,9 @@
 package com.borderkeys.predict
 
 /**
- * A request queue one deep: a new request replaces the pending one, and each carries a
- * generation number so an older answer can be discarded. Written from the UI thread and read
- * from the prediction thread.
+ * A request queue one deep: a new request replaces the pending one, and the one taken gets a
+ * generation number from [NewestWins], so an answer cleared away meanwhile can be discarded.
+ * Written from the UI thread and read from the prediction thread.
  */
 internal class PredictionRequestQueue {
 
@@ -14,10 +14,9 @@ internal class PredictionRequestQueue {
     private var pendingComposing: String = ""
     private var pendingPrevious1: String? = null
     private var pendingPrevious2: String? = null
-    private var pendingGeneration = 0
 
     private var workerScheduled = false
-    private var nextGeneration = 0
+    private val generations = NewestWins()
 
     var currentComposing: String = ""
         private set
@@ -42,7 +41,6 @@ internal class PredictionRequestQueue {
         pendingComposing = composing
         pendingPrevious1 = previous1
         pendingPrevious2 = previous2
-        pendingGeneration = nextGeneration++
 
         val needsWorker = !workerScheduled
         workerScheduled = true
@@ -62,20 +60,21 @@ internal class PredictionRequestQueue {
         currentComposing = pendingComposing
         currentPrevious1 = pendingPrevious1
         currentPrevious2 = pendingPrevious2
-        currentGeneration = pendingGeneration
+        currentGeneration = generations.issue()
         pendingValid = false
         return true
     }
 
     /** Whether a result for [generation] is still worth showing. */
     @Synchronized
-    fun isCurrent(generation: Int): Boolean = generation == currentGeneration
+    fun isCurrent(generation: Int): Boolean = generations.isNewest(generation)
 
     /** Drops the pending and the current request. */
     @Synchronized
     fun clear() {
         pendingValid = false
         workerScheduled = false
+        generations.cancel()
         currentGeneration = -1
         currentComposing = ""
         currentPrevious1 = null

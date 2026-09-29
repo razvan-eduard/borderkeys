@@ -7,6 +7,7 @@ import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.predict.AnswerScratch
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.NativePredictor
+import com.borderkeys.predict.NewestWins
 import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.predict.RefusedWords
 import com.borderkeys.predict.answerRequest
@@ -102,7 +103,7 @@ internal class QueuedEngine(
     /** Drops the suggestion requests not yet served, and the swipe decode; the rest still runs. */
     override fun cancelPending() {
         tasks.removeAll { it.request }
-        gestureGeneration++
+        gestureRequests.cancel()
     }
 
     /** Receives each answer to [decodeGesture]. */
@@ -111,9 +112,9 @@ internal class QueuedEngine(
     /** Receives each answer to [decodeGesturePreview]. */
     var onGesturePreviewCandidates: (List<Candidate>) -> Unit = {}
 
-    /** Counts the swipe decodes asked for; an answer from an older one is dropped. */
-    private var gestureGeneration = 0
-    private var previewGeneration = 0
+    /** Numbers the swipe and preview decodes; one cancelled or superseded is dropped. */
+    private val gestureRequests = NewestWins()
+    private val previewRequests = NewestWins()
 
     override fun decodeGesture(
         xs: FloatArray,
@@ -126,12 +127,12 @@ internal class QueuedEngine(
         if (count < 2) {
             return
         }
-        val generation = ++gestureGeneration
+        val generation = gestureRequests.issue()
         val path = Path(xs.copyOf(count), ys.copyOf(count), timestamps.copyOf(count))
         tasks.addLast(
             Task(request = false) {
                 val found = decode(path, previous1, previous2)
-                if (generation == gestureGeneration) {
+                if (gestureRequests.isNewest(generation)) {
                     onGestureCandidates(found)
                 }
             },
@@ -149,12 +150,12 @@ internal class QueuedEngine(
         if (count < 2) {
             return
         }
-        val generation = ++previewGeneration
+        val generation = previewRequests.issue()
         val path = Path(xs.copyOf(count), ys.copyOf(count), timestamps.copyOf(count))
         tasks.addLast(
             Task(request = false) {
                 val found = decode(path, previous1, previous2)
-                if (generation == previewGeneration) {
+                if (previewRequests.isNewest(generation)) {
                     onGesturePreviewCandidates(found)
                 }
             },
@@ -162,11 +163,11 @@ internal class QueuedEngine(
     }
 
     override fun cancelPendingGesture() {
-        gestureGeneration++
+        gestureRequests.cancel()
     }
 
     override fun cancelPendingPreview() {
-        previewGeneration++
+        previewRequests.cancel()
     }
 
     /** A swipe's samples, copied when the decode is asked for. */
