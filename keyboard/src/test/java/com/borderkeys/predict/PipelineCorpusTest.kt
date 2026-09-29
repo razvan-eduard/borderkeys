@@ -54,6 +54,7 @@ class PipelineCorpusTest {
             }
             val tally = Tally()
             val pipeline = Pipeline.open(corpus.tag)
+            val readings = Pipeline.readings(corpus.file)
             try {
                 for (line in file.readLines()) {
                     if (line.isBlank() || line.startsWith("#")) {
@@ -62,6 +63,7 @@ class PipelineCorpusTest {
                     val typed = line.substringBefore('\t')
                     val expected = line.substringAfter('\t').substringBefore('\t')
                     val outcome = pipeline.commit(typed)
+                    readings?.println(pipeline.readingLine(outcome))
                     val committed = outcome.committed
                     tally.cases++
                     // Compared ignoring case.
@@ -80,6 +82,7 @@ class PipelineCorpusTest {
                     }
                 }
             } finally {
+                readings?.close()
                 pipeline.close()
             }
             report.append(

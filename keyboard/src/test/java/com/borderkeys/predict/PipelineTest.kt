@@ -25,8 +25,10 @@ class PipelineTest {
         val cases = readCases()
         assertTrue("no cases were read -- the payload is missing", cases.isNotEmpty())
 
+        val readings = Pipeline.readings("pipeline_cases.tsv")
         val failures = cases.mapNotNull { case ->
             val outcome = pipeline.commit(case.typed)
+            readings?.println(pipeline.readingLine(outcome))
             val committed = outcome.committed
             when {
                 committed != case.committed ->
@@ -38,6 +40,7 @@ class PipelineTest {
                 else -> null
             }
         }
+        readings?.close()
         assertTrue(
             "${failures.size} of ${cases.size} cases failed:\n" + failures.joinToString("\n"),
             failures.isEmpty(),
@@ -60,9 +63,11 @@ class PipelineTest {
     fun `every Romanian case commits what it should, for the reason it should`() {
         Pipeline.require()
         val romanian = Pipeline.open("ro-RO")
+        val readings = Pipeline.readings("pipeline_cases_ro.tsv")
         try {
             val failures = readCases("pipeline_cases_ro.tsv").mapNotNull { case ->
                 val outcome = romanian.commit(case.typed)
+                readings?.println(romanian.readingLine(outcome))
                 when {
                     outcome.committed != case.committed ->
                         "  ${case.typed}: expected ${describe(case.committed)}, " +
@@ -76,6 +81,7 @@ class PipelineTest {
             assertTrue("${failures.size} failed:\n" + failures.joinToString("\n"),
                        failures.isEmpty())
         } finally {
+            readings?.close()
             romanian.close()
         }
     }
@@ -151,6 +157,7 @@ class PipelineTest {
     fun `every case behaves the same when the first letter is capitalised`() {
         Pipeline.require()
         val romanian = Pipeline.open("ro-RO")
+        val readings = Pipeline.readings("pipeline_cases_capitalised.tsv")
         val failures = try {
             // Each payload against its own language's pipeline.
             val runs = readCases().map { it to pipeline } +
@@ -166,6 +173,7 @@ class PipelineTest {
                     return@mapNotNull null
                 }
                 val outcome = engine.commit(capitalised)
+                readings?.println(engine.readingLine(outcome))
                 if (outcome.committed != expected) {
                     "  $capitalised: expected ${describe(expected)}, " +
                         "committed ${describe(outcome.committed)}  [${outcome.reason}]"
@@ -174,6 +182,7 @@ class PipelineTest {
                 }
             }
         } finally {
+            readings?.close()
             romanian.close()
         }
         assertTrue(
