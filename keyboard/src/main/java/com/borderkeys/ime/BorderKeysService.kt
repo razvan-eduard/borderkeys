@@ -29,11 +29,6 @@ import androidx.autofill.inline.v1.InlineSuggestionUi
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.DictionaryRepository
 import com.borderkeys.data.KeyboardStats
-import com.borderkeys.data.LanguagePackRepository
-import com.borderkeys.data.decayed
-import com.borderkeys.predict.LanguagePackInspector
-import com.borderkeys.data.entity.LanguagePackEntry
-import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.draft.DraftProtocol
 import com.borderkeys.data.theme.EffectEvent
@@ -52,10 +47,8 @@ import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.ime.fx.applyParticleLayer
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.PredictionEngine
-import com.borderkeys.predict.RefusedWords
 import com.borderkeys.predict.ScoreExplanation
 import com.borderkeys.predict.SwipeModelLoad
-import com.borderkeys.predict.WordFold
 import com.borderkeys.theme.DynamicColors
 import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
@@ -76,7 +69,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import java.io.File
 import kotlin.math.hypot
 import com.borderkeys.i18n.LanguageManager
@@ -105,8 +97,6 @@ class BorderKeysService :
     private val learningJob = SupervisorJob()
     private val learningScope = CoroutineScope(learningJob + Dispatchers.IO)
 
-    /** Serialises [loadDictionaries]. */
-    private val dictionaryLoad = kotlinx.coroutines.sync.Mutex()
     private val paints = ThemePaints()
     private val engine = PredictionEngine()
 
@@ -148,17 +138,6 @@ class BorderKeysService :
     private var symbolsShiftLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var numpadLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
 
-    /** Diacritics for the enabled languages, merged onto the letter keys by [composedLayout]. */
-    private var accentOverlays: Map<Char, String> = emptyMap()
-
-    /** Distinguishes one enabled-language set from another in the compiled-geometry cache key. */
-    private var accentSignature: String = ""
-
-    /** The offensive-word lists of the enabled packs, merged and folded; see [OffensiveWords]. */
-    private var offensiveWords: Set<String> = emptySet()
-
-    /** The emoji panel's keywords for the languages switched on; see [EmojiKeywords]. */
-    private var emojiKeywords: Map<String, List<String>> = emptyMap()
 
     /** The tier B load in flight. */
     private var swipeModelJob: kotlinx.coroutines.Job? = null
@@ -436,6 +415,16 @@ class BorderKeysService :
         clock = typingClock,
     )
 
+    /** The language packs, the blocked words and the personal dictionary, loaded into [engine]. */
+    private val dictionaryLoader: DictionaryLoader by lazy {
+        DictionaryLoader(assets, engine, orchestrator, { preferences }) {
+            host?.let {
+                it.emojiPanel.keywords = dictionaryLoader.emojiKeywords
+                showPage(page)
+            }
+        }
+    }
+
     // ---- lifecycle ---------------------------------------------------------------------------
 
     /** Listens for the wallpaper changing, through the platform's own registerReceiver. */
@@ -474,7 +463,7 @@ class BorderKeysService :
             symbolsShiftLayout = LayoutLoader.load(assets, SYMBOLS_SHIFT_LAYOUT)
             numpadLayout = LayoutLoader.load(assets, NUMPAD_LAYOUT)
             // A failed load leaves the keyboard typing without dictionaries.
-            runCatching { loadDictionaries() }
+            runCatching { dictionaryLoader.load() }
                 .onFailure { error -> degradeWithoutDictionaries(error) }
             File(filesDir, LEGACY_USER_MODEL_SNAPSHOT).delete()
         }
@@ -486,18 +475,12 @@ class BorderKeysService :
 
     /**
      * Reloads the blocked words and the personal model after an edit on the Personal dictionary
-     * screen, under [dictionaryLoad].
+     * screen.
      */
     private fun observeDictionaryEdits() {
         scope.launch {
             DataGraph.dictionary.edits.collect {
-                withContext(Dispatchers.IO) {
-                    dictionaryLoad.withLock {
-                        val dictionary = DataGraph.dictionary
-                        refreshBlockedWords(dictionary)
-                        loadPersonalModel(dictionary)
-                    }
-                }
+                withContext(Dispatchers.IO) { dictionaryLoader.reloadPersonal() }
                 orchestrator.requestSuggestions()
             }
         }
@@ -558,113 +541,6 @@ class BorderKeysService :
         }
     }
 
-    /**
-     * Loads the enabled language packs, re-hashing each first, then the blocked words and the
-     * personal dictionary. A pack whose hash no longer matches is switched off.
-     */
-    private suspend fun loadDictionaries() {
-        dictionaryLoad.withLock {
-            val repository = DataGraph.languagePacks
-            reinstallOutdatedBundledPacks(repository)
-            repository.verifyEnabled()
-
-            // Heaviest first, cut to the engine's slots.
-            val everyEnabled = repository.enabledPacks()
-            val enabled = everyEnabled.take(LanguagePackRepository.MAX_ENABLED)
-            if (enabled.size < everyEnabled.size) {
-                android.util.Log.w(
-                    "BorderKeys",
-                    "${everyEnabled.size} packs enabled, loading the ${enabled.size} heaviest",
-                )
-            }
-
-            // The accents, offensive words, emoji keywords and contractions of the enabled packs.
-            accentOverlays = AccentOverlays.merge(enabled.map { AccentOverlays.load(assets, it.tag) })
-            accentSignature = enabled.joinToString(",") { it.tag }
-            orchestrator.languageTags = enabled.map { it.tag }
-            offensiveWords = OffensiveWords.merge(enabled.map { OffensiveWords.load(assets, it.tag) })
-            emojiKeywords = EmojiKeywords.load(assets, enabled.map { it.tag })
-            orchestrator.contractions = Contractions.of(
-                enabled.map { Contractions.load(assets, it.tag) },
-                enabled.map { it.tag },
-            )
-            withContext(Dispatchers.Main) {
-                host?.let {
-                    it.emojiPanel.keywords = emojiKeywords
-                    showPage(page)
-                }
-            }
-
-            // The set is sent before the packs load, to free the slots of packs no longer named,
-            // and again after; also when it is empty.
-            val tags = Array(enabled.size) { enabled[it].tag }
-            val weights = FloatArray(enabled.size) { enabled[it].weight }
-            engine.setActiveLanguages(tags, weights)
-            for (entry in enabled) {
-                val file = repository.fileFor(entry)
-                if (!file.isFile) {
-                    continue
-                }
-                runCatching {
-                    val descriptor = android.content.res.AssetFileDescriptor(
-                        android.os.ParcelFileDescriptor.open(
-                            file, android.os.ParcelFileDescriptor.MODE_READ_ONLY,
-                        ),
-                        0L,
-                        file.length(),
-                    )
-                    engine.loadLanguage(entry.tag, descriptor, entry.weight)
-                }
-            }
-            engine.setActiveLanguages(tags, weights)
-
-            val dictionary = DataGraph.dictionary
-            refreshBlockedWords(dictionary)
-            loadPersonalModel(dictionary)
-        }
-    }
-
-    /**
-     * Pushes the blocked words to the engine, which treats them as absent from every dictionary,
-     * and them and the offensive words, while their switch is on, to the engine's filter and to
-     * the learning buffer.
-     */
-    private suspend fun refreshBlockedWords(dictionary: DictionaryRepository) {
-        val blocked = dictionary.blockedWordSet()
-        val refused = RefusedWords.of(
-            blocked,
-            if (preferences.blockOffensiveWords) offensiveWords else emptySet(),
-        )
-        engine.setBlockedWords(blocked)
-        engine.setRefusedWords(refused)
-        orchestrator.setRefusedWords(refused)
-    }
-
-    /**
-     * Pushes the personal dictionary into the native model, each entry decayed for how long it
-     * has sat unused.
-     */
-    private suspend fun loadPersonalModel(dictionary: DictionaryRepository) {
-        val now = System.currentTimeMillis()
-        // With the offensive-word switch on, words, pairs and triples that contain an offensive
-        // word are left out.
-        val hidden = if (preferences.blockOffensiveWords) offensiveWords else emptySet()
-        fun shown(word: String) = hidden.isEmpty() || WordFold.fold(word) !in hidden
-        engine.loadUserWords(
-            dictionary.topWords().filter { shown(it.word) }.map { it.decayed(now) },
-        )
-        engine.loadUserBigrams(
-            dictionary.topBigrams()
-                .filter { shown(it.previousWord) && shown(it.word) }
-                .map { it.decayed(now) },
-        )
-        engine.loadUserTrigrams(
-            dictionary.topTrigrams()
-                .filter { shown(it.previousWord2) && shown(it.previousWord1) && shown(it.word) }
-                .map { it.decayed(now) },
-        )
-    }
-
     /** Carries on without dictionaries: no prediction, correction or learning. */
     private fun degradeWithoutDictionaries(error: Throwable) {
         android.util.Log.e("BorderKeys", "starting without dictionaries", error)
@@ -695,7 +571,7 @@ class BorderKeysService :
                         host?.let { showPage(page) }
                         return@collect
                     }
-                    runCatching { withContext(Dispatchers.IO) { loadDictionaries() } }
+                    runCatching { withContext(Dispatchers.IO) { dictionaryLoader.load() } }
                         .onFailure { error ->
                             android.util.Log.e("BorderKeys", "reloading packs failed", error)
                         }
@@ -727,13 +603,8 @@ class BorderKeysService :
                 }
                 particleEffects = newParticleEffects
                 if (offensiveSwitchFlipped) {
-                    // Rebuilds the refused words and the personal model under [dictionaryLoad].
                     scope.launch(Dispatchers.IO) {
-                        dictionaryLoad.withLock {
-                            val dictionary = DataGraph.dictionary
-                            refreshBlockedWords(dictionary)
-                            loadPersonalModel(dictionary)
-                        }
+                        dictionaryLoader.reloadPersonal()
                         withContext(Dispatchers.Main) { orchestrator.requestSuggestions() }
                     }
                 }
@@ -881,7 +752,7 @@ class BorderKeysService :
         view.radialSuggestionMenu.listener = this
         view.emojiPanel.listener = EmojiPanelView.Listener { emoji -> onEmojiPicked(emoji) }
         view.emojiPanel.recents = preferences.emojiRecents
-        view.emojiPanel.keywords = emojiKeywords
+        view.emojiPanel.keywords = dictionaryLoader.emojiKeywords
         applyQuickActions(view)
         view.onMoveToOtherSide = { moveKeyboardToOtherSide() }
         view.onResizeDrag = { height, width, offset -> previewResize(height, width, offset) }
@@ -1473,8 +1344,9 @@ class BorderKeysService :
      */
     private fun composedLayout(layout: KeyboardLayout, allowNumberRow: Boolean = true): KeyboardLayout {
         var result = layout
-        if (preferences.accentedCharacters && accentOverlays.isNotEmpty()) {
-            result = result.withAccents(accentOverlays, accentSignature)
+        val accents = dictionaryLoader.accentOverlays
+        if (preferences.accentedCharacters && accents.isNotEmpty()) {
+            result = result.withAccents(accents, dictionaryLoader.accentSignature)
         }
         // The top letter row hints digits, or symbols once the number row holds the digits.
         result = if (preferences.numberRow && allowNumberRow) {
@@ -1746,9 +1618,9 @@ class BorderKeysService :
                 dictionary.forget(personal.word)
             } else if (blockWhenNotPersonal) {
                 dictionary.block(word.lowercase())
-                refreshBlockedWords(dictionary)
+                dictionaryLoader.refreshBlockedWords(dictionary)
             }
-            loadPersonalModel(dictionary)
+            dictionaryLoader.loadPersonalModel(dictionary)
             orchestrator.requestSuggestions()
         }
     }
@@ -1819,92 +1691,6 @@ class BorderKeysService :
         }
         clipboardManager?.removePrimaryClipChangedListener(clipboardListener)
         clipboardListenerRegistered = false
-    }
-
-    /**
-     * Replaces bundled packs that this build cannot read or ships a different edition of, from
-     * the assets. Imported packs are left alone. Failures are logged.
-     */
-    private suspend fun reinstallOutdatedBundledPacks(
-        repository: com.borderkeys.data.LanguagePackRepository,
-    ) {
-        runCatching { repairBundledPacks(repository) }
-            .onFailure { android.util.Log.w("BorderKeys", "pack repair failed", it) }
-    }
-
-    /** The pack files [LanguagePackInspector] has accepted in this process, as `path:sha256`. */
-    private val readablePacks = HashSet<String>()
-
-    private fun packReadable(file: File, sha256: String): Boolean {
-        val key = "${file.path}:$sha256"
-        if (key in readablePacks) {
-            return true
-        }
-        val readable = LanguagePackInspector.inspect(file) is LanguagePackInspector.Result.Valid
-        if (readable) {
-            readablePacks += key
-        }
-        return readable
-    }
-
-    private suspend fun repairBundledPacks(
-        repository: com.borderkeys.data.LanguagePackRepository,
-    ) {
-        for (entry in repository.allPacks()) {
-            val bundled = BundledDictionaries.ALL.firstOrNull { it.tag == entry.tag } ?: continue
-            val file = repository.fileFor(entry)
-            // Stale: missing, unreadable, not matching its hash, or a different edition than the
-            // shipped one by content CRC, word count or size.
-            val shipped = runCatching {
-                BundledDictionaries.open(assets, bundled).use { BundledDictionaries.contentCrc(it) }
-            }.getOrNull()
-            val installed = runCatching {
-                file.inputStream().use { BundledDictionaries.contentCrc(it) }
-            }.getOrNull()
-            val stale = !file.isFile ||
-                shipped == null || shipped != installed ||
-                entry.wordCount != bundled.wordCount ||
-                entry.sizeBytes != bundled.sizeBytes ||
-                runCatching { repository.cachedSha256(file) }.getOrNull() != entry.sha256 ||
-                !packReadable(file, entry.sha256)
-            if (!stale) {
-                continue
-            }
-            val staged = runCatching {
-                BundledDictionaries.open(assets, bundled).use { stream ->
-                    repository.stage(stream, bundled.fileName)
-                }
-            }.getOrNull()?.getOrNull() ?: continue
-
-            val checked = LanguagePackInspector.inspect(staged.file)
-            if (checked !is LanguagePackInspector.Result.Valid) {
-                staged.file.delete()
-                continue
-            }
-            readablePacks += "${staged.file.path}:${staged.sha256}"
-            repository.replace(
-                LanguagePackEntry(
-                    id = entry.id,
-                    tag = checked.info.tag,
-                    displayName = entry.displayName,
-                    fileName = staged.file.name,
-                    formatVersion = checked.info.formatVersion,
-                    wordCount = checked.info.wordCount,
-                    sizeBytes = staged.sizeBytes,
-                    sha256 = staged.sha256,
-                    importedAt = System.currentTimeMillis(),
-                    // Switched back on only where an integrity failure switched it off.
-                    enabled = entry.enabled || entry.integrityFailedAt != null,
-                    weight = entry.weight,
-                    integrityFailedAt = null,
-                    licenseNote = entry.licenseNote,
-                ),
-            )
-            android.util.Log.i(
-                "BorderKeys",
-                "replaced the bundled ${entry.tag} pack: unreadable by this build, or an older edition than it ships",
-            )
-        }
     }
 
     // ---- quick actions --------------------------------------------------------------------
