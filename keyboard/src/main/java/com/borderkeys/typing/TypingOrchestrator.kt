@@ -6,8 +6,6 @@ package com.borderkeys.typing
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import com.borderkeys.data.KeyboardStats
-import com.borderkeys.data.dao.LearnedWord
-import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.AutoCorrection
@@ -25,7 +23,6 @@ import com.borderkeys.ime.ShiftState
 import com.borderkeys.ime.SuggestionRow
 import com.borderkeys.ime.WordCommit
 import com.borderkeys.predict.Candidate
-import com.borderkeys.predict.LearningBuffer
 import com.borderkeys.predict.RefusedWords
 
 /**
@@ -39,9 +36,12 @@ class TypingOrchestrator(
     private val currentEditor: () -> FieldEditor?,
     private val engine: EnginePort,
     private val host: TypingHost,
-    private val store: LearningStore,
+    store: LearningStore,
     private val clock: TypingClock,
 ) {
+    /** What is learned from typing, and the gate on it. */
+    private val learningFlow = LearningFlow(engine, host, store, clock)
+
     var preferences = KeyboardPreferences()
         private set
 
@@ -114,8 +114,6 @@ class TypingOrchestrator(
     private var autoLockedShift = false
     private var lastShiftPressAt = 0L
 
-    private val flushLearningRunnable = Runnable { flushLearning() }
-
     /** Uptime of the keystroke the engine was last asked about, for the strip latency figure. */
     private var suggestionsRequestedAt = 0L
 
@@ -148,9 +146,6 @@ class TypingOrchestrator(
     /** Finds the words that look wrong once the conversation's language has changed. */
     private val languageSwitchCorrector = LanguageSwitchCorrector()
 
-    /** What is learned, until it is written to the [store]. */
-    private val learning = LearningBuffer()
-
     /** Where the typed word and the word a delimiter would apply end up on the strip. */
     private val suggestionRow = SuggestionRow()
 
@@ -167,10 +162,8 @@ class TypingOrchestrator(
     fun startField(field: FieldSession) {
         session = field
         terminalWord.setLength(0)
-        applyLearningGate()
-        if (session.policy.privateField) {
-            learning.discard()
-        }
+        session = session.copy(policy = session.policy.withLearning(preferences.learningEnabled))
+        learningFlow.startField(session)
         // Each field starts with shift and caps lock off.
         shiftHeldByUser = false
         userReleasedAutoLock = false
@@ -187,7 +180,7 @@ class TypingOrchestrator(
 
     /** The field closed: what was learned is written, and the pending requests and the word go. */
     fun finishField() {
-        flushLearning()
+        learningFlow.finishField()
         engine.cancelPending()
         resetComposing()
     }
@@ -196,24 +189,25 @@ class TypingOrchestrator(
     fun applySettings(settings: KeyboardPreferences) {
         preferences = settings
         if (host.viewAttached) {
-            applyLearningGate(settings)
+            session = session.copy(policy = session.policy.withLearning(settings.learningEnabled))
+            learningFlow.applySettings(settings)
             applyAutoShift()
         }
     }
 
     /** The last flush: writes what is left and waits, a bounded time, for the writes in flight. */
     fun shutdown() {
-        store.persistBeforeShutdown(drainLearning())
+        learningFlow.shutdown()
     }
 
     /** Sets the words never learned. */
     fun setRefusedWords(words: RefusedWords) {
-        learning.setRefusedWords(words)
+        learningFlow.setRefusedWords(words)
     }
 
     /** Learns nothing until the learning gate is next set, at a field start or a settings change. */
     fun stopLearning() {
-        learning.enabled = false
+        learningFlow.stop()
     }
 
     /**
@@ -499,7 +493,7 @@ class TypingOrchestrator(
                 editor.commitText(" ", 1)
                 editor.endBatchEdit()
                 if (finished != null) {
-                    recordLearned(finished, contextWord, grandContextWord, composingWord.capitalisedByUser)
+                    learningFlow.record(finished, contextWord, grandContextWord, composingWord.capitalisedByUser)
                 }
                 checkpointField()
                 composingWord.capitalisedByUser = heldByUser && Character.isUpperCase(shifted)
@@ -604,7 +598,7 @@ class TypingOrchestrator(
             }
         } else {
             if (typed.isNotEmpty()) {
-                recordLearned(typed, contextWord, grandContextWord, composingWord.capitalisedByUser)
+                learningFlow.record(typed, contextWord, grandContextWord, composingWord.capitalisedByUser)
             }
             pendingCorrection = null
         }
@@ -726,7 +720,7 @@ class TypingOrchestrator(
             afterNewlineCommitted()
         }
         if (finished != null) {
-            recordLearned(finished, contextWord, grandContextWord, composingWord.capitalisedByUser)
+            learningFlow.record(finished, contextWord, grandContextWord, composingWord.capitalisedByUser)
         }
         // Enter clears the context for the next word.
         wordContext = WordContext.NONE
@@ -792,7 +786,7 @@ class TypingOrchestrator(
         val finished = finishComposing(editor)
         editor.endBatchEdit()
         if (finished != null) {
-            recordLearned(finished, contextWord, grandContextWord, composingWord.capitalisedByUser)
+            learningFlow.record(finished, contextWord, grandContextWord, composingWord.capitalisedByUser)
         }
     }
 
@@ -1077,7 +1071,7 @@ class TypingOrchestrator(
         if (!pending.learn) {
             return
         }
-        recordLearned(
+        learningFlow.record(
             pending.corrected, pending.contextWord, pending.grandContextWord,
             pending.deliberateCapital,
         )
@@ -1135,7 +1129,7 @@ class TypingOrchestrator(
         if (viaBackspace && !preferences.revertCorrectionOnBackspace) {
             // An ordinary backspace confirms the correction.
             if (pending.learn) {
-                recordLearned(
+                learningFlow.record(
                     pending.corrected, pending.contextWord, pending.grandContextWord,
                     pending.deliberateCapital,
                 )
@@ -1146,7 +1140,7 @@ class TypingOrchestrator(
         val before = editor.textBeforeCursor(committed.length)
         if (before == null || before.toString() != committed) {
             // The text before the caret changed: the correction stands and is learned.
-            recordLearned(
+            learningFlow.record(
                 pending.corrected, pending.contextWord, pending.grandContextWord,
                 pending.deliberateCapital,
             )
@@ -1159,7 +1153,7 @@ class TypingOrchestrator(
         wordContext = wordContext.copy(previous1 = pending.typed)
         // The typed word is learned as asserted; the rejected correction is forgotten from the
         // personal dictionary, never blocked.
-        recordLearned(
+        learningFlow.record(
             pending.typed, pending.contextWord, pending.grandContextWord,
             pending.deliberateCapital, asserted = true,
         )
@@ -1303,7 +1297,7 @@ class TypingOrchestrator(
         var previous = contextWord
         var grandPrevious = grandContextWord
         for (part in words) {
-            recordLearned(part, previous, grandPrevious, asserted = true)
+            learningFlow.record(part, previous, grandPrevious, asserted = true)
             grandPrevious = previous
             previous = part
         }
@@ -1810,79 +1804,6 @@ class TypingOrchestrator(
         )
     }
 
-    // ---- learning ------------------------------------------------------------------------------
-
-    /**
-     * Whether anything is learned, and whether the personal dictionary is consulted: off with the
-     * learning switch or in a private field.
-     */
-    private fun applyLearningGate(preferences: KeyboardPreferences = this.preferences) {
-        session = session.copy(
-            policy = session.policy.withLearning(preferences.learningEnabled),
-        )
-        learning.enabled = session.policy.personalAllowed
-        engine.setPersonalModelEnabled(learning.enabled)
-    }
-
-    /**
-     * Records a confirmed word, and the pair and triple it makes with [contextWord] and
-     * [grandContextWord], read before the commit. [deliberateCapital] is whether its capital was
-     * typed with shift; [asserted] whether the user chose it on purpose.
-     */
-    private fun recordLearned(
-        word: String,
-        contextWord: String?,
-        grandContextWord: String?,
-        deliberateCapital: Boolean = false,
-        asserted: Boolean = false,
-    ) {
-        if (!learning.enabled || word.length < MIN_LEARNED_LENGTH) {
-            return
-        }
-        // The input-method subtype's tag, recorded with the word.
-        val locale = host.subtypeTag()
-        val now = clock.currentTimeMillis()
-        // A word with nothing before it is paired with the sentence start.
-        val pairContext = contextWord ?: UserBigram.SENTENCE_START
-        learning.recordPair(pairContext, word, now)
-        if (contextWord != null && grandContextWord != null) {
-            learning.recordTriple(grandContextWord, contextWord, word, now)
-        }
-        if (learning.record(word, locale, now, deliberateCapital, asserted)) {
-            host.playEffect(EffectEvent.LearnedWord, word)
-            engine.learn(
-                listOf(LearnedWord(word, locale, 1, now, deliberateCapital, asserted)),
-                pairContext, grandContextWord,
-            )
-        }
-        if (!host.viewAttached) {
-            return
-        }
-        host.removeCallbacks(flushLearningRunnable)
-        if (learning.isDue(clock.currentTimeMillis())) {
-            flushLearning()
-        } else {
-            host.postDelayed(flushLearningRunnable, LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        }
-    }
-
-    /** Writes the buffered learning to the [store]. */
-    private fun flushLearning() {
-        val batch = drainLearning() ?: return
-        store.persist(batch)
-    }
-
-    /** Empties [learning], or returns null when there was nothing in it. */
-    private fun drainLearning(): LearningBatch? {
-        val updates = learning.drain()
-        val pairs = learning.drainPairs()
-        val triples = learning.drainTriples()
-        if (updates.isEmpty() && pairs.isEmpty() && triples.isEmpty()) {
-            return null
-        }
-        return LearningBatch(updates, pairs, triples)
-    }
-
     companion object {
         const val CONTEXT_WINDOW_CHARS = 64
 
@@ -1893,8 +1814,6 @@ class TypingOrchestrator(
         const val DOUBLE_SPACE_MILLIS = 1200L
 
         const val DOUBLE_TAP_MILLIS = 400L
-
-        const val MIN_LEARNED_LENGTH = 2
 
         /** The characters a swiped word follows without a space; see [spaceBeforeSwipedWord]. */
         const val SWIPE_NO_SPACE_AFTER = "([{\"'/-_@#\n"
