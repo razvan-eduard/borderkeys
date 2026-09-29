@@ -1188,11 +1188,17 @@ class TypingOrchestrator(
         checkpointField()
     }
 
-    /** Puts the field back one step. */
-    fun undo() = restoreFieldVersion(fieldHistory.back())
+    /** Puts the field back one step; what was typed since the last step is a step of its own. */
+    fun undo() {
+        checkpointField()
+        restoreFieldVersion(fieldHistory.back())
+    }
 
-    /** Puts the field forward one step, after [undo]. */
-    fun redo() = restoreFieldVersion(fieldHistory.forward())
+    /** Puts the field forward one step, after [undo]; text typed since the undo stays. */
+    fun redo() {
+        checkpointField()
+        restoreFieldVersion(fieldHistory.forward())
+    }
 
     /**
      * Puts the field back to [target], editing only the span where the live text differs; see
