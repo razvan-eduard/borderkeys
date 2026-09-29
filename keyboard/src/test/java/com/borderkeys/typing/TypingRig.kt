@@ -90,6 +90,13 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
         settle()
     }
 
+    /** Presses the key [code], the one at [keyIndex], chosen at ([x], [y]), and settles. */
+    fun tap(code: Int, keyIndex: Int, x: Float, y: Float) {
+        clock.advance(KEY_INTERVAL_MILLIS)
+        orchestrator.onKey(code, keyIndex, x, y)
+        settle()
+    }
+
     /** Holds the key [code] down until its long press fires, and settles. */
     fun longPress(code: Int) {
         clock.advance(KEY_INTERVAL_MILLIS)
@@ -138,7 +145,11 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
             if (engine.serveNext() || host.runDue()) {
                 continue
             }
-            return
+            break
+        }
+        val word = orchestrator.composingText
+        check(orchestrator.taps.size == word.codePointCount(0, word.length)) {
+            "'$word' has ${orchestrator.taps.size} taps"
         }
     }
 

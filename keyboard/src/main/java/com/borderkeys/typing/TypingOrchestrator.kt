@@ -92,6 +92,12 @@ class TypingOrchestrator(
     /** The word being written. */
     val composingText: String get() = composing.toString()
 
+    /** Where each code point of the word being written was typed. */
+    internal val taps: TapTrail get() = composingWord.taps
+
+    /** The letter keys as the taps land on them, for the current field and layout. */
+    var keyGeometry: KeyGeometrySnapshot? = null
+
     /** The editor's selection, as of the last report, [selectionStart] never after [selectionEnd]. */
     var selectionStart = 0
         private set
@@ -218,11 +224,17 @@ class TypingOrchestrator(
     // ---- keys --------------------------------------------------------------------------------
 
     /**
-     * A key press. Every key but backspace confirms a pending correction and closes the ring
-     * first. Returns false for a key left to the caller: pages, panels, the globe and the
+     * A key press, the key at [keyIndex] chosen at ([x], [y]) in the keyboard view's pixels, NaN
+     * when no tap chose it. Every key but backspace confirms a pending correction and closes the
+     * ring first. Returns false for a key left to the caller: pages, panels, the globe and the
      * modifier keys.
      */
-    fun onKey(code: Int): Boolean {
+    fun onKey(
+        code: Int,
+        keyIndex: Int = TapTrail.NO_KEY,
+        x: Float = Float.NaN,
+        y: Float = Float.NaN,
+    ): Boolean {
         if (code != KeyCodes.DELETE) {
             confirmPendingCorrection()
             dismissRing()
@@ -238,7 +250,11 @@ class TypingOrchestrator(
                 handleNavigationKey(code)
             KeyCodes.FORWARD_DELETE -> handleHardwareKey(KeyEvent.KEYCODE_FORWARD_DEL)
             KeyCodes.INSERT -> handleHardwareKey(KeyEvent.KEYCODE_INSERT)
-            else -> if (KeyCodes.isCharacter(code)) handleCharacter(code) else return false
+            else -> if (KeyCodes.isCharacter(code)) {
+                handleCharacter(code, keyIndex, x, y)
+            } else {
+                return false
+            }
         }
         return true
     }
@@ -387,7 +403,7 @@ class TypingOrchestrator(
         requestSuggestions()
     }
 
-    private fun handleCharacter(code: Int) {
+    private fun handleCharacter(code: Int, keyIndex: Int, x: Float, y: Float) {
         val editor = currentEditor() ?: return
         KeyboardStats.keystrokes++
         KeyboardStats.input(clock.uptimeMillis())
@@ -445,7 +461,7 @@ class TypingOrchestrator(
                 checkpointField()
                 composingWord.capitalisedByUser = heldByUser && Character.isUpperCase(shifted)
             }
-            composing.appendCodePoint(shifted)
+            composingWord.append(shifted, keyIndex, x, y)
             editor.setComposingText(composing, 1)
             requestSuggestions()
             return
@@ -487,7 +503,7 @@ class TypingOrchestrator(
         val delimiter = String(Character.toChars(shifted)) + spacingFlow.spaceAfterMark(shifted, editor)
         if (correction != null) {
             // commitText replaces the composing region with the correction.
-            composing.setLength(0)
+            composingWord.clear()
             editor.commitText(correction + delimiter, 1)
             host.playEffect(EffectEvent.AutocorrectApplied, correction)
         } else {
@@ -538,7 +554,7 @@ class TypingOrchestrator(
         val hasSelection = selectionEnd > selectionStart
         // A selection is deleted whole, by committing empty text over it.
         if (hasSelection) {
-            composing.setLength(0)
+            composingWord.clear()
             composingWord.fromGesture = false
             confirmPendingCorrection()
             editor.commitText("", 1)
@@ -567,10 +583,7 @@ class TypingOrchestrator(
         if (composing.isNotEmpty()) {
             // After a backspace, typed letters extend a swiped word.
             composingWord.fromGesture = false
-            // Deletes one code point.
-            val length = composing.length
-            val start = composing.offsetByCodePoints(length, -1)
-            composing.setLength(start)
+            composingWord.deleteLast()
             editor.setComposingText(composing, 1)
             if (composing.isEmpty()) {
                 applyAutoShift()
@@ -899,8 +912,8 @@ class TypingOrchestrator(
         val best = cased.first().text
         editor.beginBatchEdit()
         spaceBeforeSwipedWord(editor)
-        composing.setLength(0)
-        composing.append(best)
+        composingWord.clear()
+        composingWord.appendUntapped(best)
         editor.setComposingText(composing, 1)
         editor.endBatchEdit()
         composingWord.fromGesture = true
@@ -932,7 +945,7 @@ class TypingOrchestrator(
             }
             editor.endBatchEdit()
         }
-        composing.setLength(0)
+        composingWord.clear()
         composingWord.fromGesture = false
         composingWord.autoSpaceBefore = false
         host.clearStrip()
@@ -1174,8 +1187,8 @@ class TypingOrchestrator(
                 editor.deleteSurroundingText(lastQuery.length, 0)
             }
         }
-        composing.setLength(0)
-        composing.append(word)
+        composingWord.clear()
+        composingWord.appendUntapped(word)
         // A replacing pick also deletes the rest of the word after the caret.
         val after = editor.textAfterCursor(CONTEXT_WINDOW_CHARS)
         var tail = 0
@@ -1215,7 +1228,7 @@ class TypingOrchestrator(
             previous1 = words.lastOrNull() ?: word,
             previous2 = if (words.size >= 2) words[words.size - 2] else wordContext.previous1,
         )
-        composing.setLength(0)
+        composingWord.clear()
         host.clearStrip()
         checkpointField()
         applyAutoShift()
@@ -1338,7 +1351,7 @@ class TypingOrchestrator(
         }
         val word = composing.toString()
         editor.finishComposingText()
-        composing.setLength(0)
+        composingWord.clear()
         wordContext = wordContext.then(word)
         KeyboardStats.words++
         return word
@@ -1359,7 +1372,7 @@ class TypingOrchestrator(
         host.onWordReset()
         commitFlow.dropPending()
         suggestionFlow.clearAnswer()
-        composing.setLength(0)
+        composingWord.clear()
         terminalWriter.clearWord()
         composingWord.runningText = true
         composingWord.fromGesture = false
@@ -1399,7 +1412,7 @@ class TypingOrchestrator(
     }
 
     private fun adoptWordAtCaretNow() {
-        composing.setLength(0)
+        composingWord.clear()
         composingWord.fromGesture = false
         composingWord.autoSpaceBefore = false
         composingWord.capitalisedByUser = false
@@ -1426,7 +1439,7 @@ class TypingOrchestrator(
         val (context1, context2) = contextWordsBefore(before, start)
         wordContext = WordContext(context1, context2)
         if (partial.isNotEmpty()) {
-            composing.append(partial)
+            composingWord.appendUntapped(partial)
             val caret = selectionEnd
             editor.setComposingRegion(caret - partial.length, caret)
         }
@@ -1488,7 +1501,7 @@ class TypingOrchestrator(
             checkpointField()
             return
         }
-        composing.setLength(0)
+        composingWord.clear()
         editor.finishComposingText()
         val before = editor.textBeforeCursor(CONTEXT_WINDOW_CHARS)
         if (before.isNullOrEmpty()) {
