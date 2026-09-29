@@ -45,7 +45,7 @@ class SettingsIndexTest {
     fun `a word finds the card that carries it, under its screen`() {
         val match = SettingsSearch.find("phrases", ::text).single { it.screen == Screen.Dictionary }
         assertEquals("Learned phrases", match.title)
-        assertEquals(text(Keys.SCREEN_PERSONAL_DICTIONARY), match.place)
+        assertEquals(text(Keys.SCREEN_DICTIONARY_AND_HEATMAP), match.place)
     }
 
     @Test

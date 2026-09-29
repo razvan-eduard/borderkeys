@@ -12,6 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.borderkeys.data.dao.AssistModelDao
 import com.borderkeys.data.dao.BlockedWordDao
 import com.borderkeys.data.dao.ClipboardDao
+import com.borderkeys.data.dao.KeyTouchDao
 import com.borderkeys.data.dao.LanguagePackDao
 import com.borderkeys.data.dao.UserBigramDao
 import com.borderkeys.data.dao.UserTrigramDao
@@ -19,6 +20,7 @@ import com.borderkeys.data.dao.UserWordDao
 import com.borderkeys.data.entity.AssistModelEntry
 import com.borderkeys.data.entity.BlockedWord
 import com.borderkeys.data.entity.ClipEntry
+import com.borderkeys.data.entity.KeyTouch
 import com.borderkeys.data.entity.LanguagePackEntry
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserTrigram
@@ -36,8 +38,9 @@ import java.util.Arrays
         AssistModelEntry::class,
         UserBigram::class,
         UserTrigram::class,
+        KeyTouch::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class BorderKeysDatabase : RoomDatabase() {
@@ -49,6 +52,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
     abstract fun assistModelDao(): AssistModelDao
     abstract fun userBigramDao(): UserBigramDao
     abstract fun userTrigramDao(): UserTrigramDao
+    abstract fun keyTouchDao(): KeyTouchDao
 
     companion object {
         private const val DATABASE_NAME = "borderkeys.db"
@@ -168,6 +172,31 @@ abstract class BorderKeysDatabase : RoomDatabase() {
             }
         }
 
+        /** Version 7 to 8: where taps land on each key, [KeyTouch]. Additive. */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `key_touches` (
+                        `bucket` TEXT NOT NULL,
+                        `code` INTEGER NOT NULL,
+                        `taps` REAL NOT NULL,
+                        `sumX` REAL NOT NULL,
+                        `sumY` REAL NOT NULL,
+                        `sumXX` REAL NOT NULL,
+                        `sumYY` REAL NOT NULL,
+                        `sumXY` REAL NOT NULL,
+                        `keyWidthPx` REAL NOT NULL,
+                        `keyHeightPx` REAL NOT NULL,
+                        `density` REAL NOT NULL,
+                        `lastUsedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`bucket`, `code`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun open(context: Context): BorderKeysDatabase {
             // sqlcipher-android 4.x does not load its own library.
             System.loadLibrary("sqlcipher")
@@ -185,7 +214,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
                 .openHelperFactory(factory)
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-                    MIGRATION_6_7,
+                    MIGRATION_6_7, MIGRATION_7_8,
                 )
                 // The ":assist" process opens this database too.
                 .enableMultiInstanceInvalidation()

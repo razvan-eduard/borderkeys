@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -35,6 +36,8 @@ import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.TextShortcut
+import com.borderkeys.settings.DefaultableSlider
+import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingsSectionCard
@@ -45,6 +48,7 @@ import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /** What this device has learned, with a CSV export and import. */
 @Composable
@@ -57,6 +61,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     var message by remember { mutableStateOf<String?>(null) }
     var confirmingForgetAll by remember { mutableStateOf(false) }
     var confirmingLearningOff by remember { mutableStateOf(false) }
+    var confirmingHeatmapOff by remember { mutableStateOf(false) }
 
     val words by (if (query.isBlank()) repository.words else repository.search(query))
         .collectAsStateWithLifecycle(initialValue = emptyList())
@@ -65,6 +70,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     val triples by repository.topTriplesLive().collectAsStateWithLifecycle(initialValue = emptyList())
     val pairCount by repository.pairCount.collectAsStateWithLifecycle(initialValue = 0)
     val tripleCount by repository.tripleCount.collectAsStateWithLifecycle(initialValue = 0)
+    val touchTaps by repository.touchTaps.collectAsStateWithLifecycle(initialValue = 0)
 
     val exporter = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv"),
@@ -114,9 +120,9 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SettingsSectionCard(strings[Keys.DICTIONARY_HOW_QUICKLY_IT_LEARNS]) {
+        SettingsSectionCard(strings[Keys.DICTIONARY_LEARN_FROM_TYPING]) {
             SwitchRow(
-                title = strings[Keys.DICTIONARY_LEARN_AT_ALL],
+                title = strings[Keys.DICTIONARY_LEARNING],
                 subtitle = strings[Keys.DICTIONARY_OFF_MEANS_NOTHING_NEW_IS_RECORDED],
                 checked = preferences.learningEnabled,
             ) { value ->
@@ -157,6 +163,97 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                             strings[Keys.DICTIONARY_A_PHRASE_WRITTEN_TWICE_STARTS_TO]
                     },
                 )
+            }
+        }
+        // Where the taps land on each key; greyed, not hidden, while Learning is off.
+        SettingsSectionCard(strings[Keys.DICTIONARY_HEATMAP]) {
+            val learning = preferences.learningEnabled
+            val heatmapOn = learning && preferences.heatmapEnabled
+            if (!learning) {
+                Explanation(strings[Keys.DICTIONARY_HEATMAP_NEEDS_LEARNING])
+            }
+            Disableable(disabled = !learning) {
+                SwitchRow(
+                    title = strings[Keys.DICTIONARY_HEATMAP],
+                    subtitle = strings[Keys.DICTIONARY_HEATMAP_NOTE],
+                    checked = preferences.heatmapEnabled,
+                    enabled = learning,
+                ) { value ->
+                    if (value) {
+                        update { it.copy(heatmapEnabled = true) }
+                    } else {
+                        confirmingHeatmapOff = true
+                    }
+                }
+                SettingRow(
+                    title = if (touchTaps > 0) {
+                        strings.getString(Keys.DICTIONARY_HEATMAP_TAPS, touchTaps)
+                    } else {
+                        strings[Keys.DICTIONARY_HEATMAP_NOTHING_YET]
+                    },
+                )
+                AdvancedSection(strings[Keys.DICTIONARY_HEATMAP_ADVANCED_NOTE]) {
+                    Text(
+                        strings[Keys.DICTIONARY_HEATMAP_WEIGHT],
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    )
+                    DefaultableSlider(
+                        label = strings.getString(
+                            Keys.CORRECTIONS_TIMES_THE_DEFAULT,
+                            "%.1f".format(preferences.heatmapWeight),
+                        ),
+                        value = preferences.heatmapWeight,
+                        range = KeyboardPreferences.MIN_HEATMAP_WEIGHT..
+                            KeyboardPreferences.MAX_HEATMAP_WEIGHT,
+                        default = KeyboardPreferences.DEFAULT_HEATMAP_WEIGHT,
+                        enabled = heatmapOn,
+                    ) { value -> update { it.copy(heatmapWeight = value) } }
+                    Explanation(strings[Keys.DICTIONARY_HEATMAP_WEIGHT_NOTE])
+                    Text(
+                        strings[Keys.DICTIONARY_HEATMAP_MIN_TAPS],
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    )
+                    DefaultableSlider(
+                        label = strings.getString(
+                            Keys.DICTIONARY_HEATMAP_TAPS_COUNT,
+                            preferences.heatmapMinTaps,
+                        ),
+                        value = preferences.heatmapMinTaps.toFloat(),
+                        range = KeyboardPreferences.MIN_HEATMAP_MIN_TAPS.toFloat()..
+                            KeyboardPreferences.MAX_HEATMAP_MIN_TAPS.toFloat(),
+                        default = KeyboardPreferences.DEFAULT_HEATMAP_MIN_TAPS.toFloat(),
+                        steps = (KeyboardPreferences.MAX_HEATMAP_MIN_TAPS -
+                            KeyboardPreferences.MIN_HEATMAP_MIN_TAPS) /
+                            KeyboardPreferences.HEATMAP_MIN_TAPS_STEP - 1,
+                        enabled = heatmapOn,
+                    ) { value -> update { it.copy(heatmapMinTaps = value.roundToInt()) } }
+                    Explanation(strings[Keys.DICTIONARY_HEATMAP_MIN_TAPS_NOTE])
+                    Text(
+                        strings[Keys.DICTIONARY_HEATMAP_HALF_LIFE],
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    )
+                    DefaultableSlider(
+                        label = strings.getString(
+                            Keys.DICTIONARY_HEATMAP_DAYS,
+                            preferences.heatmapHalfLifeDays,
+                        ),
+                        value = preferences.heatmapHalfLifeDays.toFloat(),
+                        range = KeyboardPreferences.MIN_HEATMAP_HALF_LIFE_DAYS.toFloat()..
+                            KeyboardPreferences.MAX_HEATMAP_HALF_LIFE_DAYS.toFloat(),
+                        default = KeyboardPreferences.DEFAULT_HEATMAP_HALF_LIFE_DAYS.toFloat(),
+                        enabled = heatmapOn,
+                    ) { value -> update { it.copy(heatmapHalfLifeDays = value.roundToInt()) } }
+                    Explanation(strings[Keys.DICTIONARY_HEATMAP_HALF_LIFE_NOTE])
+                    Button(
+                        onClick = { update { resetHeatmapDefaults(it) } },
+                        enabled = heatmapOn,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULTS]) }
+                    Explanation(strings[Keys.DICTIONARY_HEATMAP_RESET_NOTE])
+                }
             }
         }
         // Text shortcuts, beside the learned words.
@@ -354,6 +451,28 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
             scope.launch { repository.forgetEverything() }
         }
     }
+
+    if (confirmingHeatmapOff) {
+        ConfirmDialog(
+            title = strings[Keys.DICTIONARY_HEATMAP_OFF_TITLE],
+            text = strings[Keys.DICTIONARY_HEATMAP_OFF_TEXT],
+            confirmLabel = strings[Keys.DICTIONARY_LEARNING_OFF_CONFIRM],
+            onDismiss = { confirmingHeatmapOff = false },
+        ) {
+            update { it.copy(heatmapEnabled = false) }
+            scope.launch { repository.forgetTouchPattern() }
+        }
+    }
+}
+
+/** [preferences] with the heatmap's three settings, and nothing else, at their defaults. */
+private fun resetHeatmapDefaults(preferences: KeyboardPreferences): KeyboardPreferences {
+    val defaults = KeyboardPreferences()
+    return preferences.copy(
+        heatmapWeight = defaults.heatmapWeight,
+        heatmapMinTaps = defaults.heatmapMinTaps,
+        heatmapHalfLifeDays = defaults.heatmapHalfLifeDays,
+    )
 }
 
 /**

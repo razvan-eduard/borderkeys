@@ -140,6 +140,13 @@ android {
         jniLibs { useLegacyPackaging = false }
     }
 
+    // The database's exported schemas, which the migration test builds each old version from.
+    sourceSets {
+        getByName("androidTest") {
+            assets.srcDir(rootProject.layout.projectDirectory.dir("data/schemas"))
+        }
+    }
+
     // No dependency-info blob in the APK signing block; F-Droid rejects it.
     dependenciesInfo {
         includeInApk = false
@@ -168,6 +175,7 @@ dependencies {
     androidTestImplementation(project(":data"))
     androidTestImplementation(project(":i18n"))
     androidTestImplementation(project(":settings"))
+    androidTestImplementation(libs.androidx.room.testing)
     // Attached only to the `plus` flavor; the `core` APK never compiles the assistant.
     "plusImplementation"(project(":assist"))
 }

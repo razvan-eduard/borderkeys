@@ -110,7 +110,7 @@ fun HomeScreen(query: String, modifier: Modifier = Modifier, open: (Screen) -> U
                 strings[Keys.HOME_SUGGESTIONS_AND_CORRECTIONS],
                 strings[Keys.HOME_THE_SUGGESTION_STRIP_AUTOCORRECT_AND_SWIPE],
             ) { open(Screen.Typing) }
-            SettingRow(strings[Keys.HOME_PERSONAL_DICTIONARY], strings[Keys.HOME_WHAT_THIS_DEVICE_HAS_LEARNED]) {
+            SettingRow(strings[Keys.HOME_DICTIONARY_AND_HEATMAP], strings[Keys.HOME_WHAT_THIS_DEVICE_HAS_LEARNED]) {
                 open(Screen.Dictionary)
             }
             SettingRow(strings[Keys.HOME_CLIPBOARD], strings[Keys.HOME_HISTORY_PINNING_AND_HOW_LONG_IT]) {
