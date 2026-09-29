@@ -22,7 +22,7 @@ import java.util.Locale
  */
 internal class Pipeline private constructor(
     private val handle: Long,
-    contractions: Map<String, String>,
+    private val contractions: Map<String, String>,
     private val languages: List<String>,
 ) {
 
@@ -32,10 +32,14 @@ internal class Pipeline private constructor(
     /** Whether the Learning switch is on; off, no case learns from the ones typed before it. */
     var learning = false
 
-    private val rig = TypingRig(QueuedEngine(handle, languages), settings()).also {
-        it.orchestrator.contractions = contractions
-        it.orchestrator.languageTags = languages
-    }
+    private val rig = typingRig(settings())
+
+    /** A rig of its own on this engine, with [settings], for typing a scenario key by key. */
+    fun typingRig(settings: KeyboardPreferences): TypingRig =
+        TypingRig(QueuedEngine(handle, languages), settings).also {
+            it.orchestrator.contractions = contractions
+            it.orchestrator.languageTags = languages
+        }
 
     /**
      * Types [typed] and a space into a field holding [previous] and a space, or nothing, and
