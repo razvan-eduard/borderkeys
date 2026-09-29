@@ -157,7 +157,7 @@ object DataGraph {
 
     /** Reading what this keyboard knows out to a file, and back in from one. */
     val backups: com.borderkeys.data.backup.BackupRepository by lazy {
-        com.borderkeys.data.backup.BackupRepository(database, themes)
+        com.borderkeys.data.backup.BackupRepository(database, themes, dictionary)
     }
 
     val assistModels: AssistModelRepository by lazy {
