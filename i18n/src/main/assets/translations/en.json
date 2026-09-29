@@ -753,8 +753,6 @@
   "privacy_permissions_and_network": "Permissions and network",
   "privacy_read_from_the_installed_package_just": "Read from the installed package just now, not from a string in this screen. If a permission were ever added, this list would say so.",
   "privacy_so_that_after_vreau_it_can": "Learns which words you tend to write together, so the next one can be suggested sooner. Stored encrypted, never in a password field, and cleared along with the personal dictionary.",
-  "privacy_heatmap": "Where your taps land on each key",
-  "privacy_heatmap_note": "An average per key, so the keyboard can tell which key you meant. Stored encrypted, never in a password field, not in backups, and deleted when you switch the heatmap or Learning off.",
   "privacy_that_is_why_nothing_downloads_dictionaries": "That is why nothing downloads. Dictionaries and models are either inside the app or chosen by you from a file on this device.",
   "privacy_there_is_none": "There is none",
   "privacy_what_is_not_stored": "What is not stored",

@@ -753,8 +753,6 @@
   "privacy_permissions_and_network": "Autorisations et réseau",
   "privacy_read_from_the_installed_package_just": "Lues à l'instant depuis le paquet installé, pas depuis une chaîne écrite dans cet écran. Si une permission était un jour ajoutée, cette liste le dirait.",
   "privacy_so_that_after_vreau_it_can": "Apprend les mots que vous avez tendance à écrire ensemble, pour suggérer le suivant plus tôt. Stocké chiffré, jamais dans un champ de mot de passe, et effacé avec le dictionnaire personnel.",
-  "privacy_heatmap": "Où vos frappes tombent sur chaque touche",
-  "privacy_heatmap_note": "Une moyenne par touche, pour que le clavier sache quelle touche vous visiez. Stockée chiffrée, jamais dans un champ de mot de passe, pas dans les sauvegardes, et effacée quand vous désactivez la carte des frappes ou l'Apprentissage.",
   "privacy_that_is_why_nothing_downloads_dictionaries": "C'est pourquoi rien ne se télécharge. Les dictionnaires et les modèles sont soit dans l'application, soit choisis par vous dans un fichier de cet appareil.",
   "privacy_there_is_none": "Il n'y en a aucune",
   "privacy_what_is_not_stored": "Ce qui n'est pas stocké",

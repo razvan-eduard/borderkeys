@@ -753,8 +753,6 @@
   "privacy_permissions_and_network": "Berechtigungen und Netzwerk",
   "privacy_read_from_the_installed_package_just": "Soeben aus dem installierten Paket gelesen, nicht aus einer Zeichenkette in diesem Bildschirm. Käme je eine Berechtigung hinzu, stünde sie in dieser Liste.",
   "privacy_so_that_after_vreau_it_can": "Lernt, welche Wörter du meist zusammen schreibst, damit das nächste früher vorgeschlagen werden kann. Verschlüsselt gespeichert, nie in einem Passwortfeld, und wird mit dem persönlichen Wörterbuch gelöscht.",
-  "privacy_heatmap": "Wo deine Berührungen auf jeder Taste landen",
-  "privacy_heatmap_note": "Ein Mittelwert pro Taste, damit die Tastatur erkennt, welche Taste du gemeint hast. Verschlüsselt gespeichert, nie in einem Passwortfeld, nicht in Sicherungen, und gelöscht, wenn du die Heatmap oder Lernen ausschaltest.",
   "privacy_that_is_why_nothing_downloads_dictionaries": "Deshalb lädt nichts herunter. Wörterbücher und Modelle sind entweder in der App oder von dir aus einer Datei auf diesem Gerät gewählt.",
   "privacy_there_is_none": "Es gibt keine",
   "privacy_what_is_not_stored": "Was nicht gespeichert wird",
