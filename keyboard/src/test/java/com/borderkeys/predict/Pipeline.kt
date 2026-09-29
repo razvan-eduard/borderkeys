@@ -5,7 +5,6 @@ package com.borderkeys.predict
 
 import com.borderkeys.ime.Contractions
 import com.borderkeys.ime.WordCommit
-import com.borderkeys.ime.WordStems
 import org.junit.AssumptionViolatedException
 import java.io.File
 import java.io.FileDescriptor
@@ -35,26 +34,19 @@ internal class Pipeline private constructor(
         correctionDistance: Int = DEFAULT_DISTANCE,
         capitaliseNames: Boolean = true,
     ): Outcome {
-        val answer = answer(typed, previous)
-        val correction = answer.texts[NativePredictor.TEXT_CORRECTION]
-        val spelling = answer.texts[NativePredictor.TEXT_KNOWN_SPELLING]
-        val knownWord = if (spelling != null && spelling.equals(typed, ignoreCase = true)) typed else ""
-        val possessive = answer.texts[NativePredictor.TEXT_POSSESSIVE]
-        val inflection = correction != null &&
-            WordStems.shields(typed, correction, knownStems(typed), languages)
-
+        val answer = answerRequest(handle, typed, previous, null, languages, scratch)
         val outcome = WordCommit.decide(
             typed = typed,
             fromGesture = false,
             runningText = true,
             shortcuts = emptyList(),
             contractions = contractions,
-            possessive = possessive,
-            suggestion = correction,
+            possessive = answer.possessive,
+            suggestion = answer.correction,
             suggestionQuery = typed,
-            knownWord = knownWord,
+            knownWord = answer.knownWord,
             isProperNoun = answer.correctionIsName,
-            inflection = inflection,
+            inflection = answer.inflection,
             settings = WordCommit.Settings(
                 autoCorrectOnSpace = true,
                 autoCapitalise = true,
@@ -66,27 +58,17 @@ internal class Pipeline private constructor(
         return Outcome(typed, outcome.text, outcome.reason)
     }
 
-    /** The stems of [typed] the engine holds. */
-    private fun knownStems(typed: String): Set<String> {
-        val stems = WordStems.candidates(typed, languages).take(NativePredictor.MAX_STEMS_QUERY)
-        if (stems.isEmpty()) {
-            return emptySet()
-        }
-        val known = BooleanArray(stems.size)
-        NativePredictor.nativeKnownStems(handle, stems.toTypedArray(), known)
-        return stems.filterIndexed { index, _ -> known[index] }.toSet()
-    }
-
     /** What the suggestion strip would show for [typed], in order. */
-    fun strip(typed: String, previous: String? = null): List<String> = answer(typed, previous).ranked
+    fun strip(typed: String, previous: String? = null): List<String> =
+        answerRequest(handle, typed, previous, null, languages, scratch).words.filterNotNull()
 
     /**
      * [outcome] as one tab-separated line: typed, committed or `-`, reason, then the engine's
      * ranking for the typed word, each entry `word:score`, a name marked `word*:score`.
      */
     fun readingLine(outcome: Outcome): String {
-        val answer = answer(outcome.typed)
-        val ranking = (0 until answer.count).joinToString(" ") { index ->
+        val answer = answerRequest(handle, outcome.typed, null, null, languages, scratch)
+        val ranking = answer.words.indices.joinToString(" ") { index ->
             val name = if (answer.properNoun[index]) "*" else ""
             "${answer.words[index]}$name:" + String.format(Locale.ROOT, "%.4f", answer.scores[index])
         }
@@ -95,40 +77,12 @@ internal class Pipeline private constructor(
 
     /** The ranked words for [typed], and the index of the engine's correction among them, or -1. */
     fun stripWithCorrection(typed: String, previous: String? = null): CorrectionView {
-        val answer = answer(typed, previous)
-        return CorrectionView(
-            answer.ranked,
-            answer.correctionAt,
-            answer.texts[NativePredictor.TEXT_CORRECTION],
-        )
+        val answer = answerRequest(handle, typed, previous, null, languages, scratch)
+        return CorrectionView(answer.words.filterNotNull(), answer.correctionAt, answer.correction)
     }
 
-    /** One [NativePredictor.nativeAnswer] call's output. */
-    private class Answer(
-        val words: Array<String?>,
-        val scores: FloatArray,
-        val properNoun: BooleanArray,
-        val count: Int,
-        val correctionAt: Int,
-        val texts: Array<String?>,
-        val correctionIsName: Boolean,
-    ) {
-        val ranked: List<String> get() = (0 until count).mapNotNull { words[it] }
-    }
-
-    /** The engine's answer for [typed] after [previous]. */
-    private fun answer(typed: String, previous: String? = null): Answer {
-        val words = arrayOfNulls<String>(MAX_CANDIDATES)
-        val scores = FloatArray(MAX_CANDIDATES)
-        val properNoun = BooleanArray(MAX_CANDIDATES)
-        val at = IntArray(1)
-        val texts = arrayOfNulls<String>(NativePredictor.TEXT_SLOTS)
-        val isName = BooleanArray(1)
-        val count = NativePredictor.nativeAnswer(
-            handle, typed, previous, null, words, scores, properNoun, at, texts, isName,
-        )
-        return Answer(words, scores, properNoun, count, at[0], texts, isName[0])
-    }
+    /** The buffers the engine's answers are read through. */
+    private val scratch = AnswerScratch()
 
     /** The engine's ranking, the index of its correction in it, and the correction itself. */
     data class CorrectionView(val ranked: List<String>, val correctionAt: Int, val correction: String?)
@@ -168,8 +122,6 @@ internal class Pipeline private constructor(
     fun close() = NativePredictor.nativeDestroy(handle)
 
     companion object {
-        private const val MAX_CANDIDATES = 16
-
         /** The shipped apostrophe maps, relative to the module the tests run in. */
         private const val CONTRACTIONS_DIRECTORY = "src/main/assets/contractions"
 

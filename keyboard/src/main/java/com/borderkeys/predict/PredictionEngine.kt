@@ -65,52 +65,15 @@ class PredictionEngine(
 
     private val queue = PredictionRequestQueue()
 
-    /** The last answered query when the dictionaries know it, else empty. Guarded by resultLock. */
-    private var nativeKnownWord = ""
-
-    /** The possessive rewrite for the request being served, or null. */
-    private var nativePossessive: String? = null
-
-    /** [WordStems.shields]'s answer for the query and the correction being served. */
-    private var nativeInflection = false
-
     /** The tags handed to [setActiveLanguages], read on the worker for [WordStems]. */
     private var activeTags: List<String> = emptyList()
 
-    /** Autocorrect's answer for the request being served, or null. */
-    private var nativeCorrection: String? = null
-    private var nativeCorrectionIsName = false
-
-    /** [searchCorrectionIndex]'s value for the answer being published, under resultLock. */
-    private var nativeCorrectionAt = -1
-
-    /** The composing text the current [nativeKnownWord]/[nativeCount] answer is about. */
-    private var nativeQuery = ""
-
-    // Written by the prediction thread and copied out by the UI thread under [resultLock].
+    /** The last answer served, published on the UI thread. Guarded by [resultLock]. */
+    private var latestAnswer: PredictionAnswer? = null
     private val resultLock = Any()
-    private val nativeWords = arrayOfNulls<String>(MAX_RESULTS)
-    private val nativeScores = FloatArray(MAX_RESULTS)
-    private val nativeProperNoun = BooleanArray(MAX_RESULTS)
-    private var nativeCount = 0
 
-    // The prediction thread's scratch, filled by JNI and copied into the buffers above under
-    // [resultLock].
-    private val searchWords = arrayOfNulls<String>(MAX_RESULTS)
-    private val searchScores = FloatArray(MAX_RESULTS)
-    private val searchProperNoun = BooleanArray(MAX_RESULTS)
-
-    /**
-     * Which entry of [searchWords] the corrections heap settled on, or -1 when none of them;
-     * cleared per request.
-     */
-    private val searchCorrectionIndex = IntArray(1)
-
-    /** The typed word's texts, in [NativePredictor.nativeAnswer]'s slots; cleared per request. */
-    private val searchTexts = arrayOfNulls<String>(NativePredictor.TEXT_SLOTS)
-
-    /** Whether the correction in [searchTexts] is a name; cleared per request. */
-    private val searchCorrectionName = BooleanArray(1)
+    /** The prediction thread's buffers for [answerRequest]. */
+    private val scratch = AnswerScratch()
 
     /** Words dropped from every answer. */
     @Volatile
@@ -256,29 +219,6 @@ class PredictionEngine(
                 pendingPackLoadMillis + android.os.SystemClock.elapsedRealtime() - started
             pendingPackLoadMillis = 0L
         }
-    }
-
-    /**
-     * Whether [query] is a regular inflection of a word the engine holds that [correction] is
-     * not built on. Runs on the worker.
-     */
-    private fun inflectionOf(query: String, correction: String?): Boolean {
-        if (correction == null) {
-            return false
-        }
-        val stems = WordStems.candidates(query, activeTags).take(NativePredictor.MAX_STEMS_QUERY)
-        if (stems.isEmpty()) {
-            return false
-        }
-        val known = BooleanArray(stems.size)
-        val found = withHandle(0) { current ->
-            NativePredictor.nativeKnownStems(current, stems.toTypedArray(), known)
-        }
-        if (found == 0) {
-            return false
-        }
-        val knownStems = stems.filterIndexed { index, _ -> known[index] }.toSet()
-        return WordStems.shields(query, correction, knownStems, activeTags)
     }
 
     /** Pushes the key centres and the key size to the engine. */
@@ -538,7 +478,7 @@ class PredictionEngine(
 
     fun cancelPending() {
         queue.clear()
-        synchronized(resultLock) { nativeCount = 0 }
+        synchronized(resultLock) { latestAnswer = latestAnswer?.withoutRanking() }
         gestureGeneration++
     }
 
@@ -696,24 +636,14 @@ class PredictionEngine(
     private fun serveRequests() {
         while (queue.take()) {
             val generation = queue.currentGeneration
-            searchCorrectionIndex[0] = -1
-            searchTexts.fill(null)
-            searchCorrectionName[0] = false
+            val query = queue.currentComposing
             Trace.beginSection("PredictionEngine.suggest")
             val searchStarted = android.os.SystemClock.elapsedRealtimeNanos()
-            val count = try {
-                withHandle(0) { current ->
-                    NativePredictor.nativeAnswer(
-                        current,
-                        queue.currentComposing,
-                        queue.currentPrevious1,
-                        queue.currentPrevious2,
-                        searchWords,
-                        searchScores,
-                        searchProperNoun,
-                        searchCorrectionIndex,
-                        searchTexts,
-                        searchCorrectionName,
+            val answer = try {
+                withHandle(PredictionAnswer.empty(query)) { current ->
+                    answerRequest(
+                        current, query, queue.currentPrevious1, queue.currentPrevious2, activeTags,
+                        scratch,
                     )
                 }
             } finally {
@@ -726,29 +656,7 @@ class PredictionEngine(
             if (!queue.isCurrent(generation)) {
                 continue
             }
-            val query = queue.currentComposing
-            // The query is known when the dictionaries spell it the same, ignoring case.
-            val spelling = searchTexts[NativePredictor.TEXT_KNOWN_SPELLING]
-            val possessive = searchTexts[NativePredictor.TEXT_POSSESSIVE]
-            val correction = searchTexts[NativePredictor.TEXT_CORRECTION]
-            val inflection = if (query.isEmpty()) false else inflectionOf(query, correction)
-            synchronized(resultLock) {
-                System.arraycopy(searchWords, 0, nativeWords, 0, count)
-                System.arraycopy(searchScores, 0, nativeScores, 0, count)
-                System.arraycopy(searchProperNoun, 0, nativeProperNoun, 0, count)
-                nativePossessive = possessive
-                nativeInflection = inflection
-                nativeCorrection = correction
-                nativeCorrectionIsName = searchCorrectionName[0]
-                nativeCorrectionAt = searchCorrectionIndex[0]
-                nativeCount = count
-                nativeQuery = query
-                nativeKnownWord = if (spelling != null && spelling.equals(query, ignoreCase = true)) {
-                    query
-                } else {
-                    ""
-                }
-            }
+            synchronized(resultLock) { latestAnswer = answer }
             mainHandler.removeCallbacks(publishResults)
             mainHandler.post(publishResults)
         }
@@ -756,46 +664,11 @@ class PredictionEngine(
 
     /** Runs on the UI thread and delivers the last answer to the listener. */
     private fun publish() {
-        val known: String
-        val possessive: String?
-        val inflection: Boolean
-        val query: String
-        synchronized(resultLock) {
-            known = nativeKnownWord
-            possessive = nativePossessive
-            inflection = nativeInflection
-            query = nativeQuery
-        }
-        listener?.onSuggestions(copyAndFilterResults(), known, query, possessive, inflection)
-    }
-
-    /** The last answer, copied out under [resultLock], with refused words dropped. */
-    private fun copyAndFilterResults(): List<Candidate> {
-        val out = ArrayList<Candidate>(MAX_RESULTS)
-        var correction: Candidate? = null
-        synchronized(resultLock) {
-            for (index in 0 until nativeCount) {
-                val word = nativeWords[index] ?: continue
-                out.add(
-                    Candidate(
-                        word,
-                        nativeProperNoun[index],
-                        isCorrection = index == nativeCorrectionAt,
-                    ),
-                )
-            }
-            // Adds the correction when the ranking does not carry it.
-            val text = nativeCorrection
-            if (nativeCorrectionAt < 0 && text != null) {
-                correction = Candidate(text, nativeCorrectionIsName, isCorrection = true)
-            }
-        }
-        correction?.let { out.add(it) }
-        val refusedNow = refused
-        if (!refusedNow.isEmpty) {
-            out.removeAll { refusedNow.refuses(it.text) }
-        }
-        return out
+        val answer = synchronized(resultLock) { latestAnswer } ?: return
+        listener?.onSuggestions(
+            answer.candidates(refused), answer.knownWord, answer.query, answer.possessive,
+            answer.inflection,
+        )
     }
 
     companion object {
