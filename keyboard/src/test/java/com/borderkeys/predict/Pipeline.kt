@@ -37,6 +37,7 @@ internal class Pipeline private constructor(
         val answer = answerRequest(handle, typed, previous, null, languages, scratch)
         val outcome = WordCommit.decide(
             typed = typed,
+            endedBy = ' '.code,
             fromGesture = false,
             runningText = true,
             shortcuts = emptyList(),
