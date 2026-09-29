@@ -30,12 +30,12 @@ object BundledDictionaries {
 
     val ALL: List<Entry> = listOf(
         // Read from the compiled headers; BundledPackMetadataTest checks them.
-        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 112_197, 8_432_908),
-        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 125_817, 10_056_288),
-        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 99_828, 8_127_252),
-        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 95_877, 7_980_800),
-        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 101_638, 9_236_688),
-        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 97_382, 8_302_540),
+        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 108_246, 8_250_812),
+        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 119_062, 9_744_124),
+        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 97_406, 8_016_384),
+        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 93_966, 7_897_344),
+        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 100_737, 9_184_772),
+        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 95_592, 8_218_768),
     )
 
     /** Opens one for reading. The caller closes it; the install path copies and validates. */

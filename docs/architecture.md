@@ -670,7 +670,8 @@ is that search and one more inside the pair's own list; the next-word search wal
 | `flag_names.py` | Flags proper nouns already in a pack's ordinary rows, by case asymmetry. |
 | `make_ordinary.py` | Which corpus words are lower-case headwords of the spelling dictionary. |
 | `build_pos.py` | Treebank tags and transition matrices → `dictionaries/<tag>.pos`. |
-| `classify_wordlist.py` | Judges every row of a list by the language's own evidence -- its spell checkers in three case forms, the treebank, the name flag, a possessive or elision base, corpus pairs -- against typo, foreign and noise rules, in two tiers by rank. Reports drops, guard words and coverage of a held-out list; report-only until the coverage it costs is recovered (see `docs/testing.md`). |
+| `classify_wordlist.py` | Keeps a bundled word list to the rows its language's own evidence supports: spelling dictionaries in three case forms, the stock keyboard's word lists, subtitle frequencies, how a news corpus writes the word, the treebank, the name flag, corpus pairs; against twins missing their diacritics, typos, other languages' words and short noise, in two tiers by rank. Applied to all six lists (`docs/dictionaries.md`, "Which rows a list keeps"). |
+| `make_twin_corpus.py` | Writes the twin and plain autocorrect corpora from `classify_wordlist.py`'s review files. |
 | `make_doubled_corpus.py`, `make_firstletter_corpus.py`, `make_midtypo_corpus.py`, `make_unknown_corpus.py`, `make_accent_corpus.py` | The generated autocorrect corpora under `native-tests/data`, each from a seed. |
 | `drop_foreign.py` | Removes another language's vocabulary that a crawled corpus quoted. |
 | `drop_misspellings.py` | Review-only, multi-oracle. Review-only because a rare surname and a misspelling are the same shape in this data. |

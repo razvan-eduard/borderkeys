@@ -35,6 +35,14 @@ class PipelineCorpusTest {
             Corpus("en-US", "autocorrect_firstletter_en.tsv", FIRSTLETTER_FLOOR),
             Corpus("en-US", "autocorrect_marks_en.tsv", MARKS_FLOOR),
             Corpus("ro-RO", "autocorrect_accents_ro.tsv", ACCENTS_FLOOR),
+            Corpus("ro-RO", "autocorrect_twins_ro.tsv", TWINS_RO_FLOOR),
+            Corpus("ro-RO", "autocorrect_plain_ro.tsv", PLAIN_RO_FLOOR),
+            Corpus("fr-FR", "autocorrect_twins_fr.tsv", TWINS_FR_FLOOR),
+            Corpus("fr-FR", "autocorrect_plain_fr.tsv", PLAIN_FR_FLOOR),
+            Corpus("es-ES", "autocorrect_twins_es.tsv", TWINS_ES_FLOOR),
+            Corpus("es-ES", "autocorrect_plain_es.tsv", PLAIN_ES_FLOOR),
+            Corpus("it-IT", "autocorrect_twins_it.tsv", TWINS_IT_FLOOR),
+            Corpus("it-IT", "autocorrect_plain_it.tsv", PLAIN_IT_FLOOR),
         )
         val report = StringBuilder()
         val failures = mutableListOf<String>()
@@ -108,5 +116,15 @@ class PipelineCorpusTest {
         const val FIRSTLETTER_FLOOR = 166
         const val MARKS_FLOOR = 240
         const val ACCENTS_FLOOR = 237
+
+        /** Out of 200, 190 for the Spanish twins and 57 for the Italian ones. */
+        const val TWINS_RO_FLOOR = 186
+        const val PLAIN_RO_FLOOR = 200
+        const val TWINS_FR_FLOOR = 196
+        const val PLAIN_FR_FLOOR = 200
+        const val TWINS_ES_FLOOR = 188
+        const val PLAIN_ES_FLOOR = 200
+        const val TWINS_IT_FLOOR = 57
+        const val PLAIN_IT_FLOOR = 200
     }
 }

@@ -204,12 +204,12 @@ jobs:
             ./native-tests/build/suggest_eval "$packs" --reachable \
               "dictionaries/$file.tsv" "$tag" "$budget" || status=1
           done <<'BUDGETS'
-          en-US 611
-          ro-RO 402
-          de-DE 180
-          es-ES 313
-          fr-FR 326
-          it-IT 240
+          en-US 530
+          ro-RO 337
+          de-DE 162
+          es-ES 289
+          fr-FR 297
+          it-IT 222
           BUDGETS
           exit $status
 
