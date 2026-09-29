@@ -564,6 +564,25 @@ class TypingScenarioTest {
         }
     }
 
+    @Test
+    fun `a Romanian verdict writes în whichever pack loaded first`() {
+        for (order in listOf(listOf("ro-RO", "en-US"), listOf("en-US", "ro-RO"))) {
+            val both = Pipeline.open(*order.toTypedArray())
+            try {
+                both.languageLock(BALANCED_EVIDENCE)
+                val twoLanguages = both.typingRig(SMOKE_SETTINGS)
+                twoLanguages.startField()
+                for (word in ROMANIAN_PHRASE.split(' ') + "in") {
+                    twoLanguages.type("$word ")
+                }
+                val text = twoLanguages.editor.text
+                assertTrue("$order wrote '$text'", text.endsWith(" în "))
+            } finally {
+                both.close()
+            }
+        }
+    }
+
     /** The Undo quick action. */
     private fun undo() {
         rig.orchestrator.undo()

@@ -1828,7 +1828,7 @@ int Engine::knownSpelling(const char* word, size_t length, char* out, int outByt
         return 0;
     }
     // The exact spelling when a pack holds it, else the first unblocked spelling of the folded
-    // key.
+    // key, the preferred language's before the other packs'.
     int exactPack = -1;
     uint32_t exactWord = 0;
     if (exactSpelling(word, length, &exactPack, &exactWord)) {
@@ -1845,7 +1845,13 @@ int Engine::knownSpelling(const char* word, size_t length, char* out, int outByt
     if (foldedLength <= 0) {
         return 0;
     }
-    for (int index = 0; index < kMaxPacks; ++index) {
+    // Step -1 visits the preferred pack; the steps after it visit the others in order.
+    const int preferred = preferredPack();
+    for (int step = -1; step < kMaxPacks; ++step) {
+        const int index = (step < 0) ? preferred : step;
+        if (index < 0 || (step >= 0 && index == preferred)) {
+            continue;
+        }
         const LanguagePack& pack = packs_[index];
         if (!pack.isOpen() || !pack.active) {
             continue;

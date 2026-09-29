@@ -339,7 +339,14 @@ class ImeSmokeTest {
             settle()
             // Romanian settles the verdict, so "in" is spelled the Romanian way; enough English
             // after it turns the verdict, and the word is asked about again, of the English pack.
-            for (word in ROMANIAN_PHRASE.split(' ') + "in" + ENGLISH_PHRASE.split(' ')) {
+            for (word in ROMANIAN_PHRASE.split(' ') + "in") {
+                type(word)
+                tapKey(SPACE)
+            }
+            settle()
+            val romanian = field().text.orEmpty()
+            assertTrue("the Romanian verdict wrote în in '$romanian'", romanian.endsWith(" în "))
+            for (word in ENGLISH_PHRASE.split(' ')) {
                 type(word)
                 tapKey(SPACE)
             }
