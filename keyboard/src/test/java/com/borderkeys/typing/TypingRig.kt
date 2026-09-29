@@ -24,7 +24,7 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
         orchestrator.applySettings(settings)
     }
 
-    /** Opens a field holding [text], the caret at its end, and settles. */
+    /** Opens a field holding [text], the caret at its end, and settles unless [settle] is false. */
     fun startField(
         text: String = "",
         inputType: Int = InputType.TYPE_CLASS_TEXT,
@@ -33,6 +33,7 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
         terminalField: Boolean = false,
         passwordField: Boolean = false,
         privateField: Boolean = false,
+        settle: Boolean = true,
     ) {
         editor.reset(text)
         orchestrator.startField(
@@ -50,7 +51,9 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
                 described = true,
             ),
         )
-        settle()
+        if (settle) {
+            settle()
+        }
     }
 
     /** Presses the key for each code point of [text]. */

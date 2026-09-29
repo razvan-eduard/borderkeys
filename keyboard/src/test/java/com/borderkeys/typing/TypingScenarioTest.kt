@@ -528,6 +528,79 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `with the strip off nothing is shown, and a space still corrects`() {
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(showSuggestionStrip = false))
+        rig.startField()
+        rig.type("teh")
+        assertTrue(rig.host.strip.isEmpty())
+        rig.type(" ")
+        assertEquals("the ", rig.editor.text)
+    }
+
+    @Test
+    fun `the strip holds as many words as the setting asks for`() {
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(suggestionCount = 4))
+        rig.startField()
+        rig.type("th")
+        assertEquals(4, rig.host.strip.size)
+    }
+
+    @Test
+    fun `an answer about a word already typed past is dropped`() {
+        rig.orchestrator.onKey('t'.code)
+        rig.orchestrator.onKey('h'.code)
+        rig.settle()
+        assertEquals("th", rig.host.strip[rig.host.typedIndex].text)
+    }
+
+    @Test
+    fun `answers that arrive after a swipe replaced the typed word change nothing`() {
+        for (code in "teh".map { it.code }) {
+            rig.orchestrator.onKey(code)
+        }
+        rig.orchestrator.finishWordBeforeSwipe()
+        rig.orchestrator.composeSwipedWord(swiped("then", "they"))
+        val shown = rig.host.strip
+        rig.settle()
+        assertEquals(shown, rig.host.strip)
+    }
+
+    @Test
+    fun `a swiped word is not asked about again`() {
+        rig.engine.queries.clear()
+        rig.orchestrator.composeSwipedWord(swiped("the", "then", "they"))
+        rig.settle()
+        assertFalse(rig.engine.queries.contains("the"))
+    }
+
+    @Test
+    fun `an answer about the field before never applies in the next`() {
+        rig.type("teh")
+        rig.startField(settle = false)
+        for (code in "teh ".map { it.code }) {
+            rig.orchestrator.onKey(code)
+        }
+        rig.settle()
+        assertEquals("teh ", rig.editor.text)
+    }
+
+    @Test
+    fun `asking about the word in a private field reads the field into the strip`() {
+        rig.startField(privateField = true)
+        val before = rig.host.privateRevealRefreshes
+        rig.orchestrator.requestSuggestions()
+        assertEquals(before + 1, rig.host.privateRevealRefreshes)
+    }
+
+    @Test
+    fun `a terminal's password field is never asked about`() {
+        rig.startField(terminalField = true, passwordField = true, privateField = true)
+        rig.engine.queries.clear()
+        rig.type("ls")
+        assertEquals(emptyList<String>(), rig.engine.queries)
+    }
+
+    @Test
     fun `the strip outlines the correction a space would write, never a shortcut's expansion`() {
         rig.type("teh")
         assertEquals("the", rig.host.strip[rig.host.appliedIndex].text)

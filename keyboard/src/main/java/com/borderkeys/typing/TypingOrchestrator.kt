@@ -16,7 +16,6 @@ import com.borderkeys.ime.LanguageSwitchCorrector
 import com.borderkeys.ime.PhysicalKeys
 import com.borderkeys.ime.RunningText
 import com.borderkeys.ime.ShiftState
-import com.borderkeys.ime.SuggestionRow
 import com.borderkeys.ime.WordCommit
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.RefusedWords
@@ -50,9 +49,12 @@ class TypingOrchestrator(
     /** The commit decision, the pending correction, and the language switch's corrections. */
     private val commitFlow = CommitFlow(currentEditor, engine)
 
+    /** What the strip asks the engine, the answer a delimiter applies, and the strip's row. */
+    private val suggestionFlow = SuggestionFlow(engine, host, clock)
+
     /** The flows, in the order each hears of a field and of the settings. */
     private val flows: List<TypingFlow> =
-        listOf(terminalWriter, learningFlow, shiftFlow, spacingFlow, commitFlow)
+        listOf(terminalWriter, learningFlow, shiftFlow, spacingFlow, commitFlow, suggestionFlow)
 
     var preferences = KeyboardPreferences()
         private set
@@ -106,21 +108,11 @@ class TypingOrchestrator(
     /** Whether [adoptWordAtCaret] is running; selection reports meanwhile are its own edits. */
     private var adoptingWordAtCaret = false
 
-    /** Uptime of the keystroke the engine was last asked about, for the strip latency figure. */
-    private var suggestionsRequestedAt = 0L
-
-    /** The engine's last answer, kept so the delimiter path can apply it. */
-    private var searchAnswer = SearchAnswer.NONE
-
     /** The field's undo and redo history for this input session. */
     private val fieldHistory = Composer()
 
-    /** Where the typed word and the word a delimiter would apply end up on the strip. */
-    private val suggestionRow = SuggestionRow()
-
     /** The word the engine was last asked about. */
-    var lastQuery: String = ""
-        private set
+    val lastQuery: String get() = suggestionFlow.lastQuery
 
     // ---- the field ---------------------------------------------------------------------------
 
@@ -703,13 +695,7 @@ class TypingOrchestrator(
         editor.setComposingText(composing, 1)
         editor.endBatchEdit()
         composingWord.fromGesture = true
-        lastQuery = best
-        searchAnswer = searchAnswer.copy(
-            query = best,
-            knownWord = best,
-            correction = best,
-            correctionIsName = cased.first().isProperNoun,
-        )
+        suggestionFlow.answerSwiped(best, cased.first().isProperNoun)
     }
 
     /**
@@ -793,13 +779,7 @@ class TypingOrchestrator(
         val best = cased.first().text
         ownEditPending = true
         terminalWriter.writeSwiped(editor, best)
-        lastQuery = best
-        searchAnswer = searchAnswer.copy(
-            query = best,
-            knownWord = best,
-            correction = best,
-            correctionIsName = cased.first().isProperNoun,
-        )
+        suggestionFlow.answerSwiped(best, cased.first().isProperNoun)
         host.showSuggestions(cased, -1, -1)
         host.playEffect(EffectEvent.SwipeAccepted, best)
     }
@@ -854,7 +834,8 @@ class TypingOrchestrator(
     /** What the key [endedBy] would write in place of [typed]; see [WordCommit]. Reads no editor. */
     internal fun commitOutcome(typed: String, endedBy: Int): WordCommit.Outcome =
         commitFlow.decide(
-            typed, endedBy, composingWord.fromGesture, composingWord.runningText, searchAnswer,
+            typed, endedBy, composingWord.fromGesture, composingWord.runningText,
+            suggestionFlow.answer,
         )
 
     /**
@@ -1077,13 +1058,8 @@ class TypingOrchestrator(
 
     /** The strip's completions of the terminal's word; a terminal has no words before it to read. */
     private fun requestTerminalSuggestions() {
-        lastQuery = terminalWriter.word
         wordContext = WordContext.NONE
-        if (!session.policy.suggestionsAllowed) {
-            return
-        }
-        suggestionsRequestedAt = clock.uptimeMillis()
-        engine.requestSuggestions(lastQuery, null, null)
+        suggestionFlow.requestForTerminal(terminalWriter.word)
     }
 
     // ---- suggestions ---------------------------------------------------------------------------
@@ -1099,55 +1075,29 @@ class TypingOrchestrator(
         possessive: String?,
         inflection: Boolean,
     ) {
-        if (query != lastQuery) {
+        if (!suggestionFlow.accept(query)) {
             return
-        }
-        if (suggestionsRequestedAt != 0L) {
-            KeyboardStats.suggestionMillis.add(
-                (clock.uptimeMillis() - suggestionsRequestedAt).toDouble(),
-            )
-            suggestionsRequestedAt = 0L
         }
         if (composing.isNotEmpty()) {
             host.setEditorEmpty(false)
         }
-        // The word the corrections heap settled on, in the engine's own case.
-        val marked = candidates.firstOrNull { it.isCorrection }
-        searchAnswer = SearchAnswer(
-            query = query,
-            knownWord = knownWord,
-            correction = marked?.text,
-            correctionIsName = marked?.isProperNoun == true,
-            possessive = possessive,
-            inflection = inflection,
-        )
+        suggestionFlow.keep(candidates, knownWord, query, possessive, inflection)
         val cased = shiftFlow.caseForStrip(candidates, lastQuery)
-        if (!preferences.showSuggestionStrip) {
-            return
-        }
-        val slots = host.stripWordSlots() ?: return
+        val slots = suggestionFlow.wordSlots() ?: return
         // Arranged for the slots that hold words, outlining what a delimiter would commit.
-        val row = suggestionRow.arrange(
-            cased, lastQuery, preferences.suggestionCount.coerceAtMost(slots),
+        suggestionFlow.show(
+            cased, slots,
             correction = commitFlow.outline(
-                lastQuery, composingWord.fromGesture, composingWord.runningText, searchAnswer,
+                lastQuery, composingWord.fromGesture, composingWord.runningText,
+                suggestionFlow.answer,
             ),
             revertable = commitFlow.revertableWord(),
         )
-        host.showSuggestions(row, suggestionRow.typedIndex, suggestionRow.appliedIndex)
     }
 
     /** Asks the engine about the composing word; never for a password field. */
     fun requestSuggestions() {
-        lastQuery = composing.toString()
-        if (session.policy.privateField) {
-            host.refreshPrivateReveal()
-        }
-        if (!session.policy.suggestionsAllowed) {
-            return
-        }
-        suggestionsRequestedAt = clock.uptimeMillis()
-        engine.requestSuggestions(lastQuery, wordContext.previous1, wordContext.previous2)
+        suggestionFlow.request(composing.toString(), wordContext)
     }
 
     /**
@@ -1195,13 +1145,7 @@ class TypingOrchestrator(
     fun resetComposing() {
         host.onWordReset()
         commitFlow.dropPending()
-        searchAnswer = searchAnswer.copy(
-            query = "",
-            knownWord = "",
-            correction = null,
-            correctionIsName = false,
-            inflection = false,
-        )
+        suggestionFlow.clearAnswer()
         composing.setLength(0)
         terminalWriter.clearWord()
         composingWord.runningText = true
@@ -1253,10 +1197,7 @@ class TypingOrchestrator(
         val before = editor?.textBeforeCursor(CONTEXT_WINDOW_CHARS)
         if (editor == null || before.isNullOrEmpty()) {
             wordContext = WordContext.NONE
-            lastQuery = ""
-            if (session.policy.suggestionsAllowed) {
-                engine.requestSuggestions("", null, null)
-            }
+            suggestionFlow.requestAdopted("", WordContext.NONE)
             return
         }
         // The run of [isWordCharacter] characters before the caret, starting at its first
@@ -1271,15 +1212,12 @@ class TypingOrchestrator(
         val partial = before.substring(start)
         val (context1, context2) = contextWordsBefore(before, start)
         wordContext = WordContext(context1, context2)
-        lastQuery = partial
         if (partial.isNotEmpty()) {
             composing.append(partial)
             val caret = selectionEnd
             editor.setComposingRegion(caret - partial.length, caret)
         }
-        if (session.policy.suggestionsAllowed) {
-            engine.requestSuggestions(partial, wordContext.previous1, wordContext.previous2)
-        }
+        suggestionFlow.requestAdopted(partial, wordContext)
     }
 
     /** Reads the two words before the cursor back from the editor. */
