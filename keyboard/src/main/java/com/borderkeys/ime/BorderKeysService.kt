@@ -63,6 +63,7 @@ import com.borderkeys.typing.FieldPolicy
 import com.borderkeys.typing.FieldSession
 import com.borderkeys.typing.LearningBatch
 import com.borderkeys.typing.LearningStore
+import com.borderkeys.typing.RingUi
 import com.borderkeys.typing.TypingClock
 import com.borderkeys.typing.TypingHost
 import com.borderkeys.typing.TypingOrchestrator
@@ -169,9 +170,6 @@ class BorderKeysService :
     private var controlArmed = false
     private var altArmed = false
 
-    /** Whether this gesture's pause-time preview already composed a word. */
-    private var previewComposedThisGesture = false
-
     /** Where the text field sat on screen when the ring opened, or NaN before the first report. */
     private var ringEditorOriginX = Float.NaN
     private var ringEditorOriginY = Float.NaN
@@ -202,40 +200,11 @@ class BorderKeysService :
     /** The words [syncDebugRing]'s sample ring offers. */
     private val DEBUG_RING_WORDS = listOf("alpha", "bravo", "charlie", "delta", "echo", "foxtrot")
 
-    /** The pause-time decode's rank one, applied when the ring resolves without a pick. */
-    private var radialTopWord: String? = null
-
-    /**
-     * The ring's words: the decode's first [KeyboardPreferences.radialSuggestionCount], or none
-     * for a decode of fewer than two.
-     */
-    private fun ringWedges(candidates: List<Candidate>): List<String> =
-        if (candidates.size < 2) {
-            emptyList()
-        } else {
-            candidates.take(preferences.radialSuggestionCount).map { it.text }
-        }
-
-    /** Which wedge carries the word already in the field. */
-    private val trustedWedgeIndex = 0
-
-    /** Whether rank one holds at least [DECISIVE_SHARE_PER_MILLE] of the decode. */
-    private fun decodeWasDecisive(candidates: List<Candidate>): Boolean =
-        candidates.size < 2 || candidates.first().share >= DECISIVE_SHARE_PER_MILLE
-
-    /** Resolves the ring from its current selection: applies or cancels. */
-    private fun forceResolveRadialRing() {
-        val selection = host?.radialSuggestionMenu?.currentSelection()
-            ?: RadialSuggestionMenuView.Selection.None
-        closeRadialRing((selection as? RadialSuggestionMenuView.Selection.Word)?.index)
-        resolveRadialSelection(selection)
-    }
-
     /**
      * Resolves the ring [KeyboardPreferences.radialPickTimeoutMillis] after it opens, unless
      * steering, a resolution or a dismissal cancels it first.
      */
-    private val radialTimeoutRunnable = Runnable { forceResolveRadialRing() }
+    private val radialTimeoutRunnable: Runnable = Runnable { orchestrator.onRingTimedOut() }
 
     /** The word the strip is currently asking about, between the hold and the answer. */
     private var pendingForget: String? = null
@@ -284,14 +253,38 @@ class BorderKeysService :
             host?.keyboard?.shiftState = state
         }
 
-        override fun dismissRing() = dismissRadialMenu()
-
         override fun onWordReset() {
-            dismissRadialMenu()
-            engine.cancelPendingPreview()
-            engine.cancelPendingGesture()
-            previewComposedThisGesture = false
             pendingForget = null
+        }
+
+        override fun onSwipeLifted(
+            xs: FloatArray,
+            ys: FloatArray,
+            timestamps: LongArray,
+            count: Int,
+        ) {
+            host?.postDelayed(gestureDecodingRunnable, GESTURE_DECODING_NOTICE_MILLIS)
+            gestureLiftedAt = android.os.SystemClock.uptimeMillis()
+            recordSwipeShape(xs, ys, timestamps, count)
+        }
+
+        override fun onSwipeAnswered() {
+            host?.removeCallbacks(gestureDecodingRunnable)
+            host?.suggestionStrip?.decoding = false
+        }
+
+        override fun onSwipeDecoded(candidates: Int) = recordSwipeDecode(candidates)
+
+        override fun traceSwipeDecode(candidates: Int) {
+            if (debuggable) {
+                android.util.Log.d(
+                    "BorderKeys",
+                    "swipe: decode ${engine.lastGestureDecodeMicros / 1000.0} ms, lift to text " +
+                        "${android.os.SystemClock.uptimeMillis() - gestureLiftedAt} ms, tier " +
+                        "${if (engine.lastGestureUsedNeural) "B" else "A"}, " +
+                        "$candidates candidates",
+                )
+            }
         }
 
         override fun refreshPrivateReveal() = this@BorderKeysService.refreshPrivateReveal()
@@ -329,6 +322,66 @@ class BorderKeysService :
 
         override fun removeCallbacks(action: Runnable) {
             host?.removeCallbacks(action)
+        }
+    }
+
+    /** The radial ring, as [orchestrator] opens, reads and closes it. */
+    private val ringUi: RingUi = object : RingUi {
+        override val isOpen: Boolean
+            get() = swipeRadialController.state == SwipeRadialController.State.OPEN
+
+        override fun open(
+            words: List<String>,
+            trustedIndex: Int,
+            waitsForTap: Boolean,
+            pickTimeoutMillis: Long?,
+        ): Boolean {
+            val view = host ?: return false
+            if (!swipeRadialController.onRingOpened(words)) {
+                return false
+            }
+            val (anchorX, anchorY) = radialAnchor(view)
+            view.radialSuggestionMenu.show(anchorX, anchorY, words, trustedIndex)
+            if (waitsForTap) {
+                view.radialSuggestionMenu.acceptsOwnTouches = true
+            }
+            view.setRadialMenuVisible(true)
+            watchEditorWhileRingOpen(true)
+            refreshTouchableArea()
+            if (!waitsForTap) {
+                view.removeCallbacks(radialTimeoutRunnable)
+                pickTimeoutMillis?.let { view.postDelayed(radialTimeoutRunnable, it) }
+            }
+            return true
+        }
+
+        override fun selection(): RingUi.Selection =
+            when (val selection = host?.radialSuggestionMenu?.currentSelection()) {
+                is RadialSuggestionMenuView.Selection.Word ->
+                    RingUi.Selection.Word(selection.index, selection.word)
+                RadialSuggestionMenuView.Selection.Cancel -> RingUi.Selection.Cancel
+                RadialSuggestionMenuView.Selection.None, null -> RingUi.Selection.None
+            }
+
+        override fun keepOpenForTap() {
+            val view = host ?: return
+            view.removeCallbacks(radialTimeoutRunnable)
+            view.radialSuggestionMenu.acceptsOwnTouches = true
+        }
+
+        override fun close(celebrateIndex: Int?) = closeRadialRing(celebrateIndex)
+
+        override fun dismiss(): Boolean {
+            if (swipeRadialController.state != SwipeRadialController.State.OPEN || debugRingOpen) {
+                return false
+            }
+            closeRadialRing()
+            host?.keyboard?.abandonRingStroke()
+            return true
+        }
+
+        override fun resumeGestureCapture() {
+            host?.keyboard?.resumeGestureCapture()
         }
     }
 
@@ -374,10 +427,11 @@ class BorderKeysService :
     private val fieldEditor = ConnectionFieldEditor { currentInputConnection }
 
     /** Each word, from its first key to what is learned from it. */
-    private val orchestrator = TypingOrchestrator(
+    private val orchestrator: TypingOrchestrator = TypingOrchestrator(
         currentEditor = { if (currentInputConnection != null) fieldEditor else null },
         engine = engine,
         host = typingHost,
+        ring = ringUi,
         store = learningStore,
         clock = typingClock,
     )
@@ -745,12 +799,12 @@ class BorderKeysService :
     override fun onViewClicked(focusChanged: Boolean) {
         @Suppress("DEPRECATION")
         super.onViewClicked(focusChanged)
-        dismissRadialMenu()
+        orchestrator.dismissRing()
     }
 
     override fun onUpdateEditorToolType(toolType: Int) {
         super.onUpdateEditorToolType(toolType)
-        dismissRadialMenu()
+        orchestrator.dismissRing()
     }
 
     /** Called whenever the cursor or the selection moves. */
@@ -901,7 +955,7 @@ class BorderKeysService :
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
-        dismissRadialMenu()
+        orchestrator.dismissRing()
         // With "offer it only once" on, the clip shown this session is withheld from now on.
         if (preferences.clipboardSuggestionOnce && shownClipSignature != null) {
             withdrawnClip = shownClipSignature
@@ -912,7 +966,7 @@ class BorderKeysService :
     /** Closes the ring when the window hides. */
     override fun onWindowHidden() {
         super.onWindowHidden()
-        dismissRadialMenu()
+        orchestrator.dismissRing()
     }
 
     override fun onFinishInput() {
@@ -1056,32 +1110,13 @@ class BorderKeysService :
 
     override fun onCursorNudgeLines(lines: Int) = orchestrator.onCursorNudgeLines(lines)
 
-    /** A completed swipe. The word in progress is committed first. */
+    /** A completed swipe; its last point anchors a ring that opens after the lift. */
     override fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
-        if (!preferences.swipeEnabled || !orchestrator.session.policy.suggestionsAllowed) {
-            return
-        }
-        radialTopWord = null
-        // Closes a ring and drops a pause-time decode still in flight.
-        dismissRadialMenu()
-        engine.cancelPendingPreview()
-        // The ring's anchor, for a swipe that did not pause.
         if (count > 0) {
             lastGestureX = xs[count - 1]
             lastGestureY = ys[count - 1]
         }
-        if (previewComposedThisGesture) {
-            // The preview's guess is taken back; this decode replaces it.
-            previewComposedThisGesture = false
-            orchestrator.cancelSwipedWord()
-        } else {
-            orchestrator.finishWordBeforeSwipe()
-        }
-        host?.postDelayed(gestureDecodingRunnable, GESTURE_DECODING_NOTICE_MILLIS)
-        gestureLiftedAt = android.os.SystemClock.uptimeMillis()
-        recordSwipeShape(xs, ys, timestamps, count)
-        val context = orchestrator.wordContext
-        engine.decodeGesture(xs, ys, timestamps, count, context.previous1, context.previous2)
+        orchestrator.onGesture(xs, ys, timestamps, count)
     }
 
     /** The swipe's path in key widths, its duration and its sample count, for the stats. */
@@ -1115,27 +1150,14 @@ class BorderKeysService :
         KeyboardStats.words++
     }
 
-    /** The finger paused mid-swipe: decodes the path so far for the ring, when the ring is on. */
+    /** The finger paused mid-swipe; the pause point anchors the ring and starts its steering. */
     override fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
-        if (!preferences.radialMenuEnabled || !orchestrator.session.policy.suggestionsAllowed) {
-            host?.keyboard?.resumeGestureCapture()
-            return
-        }
-        radialTopWord = null
-        if (previewComposedThisGesture) {
-            // A second pause: the first preview's guess is taken back.
-            previewComposedThisGesture = false
-            orchestrator.cancelSwipedWord()
-        } else {
-            orchestrator.finishWordBeforeSwipe()
-        }
         if (count > 0) {
             lastGestureX = xs[count - 1]
             lastGestureY = ys[count - 1]
         }
         steerLeftPausePoint = false
-        val context = orchestrator.wordContext
-        engine.decodeGesturePreview(xs, ys, timestamps, count, context.previous1, context.previous2)
+        orchestrator.onGesturePaused(xs, ys, timestamps, count)
     }
 
     /** Whether the steering finger has moved past the touch slop since the pause. */
@@ -1162,41 +1184,26 @@ class BorderKeysService :
         }
     }
 
-    /** The finger lifted while the ring was open. */
-    override fun onGestureRingResolved() {
-        resolveRadialRing()
-    }
+    override fun onGestureRingResolved() = orchestrator.onRingLifted()
 
-    /** The touch stream was interrupted while the ring was open: discards the swipe. */
-    override fun onGestureRingCancelled() {
-        closeRadialRing()
-        orchestrator.cancelSwipedWord()
-    }
+    override fun onGestureRingCancelled() = orchestrator.onRingCancelled()
 
-    /**
-     * A tap on a ring kept open after a lift: a wedge applies its word, the centre cancels, and
-     * anything else only closes the ring.
-     */
-    override fun onRadialTapResolved(selection: RadialSuggestionMenuView.Selection) {
-        when (selection) {
-            is RadialSuggestionMenuView.Selection.Word -> {
-                closeRadialRing(selection.index)
-                resolveRadialSelection(selection)
-            }
-            RadialSuggestionMenuView.Selection.Cancel -> {
-                closeRadialRing()
-                orchestrator.cancelSwipedWord()
-            }
-            RadialSuggestionMenuView.Selection.None -> dismissRadialMenu()
-        }
-    }
+    override fun onRadialTapResolved(selection: RadialSuggestionMenuView.Selection) =
+        orchestrator.onRingTapped(
+            when (selection) {
+                is RadialSuggestionMenuView.Selection.Word ->
+                    RingUi.Selection.Word(selection.index, selection.word)
+                RadialSuggestionMenuView.Selection.Cancel -> RingUi.Selection.Cancel
+                RadialSuggestionMenuView.Selection.None -> RingUi.Selection.None
+            },
+        )
 
     /**
      * A touch outside a ring waiting for a tap: closes the ring, and hides the keyboard when
      * [KeyboardPreferences.radialOutsideTapHidesKeyboard] is on.
      */
     override fun onRadialDismissed() {
-        dismissRadialMenu()
+        orchestrator.dismissRing()
         if (preferences.radialOutsideTapHidesKeyboard) {
             requestHideSelf(0)
         }
@@ -1223,7 +1230,7 @@ class BorderKeysService :
         if (preferences.radialCloseOnEditorMove &&
             hypot(x - ringEditorOriginX, y - ringEditorOriginY) > EDITOR_MOVE_DISMISS_PX
         ) {
-            dismissRadialMenu()
+            orchestrator.dismissRing()
         }
     }
 
@@ -1264,54 +1271,8 @@ class BorderKeysService :
         }
     }
 
-    /**
-     * The pause-time decode's answer: the top candidate composes at once, and the ring opens with
-     * [ringWedges].
-     */
-    override fun onGesturePreviewCandidates(candidates: List<Candidate>) {
-        val view = host ?: return
-        if (currentInputConnection == null) {
-            return
-        }
-        if (candidates.isEmpty() || orchestrator.session.terminalField) {
-            // No ring: the stroke goes back to plain capture.
-            view.keyboard.resumeGestureCapture()
-            return
-        }
-        val cased = orchestrator.caseSwipedWords(candidates)
-        radialTopWord = cased.first().text
-        orchestrator.composeSwipedWord(cased)
-        recordSwipeDecode(candidates.size)
-        if (debuggable) {
-            android.util.Log.d(
-                "BorderKeys",
-                "swipe: decode ${engine.lastGestureDecodeMicros / 1000.0} ms, lift to text " +
-                    "${android.os.SystemClock.uptimeMillis() - gestureLiftedAt} ms, tier " +
-                    "${if (engine.lastGestureUsedNeural) "B" else "A"}, " +
-                    "${candidates.size} candidates",
-            )
-        }
-        previewComposedThisGesture = true
-
-        val wedgeWords = ringWedges(cased)
-        if (!swipeRadialController.onRingOpened(wedgeWords)) {
-            // Too few words for a ring: the preview stays composing and the stroke goes back to
-            // plain capture.
-            radialTopWord = null
-            view.keyboard.resumeGestureCapture()
-            return
-        }
-        val (anchorX, anchorY) = radialAnchor(view)
-        view.radialSuggestionMenu.show(anchorX, anchorY, wedgeWords, trustedWedgeIndex)
-        view.setRadialMenuVisible(true)
-        watchEditorWhileRingOpen(true)
-        refreshTouchableArea()
-        view.removeCallbacks(radialTimeoutRunnable)
-        // No pick timeout while the ring is kept open.
-        if (!preferences.radialLiftKeepsOpen) {
-            view.postDelayed(radialTimeoutRunnable, preferences.radialPickTimeoutMillis.toLong())
-        }
-    }
+    override fun onGesturePreviewCandidates(candidates: List<Candidate>) =
+        orchestrator.onGesturePreviewCandidates(candidates)
 
     /**
      * Where the ring is centred, per [KeyboardPreferences.radialMenuAnchor], in the host's
@@ -1332,52 +1293,6 @@ class BorderKeysService :
     }
 
     /**
-     * Resolves the ring from its selection at a lift. With no wedge or Cancel under the finger
-     * and [KeyboardPreferences.radialLiftKeepsOpen] on, an open ring stays open for a tap.
-     */
-    private fun resolveRadialRing() {
-        val view = host ?: return
-        previewComposedThisGesture = false
-        val selection = view.radialSuggestionMenu.currentSelection()
-        if (selection == RadialSuggestionMenuView.Selection.None && preferences.radialLiftKeepsOpen &&
-            swipeRadialController.state == SwipeRadialController.State.OPEN
-        ) {
-            view.removeCallbacks(radialTimeoutRunnable)
-            view.radialSuggestionMenu.acceptsOwnTouches = true
-            return
-        }
-        closeRadialRing((selection as? RadialSuggestionMenuView.Selection.Word)?.index)
-        resolveRadialSelection(selection)
-    }
-
-    /**
-     * A wedge applies its word and Cancel discards the swipe; with neither,
-     * [KeyboardPreferences.radialTimeoutDefault] applies rank one or cancels.
-     */
-    private fun resolveRadialSelection(selection: RadialSuggestionMenuView.Selection) {
-        when (selection) {
-            is RadialSuggestionMenuView.Selection.Word -> {
-                onSuggestionPicked(selection.index, selection.word)
-                playEffect(EffectEvent.SwipeAccepted, selection.word)
-            }
-            RadialSuggestionMenuView.Selection.Cancel -> orchestrator.cancelSwipedWord()
-            RadialSuggestionMenuView.Selection.None -> {
-                if (preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) {
-                    orchestrator.cancelSwipedWord()
-                } else {
-                    val word = radialTopWord
-                    if (word != null) {
-                        onSuggestionPicked(0, word)
-                        playEffect(EffectEvent.SwipeAccepted, word)
-                    } else {
-                        orchestrator.cancelSwipedWord()
-                    }
-                }
-            }
-        }
-    }
-
-    /**
      * Opens a tap-only sample ring while [KeyboardPreferences.debugForceRadialRing] is on and no
      * ring is open. Debuggable builds only.
      */
@@ -1394,7 +1309,6 @@ class BorderKeysService :
         if (!swipeRadialController.onRingOpened(words)) {
             return
         }
-        radialTopWord = null
         debugRingOpen = true
         val x = view.keyboard.left + view.keyboard.width / 2f
         val y = view.keyboard.top + view.keyboard.height / 2f
@@ -1424,7 +1338,6 @@ class BorderKeysService :
     private fun closeRadialRing(celebrateIndex: Int? = null) {
         val view = host
         view?.removeCallbacks(radialTimeoutRunnable)
-        previewComposedThisGesture = false
         val wasOpen = swipeRadialController.state == SwipeRadialController.State.OPEN
         swipeRadialController.onResolved()
         if (wasOpen) {
@@ -1446,68 +1359,8 @@ class BorderKeysService :
         view?.setRadialMenuVisible(false)
     }
 
-    /**
-     * A decoded swipe that did not pause: the first candidate composes at once and all of them go
-     * to the strip. With [KeyboardPreferences.radialLiftKeepsOpen] on, a tap-only ring opens too,
-     * unless the decode was decisive and [KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY] is set.
-     */
-    override fun onGestureCandidates(candidates: List<Candidate>) {
-        host?.removeCallbacks(gestureDecodingRunnable)
-        val view = host
-        view?.suggestionStrip?.decoding = false
-        if (candidates.isEmpty()) {
-            view?.suggestionStrip?.clear()
-            orchestrator.requestSuggestions()
-            return
-        }
-        if (currentInputConnection == null) {
-            return
-        }
-        val cased = orchestrator.caseSwipedWords(candidates)
-        val best = cased.first().text
-        if (orchestrator.session.terminalField) {
-            orchestrator.swipeIntoTerminal(cased)
-            recordSwipeDecode(cased.size)
-            return
-        }
-
-        orchestrator.composeSwipedWord(cased)
-        recordSwipeDecode(candidates.size)
-        if (debuggable) {
-            android.util.Log.d(
-                "BorderKeys",
-                "swipe: decode ${engine.lastGestureDecodeMicros / 1000.0} ms, lift to text " +
-                    "${android.os.SystemClock.uptimeMillis() - gestureLiftedAt} ms, tier " +
-                    "${if (engine.lastGestureUsedNeural) "B" else "A"}, " +
-                    "${candidates.size} candidates",
-            )
-        }
-        // The strip shows the swipe's alternatives, with no typed chip and no correction.
-        view?.suggestionStrip?.let { strip ->
-            strip.typedIndex = -1
-            strip.appliedIndex = -1
-            strip.setSuggestions(cased)
-        }
-
-        if (view != null && preferences.radialMenuEnabled && preferences.radialLiftKeepsOpen) {
-            radialTopWord = best
-            if (preferences.radialTrustedWord == KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY &&
-                decodeWasDecisive(cased)
-            ) {
-                playEffect(EffectEvent.SwipeAccepted, best)
-                return
-            }
-            val wedgeWords = ringWedges(cased)
-            if (swipeRadialController.onRingOpened(wedgeWords)) {
-                val (anchorX, anchorY) = radialAnchor(view)
-                view.radialSuggestionMenu.show(anchorX, anchorY, wedgeWords, trustedWedgeIndex)
-                view.radialSuggestionMenu.acceptsOwnTouches = true
-                view.setRadialMenuVisible(true)
-                watchEditorWhileRingOpen(true)
-                refreshTouchableArea()
-            }
-        }
-    }
+    override fun onGestureCandidates(candidates: List<Candidate>) =
+        orchestrator.onGestureCandidates(candidates)
 
     override fun onKeyRepeat(code: Int) = orchestrator.onKeyRepeat(code)
 
@@ -1611,18 +1464,6 @@ class BorderKeysService :
 
     override fun onLanguageRevertDismissed() {
         host?.setLanguageRevertPanelVisible(false)
-    }
-
-    /**
-     * Closes an open ring, not the debug one, and leaves the swiped word as it is. The steering
-     * stroke, if still down, is abandoned.
-     */
-    private fun dismissRadialMenu() {
-        if (swipeRadialController.state != SwipeRadialController.State.OPEN || debugRingOpen) {
-            return
-        }
-        closeRadialRing()
-        host?.keyboard?.abandonRingStroke()
     }
 
     /**
@@ -2795,8 +2636,6 @@ class BorderKeysService :
 
         const val GESTURE_DECODING_NOTICE_MILLIS = 50L
 
-        /** The share of a decode, per mille, rank one must hold for [decodeWasDecisive]. */
-        const val DECISIVE_SHARE_PER_MILLE = 500f
 
         /** How far, in pixels, the text field must move to close an open ring. */
         const val EDITOR_MOVE_DISMISS_PX = 8f

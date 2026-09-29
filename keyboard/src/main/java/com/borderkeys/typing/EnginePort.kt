@@ -24,4 +24,36 @@ interface EnginePort {
     fun candidatesForPack(dominantPack: Int, words: List<String>, onResult: (List<String?>) -> Unit)
 
     fun cancelPending()
+
+    /**
+     * Decodes a finished swipe, [count] samples, after [previous1] and [previous2]; the answer
+     * reaches [TypingOrchestrator.onGestureCandidates].
+     */
+    fun decodeGesture(
+        xs: FloatArray,
+        ys: FloatArray,
+        timestamps: LongArray,
+        count: Int,
+        previous1: String?,
+        previous2: String?,
+    )
+
+    /**
+     * Decodes a swipe still in progress, as [decodeGesture] does; the answer reaches
+     * [TypingOrchestrator.onGesturePreviewCandidates].
+     */
+    fun decodeGesturePreview(
+        xs: FloatArray,
+        ys: FloatArray,
+        timestamps: LongArray,
+        count: Int,
+        previous1: String?,
+        previous2: String?,
+    )
+
+    /** Drops a swipe decode that has not answered yet. */
+    fun cancelPendingGesture()
+
+    /** Drops a preview decode that has not answered yet. */
+    fun cancelPendingPreview()
 }

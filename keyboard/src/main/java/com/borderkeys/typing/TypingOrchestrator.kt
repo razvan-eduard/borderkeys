@@ -23,14 +23,16 @@ import com.borderkeys.predict.RefusedWords
 /**
  * Owns each word from its first key to what is learned from it: the keys, the composing word,
  * the engine's answer, the commit decision, the pending correction, spacing, shift and the
- * field's history. The field, the engine, the views, the database and the clocks are reached
- * through [FieldEditor], [EnginePort], [TypingHost], [LearningStore] and [TypingClock].
+ * field's history. The field, the engine, the views, the swipe ring, the database and the clocks
+ * are reached through [FieldEditor], [EnginePort], [TypingHost], [RingUi], [LearningStore] and
+ * [TypingClock].
  */
 class TypingOrchestrator(
     /** The field being typed into, or null when none is bound. */
     private val currentEditor: () -> FieldEditor?,
     private val engine: EnginePort,
     private val host: TypingHost,
+    private val ring: RingUi,
     store: LearningStore,
     private val clock: TypingClock,
 ) {
@@ -52,9 +54,13 @@ class TypingOrchestrator(
     /** What the strip asks the engine, the answer a delimiter applies, and the strip's row. */
     private val suggestionFlow = SuggestionFlow(engine, host, clock)
 
+    /** A swipe between its decode and its word, and the words its ring offers. */
+    private val swipeFlow = SwipeFlow()
+
     /** The flows, in the order each hears of a field and of the settings. */
-    private val flows: List<TypingFlow> =
-        listOf(terminalWriter, learningFlow, shiftFlow, spacingFlow, commitFlow, suggestionFlow)
+    private val flows: List<TypingFlow> = listOf(
+        terminalWriter, learningFlow, shiftFlow, spacingFlow, commitFlow, suggestionFlow, swipeFlow,
+    )
 
     var preferences = KeyboardPreferences()
         private set
@@ -198,14 +204,14 @@ class TypingOrchestrator(
             } else if (ownEditPending) {
                 ownEditPending = false
             } else if (session.terminalField) {
-                host.dismissRing()
+                dismissRing()
             } else {
-                host.dismissRing()
+                dismissRing()
                 adoptWordAtCaret()
             }
             applyAutoShift()
         } else {
-            host.dismissRing()
+            dismissRing()
         }
     }
 
@@ -219,7 +225,7 @@ class TypingOrchestrator(
     fun onKey(code: Int): Boolean {
         if (code != KeyCodes.DELETE) {
             confirmPendingCorrection()
-            host.dismissRing()
+            dismissRing()
         }
         when (code) {
             KeyCodes.SHIFT -> handleShift()
@@ -272,7 +278,7 @@ class TypingOrchestrator(
 
     /** A key that writes more than one character: the word is finished, then [text] written. */
     fun onText(text: CharSequence) {
-        host.dismissRing()
+        dismissRing()
         val editor = currentEditor() ?: return
         confirmPendingCorrection()
         editor.beginBatchEdit()
@@ -287,7 +293,7 @@ class TypingOrchestrator(
 
     /** Moves the caret by [steps] characters through setSelection, from a space-bar slide. */
     fun onCursorNudge(steps: Int) {
-        host.dismissRing()
+        dismissRing()
         val editor = currentEditor() ?: return
         val extracted = editor.extractedText(0) ?: return
         val length = extracted.text?.length ?: return
@@ -323,7 +329,7 @@ class TypingOrchestrator(
 
     /** Moves the caret up or down by [lines], keeping its column; with shift held it selects. */
     fun onCursorNudgeLines(lines: Int) {
-        host.dismissRing()
+        dismissRing()
         val editor = currentEditor() ?: return
         val text = editor.extractedText(0)?.text ?: return
         val next = CaretNudge.slideLines(
@@ -523,7 +529,7 @@ class TypingOrchestrator(
     }
 
     private fun handleDelete() {
-        host.dismissRing()
+        dismissRing()
         val editor = currentEditor() ?: return
         if (session.terminalField) {
             deleteInTerminal()
@@ -646,6 +652,209 @@ class TypingOrchestrator(
     private fun lockShift() {
         shiftFlow.lock()
         requestSuggestions()
+    }
+
+    // ---- swipes and the ring -------------------------------------------------------------------
+
+    /**
+     * A finished swipe of [count] samples: an open ring closes, the pause's guess is taken back or
+     * the word in progress finished, and the path is decoded.
+     */
+    fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
+        if (!preferences.swipeEnabled || !session.policy.suggestionsAllowed) {
+            return
+        }
+        swipeFlow.forgetTopWord()
+        // Closes a ring and drops a pause-time decode still in flight.
+        dismissRing()
+        engine.cancelPendingPreview()
+        if (swipeFlow.takePreviewComposed()) {
+            // The preview's guess is taken back; this decode replaces it.
+            cancelSwipedWord()
+        } else {
+            finishWordBeforeSwipe()
+        }
+        host.onSwipeLifted(xs, ys, timestamps, count)
+        engine.decodeGesture(
+            xs, ys, timestamps, count, wordContext.previous1, wordContext.previous2,
+        )
+    }
+
+    /** The finger paused mid-swipe: the path so far is decoded for the ring, if it is on. */
+    fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
+        if (!preferences.radialMenuEnabled || !session.policy.suggestionsAllowed) {
+            ring.resumeGestureCapture()
+            return
+        }
+        swipeFlow.forgetTopWord()
+        if (swipeFlow.takePreviewComposed()) {
+            // A second pause: the first preview's guess is taken back.
+            cancelSwipedWord()
+        } else {
+            finishWordBeforeSwipe()
+        }
+        engine.decodeGesturePreview(
+            xs, ys, timestamps, count, wordContext.previous1, wordContext.previous2,
+        )
+    }
+
+    /**
+     * The pause-time decode's answer: the top candidate composes at once, and the ring opens on
+     * [SwipeFlow.wedges].
+     */
+    fun onGesturePreviewCandidates(candidates: List<Candidate>) {
+        if (!host.viewAttached || currentEditor() == null) {
+            return
+        }
+        if (candidates.isEmpty() || session.terminalField) {
+            // No ring: the stroke goes back to plain capture.
+            ring.resumeGestureCapture()
+            return
+        }
+        val cased = caseSwipedWords(candidates)
+        swipeFlow.rememberTopWord(cased.first().text)
+        composeSwipedWord(cased)
+        host.onSwipeDecoded(candidates.size)
+        host.traceSwipeDecode(candidates.size)
+        swipeFlow.previewComposed()
+        val pickTimeout = if (preferences.radialLiftKeepsOpen) {
+            null
+        } else {
+            preferences.radialPickTimeoutMillis.toLong()
+        }
+        if (!ring.open(swipeFlow.wedges(cased), SwipeFlow.TRUSTED_WEDGE, false, pickTimeout)) {
+            // Too few words for a ring: the preview stays composing and the stroke goes back to
+            // plain capture.
+            swipeFlow.forgetTopWord()
+            ring.resumeGestureCapture()
+        }
+    }
+
+    /**
+     * A decoded swipe that did not pause: the first candidate composes at once and all of them go
+     * to the strip. With [KeyboardPreferences.radialLiftKeepsOpen] on, a ring opens for a tap,
+     * unless the decode was decisive and [KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY] is set.
+     */
+    fun onGestureCandidates(candidates: List<Candidate>) {
+        host.onSwipeAnswered()
+        if (candidates.isEmpty()) {
+            host.clearStrip()
+            requestSuggestions()
+            return
+        }
+        if (currentEditor() == null) {
+            return
+        }
+        val cased = caseSwipedWords(candidates)
+        val best = cased.first().text
+        if (session.terminalField) {
+            swipeIntoTerminal(cased)
+            host.onSwipeDecoded(cased.size)
+            return
+        }
+        composeSwipedWord(cased)
+        host.onSwipeDecoded(candidates.size)
+        host.traceSwipeDecode(candidates.size)
+        // The strip shows the swipe's alternatives, with no typed chip and no correction.
+        host.showSuggestions(cased, -1, -1)
+        if (host.viewAttached && preferences.radialMenuEnabled && preferences.radialLiftKeepsOpen) {
+            swipeFlow.rememberTopWord(best)
+            if (preferences.radialTrustedWord == KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY &&
+                swipeFlow.decisive(cased)
+            ) {
+                host.playEffect(EffectEvent.SwipeAccepted, best)
+                return
+            }
+            ring.open(swipeFlow.wedges(cased), SwipeFlow.TRUSTED_WEDGE, true, null)
+        }
+    }
+
+    /**
+     * The finger lifted while the ring was open: its selection resolves it. With no wedge or
+     * Cancel under the finger and [KeyboardPreferences.radialLiftKeepsOpen] on, the ring stays open
+     * for a tap.
+     */
+    fun onRingLifted() {
+        if (!host.viewAttached) {
+            return
+        }
+        swipeFlow.forgetPreview()
+        val selection = ring.selection()
+        if (selection == RingUi.Selection.None && preferences.radialLiftKeepsOpen && ring.isOpen) {
+            ring.keepOpenForTap()
+            return
+        }
+        closeRing((selection as? RingUi.Selection.Word)?.index)
+        resolveRingSelection(selection)
+    }
+
+    /** The touch stream was interrupted while the ring was open: the swipe is discarded. */
+    fun onRingCancelled() {
+        closeRing()
+        cancelSwipedWord()
+    }
+
+    /**
+     * A tap on a ring kept open after a lift: a wedge applies its word, the centre cancels, and
+     * anything else only closes the ring.
+     */
+    fun onRingTapped(selection: RingUi.Selection) {
+        when (selection) {
+            is RingUi.Selection.Word -> {
+                closeRing(selection.index)
+                resolveRingSelection(selection)
+            }
+            RingUi.Selection.Cancel -> {
+                closeRing()
+                cancelSwipedWord()
+            }
+            RingUi.Selection.None -> dismissRing()
+        }
+    }
+
+    /** The ring's pick timeout ran out: its current selection resolves it. */
+    fun onRingTimedOut() {
+        val selection = ring.selection()
+        closeRing((selection as? RingUi.Selection.Word)?.index)
+        resolveRingSelection(selection)
+    }
+
+    /** Closes the swipe's ring, when one is open, and forgets the pause's guess with it. */
+    fun dismissRing() {
+        if (ring.dismiss()) {
+            swipeFlow.forgetPreview()
+        }
+    }
+
+    /** Closes the ring; [celebrateIndex] is the picked wedge, or null. */
+    private fun closeRing(celebrateIndex: Int? = null) {
+        swipeFlow.forgetPreview()
+        ring.close(celebrateIndex)
+    }
+
+    /**
+     * A wedge applies its word and Cancel discards the swipe; with neither,
+     * [KeyboardPreferences.radialTimeoutDefault] applies the top word or cancels.
+     */
+    private fun resolveRingSelection(selection: RingUi.Selection) {
+        when (selection) {
+            is RingUi.Selection.Word -> {
+                onPick(selection.index, selection.word)
+                host.playEffect(EffectEvent.SwipeAccepted, selection.word)
+            }
+            RingUi.Selection.Cancel -> cancelSwipedWord()
+            RingUi.Selection.None -> {
+                val word = swipeFlow.topWord
+                if (preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) {
+                    cancelSwipedWord()
+                } else if (word != null) {
+                    onPick(0, word)
+                    host.playEffect(EffectEvent.SwipeAccepted, word)
+                } else {
+                    cancelSwipedWord()
+                }
+            }
+        }
     }
 
     // ---- swiped words --------------------------------------------------------------------------
@@ -934,7 +1143,7 @@ class TypingOrchestrator(
     /** A word picked from the strip or the ring, [index] being its slot. */
     fun onPick(index: Int, word: String) {
         val editor = currentEditor() ?: return
-        host.dismissRing()
+        dismissRing()
         if (session.terminalField) {
             pickIntoTerminal(editor, word)
             return
@@ -1143,6 +1352,10 @@ class TypingOrchestrator(
 
     /** Drops the word, its answer and the pending correction, and asks about the caret afresh. */
     fun resetComposing() {
+        dismissRing()
+        engine.cancelPendingPreview()
+        engine.cancelPendingGesture()
+        swipeFlow.forgetPreview()
         host.onWordReset()
         commitFlow.dropPending()
         suggestionFlow.clearAnswer()
