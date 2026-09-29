@@ -816,12 +816,12 @@ data class KeyboardPreferences(
         const val MIN_HEATMAP_MIN_TAPS = 10
         const val MAX_HEATMAP_MIN_TAPS = 100
         const val HEATMAP_MIN_TAPS_STEP = 10
-        const val DEFAULT_HEATMAP_MIN_TAPS = 30
+        const val DEFAULT_HEATMAP_MIN_TAPS = 10
 
         /** [heatmapHalfLifeDays]' range and default. */
         const val MIN_HEATMAP_HALF_LIFE_DAYS = 7
         const val MAX_HEATMAP_HALF_LIFE_DAYS = 180
-        const val DEFAULT_HEATMAP_HALF_LIFE_DAYS = 60
+        const val DEFAULT_HEATMAP_HALF_LIFE_DAYS = 30
 
         /** Every dictionary is consulted for every word, whatever language the sentence is in. */
         const val LANGUAGE_LOCK_OFF = 0
