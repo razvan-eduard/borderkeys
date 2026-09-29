@@ -108,8 +108,8 @@ class PredictionEngine(
     private val decodeScores = FloatArray(MAX_RESULTS)
     private val decodeProperNoun = BooleanArray(MAX_RESULTS)
 
-    /** Bumped when the field changes or the service cancels; an older decode is dropped. */
-    private var gestureGeneration = 0
+    /** Numbers the swipe decodes; one cancelled or superseded is dropped. UI thread only. */
+    private val gestureRequests = NewestWins()
 
     // ---- swipe-preview path (radial menu) --------------------------------------------------
     //
@@ -127,8 +127,8 @@ class PredictionEngine(
     private val previewNativeProperNoun = BooleanArray(MAX_RESULTS)
     private var previewNativeCount = 0
 
-    /** UI thread only. A preview answer from an older generation is dropped. */
-    private var previewGeneration = 0
+    /** Numbers the preview decodes; one cancelled or superseded is dropped. UI thread only. */
+    private val previewRequests = NewestWins()
 
     fun start(): Boolean {
         thread.start()
@@ -169,8 +169,8 @@ class PredictionEngine(
         }
         mainHandler.removeCallbacks(publishResults)
         // Drops the gesture and preview answers still in flight.
-        previewGeneration++
-        gestureGeneration++
+        previewRequests.cancel()
+        gestureRequests.cancel()
     }
 
     private inline fun <T> withHandle(fallback: T, block: (Long) -> T): T {
@@ -480,12 +480,12 @@ class PredictionEngine(
     override fun cancelPending() {
         queue.clear()
         synchronized(resultLock) { latestAnswer = latestAnswer?.withoutRanking() }
-        gestureGeneration++
+        gestureRequests.cancel()
     }
 
     /** Drops a swipe decode that has not answered yet. */
     override fun cancelPendingGesture() {
-        gestureGeneration++
+        gestureRequests.cancel()
     }
 
     /** Requests superseded before being served. */
@@ -513,7 +513,7 @@ class PredictionEngine(
             System.arraycopy(timestamps, 0, gestureTime, 0, points)
             gestureCount = points
         }
-        val generation = ++gestureGeneration
+        val generation = gestureRequests.issue()
         worker.post {
             Trace.beginSection("PredictionEngine.decodeGesture")
             val started = System.nanoTime()
@@ -538,7 +538,7 @@ class PredictionEngine(
                 gestureNativeCount = found
             }
             mainHandler.post {
-                if (generation == gestureGeneration) {
+                if (gestureRequests.isNewest(generation)) {
                     publishGestureResult()
                 }
             }
@@ -587,7 +587,7 @@ class PredictionEngine(
             System.arraycopy(timestamps, 0, previewGestureTime, 0, points)
             previewGestureCount = points
         }
-        val generation = ++previewGeneration
+        val generation = previewRequests.issue()
         worker.post {
             val started = System.nanoTime()
             val found = withHandle(0) { current ->
@@ -607,7 +607,7 @@ class PredictionEngine(
                 previewNativeCount = found
             }
             mainHandler.post {
-                if (generation == previewGeneration) {
+                if (previewRequests.isNewest(generation)) {
                     publishGesturePreviewResult()
                 }
             }
@@ -616,7 +616,7 @@ class PredictionEngine(
 
     /** Drops a preview decode that has not answered yet. */
     override fun cancelPendingPreview() {
-        previewGeneration++
+        previewRequests.cancel()
     }
 
     private fun publishGesturePreviewResult() {
