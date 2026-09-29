@@ -94,6 +94,8 @@ class PipelineTest {
     fun `a typo typed past twice is still corrected, a word chosen once is not`() {
         Pipeline.require()
         val own = Pipeline.open("en-US")
+        // The personal dictionary is consulted only with Learning on.
+        own.learning = true
         try {
             own.learn("teh", times = 2)
             val twice = own.commit("teh")
