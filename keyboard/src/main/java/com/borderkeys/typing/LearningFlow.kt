@@ -101,7 +101,7 @@ class LearningFlow(
 
     /**
      * Whether anything is learned, whether the personal dictionary is consulted, and whether the
-     * touch model prices taps: off with their switches or in a private field.
+     * learned touch patterns count: off with their switches or in a private field.
      */
     private fun applyGate() {
         learning.enabled = session.policy.personalAllowed

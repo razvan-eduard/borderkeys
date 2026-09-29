@@ -597,8 +597,8 @@ bool Engine::setKeyGeometry(const int32_t* codes, const float* centersX, const f
     return true;
 }
 
-void Engine::setTouchModel(bool enabled, float weight, int minTaps) {
-    touchModel_.configure(enabled, weight, minTaps);
+void Engine::setTouchModel(bool learned, float weight, int minTaps) {
+    touchModel_.configure(learned, weight, minTaps);
 }
 
 void Engine::setTouchPatterns(const int32_t* codes, const float* taps, const float* meanX,
@@ -2005,7 +2005,7 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
         bool& tapped;
         ~TapsScope() { tapped = false; }
     } tapsScope{queryTapped_};
-    queryTapped_ = tapX != nullptr && tapY != nullptr && touchModel_.active();
+    queryTapped_ = tapX != nullptr && tapY != nullptr;
     if (queryTapped_) {
         const float none = std::numeric_limits<float>::quiet_NaN();
         for (int i = 0; i < foldedLength; ++i) {

@@ -11,8 +11,8 @@ set -euo pipefail
 #
 # Usage: scripts/corpus_readings.sh <out dir> [--centre-taps]
 #
-# --centre-taps writes native/ only, each letter tapped at its key's centre on touch patterns
-# that price every substitution as the key geometry does (suggest_eval --centre-taps).
+# --centre-taps writes native/ only, each letter tapped at its key's centre, where the default
+# touch patterns price every substitution as the key geometry does (suggest_eval --centre-taps).
 
 if [ $# -lt 1 ] || [ $# -gt 2 ] || { [ $# -eq 2 ] && [ "$2" != "--centre-taps" ]; }; then
     echo "usage: $0 <out dir> [--centre-taps]" >&2

@@ -30,8 +30,7 @@
  * number of unreachable rows tolerated, zero when omitted; the exit status is non-zero above it.
  *
  * `--centre-taps`, anywhere after the dict dir, taps each letter of a corpus case at its key's
- * centre, on touch patterns centred on the keys at the reference spread, which price every
- * substitution as the key geometry does.
+ * centre, where the default touch patterns price every substitution as the key geometry does.
  */
 
 #include <algorithm>
@@ -111,17 +110,6 @@ std::vector<Case> readCorpus(const char* path) {
     }
     std::fclose(file);
     return cases;
-}
-
-/** Every key of `layout` a pattern centred on it at the reference spread, and the model on. */
-void centrePatterns(Engine& engine, const borderkeys_test::TestLayout& layout) {
-    const float variance = TouchModel::kReferenceSpread * TouchModel::kReferenceSpread;
-    const std::vector<float> taps(layout.count, 1000.0f);
-    const std::vector<float> zero(layout.count, 0.0f);
-    const std::vector<float> spread(layout.count, variance);
-    engine.setTouchPatterns(layout.codes, taps.data(), zero.data(), zero.data(), spread.data(),
-                            spread.data(), zero.data(), layout.count);
-    engine.setTouchModel(true, 1.0f, 1);
 }
 
 /**
@@ -227,9 +215,6 @@ int main(int argc, char** argv) {
                                layout.keyHeight)) {
         std::printf("the test layout was refused\n");
         return 1;
-    }
-    if (centreTapped) {
-        centrePatterns(engine, layout);
     }
     std::vector<float> tapXs;
     std::vector<float> tapYs;

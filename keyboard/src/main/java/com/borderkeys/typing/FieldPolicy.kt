@@ -16,7 +16,10 @@ data class FieldPolicy(
     val personalAllowed: Boolean,
     /** The keys go in exactly as typed: no correction or rewrite, no space added or removed. */
     val verbatim: Boolean,
-    /** Where the taps land is recorded and used: [personalAllowed], and the Heatmap switch on. */
+    /**
+     * Where the taps land is learned, and the learned patterns count: [personalAllowed], and the
+     * Heatmap switch on.
+     */
     val heatmapAllowed: Boolean,
 ) {
     /** This policy with the Learning switch at [learning] and the Heatmap switch at [heatmap]. */

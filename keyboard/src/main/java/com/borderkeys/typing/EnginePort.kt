@@ -29,10 +29,11 @@ interface EnginePort {
     fun setPersonalModelEnabled(enabled: Boolean)
 
     /**
-     * Whether the touch model prices substitutions from taps, how far it moves them from the key
-     * geometry's costs, and how many taps a key needs first.
+     * Whether the learned touch patterns count, how far they move a substitution's cost from the
+     * default patterns' cost, and how many taps a key needs first. A request's taps are priced by
+     * the default patterns either way.
      */
-    fun setTouchModel(enabled: Boolean, weight: Float, minTaps: Int)
+    fun setTouchModel(learned: Boolean, weight: Float, minTaps: Int)
 
     fun dominantLanguageTag(onResult: (String?) -> Unit)
 
