@@ -19,4 +19,6 @@ data class PendingCorrection(
     val deliberateCapital: Boolean,
     /** Whether confirming it learns [corrected]; false for a text shortcut's expansion. */
     val learn: Boolean = true,
+    /** [typed] with where each of its letters was tapped. */
+    val taps: TypedTaps? = null,
 )

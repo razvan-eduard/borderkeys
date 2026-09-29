@@ -27,6 +27,7 @@ import androidx.autofill.inline.common.TextViewStyle
 import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.entity.KeyTouch
 import com.borderkeys.data.DictionaryRepository
 import com.borderkeys.data.KeyboardStats
 import com.borderkeys.data.assist.AssistProtocol
@@ -376,6 +377,15 @@ class BorderKeysService :
             }
         }
 
+        override fun loadTouches(bucket: String, onLoaded: (List<KeyTouch>) -> Unit) {
+            learningScope.launch {
+                val rows = runCatching { DataGraph.dictionary.touchesIn(bucket) }
+                    .onFailure { error -> android.util.Log.e("BorderKeys", "heatmap load failed", error) }
+                    .getOrDefault(emptyList())
+                withContext(Dispatchers.Main) { onLoaded(rows) }
+            }
+        }
+
         /** Waits up to [FINAL_FLUSH_TIMEOUT_MILLIS] for the writes in flight and for [batch]. */
         override fun persistBeforeShutdown(batch: LearningBatch?) {
             val inFlight = learningJob.children.toList()
@@ -482,6 +492,7 @@ class BorderKeysService :
         scope.launch {
             DataGraph.dictionary.edits.collect {
                 withContext(Dispatchers.IO) { dictionaryLoader.reloadPersonal() }
+                orchestrator.reloadTouches()
                 orchestrator.requestSuggestions()
             }
         }
@@ -994,6 +1005,7 @@ class BorderKeysService :
             ),
             keyWidth = keyWidth,
             keyHeight = keyHeight,
+            density = resources.displayMetrics.density,
             codes = codes.copyOf(count),
             centreX = centreX.copyOf(count),
             centreY = centreY.copyOf(count),
@@ -1684,6 +1696,7 @@ class BorderKeysService :
         DataGraph.dictionary.applyLearned(batch.updates)
         DataGraph.dictionary.applyLearnedBigrams(batch.pairs)
         DataGraph.dictionary.applyLearnedTrigrams(batch.triples)
+        DataGraph.dictionary.applyTouches(batch.touches, batch.touchHalfLifeMillis)
         maybeDecayPersonalDictionary()
     }
 

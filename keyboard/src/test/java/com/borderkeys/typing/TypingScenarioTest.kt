@@ -774,6 +774,93 @@ class TypingScenarioTest {
         assertEquals(false, rig.engine.touchModel?.learned)
     }
 
+    // ---- the heatmap ---------------------------------------------------------------------------
+
+    @Test
+    fun `a word kept as typed teaches each of its keys where it was tapped`() {
+        heatmapOn()
+        tapWord("the", mapOf(0 to (0.1f to 0.2f)))
+        rig.type(" ")
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals("t h e", touchedLetters())
+        val t = rig.store.touches.first()
+        assertEquals(0.1, t.sumX, 1e-5)
+        assertEquals(0.2, t.sumY, 1e-5)
+    }
+
+    @Test
+    fun `a correction the next key confirms teaches the key meant`() {
+        heatmapOn()
+        tapWord("thw", mapOf(2 to (0.3f to 0f)))
+        rig.type(" ")
+        assertEquals("the ", rig.editor.text)
+        tapWord("a")
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals("t h e", touchedLetters())
+        assertEquals(-0.7, rig.store.touches.single { it.code == 'e'.code }.sumX, 1e-5)
+    }
+
+    @Test
+    fun `a correction taken back teaches the letters as typed`() {
+        heatmapOn()
+        tapWord("thw", mapOf(2 to (0.3f to 0f)))
+        rig.type(" ")
+        rig.press(KeyCodes.DELETE)
+        assertEquals("thw ", rig.editor.text)
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals("t h w", touchedLetters())
+        assertEquals(0.3, rig.store.touches.single { it.code == 'w'.code }.sumX, 1e-5)
+    }
+
+    @Test
+    fun `a completion picked from the strip teaches the letters typed`() {
+        heatmapOn()
+        tapWord("keyb")
+        rig.pick(1, "keyboard")
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals("k e y b", touchedLetters())
+    }
+
+    @Test
+    fun `with the Heatmap off, or in a private field, nothing is learned about taps`() {
+        startWithSwitches(learning = true, heatmap = false)
+        rig.orchestrator.keyGeometry = harnessGeometry()
+        tapWord("the")
+        rig.type(" ")
+        heatmapOn()
+        rig.startField(privateField = true)
+        tapWord("the")
+        rig.type(" ")
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals("", touchedLetters())
+    }
+
+    @Test
+    fun `switching Learning off drops the words and taps not yet written`() {
+        heatmapOn()
+        tapWord("the")
+        rig.type(" ")
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = false))
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals(emptyList<LearningBatch>(), rig.store.batches)
+    }
+
+    @Test
+    fun `the engine gets the patterns as taps are learned, and a new bucket's stored ones`() {
+        heatmapOn()
+        tapWord("the")
+        rig.type(" ")
+        assertEquals("e h t", rig.engine.touchPatterns!!.codes.joinToString(" ") { it.toChar().toString() })
+        val landscape = HARNESS_BUCKET.copy(landscape = true)
+        rig.store.storedTouches[landscape.key] = listOf(
+            com.borderkeys.data.entity.KeyTouch(landscape.key, 'q'.code, 40.0, 4.0, 0.0, 1.0, 1.0, 0.0, 108f, 160f, 2.75f, rig.clock.now),
+        )
+        rig.orchestrator.keyGeometry = harnessGeometry(landscape)
+        val patterns = rig.engine.touchPatterns!!
+        assertEquals(listOf('q'.code), patterns.codes.toList())
+        assertEquals(0.1f, patterns.meanX.single(), 1e-5f)
+    }
+
     // ---- swipes and the ring ------------------------------------------------------------------
 
     @Test
@@ -955,6 +1042,26 @@ class TypingScenarioTest {
             rig.host.physicalKeys.map { it.first },
         )
     }
+
+    /** Opens a fresh field with Learning and the Heatmap on, the harness's keys snapshotted. */
+    private fun heatmapOn() {
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true, heatmapEnabled = true))
+        rig.orchestrator.keyGeometry = harnessGeometry()
+        rig.startField()
+    }
+
+    /** Taps each letter of [word] at its key's centre moved by [offsets], in key units. */
+    private fun tapWord(word: String, offsets: Map<Int, Pair<Float, Float>> = emptyMap()) {
+        word.forEachIndexed { index, letter ->
+            val (x, y) = Pipeline.keyCentre(letter)
+            val (dx, dy) = offsets[index] ?: (0f to 0f)
+            rig.tap(letter.code, index, x + dx * HARNESS_KEY_WIDTH, y + dy * HARNESS_KEY_HEIGHT)
+        }
+    }
+
+    /** The letters the heatmap wrote totals for, in order. */
+    private fun touchedLetters(): String =
+        rig.store.touches.joinToString(" ") { it.code.toChar().toString() }
 
     /** Opens a fresh field with the Learning switch at [learning] and the Heatmap at [heatmap]. */
     private fun startWithSwitches(learning: Boolean, heatmap: Boolean) {

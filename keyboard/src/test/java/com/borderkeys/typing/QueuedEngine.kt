@@ -49,6 +49,10 @@ internal class QueuedEngine(
     var touchModel: TouchModelSetting? = null
         private set
 
+    /** The learned touch patterns last handed over. */
+    var touchPatterns: TouchPatterns? = null
+        private set
+
     /** Runs the oldest queued call; false when none was queued. */
     fun serveNext(): Boolean {
         val task = tasks.removeFirstOrNull() ?: return false
@@ -102,6 +106,18 @@ internal class QueuedEngine(
         touchModel = TouchModelSetting(learned, weight, minTaps)
         tasks.addLast(
             Task(request = false) { NativePredictor.nativeSetTouchModel(handle, learned, weight, minTaps) },
+        )
+    }
+
+    override fun setTouchPatterns(patterns: TouchPatterns) {
+        touchPatterns = patterns
+        tasks.addLast(
+            Task(request = false) {
+                NativePredictor.nativeSetTouchPatterns(
+                    handle, patterns.codes, patterns.taps, patterns.meanX, patterns.meanY,
+                    patterns.varianceX, patterns.varianceY, patterns.covariance,
+                )
+            },
         )
     }
 

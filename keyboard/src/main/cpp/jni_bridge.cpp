@@ -201,6 +201,48 @@ void nativeSetKeyGeometry(JNIEnv* env, jobject /*thiz*/, jlong handle, jintArray
                            static_cast<float>(keyHeight));
 }
 
+void nativeSetTouchPatterns(JNIEnv* env, jobject /*thiz*/, jlong handle, jintArray codes,
+                            jfloatArray taps, jfloatArray meanX, jfloatArray meanY,
+                            jfloatArray varianceX, jfloatArray varianceY, jfloatArray covariance) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || codes == nullptr || taps == nullptr || meanX == nullptr ||
+        meanY == nullptr || varianceX == nullptr || varianceY == nullptr || covariance == nullptr) {
+        return;
+    }
+    const jsize count = env->GetArrayLength(codes);
+    for (jfloatArray values : {taps, meanX, meanY, varianceX, varianceY, covariance}) {
+        if (env->GetArrayLength(values) < count) {
+            return;
+        }
+    }
+    const jsize limited =
+        (count > borderkeys::TouchModel::kMaxKeys) ? borderkeys::TouchModel::kMaxKeys : count;
+
+    jint codeBuffer[borderkeys::TouchModel::kMaxKeys];
+    jfloat tapBuffer[borderkeys::TouchModel::kMaxKeys];
+    jfloat meanXBuffer[borderkeys::TouchModel::kMaxKeys];
+    jfloat meanYBuffer[borderkeys::TouchModel::kMaxKeys];
+    jfloat varianceXBuffer[borderkeys::TouchModel::kMaxKeys];
+    jfloat varianceYBuffer[borderkeys::TouchModel::kMaxKeys];
+    jfloat covarianceBuffer[borderkeys::TouchModel::kMaxKeys];
+    if (limited > 0) {
+        env->GetIntArrayRegion(codes, 0, limited, codeBuffer);
+        env->GetFloatArrayRegion(taps, 0, limited, tapBuffer);
+        env->GetFloatArrayRegion(meanX, 0, limited, meanXBuffer);
+        env->GetFloatArrayRegion(meanY, 0, limited, meanYBuffer);
+        env->GetFloatArrayRegion(varianceX, 0, limited, varianceXBuffer);
+        env->GetFloatArrayRegion(varianceY, 0, limited, varianceYBuffer);
+        env->GetFloatArrayRegion(covariance, 0, limited, covarianceBuffer);
+        if (env->ExceptionCheck() == JNI_TRUE) {
+            env->ExceptionClear();
+            return;
+        }
+    }
+    engine->setTouchPatterns(reinterpret_cast<const int32_t*>(codeBuffer), tapBuffer, meanXBuffer,
+                             meanYBuffer, varianceXBuffer, varianceYBuffer, covarianceBuffer,
+                             static_cast<int>(limited));
+}
+
 /** Stores [text] in `array[slot]` as a Java string; a failed allocation leaves the slot as is. */
 void setText(JNIEnv* env, jobjectArray array, jsize slot, const char* text) {
     jstring value = env->NewStringUTF(text);
@@ -1057,6 +1099,8 @@ const JNINativeMethod kMethods[] = {
      "[Ljava/lang/String;[Z)I",
      reinterpret_cast<void*>(nativeAnswer)},
     {"nativeSetTouchModel", "(JZFI)V", reinterpret_cast<void*>(nativeSetTouchModel)},
+    {"nativeSetTouchPatterns", "(J[I[F[F[F[F[F[F)V",
+     reinterpret_cast<void*>(nativeSetTouchPatterns)},
     {"nativeLearn", "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZ)V",
      reinterpret_cast<void*>(nativeLearn)},
     {"nativeLoadUserWords", "(J[Ljava/lang/String;[I[I[I)V",
