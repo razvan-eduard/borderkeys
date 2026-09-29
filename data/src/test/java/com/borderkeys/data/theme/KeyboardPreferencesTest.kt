@@ -313,6 +313,32 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `the heatmap defaults on, and its three settings are clamped to their ranges`() {
+        val defaults = KeyboardPreferences()
+        assertTrue(defaults.heatmapEnabled)
+        assertEquals(KeyboardPreferences.DEFAULT_HEATMAP_WEIGHT, defaults.heatmapWeight, 0f)
+        assertEquals(
+            KeyboardPreferences.MAX_HEATMAP_WEIGHT,
+            KeyboardPreferences(heatmapWeight = 9f).sanitised().heatmapWeight,
+            0f,
+        )
+        assertEquals(
+            KeyboardPreferences.DEFAULT_HEATMAP_WEIGHT,
+            KeyboardPreferences(heatmapWeight = Float.NaN).sanitised().heatmapWeight,
+            0f,
+        )
+        assertEquals(
+            KeyboardPreferences.MIN_HEATMAP_MIN_TAPS,
+            KeyboardPreferences(heatmapMinTaps = -5).sanitised().heatmapMinTaps,
+        )
+        assertEquals(40, KeyboardPreferences(heatmapMinTaps = 47).sanitised().heatmapMinTaps)
+        assertEquals(
+            KeyboardPreferences.MAX_HEATMAP_HALF_LIFE_DAYS,
+            KeyboardPreferences(heatmapHalfLifeDays = 1000).sanitised().heatmapHalfLifeDays,
+        )
+    }
+
+    @Test
     fun `the pause dwell and pick timeout are each clamped to their own range`() {
         assertEquals(
             KeyboardPreferences.MAX_RADIAL_PAUSE_DWELL_MILLIS,

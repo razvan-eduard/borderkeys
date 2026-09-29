@@ -23,6 +23,7 @@ set(ENGINE_SOURCES
     ${ENGINE_DIR}/ngram_model.cpp
     ${ENGINE_DIR}/user_model.cpp
     ${ENGINE_DIR}/proximity.cpp
+    ${ENGINE_DIR}/touch_model.cpp
     ${ENGINE_DIR}/gesture/resample.cpp
     ${ENGINE_DIR}/gesture/template_cache.cpp
     ${ENGINE_DIR}/gesture/shark2_decoder.cpp

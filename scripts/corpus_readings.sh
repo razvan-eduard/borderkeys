@@ -9,12 +9,16 @@ set -euo pipefail
 #   kotlin/  the pipeline tests, per case: typed, committed, reason, and the engine's ranking
 # Two runs compare with `diff -r`.
 #
-# Usage: scripts/corpus_readings.sh <out dir>
+# Usage: scripts/corpus_readings.sh <out dir> [--centre-taps]
+#
+# --centre-taps writes native/ only, each letter tapped at its key's centre on touch patterns
+# that price every substitution as the key geometry does (suggest_eval --centre-taps).
 
-if [ $# -ne 1 ]; then
-    echo "usage: $0 <out dir>" >&2
+if [ $# -lt 1 ] || [ $# -gt 2 ] || { [ $# -eq 2 ] && [ "$2" != "--centre-taps" ]; }; then
+    echo "usage: $0 <out dir> [--centre-taps]" >&2
     exit 2
 fi
+TAPS="${2:-}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$1"
@@ -50,9 +54,15 @@ for CORPUS in "$DATA"/autocorrect_*.tsv; do
         echo "skipped $NAME: no shipped pack" >&2
         continue
     fi
-    "$EVAL" "$PACKS" --autocorrect "$CORPUS" "$TAG" > "$OUT/native/$NAME.txt"
+    "$EVAL" "$PACKS" --autocorrect "$CORPUS" "$TAG" $TAPS > "$OUT/native/$NAME.txt"
 done
-"$EVAL" "$PACKS" "$DATA/suggest_en.tsv" en-US > "$OUT/native/suggest_en.txt"
+"$EVAL" "$PACKS" "$DATA/suggest_en.tsv" en-US $TAPS > "$OUT/native/suggest_en.txt"
+
+if [ -n "$TAPS" ]; then
+    rmdir "$OUT/kotlin"
+    echo "native: $(ls "$OUT/native" | wc -l | tr -d ' ') files, centre-tapped, in $OUT"
+    exit 0
+fi
 
 "$ROOT/gradlew" -p "$ROOT" -q :keyboard:testCoreDebugUnitTest \
     --tests 'com.borderkeys.predict.PipelineCorpusTest' \

@@ -38,10 +38,12 @@ abstract class TypingFlow {
         onFieldFinished()
     }
 
-    /** Takes [settings], the field's policy following the Learning switch first. */
+    /** Takes [settings], the field's policy following the Learning and Heatmap switches first. */
     fun applySettings(settings: KeyboardPreferences) {
         this.settings = settings
-        session = session.copy(policy = session.policy.withLearning(settings.learningEnabled))
+        session = session.copy(
+            policy = session.policy.withSwitches(settings.learningEnabled, settings.heatmapEnabled),
+        )
         onSettingsChanged(settings)
     }
 

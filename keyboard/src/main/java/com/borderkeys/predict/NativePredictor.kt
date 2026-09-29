@@ -68,6 +68,8 @@ internal object NativePredictor {
         composing: String,
         prev1: String?,
         prev2: String?,
+        tapXs: FloatArray?,
+        tapYs: FloatArray?,
         outWords: Array<String?>,
         outScores: FloatArray,
         outProperNoun: BooleanArray,
@@ -213,6 +215,12 @@ internal object NativePredictor {
 
     /** Whether the personal dictionary is consulted; it stays loaded either way. */
     external fun nativeSetPersonalModelEnabled(handle: Long, enabled: Boolean)
+
+    /**
+     * Whether the touch model prices substitutions from taps, how far it moves them from the key
+     * geometry's costs, and how many taps a key needs first.
+     */
+    external fun nativeSetTouchModel(handle: Long, enabled: Boolean, weight: Float, minTaps: Int)
 
     /** The language tag of [nativeDominantPack]'s pack, or null while the engine is undecided. */
     external fun nativeDominantLanguageTag(handle: Long): String?

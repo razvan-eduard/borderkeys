@@ -22,6 +22,7 @@ set(BORDERKEYS_SOURCES
     ngram_model.cpp
     user_model.cpp
     proximity.cpp
+    touch_model.cpp
     gesture/resample.cpp
     gesture/template_cache.cpp
     gesture/shark2_decoder.cpp

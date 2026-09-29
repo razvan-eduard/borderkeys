@@ -777,6 +777,7 @@ class BorderKeysService :
                 passwordField = info != null && PrivateMode.isPasswordField(info.inputType),
                 privateField = PrivateMode.isPrivate(info),
                 learningEnabled = preferences.learningEnabled,
+                heatmapEnabled = preferences.heatmapEnabled,
             ),
             addressField = info != null && AddressField.isAddress(info.inputType),
             terminalField = TerminalField.isTerminal(info, preferences.terminalPackages),

@@ -427,6 +427,14 @@ class PredictionEngine(
         }
     }
 
+    override fun setTouchModel(enabled: Boolean, weight: Float, minTaps: Int) {
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeSetTouchModel(current, enabled, weight, minTaps)
+            }
+        }
+    }
+
     /** [dominantPack] as a language tag, or null while undecided. Delivered on the UI thread. */
     override fun dominantLanguageTag(onResult: (String?) -> Unit) {
         worker.post {
@@ -471,8 +479,14 @@ class PredictionEngine(
     // ---- the suggestion path ----------------------------------------------------------------
 
     /** Asks for suggestions. Returns immediately; the answer arrives on the UI thread. */
-    override fun requestSuggestions(composing: String, previous1: String?, previous2: String?) {
-        if (queue.submit(composing, previous1, previous2)) {
+    override fun requestSuggestions(
+        composing: String,
+        previous1: String?,
+        previous2: String?,
+        tapXs: FloatArray?,
+        tapYs: FloatArray?,
+    ) {
+        if (queue.submit(composing, previous1, previous2, tapXs, tapYs)) {
             worker.post(workerLoop)
         }
     }
@@ -644,7 +658,7 @@ class PredictionEngine(
                 withHandle(PredictionAnswer.empty(query)) { current ->
                     answerRequest(
                         current, query, queue.currentPrevious1, queue.currentPrevious2, activeTags,
-                        scratch,
+                        scratch, queue.currentTapXs, queue.currentTapYs,
                     )
                 }
             } finally {

@@ -73,7 +73,8 @@ internal class AnswerScratch {
 
 /**
  * Asks the engine at [handle] about [composing] after [previous1] and [previous2], through
- * [scratch], with [languages] the active tags.
+ * [scratch], with [languages] the active tags. [tapXs] and [tapYs] are where each code point of
+ * [composing] was tapped, in the keyboard view's pixels, NaN for none; null for no taps.
  */
 internal fun answerRequest(
     handle: Long,
@@ -82,13 +83,15 @@ internal fun answerRequest(
     previous2: String?,
     languages: List<String>,
     scratch: AnswerScratch,
+    tapXs: FloatArray? = null,
+    tapYs: FloatArray? = null,
 ): PredictionAnswer {
     scratch.correctionIndex[0] = -1
     scratch.texts.fill(null)
     scratch.correctionName[0] = false
     val count = NativePredictor.nativeAnswer(
-        handle, composing, previous1, previous2, scratch.words, scratch.scores, scratch.properNoun,
-        scratch.correctionIndex, scratch.texts, scratch.correctionName,
+        handle, composing, previous1, previous2, tapXs, tapYs, scratch.words, scratch.scores,
+        scratch.properNoun, scratch.correctionIndex, scratch.texts, scratch.correctionName,
     )
     val spelling = scratch.texts[NativePredictor.TEXT_KNOWN_SPELLING]
     val correction = scratch.texts[NativePredictor.TEXT_CORRECTION]

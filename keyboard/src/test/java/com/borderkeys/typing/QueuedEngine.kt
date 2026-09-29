@@ -40,6 +40,15 @@ internal class QueuedEngine(
     /** Each word [requestSuggestions] was asked about, in order. */
     val queries = mutableListOf<String>()
 
+    /** The taps sent with each of [queries], x and y per code point, or null for none. */
+    val tapsAsked = mutableListOf<Pair<List<Float>, List<Float>>?>()
+
+    /** How the touch model was last set: on or off, the weight, and the taps a key needs. */
+    data class TouchModelSetting(val enabled: Boolean, val weight: Float, val minTaps: Int)
+
+    var touchModel: TouchModelSetting? = null
+        private set
+
     /** Runs the oldest queued call; false when none was queued. */
     fun serveNext(): Boolean {
         val task = tasks.removeFirstOrNull() ?: return false
@@ -47,11 +56,20 @@ internal class QueuedEngine(
         return true
     }
 
-    override fun requestSuggestions(composing: String, previous1: String?, previous2: String?) {
+    override fun requestSuggestions(
+        composing: String,
+        previous1: String?,
+        previous2: String?,
+        tapXs: FloatArray?,
+        tapYs: FloatArray?,
+    ) {
         queries += composing
+        tapsAsked += if (tapXs != null && tapYs != null) tapXs.toList() to tapYs.toList() else null
         tasks.addLast(
             Task(request = true) {
-                val answer = answerRequest(handle, composing, previous1, previous2, languages, scratch)
+                val answer = answerRequest(
+                    handle, composing, previous1, previous2, languages, scratch, tapXs, tapYs,
+                )
                 onSuggestions(
                     answer.candidates(refused), answer.knownWord, answer.query, answer.possessive,
                     answer.inflection,
@@ -78,6 +96,13 @@ internal class QueuedEngine(
 
     override fun setPersonalModelEnabled(enabled: Boolean) {
         tasks.addLast(Task(request = false) { NativePredictor.nativeSetPersonalModelEnabled(handle, enabled) })
+    }
+
+    override fun setTouchModel(enabled: Boolean, weight: Float, minTaps: Int) {
+        touchModel = TouchModelSetting(enabled, weight, minTaps)
+        tasks.addLast(
+            Task(request = false) { NativePredictor.nativeSetTouchModel(handle, enabled, weight, minTaps) },
+        )
     }
 
     override fun dominantLanguageTag(onResult: (String?) -> Unit) {

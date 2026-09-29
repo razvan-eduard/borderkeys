@@ -9,9 +9,21 @@ import org.junit.Test
 
 class FieldPolicyTest {
 
+    private fun policy(
+        password: Boolean = false,
+        private: Boolean = false,
+        learning: Boolean = true,
+        heatmap: Boolean = true,
+    ) = FieldPolicy.of(
+        passwordField = password,
+        privateField = private,
+        learningEnabled = learning,
+        heatmapEnabled = heatmap,
+    )
+
     @Test
     fun `a password field allows no dictionary words and nothing personal, and takes the keys verbatim`() {
-        val policy = FieldPolicy.of(passwordField = true, privateField = true, learningEnabled = true)
+        val policy = policy(password = true, private = true)
         assertFalse(policy.suggestionsAllowed)
         assertTrue(policy.privateField)
         assertFalse(policy.personalAllowed)
@@ -20,7 +32,7 @@ class FieldPolicyTest {
 
     @Test
     fun `a private field that is not a password field still allows dictionary words`() {
-        val policy = FieldPolicy.of(passwordField = false, privateField = true, learningEnabled = true)
+        val policy = policy(private = true)
         assertTrue(policy.suggestionsAllowed)
         assertFalse(policy.personalAllowed)
         assertFalse(policy.verbatim)
@@ -28,15 +40,31 @@ class FieldPolicyTest {
 
     @Test
     fun `the personal dictionary needs the Learning switch`() {
-        val off = FieldPolicy.of(passwordField = false, privateField = false, learningEnabled = false)
+        val off = policy(learning = false)
         assertFalse(off.personalAllowed)
-        assertTrue(off.withLearning(true).personalAllowed)
-        assertFalse(off.withLearning(true).withLearning(false).personalAllowed)
+        assertTrue(off.withSwitches(true, true).personalAllowed)
+        assertFalse(off.withSwitches(true, true).withSwitches(false, true).personalAllowed)
+    }
+
+    @Test
+    fun `the heatmap needs Learning and its own switch`() {
+        val both = policy()
+        assertTrue(both.heatmapAllowed)
+        assertFalse(both.withSwitches(learning = false, heatmap = true).heatmapAllowed)
+        assertFalse(both.withSwitches(learning = true, heatmap = false).heatmapAllowed)
+        assertTrue(both.withSwitches(learning = true, heatmap = false).personalAllowed)
+    }
+
+    @Test
+    fun `a private field never records the heatmap`() {
+        val private = policy(private = true)
+        assertFalse(private.heatmapAllowed)
+        assertFalse(private.withSwitches(learning = true, heatmap = true).heatmapAllowed)
     }
 
     @Test
     fun `switching Learning on does not open a private field`() {
-        val private = FieldPolicy.of(passwordField = false, privateField = true, learningEnabled = false)
-        assertFalse(private.withLearning(true).personalAllowed)
+        val private = policy(private = true, learning = false)
+        assertFalse(private.withSwitches(true, true).personalAllowed)
     }
 }

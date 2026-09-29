@@ -53,6 +53,12 @@ class TapTrail {
 
     fun yAt(index: Int): Float = ys[index]
 
+    /** Each code point's x, NaN for no point, as a new array. */
+    fun copyXs(): FloatArray = xs.copyOf(size)
+
+    /** Each code point's y, NaN for no point, as a new array. */
+    fun copyYs(): FloatArray = ys.copyOf(size)
+
     /** Whether the code point at [index] was chosen by a tap with a point. */
     fun isTapped(index: Int): Boolean = !xs[index].isNaN() && !ys[index].isNaN()
 

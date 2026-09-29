@@ -254,9 +254,32 @@ void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t leng
     setText(env, outTexts, kTextCorrection, text);
 }
 
+/**
+ * Copies where each code point of the composing word was tapped into `xs` and `ys`, at most
+ * Engine::kMaxComposing entries; returns how many, or 0 when there are no taps or the two arrays
+ * differ in length.
+ */
+int copyTaps(JNIEnv* env, jfloatArray tapXs, jfloatArray tapYs, float* xs, float* ys) {
+    if (tapXs == nullptr || tapYs == nullptr) {
+        return 0;
+    }
+    const jsize count = env->GetArrayLength(tapXs);
+    if (count != env->GetArrayLength(tapYs) || count <= 0) {
+        return 0;
+    }
+    const jsize copied = count < Engine::kMaxComposing ? count : Engine::kMaxComposing;
+    env->GetFloatArrayRegion(tapXs, 0, copied, xs);
+    env->GetFloatArrayRegion(tapYs, 0, copied, ys);
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        env->ExceptionClear();
+        return 0;
+    }
+    return static_cast<int>(copied);
+}
+
 jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing, jstring prev1,
-                  jstring prev2, jobjectArray outWords, jfloatArray outScores,
-                  jbooleanArray outProperNoun, jintArray outCorrectionIndex,
+                  jstring prev2, jfloatArray tapXs, jfloatArray tapYs, jobjectArray outWords,
+                  jfloatArray outScores, jbooleanArray outProperNoun, jintArray outCorrectionIndex,
                   jobjectArray outTexts, jbooleanArray outCorrectionName) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || outWords == nullptr || outScores == nullptr ||
@@ -299,11 +322,16 @@ jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing
         slots = Engine::kMaxCandidates;
     }
 
+    float tapX[Engine::kMaxComposing];
+    float tapY[Engine::kMaxComposing];
+    const int tapCount = copyTaps(env, tapXs, tapYs, tapX, tapY);
+
     Candidate candidates[Engine::kMaxCandidates];
     const int found = engine->suggest(composingBuffer, static_cast<size_t>(composingLength),
                                       prev1Buffer, static_cast<size_t>(prev1Length),
-                                      prev2Buffer, static_cast<size_t>(prev2Length), candidates,
-                                      static_cast<int>(slots));
+                                      prev2Buffer, static_cast<size_t>(prev2Length),
+                                      tapCount > 0 ? tapX : nullptr, tapCount > 0 ? tapY : nullptr,
+                                      tapCount, candidates, static_cast<int>(slots));
     // For a typed word: how the dictionaries spell it, its possessive, and autocorrect's answer.
     if (composingLength > 0) {
         writeTexts(env, *engine, composingBuffer, static_cast<size_t>(composingLength), outTexts,
@@ -653,6 +681,15 @@ void nativeSetPersonalModelEnabled(JNIEnv* /*env*/, jobject /*thiz*/, jlong hand
         return;
     }
     engine->setPersonalModelEnabled(enabled == JNI_TRUE);
+}
+
+void nativeSetTouchModel(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jboolean enabled,
+                         jfloat weight, jint minTaps) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return;
+    }
+    engine->setTouchModel(enabled == JNI_TRUE, weight, minTaps);
 }
 
 jstring nativeDominantLanguageTag(JNIEnv* env, jobject /*thiz*/, jlong handle) {
@@ -1016,9 +1053,10 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeSetActiveLanguages)},
     {"nativeSetKeyGeometry", "(J[I[F[FFF)V", reinterpret_cast<void*>(nativeSetKeyGeometry)},
     {"nativeAnswer",
-     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F[Z[I"
+     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[F[F[Ljava/lang/String;[F[Z[I"
      "[Ljava/lang/String;[Z)I",
      reinterpret_cast<void*>(nativeAnswer)},
+    {"nativeSetTouchModel", "(JZFI)V", reinterpret_cast<void*>(nativeSetTouchModel)},
     {"nativeLearn", "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZ)V",
      reinterpret_cast<void*>(nativeLearn)},
     {"nativeLoadUserWords", "(J[Ljava/lang/String;[I[I[I)V",

@@ -60,6 +60,7 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
                     passwordField = passwordField,
                     privateField = privateField,
                     learningEnabled = orchestrator.preferences.learningEnabled,
+                    heatmapEnabled = orchestrator.preferences.heatmapEnabled,
                 ),
                 addressField = addressField,
                 terminalField = terminalField,
