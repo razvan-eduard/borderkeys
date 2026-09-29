@@ -6,6 +6,7 @@ package com.borderkeys.data.backup
 import androidx.room.withTransaction
 import com.borderkeys.data.BorderKeysDatabase
 import com.borderkeys.data.ClipboardRepository
+import com.borderkeys.data.DictionaryRepository
 import com.borderkeys.data.theme.ThemeRepository
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.first
 class BackupRepository(
     private val database: BorderKeysDatabase,
     private val themes: ThemeRepository,
+    private val dictionary: DictionaryRepository,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     /** What the caller asked to include. Each is a separate answer. */
@@ -278,6 +280,7 @@ class BackupRepository(
                     database.blockedWordDao().insert(BlockedWord(word))
                 }
             }
+            dictionary.edited()
             applied = applied.copy(
                 words = payload.words.size,
                 pairs = payload.bigrams.size,

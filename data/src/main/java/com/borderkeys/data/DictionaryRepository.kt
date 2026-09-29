@@ -52,8 +52,8 @@ class DictionaryRepository internal constructor(
 
     /**
      * Fires after an edit made by hand -- a word or a phrase forgotten, a word blocked or
-     * unblocked, everything forgotten -- so the keyboard can reload what it holds in memory. The
-     * learning flush is not an edit and does not fire it.
+     * unblocked, everything forgotten, a backup restored -- so the keyboard can reload what it
+     * holds in memory. The learning flush is not an edit and does not fire it.
      */
     val edits: SharedFlow<Unit> get() = editsFlow
     private val editsFlow = MutableSharedFlow<Unit>(
@@ -61,7 +61,7 @@ class DictionaryRepository internal constructor(
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
 
-    private fun edited() {
+    internal fun edited() {
         editsFlow.tryEmit(Unit)
     }
 
