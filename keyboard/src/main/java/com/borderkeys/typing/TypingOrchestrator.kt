@@ -11,11 +11,9 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.CaretNudge
 import com.borderkeys.ime.Composer
 import com.borderkeys.ime.FieldRestore
-import com.borderkeys.ime.HabitSpace
 import com.borderkeys.ime.KeyCodes
 import com.borderkeys.ime.LanguageSwitchCorrector
 import com.borderkeys.ime.PhysicalKeys
-import com.borderkeys.ime.PunctuationSpace
 import com.borderkeys.ime.RunningText
 import com.borderkeys.ime.ShiftState
 import com.borderkeys.ime.SuggestionRow
@@ -43,8 +41,11 @@ class TypingOrchestrator(
     /** Shift, caps lock and auto-shift, and the casing they give words. */
     private val shiftFlow = ShiftFlow(currentEditor, host, clock)
 
+    /** The spaces the keyboard writes or takes back on its own. */
+    private val spacingFlow = SpacingFlow(clock)
+
     /** The flows, in the order each hears of a field and of the settings. */
-    private val flows: List<TypingFlow> = listOf(learningFlow, shiftFlow)
+    private val flows: List<TypingFlow> = listOf(learningFlow, shiftFlow, spacingFlow)
 
     var preferences = KeyboardPreferences()
         private set
@@ -54,8 +55,11 @@ class TypingOrchestrator(
         private set
 
     /** The tags of the packs the engine consults, heaviest first. */
-    @Volatile
-    var languageTags: List<String> = emptyList()
+    var languageTags: List<String>
+        get() = spacingFlow.languageTags
+        set(value) {
+            spacingFlow.languageTags = value
+        }
 
     /** Apostrophe spellings for the languages switched on; see [com.borderkeys.ime.Contractions]. */
     var contractions: Map<String, String> = emptyMap()
@@ -84,18 +88,6 @@ class TypingOrchestrator(
     /** The two words before the word being written. */
     var wordContext = WordContext.NONE
         private set
-
-    /** The language the conversation is considered written in, or null. */
-    private var dominantLanguageTag: String? = null
-
-    /** When the last space was committed, for the two-spaces-make-a-full-stop window. */
-    private var lastSpaceAt = 0L
-
-    /** Set for one keystroke after two spaces became a full stop; backspace then undoes it. */
-    private var pendingSpacePeriod = false
-
-    /** Set when a space was added after a sentence mark; the next typed space is swallowed. */
-    private var pendingAutoSpace = false
 
     /**
      * Set right before a commit of this class's own and spent by the next selection report,
@@ -454,7 +446,7 @@ class TypingOrchestrator(
         }
 
         if (letter) {
-            pendingAutoSpace = false
+            spacingFlow.dropAutoSpace()
             if (composingWord.fromGesture) {
                 // A letter after a swiped word finishes and learns it, adds a space, and starts
                 // the next word.
@@ -488,37 +480,16 @@ class TypingOrchestrator(
         val grandContextWord = wordContext.previous2
 
         // A space typed right after one this keyboard added is handled per
-        // KeyboardPreferences.autoSpaceHabit; see [HabitSpace].
-        if (shifted == ' '.code &&
-            HabitSpace.swallows(
-                composingEmpty = typed.isEmpty(),
-                pendingAutoSpace = pendingAutoSpace,
-                habit = preferences.autoSpaceHabit,
-                characterBeforeCursor = {
-                    editor.textBeforeCursor(1)?.takeIf { it.isNotEmpty() }?.get(0)
-                },
-            )
-        ) {
-            if (!HabitSpace.staysArmed(preferences.autoSpaceHabit)) {
-                pendingAutoSpace = false
-            }
+        // KeyboardPreferences.autoSpaceHabit.
+        if (shifted == ' '.code && spacingFlow.swallowsTypedSpace(typed.isEmpty(), editor)) {
             shiftFlow.afterDelimiter(heldByUser, composing.isEmpty())
             return
         }
 
-        // Two spaces within DOUBLE_SPACE_MILLIS after a word character become ". ".
-        if (shifted == ' '.code && typed.isEmpty() && preferences.doubleSpacePeriod && !session.addressField &&
-            clock.currentTimeMillis() - lastSpaceAt < DOUBLE_SPACE_MILLIS &&
-            endsWithWordCharacterBeforeSpace(editor)
-        ) {
+        // Two spaces in quick succession after a word character become ". ".
+        if (shifted == ' '.code && spacingFlow.doubleSpaceMakesPeriod(typed.isEmpty(), editor)) {
             ownEditPending = true
-            editor.beginBatchEdit()
-            editor.deleteSurroundingText(1, 0)
-            editor.commitText(". ", 1)
-            editor.endBatchEdit()
-            lastSpaceAt = 0L
-            pendingSpacePeriod = true
-            pendingAutoSpace = true
+            spacingFlow.writePeriod(editor)
             pendingCorrection = null
             checkpointField()
             refreshContextFromEditor()
@@ -526,25 +497,12 @@ class TypingOrchestrator(
             requestSuggestions()
             return
         }
-        if (shifted == ' '.code) {
-            lastSpaceAt = clock.currentTimeMillis()
-        }
-        pendingSpacePeriod = false
+        spacingFlow.delimiterTyped(shifted)
 
         ownEditPending = true
         editor.beginBatchEdit()
-        // A space before a tight mark is removed, except the one French writes before ! ? ; :.
-        if (typed.isEmpty() && preferences.removeSpaceBeforePunctuation &&
-            isTightPunctuation(shifted) && !isFrenchSpacedPunctuation(shifted)
-        ) {
-            val before = editor.textBeforeCursor(1)
-            if (before != null && before.length == 1 && before[0] == ' ') {
-                editor.deleteSurroundingText(1, 0)
-            }
-        }
-        val added = spaceAfter(shifted)
-        pendingAutoSpace = added.isNotEmpty()
-        val delimiter = String(Character.toChars(shifted)) + added
+        spacingFlow.removeSpaceBeforeMark(shifted, typed.isEmpty(), editor)
+        val delimiter = String(Character.toChars(shifted)) + spacingFlow.spaceAfterMark(shifted, editor)
         if (correction != null) {
             // commitText replaces the composing region with the correction.
             composing.setLength(0)
@@ -582,7 +540,7 @@ class TypingOrchestrator(
         checkpointField()
         shiftFlow.afterDelimiter(heldByUser, composing.isEmpty(), justCommitted = delimiter)
         requestSuggestions()
-        engine.dominantLanguageTag { tag -> dominantLanguageTag = tag }
+        engine.dominantLanguageTag { tag -> spacingFlow.dominantLanguageTag = tag }
         if (preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
             checkLanguageSwitch()
         }
@@ -613,20 +571,11 @@ class TypingOrchestrator(
             applyAutoShift()
             return
         }
-        if (pendingSpacePeriod) {
-            // Turns ". " back into the two spaces.
-            pendingSpacePeriod = false
-            val before = editor.textBeforeCursor(2)
-            if (before != null && before.toString() == ". ") {
-                editor.beginBatchEdit()
-                editor.deleteSurroundingText(2, 0)
-                editor.commitText("  ", 1)
-                editor.endBatchEdit()
-                refreshContextFromEditor()
-                applyAutoShift()
-                requestSuggestions()
-                return
-            }
+        if (spacingFlow.takeBackPeriod(editor)) {
+            refreshContextFromEditor()
+            applyAutoShift()
+            requestSuggestions()
+            return
         }
         if (revertCorrection(editor)) {
             applyAutoShift()
@@ -706,9 +655,7 @@ class TypingOrchestrator(
      */
     fun afterNewlineCommitted() {
         checkpointField()
-        pendingAutoSpace = false
-        pendingSpacePeriod = false
-        lastSpaceAt = 0L
+        spacingFlow.lineStarted()
         refreshContextFromEditor()
         applyAutoShift()
     }
@@ -1215,7 +1162,7 @@ class TypingOrchestrator(
         editor.endBatchEdit()
         composingWord.fromGesture = false
         composingWord.autoSpaceBefore = false
-        pendingAutoSpace = space.isNotEmpty()
+        spacingFlow.spaceAddedAfterPick(space.isNotEmpty())
         // A pick spends a one-shot shift.
         shiftFlow.spendOneShot()
         shiftFlow.clearHeld()
@@ -1462,7 +1409,7 @@ class TypingOrchestrator(
         composingWord.runningText = true
         composingWord.fromGesture = false
         composingWord.autoSpaceBefore = false
-        pendingAutoSpace = false
+        spacingFlow.dropAutoSpace()
         currentEditor()?.finishComposingText()
         refreshContextFromEditor()
         host.clearStrip()
@@ -1605,55 +1552,9 @@ class TypingOrchestrator(
         checkpointField()
     }
 
-    // ---- spacing and shift ---------------------------------------------------------------------
-
-    /** True when what precedes the single trailing space is a word character or a digit. */
-    private fun endsWithWordCharacterBeforeSpace(editor: FieldEditor): Boolean {
-        val before = editor.textBeforeCursor(2) ?: return false
-        return before.length == 2 && before[1] == ' ' &&
-            (isWordCharacter(before[0].code) || before[0].isDigit())
-    }
-
-    /** Marks that close up against the word before them. */
-    private fun isTightPunctuation(code: Int): Boolean =
-        code == '.'.code || code == ','.code || code == '!'.code || code == '?'.code ||
-            code == ';'.code || code == ':'.code
-
     /** Marks that end a sentence. */
     private fun isSentenceEndingPunctuation(code: Int): Boolean =
         code == '.'.code || code == '!'.code || code == '?'.code
-
-    /** The space that follows a sentence mark, or nothing at all; see [PunctuationSpace]. */
-    private fun spaceAfter(code: Int): String {
-        val editor = currentEditor()
-        val follows = PunctuationSpace.follows(
-            enabled = preferences.spaceAfterPunctuation,
-            addressField = session.addressField,
-            insideNumbers = preferences.spaceInsideNumbers,
-            tightPunctuation = isTightPunctuation(code),
-            before = { editor?.textBeforeCursor(1)?.firstOrNull() },
-            after = { editor?.textAfterCursor(1)?.firstOrNull() },
-        )
-        return if (follows) " " else ""
-    }
-
-    /** Whether [code] is one of ! ? ; : and the text is French. */
-    private fun isFrenchSpacedPunctuation(code: Int): Boolean =
-        (code == '!'.code || code == '?'.code || code == ';'.code || code == ':'.code) &&
-            writingInFrench()
-
-    /**
-     * Whether the text being written is French: the dominant language, or, before there is one,
-     * the only language enabled.
-     */
-    private fun writingInFrench(): Boolean {
-        val dominant = dominantLanguageTag
-        if (dominant != null) {
-            return dominant.startsWith("fr", ignoreCase = true)
-        }
-        val tags = languageTags
-        return tags.isNotEmpty() && tags.all { it.startsWith("fr", ignoreCase = true) }
-    }
 
     /**
      * Sets shift from what the field asks for and the text before the caret, unless the user set
@@ -1667,9 +1568,6 @@ class TypingOrchestrator(
 
         /** How much of the field [checkpointField] and the field's history read. */
         const val FIELD_HISTORY_CHARS = 20_000
-
-        /** The longest gap between two spaces that become a full stop. */
-        const val DOUBLE_SPACE_MILLIS = 1200L
 
         /** The characters a swiped word follows without a space; see [spaceBeforeSwipedWord]. */
         const val SWIPE_NO_SPACE_AFTER = "([{\"'/-_@#\n"
