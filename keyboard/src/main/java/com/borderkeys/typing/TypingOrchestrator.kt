@@ -47,8 +47,12 @@ class TypingOrchestrator(
     /** Typing into a terminal, key event by key event. */
     private val terminalWriter = TerminalWriter(host)
 
+    /** The commit decision, the pending correction, and the language switch's corrections. */
+    private val commitFlow = CommitFlow(currentEditor, engine)
+
     /** The flows, in the order each hears of a field and of the settings. */
-    private val flows: List<TypingFlow> = listOf(terminalWriter, learningFlow, shiftFlow, spacingFlow)
+    private val flows: List<TypingFlow> =
+        listOf(terminalWriter, learningFlow, shiftFlow, spacingFlow, commitFlow)
 
     var preferences = KeyboardPreferences()
         private set
@@ -65,7 +69,11 @@ class TypingOrchestrator(
         }
 
     /** Apostrophe spellings for the languages switched on; see [com.borderkeys.ime.Contractions]. */
-    var contractions: Map<String, String> = emptyMap()
+    var contractions: Map<String, String>
+        get() = commitFlow.contractions
+        set(value) {
+            commitFlow.contractions = value
+        }
 
     /** The word being written. */
     private val composingWord = ComposingWord()
@@ -104,31 +112,8 @@ class TypingOrchestrator(
     /** The engine's last answer, kept so the delimiter path can apply it. */
     private var searchAnswer = SearchAnswer.NONE
 
-    /**
-     * A correction that has been applied and can still be taken back, for one keystroke:
-     * backspace reverts it, any other key confirms it, and a cursor move drops it.
-     */
-    private data class PendingCorrection(
-        val typed: String,
-        val corrected: String,
-        val delimiter: String,
-        /** The word before it. */
-        val contextWord: String?,
-        /** The word before [contextWord]. */
-        val grandContextWord: String?,
-        /** [ComposingWord.capitalisedByUser] when [typed] was finished. */
-        val deliberateCapital: Boolean,
-        /** Whether confirming it learns [corrected]; false for a text shortcut's expansion. */
-        val learn: Boolean = true,
-    )
-
-    private var pendingCorrection: PendingCorrection? = null
-
     /** The field's undo and redo history for this input session. */
     private val fieldHistory = Composer()
-
-    /** Finds the words that look wrong once the conversation's language has changed. */
-    private val languageSwitchCorrector = LanguageSwitchCorrector()
 
     /** Where the typed word and the word a delimiter would apply end up on the strip. */
     private val suggestionRow = SuggestionRow()
@@ -489,7 +474,7 @@ class TypingOrchestrator(
         if (shifted == ' '.code && spacingFlow.doubleSpaceMakesPeriod(typed.isEmpty(), editor)) {
             ownEditPending = true
             spacingFlow.writePeriod(editor)
-            pendingCorrection = null
+            commitFlow.dropPending()
             checkpointField()
             refreshContextFromEditor()
             applyAutoShift(justCommitted = ". ")
@@ -519,18 +504,20 @@ class TypingOrchestrator(
                 if (rewrite) correction.substringAfterLast(' ') else correction,
             )
             // Learned once the correction survives the next keystroke.
-            pendingCorrection = PendingCorrection(
-                typed, correction, delimiter, contextWord, grandContextWord,
-                composingWord.capitalisedByUser, learn = !rewrite,
+            commitFlow.setPending(
+                PendingCorrection(
+                    typed, correction, delimiter, contextWord, grandContextWord,
+                    composingWord.capitalisedByUser, learn = !rewrite,
+                ),
             )
-            if (!rewrite && preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
-                recordLanguageSwitchFlag(editor, typed, correction, delimiter)
+            if (!rewrite) {
+                commitFlow.recordLanguageSwitchFlag(editor, typed, correction, delimiter)
             }
         } else {
             if (typed.isNotEmpty()) {
                 learningFlow.record(typed, contextWord, grandContextWord, composingWord.capitalisedByUser)
             }
-            pendingCorrection = null
+            commitFlow.dropPending()
         }
         // A sentence mark clears the context for the next word, after this word was learned.
         if (isSentenceEndingPunctuation(shifted)) {
@@ -540,9 +527,7 @@ class TypingOrchestrator(
         shiftFlow.afterDelimiter(heldByUser, composing.isEmpty(), justCommitted = delimiter)
         requestSuggestions()
         engine.dominantLanguageTag { tag -> spacingFlow.dominantLanguageTag = tag }
-        if (preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
-            checkLanguageSwitch()
-        }
+        commitFlow.checkLanguageSwitch(::onLanguageSwitchReplacements)
     }
 
     private fun handleDelete() {
@@ -821,73 +806,6 @@ class TypingOrchestrator(
 
     // ---- the language switch ------------------------------------------------------------------
 
-    /** Records where [correction] landed, read from the cursor, for [checkLanguageSwitch]. */
-    private fun recordLanguageSwitchFlag(
-        editor: FieldEditor,
-        typed: String,
-        correction: String,
-        delimiter: String,
-    ) {
-        val cursor = editor.extractedText(FIELD_HISTORY_CHARS)?.selectionEnd ?: return
-        val end = cursor - delimiter.length
-        val start = end - correction.length
-        if (start < 0) {
-            return
-        }
-        languageSwitchCorrector.recordCorrection(
-            LanguageSwitchCorrector.Flag(typed, correction, start, end),
-        )
-    }
-
-    /**
-     * Asks whether the conversation's language changed and which recent corrections that leaves
-     * wrong. An answer about an older field is dropped.
-     */
-    private fun checkLanguageSwitch() {
-        val generation = session.generation
-        engine.dominantPack { dominantPack ->
-            if (generation != session.generation || !languageSwitchCorrector.observeDominantPack(dominantPack)) {
-                return@dominantPack
-            }
-            val editor = currentEditor() ?: return@dominantPack
-            val verified = languageSwitchCorrector.snapshot().filter { flag ->
-                textAt(editor, flag.startOffset, flag.endOffset) == flag.appliedText
-            }
-            if (verified.isEmpty()) {
-                return@dominantPack
-            }
-            engine.candidatesForPack(dominantPack, verified.map { it.typedText }) { suggestions ->
-                if (generation != session.generation) {
-                    return@candidatesForPack
-                }
-                val replacements = languageSwitchCorrector.resolve(verified, suggestions)
-                if (replacements.isNotEmpty()) {
-                    onLanguageSwitchReplacements(replacements)
-                }
-            }
-        }
-    }
-
-    /** The field's text between two offsets, or null if either is out of range. */
-    private fun textAt(editor: FieldEditor, start: Int, endExclusive: Int): String? {
-        if (start < 0 || endExclusive < start) {
-            return null
-        }
-        val text = editor.extractedText(FIELD_HISTORY_CHARS)?.text ?: return null
-        if (endExclusive > text.length) {
-            return null
-        }
-        return text.subSequence(start, endExclusive).toString()
-    }
-
-    /** The selection in the offsets [textAt] uses, or null when the editor does not report it. */
-    private fun selectionOf(editor: FieldEditor): Pair<Int, Int>? {
-        val extracted = editor.extractedText(FIELD_HISTORY_CHARS) ?: return null
-        val start = extracted.selectionStart
-        val end = extracted.selectionEnd
-        return if (start < 0 || end < 0) null else Pair(start, end)
-    }
-
     /** `Ask` shows the revert panel; `Auto-apply` edits the field itself, right away. */
     private fun onLanguageSwitchReplacements(replacements: List<LanguageSwitchCorrector.Replacement>) {
         if (preferences.languageSwitchCorrectionMode == KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY) {
@@ -898,36 +816,15 @@ class TypingOrchestrator(
     }
 
     /**
-     * Applies the replacements in their order, each only if its text is still in place, with one
-     * [checkpointField] for the batch, then puts the caret back where the user is writing.
+     * Applies the replacements through [CommitFlow.replace] in one batch edit, with one
+     * [checkpointField] for the batch.
      */
     fun applyLanguageSwitchReplacements(replacements: List<LanguageSwitchCorrector.Replacement>) {
         val editor = currentEditor() ?: return
-        val applied = ArrayList<LanguageSwitchCorrector.Replacement>(replacements.size)
         editor.beginBatchEdit()
         finishComposing(editor)
-        val caret = selectionOf(editor)
-        for (replacement in replacements) {
-            if (textAt(editor, replacement.startOffset, replacement.endOffset) !=
-                replacement.previousText
-            ) {
-                continue
-            }
-            editor.setComposingRegion(replacement.startOffset, replacement.endOffset)
-            editor.setComposingText(replacement.text, 1)
-            editor.finishComposingText()
-            applied += replacement
-        }
-        // The caret goes back, shifted by the length the text before it changed.
-        if (applied.isNotEmpty() && caret != null) {
-            val (start, end) = caret
-            editor.setSelection(
-                languageSwitchCorrector.caretAfter(start, applied),
-                languageSwitchCorrector.caretAfter(end, applied),
-            )
-        }
+        val changed = commitFlow.replace(editor, replacements)
         editor.endBatchEdit()
-        val changed = applied.isNotEmpty()
         if (changed) {
             checkpointField()
             refreshContextFromEditor()
@@ -939,8 +836,7 @@ class TypingOrchestrator(
 
     /** Confirms the pending correction and learns it. */
     private fun confirmPendingCorrection() {
-        val pending = pendingCorrection ?: return
-        pendingCorrection = null
+        val pending = commitFlow.takePending() ?: return
         if (!pending.learn) {
             return
         }
@@ -952,77 +848,31 @@ class TypingOrchestrator(
 
     /** Drops the pending correction without learning it, after an edit that rewrote the field. */
     fun dropPendingCorrection() {
-        pendingCorrection = null
+        commitFlow.dropPending()
     }
 
     /** What the key [endedBy] would write in place of [typed]; see [WordCommit]. Reads no editor. */
-    internal fun commitOutcome(typed: String, endedBy: Int): WordCommit.Outcome = WordCommit.decide(
-        typed = typed,
-        endedBy = endedBy,
-        fromGesture = composingWord.fromGesture,
-        runningText = composingWord.runningText,
-        shortcuts = preferences.textShortcuts,
-        contractions = contractions,
-        possessive = searchAnswer.possessive,
-        suggestion = searchAnswer.correction,
-        suggestionQuery = searchAnswer.query,
-        knownWord = searchAnswer.knownWord,
-        isProperNoun = searchAnswer.correctionIsName,
-        inflection = searchAnswer.inflection,
-        settings = WordCommit.Settings(
-            autoCorrectOnSpace = preferences.autoCorrectOnSpace,
-            autoCapitalise = preferences.autoCapitalise,
-            minimumLength = preferences.minCorrectionLength,
-            correctionDistance = preferences.correctionDistance,
-            capitaliseNames = preferences.capitaliseNames,
-        ),
-    )
-
-    /** The word the strip outlines: what a space would write, unless it is a text shortcut. */
-    private fun outlinedCommit(typed: String): String? {
-        val outcome = commitOutcome(typed, ' '.code)
-        return if (outcome.kind == WordCommit.Kind.SHORTCUT) null else outcome.text
-    }
-
-    /** Whether [pending]'s correction and delimiter are still the text before the caret. */
-    private fun correctionBeforeCaret(pending: PendingCorrection): Boolean {
-        val committed = pending.corrected + pending.delimiter
-        val before = currentEditor()?.textBeforeCursor(committed.length) ?: return false
-        return before.toString() == committed
-    }
+    internal fun commitOutcome(typed: String, endedBy: Int): WordCommit.Outcome =
+        commitFlow.decide(
+            typed, endedBy, composingWord.fromGesture, composingWord.runningText, searchAnswer,
+        )
 
     /**
-     * Replaces a pending correction and its delimiter with what was typed, in one batch edit.
-     * Returns false when there is nothing to revert. [viaBackspace] is whether the backspace key
-     * asked, which [KeyboardPreferences.revertCorrectionOnBackspace] governs.
+     * Takes the pending correction back through [CommitFlow.revert], and learns what that leaves.
+     * Returns whether it was taken back.
      */
     private fun revertCorrection(editor: FieldEditor, viaBackspace: Boolean = true): Boolean {
-        val pending = pendingCorrection ?: return false
-        pendingCorrection = null
-        if (viaBackspace && !preferences.revertCorrectionOnBackspace) {
-            // An ordinary backspace confirms the correction.
-            if (pending.learn) {
-                learningFlow.record(
-                    pending.corrected, pending.contextWord, pending.grandContextWord,
-                    pending.deliberateCapital,
-                )
-            }
-            return false
-        }
-        val committed = pending.corrected + pending.delimiter
-        val before = editor.textBeforeCursor(committed.length)
-        if (before == null || before.toString() != committed) {
-            // The text before the caret changed: the correction stands and is learned.
+        val revert = commitFlow.revert(editor, viaBackspace) ?: return false
+        val pending = revert.pending
+        if (revert.learnCorrected) {
             learningFlow.record(
                 pending.corrected, pending.contextWord, pending.grandContextWord,
                 pending.deliberateCapital,
             )
+        }
+        if (!revert.reverted) {
             return false
         }
-        editor.beginBatchEdit()
-        editor.deleteSurroundingText(committed.length, 0)
-        editor.commitText(pending.typed + pending.delimiter, 1)
-        editor.endBatchEdit()
         wordContext = wordContext.copy(previous1 = pending.typed)
         // The typed word is learned as asserted; the rejected correction is forgotten from the
         // personal dictionary, never blocked.
@@ -1051,7 +901,6 @@ class TypingOrchestrator(
     /** Starts a new undo and redo history for a field just opened, seeded with its text. */
     private fun resetFieldHistory() {
         fieldHistory.clear()
-        languageSwitchCorrector.reset()
         checkpointField()
     }
 
@@ -1094,7 +943,7 @@ class TypingOrchestrator(
             editor.commitText(span.insert, 1)
         }
         editor.endBatchEdit()
-        pendingCorrection = null
+        commitFlow.dropPending()
         refreshContextFromEditor()
         requestSuggestions()
     }
@@ -1110,9 +959,9 @@ class TypingOrchestrator(
             return
         }
         // While a correction is pending, the typed chip reverts it.
-        val pending = pendingCorrection
-        if (pending != null && index == host.stripTypedIndex() &&
-            word == pending.typed && composing.isEmpty()
+        val pendingTyped = commitFlow.pendingTypedWord
+        if (pendingTyped != null && index == host.stripTypedIndex() &&
+            word == pendingTyped && composing.isEmpty()
         ) {
             revertCorrection(editor, viaBackspace = false)
             host.clearStrip()
@@ -1280,8 +1129,10 @@ class TypingOrchestrator(
         // Arranged for the slots that hold words, outlining what a delimiter would commit.
         val row = suggestionRow.arrange(
             cased, lastQuery, preferences.suggestionCount.coerceAtMost(slots),
-            correction = outlinedCommit(lastQuery),
-            revertable = pendingCorrection?.takeIf { correctionBeforeCaret(it) }?.typed,
+            correction = commitFlow.outline(
+                lastQuery, composingWord.fromGesture, composingWord.runningText, searchAnswer,
+            ),
+            revertable = commitFlow.revertableWord(),
         )
         host.showSuggestions(row, suggestionRow.typedIndex, suggestionRow.appliedIndex)
     }
@@ -1343,7 +1194,7 @@ class TypingOrchestrator(
     /** Drops the word, its answer and the pending correction, and asks about the caret afresh. */
     fun resetComposing() {
         host.onWordReset()
-        pendingCorrection = null
+        commitFlow.dropPending()
         searchAnswer = searchAnswer.copy(
             query = "",
             knownWord = "",
