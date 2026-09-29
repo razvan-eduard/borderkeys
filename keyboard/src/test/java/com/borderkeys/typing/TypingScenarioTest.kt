@@ -78,6 +78,15 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `backspace deletes a selection made leftwards`() {
+        rig.type("abc def")
+        rig.longPress(KeyCodes.SHIFT)
+        rig.slide(-1)
+        rig.press(KeyCodes.DELETE)
+        assertEquals("abc de", rig.editor.text)
+    }
+
+    @Test
     fun `control on the modifier row selects all with a`() {
         rig.type("abc")
         rig.host.onPhysicalKey = { keyCode, _ ->
