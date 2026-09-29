@@ -165,7 +165,7 @@ class KeyboardCanvasView(
     private val pointerKey = IntArray(MAX_POINTERS) { NO_KEY }
     private val pointerDownAt = LongArray(MAX_POINTERS)
 
-    /** Where each pointer chose its key: the press, or where a slide entered the key. */
+    /** Where each pointer pressed its key; NaN once it slid onto another key. */
     private val pointerChosenX = FloatArray(MAX_POINTERS)
     private val pointerChosenY = FloatArray(MAX_POINTERS)
     private var touchSlop = 0
@@ -1104,8 +1104,8 @@ class KeyboardCanvasView(
         endPress(previous)
         cancelPendingCallbacks()
         pointerKey[pointerId] = index
-        pointerChosenX[pointerId] = x
-        pointerChosenY[pointerId] = y
+        pointerChosenX[pointerId] = Float.NaN
+        pointerChosenY[pointerId] = Float.NaN
         startPress(index)
         showPreview(index, pointerId)
         if (swipeEnabled && !gestureActive && KeyFlags.has(geometry.keyFlags[index], KeyFlags.LETTER)) {
