@@ -809,8 +809,6 @@ object Keys {
     const val PRIVACY_ENCRYPTED_DATABASE = "privacy_encrypted_database"
     const val PRIVACY_EXCLUDED_FROM_BACKUP = "privacy_excluded_from_backup"
     const val PRIVACY_HAPTIC_FEEDBACK_USES_THE_API_THAT = "privacy_haptic_feedback_uses_the_api_that"
-    const val PRIVACY_HEATMAP = "privacy_heatmap"
-    const val PRIVACY_HEATMAP_NOTE = "privacy_heatmap_note"
     const val PRIVACY_IN_A_PASSWORD_FIELD_OR_WHEN = "privacy_in_a_password_field_or_when"
     const val PRIVACY_NETWORK = "privacy_network"
     const val PRIVACY_NO_INTERNET_PERMISSION_AND_NO_HTTP = "privacy_no_internet_permission_and_no_http"

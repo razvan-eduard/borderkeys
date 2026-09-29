@@ -73,10 +73,6 @@ fun PrivacyScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.PRIVACY_SO_THAT_AFTER_VREAU_IT_CAN],
             )
             SettingRow(
-                title = strings[Keys.PRIVACY_HEATMAP],
-                subtitle = strings[Keys.PRIVACY_HEATMAP_NOTE],
-            )
-            SettingRow(
                 title = strings[Keys.PRIVACY_EXCLUDED_FROM_BACKUP],
                 subtitle = strings[Keys.PRIVACY_CLOUD_BACKUP_AND_DEVICE_TO_DEVICE],
             )

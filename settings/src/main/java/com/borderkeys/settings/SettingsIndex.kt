@@ -99,7 +99,6 @@ object SettingsIndex {
         Entry(Screen.Privacy, null, Keys.PRIVACY_WHAT_IS_STORED),
         Entry(Screen.Privacy, Keys.PRIVACY_WHAT_IS_STORED, Keys.PRIVACY_ENCRYPTED_DATABASE),
         Entry(Screen.Privacy, Keys.PRIVACY_WHAT_IS_STORED, Keys.PRIVACY_PAIRS_OF_WORDS_YOU_WRITE_TOGETHER),
-        Entry(Screen.Privacy, Keys.PRIVACY_WHAT_IS_STORED, Keys.PRIVACY_HEATMAP),
         Entry(Screen.Privacy, Keys.PRIVACY_WHAT_IS_STORED, Keys.PRIVACY_EXCLUDED_FROM_BACKUP),
         Entry(Screen.Privacy, Keys.PRIVACY_WHAT_IS_STORED, Keys.PRIVACY_NOTHING_IS_LEARNED_IN_A_PASSWORD),
         Entry(Screen.Privacy, null, Keys.PRIVACY_WHAT_IS_NOT_STORED),

@@ -753,8 +753,6 @@
   "privacy_permissions_and_network": "Permisiuni și rețea",
   "privacy_read_from_the_installed_package_just": "Citite chiar acum din pachetul instalat, nu dintr-un șir scris în acest ecran. Dacă s-ar adăuga vreodată o permisiune, lista ar spune-o.",
   "privacy_so_that_after_vreau_it_can": "Învață ce cuvinte obișnuiești să scrii împreună, ca următorul să poată fi sugerat mai devreme. Stocat criptat, niciodată într-un câmp de parolă, și șters odată cu dicționarul personal.",
-  "privacy_heatmap": "Unde atingi fiecare tastă",
-  "privacy_heatmap_note": "O medie pe tastă, ca tastatura să știe ce tastă ai vrut. Stocată criptat, niciodată într-un câmp de parolă, nu în copii de rezervă, și ștearsă când oprești harta atingerilor sau Învățarea.",
   "privacy_that_is_why_nothing_downloads_dictionaries": "De aceea nu se descarcă nimic. Dicționarele și modelele sunt fie în aplicație, fie alese de tine dintr-un fișier de pe acest dispozitiv.",
   "privacy_there_is_none": "Nu există",
   "privacy_what_is_not_stored": "Ce nu se stochează",

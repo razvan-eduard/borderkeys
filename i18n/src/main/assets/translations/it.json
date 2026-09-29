@@ -753,8 +753,6 @@
   "privacy_permissions_and_network": "Autorizzazioni e rete",
   "privacy_read_from_the_installed_package_just": "Letti proprio ora dal pacchetto installato, non da una stringa scritta in questa schermata. Se un permesso venisse mai aggiunto, questo elenco lo direbbe.",
   "privacy_so_that_after_vreau_it_can": "Impara quali parole tendi a scrivere insieme, così la successiva può essere suggerita prima. Salvato in modo cifrato, mai in un campo password, e cancellato insieme al dizionario personale.",
-  "privacy_heatmap": "Dove cadono i tuoi tocchi su ogni tasto",
-  "privacy_heatmap_note": "Una media per tasto, così la tastiera capisce quale tasto intendevi. Salvata in modo cifrato, mai in un campo password, non nei backup, e cancellata quando spegni la mappa dei tocchi o l'Apprendimento.",
   "privacy_that_is_why_nothing_downloads_dictionaries": "È per questo che non si scarica nulla. I dizionari e i modelli o sono dentro l'applicazione o li scegli tu da un file su questo dispositivo.",
   "privacy_there_is_none": "Non ce n'è",
   "privacy_what_is_not_stored": "Cosa non viene salvato",
