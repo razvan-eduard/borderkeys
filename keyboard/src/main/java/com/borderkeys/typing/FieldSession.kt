@@ -12,6 +12,14 @@ data class FieldSession(
     val addressField: Boolean,
     /** The field is a terminal: commits show at once and deletions go as key events. */
     val terminalField: Boolean,
+    /** The field's input type, in [android.text.InputType]'s bits. */
+    val inputType: Int = 0,
+    /** The field's action and flags, in [android.view.inputmethod.EditorInfo.imeOptions]' bits. */
+    val imeOptions: Int = 0,
+    /** The capital modes that applied when the field started, for when it cannot be asked. */
+    val initialCapsMode: Int = 0,
+    /** The field described itself; without that, shift is never set automatically. */
+    val described: Boolean = false,
 ) {
     companion object {
         /** Before any field has started. */

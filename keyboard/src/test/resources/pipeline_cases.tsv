@@ -1,12 +1,12 @@
-# What the space bar commits, through the engine, the JNI bridge and the Kotlin commit layer,
-# against the shipped packs. Read by PipelineTest.
+# What typing the word and a space commits, through the typing orchestrator, the engine and the
+# JNI bridge, against the shipped packs. Read by PipelineTest.
 #
 #   typed <TAB> committed <TAB> reason
 #
 # `committed` is "-" when the typed text is left untouched.
 #
-# `reason` is which claim on the word won: a rewrite's kind (Shortcut, Contraction, Possessive,
-# Capital), one of autocorrect's situations, or NotProse -- see WordCommit.
+# `reason` is which claim won on the last word typed: a rewrite's kind (Shortcut, Contraction,
+# Possessive, Capital), one of autocorrect's situations, or NotProse -- see WordCommit.
 
 # --- a word still being typed is completed, not corrected -------------------------------------
 believ	believe	Correctable
@@ -30,10 +30,11 @@ wihch	which	Correctable
 aobut	about	Correctable
 
 # --- a mark the user typed is kept ------------------------------------------------------------
+# A mark before a word is a key of its own; the word after it is decided without it.
 dogs'	-	NothingOffered
 workers'	-	NothingOffered
-'hello	-	NothingOffered
-'quoted	-	NothingOffered
+'hello	-	NoChange
+'quoted	-	NoChange
 quoted'	-	NothingOffered
 
 # --- a mark left out is restored --------------------------------------------------------------
@@ -70,9 +71,11 @@ form	-	NoChange
 their	-	NoChange
 
 # --- an address or a filename is not a sentence -----------------------------------------------
-# A digit anywhere keeps autocorrect from being asked (RunningText).
+# A word a digit ends, or one that follows a digit, is not corrected.
 sha256	-	NotProse
 v2beta	-	NotProse
+covid19	-	NotProse
+i7	-	NotProse
 
 # --- a two-letter word the pack holds is left alone -------------------------------------------
 ab	-	NoChange
@@ -80,7 +83,7 @@ ab	-	NoChange
 # --- a hyphen the user typed is kept ----------------------------------------------------------
 well-	-	NothingOffered
 year-	-	NothingOffered
--well	-	NothingOffered
+-well	-	NoChange
 
 # --- a trailing mark on a known word is kept --------------------------------------------------
 put'	-	NothingOffered

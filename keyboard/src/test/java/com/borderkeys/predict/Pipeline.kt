@@ -3,8 +3,11 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.Contractions
-import com.borderkeys.ime.WordCommit
+import com.borderkeys.typing.QueuedEngine
+import com.borderkeys.typing.TypingOrchestrator
+import com.borderkeys.typing.TypingRig
 import org.junit.AssumptionViolatedException
 import java.io.File
 import java.io.FileDescriptor
@@ -13,20 +16,31 @@ import java.io.PrintWriter
 import java.util.Locale
 
 /**
- * The engine, the JNI bridge and [WordCommit] run off a device against the shipped packs, with
- * corrections and auto-capitalise on and no shortcuts. The editor, the composing region,
- * delimiter handling and field state are not covered.
+ * Words typed into a [TypingOrchestrator] off a device, the engine on the shipped packs through
+ * the JNI bridge: corrections on space, auto-capitalise on, no shortcuts, and Learning off unless
+ * [learning] is set. The field is plain text.
  */
 internal class Pipeline private constructor(
     private val handle: Long,
-    private val contractions: Map<String, String>,
+    contractions: Map<String, String>,
     private val languages: List<String>,
 ) {
 
-    /** What a word would become; [reason] is [WordCommit.Outcome.reason]. */
+    /** What a word became, and why. */
     internal data class Outcome(val typed: String, val committed: String?, val reason: String)
 
-    /** Runs one word as a delimiter would; [previous] is the word before it. */
+    /** Whether the Learning switch is on; off, no case learns from the ones typed before it. */
+    var learning = false
+
+    private val rig = TypingRig(QueuedEngine(handle, languages), settings()).also {
+        it.orchestrator.contractions = contractions
+        it.orchestrator.languageTags = languages
+    }
+
+    /**
+     * Types [typed] and a space into a field holding [previous] and a space, or nothing, and
+     * reads back what the field kept.
+     */
     fun commit(
         typed: String,
         previous: String? = null,
@@ -34,30 +48,51 @@ internal class Pipeline private constructor(
         correctionDistance: Int = DEFAULT_DISTANCE,
         capitaliseNames: Boolean = true,
     ): Outcome {
-        val answer = answerRequest(handle, typed, previous, null, languages, scratch)
-        val outcome = WordCommit.decide(
-            typed = typed,
-            endedBy = ' '.code,
-            fromGesture = false,
-            runningText = true,
-            shortcuts = emptyList(),
-            contractions = contractions,
-            possessive = answer.possessive,
-            suggestion = answer.correction,
-            suggestionQuery = typed,
-            knownWord = answer.knownWord,
-            isProperNoun = answer.correctionIsName,
-            inflection = answer.inflection,
-            settings = WordCommit.Settings(
-                autoCorrectOnSpace = true,
-                autoCapitalise = true,
-                minimumLength = minimumLength,
-                correctionDistance = correctionDistance,
-                capitaliseNames = capitaliseNames,
-            ),
-        )
-        return Outcome(typed, outcome.text, outcome.reason)
+        rig.orchestrator.applySettings(settings(minimumLength, correctionDistance, capitaliseNames))
+        val before = if (previous != null) "$previous " else ""
+        rig.startField(before)
+        return typeWord(typed)
     }
+
+    /**
+     * Types [typed] and a space where the caret is. [Outcome.committed] is null when the field
+     * kept what was typed; [Outcome.reason] is the decision of the key that ended the last word.
+     */
+    private fun typeWord(typed: String): Outcome {
+        val start = rig.editor.selectionEnd
+        val keys = "$typed "
+        var reason: String? = null
+        var index = 0
+        while (index < keys.length) {
+            val code = keys.codePointAt(index)
+            index += Character.charCount(code)
+            val word = rig.orchestrator.composingText
+            if (word.isNotEmpty() && !TypingOrchestrator.isWordCharacter(code)) {
+                reason = rig.orchestrator.commitOutcome(word, code).reason
+            }
+            rig.press(code)
+        }
+        val written = rig.editor.text.substring(start, rig.editor.selectionEnd).removeSuffix(" ")
+        return Outcome(
+            typed,
+            written.takeIf { it != typed },
+            reason ?: rig.orchestrator.commitOutcome("", ' '.code).reason,
+        )
+    }
+
+    /** The settings the keyboard runs with, the three the corpora vary given. */
+    private fun settings(
+        minimumLength: Int = 3,
+        correctionDistance: Int = DEFAULT_DISTANCE,
+        capitaliseNames: Boolean = true,
+    ) = KeyboardPreferences(
+        learningEnabled = learning,
+        autoCorrectOnSpace = true,
+        autoCapitalise = true,
+        minCorrectionLength = minimumLength,
+        correctionDistance = correctionDistance,
+        capitaliseNames = capitaliseNames,
+    )
 
     /** What the suggestion strip would show for [typed], in order. */
     fun strip(typed: String, previous: String? = null): List<String> =
@@ -88,12 +123,11 @@ internal class Pipeline private constructor(
     /** The engine's ranking, the index of its correction in it, and the correction itself. */
     data class CorrectionView(val ranked: List<String>, val correctionAt: Int, val correction: String?)
 
-    /** Each word of [phrase] in turn, every one carrying the word before it as context. */
+    /** Each word of [phrase] typed in turn, with a space after it, into one field. */
     fun commitPhrase(phrase: String): List<Outcome> {
-        var previous: String? = null
-        return phrase.split(' ').filter { it.isNotEmpty() }.map { word ->
-            commit(word, previous).also { previous = it.committed ?: word }
-        }
+        rig.orchestrator.applySettings(settings())
+        rig.startField()
+        return phrase.split(' ').filter { it.isNotEmpty() }.map { typeWord(it) }
     }
 
     /** The pack the conversation is taken to be in, or -1 while undecided; moved by [commit]. */
