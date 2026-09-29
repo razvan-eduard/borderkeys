@@ -44,8 +44,11 @@ class TypingOrchestrator(
     /** The spaces the keyboard writes or takes back on its own. */
     private val spacingFlow = SpacingFlow(clock)
 
+    /** Typing into a terminal, key event by key event. */
+    private val terminalWriter = TerminalWriter(host)
+
     /** The flows, in the order each hears of a field and of the settings. */
-    private val flows: List<TypingFlow> = listOf(learningFlow, shiftFlow, spacingFlow)
+    private val flows: List<TypingFlow> = listOf(terminalWriter, learningFlow, shiftFlow, spacingFlow)
 
     var preferences = KeyboardPreferences()
         private set
@@ -81,9 +84,6 @@ class TypingOrchestrator(
 
     /** What the last slide along the space bar selected, so one drag keeps one anchor. */
     private var lastNudge: CaretNudge.Selection? = null
-
-    /** The letters typed into a terminal since the last delimiter. */
-    private val terminalWord = StringBuilder()
 
     /** The two words before the word being written. */
     var wordContext = WordContext.NONE
@@ -145,7 +145,6 @@ class TypingOrchestrator(
      */
     fun startField(field: FieldSession) {
         session = field
-        terminalWord.setLength(0)
         session = session.copy(policy = session.policy.withLearning(preferences.learningEnabled))
         for (flow in flows) {
             flow.startField(session)
@@ -550,7 +549,7 @@ class TypingOrchestrator(
         host.dismissRing()
         val editor = currentEditor() ?: return
         if (session.terminalField) {
-            deleteInTerminal(editor)
+            deleteInTerminal()
             return
         }
         val hasSelection = selectionEnd > selectionStart
@@ -801,18 +800,14 @@ class TypingOrchestrator(
 
     /**
      * Writes a swiped word whole into a terminal, after a space when letters were typed just
-     * before it, and offers the rest of [cased] on the strip. The word stays [terminalWord], so a
-     * pick from the strip replaces it the way it replaces typed letters.
+     * before it, and offers the rest of [cased] on the strip. The word stays the terminal's word,
+     * so a pick from the strip replaces it the way it replaces typed letters.
      */
     fun swipeIntoTerminal(cased: List<Candidate>) {
         val editor = currentEditor() ?: return
         val best = cased.first().text
         ownEditPending = true
-        editor.beginBatchEdit()
-        writeToTerminal(editor, if (terminalWord.isNotEmpty()) " $best" else best)
-        editor.endBatchEdit()
-        terminalWord.setLength(0)
-        terminalWord.append(best)
+        terminalWriter.writeSwiped(editor, best)
         lastQuery = best
         searchAnswer = searchAnswer.copy(
             query = best,
@@ -1191,97 +1186,49 @@ class TypingOrchestrator(
     // ---- terminals -----------------------------------------------------------------------------
 
     /**
-     * Types [code] into a terminal: written at once, never composed. A letter extends
-     * [terminalWord], which the strip completes; anything else ends it. A one-shot shift is
-     * spent by the letter it capitalised, as in an ordinary field.
+     * Types [code] into a terminal, written at once. A one-shot shift is spent by the letter it
+     * capitalised, as in an ordinary field.
      */
     private fun typeIntoTerminal(editor: FieldEditor, code: Int) {
-        val letter = if (terminalWord.isEmpty()) Character.isLetter(code) else isWordCharacter(code)
+        val letter = terminalWriter.continuesWord(code)
         if (letter) {
             shiftFlow.spendOneShot()
         }
         shiftFlow.clearHeld()
         ownEditPending = true
-        writeToTerminal(editor, String(Character.toChars(code)))
-        if (letter) {
-            terminalWord.appendCodePoint(code)
-        } else {
-            terminalWord.setLength(0)
-        }
+        terminalWriter.type(editor, code, letter)
         requestTerminalSuggestions()
     }
 
-    /**
-     * Writes [text] to a terminal: each character as the key that carries it, shift held for a
-     * capital, and as text only where no plain key carries it.
-     */
-    private fun writeToTerminal(editor: FieldEditor, text: String) {
-        var index = 0
-        while (index < text.length) {
-            val code = text.codePointAt(index)
-            index += Character.charCount(code)
-            val keyCode = if (code < 128) PhysicalKeys.keyCodeFor(code) else 0
-            if (keyCode == 0) {
-                editor.commitText(String(Character.toChars(code)), 1)
-                continue
-            }
-            val meta = if (Character.isUpperCase(code)) ShiftFlow.SHIFT_META else 0
-            host.sendPhysicalKey(keyCode, meta)
-        }
-    }
-
-    /** [count] characters back, as the key events a terminal deletes by. */
-    private fun deleteInTerminal(editor: FieldEditor, count: Int = 1) {
+    /** Backspace in a terminal. */
+    private fun deleteInTerminal() {
         ownEditPending = true
-        repeat(count) {
-            host.sendPhysicalKey(KeyEvent.KEYCODE_DEL, 0)
-        }
-        if (terminalWord.isNotEmpty()) {
-            terminalWord.setLength(terminalWord.offsetByCodePoints(terminalWord.length, -1))
-        }
+        terminalWriter.deleteBack()
         requestTerminalSuggestions()
     }
 
-    /**
-     * Replaces the letters typed into a terminal with [word], and a space when set to. A word
-     * that continues the letters has only its remainder written; any other deletes them first.
-     */
+    /** Replaces the letters typed into a terminal with [word], and a space when set to. */
     private fun pickIntoTerminal(editor: FieldEditor, word: String) {
         host.playEffect(EffectEvent.SuggestionPicked, word)
-        val typed = terminalWord.toString()
         val space = if (preferences.spaceAfterSuggestion) " " else ""
         ownEditPending = true
-        editor.beginBatchEdit()
-        if (word.length >= typed.length && word.startsWith(typed)) {
-            writeToTerminal(editor, word.substring(typed.length) + space)
-        } else {
-            repeat(typed.codePointCount(0, typed.length)) {
-                host.sendPhysicalKey(KeyEvent.KEYCODE_DEL, 0)
-            }
-            writeToTerminal(editor, word + space)
-        }
-        editor.endBatchEdit()
-        terminalWord.setLength(0)
-        if (space.isEmpty()) {
-            terminalWord.append(word)
-        }
+        terminalWriter.pick(editor, word, space)
         shiftFlow.spendOneShot()
         shiftFlow.clearHeld()
         host.clearStrip()
         requestTerminalSuggestions()
     }
 
-    /** Enter in a terminal: the key itself, which is what runs the line. */
+    /** Enter in a terminal. */
     private fun enterInTerminal() {
-        terminalWord.setLength(0)
         ownEditPending = true
-        host.sendPhysicalKey(KeyEvent.KEYCODE_ENTER, 0)
+        terminalWriter.enter()
         requestTerminalSuggestions()
     }
 
-    /** The strip's completions of [terminalWord]; a terminal has no words before it to read. */
+    /** The strip's completions of the terminal's word; a terminal has no words before it to read. */
     private fun requestTerminalSuggestions() {
-        lastQuery = terminalWord.toString()
+        lastQuery = terminalWriter.word
         wordContext = WordContext.NONE
         if (!session.policy.suggestionsAllowed) {
             return
@@ -1405,7 +1352,7 @@ class TypingOrchestrator(
             inflection = false,
         )
         composing.setLength(0)
-        terminalWord.setLength(0)
+        terminalWriter.clearWord()
         composingWord.runningText = true
         composingWord.fromGesture = false
         composingWord.autoSpaceBefore = false

@@ -153,6 +153,23 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `in a terminal backspace, a pick and a swiped word all go out as keys`() {
+        rig.startField(terminalField = true)
+        rig.host.onPhysicalKey = { keyCode, metaState -> terminal(keyCode, metaState) }
+        rig.type("lsx")
+        rig.press(KeyCodes.DELETE)
+        assertEquals("ls", rig.editor.text)
+        assertEquals(KeyEvent.KEYCODE_DEL, rig.host.physicalKeys.last().first)
+        rig.orchestrator.swipeIntoTerminal(swiped("the"))
+        rig.settle()
+        assertEquals("ls the", rig.editor.text)
+        rig.type(" ech")
+        rig.pick(0, "echo")
+        assertEquals("ls the echo ", rig.editor.text)
+        assertNull(rig.editor.composingText)
+    }
+
+    @Test
     fun `a slide up the space bar moves the caret a line`() {
         rig.type("ab")
         rig.press(KeyCodes.ENTER)
