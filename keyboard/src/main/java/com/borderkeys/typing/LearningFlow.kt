@@ -37,7 +37,12 @@ class LearningFlow(
     /** What was learned in the field is written. */
     override fun onFieldFinished() = flush()
 
-    override fun onSettingsChanged(settings: KeyboardPreferences) = applyGate()
+    /** With the views up, the gate follows the settings at once; otherwise at the next field. */
+    override fun onSettingsChanged(settings: KeyboardPreferences) {
+        if (host.viewAttached) {
+            applyGate()
+        }
+    }
 
     /** Writes what is left and waits, a bounded time, for the writes in flight. */
     override fun onShutdown() = store.persistBeforeShutdown(drain())

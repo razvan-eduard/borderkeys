@@ -16,6 +16,10 @@ abstract class TypingFlow {
     protected var session: FieldSession = FieldSession.NONE
         private set
 
+    /** The settings, as of the last [applySettings]. */
+    protected var settings: KeyboardPreferences = KeyboardPreferences()
+        private set
+
     /** Whether a field has started and not yet finished. */
     private var fieldOpen = false
 
@@ -36,6 +40,7 @@ abstract class TypingFlow {
 
     /** Takes [settings], the field's policy following the Learning switch first. */
     fun applySettings(settings: KeyboardPreferences) {
+        this.settings = settings
         session = session.copy(policy = session.policy.withLearning(settings.learningEnabled))
         onSettingsChanged(settings)
     }

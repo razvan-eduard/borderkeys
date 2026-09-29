@@ -3,10 +3,12 @@
 
 package com.borderkeys.typing
 
+import android.text.InputType
 import android.view.KeyEvent
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.TextShortcut
 import com.borderkeys.ime.KeyCodes
+import com.borderkeys.ime.ShiftState
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.LearningBuffer
 import com.borderkeys.predict.Pipeline
@@ -211,6 +213,54 @@ class TypingScenarioTest {
     }
 
     // ---- what the smoke suite does not reach ----------------------------------------------------
+
+    @Test
+    fun `a sentence starts with a capital, which its first letter spends`() {
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(autoCapitalise = true))
+        rig.startField(inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES)
+        assertEquals(ShiftState.ON, rig.host.shiftState)
+        rig.type("hello")
+        assertEquals(ShiftState.OFF, rig.host.shiftState)
+        rig.type(".")
+        assertEquals(ShiftState.ON, rig.host.shiftState)
+        rig.type("world")
+        assertEquals("Hello. World", rig.editor.text)
+    }
+
+    @Test
+    fun `a field that asks for capitals locks shift, and a tap releases it until the next letter`() {
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(autoCapitalise = true))
+        rig.startField(inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS)
+        assertEquals(ShiftState.LOCKED, rig.host.shiftState)
+        rig.type("ab")
+        rig.press(KeyCodes.SHIFT)
+        assertEquals(ShiftState.OFF, rig.host.shiftState)
+        rig.type("c")
+        assertEquals("ABc", rig.editor.text)
+    }
+
+    @Test
+    fun `two quick taps lock shift and a third releases it`() {
+        rig.press(KeyCodes.SHIFT)
+        rig.press(KeyCodes.SHIFT)
+        assertEquals(ShiftState.LOCKED, rig.host.shiftState)
+        rig.type("ab")
+        rig.press(KeyCodes.SHIFT)
+        rig.type("c")
+        assertEquals("ABc", rig.editor.text)
+    }
+
+    @Test
+    fun `shift spent on a swipe capitalises the swiped word, and the strip follows shift`() {
+        rig.press(KeyCodes.SHIFT)
+        assertTrue(rig.host.strip.isNotEmpty())
+        assertTrue(rig.host.strip.all { it.text.first().isUpperCase() || !it.text.first().isLetter() })
+        rig.orchestrator.composeSwipedWord(swiped("the", "then"))
+        rig.settle()
+        assertEquals(ShiftState.OFF, rig.host.shiftState)
+        rig.type(" ")
+        assertEquals("The ", rig.editor.text)
+    }
 
     @Test
     fun `two spaces after a word make a full stop, and backspace takes it back`() {
