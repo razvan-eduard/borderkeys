@@ -473,6 +473,23 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `a shortcut's expansion the caret has left is not learned by the next backspace`() {
+        rig.orchestrator.applySettings(
+            SMOKE_SETTINGS.copy(
+                learningEnabled = true,
+                textShortcuts = listOf(TextShortcut(trigger = "omw", expansion = "on my way")),
+            ),
+        )
+        rig.startField()
+        rig.type("omw ")
+        rig.moveCaret(2)
+        rig.press(KeyCodes.DELETE)
+        assertEquals("o my way ", rig.editor.text)
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertTrue(rig.store.batches.isEmpty())
+    }
+
+    @Test
     fun `undo drops a pending correction without learning it`() {
         rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true))
         rig.startField()

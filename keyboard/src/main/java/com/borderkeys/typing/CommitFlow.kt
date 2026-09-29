@@ -131,8 +131,8 @@ class CommitFlow(
         val committed = pending.corrected + pending.delimiter
         val before = editor.textBeforeCursor(committed.length)
         if (before == null || before.toString() != committed) {
-            // The text before the caret changed: the correction stands and is learned.
-            return Revert(pending, reverted = false, learnCorrected = true)
+            // The text before the caret changed: the correction stands.
+            return Revert(pending, reverted = false, learnCorrected = pending.learn)
         }
         editor.beginBatchEdit()
         editor.deleteSurroundingText(committed.length, 0)
