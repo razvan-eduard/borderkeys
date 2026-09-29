@@ -65,7 +65,7 @@ class TypingOrchestrator(
     /** The word being written. */
     val composingText: String get() = composing.toString()
 
-    /** The editor's selection, as of the last report. */
+    /** The editor's selection, as of the last report, [selectionStart] never after [selectionEnd]. */
     var selectionStart = 0
         private set
     var selectionEnd = 0
@@ -216,22 +216,25 @@ class TypingOrchestrator(
         learning.enabled = false
     }
 
-    /** The field reported its selection as [start] to [end]. */
+    /**
+     * The field reported its selection as [start] to [end]; a selection made leftwards comes
+     * with [start] after [end].
+     */
     fun onSelectionChanged(start: Int, end: Int) {
-        selectionStart = start
-        selectionEnd = end
+        selectionStart = minOf(start, end)
+        selectionEnd = maxOf(start, end)
         host.refreshPrivateReveal()
-        updateEditorEmpty(end > 0)
+        updateEditorEmpty(selectionEnd > 0)
         if (!host.viewAttached) {
             return
         }
-        val hasSelection = end > start
+        val hasSelection = selectionEnd > selectionStart
         host.clearStripActions()
         if (!hasSelection) {
             // A caret that still ends the composing text asks for suggestions; the echo of this
             // class's own commit is spent; any other move closes the ring and adopts the word
             // under the caret.
-            val caretMatches = composingMatchesCaret(end)
+            val caretMatches = composingMatchesCaret(selectionEnd)
             if (caretMatches) {
                 if (lastQuery != composing.toString()) {
                     requestSuggestions()
