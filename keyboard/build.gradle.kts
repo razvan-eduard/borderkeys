@@ -89,6 +89,13 @@ android {
                 )
                 // For FileDescriptor's private fd field, which the tests hand nativeLoadLanguage.
                 it.jvmArgs("--add-opens", "java.base/java.io=ALL-UNNAMED")
+                // The host library and the packs the pipeline tests load: a change to either reruns
+                // the tests, and out-of-date packs are built first.
+                it.inputs.files(
+                    rootProject.fileTree("native-tests/build") { include("libborderkeys.*") },
+                ).withPropertyName("hostLibrary").withPathSensitivity(PathSensitivity.NONE)
+                it.inputs.files(tasks.named("buildDictionaries"))
+                    .withPropertyName("packs").withPathSensitivity(PathSensitivity.RELATIVE)
                 // The directory the pipeline tests write one line per case into; unset writes none.
                 providers.gradleProperty("borderkeys.readings").orNull?.let { directory ->
                     it.systemProperty("borderkeys.readings", directory)
