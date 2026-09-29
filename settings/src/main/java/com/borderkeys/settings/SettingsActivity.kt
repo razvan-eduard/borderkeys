@@ -70,6 +70,7 @@ import com.borderkeys.settings.screen.FeaturesScreen
 import com.borderkeys.settings.screen.HomeScreen
 import com.borderkeys.settings.screen.LanguagesScreen
 import com.borderkeys.settings.screen.LayoutScreen
+import com.borderkeys.settings.screen.LearnedWordsScreen
 import com.borderkeys.settings.screen.PrivacyScreen
 import com.borderkeys.settings.screen.ProcessTextScreen
 import com.borderkeys.settings.screen.QuickActionsScreen
@@ -380,7 +381,8 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                 Screen.Size -> SizeScreen(modifier)
                 Screen.Effects -> EffectsScreen(modifier)
                 Screen.Typing -> TypingScreen(modifier)
-                Screen.Dictionary -> DictionaryScreen(modifier)
+                Screen.Dictionary -> DictionaryScreen(modifier, open)
+                Screen.LearnedWords -> LearnedWordsScreen(modifier)
                 Screen.Clipboard -> ClipboardScreen(modifier, editClipId)
                 Screen.QuickActions -> QuickActionsScreen(modifier)
                 Screen.Composer -> ComposerScreen(modifier)

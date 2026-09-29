@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -27,6 +28,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.res.painterResource
 import com.borderkeys.settings.PlacementPreview
 import com.borderkeys.settings.HeatmapGlows
 import com.borderkeys.data.KeyTouches
@@ -41,6 +44,7 @@ import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PickerChip
+import com.borderkeys.settings.Screen
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
@@ -51,17 +55,14 @@ import kotlin.math.roundToInt
 
 /** What this device has learned, and where the taps land on each key. */
 @Composable
-fun DictionaryScreen(modifier: Modifier = Modifier) {
+fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
     val strings = LocalStrings.current
     val repository = remember { DataGraph.dictionary }
     val scope = rememberCoroutineScope()
-    var query by remember { mutableStateOf("") }
-    var confirmingForgetAll by remember { mutableStateOf(false) }
     var confirmingLearningOff by remember { mutableStateOf(false) }
     var confirmingHeatmapOff by remember { mutableStateOf(false) }
 
-    val words by (if (query.isBlank()) repository.words else repository.search(query))
-        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val wordCount by repository.wordCount.collectAsStateWithLifecycle(initialValue = 0)
     val blocked by repository.blocked.collectAsStateWithLifecycle(initialValue = emptyList())
     val pairs by repository.topPairsLive().collectAsStateWithLifecycle(initialValue = emptyList())
     val triples by repository.topTriplesLive().collectAsStateWithLifecycle(initialValue = emptyList())
@@ -300,47 +301,19 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                 modifier = Modifier.padding(horizontal = 12.dp),
             ) { Text(strings[Keys.DICTIONARY_SHORTCUT_ADD]) }
         }
-        SettingsSectionCard(strings.getString(Keys.DICTIONARY_LEARNED_WORDS, words.size)) {
-            // At the top of the list it filters.
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text(strings[Keys.DICTIONARY_SEARCH]) },
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
-            )
-            if (words.isEmpty()) {
-                SettingRow(
-                    title = if (query.isBlank()) strings[Keys.DICTIONARY_NOTHING_LEARNED_YET] else strings[Keys.DICTIONARY_NO_MATCH],
-                    subtitle = if (query.isBlank()) {
-                        strings[Keys.DICTIONARY_A_WORD_IS_LEARNED_WHEN_YOU]
-                    } else {
-                        null
-                    },
-                )
-            }
-            for (word in words.take(200)) {
-                SettingRow(
-                    title = word.word,
-                    subtitle = strings.getString(Keys.DICTIONARY_CHOSEN_TIMES_TYPED_ON, word.count, word.locale),
-                    trailing = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TextButton(onClick = { scope.launch { repository.forget(word.word) } }) {
-                                Text(strings[Keys.DICTIONARY_FORGET])
-                            }
-                            TextButton(onClick = { scope.launch { repository.block(word.word) } }) {
-                                Text(strings[Keys.DICTIONARY_BLOCK])
-                            }
-                        }
-                    },
-                )
-            }
-            if (words.size > 200) {
-                Explanation(strings[Keys.DICTIONARY_SHOWING_THE_FIRST_200_USE_SEARCH])
-            }
-            TextButton(
-                onClick = { confirmingForgetAll = true },
-                modifier = Modifier.padding(horizontal = 12.dp),
-            ) { Text(strings[Keys.DICTIONARY_FORGET_EVERYTHING]) }
+        // The list itself is a page of its own.
+        SettingsSectionCard(strings[Keys.SCREEN_LEARNED_WORDS]) {
+            SettingRow(
+                title = strings.getString(Keys.DICTIONARY_ALL_LEARNED_WORDS, wordCount),
+                trailing = {
+                    Icon(
+                        painter = painterResource(com.borderkeys.keyboard.R.drawable.bk_chevron_down),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.rotate(-90f),
+                    )
+                },
+            ) { open(Screen.LearnedWords) }
         }
         // Every learned pair and triple, each with its own Forget.
         SettingsSectionCard(strings.getString(Keys.DICTIONARY_PHRASES, pairCount + tripleCount)) {
@@ -400,16 +373,6 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    // Asked first: this forgets every learned word and phrase.
-    if (confirmingForgetAll) {
-        ConfirmDialog(
-            title = strings[Keys.DICTIONARY_FORGET_EVERYTHING_TITLE],
-            text = strings[Keys.COMMON_CANNOT_BE_UNDONE],
-            confirmLabel = strings[Keys.DICTIONARY_FORGET_EVERYTHING],
-            onDismiss = { confirmingForgetAll = false },
-        ) { scope.launch { repository.forgetEverything() } }
-    }
-
     if (confirmingLearningOff) {
         ConfirmDialog(
             title = strings[Keys.DICTIONARY_LEARNING_OFF_TITLE],
@@ -450,7 +413,7 @@ private fun resetHeatmapDefaults(preferences: KeyboardPreferences): KeyboardPref
  * it closes.
  */
 @Composable
-private fun ConfirmDialog(
+internal fun ConfirmDialog(
     title: String,
     text: String,
     confirmLabel: String,
