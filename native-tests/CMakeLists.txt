@@ -99,6 +99,12 @@ add_executable(suggest_eval suggest_eval.cpp)
 target_link_libraries(suggest_eval borderkeys_engine)
 target_compile_options(suggest_eval PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
 
+# The touch model measured on a tap corpus from tools/make_tap_corpus.py; a measurement, not a
+# verdict.
+add_executable(touch_eval touch_eval.cpp)
+target_link_libraries(touch_eval borderkeys_engine)
+target_compile_options(touch_eval PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
+
 enable_testing()
 add_test(NAME engine COMMAND borderkeys_tests)
 
