@@ -54,6 +54,7 @@ import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
 import com.borderkeys.typing.FieldPolicy
 import com.borderkeys.typing.FieldSession
+import com.borderkeys.typing.KeyGeometrySnapshot
 import com.borderkeys.typing.LearningBatch
 import com.borderkeys.typing.LearningStore
 import com.borderkeys.typing.RingUi
@@ -971,6 +972,31 @@ class BorderKeysService :
         engine.setKeyGeometry(0, keyWidth, keyHeight) { codes, x, y ->
             view.exportGeometry(codes, x, y)
         }
+        orchestrator.keyGeometry = keyGeometrySnapshot(view, keyWidth, keyHeight)
+    }
+
+    /** The letter keys of [view] as its taps land on them, in the current bucket. */
+    private fun keyGeometrySnapshot(
+        view: KeyboardCanvasView,
+        keyWidth: Float,
+        keyHeight: Float,
+    ): KeyGeometrySnapshot {
+        val codes = IntArray(MAX_SNAPSHOT_KEYS)
+        val centreX = FloatArray(MAX_SNAPSHOT_KEYS)
+        val centreY = FloatArray(MAX_SNAPSHOT_KEYS)
+        val count = view.exportGeometry(codes, centreX, centreY)
+        return KeyGeometrySnapshot(
+            bucket = KeyGeometrySnapshot.Bucket(
+                landscape = isLandscape(),
+                positionMode = activePlacement().positionMode,
+                layoutId = view.layoutId,
+            ),
+            keyWidth = keyWidth,
+            keyHeight = keyHeight,
+            codes = codes.copyOf(count),
+            centreX = centreX.copyOf(count),
+            centreY = centreY.copyOf(count),
+        )
     }
 
     // ---- key handling ----------------------------------------------------------------------------
@@ -1238,8 +1264,8 @@ class BorderKeysService :
     override fun onText(text: CharSequence) = orchestrator.onText(text)
 
     /** The typing flow's keys go to [orchestrator]; pages, panels and the modifiers stay here. */
-    override fun onKey(code: Int, keyIndex: Int) {
-        if (orchestrator.onKey(code)) {
+    override fun onKey(code: Int, keyIndex: Int, x: Float, y: Float) {
+        if (orchestrator.onKey(code, keyIndex, x, y)) {
             return
         }
         when (code) {
@@ -2421,6 +2447,9 @@ class BorderKeysService :
         const val LINE_WINDOW_CHARS = 1024
 
         const val GESTURE_DECODING_NOTICE_MILLIS = 50L
+
+        /** The most letter keys a geometry snapshot takes, as many as the engine's geometry. */
+        const val MAX_SNAPSHOT_KEYS = 64
 
 
         /** How far, in pixels, the text field must move to close an open ring. */

@@ -681,6 +681,49 @@ class TypingScenarioTest {
         }
     }
 
+    // ---- taps ---------------------------------------------------------------------------------
+
+    @Test
+    fun `each letter's tap travels with the word, and backspace takes the last one back`() {
+        rig.tap('t'.code, 4, 11f, 12f)
+        rig.tap('h'.code, 16, 21f, 22f)
+        rig.tap('e'.code, 2, 31f, 32f)
+        val taps = rig.orchestrator.taps
+        assertEquals(3, taps.size)
+        assertEquals(16, taps.keyIndexAt(1))
+        assertEquals(21f, taps.xAt(1))
+        assertEquals(22f, taps.yAt(1))
+        rig.press(KeyCodes.DELETE)
+        assertEquals(2, rig.orchestrator.taps.size)
+        assertEquals(21f, rig.orchestrator.taps.xAt(1))
+    }
+
+    @Test
+    fun `a delimiter ends the word and its taps`() {
+        rig.tap('t'.code, 4, 11f, 12f)
+        rig.type(" ")
+        assertEquals(0, rig.orchestrator.taps.size)
+    }
+
+    @Test
+    fun `a key chosen without a tap has no point`() {
+        rig.type("t")
+        assertEquals(1, rig.orchestrator.taps.size)
+        assertFalse(rig.orchestrator.taps.isTapped(0))
+    }
+
+    @Test
+    fun `a swiped word and a word adopted at the caret carry no taps`() {
+        rig.swipe("the")
+        assertEquals(3, rig.orchestrator.taps.size)
+        assertFalse((0 until 3).any { rig.orchestrator.taps.isTapped(it) })
+        rig.startField()
+        rig.type("hello world ")
+        rig.moveCaret("hello wor".length)
+        assertEquals("wor", rig.orchestrator.composingText)
+        assertFalse((0 until 3).any { rig.orchestrator.taps.isTapped(it) })
+    }
+
     // ---- swipes and the ring ------------------------------------------------------------------
 
     @Test

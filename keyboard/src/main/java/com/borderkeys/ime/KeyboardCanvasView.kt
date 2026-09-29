@@ -45,7 +45,11 @@ class KeyboardCanvasView(
 
     /** What the service is told about. Called on the UI thread, inside a touch event. */
     interface Listener {
-        fun onKey(code: Int, keyIndex: Int)
+        /**
+         * The key at [keyIndex] typed [code]; it was chosen at ([x], [y]) in this view's pixels,
+         * where it was pressed or a slide entered it, or NaN when no tap chose it.
+         */
+        fun onKey(code: Int, keyIndex: Int, x: Float, y: Float)
         fun onKeyRepeat(code: Int)
         fun onText(text: CharSequence)
         /** Fired on every press so the service can start a prediction early. */
@@ -160,6 +164,10 @@ class KeyboardCanvasView(
     /** Pointer id to key index. */
     private val pointerKey = IntArray(MAX_POINTERS) { NO_KEY }
     private val pointerDownAt = LongArray(MAX_POINTERS)
+
+    /** Where each pointer chose its key: the press, or where a slide entered the key. */
+    private val pointerChosenX = FloatArray(MAX_POINTERS)
+    private val pointerChosenY = FloatArray(MAX_POINTERS)
     private var touchSlop = 0
 
     // ---- gesture capture -----------------------------------------------------------------------
@@ -479,8 +487,8 @@ class KeyboardCanvasView(
     /** The virtual view hierarchy a screen reader explores, built from [geometry]. */
     private val accessibility = KeyboardAccessibility(this, geometry, strings).apply {
         listener = KeyboardAccessibility.Listener { code, keyIndex ->
-            // A key the reader activated goes where a completed tap goes.
-            this@KeyboardCanvasView.listener?.onKey(code, keyIndex)
+            // A key the reader activated goes where a completed tap goes, with no point.
+            this@KeyboardCanvasView.listener?.onKey(code, keyIndex, Float.NaN, Float.NaN)
         }
     }
 
@@ -572,6 +580,9 @@ class KeyboardCanvasView(
         centersXOut: FloatArray,
         centersYOut: FloatArray,
     ): Int = geometry.exportGeometry(codesOut, centersXOut, centersYOut)
+
+    /** The id of the layout on the keys. */
+    val layoutId: String get() = layout.id
 
     /** Average key size, for the native engine. Zero before the first layout pass. */
     val averageKeyWidth: Float get() = geometry.averageKeyWidth
@@ -1007,6 +1018,8 @@ class KeyboardCanvasView(
         }
         pointerKey[pointerId] = index
         pointerDownAt[pointerId] = eventTime
+        pointerChosenX[pointerId] = x
+        pointerChosenY[pointerId] = y
         startPress(index)
         showPreview(index, pointerId)
 
@@ -1091,6 +1104,8 @@ class KeyboardCanvasView(
         endPress(previous)
         cancelPendingCallbacks()
         pointerKey[pointerId] = index
+        pointerChosenX[pointerId] = x
+        pointerChosenY[pointerId] = y
         startPress(index)
         showPreview(index, pointerId)
         if (swipeEnabled && !gestureActive && KeyFlags.has(geometry.keyFlags[index], KeyFlags.LETTER)) {
@@ -1145,7 +1160,9 @@ class KeyboardCanvasView(
             return
         }
         cancelPendingCallbacks()
-        listener?.onKey(geometry.keyCode[index], index)
+        listener?.onKey(
+            geometry.keyCode[index], index, pointerChosenX[pointerId], pointerChosenY[pointerId],
+        )
     }
 
     private fun cancelAllPointers() {
@@ -1255,7 +1272,7 @@ class KeyboardCanvasView(
             updateAlternativesSelection(x)
             val position = alternativesSelection
             if (position >= 0 && position < geometry.altLength[index]) {
-                listener?.onKey(altCharAt(index, position).code, index)
+                listener?.onKey(altCharAt(index, position).code, index, Float.NaN, Float.NaN)
             }
         }
         dismissAlternatives()
