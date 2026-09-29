@@ -30,6 +30,7 @@ class WordCommitTest {
 
     private fun decide(
         typed: String,
+        endedBy: Int = ' '.code,
         suggestion: String? = null,
         knownWord: String = "",
         possessive: String? = null,
@@ -40,6 +41,7 @@ class WordCommitTest {
         settings: WordCommit.Settings = settings(),
     ) = WordCommit.decide(
         typed = typed,
+        endedBy = endedBy,
         fromGesture = fromGesture,
         runningText = runningText,
         shortcuts = shortcuts,
@@ -145,6 +147,17 @@ class WordCommitTest {
         val outcome = decide("", possessive = "maria's")
         assertNull(outcome.text)
         assertEquals(Kind.NONE, outcome.kind)
+    }
+
+    @Test
+    fun `a word a digit ends is part of a number or a code, and nothing rewrites it`() {
+        val correction = decide("teh", endedBy = '2'.code, suggestion = "the")
+        assertNull(correction.text)
+        assertEquals(Kind.NONE, correction.kind)
+        assertEquals(WordCommit.REASON_NOT_PROSE, correction.reason)
+        assertNull(decide("i", endedBy = '7'.code).text)
+        assertNull(decide("dont", endedBy = '2'.code).text)
+        assertNull(decide("marias", endedBy = '1'.code, suggestion = "maria", possessive = "maria's").text)
     }
 
     @Test

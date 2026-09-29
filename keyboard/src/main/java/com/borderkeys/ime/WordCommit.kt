@@ -9,7 +9,8 @@ import com.borderkeys.data.theme.TextShortcut
  * What a delimiter writes in place of the word just typed, and why. The first to claim the word
  * wins, in order: the user's text shortcut; the bundled map, restoring an apostrophe with
  * corrections on in running text, or a capital with auto-capitalise on; a name's possessive, with
- * corrections on in running text; autocorrect. Reads neither the editor nor the engine.
+ * corrections on in running text; autocorrect. A word a digit ends is part of a number or a code,
+ * and nothing claims it. Reads neither the editor nor the engine.
  */
 internal object WordCommit {
 
@@ -59,14 +60,15 @@ internal object WordCommit {
     const val REASON_NOT_PROSE = "NotProse"
 
     /**
-     * Decides for [typed]. No rewrite claims a word from a gesture ([fromGesture]). [runningText]
-     * is whether the word is part of a sentence, settled as it began ([RunningText]).
-     * [possessive] is the engine's possessive for [suggestionQuery], used only when that is
-     * [typed] and [typed] is not empty; [inflection] is [WordStems.shields]'s answer for the same
-     * query and suggestion.
+     * Decides for [typed], ended by the key [endedBy]: a space for what the strip outlines. No
+     * rewrite claims a word from a gesture ([fromGesture]). [runningText] is whether the word is
+     * part of a sentence, settled as it began ([RunningText]). [possessive] is the engine's
+     * possessive for [suggestionQuery], used only when that is [typed] and [typed] is not empty;
+     * [inflection] is [WordStems.shields]'s answer for the same query and suggestion.
      */
     fun decide(
         typed: String,
+        endedBy: Int,
         fromGesture: Boolean,
         runningText: Boolean,
         shortcuts: List<TextShortcut>,
@@ -79,6 +81,9 @@ internal object WordCommit {
         inflection: Boolean,
         settings: Settings,
     ): Outcome {
+        if (Character.isDigit(endedBy)) {
+            return Outcome(null, Kind.NONE, null, REASON_NOT_PROSE)
+        }
         val prose = runningText && RunningText.admits(typed) { null }
         if (!fromGesture) {
             // The user's own shortcut outranks every bundled rewrite.

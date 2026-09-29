@@ -1976,7 +1976,7 @@ class BorderKeysService :
         // A delimiter ends the word. What replaces the typed word, if anything, is decided by
         // [commitOutcome]; a rewrite is committed in its place and can be reverted.
         val typed = composing.toString()
-        val outcome = commitOutcome(typed)
+        val outcome = commitOutcome(typed, shifted)
         val rewrite = outcome.isRewrite
         val correction = outcome.text
         // Read before anything commits.
@@ -2247,9 +2247,10 @@ class BorderKeysService :
         )
     }
 
-    /** What a delimiter would write in place of [typed]; see [WordCommit]. Reads no editor. */
-    private fun commitOutcome(typed: String): WordCommit.Outcome = WordCommit.decide(
+    /** What the key [endedBy] would write in place of [typed]; see [WordCommit]. Reads no editor. */
+    private fun commitOutcome(typed: String, endedBy: Int): WordCommit.Outcome = WordCommit.decide(
         typed = typed,
+        endedBy = endedBy,
         fromGesture = composingWord.fromGesture,
         runningText = composingWord.runningText,
         shortcuts = preferences.textShortcuts,
@@ -2269,9 +2270,9 @@ class BorderKeysService :
         ),
     )
 
-    /** The word the strip outlines: what a delimiter would write, unless it is a text shortcut. */
+    /** The word the strip outlines: what a space would write, unless it is a text shortcut. */
     private fun outlinedCommit(typed: String): String? {
-        val outcome = commitOutcome(typed)
+        val outcome = commitOutcome(typed, ' '.code)
         return if (outcome.kind == WordCommit.Kind.SHORTCUT) null else outcome.text
     }
 
