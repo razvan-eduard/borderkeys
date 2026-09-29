@@ -55,6 +55,7 @@ class CommitFlow(
     ): WordCommit.Outcome = WordCommit.decide(
         typed = typed,
         endedBy = endedBy,
+        verbatim = session.policy.verbatim,
         fromGesture = fromGesture,
         runningText = runningText,
         shortcuts = settings.textShortcuts,

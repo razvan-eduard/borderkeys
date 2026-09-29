@@ -208,6 +208,20 @@ class ImeSmokeTest {
         tapKey(SPACE)
         settle()
         assertEquals("teh ", probeText(ProbeMode.PASSWORD))
+        // The caret back on the word, then a space.
+        device.pressKeyCode(KeyEvent.KEYCODE_DPAD_LEFT)
+        settle()
+        tapKey(SPACE)
+        settle()
+        assertEquals("teh  ", probeText(ProbeMode.PASSWORD))
+        // No apostrophe restored, and no space after the mark.
+        device.pressKeyCode(KeyEvent.KEYCODE_DPAD_RIGHT)
+        settle()
+        type("dont")
+        tapKey(".")
+        type("pass")
+        settle()
+        assertEquals("teh  dont.pass", probeText(ProbeMode.PASSWORD))
     }
 
     @Test

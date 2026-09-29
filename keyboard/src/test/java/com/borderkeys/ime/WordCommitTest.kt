@@ -10,8 +10,8 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Which claim a delimiter honours, and under which switch: a shortcut, then the apostrophe map,
- * then the possessive, then autocorrect.
+ * Which claim a delimiter honours, and under which switch: a verbatim field, then a shortcut,
+ * then the apostrophe map, then the possessive, then autocorrect.
  */
 class WordCommitTest {
 
@@ -35,6 +35,7 @@ class WordCommitTest {
         knownWord: String = "",
         possessive: String? = null,
         shortcuts: List<TextShortcut> = emptyList(),
+        verbatim: Boolean = false,
         fromGesture: Boolean = false,
         runningText: Boolean = true,
         inflection: Boolean = false,
@@ -42,6 +43,7 @@ class WordCommitTest {
     ) = WordCommit.decide(
         typed = typed,
         endedBy = endedBy,
+        verbatim = verbatim,
         fromGesture = fromGesture,
         runningText = runningText,
         shortcuts = shortcuts,
@@ -80,6 +82,18 @@ class WordCommitTest {
         val outcome = decide("dont", runningText = false)
         assertNull(outcome.text)
         assertEquals(WordCommit.REASON_NOT_PROSE, outcome.reason)
+    }
+
+    @Test
+    fun `a verbatim field leaves every word as typed`() {
+        val shortcuts = listOf(TextShortcut(trigger = "omw", expansion = "on my way"))
+        for (typed in listOf("dont", "i", "omw", "teh")) {
+            val outcome = decide(
+                typed, suggestion = "the", shortcuts = shortcuts, possessive = "Laura's", verbatim = true,
+            )
+            assertNull(typed, outcome.text)
+            assertEquals(WordCommit.REASON_VERBATIM, outcome.reason)
+        }
     }
 
     @Test

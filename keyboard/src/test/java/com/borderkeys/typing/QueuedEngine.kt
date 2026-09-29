@@ -35,6 +35,9 @@ internal class QueuedEngine(
     private val tasks = ArrayDeque<Task>()
     private val scratch = AnswerScratch()
 
+    /** Each word [requestSuggestions] was asked about, in order. */
+    val queries = mutableListOf<String>()
+
     /** Runs the oldest queued call; false when none was queued. */
     fun serveNext(): Boolean {
         val task = tasks.removeFirstOrNull() ?: return false
@@ -43,6 +46,7 @@ internal class QueuedEngine(
     }
 
     override fun requestSuggestions(composing: String, previous1: String?, previous2: String?) {
+        queries += composing
         tasks.addLast(
             Task(request = true) {
                 val answer = answerRequest(handle, composing, previous1, previous2, languages, scratch)

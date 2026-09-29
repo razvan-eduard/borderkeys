@@ -127,6 +127,31 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `a password field is not corrected after a caret move, and its text is never asked about`() {
+        rig.startField(passwordField = true, privateField = true)
+        rig.engine.queries.clear()
+        rig.type("teh ")
+        rig.moveCaret(3)
+        rig.type(" ")
+        assertEquals("teh  ", rig.editor.text)
+        assertEquals(emptyList<String>(), rig.engine.queries)
+    }
+
+    @Test
+    fun `a password field gets exactly the keys typed`() {
+        rig.orchestrator.applySettings(
+            SMOKE_SETTINGS.copy(
+                autoCapitalise = true,
+                textShortcuts = listOf(TextShortcut(trigger = "omw", expansion = "on my way")),
+            ),
+        )
+        rig.startField(passwordField = true, privateField = true)
+        val typed = "dont.im!omw!pass.word  a ,i."
+        rig.type(typed)
+        assertEquals(typed, rig.editor.text)
+    }
+
+    @Test
     fun `a private field is read into the strip at each key, and nothing typed there is learned`() {
         rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true))
         rig.startField(passwordField = true, privateField = true)

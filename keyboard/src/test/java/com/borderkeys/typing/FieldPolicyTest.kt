@@ -10,11 +10,12 @@ import org.junit.Test
 class FieldPolicyTest {
 
     @Test
-    fun `a password field allows no dictionary words and nothing personal`() {
+    fun `a password field allows no dictionary words and nothing personal, and takes the keys verbatim`() {
         val policy = FieldPolicy.of(passwordField = true, privateField = true, learningEnabled = true)
         assertFalse(policy.suggestionsAllowed)
         assertTrue(policy.privateField)
         assertFalse(policy.personalAllowed)
+        assertTrue(policy.verbatim)
     }
 
     @Test
@@ -22,6 +23,7 @@ class FieldPolicyTest {
         val policy = FieldPolicy.of(passwordField = false, privateField = true, learningEnabled = true)
         assertTrue(policy.suggestionsAllowed)
         assertFalse(policy.personalAllowed)
+        assertFalse(policy.verbatim)
     }
 
     @Test

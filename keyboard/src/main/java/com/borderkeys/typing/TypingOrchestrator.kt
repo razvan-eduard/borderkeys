@@ -1254,7 +1254,9 @@ class TypingOrchestrator(
         if (editor == null || before.isNullOrEmpty()) {
             wordContext = WordContext.NONE
             lastQuery = ""
-            engine.requestSuggestions("", null, null)
+            if (session.policy.suggestionsAllowed) {
+                engine.requestSuggestions("", null, null)
+            }
             return
         }
         // The run of [isWordCharacter] characters before the caret, starting at its first
@@ -1275,7 +1277,9 @@ class TypingOrchestrator(
             val caret = selectionEnd
             editor.setComposingRegion(caret - partial.length, caret)
         }
-        engine.requestSuggestions(partial, wordContext.previous1, wordContext.previous2)
+        if (session.policy.suggestionsAllowed) {
+            engine.requestSuggestions(partial, wordContext.previous1, wordContext.previous2)
+        }
     }
 
     /** Reads the two words before the cursor back from the editor. */
