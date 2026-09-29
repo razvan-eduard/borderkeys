@@ -8,8 +8,6 @@ import android.view.inputmethod.EditorInfo
 import com.borderkeys.data.KeyboardStats
 import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.KeyboardPreferences
-import com.borderkeys.ime.AutoCorrection
-import com.borderkeys.ime.AutoShift
 import com.borderkeys.ime.CaretNudge
 import com.borderkeys.ime.Composer
 import com.borderkeys.ime.FieldRestore
@@ -41,6 +39,12 @@ class TypingOrchestrator(
 ) {
     /** What is learned from typing, and the gate on it. */
     private val learningFlow = LearningFlow(engine, host, store, clock)
+
+    /** Shift, caps lock and auto-shift, and the casing they give words. */
+    private val shiftFlow = ShiftFlow(currentEditor, host, clock)
+
+    /** The flows, in the order each hears of a field and of the settings. */
+    private val flows: List<TypingFlow> = listOf(learningFlow, shiftFlow)
 
     var preferences = KeyboardPreferences()
         private set
@@ -84,11 +88,6 @@ class TypingOrchestrator(
     /** The language the conversation is considered written in, or null. */
     private var dominantLanguageTag: String? = null
 
-    private var shiftState = ShiftState.OFF
-
-    /** Set when the user pressed shift, cleared by the character it applied to. */
-    private var shiftHeldByUser = false
-
     /** When the last space was committed, for the two-spaces-make-a-full-stop window. */
     private var lastSpaceAt = 0L
 
@@ -98,9 +97,6 @@ class TypingOrchestrator(
     /** Set when a space was added after a sentence mark; the next typed space is swallowed. */
     private var pendingAutoSpace = false
 
-    /** Set when the user released a caps lock that auto-shift applied, until the next letter. */
-    private var userReleasedAutoLock = false
-
     /**
      * Set right before a commit of this class's own and spent by the next selection report,
      * which is then not treated as a caret move. Cleared by any key press.
@@ -109,10 +105,6 @@ class TypingOrchestrator(
 
     /** Whether [adoptWordAtCaret] is running; selection reports meanwhile are its own edits. */
     private var adoptingWordAtCaret = false
-
-    /** Whether the current lock came from the field asking for capitals rather than from shift. */
-    private var autoLockedShift = false
-    private var lastShiftPressAt = 0L
 
     /** Uptime of the keystroke the engine was last asked about, for the strip latency figure. */
     private var suggestionsRequestedAt = 0L
@@ -163,13 +155,9 @@ class TypingOrchestrator(
         session = field
         terminalWord.setLength(0)
         session = session.copy(policy = session.policy.withLearning(preferences.learningEnabled))
-        learningFlow.startField(session)
-        // Each field starts with shift and caps lock off.
-        shiftHeldByUser = false
-        userReleasedAutoLock = false
-        autoLockedShift = false
-        shiftState = ShiftState.OFF
-        host.showShiftState(shiftState)
+        for (flow in flows) {
+            flow.startField(session)
+        }
         host.releaseModifiers()
         ownEditPending = false
         resetComposing()
@@ -180,7 +168,9 @@ class TypingOrchestrator(
 
     /** The field closed: what was learned is written, and the pending requests and the word go. */
     fun finishField() {
-        learningFlow.finishField()
+        for (flow in flows) {
+            flow.finishField()
+        }
         engine.cancelPending()
         resetComposing()
     }
@@ -188,16 +178,20 @@ class TypingOrchestrator(
     /** Takes [settings]; with the views up, the learning gate and shift follow them at once. */
     fun applySettings(settings: KeyboardPreferences) {
         preferences = settings
+        session = session.copy(policy = session.policy.withLearning(settings.learningEnabled))
+        for (flow in flows) {
+            flow.applySettings(settings)
+        }
         if (host.viewAttached) {
-            session = session.copy(policy = session.policy.withLearning(settings.learningEnabled))
-            learningFlow.applySettings(settings)
             applyAutoShift()
         }
     }
 
     /** The last flush: writes what is left and waits, a bounded time, for the writes in flight. */
     fun shutdown() {
-        learningFlow.shutdown()
+        for (flow in flows) {
+            flow.shutdown()
+        }
     }
 
     /** Sets the words never learned. */
@@ -335,7 +329,7 @@ class TypingOrchestrator(
             previous = lastNudge,
             steps = steps,
             length = length,
-            selecting = shiftState != ShiftState.OFF,
+            selecting = shiftFlow.state != ShiftState.OFF,
         )
         applyNudge(editor, next)
     }
@@ -370,7 +364,7 @@ class TypingOrchestrator(
             end = selectionEnd,
             previous = lastNudge,
             lines = lines,
-            selecting = shiftState != ShiftState.OFF,
+            selecting = shiftFlow.state != ShiftState.OFF,
         )
         applyNudge(editor, next)
     }
@@ -393,7 +387,7 @@ class TypingOrchestrator(
             KeyCodes.PAGE_UP -> KeyEvent.KEYCODE_PAGE_UP
             else -> KeyEvent.KEYCODE_PAGE_DOWN
         }
-        val meta = heldShiftMeta(spend = false)
+        val meta = shiftFlow.heldMeta(spend = false)
         ownEditPending = composing.isNotEmpty()
         resetComposing()
         host.sendPhysicalKey(keyCode, meta)
@@ -407,7 +401,7 @@ class TypingOrchestrator(
      */
     private fun handleHardwareKey(keyCode: Int) {
         val editor = currentEditor() ?: return
-        val meta = heldShiftMeta(spend = true)
+        val meta = shiftFlow.heldMeta(spend = true)
         ownEditPending = composing.isNotEmpty()
         editor.beginBatchEdit()
         finishComposing(editor)
@@ -417,21 +411,6 @@ class TypingOrchestrator(
         refreshContextFromEditor()
         applyAutoShift()
         requestSuggestions()
-    }
-
-    /**
-     * The shift bits for a hardware key: set only while the user holds shift. With [spend], a
-     * one-shot shift is spent by the key.
-     */
-    private fun heldShiftMeta(spend: Boolean): Int {
-        if (!shiftHeldByUser || shiftState == ShiftState.OFF) {
-            return 0
-        }
-        if (spend && shiftState == ShiftState.ON) {
-            shiftState = ShiftState.OFF
-            host.showShiftState(shiftState)
-        }
-        return SHIFT_META
     }
 
     private fun handleCharacter(code: Int) {
@@ -449,11 +428,7 @@ class TypingOrchestrator(
             host.releaseModifiers()
         }
         ownEditPending = false
-        val shifted = if (shiftState != ShiftState.OFF) {
-            Character.toUpperCase(code)
-        } else {
-            code
-        }
+        val shifted = shiftFlow.shifted(code)
         if (session.terminalField) {
             typeIntoTerminal(editor, shifted)
             return
@@ -465,19 +440,17 @@ class TypingOrchestrator(
             isWordCharacter(shifted)
         }
         // A one-shot shift is spent only by a letter.
-        if (letter && shiftState == ShiftState.ON) {
-            shiftState = ShiftState.OFF
-            host.showShiftState(shiftState)
+        if (letter) {
+            shiftFlow.spendOneShot()
         }
-        val heldByUser = shiftHeldByUser
+        val heldByUser = shiftFlow.heldByUser
         if (composing.isEmpty() && letter) {
             composingWord.capitalisedByUser = heldByUser && Character.isUpperCase(shifted)
             val ahead = editor.textBeforeCursor(1)
             composingWord.runningText = ahead.isNullOrEmpty() || !RunningText.isMark(ahead[0])
         }
         if (letter) {
-            shiftHeldByUser = false
-            userReleasedAutoLock = false
+            shiftFlow.letterTyped()
         }
 
         if (letter) {
@@ -529,7 +502,7 @@ class TypingOrchestrator(
             if (!HabitSpace.staysArmed(preferences.autoSpaceHabit)) {
                 pendingAutoSpace = false
             }
-            shiftAfterDelimiter(heldByUser)
+            shiftFlow.afterDelimiter(heldByUser, composing.isEmpty())
             return
         }
 
@@ -607,7 +580,7 @@ class TypingOrchestrator(
             wordContext = WordContext.NONE
         }
         checkpointField()
-        shiftAfterDelimiter(heldByUser, justCommitted = delimiter)
+        shiftFlow.afterDelimiter(heldByUser, composing.isEmpty(), justCommitted = delimiter)
         requestSuggestions()
         engine.dominantLanguageTag { tag -> dominantLanguageTag = tag }
         if (preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
@@ -741,32 +714,14 @@ class TypingOrchestrator(
     }
 
     private fun handleShift() {
-        val now = clock.currentTimeMillis()
-        // Two taps within DOUBLE_TAP_MILLIS lock, from any state.
-        val doubleTap = now - lastShiftPressAt < DOUBLE_TAP_MILLIS
-        val releasedAutoLock = shiftState == ShiftState.LOCKED && autoLockedShift
-        shiftState = when {
-            shiftState == ShiftState.LOCKED -> ShiftState.OFF
-            doubleTap -> ShiftState.LOCKED
-            shiftState == ShiftState.ON -> ShiftState.OFF
-            else -> ShiftState.ON
-        }
-        lastShiftPressAt = now
-        shiftHeldByUser = shiftState != ShiftState.OFF
-        autoLockedShift = false
-        userReleasedAutoLock = releasedAutoLock
-        host.showShiftState(shiftState)
+        shiftFlow.press()
         // The strip's words are re-cased for the new shift state.
         requestSuggestions()
     }
 
     /** Locks shift, from holding it. */
     private fun lockShift() {
-        shiftState = ShiftState.LOCKED
-        shiftHeldByUser = true
-        autoLockedShift = false
-        userReleasedAutoLock = false
-        host.showShiftState(shiftState)
+        shiftFlow.lock()
         requestSuggestions()
     }
 
@@ -799,32 +754,8 @@ class TypingOrchestrator(
         if (!preferences.capitaliseNames) {
             return candidates
         }
-        var cased = candidates.map { candidate ->
-            if (candidate.isProperNoun) {
-                candidate.copy(text = candidate.text.replaceFirstChar { it.uppercaseChar() })
-            } else {
-                candidate
-            }
-        }
-        val state = shiftState
-        if (state != ShiftState.OFF) {
-            cased = cased.map { candidate ->
-                candidate.copy(
-                    text = if (state == ShiftState.LOCKED) {
-                        candidate.text.uppercase()
-                    } else {
-                        candidate.text.replaceFirstChar { it.uppercaseChar() }
-                    },
-                )
-            }
-        }
-        composingWord.capitalisedByUser = shiftHeldByUser && state != ShiftState.OFF
-        if (state == ShiftState.ON) {
-            shiftState = ShiftState.OFF
-            host.showShiftState(shiftState)
-        }
-        shiftHeldByUser = false
-        return cased.distinctBy { it.text }
+        composingWord.capitalisedByUser = shiftFlow.heldByUser && shiftFlow.state != ShiftState.OFF
+        return shiftFlow.caseSwiped(candidates)
     }
 
     /**
@@ -1286,11 +1217,8 @@ class TypingOrchestrator(
         composingWord.autoSpaceBefore = false
         pendingAutoSpace = space.isNotEmpty()
         // A pick spends a one-shot shift.
-        if (shiftState == ShiftState.ON) {
-            shiftState = ShiftState.OFF
-            host.showShiftState(shiftState)
-        }
-        shiftHeldByUser = false
+        shiftFlow.spendOneShot()
+        shiftFlow.clearHeld()
 
         // Each word of the pick is learned as asserted.
         val words = word.split(' ').filter { it.isNotEmpty() }
@@ -1322,11 +1250,10 @@ class TypingOrchestrator(
      */
     private fun typeIntoTerminal(editor: FieldEditor, code: Int) {
         val letter = if (terminalWord.isEmpty()) Character.isLetter(code) else isWordCharacter(code)
-        if (letter && shiftState == ShiftState.ON) {
-            shiftState = ShiftState.OFF
-            host.showShiftState(shiftState)
+        if (letter) {
+            shiftFlow.spendOneShot()
         }
-        shiftHeldByUser = false
+        shiftFlow.clearHeld()
         ownEditPending = true
         writeToTerminal(editor, String(Character.toChars(code)))
         if (letter) {
@@ -1351,7 +1278,7 @@ class TypingOrchestrator(
                 editor.commitText(String(Character.toChars(code)), 1)
                 continue
             }
-            val meta = if (Character.isUpperCase(code)) SHIFT_META else 0
+            val meta = if (Character.isUpperCase(code)) ShiftFlow.SHIFT_META else 0
             host.sendPhysicalKey(keyCode, meta)
         }
     }
@@ -1391,11 +1318,8 @@ class TypingOrchestrator(
         if (space.isEmpty()) {
             terminalWord.append(word)
         }
-        if (shiftState == ShiftState.ON) {
-            shiftState = ShiftState.OFF
-            host.showShiftState(shiftState)
-        }
-        shiftHeldByUser = false
+        shiftFlow.spendOneShot()
+        shiftFlow.clearHeld()
         host.clearStrip()
         requestTerminalSuggestions()
     }
@@ -1454,27 +1378,7 @@ class TypingOrchestrator(
             possessive = possessive,
             inflection = inflection,
         )
-        // Every candidate is cased: after the typed prefix mid-word, by the shift state with
-        // nothing typed. Caps lock wins over a name's capital; otherwise a name is capitalised
-        // and any other word starts lower case.
-        val cased = candidates.map { candidate ->
-            val word = candidate.text
-            candidate.copy(
-                text = if (lastQuery.isNotEmpty()) {
-                    AutoCorrection.matchCase(
-                        lastQuery, word, candidate.isProperNoun && preferences.capitaliseNames,
-                    )
-                } else {
-                    when {
-                        shiftState == ShiftState.LOCKED -> word.uppercase()
-                        candidate.isProperNoun && preferences.capitaliseNames ->
-                            word.replaceFirstChar { it.uppercaseChar() }
-                        shiftState == ShiftState.ON -> word.replaceFirstChar { it.uppercaseChar() }
-                        else -> word.replaceFirstChar { it.lowercaseChar() }
-                    }
-                },
-            )
-        }
+        val cased = shiftFlow.caseForStrip(candidates, lastQuery)
         if (!preferences.showSuggestionStrip) {
             return
         }
@@ -1733,17 +1637,6 @@ class TypingOrchestrator(
         return if (follows) " " else ""
     }
 
-    /**
-     * Re-derives shift after a delimiter, unless caps lock is on or the user pressed shift
-     * ([heldByUser]). [justCommitted] is what this keystroke wrote; see [applyAutoShift].
-     */
-    private fun shiftAfterDelimiter(heldByUser: Boolean, justCommitted: String = "") {
-        if (shiftState == ShiftState.LOCKED || heldByUser) {
-            return
-        }
-        applyAutoShift(justCommitted)
-    }
-
     /** Whether [code] is one of ! ? ; : and the text is French. */
     private fun isFrenchSpacedPunctuation(code: Int): Boolean =
         (code == '!'.code || code == '?'.code || code == ';'.code || code == ':'.code) &&
@@ -1766,43 +1659,8 @@ class TypingOrchestrator(
      * Sets shift from what the field asks for and the text before the caret, unless the user set
      * it. [justCommitted] is text just written, appended to what the editor reports.
      */
-    fun applyAutoShift(justCommitted: String = "") {
-        if (shiftState == ShiftState.LOCKED && !autoLockedShift) {
-            return
-        }
-        if (shiftHeldByUser || userReleasedAutoLock) {
-            return
-        }
-        val wanted = autoShiftState(justCommitted)
-        autoLockedShift = wanted == ShiftState.LOCKED
-        if (shiftState != wanted) {
-            shiftState = wanted
-            host.showShiftState(shiftState)
-        }
-    }
-
-    /**
-     * What shift should be here, per [AutoShift], from the field's caps mode and the text before
-     * the cursor.
-     */
-    private fun autoShiftState(justCommitted: String = ""): Int {
-        if (!session.described) {
-            return ShiftState.OFF
-        }
-        return AutoShift.stateFor(
-            autoCapitaliseEnabled = preferences.autoCapitalise,
-            inputType = session.inputType,
-            composingIsEmpty = composing.isEmpty(),
-            forceCapitaliseSentences = preferences.forceCapitaliseSentences,
-            capsMode = {
-                currentEditor()?.cursorCapsMode(session.inputType) ?: session.initialCapsMode
-            },
-            textBeforeCursor = {
-                val before = currentEditor()?.textBeforeCursor(CONTEXT_WINDOW_CHARS)
-                if (justCommitted.isEmpty()) before else (before ?: "").toString() + justCommitted
-            },
-        )
-    }
+    private fun applyAutoShift(justCommitted: String = "") =
+        shiftFlow.applyAuto(composing.isEmpty(), justCommitted)
 
     companion object {
         const val CONTEXT_WINDOW_CHARS = 64
@@ -1813,13 +1671,8 @@ class TypingOrchestrator(
         /** The longest gap between two spaces that become a full stop. */
         const val DOUBLE_SPACE_MILLIS = 1200L
 
-        const val DOUBLE_TAP_MILLIS = 400L
-
         /** The characters a swiped word follows without a space; see [spaceBeforeSwipedWord]. */
         const val SWIPE_NO_SPACE_AFTER = "([{\"'/-_@#\n"
-
-        /** Shift held, as a key event carries it. */
-        const val SHIFT_META = KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
 
         /** A letter, an apostrophe or a hyphen: what continues a word once a letter began it. */
         fun isWordCharacter(code: Int): Boolean =
