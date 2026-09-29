@@ -285,6 +285,29 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `French keeps its space before an exclamation mark, English does not`() {
+        rig.type("hello !")
+        assertEquals("hello! ", rig.editor.text)
+        val french = Pipeline.open("fr-FR")
+        try {
+            val frenchRig = french.typingRig(SMOKE_SETTINGS)
+            frenchRig.startField()
+            frenchRig.type("bonjour !")
+            assertEquals("bonjour ! ", frenchRig.editor.text)
+        } finally {
+            french.close()
+        }
+    }
+
+    @Test
+    fun `a space typed after a picked word is not doubled`() {
+        rig.pick(0, "the")
+        assertEquals("the ", rig.editor.text)
+        rig.type(" cat")
+        assertEquals("the cat", rig.editor.text)
+    }
+
+    @Test
     fun `a text shortcut expands, and backspace takes it back`() {
         rig.orchestrator.applySettings(
             SMOKE_SETTINGS.copy(textShortcuts = listOf(TextShortcut(trigger = "omw", expansion = "on my way"))),
