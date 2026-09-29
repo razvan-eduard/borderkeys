@@ -443,6 +443,7 @@ object Keys {
     const val DICTIONARY_HEATMAP_NOTHING_YET = "dictionary_heatmap_nothing_yet"
     const val DICTIONARY_HEATMAP_OFF_TEXT = "dictionary_heatmap_off_text"
     const val DICTIONARY_HEATMAP_OFF_TITLE = "dictionary_heatmap_off_title"
+    const val DICTIONARY_HEATMAP_PREVIEW_NOTE = "dictionary_heatmap_preview_note"
     const val DICTIONARY_HEATMAP_RESET_NOTE = "dictionary_heatmap_reset_note"
     const val DICTIONARY_HEATMAP_TAPS = "dictionary_heatmap_taps"
     const val DICTIONARY_HEATMAP_TAPS_COUNT = "dictionary_heatmap_taps_count"

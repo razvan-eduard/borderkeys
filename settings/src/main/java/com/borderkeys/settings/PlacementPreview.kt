@@ -24,6 +24,7 @@ import com.borderkeys.data.theme.QuickActionBar
 import com.borderkeys.data.theme.QuickActionBarItem
 import com.borderkeys.ime.KeyboardHostView
 import com.borderkeys.ime.LayoutLoader
+import com.borderkeys.ime.TouchGlows
 import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
 
@@ -40,6 +41,8 @@ fun PlacementPreview(
     layoutId: String = "qwerty",
     /** Which of [KeyboardPreferences.placementFor]'s two answers to preview. */
     isLandscape: Boolean = false,
+    /** Where taps land on each letter key, drawn over the keys; null for none. */
+    touchGlows: TouchGlows? = null,
 ) {
     val context = LocalContext.current
     val strings = LocalStrings.current
@@ -93,6 +96,7 @@ fun PlacementPreview(
                     composed = composed.withNumberRow()
                 }
                 view.keyboard.setLayout(composed)
+                view.keyboard.touchGlows = touchGlows
 
                 // The quick action bar, as BorderKeysService.applyQuickActions sets it.
                 if (preferences.quickActionsEnabled) {

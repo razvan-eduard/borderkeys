@@ -1117,6 +1117,7 @@
   "dictionary_heatmap_needs_learning": "Necesita que el Aprendizaje esté activado.",
   "dictionary_heatmap_taps": "Aprendido de %s pulsaciones",
   "dictionary_heatmap_nothing_yet": "Aún no ha aprendido nada",
+  "dictionary_heatmap_preview_note": "Cada brillo está donde caen tus pulsaciones en esa tecla, y se extiende como ellas. Un círculo tenue es una tecla que aún se lee de la forma habitual.",
   "dictionary_heatmap_off_title": "¿Desactivar el mapa de pulsaciones?",
   "dictionary_heatmap_off_text": "Se olvida dónde caen tus pulsaciones en cada tecla, y no se registra nada hasta que lo actives de nuevo.",
   "dictionary_heatmap_advanced_note": "Cuánto cuentan tus pulsaciones, y durante cuánto tiempo",

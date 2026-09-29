@@ -1117,6 +1117,7 @@
   "dictionary_heatmap_needs_learning": "Richiede che l'Apprendimento sia attivo.",
   "dictionary_heatmap_taps": "Imparata da %s tocchi",
   "dictionary_heatmap_nothing_yet": "Ancora nulla di imparato",
+  "dictionary_heatmap_preview_note": "Ogni alone sta dove cadono i tuoi tocchi su quel tasto, e si allarga come loro. Un cerchio tenue è un tasto ancora letto nel modo solito.",
   "dictionary_heatmap_off_title": "Spegnere la mappa dei tocchi?",
   "dictionary_heatmap_off_text": "Dove cadono i tuoi tocchi su ogni tasto viene dimenticato, e nulla viene registrato finché non la riattivi.",
   "dictionary_heatmap_advanced_note": "Quanto contano i tuoi tocchi, e per quanto tempo",

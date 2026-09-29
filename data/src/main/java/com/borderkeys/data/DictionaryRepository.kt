@@ -48,6 +48,9 @@ class DictionaryRepository internal constructor(
     val pairCount: Flow<Int> = userBigrams.observeCount()
     val tripleCount: Flow<Int> = userTrigrams.observeCount()
 
+    /** The heatmap's totals in every bucket, as stored. */
+    val touches: Flow<List<KeyTouch>> = keyTouches.observeAll()
+
     /** How many taps the heatmap rests on, each weighing less as it ages, rounded. */
     val touchTaps: Flow<Int> = keyTouches.observeTaps().map { it.roundToInt() }
 

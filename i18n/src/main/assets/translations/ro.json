@@ -1117,6 +1117,7 @@
   "dictionary_heatmap_needs_learning": "Are nevoie ca Învățarea să fie pornită.",
   "dictionary_heatmap_taps": "Învățată din %s atingeri",
   "dictionary_heatmap_nothing_yet": "Nimic învățat încă",
+  "dictionary_heatmap_preview_note": "Fiecare strălucire stă unde cad atingerile tale pe tasta aceea și se întinde cât se împrăștie ele. Un cerc palid e o tastă citită încă în felul obișnuit.",
   "dictionary_heatmap_off_title": "Oprești harta atingerilor?",
   "dictionary_heatmap_off_text": "Se uită unde atingi fiecare tastă, și nimic nu se înregistrează până o pornești din nou.",
   "dictionary_heatmap_advanced_note": "Cât contează atingerile tale și pentru cât timp",

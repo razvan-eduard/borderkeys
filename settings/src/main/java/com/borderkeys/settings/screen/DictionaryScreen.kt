@@ -27,6 +27,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.borderkeys.settings.PlacementPreview
+import com.borderkeys.settings.HeatmapGlows
+import com.borderkeys.data.KeyTouches
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.entity.UserBigram
@@ -64,11 +68,15 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     val pairCount by repository.pairCount.collectAsStateWithLifecycle(initialValue = 0)
     val tripleCount by repository.tripleCount.collectAsStateWithLifecycle(initialValue = 0)
     val touchTaps by repository.touchTaps.collectAsStateWithLifecycle(initialValue = 0)
+    val touchRows by repository.touches.collectAsStateWithLifecycle(initialValue = emptyList())
+    var chosenBucket by rememberSaveable { mutableStateOf<String?>(null) }
 
     val themes = remember { DataGraph.themes }
     val update = rememberPreferencesUpdater()
     val preferences by themes.preferences
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
+    val appearance by themes.appearance
+        .collectAsStateWithLifecycle(initialValue = remember { themes.currentAppearance() })
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SettingsSectionCard(strings[Keys.DICTIONARY_LEARN_FROM_TYPING]) {
@@ -143,6 +151,40 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                         strings[Keys.DICTIONARY_HEATMAP_NOTHING_YET]
                     },
                 )
+                if (heatmapOn) {
+                    // The portrait bucket first; a chip for each bucket when there are several.
+                    val buckets = touchRows.map { it.bucket }.distinct().sorted()
+                    val shown = chosenBucket?.takeIf { it in buckets }
+                        ?: buckets.firstOrNull { !HeatmapGlows.Bucket.parse(it).landscape }
+                        ?: buckets.firstOrNull()
+                    if (buckets.size > 1) {
+                        val layouts = buckets.map { HeatmapGlows.Bucket.parse(it).baseLayoutId }.distinct()
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            for (bucket in buckets) {
+                                val parsed = HeatmapGlows.Bucket.parse(bucket)
+                                val orientation = strings[if (parsed.landscape) Keys.SIZE_LANDSCAPE else Keys.SIZE_PORTRAIT]
+                                val label = if (layouts.size > 1) "$orientation · ${parsed.baseLayoutId}" else orientation
+                                PickerChip(label, bucket == shown) { chosenBucket = bucket }
+                            }
+                        }
+                    }
+                    val parsed = shown?.let { HeatmapGlows.Bucket.parse(it) }
+                    PlacementPreview(
+                        appearance,
+                        Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        layoutId = parsed?.baseLayoutId?.takeIf { it.isNotEmpty() } ?: DEFAULT_PREVIEW_LAYOUT,
+                        isLandscape = parsed?.landscape ?: false,
+                        touchGlows = HeatmapGlows.of(
+                            touchRows, shown, System.currentTimeMillis(),
+                            KeyTouches.halfLifeMillis(preferences.heatmapHalfLifeDays),
+                            preferences.heatmapMinTaps, HeatmapGlows.COLOR,
+                        ),
+                    )
+                    Explanation(strings[Keys.DICTIONARY_HEATMAP_PREVIEW_NOTE])
+                }
                 AdvancedSection(strings[Keys.DICTIONARY_HEATMAP_ADVANCED_NOTE]) {
                     Text(
                         strings[Keys.DICTIONARY_HEATMAP_WEIGHT],
@@ -434,3 +476,6 @@ private fun ConfirmDialog(
 
 /** Between the words of a listed phrase. */
 private const val WORD_SEPARATOR = " "
+
+/** The layout the heatmap preview shows before anything is learned. */
+private const val DEFAULT_PREVIEW_LAYOUT = "qwerty"

@@ -1117,6 +1117,7 @@
   "dictionary_heatmap_needs_learning": "Nécessite que l'Apprentissage soit activé.",
   "dictionary_heatmap_taps": "Apprise à partir de %s frappes",
   "dictionary_heatmap_nothing_yet": "Rien d'appris pour l'instant",
+  "dictionary_heatmap_preview_note": "Chaque halo se place là où vos frappes tombent sur cette touche, et s'étend comme elles. Un cercle pâle est une touche encore lue de la façon habituelle.",
   "dictionary_heatmap_off_title": "Désactiver la carte des frappes ?",
   "dictionary_heatmap_off_text": "L'endroit où vos frappes tombent sur chaque touche est oublié, et rien n'est enregistré tant qu'elle n'est pas réactivée.",
   "dictionary_heatmap_advanced_note": "Combien vos frappes comptent, et pendant combien de temps",
