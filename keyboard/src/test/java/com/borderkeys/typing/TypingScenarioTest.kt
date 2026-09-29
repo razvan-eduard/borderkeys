@@ -421,6 +421,132 @@ class TypingScenarioTest {
         assertTrue(rig.store.batches.flatMap { it.updates }.any { it.word == "the" })
     }
 
+    @Test
+    fun `holding backspace takes a correction back`() {
+        rig.type("teh ")
+        rig.longPress(KeyCodes.DELETE)
+        assertEquals("teh ", rig.editor.text)
+        assertEquals(listOf("the" to false), rig.host.forgotten)
+    }
+
+    @Test
+    fun `with revert on backspace off, backspace keeps a correction and learns it`() {
+        rig.orchestrator.applySettings(
+            SMOKE_SETTINGS.copy(learningEnabled = true, revertCorrectionOnBackspace = false),
+        )
+        rig.startField()
+        rig.type("teh ")
+        rig.press(KeyCodes.DELETE)
+        assertEquals("the", rig.editor.text)
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals(listOf("the"), rig.store.batches.flatMap { batch -> batch.updates.map { it.word } })
+    }
+
+    @Test
+    fun `with revert on backspace off, backspace keeps a shortcut's expansion and learns nothing`() {
+        rig.orchestrator.applySettings(
+            SMOKE_SETTINGS.copy(
+                learningEnabled = true,
+                revertCorrectionOnBackspace = false,
+                textShortcuts = listOf(TextShortcut(trigger = "omw", expansion = "on my way")),
+            ),
+        )
+        rig.startField()
+        rig.type("omw ")
+        rig.press(KeyCodes.DELETE)
+        assertEquals("on my way", rig.editor.text)
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertTrue(rig.store.batches.isEmpty())
+    }
+
+    @Test
+    fun `a correction the caret has left is learned by the next backspace, which edits at the caret`() {
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true))
+        rig.startField()
+        rig.type("teh ")
+        rig.moveCaret(2)
+        rig.press(KeyCodes.DELETE)
+        assertEquals("te ", rig.editor.text)
+        assertTrue(rig.host.forgotten.isEmpty())
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals(listOf("the"), rig.store.batches.flatMap { batch -> batch.updates.map { it.word } })
+    }
+
+    @Test
+    fun `undo drops a pending correction without learning it`() {
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true))
+        rig.startField()
+        rig.type("hello teh ")
+        undo()
+        assertEquals("hello ", rig.editor.text)
+        rig.press(KeyCodes.DELETE)
+        assertEquals("hello", rig.editor.text)
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals(listOf("hello"), rig.store.batches.flatMap { batch -> batch.updates.map { it.word } })
+    }
+
+    @Test
+    fun `the strip outlines the correction a space would write, never a shortcut's expansion`() {
+        rig.type("teh")
+        assertEquals("the", rig.host.strip[rig.host.appliedIndex].text)
+        rig.orchestrator.applySettings(
+            SMOKE_SETTINGS.copy(textShortcuts = listOf(TextShortcut(trigger = "omw", expansion = "on my way"))),
+        )
+        rig.startField()
+        rig.type("omw")
+        assertEquals(-1, rig.host.appliedIndex)
+    }
+
+    @Test
+    fun `in Ask mode a language flip offers its replacements, and a picked one is applied`() {
+        val both = Pipeline.open("ro-RO", "en-US")
+        try {
+            both.languageLock(BALANCED_EVIDENCE)
+            val twoLanguages = both.typingRig(
+                SMOKE_SETTINGS.copy(
+                    languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_ASK,
+                ),
+            )
+            twoLanguages.startField()
+            for (word in ROMANIAN_PHRASE.split(' ') + "in") {
+                twoLanguages.type("$word ")
+            }
+            for (word in ENGLISH_PHRASE.split(' ')) {
+                twoLanguages.type("$word ")
+            }
+            assertTrue(twoLanguages.editor.text.contains(" în "))
+            val offered = twoLanguages.host.offeredReplacements.flatten()
+            val back = offered.single { it.previousText == "în" }
+            assertEquals("in", back.text)
+            twoLanguages.orchestrator.applyLanguageSwitchReplacements(listOf(back))
+            twoLanguages.settle()
+            val text = twoLanguages.editor.text
+            assertTrue("the English word came back in '$text'", text.contains(" in ") && !text.contains("în"))
+        } finally {
+            both.close()
+        }
+    }
+
+    @Test
+    fun `with the language-switch correction off a language flip changes nothing and offers nothing`() {
+        val both = Pipeline.open("ro-RO", "en-US")
+        try {
+            both.languageLock(BALANCED_EVIDENCE)
+            val twoLanguages = both.typingRig(SMOKE_SETTINGS)
+            twoLanguages.startField()
+            for (word in ROMANIAN_PHRASE.split(' ') + "in") {
+                twoLanguages.type("$word ")
+            }
+            for (word in ENGLISH_PHRASE.split(' ')) {
+                twoLanguages.type("$word ")
+            }
+            assertTrue(twoLanguages.editor.text.contains(" în "))
+            assertTrue(twoLanguages.host.offeredReplacements.isEmpty())
+        } finally {
+            both.close()
+        }
+    }
+
     /** The Undo quick action. */
     private fun undo() {
         rig.orchestrator.undo()
