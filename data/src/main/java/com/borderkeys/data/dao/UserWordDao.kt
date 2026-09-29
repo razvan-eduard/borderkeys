@@ -122,6 +122,9 @@ interface UserWordDao {
 
     @Query("SELECT COUNT(*) FROM user_words")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM user_words")
+    fun observeCount(): Flow<Int>
 }
 
 /** One pending learning update, as accumulated in memory between flushes. */

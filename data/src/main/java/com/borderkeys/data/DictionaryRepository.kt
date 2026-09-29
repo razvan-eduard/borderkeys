@@ -36,6 +36,7 @@ class DictionaryRepository internal constructor(
     private val keyTouches: KeyTouchDao,
 ) {
     val words: Flow<List<UserWord>> = userWords.observeAll()
+    val wordCount: Flow<Int> = userWords.observeCount()
     val blocked: Flow<List<BlockedWord>> = blockedWords.observeAll()
 
     /** The pairs and triples the settings screen lists, most used first. */
@@ -141,11 +142,19 @@ class DictionaryRepository internal constructor(
     suspend fun findIgnoreCase(word: String): UserWord? = userWords.findIgnoreCase(word)
 
     /** Forgets a word and every phrase it was part of. */
-    suspend fun forget(word: String) {
+    suspend fun forget(word: String) = forget(listOf(word))
+
+    /** Forgets [words] and every phrase any of them was part of, in one transaction. */
+    suspend fun forget(words: Collection<String>) {
+        if (words.isEmpty()) {
+            return
+        }
         database.withTransaction {
-            userWords.delete(word)
-            userBigrams.deleteInvolving(word)
-            userTrigrams.deleteInvolving(word)
+            for (word in words) {
+                userWords.delete(word)
+                userBigrams.deleteInvolving(word)
+                userTrigrams.deleteInvolving(word)
+            }
         }
         edited()
     }
