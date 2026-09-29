@@ -100,7 +100,10 @@ class PredictionEngine(
     private val searchScores = FloatArray(MAX_RESULTS)
     private val searchProperNoun = BooleanArray(MAX_RESULTS)
 
-    /** Which entry of [searchWords] the corrections heap settled on, or -1 when none of them. */
+    /**
+     * Which entry of [searchWords] the corrections heap settled on, or -1 when none of them;
+     * cleared per request.
+     */
     private val searchCorrectionIndex = IntArray(1)
 
     /** The typed word's texts, in [NativePredictor.nativeAnswer]'s slots; cleared per request. */
@@ -693,6 +696,7 @@ class PredictionEngine(
     private fun serveRequests() {
         while (queue.take()) {
             val generation = queue.currentGeneration
+            searchCorrectionIndex[0] = -1
             searchTexts.fill(null)
             searchCorrectionName[0] = false
             Trace.beginSection("PredictionEngine.suggest")
