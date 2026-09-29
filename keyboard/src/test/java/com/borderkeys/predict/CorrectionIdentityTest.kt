@@ -7,7 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The correction `nativeSuggest` marks by index is the word `nativeBestCorrection` names. */
+/** The correction `nativeAnswer` marks by index is the correction it names. */
 class CorrectionIdentityTest {
 
     @Test

@@ -29,6 +29,12 @@ constexpr int kMaxUserWordsPerCall = 20000;
 // The most gesture points taken; the same as GestureCapture's capacity.
 constexpr jsize kMaxGesturePoints = 512;
 
+// The slots of nativeAnswer's `outTexts`, the same as NativePredictor's TEXT_ constants.
+constexpr jsize kTextKnownSpelling = 0;
+constexpr jsize kTextPossessive = 1;
+constexpr jsize kTextCorrection = 2;
+constexpr jsize kTextSlots = 3;
+
 Engine* engineFrom(jlong handle) {
     return reinterpret_cast<Engine*>(static_cast<intptr_t>(handle));
 }
@@ -195,9 +201,63 @@ void nativeSetKeyGeometry(JNIEnv* env, jobject /*thiz*/, jlong handle, jintArray
                            static_cast<float>(keyHeight));
 }
 
-jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing, jstring prev1,
-                   jstring prev2, jobjectArray outWords, jfloatArray outScores,
-                   jbooleanArray outProperNoun, jintArray outCorrectionIndex) {
+/** Stores [text] in `array[slot]` as a Java string; a failed allocation leaves the slot as is. */
+void setText(JNIEnv* env, jobjectArray array, jsize slot, const char* text) {
+    jstring value = env->NewStringUTF(text);
+    if (value == nullptr) {
+        env->ExceptionClear();
+        return;
+    }
+    env->SetObjectArrayElement(array, slot, value);
+    env->DeleteLocalRef(value);
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        env->ExceptionClear();
+    }
+}
+
+/**
+ * Fills `outTexts` for the typed [word]: how the dictionaries spell it, its possessive, and
+ * autocorrect's answer to the request just served; a slot with none is left as it is.
+ * `outCorrectionName[0]` is set to whether that answer is a name.
+ */
+void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t length,
+                jobjectArray outTexts, jbooleanArray outCorrectionName) {
+    if (outTexts == nullptr || env->GetArrayLength(outTexts) < kTextSlots) {
+        return;
+    }
+    char text[kStringBufferBytes];
+    const int spelled = engine.knownSpelling(word, length, text, sizeof(text) - 1);
+    if (spelled > 0) {
+        text[spelled] = '\0';
+        setText(env, outTexts, kTextKnownSpelling, text);
+    }
+    const int possessive = engine.possessiveFor(word, length, text, sizeof(text) - 1);
+    if (possessive > 0) {
+        text[possessive] = '\0';
+        setText(env, outTexts, kTextPossessive, text);
+    }
+    const Candidate* const best = engine.bestCorrection();
+    if (best == nullptr) {
+        return;
+    }
+    uint32_t bestLength = 0;
+    const char* const source = engine.candidateText(*best, &bestLength);
+    if (source == nullptr || bestLength == 0 || bestLength >= kStringBufferBytes) {
+        return;
+    }
+    if (outCorrectionName != nullptr && env->GetArrayLength(outCorrectionName) > 0) {
+        const jboolean isName = engine.candidateIsProperNoun(*best) ? JNI_TRUE : JNI_FALSE;
+        env->SetBooleanArrayRegion(outCorrectionName, 0, 1, &isName);
+    }
+    std::memcpy(text, source, bestLength);
+    text[bestLength] = '\0';
+    setText(env, outTexts, kTextCorrection, text);
+}
+
+jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing, jstring prev1,
+                  jstring prev2, jobjectArray outWords, jfloatArray outScores,
+                  jbooleanArray outProperNoun, jintArray outCorrectionIndex,
+                  jobjectArray outTexts, jbooleanArray outCorrectionName) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || outWords == nullptr || outScores == nullptr ||
         outProperNoun == nullptr) {
@@ -244,6 +304,11 @@ jint nativeSuggest(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composin
                                       prev1Buffer, static_cast<size_t>(prev1Length),
                                       prev2Buffer, static_cast<size_t>(prev2Length), candidates,
                                       static_cast<int>(slots));
+    // For a typed word: how the dictionaries spell it, its possessive, and autocorrect's answer.
+    if (composingLength > 0) {
+        writeTexts(env, *engine, composingBuffer, static_cast<size_t>(composingLength), outTexts,
+                   outCorrectionName);
+    }
     if (found <= 0) {
         return 0;
     }
@@ -472,55 +537,6 @@ void nativeLoadUserTrigrams(JNIEnv* env, jobject /*thiz*/, jlong handle,
                              static_cast<int>(tripleCount));
 }
 
-/**
- * Autocorrect's answer to the last request, and whether it is a name; read right after
- * nativeSuggest on the same thread.
- */
-jstring nativeBestCorrection(JNIEnv* env, jobject /*thiz*/, jlong handle, jbooleanArray nameOut) {
-    Engine* const engine = engineFrom(handle);
-    if (engine == nullptr) {
-        return nullptr;
-    }
-    const Candidate* const best = engine->bestCorrection();
-    if (best == nullptr) {
-        return nullptr;
-    }
-    uint32_t length = 0;
-    const char* const text = engine->candidateText(*best, &length);
-    if (text == nullptr || length == 0 || length >= kStringBufferBytes) {
-        return nullptr;
-    }
-    if (nameOut != nullptr && env->GetArrayLength(nameOut) > 0) {
-        jboolean isName = engine->candidateIsProperNoun(*best) ? JNI_TRUE : JNI_FALSE;
-        env->SetBooleanArrayRegion(nameOut, 0, 1, &isName);
-    }
-    char buffer[kStringBufferBytes];
-    std::memcpy(buffer, text, length);
-    buffer[length] = '\0';
-    return env->NewStringUTF(buffer);
-}
-
-/** A name's possessive for a word missing its apostrophe, or null; see Engine::possessiveFor. */
-jstring nativePossessive(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word) {
-    Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || word == nullptr) {
-        return nullptr;
-    }
-    char buffer[kStringBufferBytes];
-    const jsize length = copyString(env, word, buffer, sizeof(buffer));
-    if (length <= 0) {
-        return nullptr;
-    }
-    char possessive[kStringBufferBytes];
-    const int written = engine->possessiveFor(buffer, static_cast<size_t>(length), possessive,
-                                              sizeof(possessive) - 1);
-    if (written <= 0) {
-        return nullptr;
-    }
-    possessive[written] = '\0';
-    return env->NewStringUTF(possessive);
-}
-
 /** The score of `candidate` as an answer to `typed`, term by term, into `out` in
  *  ScoreExplanation.kt's slot order; false when the word is not offered. */
 jboolean nativeExplainScore(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring typed,
@@ -592,26 +608,6 @@ jint nativeKnownStems(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray 
     }
     env->SetBooleanArrayRegion(outKnown, 0, count, flags);
     return known;
-}
-
-jstring nativeKnownSpelling(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word) {
-    Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || word == nullptr) {
-        return nullptr;
-    }
-    char buffer[kStringBufferBytes];
-    const jsize length = copyString(env, word, buffer, sizeof(buffer));
-    if (length <= 0) {
-        return nullptr;
-    }
-    char spelling[kStringBufferBytes];
-    const int written = engine->knownSpelling(buffer, static_cast<size_t>(length), spelling,
-                                              sizeof(spelling) - 1);
-    if (written <= 0) {
-        return nullptr;
-    }
-    spelling[written] = '\0';
-    return env->NewStringUTF(spelling);
 }
 
 jstring nativeCandidateForPack(JNIEnv* env, jobject /*thiz*/, jlong handle, jint packIndex,
@@ -992,7 +988,7 @@ jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArra
         }
         // Already in [0, 1000].
         scores[written] = candidates[i].score;
-        // The same name flag nativeSuggest reports.
+        // The same name flag nativeAnswer reports.
         properNoun[written] = engine->candidateIsProperNoun(candidates[i]) ? JNI_TRUE : JNI_FALSE;
         ++written;
     }
@@ -1019,9 +1015,10 @@ const JNINativeMethod kMethods[] = {
     {"nativeSetActiveLanguages", "(J[Ljava/lang/String;[F)V",
      reinterpret_cast<void*>(nativeSetActiveLanguages)},
     {"nativeSetKeyGeometry", "(J[I[F[FFF)V", reinterpret_cast<void*>(nativeSetKeyGeometry)},
-    {"nativeSuggest",
-     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F[Z[I)I",
-     reinterpret_cast<void*>(nativeSuggest)},
+    {"nativeAnswer",
+     "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[F[Z[I"
+     "[Ljava/lang/String;[Z)I",
+     reinterpret_cast<void*>(nativeAnswer)},
     {"nativeLearn", "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZ)V",
      reinterpret_cast<void*>(nativeLearn)},
     {"nativeLoadUserWords", "(J[Ljava/lang/String;[I[I[I)V",
@@ -1048,16 +1045,10 @@ const JNINativeMethod kMethods[] = {
     {"nativeLastDecodeUsedNeural", "(J)Z",
      reinterpret_cast<void*>(nativeLastDecodeUsedNeural)},
     {"nativeWarmSwipeModel", "(J)Z", reinterpret_cast<void*>(nativeWarmSwipeModel)},
-    {"nativeBestCorrection", "(J[Z)Ljava/lang/String;",
-     reinterpret_cast<void*>(nativeBestCorrection)},
-    {"nativePossessive", "(JLjava/lang/String;)Ljava/lang/String;",
-     reinterpret_cast<void*>(nativePossessive)},
     {"nativeKnownStems", "(J[Ljava/lang/String;[Z)I",
      reinterpret_cast<void*>(nativeKnownStems)},
     {"nativeExplainScore", "(JLjava/lang/String;Ljava/lang/String;[F)Z",
      reinterpret_cast<void*>(nativeExplainScore)},
-    {"nativeKnownSpelling", "(JLjava/lang/String;)Ljava/lang/String;",
-     reinterpret_cast<void*>(nativeKnownSpelling)},
     {"nativeLoadUserTrigrams",
      "(J[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[I)V",
      reinterpret_cast<void*>(nativeLoadUserTrigrams)},

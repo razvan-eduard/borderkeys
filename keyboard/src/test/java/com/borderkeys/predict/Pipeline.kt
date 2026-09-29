@@ -35,18 +35,11 @@ internal class Pipeline private constructor(
         correctionDistance: Int = DEFAULT_DISTANCE,
         capitaliseNames: Boolean = true,
     ): Outcome {
-        val words = arrayOfNulls<String>(MAX_CANDIDATES)
-        val scores = FloatArray(MAX_CANDIDATES)
-        val properNoun = BooleanArray(MAX_CANDIDATES)
-        NativePredictor.nativeSuggest(
-            handle, typed, previous, null, words, scores, properNoun, IntArray(1),
-        )
-
-        val isName = BooleanArray(1)
-        val correction = NativePredictor.nativeBestCorrection(handle, isName)
-        val spelling = NativePredictor.nativeKnownSpelling(handle, typed)
+        val answer = answer(typed, previous)
+        val correction = answer.texts[NativePredictor.TEXT_CORRECTION]
+        val spelling = answer.texts[NativePredictor.TEXT_KNOWN_SPELLING]
         val knownWord = if (spelling != null && spelling.equals(typed, ignoreCase = true)) typed else ""
-        val possessive = NativePredictor.nativePossessive(handle, typed)
+        val possessive = answer.texts[NativePredictor.TEXT_POSSESSIVE]
         val inflection = correction != null &&
             WordStems.shields(typed, correction, knownStems(typed), languages)
 
@@ -60,7 +53,7 @@ internal class Pipeline private constructor(
             suggestion = correction,
             suggestionQuery = typed,
             knownWord = knownWord,
-            isProperNoun = isName[0],
+            isProperNoun = answer.correctionIsName,
             inflection = inflection,
             settings = WordCommit.Settings(
                 autoCorrectOnSpace = true,
@@ -85,49 +78,56 @@ internal class Pipeline private constructor(
     }
 
     /** What the suggestion strip would show for [typed], in order. */
-    fun strip(typed: String, previous: String? = null): List<String> {
-        val words = arrayOfNulls<String>(MAX_CANDIDATES)
-        val scores = FloatArray(MAX_CANDIDATES)
-        val properNoun = BooleanArray(MAX_CANDIDATES)
-        val n = NativePredictor.nativeSuggest(
-            handle, typed, previous, null, words, scores, properNoun, IntArray(1),
-        )
-        return (0 until n).mapNotNull { words[it] }
-    }
+    fun strip(typed: String, previous: String? = null): List<String> = answer(typed, previous).ranked
 
     /**
      * [outcome] as one tab-separated line: typed, committed or `-`, reason, then the engine's
      * ranking for the typed word, each entry `word:score`, a name marked `word*:score`.
      */
     fun readingLine(outcome: Outcome): String {
-        val words = arrayOfNulls<String>(MAX_CANDIDATES)
-        val scores = FloatArray(MAX_CANDIDATES)
-        val properNoun = BooleanArray(MAX_CANDIDATES)
-        val n = NativePredictor.nativeSuggest(
-            handle, outcome.typed, null, null, words, scores, properNoun, IntArray(1),
-        )
-        val ranking = (0 until n).joinToString(" ") { index ->
-            val name = if (properNoun[index]) "*" else ""
-            "${words[index]}$name:" + String.format(Locale.ROOT, "%.4f", scores[index])
+        val answer = answer(outcome.typed)
+        val ranking = (0 until answer.count).joinToString(" ") { index ->
+            val name = if (answer.properNoun[index]) "*" else ""
+            "${answer.words[index]}$name:" + String.format(Locale.ROOT, "%.4f", answer.scores[index])
         }
         return "${outcome.typed}\t${outcome.committed ?: "-"}\t${outcome.reason}\t$ranking"
     }
 
     /** The ranked words for [typed], and the index of the engine's correction among them, or -1. */
     fun stripWithCorrection(typed: String, previous: String? = null): CorrectionView {
+        val answer = answer(typed, previous)
+        return CorrectionView(
+            answer.ranked,
+            answer.correctionAt,
+            answer.texts[NativePredictor.TEXT_CORRECTION],
+        )
+    }
+
+    /** One [NativePredictor.nativeAnswer] call's output. */
+    private class Answer(
+        val words: Array<String?>,
+        val scores: FloatArray,
+        val properNoun: BooleanArray,
+        val count: Int,
+        val correctionAt: Int,
+        val texts: Array<String?>,
+        val correctionIsName: Boolean,
+    ) {
+        val ranked: List<String> get() = (0 until count).mapNotNull { words[it] }
+    }
+
+    /** The engine's answer for [typed] after [previous]. */
+    private fun answer(typed: String, previous: String? = null): Answer {
         val words = arrayOfNulls<String>(MAX_CANDIDATES)
         val scores = FloatArray(MAX_CANDIDATES)
         val properNoun = BooleanArray(MAX_CANDIDATES)
         val at = IntArray(1)
-        val n = NativePredictor.nativeSuggest(
-            handle, typed, previous, null, words, scores, properNoun, at,
-        )
+        val texts = arrayOfNulls<String>(NativePredictor.TEXT_SLOTS)
         val isName = BooleanArray(1)
-        return CorrectionView(
-            (0 until n).mapNotNull { words[it] },
-            at[0],
-            NativePredictor.nativeBestCorrection(handle, isName),
+        val count = NativePredictor.nativeAnswer(
+            handle, typed, previous, null, words, scores, properNoun, at, texts, isName,
         )
+        return Answer(words, scores, properNoun, count, at[0], texts, isName[0])
     }
 
     /** The engine's ranking, the index of its correction in it, and the correction itself. */

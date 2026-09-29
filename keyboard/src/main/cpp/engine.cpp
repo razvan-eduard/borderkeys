@@ -1978,39 +1978,54 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     hasBestCorrection_ = false;
     hasBestRespelling_ = false;
 
-    editCostCeiling_ = maxEditCostFor(foldedLength);
     // The search is restricted to the detected language, else the preferred one, else, when
     // strict, the heaviest; otherwise every pack answers.
     const int restrictTo = (dominantPack_ >= 0)  ? dominantPack_
                            : (preferredPack_ >= 0) ? preferredPack_
                                                    : (strictLanguage_ ? heaviestPack() : -1);
-    {
-        PassScope pass(*this, Pass::Primary);
-        searchPacks(folded, foldedLength, restrictTo, heap);
-    }
-    // An empty restricted search is widened to every pack, unless strict.
-    if (heap.size() == 0 && restrictTo >= 0 && !strictLanguage_) {
-        PassScope pass(*this, Pass::AllPacks);
-        searchPacks(folded, foldedLength, -1, heap);
-    }
-    if (foldedLength > 0) {
-        {
-            PassScope pass(*this, Pass::UserModel);
-            searchUserModel(folded, foldedLength, heap);
+    for (const PassSpec& spec : kSearchPlan) {
+        const PlanState state{foldedLength, restrictTo >= 0, strictLanguage_, heap.size()};
+        if (!spec.runs(state)) {
+            continue;
         }
-        // Nothing found: one wider pass, whose candidates are shown and never committed.
-        if (heap.size() == 0) {
-            editCostCeiling_ = kFallbackEditCost;
-            PassScope pass(*this, Pass::Wide);
-            searchPacks(folded, foldedLength, -1, heap);
-        }
-    } else {
-        PassScope pass(*this, Pass::NextWord);
-        searchUserSuccessors(heap);
-        searchUserPhrases(heap);
+        PassScope pass(*this, spec.pass);
+        runPass(spec, folded, foldedLength, restrictTo, heap);
     }
 
-    // Autocorrect's answer: the best of the corrections heap.
+    settleCorrection(composing, composingLength);
+    return writeStrip(folded, foldedLength, heap, out, maxOut);
+}
+
+void Engine::runPass(const PassSpec& spec, const uint32_t* folded, int foldedLength,
+                     int restrictTo, TopK<Candidate>& heap) {
+    switch (spec.ceiling) {
+        case PassCeiling::ByLength:
+            editCostCeiling_ = maxEditCostFor(foldedLength);
+            break;
+        case PassCeiling::Fallback:
+            editCostCeiling_ = kFallbackEditCost;
+            break;
+        case PassCeiling::None:
+            break;
+    }
+    switch (spec.source) {
+        case PassSource::RestrictedPacks:
+            searchPacks(folded, foldedLength, restrictTo, heap);
+            break;
+        case PassSource::AllPacks:
+            searchPacks(folded, foldedLength, -1, heap);
+            break;
+        case PassSource::PersonalWords:
+            searchUserModel(folded, foldedLength, heap);
+            break;
+        case PassSource::PersonalNextWords:
+            searchUserSuccessors(heap);
+            searchUserPhrases(heap);
+            break;
+    }
+}
+
+void Engine::settleCorrection(const char* composing, size_t composingLength) {
     Candidate corrections[kMaxCorrections];
     if (correctionHeap_.drainSorted(corrections, kMaxCorrections) > 0) {
         bestCorrection_ = corrections[0];
@@ -2030,10 +2045,11 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
         bestCorrection_ = Candidate{typedPack, static_cast<int32_t>(typedWord), 0.0f};
         hasBestCorrection_ = true;
     }
+}
 
+int Engine::writeStrip(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap,
+                       Candidate* out, int maxOut) {
     const int drained = heap.drainSorted(drainBuffer_, kMaxCandidates);
-
-    // At most kMaxShownCompletions continuations of the typed letters are shown, the best first.
     int written = 0;
     int continuations = 0;
     for (int i = 0; i < drained && written < maxOut; ++i) {
