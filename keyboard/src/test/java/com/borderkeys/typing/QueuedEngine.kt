@@ -7,6 +7,7 @@ import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.predict.AnswerScratch
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.NativePredictor
+import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.predict.RefusedWords
 import com.borderkeys.predict.answerRequest
 
@@ -98,8 +99,91 @@ internal class QueuedEngine(
         )
     }
 
-    /** Drops the suggestion requests not yet served; the other calls still run. */
+    /** Drops the suggestion requests not yet served, and the swipe decode; the rest still runs. */
     override fun cancelPending() {
         tasks.removeAll { it.request }
+        gestureGeneration++
+    }
+
+    /** Receives each answer to [decodeGesture]. */
+    var onGestureCandidates: (List<Candidate>) -> Unit = {}
+
+    /** Receives each answer to [decodeGesturePreview]. */
+    var onGesturePreviewCandidates: (List<Candidate>) -> Unit = {}
+
+    /** Counts the swipe decodes asked for; an answer from an older one is dropped. */
+    private var gestureGeneration = 0
+    private var previewGeneration = 0
+
+    override fun decodeGesture(
+        xs: FloatArray,
+        ys: FloatArray,
+        timestamps: LongArray,
+        count: Int,
+        previous1: String?,
+        previous2: String?,
+    ) {
+        if (count < 2) {
+            return
+        }
+        val generation = ++gestureGeneration
+        val path = Path(xs.copyOf(count), ys.copyOf(count), timestamps.copyOf(count))
+        tasks.addLast(
+            Task(request = false) {
+                val found = decode(path, previous1, previous2)
+                if (generation == gestureGeneration) {
+                    onGestureCandidates(found)
+                }
+            },
+        )
+    }
+
+    override fun decodeGesturePreview(
+        xs: FloatArray,
+        ys: FloatArray,
+        timestamps: LongArray,
+        count: Int,
+        previous1: String?,
+        previous2: String?,
+    ) {
+        if (count < 2) {
+            return
+        }
+        val generation = ++previewGeneration
+        val path = Path(xs.copyOf(count), ys.copyOf(count), timestamps.copyOf(count))
+        tasks.addLast(
+            Task(request = false) {
+                val found = decode(path, previous1, previous2)
+                if (generation == previewGeneration) {
+                    onGesturePreviewCandidates(found)
+                }
+            },
+        )
+    }
+
+    override fun cancelPendingGesture() {
+        gestureGeneration++
+    }
+
+    override fun cancelPendingPreview() {
+        previewGeneration++
+    }
+
+    /** A swipe's samples, copied when the decode is asked for. */
+    private class Path(val xs: FloatArray, val ys: FloatArray, val timestamps: LongArray)
+
+    private val decodeWords = arrayOfNulls<String>(PredictionEngine.MAX_RESULTS)
+    private val decodeScores = FloatArray(PredictionEngine.MAX_RESULTS)
+    private val decodeProperNoun = BooleanArray(PredictionEngine.MAX_RESULTS)
+
+    /** The decode of [path], best first, the refused words left out. */
+    private fun decode(path: Path, previous1: String?, previous2: String?): List<Candidate> {
+        val found = NativePredictor.nativeDecodeGesture(
+            handle, path.xs, path.ys, path.timestamps, path.xs.size, previous1, previous2,
+            decodeWords, decodeScores, decodeProperNoun,
+        )
+        return (0 until found).mapNotNull { index ->
+            decodeWords[index]?.let { Candidate(it, decodeProperNoun[index], decodeScores[index]) }
+        }.filterNot { refused.refuses(it.text) }
     }
 }

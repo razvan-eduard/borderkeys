@@ -681,6 +681,205 @@ class TypingScenarioTest {
         }
     }
 
+    // ---- swipes and the ring ------------------------------------------------------------------
+
+    @Test
+    fun `a swipe types its word, and the strip shows its alternatives unmarked`() {
+        rig.swipe("the")
+        assertEquals("the", rig.editor.text)
+        assertEquals("the", rig.host.strip.first().text)
+        assertEquals(-1, rig.host.typedIndex)
+        assertEquals(-1, rig.host.appliedIndex)
+        assertTrue(rig.ring.opened.isEmpty())
+    }
+
+    @Test
+    fun `a pause composes the top word and opens the ring, and a lift in place applies it`() {
+        ringOn()
+        rig.swipeAndPause("the")
+        assertEquals("the", rig.editor.text)
+        val ring = rig.ring.opened.single()
+        assertEquals("the", ring.words.first())
+        assertEquals(KeyboardPreferences().radialSuggestionCount, ring.words.size)
+        assertFalse(ring.waitsForTap)
+        assertEquals(KeyboardPreferences().radialPickTimeoutMillis.toLong(), ring.pickTimeoutMillis)
+        rig.orchestrator.onRingLifted()
+        rig.settle()
+        assertEquals("the ", rig.editor.text)
+    }
+
+    @Test
+    fun `a lift on a wedge applies that wedge's word`() {
+        ringOn()
+        rig.swipeAndPause("the")
+        val word = rig.ring.opened.single().words[1]
+        rig.ring.selectionNow = RingUi.Selection.Word(1, word)
+        rig.orchestrator.onRingLifted()
+        rig.settle()
+        assertEquals("$word ", rig.editor.text)
+        assertEquals(listOf<Int?>(1), rig.ring.closed)
+    }
+
+    @Test
+    fun `a lift on the centre discards the swipe`() {
+        ringOn()
+        rig.swipeAndPause("the")
+        rig.ring.selectionNow = RingUi.Selection.Cancel
+        rig.orchestrator.onRingLifted()
+        rig.settle()
+        assertEquals("", rig.editor.text)
+    }
+
+    @Test
+    fun `a lift with no pick discards the swipe when the timeout is set to cancel`() {
+        ringOn(timeoutDefault = KeyboardPreferences.RADIAL_TIMEOUT_CANCEL)
+        rig.swipeAndPause("the")
+        rig.orchestrator.onRingLifted()
+        rig.settle()
+        assertEquals("", rig.editor.text)
+    }
+
+    @Test
+    fun `the pick timeout resolves the ring from its highlight`() {
+        ringOn()
+        rig.swipeAndPause("the")
+        val word = rig.ring.opened.single().words[2]
+        rig.ring.selectionNow = RingUi.Selection.Word(2, word)
+        rig.orchestrator.onRingTimedOut()
+        rig.settle()
+        assertEquals("$word ", rig.editor.text)
+    }
+
+    @Test
+    fun `a lift in place keeps the ring open for a tap when set to`() {
+        ringOn(liftKeepsOpen = true)
+        rig.swipeAndPause("the")
+        assertNull(rig.ring.opened.single().pickTimeoutMillis)
+        rig.orchestrator.onRingLifted()
+        rig.settle()
+        assertEquals(1, rig.ring.keptOpenForTap)
+        assertEquals("the", rig.editor.text)
+    }
+
+    @Test
+    fun `a ring kept open after the lift waits for a tap on a wedge`() {
+        ringOn(liftKeepsOpen = true)
+        rig.swipe("hello")
+        val ring = rig.ring.opened.single()
+        assertTrue(ring.waitsForTap)
+        assertNull(ring.pickTimeoutMillis)
+        rig.orchestrator.onRingTapped(RingUi.Selection.Word(1, ring.words[1]))
+        rig.settle()
+        assertEquals("${ring.words[1]} ", rig.editor.text)
+    }
+
+    @Test
+    fun `a tap on the centre of a kept-open ring discards the swipe, and a tap elsewhere leaves it`() {
+        ringOn(liftKeepsOpen = true)
+        rig.swipe("hello")
+        rig.orchestrator.onRingTapped(RingUi.Selection.Cancel)
+        rig.settle()
+        assertEquals("", rig.editor.text)
+        rig.swipe("hello")
+        rig.orchestrator.onRingTapped(RingUi.Selection.None)
+        rig.settle()
+        assertEquals("hello", rig.editor.text)
+        assertEquals(1, rig.ring.dismissals)
+    }
+
+    @Test
+    fun `a decisive swipe opens no ring when the trusted word applies itself`() {
+        ringOn(liftKeepsOpen = true, trustedWord = KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY)
+        rig.swipe("the")
+        assertEquals("the", rig.editor.text)
+        assertTrue(rig.ring.opened.isEmpty())
+    }
+
+    @Test
+    fun `a swipe after a pause that opened no ring replaces the pause's guess`() {
+        ringOn()
+        rig.ring.refuses = true
+        rig.swipeAndPause("the")
+        assertEquals(1, rig.ring.resumedCaptures)
+        rig.swipe("the")
+        assertEquals("the", rig.editor.text)
+    }
+
+    @Test
+    fun `a ring closed from outside leaves the pause's word, and the next swipe adds its own`() {
+        ringOn()
+        rig.swipeAndPause("the")
+        rig.orchestrator.dismissRing()
+        rig.swipe("the")
+        val words = rig.editor.text.split(' ')
+        assertEquals("the", words.first())
+        assertEquals(2, words.size)
+    }
+
+    @Test
+    fun `a swipe's answer is dropped once the word is reset`() {
+        val path = SwipePath.through("the", rig.clock)
+        rig.orchestrator.onGesture(path.xs, path.ys, path.timestamps, path.count)
+        rig.orchestrator.resetComposing()
+        rig.settle()
+        assertEquals("", rig.editor.text)
+    }
+
+    @Test
+    fun `a pause in a terminal opens no ring`() {
+        ringOn()
+        rig.startField(terminalField = true)
+        rig.swipeAndPause("the")
+        assertEquals(1, rig.ring.resumedCaptures)
+        assertTrue(rig.ring.opened.isEmpty())
+    }
+
+    @Test
+    fun `a pause in a password field opens no ring`() {
+        ringOn()
+        rig.startField(passwordField = true, privateField = true)
+        rig.swipeAndPause("the")
+        assertEquals(1, rig.ring.resumedCaptures)
+        assertTrue(rig.ring.opened.isEmpty())
+        assertEquals("", rig.editor.text)
+    }
+
+    @Test
+    fun `an empty decode clears the strip and asks about the word afresh`() {
+        rig.type("he")
+        rig.engine.queries.clear()
+        rig.orchestrator.onGestureCandidates(emptyList())
+        assertTrue(rig.host.strip.isEmpty())
+        assertEquals(listOf("he"), rig.engine.queries)
+    }
+
+    @Test
+    fun `a swipe into a terminal goes out as keys`() {
+        rig.startField(terminalField = true)
+        rig.swipe("the")
+        assertEquals(
+            listOf(KeyEvent.KEYCODE_T, KeyEvent.KEYCODE_H, KeyEvent.KEYCODE_E),
+            rig.host.physicalKeys.map { it.first },
+        )
+    }
+
+    /** Switches the ring on, with [liftKeepsOpen], [timeoutDefault] and [trustedWord], anew. */
+    private fun ringOn(
+        liftKeepsOpen: Boolean = false,
+        timeoutDefault: Int = KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP,
+        trustedWord: Int = KeyboardPreferences.RADIAL_TRUSTED_CHIP,
+    ) {
+        rig.orchestrator.applySettings(
+            SMOKE_SETTINGS.copy(
+                radialMenuEnabled = true,
+                radialLiftKeepsOpen = liftKeepsOpen,
+                radialTimeoutDefault = timeoutDefault,
+                radialTrustedWord = trustedWord,
+            ),
+        )
+        rig.startField()
+    }
+
     /** The Undo quick action. */
     private fun undo() {
         rig.orchestrator.undo()

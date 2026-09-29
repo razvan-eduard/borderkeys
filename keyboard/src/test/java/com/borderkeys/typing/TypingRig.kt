@@ -7,21 +7,38 @@ import android.text.InputType
 import com.borderkeys.data.theme.KeyboardPreferences
 
 /**
- * A [TypingOrchestrator] on an in-memory field, the engine on the host bridge, a recording host,
- * an in-memory store and a clock the test moves. After each key the rig delivers what reaches the
- * input method before the next one: the field's selection reports, the engine's answers, and the
- * runnables that fell due.
+ * A [TypingOrchestrator] on an in-memory field, the engine on the host bridge, a recording host
+ * and ring, an in-memory store and a clock the test moves. After each key the rig delivers what
+ * reaches the input method before the next one: the field's selection reports, the engine's
+ * answers, and the runnables that fell due.
  */
 internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences) {
     val editor = FakeFieldEditor()
     val clock = ManualClock()
     val host = FakeTypingHost(clock)
+    val ring = FakeRingUi()
     val store = MemoryLearningStore()
-    val orchestrator = TypingOrchestrator({ editor }, engine, host, store, clock)
+    val orchestrator = TypingOrchestrator({ editor }, engine, host, ring, store, clock)
 
     init {
         engine.onSuggestions = orchestrator::onSuggestions
+        engine.onGestureCandidates = orchestrator::onGestureCandidates
+        engine.onGesturePreviewCandidates = orchestrator::onGesturePreviewCandidates
         orchestrator.applySettings(settings)
+    }
+
+    /** Swipes through the keys of [word] on the harness's layout, lifts, and settles. */
+    fun swipe(word: String) {
+        val path = SwipePath.through(word, clock)
+        orchestrator.onGesture(path.xs, path.ys, path.timestamps, path.count)
+        settle()
+    }
+
+    /** Swipes through the keys of [word] and pauses there, the finger still down, and settles. */
+    fun swipeAndPause(word: String) {
+        val path = SwipePath.through(word, clock)
+        orchestrator.onGesturePaused(path.xs, path.ys, path.timestamps, path.count)
+        settle()
     }
 
     /** Opens a field holding [text], the caret at its end, and settles unless [settle] is false. */

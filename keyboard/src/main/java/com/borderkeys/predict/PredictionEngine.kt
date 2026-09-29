@@ -484,7 +484,7 @@ class PredictionEngine(
     }
 
     /** Drops a swipe decode that has not answered yet. */
-    fun cancelPendingGesture() {
+    override fun cancelPendingGesture() {
         gestureGeneration++
     }
 
@@ -495,7 +495,7 @@ class PredictionEngine(
      * Decodes a swipe from a copy of its samples. Returns immediately; the answer arrives on the
      * UI thread.
      */
-    fun decodeGesture(
+    override fun decodeGesture(
         xs: FloatArray,
         ys: FloatArray,
         timestamps: LongArray,
@@ -569,7 +569,7 @@ class PredictionEngine(
     }
 
     /** Decodes a swipe still in progress, through its own buffers, lock and generation. */
-    fun decodeGesturePreview(
+    override fun decodeGesturePreview(
         xs: FloatArray,
         ys: FloatArray,
         timestamps: LongArray,
@@ -615,7 +615,7 @@ class PredictionEngine(
     }
 
     /** Drops a preview decode that has not answered yet. */
-    fun cancelPendingPreview() {
+    override fun cancelPendingPreview() {
         previewGeneration++
     }
 

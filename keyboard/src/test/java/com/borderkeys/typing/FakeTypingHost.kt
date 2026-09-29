@@ -89,9 +89,29 @@ internal class FakeTypingHost(private val clock: ManualClock) : TypingHost {
         shiftState = state
     }
 
-    override fun dismissRing() = Unit
-
     override fun onWordReset() = Unit
+
+    /** The sample count of each swipe lifted, and the candidate count of each decode applied. */
+    val swipesLifted = mutableListOf<Int>()
+    val swipesDecoded = mutableListOf<Int>()
+
+    /** How many swipe decodes answered. */
+    var swipeAnswers = 0
+        private set
+
+    override fun onSwipeLifted(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
+        swipesLifted += count
+    }
+
+    override fun onSwipeAnswered() {
+        swipeAnswers++
+    }
+
+    override fun onSwipeDecoded(candidates: Int) {
+        swipesDecoded += candidates
+    }
+
+    override fun traceSwipeDecode(candidates: Int) = Unit
 
     override fun refreshPrivateReveal() {
         privateRevealRefreshes++

@@ -253,24 +253,34 @@ internal class Pipeline private constructor(
                 .getInt(descriptor)
 
         private fun qwerty(handle: Long) {
-            val rows = listOf("qwertyuiop", "asdfghjkl", "zxcvbnm")
-            val indents = listOf(0f, 0.5f, 1.5f)
-            val keyWidth = 108f
-            val keyHeight = 160f
             val codes = ArrayList<Int>()
             val xs = ArrayList<Float>()
             val ys = ArrayList<Float>()
-            rows.forEachIndexed { row, letters ->
-                letters.forEachIndexed { column, letter ->
+            for (letters in QWERTY_ROWS) {
+                for (letter in letters) {
+                    val (x, y) = keyCentre(letter)
                     codes += letter.code
-                    xs += (indents[row] + column + 0.5f) * keyWidth
-                    ys += (row + 0.5f) * keyHeight
+                    xs += x
+                    ys += y
                 }
             }
             NativePredictor.nativeSetKeyGeometry(
                 handle, codes.toIntArray(), xs.toFloatArray(), ys.toFloatArray(),
-                keyWidth, keyHeight,
+                KEY_WIDTH, KEY_HEIGHT,
             )
         }
+
+        /** The centre of [letter]'s key on the harness's layout, in its pixels. */
+        fun keyCentre(letter: Char): Pair<Float, Float> {
+            val row = QWERTY_ROWS.indexOfFirst { letter in it }
+            require(row >= 0) { "no key for '$letter'" }
+            val column = QWERTY_ROWS[row].indexOf(letter)
+            return (ROW_INDENTS[row] + column + 0.5f) * KEY_WIDTH to (row + 0.5f) * KEY_HEIGHT
+        }
+
+        private val QWERTY_ROWS = listOf("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        private val ROW_INDENTS = listOf(0f, 0.5f, 1.5f)
+        private const val KEY_WIDTH = 108f
+        private const val KEY_HEIGHT = 160f
     }
 }

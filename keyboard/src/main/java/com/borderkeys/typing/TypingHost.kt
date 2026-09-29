@@ -32,14 +32,23 @@ interface TypingHost {
     /** Shows shift as [state], a [com.borderkeys.ime.ShiftState] value. */
     fun showShiftState(state: Int)
 
-    /** Closes the swipe ring when one is open. */
-    fun dismissRing()
+    /** The word was reset: the strip lets go of a held word. */
+    fun onWordReset()
 
     /**
-     * The word was reset: the ring closes, the swipe decodes still pending are dropped, and the
-     * strip lets go of a held word.
+     * A swipe of [count] samples was lifted and is being decoded: its path goes to the stats, and
+     * the strip says so when the answer is late.
      */
-    fun onWordReset()
+    fun onSwipeLifted(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int)
+
+    /** The swipe's decode answered. */
+    fun onSwipeAnswered()
+
+    /** A decode of [candidates] words was applied, for the stats. */
+    fun onSwipeDecoded(candidates: Int)
+
+    /** A decode of [candidates] words was applied; a debuggable build logs its timings. */
+    fun traceSwipeDecode(candidates: Int)
 
     /** Re-reads a private field's text into the strip while it is being shown. */
     fun refreshPrivateReveal()
