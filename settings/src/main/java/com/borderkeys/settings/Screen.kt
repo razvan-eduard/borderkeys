@@ -16,7 +16,7 @@ enum class Screen(val titleKey: String) {
     Size(Keys.SCREEN_SIZE_AND_POSITION),
     Effects(Keys.SCREEN_PARTICLE_EFFECTS),
     Typing(Keys.SCREEN_SUGGESTIONS_AND_CORRECTIONS),
-    Dictionary(Keys.SCREEN_PERSONAL_DICTIONARY),
+    Dictionary(Keys.SCREEN_DICTIONARY_AND_HEATMAP),
     Clipboard(Keys.SCREEN_CLIPBOARD),
     QuickActions(Keys.SCREEN_QUICK_ACTIONS),
     Composer(Keys.SCREEN_DRAFT_BOX),

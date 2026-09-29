@@ -148,7 +148,7 @@ private fun featureGroups(
     fun where(screen: String, item: String) = strings.getString(Keys.FEATURES_WHERE, strings[screen], item)
     val typing = strings[Keys.SCREEN_SUGGESTIONS_AND_CORRECTIONS]
     val layout = Keys.SCREEN_LAYOUT
-    val dictionary = Keys.SCREEN_PERSONAL_DICTIONARY
+    val dictionary = Keys.SCREEN_DICTIONARY_AND_HEATMAP
 
     val typingGroup = FeatureGroup(strings[Keys.FEATURES_GROUP_TYPING], { MaterialTheme.colorScheme.primary }, listOf(
         Feature(
@@ -172,9 +172,15 @@ private fun featureGroups(
         Feature(
             strings[Keys.FEATURE_LEARNING_TITLE], strings[Keys.FEATURE_LEARNING_TEXT],
             onOff(defaults.learningEnabled),
-            where(dictionary, strings[Keys.DICTIONARY_LEARN_AT_ALL]),
+            where(dictionary, strings[Keys.DICTIONARY_LEARNING]),
             Screen.Dictionary,
         ) { accent -> ChipsPreview(strings[Keys.FEATURE_SAMPLE_LEARNED].split(SAMPLE_SEPARATOR), accent) },
+        Feature(
+            strings[Keys.FEATURE_HEATMAP_TITLE], strings[Keys.FEATURE_HEATMAP_TEXT],
+            onOff(defaults.heatmapEnabled),
+            where(dictionary, strings[Keys.DICTIONARY_HEATMAP]),
+            Screen.Dictionary,
+        ) { accent -> KeyCapsPreview(listOf("q", "w", "e", "r", "t", "y"), accent, highlighted = setOf(2)) },
         Feature(
             strings[Keys.DICTIONARY_SHORTCUTS], strings[Keys.FEATURE_SHORTCUTS_TEXT],
             strings[Keys.FEATURES_DEFAULT_NONE],

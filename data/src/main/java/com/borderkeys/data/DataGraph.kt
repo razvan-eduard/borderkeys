@@ -144,6 +144,7 @@ object DataGraph {
             database.blockedWordDao(),
             database.userBigramDao(),
             database.userTrigramDao(),
+            database.keyTouchDao(),
         )
     }
 

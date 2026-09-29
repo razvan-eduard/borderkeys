@@ -5,6 +5,7 @@ package com.borderkeys.data
 
 import androidx.room.withTransaction
 import com.borderkeys.data.dao.BlockedWordDao
+import com.borderkeys.data.dao.KeyTouchDao
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.LearnedWord
@@ -19,6 +20,8 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.map
+import kotlin.math.roundToInt
 
 /**
  * The personal dictionary: what the keyboard has learned, and what it has been told to forget.
@@ -29,6 +32,7 @@ class DictionaryRepository internal constructor(
     private val blockedWords: BlockedWordDao,
     private val userBigrams: UserBigramDao,
     private val userTrigrams: UserTrigramDao,
+    private val keyTouches: KeyTouchDao,
 ) {
     val words: Flow<List<UserWord>> = userWords.observeAll()
     val blocked: Flow<List<BlockedWord>> = blockedWords.observeAll()
@@ -42,6 +46,9 @@ class DictionaryRepository internal constructor(
 
     val pairCount: Flow<Int> = userBigrams.observeCount()
     val tripleCount: Flow<Int> = userTrigrams.observeCount()
+
+    /** How many taps the heatmap rests on, each weighing less as it ages, rounded. */
+    val touchTaps: Flow<Int> = keyTouches.observeTaps().map { it.roundToInt() }
 
     /**
      * Fires after an edit made by hand -- a word or a phrase forgotten, a word blocked or
@@ -154,12 +161,20 @@ class DictionaryRepository internal constructor(
         edited()
     }
 
+    /** Forgets every learned word, pair and triple, and the heatmap. */
     suspend fun forgetEverything() {
         database.withTransaction {
             userWords.deleteAll()
             userBigrams.deleteAll()
             userTrigrams.deleteAll()
+            keyTouches.deleteAll()
         }
+        edited()
+    }
+
+    /** Forgets where taps land on every key. The words stay. */
+    suspend fun forgetTouchPattern() {
+        keyTouches.deleteAll()
         edited()
     }
 
