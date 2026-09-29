@@ -56,11 +56,14 @@ internal object NativePredictor {
     )
 
     /**
-     * Fills [outWords], [outScores] and [outProperNoun] with the best candidates, best first, and
-     * returns how many were written. An empty [composing] asks for the next word.
-     * [outCorrectionIndex] receives the entry the corrections heap settled on, or -1.
+     * Answers one request. Fills [outWords], [outScores] and [outProperNoun] with the best
+     * candidates, best first, and returns how many were written; an empty [composing] asks for
+     * the next word. [outCorrectionIndex] receives the entry the corrections heap settled on, or
+     * -1, and is left as it is when no candidate is written. For a typed word, [outTexts]
+     * receives [TEXT_KNOWN_SPELLING], [TEXT_POSSESSIVE] and [TEXT_CORRECTION], and
+     * [outCorrectionName][0] whether that correction is a name; a slot with none is left as it is.
      */
-    external fun nativeSuggest(
+    external fun nativeAnswer(
         handle: Long,
         composing: String,
         prev1: String?,
@@ -69,7 +72,21 @@ internal object NativePredictor {
         outScores: FloatArray,
         outProperNoun: BooleanArray,
         outCorrectionIndex: IntArray,
+        outTexts: Array<String?>,
+        outCorrectionName: BooleanArray,
     ): Int
+
+    /** [nativeAnswer]'s text slot: how the dictionaries spell the typed word. */
+    const val TEXT_KNOWN_SPELLING = 0
+
+    /** [nativeAnswer]'s text slot: the possessive of a name missing its apostrophe. */
+    const val TEXT_POSSESSIVE = 1
+
+    /** [nativeAnswer]'s text slot: autocorrect's answer. */
+    const val TEXT_CORRECTION = 2
+
+    /** How many text slots [nativeAnswer] fills. */
+    const val TEXT_SLOTS = 3
 
     /**
      * Records that the user committed [word] after [prev1] and [prev2]. [asserted] is whether it
@@ -156,18 +173,6 @@ internal object NativePredictor {
      * to warm.
      */
     external fun nativeWarmSwipeModel(handle: Long): Boolean
-
-    /**
-     * The best word the last [nativeSuggest] reached by an edit, and in [nameOut][0] whether it
-     * is a name. Valid only right after [nativeSuggest].
-     */
-    external fun nativeBestCorrection(handle: Long, nameOut: BooleanArray): String?
-
-    /** The possessive of a name missing its apostrophe, or null. */
-    external fun nativePossessive(handle: Long, word: String): String?
-
-    /** How the dictionaries spell [word], or null when none holds it. */
-    external fun nativeKnownSpelling(handle: Long, word: String): String?
 
     /**
      * Marks in [outKnown] which of [stems] may stand as the stem of a regular inflection, and

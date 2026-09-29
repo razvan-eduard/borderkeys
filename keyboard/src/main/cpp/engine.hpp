@@ -17,6 +17,7 @@
 #include "ngram_model.hpp"
 #include "packed_trie.hpp"
 #include "proximity.hpp"
+#include "search_plan.hpp"
 #include "topk.hpp"
 #include "user_model.hpp"
 
@@ -397,25 +398,25 @@ private:
     void searchPacks(const uint32_t* folded, int foldedLength, int onlyPack,
                      TopK<Candidate>& heap);
 
-    // The edit-cost ceiling for the request being answered; the fallback pass raises it.
+    /** Runs one pass of kSearchPlan: sets its ceiling and searches its source. */
+    void runPass(const PassSpec& spec, const uint32_t* folded, int foldedLength, int restrictTo,
+                 TopK<Candidate>& heap);
+
+    /**
+     * Settles autocorrect's answer: the corrections heap's best, overridden by the respelling of
+     * the typed letters, overridden by the dictionaries' exact spelling of them.
+     */
+    void settleCorrection(const char* composing, size_t composingLength);
+
+    /**
+     * Drains [heap] into [out], best first, keeping at most kMaxShownCompletions continuations of
+     * the typed letters. Returns how many were written.
+     */
+    int writeStrip(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap,
+                   Candidate* out, int maxOut);
+
+    // The edit-cost ceiling of the pass running now.
     float editCostCeiling_ = 0.0f;
-
-    /** The searches one request runs, in order. */
-    enum class Pass : uint8_t {
-        /** The packs `restrictTo` names. */
-        Primary,
-        /** Every pack, when Primary found nothing and the language is not locked. */
-        AllPacks,
-        /** The personal dictionary. */
-        UserModel,
-        /** Every pack again at kFallbackEditCost, when nothing else found anything. */
-        Wide,
-        /** Successors and phrases, when nothing has been typed. */
-        NextWord,
-    };
-
-    /** Whether a pass's candidates may be committed. Wide fills the strip only. */
-    static constexpr bool commits(Pass pass) { return pass != Pass::Wide; }
 
     /** The pass running now. Read by collectWords to route candidates. */
     Pass currentPass_ = Pass::Primary;

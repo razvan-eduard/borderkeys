@@ -103,6 +103,12 @@ class PredictionEngine(
     /** Which entry of [searchWords] the corrections heap settled on, or -1 when none of them. */
     private val searchCorrectionIndex = IntArray(1)
 
+    /** The typed word's texts, in [NativePredictor.nativeAnswer]'s slots; cleared per request. */
+    private val searchTexts = arrayOfNulls<String>(NativePredictor.TEXT_SLOTS)
+
+    /** Whether the correction in [searchTexts] is a name; cleared per request. */
+    private val searchCorrectionName = BooleanArray(1)
+
     /** Words dropped from every answer. */
     @Volatile
     private var refused: RefusedWords = RefusedWords.NONE
@@ -687,11 +693,13 @@ class PredictionEngine(
     private fun serveRequests() {
         while (queue.take()) {
             val generation = queue.currentGeneration
+            searchTexts.fill(null)
+            searchCorrectionName[0] = false
             Trace.beginSection("PredictionEngine.suggest")
             val searchStarted = android.os.SystemClock.elapsedRealtimeNanos()
             val count = try {
                 withHandle(0) { current ->
-                    NativePredictor.nativeSuggest(
+                    NativePredictor.nativeAnswer(
                         current,
                         queue.currentComposing,
                         queue.currentPrevious1,
@@ -700,6 +708,8 @@ class PredictionEngine(
                         searchScores,
                         searchProperNoun,
                         searchCorrectionIndex,
+                        searchTexts,
+                        searchCorrectionName,
                     )
                 }
             } finally {
@@ -714,28 +724,9 @@ class PredictionEngine(
             }
             val query = queue.currentComposing
             // The query is known when the dictionaries spell it the same, ignoring case.
-            val spelling = if (query.isEmpty()) {
-                null
-            } else {
-                withHandle<String?>(null) { current ->
-                    NativePredictor.nativeKnownSpelling(current, query)
-                }
-            }
-            val possessive = if (query.isEmpty()) {
-                null
-            } else {
-                withHandle<String?>(null) { current ->
-                    NativePredictor.nativePossessive(current, query)
-                }
-            }
-            val correctionName = BooleanArray(1)
-            val correction = if (query.isEmpty()) {
-                null
-            } else {
-                withHandle<String?>(null) { current ->
-                    NativePredictor.nativeBestCorrection(current, correctionName)
-                }
-            }
+            val spelling = searchTexts[NativePredictor.TEXT_KNOWN_SPELLING]
+            val possessive = searchTexts[NativePredictor.TEXT_POSSESSIVE]
+            val correction = searchTexts[NativePredictor.TEXT_CORRECTION]
             val inflection = if (query.isEmpty()) false else inflectionOf(query, correction)
             synchronized(resultLock) {
                 System.arraycopy(searchWords, 0, nativeWords, 0, count)
@@ -744,7 +735,7 @@ class PredictionEngine(
                 nativePossessive = possessive
                 nativeInflection = inflection
                 nativeCorrection = correction
-                nativeCorrectionIsName = correctionName[0]
+                nativeCorrectionIsName = searchCorrectionName[0]
                 nativeCorrectionAt = searchCorrectionIndex[0]
                 nativeCount = count
                 nativeQuery = query
