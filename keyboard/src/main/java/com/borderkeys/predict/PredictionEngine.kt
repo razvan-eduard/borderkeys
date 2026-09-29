@@ -15,6 +15,7 @@ import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserWord
 import com.borderkeys.ime.WordStems
+import com.borderkeys.typing.EnginePort
 
 /**
  * Owns the native engine and the one thread it runs on. Every native call goes through
@@ -23,7 +24,7 @@ import com.borderkeys.ime.WordStems
  */
 class PredictionEngine(
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
-) {
+) : EnginePort {
     /** Receives the engine's answers on the UI thread. */
     interface ResultListener {
         /**
@@ -322,7 +323,7 @@ class PredictionEngine(
     }
 
     /** The pack the conversation is currently considered written in, delivered on the UI thread. */
-    fun dominantPack(onResult: (Int) -> Unit) {
+    override fun dominantPack(onResult: (Int) -> Unit) {
         worker.post {
             val pack = withHandle(-1) { current -> NativePredictor.nativeDominantPack(current) }
             mainHandler.post { onResult(pack) }
@@ -333,7 +334,7 @@ class PredictionEngine(
      * What [dominantPack] alone would spell each of [words] as, in the same order, null where it
      * has nothing different. Delivered on the UI thread.
      */
-    fun candidatesForPack(dominantPack: Int, words: List<String>, onResult: (List<String?>) -> Unit) {
+    override fun candidatesForPack(dominantPack: Int, words: List<String>, onResult: (List<String?>) -> Unit) {
         if (words.isEmpty()) {
             onResult(emptyList())
             return
@@ -418,7 +419,7 @@ class PredictionEngine(
     }
 
     /** Whether the personal dictionary is consulted; off for a private field. */
-    fun setPersonalModelEnabled(enabled: Boolean) {
+    override fun setPersonalModelEnabled(enabled: Boolean) {
         worker.post {
             withHandle(Unit) { current ->
                 NativePredictor.nativeSetPersonalModelEnabled(current, enabled)
@@ -427,7 +428,7 @@ class PredictionEngine(
     }
 
     /** [dominantPack] as a language tag, or null while undecided. Delivered on the UI thread. */
-    fun dominantLanguageTag(onResult: (String?) -> Unit) {
+    override fun dominantLanguageTag(onResult: (String?) -> Unit) {
         worker.post {
             val tag = withHandle<String?>(null) { current ->
                 NativePredictor.nativeDominantLanguageTag(current)
@@ -451,7 +452,7 @@ class PredictionEngine(
         }
     }
 
-    fun learn(updates: List<LearnedWord>, previous1: String?, previous2: String?) {
+    override fun learn(updates: List<LearnedWord>, previous1: String?, previous2: String?) {
         if (updates.isEmpty()) {
             return
         }
@@ -470,13 +471,13 @@ class PredictionEngine(
     // ---- the suggestion path ----------------------------------------------------------------
 
     /** Asks for suggestions. Returns immediately; the answer arrives on the UI thread. */
-    fun requestSuggestions(composing: String, previous1: String?, previous2: String?) {
+    override fun requestSuggestions(composing: String, previous1: String?, previous2: String?) {
         if (queue.submit(composing, previous1, previous2)) {
             worker.post(workerLoop)
         }
     }
 
-    fun cancelPending() {
+    override fun cancelPending() {
         queue.clear()
         synchronized(resultLock) { latestAnswer = latestAnswer?.withoutRanking() }
         gestureGeneration++

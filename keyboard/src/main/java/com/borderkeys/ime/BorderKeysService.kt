@@ -26,7 +26,6 @@ import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.common.TextViewStyle
 import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
-import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.DictionaryRepository
 import com.borderkeys.data.KeyboardStats
@@ -52,7 +51,6 @@ import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.ime.fx.applyParticleLayer
 import com.borderkeys.predict.Candidate
-import com.borderkeys.predict.LearningBuffer
 import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.predict.RefusedWords
 import com.borderkeys.predict.ScoreExplanation
@@ -61,11 +59,13 @@ import com.borderkeys.predict.WordFold
 import com.borderkeys.theme.DynamicColors
 import com.borderkeys.theme.ThemeMode
 import com.borderkeys.theme.ThemePaints
-import com.borderkeys.typing.ComposingWord
 import com.borderkeys.typing.FieldPolicy
 import com.borderkeys.typing.FieldSession
-import com.borderkeys.typing.SearchAnswer
-import com.borderkeys.typing.WordContext
+import com.borderkeys.typing.LearningBatch
+import com.borderkeys.typing.LearningStore
+import com.borderkeys.typing.TypingClock
+import com.borderkeys.typing.TypingHost
+import com.borderkeys.typing.TypingOrchestrator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -108,34 +108,8 @@ class BorderKeysService :
     private val dictionaryLoad = kotlinx.coroutines.sync.Mutex()
     private val paints = ThemePaints()
     private val engine = PredictionEngine()
-    private val learning = LearningBuffer()
 
     private var host: KeyboardHostView? = null
-
-    /** The word being written. */
-    private val composingWord = ComposingWord()
-
-    /** [composingWord]'s text. */
-    private val composing: StringBuilder get() = composingWord.text
-
-    /** The editor's selection, as of the last onUpdateSelection. */
-    private var selectionStart = 0
-    private var selectionEnd = 0
-
-    /** What the last slide along the space bar selected, so one drag keeps one anchor. */
-    private var lastNudge: CaretNudge.Selection? = null
-
-    /** Whether the field holds any text. */
-    private var editorEmpty = true
-
-    /** The field being typed into: what it is and what it allows. */
-    private var fieldSession = FieldSession.NONE
-
-    /** The letters typed into a terminal since the last delimiter. */
-    private val terminalWord = StringBuilder()
-
-    /** The two words before the word being written. */
-    private var wordContext = WordContext.NONE
 
     /** Whether the strip shows a private field's text, at the user's request, this field. */
     private var privateReveal = false
@@ -179,57 +153,21 @@ class BorderKeysService :
     /** Distinguishes one enabled-language set from another in the compiled-geometry cache key. */
     private var accentSignature: String = ""
 
-    /** The tags of the packs the engine consults, heaviest first. */
-    @Volatile
-    private var activeLanguageTags: List<String> = emptyList()
-
     /** The offensive-word lists of the enabled packs, merged and folded; see [OffensiveWords]. */
     private var offensiveWords: Set<String> = emptySet()
 
     /** The emoji panel's keywords for the languages switched on; see [EmojiKeywords]. */
     private var emojiKeywords: Map<String, List<String>> = emptyMap()
 
-    /** Apostrophe spellings for the languages switched on; see [Contractions]. */
-    private var contractions: Map<String, String> = emptyMap()
-
     /** The tier B load in flight. */
     private var swipeModelJob: kotlinx.coroutines.Job? = null
-
-    /** The language the conversation is considered written in, or null. */
-    private var dominantLanguageTag: String? = null
 
     /** Which page is on screen. */
     private var page = PAGE_ALPHABETIC
 
-    private var shiftState = ShiftState.OFF
-
     /** Control and alt from the modifier row, each armed for the next key. */
     private var controlArmed = false
     private var altArmed = false
-
-    /** Set when the user pressed shift, cleared by the character it applied to. */
-    private var shiftHeldByUser = false
-
-    /** When the last space was committed, for the two-spaces-make-a-full-stop window. */
-    private var lastSpaceAt = 0L
-
-    /** Set for one keystroke after two spaces became a full stop; backspace then undoes it. */
-    private var pendingSpacePeriod = false
-
-    /** Set when a space was added after a sentence mark; the next typed space is swallowed. */
-    private var pendingAutoSpace = false
-
-    /** Set when the user released a caps lock that auto-shift applied, until the next letter. */
-    private var userReleasedAutoLock = false
-
-    /**
-     * Set right before a commit of this class's own and spent by the next selection report,
-     * which is then not treated as a caret move. Cleared by any key press.
-     */
-    private var ownEditPending = false
-
-    /** Whether [adoptWordAtCaret] is running; selection reports meanwhile are its own edits. */
-    private var adoptingWordAtCaret = false
 
     /** Whether this gesture's pause-time preview already composed a word. */
     private var previewComposedThisGesture = false
@@ -244,52 +182,15 @@ class BorderKeysService :
     /** The signature of the clip the chip is showing, or null. */
     private var shownClipSignature: String? = null
 
-    /** Whether the current lock came from the field asking for capitals rather than from shift. */
-    private var autoLockedShift = false
-    private var lastShiftPressAt = 0L
-
-    private val flushLearningRunnable = Runnable { flushLearning() }
-
     /** Shows "decoding" on the strip when a swipe's answer is late. */
     private val gestureDecodingRunnable = Runnable { host?.suggestionStrip?.decoding = true }
 
     /** When the last swipe was lifted, for the debug timing line in onGestureCandidates. */
     private var gestureLiftedAt = 0L
 
-    /** Uptime of the keystroke the engine was last asked about, for the strip latency figure. */
-    private var suggestionsRequestedAt = 0L
-
     private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
         onClipboardChanged()
     }
-    /** The engine's last answer, kept so the delimiter path can apply it. */
-    private var searchAnswer = SearchAnswer.NONE
-
-    /**
-     * A correction that has been applied and can still be taken back, for one keystroke:
-     * backspace reverts it, any other key confirms it, and a cursor move drops it.
-     */
-    private data class PendingCorrection(
-        val typed: String,
-        val corrected: String,
-        val delimiter: String,
-        /** The word before it. */
-        val contextWord: String?,
-        /** The word before [contextWord]. */
-        val grandContextWord: String?,
-        /** [composingWord.capitalisedByUser] when [typed] was finished. */
-        val deliberateCapital: Boolean,
-        /** Whether confirming it learns [corrected]; false for a text shortcut's expansion. */
-        val learn: Boolean = true,
-    )
-
-    private var pendingCorrection: PendingCorrection? = null
-
-    /** The field's undo and redo history for this input session. */
-    private val fieldHistory = Composer()
-
-    /** Finds the words that look wrong once the conversation's language has changed. */
-    private val languageSwitchCorrector = LanguageSwitchCorrector()
 
     /** Whether the radial ring is open. */
     private val swipeRadialController = SwipeRadialController()
@@ -344,6 +245,142 @@ class BorderKeysService :
 
     private var clipboardManager: ClipboardManager? = null
     private var clipboardListenerRegistered = false
+
+    // ---- the typing flow -----------------------------------------------------------------------
+
+    /** The views and the input method, as [orchestrator] reaches them. */
+    private val typingHost = object : TypingHost {
+        override val viewAttached: Boolean
+            get() = host != null
+
+        override fun stripWordSlots(): Int? = host?.suggestionStrip?.wordSlotLimit
+
+        override fun showSuggestions(row: List<Candidate>, typedIndex: Int, appliedIndex: Int) {
+            val strip = host?.suggestionStrip ?: return
+            strip.setSuggestions(row)
+            strip.typedIndex = typedIndex
+            strip.appliedIndex = appliedIndex
+        }
+
+        override fun clearStrip() {
+            host?.suggestionStrip?.clear()
+        }
+
+        override fun stripTypedIndex(): Int? = host?.suggestionStrip?.typedIndex
+
+        override fun clearStripActions() {
+            val strip = host?.suggestionStrip ?: return
+            if (strip.actionMode) {
+                strip.clear()
+                pendingForget = null
+            }
+        }
+
+        override fun setEditorEmpty(empty: Boolean) {
+            host?.suggestionStrip?.editorEmpty = empty
+        }
+
+        override fun showShiftState(state: Int) {
+            host?.keyboard?.shiftState = state
+        }
+
+        override fun dismissRing() = dismissRadialMenu()
+
+        override fun onWordReset() {
+            dismissRadialMenu()
+            engine.cancelPendingPreview()
+            engine.cancelPendingGesture()
+            previewComposedThisGesture = false
+            pendingForget = null
+        }
+
+        override fun refreshPrivateReveal() = this@BorderKeysService.refreshPrivateReveal()
+
+        override fun playEffect(event: EffectEvent, word: String) =
+            this@BorderKeysService.playEffect(event, word)
+
+        override fun offerLanguageReplacements(
+            replacements: List<LanguageSwitchCorrector.Replacement>,
+        ) {
+            host?.let { view ->
+                view.languageRevertPanel.offer(replacements)
+                view.setLanguageRevertPanelVisible(true)
+            }
+        }
+
+        override fun forgetWord(word: String, blockWhenNotPersonal: Boolean) =
+            this@BorderKeysService.forgetWord(word, blockWhenNotPersonal)
+
+        override fun subtypeTag(): String = currentSubtypeTag()
+
+        override val modifiersArmed: Boolean
+            get() = controlArmed || altArmed
+
+        override fun releaseModifiers() = setArmedModifiers(control = false, alt = false)
+
+        override fun sendPhysicalKey(keyCode: Int, metaState: Int) {
+            val connection = currentInputConnection ?: return
+            this@BorderKeysService.sendPhysicalKey(connection, keyCode, metaState)
+        }
+
+        override fun postDelayed(action: Runnable, delayMillis: Long) {
+            host?.postDelayed(action, delayMillis)
+        }
+
+        override fun removeCallbacks(action: Runnable) {
+            host?.removeCallbacks(action)
+        }
+    }
+
+    /** The personal dictionary, as what the typing flow learns is written to it. */
+    private val learningStore = object : LearningStore {
+        override fun persist(batch: LearningBatch) {
+            learningScope.launch {
+                runCatching { persistLearning(batch) }
+                    .onFailure { error ->
+                        android.util.Log.e("BorderKeys", "learning flush failed", error)
+                    }
+            }
+        }
+
+        /** Waits up to [FINAL_FLUSH_TIMEOUT_MILLIS] for the writes in flight and for [batch]. */
+        override fun persistBeforeShutdown(batch: LearningBatch?) {
+            val inFlight = learningJob.children.toList()
+            if (batch == null && inFlight.isEmpty()) {
+                return
+            }
+            runCatching {
+                kotlinx.coroutines.runBlocking {
+                    kotlinx.coroutines.withTimeoutOrNull(FINAL_FLUSH_TIMEOUT_MILLIS) {
+                        inFlight.forEach { it.join() }
+                        if (batch != null) {
+                            withContext(Dispatchers.IO) { persistLearning(batch) }
+                        }
+                    }
+                }
+            }.onFailure { error ->
+                android.util.Log.w("BorderKeys", "the final learning flush failed", error)
+            }
+        }
+    }
+
+    private val typingClock = object : TypingClock {
+        override fun currentTimeMillis(): Long = System.currentTimeMillis()
+
+        override fun uptimeMillis(): Long = android.os.SystemClock.uptimeMillis()
+    }
+
+    /** The field being typed into, as the typing flow edits it. */
+    private val fieldEditor = ConnectionFieldEditor { currentInputConnection }
+
+    /** Each word, from its first key to what is learned from it. */
+    private val orchestrator = TypingOrchestrator(
+        currentEditor = { if (currentInputConnection != null) fieldEditor else null },
+        engine = engine,
+        host = typingHost,
+        store = learningStore,
+        clock = typingClock,
+    )
 
     // ---- lifecycle ---------------------------------------------------------------------------
 
@@ -407,7 +444,7 @@ class BorderKeysService :
                         loadPersonalModel(dictionary)
                     }
                 }
-                requestSuggestions()
+                orchestrator.requestSuggestions()
             }
         }
     }
@@ -490,10 +527,10 @@ class BorderKeysService :
             // The accents, offensive words, emoji keywords and contractions of the enabled packs.
             accentOverlays = AccentOverlays.merge(enabled.map { AccentOverlays.load(assets, it.tag) })
             accentSignature = enabled.joinToString(",") { it.tag }
-            activeLanguageTags = enabled.map { it.tag }
+            orchestrator.languageTags = enabled.map { it.tag }
             offensiveWords = OffensiveWords.merge(enabled.map { OffensiveWords.load(assets, it.tag) })
             emojiKeywords = EmojiKeywords.load(assets, enabled.map { it.tag })
-            contractions = Contractions.of(
+            orchestrator.contractions = Contractions.of(
                 enabled.map { Contractions.load(assets, it.tag) },
                 enabled.map { it.tag },
             )
@@ -546,7 +583,7 @@ class BorderKeysService :
         )
         engine.setBlockedWords(blocked)
         engine.setRefusedWords(refused)
-        learning.setRefusedWords(refused)
+        orchestrator.setRefusedWords(refused)
     }
 
     /**
@@ -577,7 +614,7 @@ class BorderKeysService :
     /** Carries on without dictionaries: no prediction, correction or learning. */
     private fun degradeWithoutDictionaries(error: Throwable) {
         android.util.Log.e("BorderKeys", "starting without dictionaries", error)
-        learning.enabled = false
+        orchestrator.stopLearning()
         scope.launch { host?.suggestionStrip?.clear() }
     }
 
@@ -630,6 +667,7 @@ class BorderKeysService :
                     preferences.experimentalSwipeModelEnabled !=
                         newPreferences.experimentalSwipeModelEnabled
                 preferences = newPreferences
+                orchestrator.applySettings(newPreferences)
                 if (swipeModelFlipped) {
                     applySwipeModel(newPreferences.experimentalSwipeModelEnabled)
                 }
@@ -642,7 +680,7 @@ class BorderKeysService :
                             refreshBlockedWords(dictionary)
                             loadPersonalModel(dictionary)
                         }
-                        withContext(Dispatchers.Main) { requestSuggestions() }
+                        withContext(Dispatchers.Main) { orchestrator.requestSuggestions() }
                     }
                 }
                 val resolvedTheme = ThemeMode.resolve(
@@ -678,16 +716,15 @@ class BorderKeysService :
                         KeyboardPreferences.radialSizeScale(newPreferences.radialMenuSize)
                     view.radialBlurBackground = newPreferences.radialBlurBackground
                     view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
-                    applyLearningGate(newPreferences)
                     applyQuickActions(view)
                     refreshClipboardChip()
                     if (wasForcingDebugRing && !newPreferences.debugForceRadialRing) {
                         closeDebugRing()
                     }
                     syncDebugRing()
-                    view.keyboard.swipeEnabled = newPreferences.swipeEnabled && fieldSession.policy.suggestionsAllowed
+                    view.keyboard.swipeEnabled =
+                        newPreferences.swipeEnabled && orchestrator.session.policy.suggestionsAllowed
                     view.suggestionStripEnabled = newPreferences.showSuggestionStrip
-                    applyAutoShift()
                     showPage(page)
                     view.fullWidthBackground = resolvedTheme.fullWidthBackground
                     view.navigationBarBackground = resolvedTheme.navigationBarBackground
@@ -728,37 +765,7 @@ class BorderKeysService :
         super.onUpdateSelection(
             oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd,
         )
-        selectionStart = newSelStart
-        selectionEnd = newSelEnd
-        refreshPrivateReveal()
-        updateEditorEmpty(newSelEnd > 0)
-        val view = host ?: return
-        val hasSelection = newSelEnd > newSelStart
-        if (view.suggestionStrip.actionMode) {
-            view.suggestionStrip.clear()
-            pendingForget = null
-        }
-        if (!hasSelection) {
-            // A caret that still ends the composing text asks for suggestions; the echo of this
-            // class's own commit is spent; any other move closes the ring and adopts the word
-            // under the caret.
-            val caretMatches = composingMatchesCaret(newSelEnd)
-            if (caretMatches) {
-                if (lastQuery != composing.toString()) {
-                    requestSuggestions()
-                }
-            } else if (ownEditPending) {
-                ownEditPending = false
-            } else if (fieldSession.terminalField) {
-                dismissRadialMenu()
-            } else {
-                dismissRadialMenu()
-                adoptWordAtCaret()
-            }
-            applyAutoShift()
-        } else {
-            dismissRadialMenu()
-        }
+        orchestrator.onSelectionChanged(newSelStart, newSelEnd)
     }
 
     override fun onActionPicked(index: Int) {
@@ -770,9 +777,9 @@ class BorderKeysService :
             0 -> forgetWord(forgetting)
             2 -> {
                 explainWord(pendingExplainQuery, forgetting)
-                requestSuggestions()
+                orchestrator.requestSuggestions()
             }
-            else -> requestSuggestions()
+            else -> orchestrator.requestSuggestions()
         }
     }
 
@@ -838,8 +845,8 @@ class BorderKeysService :
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
 
-        fieldSession = FieldSession(
-            generation = fieldSession.generation + 1,
+        val session = FieldSession(
+            generation = orchestrator.session.generation + 1,
             policy = FieldPolicy.of(
                 passwordField = info != null && PrivateMode.isPasswordField(info.inputType),
                 privateField = PrivateMode.isPrivate(info),
@@ -847,9 +854,11 @@ class BorderKeysService :
             ),
             addressField = info != null && AddressField.isAddress(info.inputType),
             terminalField = TerminalField.isTerminal(info, preferences.terminalPackages),
+            inputType = info?.inputType ?: 0,
+            imeOptions = info?.imeOptions ?: 0,
+            initialCapsMode = info?.initialCapsMode ?: 0,
+            described = info != null,
         )
-        terminalWord.setLength(0)
-        applyLearningGate()
         engine.setLearningSpeed(
             KeyboardPreferences.learningSpeedFactor(preferences.learningSpeed),
         )
@@ -864,36 +873,22 @@ class BorderKeysService :
             engine.resetLanguageEvidence()
         }
         engine.setPhraseSuggestions(preferences.phraseSuggestions)
-        if (fieldSession.policy.privateField) {
-            learning.discard()
-        }
 
         privateReveal = false
         host?.let { view ->
-            view.suggestionStrip.privateMode = fieldSession.policy.privateField
+            view.suggestionStrip.privateMode = session.policy.privateField
             view.suggestionStrip.privateReveal = false
             view.suggestionStrip.privateText = null
             view.suggestionStrip.clear()
             applyHaptics(view, preferences)
-            view.keyboard.swipeEnabled = preferences.swipeEnabled && fieldSession.policy.suggestionsAllowed
+            view.keyboard.swipeEnabled = preferences.swipeEnabled && session.policy.suggestionsAllowed
             view.suggestionStripEnabled = preferences.showSuggestionStrip
             view.keyboard.soundEnabled = preferences.keySound
             view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
             applyParticleSettings(view, particleEffects)
         }
         showPage(pageFor(info))
-        // Each field starts with shift and caps lock off.
-        shiftHeldByUser = false
-        userReleasedAutoLock = false
-        autoLockedShift = false
-        shiftState = ShiftState.OFF
-        host?.keyboard?.shiftState = shiftState
-        setArmedModifiers(control = false, alt = false)
-        ownEditPending = false
-        resetComposing()
-        resetFieldHistory()
-        applyAutoShift()
-        updateEditorEmpty(currentInputConnection?.getTextBeforeCursor(1, 0)?.isNotEmpty() == true)
+        orchestrator.startField(session)
         // Posted, to run after the first layout.
         host?.post { syncDebugRing() }
 
@@ -922,9 +917,7 @@ class BorderKeysService :
 
     override fun onFinishInput() {
         super.onFinishInput()
-        flushLearning()
-        engine.cancelPending()
-        resetComposing()
+        orchestrator.finishField()
         scope.launch(Dispatchers.IO) {
             if (preferences.clearClipboardOnClose) {
                 DataGraph.clipboard.deleteUnpinned()
@@ -971,7 +964,7 @@ class BorderKeysService :
         // Runs while the engine is still alive.
         super.onDestroy()
         SwipeModelLoad.set(SwipeModelLoad.State.Off)
-        flushLearningBeforeDestroy()
+        orchestrator.shutdown()
         engine.shutdown()
         scope.cancel()
         host = null
@@ -1059,61 +1052,13 @@ class BorderKeysService :
 
     override fun onKeyDown(code: Int) = Unit
 
-    /** Moves the caret by [steps] characters through setSelection, from a space-bar slide. */
-    override fun onCursorNudge(steps: Int) {
-        dismissRadialMenu()
-        val connection = currentInputConnection ?: return
-        val extracted = connection.getExtractedText(ExtractedTextRequest(), 0) ?: return
-        val length = extracted.text?.length ?: return
-        val next = CaretNudge.slide(
-            start = selectionStart,
-            end = selectionEnd,
-            previous = lastNudge,
-            steps = steps,
-            length = length,
-            selecting = shiftState != ShiftState.OFF,
-        )
-        applyNudge(connection, next)
-    }
+    override fun onCursorNudge(steps: Int) = orchestrator.onCursorNudge(steps)
 
-    /**
-     * Finishes the composing word and moves the caret, or the selection, to [next] in one batch
-     * edit.
-     */
-    private fun applyNudge(connection: InputConnection, next: CaretNudge.Selection) {
-        lastNudge = next
-        if (next.start == selectionStart && next.end == selectionEnd) {
-            return
-        }
-        connection.beginBatchEdit()
-        if (composing.isNotEmpty()) {
-            finishComposing(connection)
-        }
-        selectionStart = next.start
-        selectionEnd = next.end
-        connection.setSelection(next.anchor, next.caret)
-        connection.endBatchEdit()
-    }
-
-    /** Moves the caret up or down by [lines], keeping its column; with shift held it selects. */
-    override fun onCursorNudgeLines(lines: Int) {
-        dismissRadialMenu()
-        val connection = currentInputConnection ?: return
-        val text = connection.getExtractedText(ExtractedTextRequest(), 0)?.text ?: return
-        val next = CaretNudge.slideLines(
-            text = text,
-            start = selectionStart,
-            end = selectionEnd,
-            previous = lastNudge,
-            lines = lines,
-            selecting = shiftState != ShiftState.OFF,
-        )
-        applyNudge(connection, next)
-    }
+    override fun onCursorNudgeLines(lines: Int) = orchestrator.onCursorNudgeLines(lines)
 
     /** A completed swipe. The word in progress is committed first. */
     override fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
-        if (!preferences.swipeEnabled || !fieldSession.policy.suggestionsAllowed) {
+        if (!preferences.swipeEnabled || !orchestrator.session.policy.suggestionsAllowed) {
             return
         }
         radialTopWord = null
@@ -1128,14 +1073,15 @@ class BorderKeysService :
         if (previewComposedThisGesture) {
             // The preview's guess is taken back; this decode replaces it.
             previewComposedThisGesture = false
-            cancelRadialGesture()
+            orchestrator.cancelSwipedWord()
         } else {
-            finishWordBeforeSwipe()
+            orchestrator.finishWordBeforeSwipe()
         }
         host?.postDelayed(gestureDecodingRunnable, GESTURE_DECODING_NOTICE_MILLIS)
         gestureLiftedAt = android.os.SystemClock.uptimeMillis()
         recordSwipeShape(xs, ys, timestamps, count)
-        engine.decodeGesture(xs, ys, timestamps, count, wordContext.previous1, wordContext.previous2)
+        val context = orchestrator.wordContext
+        engine.decodeGesture(xs, ys, timestamps, count, context.previous1, context.previous2)
     }
 
     /** The swipe's path in key widths, its duration and its sample count, for the stats. */
@@ -1169,27 +1115,9 @@ class BorderKeysService :
         KeyboardStats.words++
     }
 
-    /** Finishes and learns the word in progress before a swipe. */
-    private fun finishWordBeforeSwipe() {
-        val connection = currentInputConnection ?: return
-        if (composing.isEmpty()) {
-            return
-        }
-        val contextWord = wordContext.previous1
-        val grandContextWord = wordContext.previous2
-        // The caret report this edit causes is not a caret move.
-        ownEditPending = true
-        connection.beginBatchEdit()
-        val finished = finishComposing(connection)
-        connection.endBatchEdit()
-        if (finished != null) {
-            recordLearned(finished, contextWord, grandContextWord, composingWord.capitalisedByUser)
-        }
-    }
-
     /** The finger paused mid-swipe: decodes the path so far for the ring, when the ring is on. */
     override fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
-        if (!preferences.radialMenuEnabled || !fieldSession.policy.suggestionsAllowed) {
+        if (!preferences.radialMenuEnabled || !orchestrator.session.policy.suggestionsAllowed) {
             host?.keyboard?.resumeGestureCapture()
             return
         }
@@ -1197,16 +1125,17 @@ class BorderKeysService :
         if (previewComposedThisGesture) {
             // A second pause: the first preview's guess is taken back.
             previewComposedThisGesture = false
-            cancelRadialGesture()
+            orchestrator.cancelSwipedWord()
         } else {
-            finishWordBeforeSwipe()
+            orchestrator.finishWordBeforeSwipe()
         }
         if (count > 0) {
             lastGestureX = xs[count - 1]
             lastGestureY = ys[count - 1]
         }
         steerLeftPausePoint = false
-        engine.decodeGesturePreview(xs, ys, timestamps, count, wordContext.previous1, wordContext.previous2)
+        val context = orchestrator.wordContext
+        engine.decodeGesturePreview(xs, ys, timestamps, count, context.previous1, context.previous2)
     }
 
     /** Whether the steering finger has moved past the touch slop since the pause. */
@@ -1241,7 +1170,7 @@ class BorderKeysService :
     /** The touch stream was interrupted while the ring was open: discards the swipe. */
     override fun onGestureRingCancelled() {
         closeRadialRing()
-        cancelRadialGesture()
+        orchestrator.cancelSwipedWord()
     }
 
     /**
@@ -1256,7 +1185,7 @@ class BorderKeysService :
             }
             RadialSuggestionMenuView.Selection.Cancel -> {
                 closeRadialRing()
-                cancelRadialGesture()
+                orchestrator.cancelSwipedWord()
             }
             RadialSuggestionMenuView.Selection.None -> dismissRadialMenu()
         }
@@ -1341,22 +1270,17 @@ class BorderKeysService :
      */
     override fun onGesturePreviewCandidates(candidates: List<Candidate>) {
         val view = host ?: return
-        val connection = currentInputConnection ?: return
-        if (candidates.isEmpty() || fieldSession.terminalField) {
+        if (currentInputConnection == null) {
+            return
+        }
+        if (candidates.isEmpty() || orchestrator.session.terminalField) {
             // No ring: the stroke goes back to plain capture.
             view.keyboard.resumeGestureCapture()
             return
         }
-        val cased = caseSwipedWords(candidates)
-        val best = cased.first().text
-        radialTopWord = best
-        connection.beginBatchEdit()
-        spaceBeforeSwipedWord(connection)
-        composing.setLength(0)
-        composing.append(best)
-        connection.setComposingText(composing, 1)
-        connection.endBatchEdit()
-        composingWord.fromGesture = true
+        val cased = orchestrator.caseSwipedWords(candidates)
+        radialTopWord = cased.first().text
+        orchestrator.composeSwipedWord(cased)
         recordSwipeDecode(candidates.size)
         if (debuggable) {
             android.util.Log.d(
@@ -1368,13 +1292,6 @@ class BorderKeysService :
             )
         }
         previewComposedThisGesture = true
-        lastQuery = best
-        searchAnswer = searchAnswer.copy(
-            query = best,
-            knownWord = best,
-            correction = best,
-            correctionIsName = cased.first().isProperNoun,
-        )
 
         val wedgeWords = ringWedges(cased)
         if (!swipeRadialController.onRingOpened(wedgeWords)) {
@@ -1443,17 +1360,17 @@ class BorderKeysService :
                 onSuggestionPicked(selection.index, selection.word)
                 playEffect(EffectEvent.SwipeAccepted, selection.word)
             }
-            RadialSuggestionMenuView.Selection.Cancel -> cancelRadialGesture()
+            RadialSuggestionMenuView.Selection.Cancel -> orchestrator.cancelSwipedWord()
             RadialSuggestionMenuView.Selection.None -> {
                 if (preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) {
-                    cancelRadialGesture()
+                    orchestrator.cancelSwipedWord()
                 } else {
                     val word = radialTopWord
                     if (word != null) {
                         onSuggestionPicked(0, word)
                         playEffect(EffectEvent.SwipeAccepted, word)
                     } else {
-                        cancelRadialGesture()
+                        orchestrator.cancelSwipedWord()
                     }
                 }
             }
@@ -1530,114 +1447,6 @@ class BorderKeysService :
     }
 
     /**
-     * Discards the swiped word, with no commit and no learning: empties the composing region, or
-     * deletes the word before the caret when it is no longer composing, and the space inserted
-     * before it.
-     */
-    private fun cancelRadialGesture() {
-        val connection = currentInputConnection
-        if (connection != null) {
-            connection.beginBatchEdit()
-            if (composing.isNotEmpty()) {
-                connection.setComposingText("", 1)
-                connection.finishComposingText()
-            } else {
-                connection.finishComposingText()
-                deleteWordBeforeCaret(connection)
-            }
-            // The space inserted before the swiped word, when it is still there.
-            if (composingWord.autoSpaceBefore) {
-                val before = connection.getTextBeforeCursor(1, 0)
-                if (before != null && before.length == 1 && before[0] == ' ') {
-                    connection.deleteSurroundingText(1, 0)
-                }
-            }
-            connection.endBatchEdit()
-        }
-        composing.setLength(0)
-        composingWord.fromGesture = false
-        composingWord.autoSpaceBefore = false
-        host?.suggestionStrip?.clear()
-        refreshContextFromEditor()
-        applyAutoShift()
-        requestSuggestions()
-    }
-
-    /** Deletes the run of [isWordCharacter] characters before the caret. */
-    private fun deleteWordBeforeCaret(connection: InputConnection) {
-        val before = connection.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
-        if (before.isNullOrEmpty()) {
-            return
-        }
-        var length = 0
-        while (length < before.length && isWordCharacter(before[before.length - 1 - length].code)) {
-            length++
-        }
-        if (length > 0) {
-            connection.deleteSurroundingText(length, 0)
-        }
-    }
-
-    /**
-     * Cases the swipe candidates as typed letters would come out under the current shift, names
-     * capitalised, then spends a one-shot shift. Never lower-cases. Drops candidates that become
-     * the same text.
-     */
-    private fun caseSwipedWords(candidates: List<Candidate>): List<Candidate> {
-        if (!preferences.capitaliseNames) {
-            return candidates
-        }
-        var cased = candidates.map { candidate ->
-            if (candidate.isProperNoun) {
-                candidate.copy(text = candidate.text.replaceFirstChar { it.uppercaseChar() })
-            } else {
-                candidate
-            }
-        }
-        val state = shiftState
-        if (state != ShiftState.OFF) {
-            cased = cased.map { candidate ->
-                candidate.copy(
-                    text = if (state == ShiftState.LOCKED) {
-                        candidate.text.uppercase()
-                    } else {
-                        candidate.text.replaceFirstChar { it.uppercaseChar() }
-                    },
-                )
-            }
-        }
-        composingWord.capitalisedByUser = shiftHeldByUser && state != ShiftState.OFF
-        if (state == ShiftState.ON) {
-            shiftState = ShiftState.OFF
-            host?.keyboard?.shiftState = shiftState
-        }
-        shiftHeldByUser = false
-        return cased.distinctBy { it.text }
-    }
-
-    /**
-     * Inserts a space before a swiped word unless the caret follows whitespace, nothing, a
-     * character in [SWIPE_NO_SPACE_AFTER], or is in an address field. Records it in
-     * [composingWord.autoSpaceBefore].
-     */
-    private fun spaceBeforeSwipedWord(connection: InputConnection) {
-        composingWord.autoSpaceBefore = false
-        if (fieldSession.addressField) {
-            return
-        }
-        val before = connection.getTextBeforeCursor(1, 0)
-        if (before.isNullOrEmpty()) {
-            return
-        }
-        val previous = before[0]
-        if (previous.isWhitespace() || previous in SWIPE_NO_SPACE_AFTER) {
-            return
-        }
-        connection.commitText(" ", 1)
-        composingWord.autoSpaceBefore = true
-    }
-
-    /**
      * A decoded swipe that did not pause: the first candidate composes at once and all of them go
      * to the strip. With [KeyboardPreferences.radialLiftKeepsOpen] on, a tap-only ring opens too,
      * unless the decode was decisive and [KeyboardPreferences.RADIAL_TRUSTED_AUTO_APPLY] is set.
@@ -1648,24 +1457,21 @@ class BorderKeysService :
         view?.suggestionStrip?.decoding = false
         if (candidates.isEmpty()) {
             view?.suggestionStrip?.clear()
-            requestSuggestions()
+            orchestrator.requestSuggestions()
             return
         }
-        val connection = currentInputConnection ?: return
-        val cased = caseSwipedWords(candidates)
+        if (currentInputConnection == null) {
+            return
+        }
+        val cased = orchestrator.caseSwipedWords(candidates)
         val best = cased.first().text
-        if (fieldSession.terminalField) {
-            swipeIntoTerminal(connection, cased)
+        if (orchestrator.session.terminalField) {
+            orchestrator.swipeIntoTerminal(cased)
+            recordSwipeDecode(cased.size)
             return
         }
 
-        connection.beginBatchEdit()
-        spaceBeforeSwipedWord(connection)
-        composing.setLength(0)
-        composing.append(best)
-        connection.setComposingText(composing, 1)
-        connection.endBatchEdit()
-        composingWord.fromGesture = true
+        orchestrator.composeSwipedWord(cased)
         recordSwipeDecode(candidates.size)
         if (debuggable) {
             android.util.Log.d(
@@ -1677,13 +1483,6 @@ class BorderKeysService :
             )
         }
         // The strip shows the swipe's alternatives, with no typed chip and no correction.
-        lastQuery = best
-        searchAnswer = searchAnswer.copy(
-            query = best,
-            knownWord = best,
-            correction = best,
-            correctionIsName = cased.first().isProperNoun,
-        )
         view?.suggestionStrip?.let { strip ->
             strip.typedIndex = -1
             strip.appliedIndex = -1
@@ -1710,40 +1509,16 @@ class BorderKeysService :
         }
     }
 
-    override fun onKeyRepeat(code: Int) {
-        if (code == KeyCodes.DELETE) {
-            handleDelete()
-        } else if (KeyCodes.isArrow(code)) {
-            handleNavigationKey(code)
-        } else if (code == KeyCodes.FORWARD_DELETE) {
-            handleHardwareKey(android.view.KeyEvent.KEYCODE_FORWARD_DEL)
-        }
-    }
+    override fun onKeyRepeat(code: Int) = orchestrator.onKeyRepeat(code)
 
-    override fun onText(text: CharSequence) {
-        dismissRadialMenu()
-        val connection = currentInputConnection ?: return
-        confirmPendingCorrection()
-        connection.beginBatchEdit()
-        finishComposing(connection)
-        connection.commitText(text, 1)
-        connection.endBatchEdit()
-        checkpointField()
-        refreshContextFromEditor()
-        applyAutoShift()
-        requestSuggestions()
-    }
+    override fun onText(text: CharSequence) = orchestrator.onText(text)
 
+    /** The typing flow's keys go to [orchestrator]; pages, panels and the modifiers stay here. */
     override fun onKey(code: Int, keyIndex: Int) {
-        // Every key but backspace confirms a pending correction and closes the ring.
-        if (code != KeyCodes.DELETE) {
-            confirmPendingCorrection()
-            dismissRadialMenu()
+        if (orchestrator.onKey(code)) {
+            return
         }
         when (code) {
-            KeyCodes.SHIFT -> handleShift()
-            KeyCodes.DELETE -> handleDelete()
-            KeyCodes.ENTER -> handleEnter()
             KeyCodes.SYMBOLS -> showPage(
                 if (page == PAGE_ALPHABETIC) PAGE_SYMBOLS else PAGE_ALPHABETIC,
             )
@@ -1753,16 +1528,8 @@ class BorderKeysService :
             KeyCodes.LANGUAGE -> switchLanguage()
             KeyCodes.SETTINGS -> toggleQuickSettings()
             KeyCodes.EMOJI -> toggleEmojiPanel()
-            KeyCodes.ESCAPE -> handleHardwareKey(android.view.KeyEvent.KEYCODE_ESCAPE)
-            KeyCodes.TAB -> handleHardwareKey(android.view.KeyEvent.KEYCODE_TAB)
             KeyCodes.CONTROL -> setArmedModifiers(control = !controlArmed, alt = altArmed)
             KeyCodes.ALT -> setArmedModifiers(control = controlArmed, alt = !altArmed)
-            KeyCodes.ARROW_LEFT, KeyCodes.ARROW_RIGHT, KeyCodes.ARROW_UP, KeyCodes.ARROW_DOWN,
-            KeyCodes.HOME, KeyCodes.END, KeyCodes.PAGE_UP, KeyCodes.PAGE_DOWN ->
-                handleNavigationKey(code)
-            KeyCodes.FORWARD_DELETE -> handleHardwareKey(android.view.KeyEvent.KEYCODE_FORWARD_DEL)
-            KeyCodes.INSERT -> handleHardwareKey(android.view.KeyEvent.KEYCODE_INSERT)
-            else -> if (KeyCodes.isCharacter(code)) handleCharacter(code)
         }
     }
 
@@ -1770,63 +1537,6 @@ class BorderKeysService :
         controlArmed = control
         altArmed = alt
         host?.keyboard?.setArmedModifiers(control, alt)
-    }
-
-    /**
-     * A caret key from the modifier row, sent as the hardware key, selecting when shift is held.
-     * The word being typed is finished first.
-     */
-    private fun handleNavigationKey(code: Int) {
-        val connection = currentInputConnection ?: return
-        val keyCode = when (code) {
-            KeyCodes.ARROW_LEFT -> android.view.KeyEvent.KEYCODE_DPAD_LEFT
-            KeyCodes.ARROW_RIGHT -> android.view.KeyEvent.KEYCODE_DPAD_RIGHT
-            KeyCodes.ARROW_UP -> android.view.KeyEvent.KEYCODE_DPAD_UP
-            KeyCodes.ARROW_DOWN -> android.view.KeyEvent.KEYCODE_DPAD_DOWN
-            KeyCodes.HOME -> android.view.KeyEvent.KEYCODE_MOVE_HOME
-            KeyCodes.END -> android.view.KeyEvent.KEYCODE_MOVE_END
-            KeyCodes.PAGE_UP -> android.view.KeyEvent.KEYCODE_PAGE_UP
-            else -> android.view.KeyEvent.KEYCODE_PAGE_DOWN
-        }
-        val meta = heldShiftMeta(spend = false)
-        ownEditPending = composing.isNotEmpty()
-        resetComposing()
-        sendPhysicalKey(connection, keyCode, meta)
-        refreshContextFromEditor()
-        applyAutoShift()
-    }
-
-    /**
-     * Escape, tab, or a character under control or alt: commits the word being typed, then sends
-     * the key.
-     */
-    private fun handleHardwareKey(keyCode: Int) {
-        val connection = currentInputConnection ?: return
-        val meta = heldShiftMeta(spend = true)
-        ownEditPending = composing.isNotEmpty()
-        connection.beginBatchEdit()
-        finishComposing(connection)
-        sendPhysicalKey(connection, keyCode, meta)
-        connection.endBatchEdit()
-        checkpointField()
-        refreshContextFromEditor()
-        applyAutoShift()
-        requestSuggestions()
-    }
-
-    /**
-     * The shift bits for a hardware key: set only while the user holds shift. With [spend], a
-     * one-shot shift is spent by the key.
-     */
-    private fun heldShiftMeta(spend: Boolean): Int {
-        if (!shiftHeldByUser || shiftState == ShiftState.OFF) {
-            return 0
-        }
-        if (spend && shiftState == ShiftState.ON) {
-            shiftState = ShiftState.OFF
-            host?.keyboard?.shiftState = shiftState
-        }
-        return android.view.KeyEvent.META_SHIFT_ON or android.view.KeyEvent.META_SHIFT_LEFT_ON
     }
 
     /**
@@ -1881,19 +1591,7 @@ class BorderKeysService :
             switchLanguage()
             return true
         }
-        if (code == KeyCodes.SHIFT) {
-            lockShift()
-            return true
-        }
-        // Reverts a pending correction, or deletes the word before the cursor.
-        if (code == KeyCodes.DELETE) {
-            val connection = currentInputConnection
-            if (connection != null && !revertCorrection(connection)) {
-                deleteWordBeforeCursor(connection)
-            }
-            refreshContextFromEditor()
-            applyAutoShift()
-            requestSuggestions()
+        if (orchestrator.onKeyLongPress(code)) {
             return true
         }
         if (code != KeyCodes.ENTER && code != KeyCodes.LANGUAGE && code != KeyCodes.SETTINGS) {
@@ -1903,277 +1601,8 @@ class BorderKeysService :
         return true
     }
 
-    private fun handleCharacter(code: Int) {
-        val connection = currentInputConnection ?: return
-        KeyboardStats.keystrokes++
-        KeyboardStats.input(android.os.SystemClock.uptimeMillis())
-        // Under an armed control or alt, a character goes out as its hardware key; one with no
-        // hardware key releases the modifiers and is typed.
-        if (controlArmed || altArmed) {
-            val keyCode = PhysicalKeys.keyCodeFor(code)
-            if (keyCode != 0) {
-                handleHardwareKey(keyCode)
-                return
-            }
-            setArmedModifiers(control = false, alt = false)
-        }
-        ownEditPending = false
-        val shifted = if (shiftState != ShiftState.OFF) {
-            Character.toUpperCase(code)
-        } else {
-            code
-        }
-        if (fieldSession.terminalField) {
-            typeIntoTerminal(connection, shifted)
-            return
-        }
-        // A word starts with a letter; after that, [isWordCharacter] continues it.
-        val letter = if (composing.isEmpty()) {
-            Character.isLetter(shifted)
-        } else {
-            isWordCharacter(shifted)
-        }
-        // A one-shot shift is spent only by a letter.
-        if (letter && shiftState == ShiftState.ON) {
-            shiftState = ShiftState.OFF
-            host?.keyboard?.shiftState = shiftState
-        }
-        val heldByUser = shiftHeldByUser
-        if (composing.isEmpty() && letter) {
-            composingWord.capitalisedByUser = heldByUser && Character.isUpperCase(shifted)
-            val ahead = connection.getTextBeforeCursor(1, 0)
-            composingWord.runningText = ahead.isNullOrEmpty() || !RunningText.isMark(ahead[0])
-        }
-        if (letter) {
-            shiftHeldByUser = false
-            userReleasedAutoLock = false
-        }
-
-        if (letter) {
-            pendingAutoSpace = false
-            if (composingWord.fromGesture) {
-                // A letter after a swiped word finishes and learns it, adds a space, and starts
-                // the next word.
-                composingWord.fromGesture = false
-                val contextWord = wordContext.previous1
-                val grandContextWord = wordContext.previous2
-                connection.beginBatchEdit()
-                val finished = finishComposing(connection)
-                connection.commitText(" ", 1)
-                connection.endBatchEdit()
-                if (finished != null) {
-                    recordLearned(finished, contextWord, grandContextWord, composingWord.capitalisedByUser)
-                }
-                checkpointField()
-                composingWord.capitalisedByUser = heldByUser && Character.isUpperCase(shifted)
-            }
-            composing.appendCodePoint(shifted)
-            connection.setComposingText(composing, 1)
-            requestSuggestions()
-            return
-        }
-
-        // A delimiter ends the word. What replaces the typed word, if anything, is decided by
-        // [commitOutcome]; a rewrite is committed in its place and can be reverted.
-        val typed = composing.toString()
-        val outcome = commitOutcome(typed, shifted)
-        val rewrite = outcome.isRewrite
-        val correction = outcome.text
-        // Read before anything commits.
-        val contextWord = wordContext.previous1
-        val grandContextWord = wordContext.previous2
-
-        // A space typed right after one this keyboard added is handled per
-        // KeyboardPreferences.autoSpaceHabit; see [HabitSpace].
-        if (shifted == ' '.code &&
-            HabitSpace.swallows(
-                composingEmpty = typed.isEmpty(),
-                pendingAutoSpace = pendingAutoSpace,
-                habit = preferences.autoSpaceHabit,
-                characterBeforeCursor = {
-                    connection.getTextBeforeCursor(1, 0)?.takeIf { it.isNotEmpty() }?.get(0)
-                },
-            )
-        ) {
-            if (!HabitSpace.staysArmed(preferences.autoSpaceHabit)) {
-                pendingAutoSpace = false
-            }
-            shiftAfterDelimiter(heldByUser)
-            return
-        }
-
-        // Two spaces within DOUBLE_SPACE_MILLIS after a word character become ". ".
-        if (shifted == ' '.code && typed.isEmpty() && preferences.doubleSpacePeriod && !fieldSession.addressField &&
-            System.currentTimeMillis() - lastSpaceAt < DOUBLE_SPACE_MILLIS &&
-            endsWithWordCharacterBeforeSpace(connection)
-        ) {
-            ownEditPending = true
-            connection.beginBatchEdit()
-            connection.deleteSurroundingText(1, 0)
-            connection.commitText(". ", 1)
-            connection.endBatchEdit()
-            lastSpaceAt = 0L
-            pendingSpacePeriod = true
-            pendingAutoSpace = true
-            pendingCorrection = null
-            checkpointField()
-            refreshContextFromEditor()
-            applyAutoShift(justCommitted = ". ")
-            requestSuggestions()
-            return
-        }
-        if (shifted == ' '.code) {
-            lastSpaceAt = System.currentTimeMillis()
-        }
-        pendingSpacePeriod = false
-
-        ownEditPending = true
-        connection.beginBatchEdit()
-        // A space before a tight mark is removed, except the one French writes before ! ? ; :.
-        if (typed.isEmpty() && preferences.removeSpaceBeforePunctuation &&
-            isTightPunctuation(shifted) && !isFrenchSpacedPunctuation(shifted)
-        ) {
-            val before = connection.getTextBeforeCursor(1, 0)
-            if (before != null && before.length == 1 && before[0] == ' ') {
-                connection.deleteSurroundingText(1, 0)
-            }
-        }
-        val added = spaceAfter(shifted)
-        pendingAutoSpace = added.isNotEmpty()
-        val delimiter = String(Character.toChars(shifted)) + added
-        if (correction != null) {
-            // commitText replaces the composing region with the correction.
-            composing.setLength(0)
-            connection.commitText(correction + delimiter, 1)
-            playEffect(EffectEvent.AutocorrectApplied, correction)
-        } else {
-            finishComposing(connection)
-            connection.commitText(delimiter, 1)
-        }
-        connection.endBatchEdit()
-
-        if (correction != null) {
-            // An expansion's last word is the context the next word follows.
-            wordContext = wordContext.then(
-                if (rewrite) correction.substringAfterLast(' ') else correction,
-            )
-            // Learned once the correction survives the next keystroke.
-            pendingCorrection = PendingCorrection(
-                typed, correction, delimiter, contextWord, grandContextWord,
-                composingWord.capitalisedByUser, learn = !rewrite,
-            )
-            if (!rewrite && preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
-                recordLanguageSwitchFlag(connection, typed, correction, delimiter)
-            }
-        } else {
-            if (typed.isNotEmpty()) {
-                recordLearned(typed, contextWord, grandContextWord, composingWord.capitalisedByUser)
-            }
-            pendingCorrection = null
-        }
-        // A sentence mark clears the context for the next word, after this word was learned.
-        if (isSentenceEndingPunctuation(shifted)) {
-            wordContext = WordContext.NONE
-        }
-        checkpointField()
-        shiftAfterDelimiter(heldByUser, justCommitted = delimiter)
-        requestSuggestions()
-        engine.dominantLanguageTag { tag -> dominantLanguageTag = tag }
-        if (preferences.languageSwitchCorrectionMode != KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
-            checkLanguageSwitch()
-        }
-    }
-
-    /** Records where [correction] landed, read from the cursor, for [checkLanguageSwitch]. */
-    private fun recordLanguageSwitchFlag(
-        connection: InputConnection,
-        typed: String,
-        correction: String,
-        delimiter: String,
-    ) {
-        val cursor = connection.getExtractedText(
-            ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
-            0,
-        )?.selectionEnd ?: return
-        val end = cursor - delimiter.length
-        val start = end - correction.length
-        if (start < 0) {
-            return
-        }
-        languageSwitchCorrector.recordCorrection(
-            LanguageSwitchCorrector.Flag(typed, correction, start, end),
-        )
-    }
-
-    /**
-     * Asks whether the conversation's language changed and which recent corrections that leaves
-     * wrong. An answer about an older field is dropped.
-     */
-    private fun checkLanguageSwitch() {
-        val generation = fieldSession.generation
-        engine.dominantPack { dominantPack ->
-            if (generation != fieldSession.generation || !languageSwitchCorrector.observeDominantPack(dominantPack)) {
-                return@dominantPack
-            }
-            val connection = currentInputConnection ?: return@dominantPack
-            val verified = languageSwitchCorrector.snapshot().filter { flag ->
-                textAt(connection, flag.startOffset, flag.endOffset) == flag.appliedText
-            }
-            if (verified.isEmpty()) {
-                return@dominantPack
-            }
-            engine.candidatesForPack(dominantPack, verified.map { it.typedText }) { suggestions ->
-                if (generation != fieldSession.generation) {
-                    return@candidatesForPack
-                }
-                val replacements = languageSwitchCorrector.resolve(verified, suggestions)
-                if (replacements.isNotEmpty()) {
-                    onLanguageSwitchReplacements(replacements)
-                }
-            }
-        }
-    }
-
-    /** The field's text between two offsets, or null if either is out of range. */
-    private fun textAt(connection: InputConnection, start: Int, endExclusive: Int): String? {
-        if (start < 0 || endExclusive < start) {
-            return null
-        }
-        val text = connection.getExtractedText(
-            ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
-            0,
-        )?.text ?: return null
-        if (endExclusive > text.length) {
-            return null
-        }
-        return text.subSequence(start, endExclusive).toString()
-    }
-
-    /** The selection in the offsets [textAt] uses, or null when the editor does not report it. */
-    private fun selectionOf(connection: InputConnection): Pair<Int, Int>? {
-        val extracted = connection.getExtractedText(
-            ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
-            0,
-        ) ?: return null
-        val start = extracted.selectionStart
-        val end = extracted.selectionEnd
-        return if (start < 0 || end < 0) null else Pair(start, end)
-    }
-
-    /** `Ask` shows the revert panel; `Auto-apply` edits the field itself, right away. */
-    private fun onLanguageSwitchReplacements(replacements: List<LanguageSwitchCorrector.Replacement>) {
-        if (preferences.languageSwitchCorrectionMode == KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY) {
-            applyLanguageSwitchReplacements(replacements)
-        } else {
-            host?.let { view ->
-                view.languageRevertPanel.offer(replacements)
-                view.setLanguageRevertPanelVisible(true)
-            }
-        }
-    }
-
     override fun onLanguageRevertPicked(replacement: LanguageSwitchCorrector.Replacement) {
-        applyLanguageSwitchReplacements(listOf(replacement))
+        orchestrator.applyLanguageSwitchReplacements(listOf(replacement))
         val remaining = host?.languageRevertPanel?.remove(replacement) ?: 0
         if (remaining == 0) {
             host?.setLanguageRevertPanelVisible(false)
@@ -2194,349 +1623,6 @@ class BorderKeysService :
         }
         closeRadialRing()
         host?.keyboard?.abandonRingStroke()
-    }
-
-    /**
-     * Applies the replacements in their order, each only if its text is still in place, with one
-     * [checkpointField] for the batch, then puts the caret back where the user is writing.
-     */
-    private fun applyLanguageSwitchReplacements(replacements: List<LanguageSwitchCorrector.Replacement>) {
-        val connection = currentInputConnection ?: return
-        val applied = ArrayList<LanguageSwitchCorrector.Replacement>(replacements.size)
-        connection.beginBatchEdit()
-        finishComposing(connection)
-        val caret = selectionOf(connection)
-        for (replacement in replacements) {
-            if (textAt(connection, replacement.startOffset, replacement.endOffset) !=
-                replacement.previousText
-            ) {
-                continue
-            }
-            connection.setComposingRegion(replacement.startOffset, replacement.endOffset)
-            connection.setComposingText(replacement.text, 1)
-            connection.finishComposingText()
-            applied += replacement
-        }
-        // The caret goes back, shifted by the length the text before it changed.
-        if (applied.isNotEmpty() && caret != null) {
-            val (start, end) = caret
-            connection.setSelection(
-                languageSwitchCorrector.caretAfter(start, applied),
-                languageSwitchCorrector.caretAfter(end, applied),
-            )
-        }
-        connection.endBatchEdit()
-        val changed = applied.isNotEmpty()
-        if (changed) {
-            checkpointField()
-            refreshContextFromEditor()
-            requestSuggestions()
-        }
-    }
-
-    /** Confirms the pending correction and learns it. */
-    private fun confirmPendingCorrection() {
-        val pending = pendingCorrection ?: return
-        pendingCorrection = null
-        if (!pending.learn) {
-            return
-        }
-        recordLearned(
-            pending.corrected, pending.contextWord, pending.grandContextWord,
-            pending.deliberateCapital,
-        )
-    }
-
-    /** What the key [endedBy] would write in place of [typed]; see [WordCommit]. Reads no editor. */
-    private fun commitOutcome(typed: String, endedBy: Int): WordCommit.Outcome = WordCommit.decide(
-        typed = typed,
-        endedBy = endedBy,
-        fromGesture = composingWord.fromGesture,
-        runningText = composingWord.runningText,
-        shortcuts = preferences.textShortcuts,
-        contractions = contractions,
-        possessive = searchAnswer.possessive,
-        suggestion = searchAnswer.correction,
-        suggestionQuery = searchAnswer.query,
-        knownWord = searchAnswer.knownWord,
-        isProperNoun = searchAnswer.correctionIsName,
-        inflection = searchAnswer.inflection,
-        settings = WordCommit.Settings(
-            autoCorrectOnSpace = preferences.autoCorrectOnSpace,
-            autoCapitalise = preferences.autoCapitalise,
-            minimumLength = preferences.minCorrectionLength,
-            correctionDistance = preferences.correctionDistance,
-            capitaliseNames = preferences.capitaliseNames,
-        ),
-    )
-
-    /** The word the strip outlines: what a space would write, unless it is a text shortcut. */
-    private fun outlinedCommit(typed: String): String? {
-        val outcome = commitOutcome(typed, ' '.code)
-        return if (outcome.kind == WordCommit.Kind.SHORTCUT) null else outcome.text
-    }
-
-    /** Whether [pending]'s correction and delimiter are still the text before the caret. */
-    private fun correctionBeforeCaret(pending: PendingCorrection): Boolean {
-        val committed = pending.corrected + pending.delimiter
-        val before = currentInputConnection?.getTextBeforeCursor(committed.length, 0)
-            ?: return false
-        return before.toString() == committed
-    }
-
-    /**
-     * Replaces a pending correction and its delimiter with what was typed, in one batch edit.
-     * Returns false when there is nothing to revert. [viaBackspace] is whether the backspace key
-     * asked, which [KeyboardPreferences.revertCorrectionOnBackspace] governs.
-     */
-    private fun revertCorrection(connection: InputConnection, viaBackspace: Boolean = true): Boolean {
-        val pending = pendingCorrection ?: return false
-        pendingCorrection = null
-        if (viaBackspace && !preferences.revertCorrectionOnBackspace) {
-            // An ordinary backspace confirms the correction.
-            if (pending.learn) {
-                recordLearned(
-                    pending.corrected, pending.contextWord, pending.grandContextWord,
-                    pending.deliberateCapital,
-                )
-            }
-            return false
-        }
-        val committed = pending.corrected + pending.delimiter
-        val before = connection.getTextBeforeCursor(committed.length, 0)
-        if (before == null || before.toString() != committed) {
-            // The text before the caret changed: the correction stands and is learned.
-            recordLearned(
-                pending.corrected, pending.contextWord, pending.grandContextWord,
-                pending.deliberateCapital,
-            )
-            return false
-        }
-        connection.beginBatchEdit()
-        connection.deleteSurroundingText(committed.length, 0)
-        connection.commitText(pending.typed + pending.delimiter, 1)
-        connection.endBatchEdit()
-        wordContext = wordContext.copy(previous1 = pending.typed)
-        // The typed word is learned as asserted; the rejected correction is forgotten from the
-        // personal dictionary, never blocked.
-        recordLearned(
-            pending.typed, pending.contextWord, pending.grandContextWord,
-            pending.deliberateCapital, asserted = true,
-        )
-        forgetWord(pending.corrected, blockWhenNotPersonal = false)
-        playEffect(EffectEvent.CorrectionReverted, pending.typed)
-        refreshContextFromEditor()
-        return true
-    }
-
-    /** Records the field's text as a step in [fieldHistory] when it changed. */
-    private fun checkpointField() {
-        val connection = currentInputConnection ?: return
-        val text = connection.getExtractedText(
-            ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
-            0,
-        )?.text?.toString() ?: return
-        if (text == fieldHistory.current()) {
-            return
-        }
-        fieldHistory.addResult(text)
-    }
-
-    /** Starts a new undo and redo history for a field just opened, seeded with its text. */
-    private fun resetFieldHistory() {
-        fieldHistory.clear()
-        languageSwitchCorrector.reset()
-        checkpointField()
-    }
-
-    /**
-     * Puts the field back to [target], editing only the span where the live text differs; see
-     * [FieldRestore.diff].
-     */
-    private fun restoreFieldVersion(target: String?) {
-        if (target == null) {
-            return
-        }
-        val connection = currentInputConnection ?: return
-        val extracted = connection.getExtractedText(
-            ExtractedTextRequest().apply { hintMaxChars = FIELD_HISTORY_CHARS },
-            0,
-        ) ?: return
-        val current = extracted.text?.toString() ?: return
-        if (current == target) {
-            return
-        }
-        val span = FieldRestore.diff(current, target)
-        connection.beginBatchEdit()
-        finishComposing(connection)
-        // The diff's offsets are into the extracted window, which starts at startOffset.
-        val boundary = extracted.startOffset + span.deleteFrom + span.deleteCount
-        connection.setSelection(boundary, boundary)
-        if (span.deleteCount > 0) {
-            connection.deleteSurroundingText(span.deleteCount, 0)
-        }
-        if (span.insert.isNotEmpty()) {
-            connection.commitText(span.insert, 1)
-        }
-        connection.endBatchEdit()
-        pendingCorrection = null
-        refreshContextFromEditor()
-        requestSuggestions()
-    }
-
-    private fun handleDelete() {
-        dismissRadialMenu()
-        val connection = currentInputConnection ?: return
-        if (fieldSession.terminalField) {
-            deleteInTerminal(connection)
-            return
-        }
-        val hasSelection = selectionEnd > selectionStart
-        // A selection is deleted whole, by committing empty text over it.
-        if (hasSelection) {
-            composing.setLength(0)
-            composingWord.fromGesture = false
-            confirmPendingCorrection()
-            connection.commitText("", 1)
-            refreshContextFromEditor()
-            applyAutoShift()
-            requestSuggestions()
-            return
-        }
-        // A swiped word is deleted whole when KeyboardPreferences.swipeBackspaceDeletesWord is on.
-        if (composingWord.fromGesture && preferences.swipeBackspaceDeletesWord && composing.isNotEmpty()) {
-            cancelRadialGesture()
-            applyAutoShift()
-            return
-        }
-        if (pendingSpacePeriod) {
-            // Turns ". " back into the two spaces.
-            pendingSpacePeriod = false
-            val before = connection.getTextBeforeCursor(2, 0)
-            if (before != null && before.toString() == ". ") {
-                connection.beginBatchEdit()
-                connection.deleteSurroundingText(2, 0)
-                connection.commitText("  ", 1)
-                connection.endBatchEdit()
-                refreshContextFromEditor()
-                applyAutoShift()
-                requestSuggestions()
-                return
-            }
-        }
-        if (revertCorrection(connection)) {
-            applyAutoShift()
-            requestSuggestions()
-            return
-        }
-        if (composing.isNotEmpty()) {
-            // After a backspace, typed letters extend a swiped word.
-            composingWord.fromGesture = false
-            // Deletes one code point.
-            val length = composing.length
-            val start = composing.offsetByCodePoints(length, -1)
-            composing.setLength(start)
-            connection.setComposingText(composing, 1)
-            if (composing.isEmpty()) {
-                applyAutoShift()
-            }
-            requestSuggestions()
-            return
-        }
-        connection.beginBatchEdit()
-        val before = connection.getTextBeforeCursor(2, 0)
-        val toDelete = if (before != null && before.length == 2 &&
-            Character.isSurrogatePair(before[0], before[1])
-        ) {
-            2
-        } else {
-            1
-        }
-        connection.deleteSurroundingText(toDelete, 0)
-        connection.endBatchEdit()
-        refreshContextFromEditor()
-        applyAutoShift()
-        requestSuggestions()
-    }
-
-    private fun handleEnter() {
-        val connection = currentInputConnection ?: return
-        if (fieldSession.terminalField) {
-            enterInTerminal(connection)
-            return
-        }
-        val contextWord = wordContext.previous1
-        val grandContextWord = wordContext.previous2
-        connection.beginBatchEdit()
-        val finished = finishComposing(connection)
-        val imeOptions = currentInputEditorInfo?.imeOptions ?: 0
-        val action = imeOptions and EditorInfo.IME_MASK_ACTION
-        val hasAction = action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED
-        // ENTER_KEY_AUTO honours IME_FLAG_NO_ENTER_ACTION, ENTER_KEY_FORCE_ACTION performs any
-        // declared action, and ENTER_KEY_FORCE_NEWLINE never performs one.
-        val noEnterAction = (imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
-        val performAction = when (preferences.enterKeyBehavior) {
-            KeyboardPreferences.ENTER_KEY_FORCE_ACTION -> hasAction
-            KeyboardPreferences.ENTER_KEY_FORCE_NEWLINE -> false
-            else -> hasAction && !noEnterAction
-        }
-        if (performAction) {
-            connection.endBatchEdit()
-            connection.performEditorAction(action)
-        } else {
-            connection.commitText("\n", 1)
-            connection.endBatchEdit()
-            afterNewlineCommitted()
-        }
-        if (finished != null) {
-            recordLearned(finished, contextWord, grandContextWord, composingWord.capitalisedByUser)
-        }
-        // Enter clears the context for the next word.
-        wordContext = WordContext.NONE
-        requestSuggestions()
-    }
-
-    /**
-     * After a committed newline, from [handleEnter] or the quick-action bar: records the step,
-     * resets the spacing state, and re-derives the context and shift.
-     */
-    private fun afterNewlineCommitted() {
-        checkpointField()
-        pendingAutoSpace = false
-        pendingSpacePeriod = false
-        lastSpaceAt = 0L
-        refreshContextFromEditor()
-        applyAutoShift()
-    }
-
-    private fun handleShift() {
-        val now = System.currentTimeMillis()
-        // Two taps within DOUBLE_TAP_MILLIS lock, from any state.
-        val doubleTap = now - lastShiftPressAt < DOUBLE_TAP_MILLIS
-        val releasedAutoLock = shiftState == ShiftState.LOCKED && autoLockedShift
-        shiftState = when {
-            shiftState == ShiftState.LOCKED -> ShiftState.OFF
-            doubleTap -> ShiftState.LOCKED
-            shiftState == ShiftState.ON -> ShiftState.OFF
-            else -> ShiftState.ON
-        }
-        lastShiftPressAt = now
-        shiftHeldByUser = shiftState != ShiftState.OFF
-        autoLockedShift = false
-        userReleasedAutoLock = releasedAutoLock
-        host?.keyboard?.shiftState = shiftState
-        // The strip's words are re-cased for the new shift state.
-        requestSuggestions()
-    }
-
-    /** Locks shift, from holding it. */
-    private fun lockShift() {
-        shiftState = ShiftState.LOCKED
-        shiftHeldByUser = true
-        autoLockedShift = false
-        userReleasedAutoLock = false
-        host?.keyboard?.shiftState = shiftState
-        requestSuggestions()
     }
 
     /**
@@ -2742,97 +1828,15 @@ class BorderKeysService :
 
     // ---- suggestions ------------------------------------------------------------------------------
 
-    override fun onSuggestionPicked(index: Int, word: String) {
-        val connection = currentInputConnection ?: return
-        dismissRadialMenu()
-        if (fieldSession.terminalField) {
-            pickIntoTerminal(connection, word)
-            return
-        }
-        // While a correction is pending, the typed chip reverts it.
-        val pending = pendingCorrection
-        if (pending != null && index == host?.suggestionStrip?.typedIndex &&
-            word == pending.typed && composing.isEmpty()
-        ) {
-            revertCorrection(connection, viaBackspace = false)
-            host?.suggestionStrip?.clear()
-            requestSuggestions()
-            return
-        }
-        playEffect(EffectEvent.SuggestionPicked, word)
-        confirmPendingCorrection()
-        // Read before the commit.
-        val contextWord = wordContext.previous1
-        val grandContextWord = wordContext.previous2
-        connection.beginBatchEdit()
-        // A pick replaces the word being typed or the word the caret sits in; with neither, it
-        // is a prediction inserted at the caret. An adopted word is deleted first, when it is
-        // still the text before the caret.
-        val replacesWord = composing.isNotEmpty() || lastQuery.isNotEmpty()
-        if (composing.isEmpty() && lastQuery.isNotEmpty()) {
-            val before = connection.getTextBeforeCursor(lastQuery.length, 0)
-            if (before != null && before.toString() == lastQuery) {
-                connection.deleteSurroundingText(lastQuery.length, 0)
-            }
-        }
-        composing.setLength(0)
-        composing.append(word)
-        // A replacing pick also deletes the rest of the word after the caret.
-        val after = connection.getTextAfterCursor(CONTEXT_WINDOW_CHARS, 0)
-        var tail = 0
-        if (after != null && replacesWord) {
-            while (tail < after.length && isWordCharacter(after[tail].code)) {
-                tail++
-            }
-        }
-        if (tail > 0) {
-            connection.deleteSurroundingText(0, tail)
-        }
-        // A space follows the pick unless one is already next, the setting is off, or the field
-        // holds an address.
-        val nextChar = after?.getOrNull(tail)
-        val space = if (!preferences.spaceAfterSuggestion || fieldSession.addressField || nextChar == ' ') "" else " "
-        ownEditPending = true
-        connection.commitText(word + space, 1)
-        connection.endBatchEdit()
-        composingWord.fromGesture = false
-        composingWord.autoSpaceBefore = false
-        pendingAutoSpace = space.isNotEmpty()
-        // A pick spends a one-shot shift.
-        if (shiftState == ShiftState.ON) {
-            shiftState = ShiftState.OFF
-            host?.keyboard?.shiftState = shiftState
-        }
-        shiftHeldByUser = false
-
-        // Each word of the pick is learned as asserted.
-        val words = word.split(' ').filter { it.isNotEmpty() }
-        var previous = contextWord
-        var grandPrevious = grandContextWord
-        for (part in words) {
-            recordLearned(part, previous, grandPrevious, asserted = true)
-            grandPrevious = previous
-            previous = part
-        }
-        // The picked words become the context for the next word.
-        wordContext = WordContext(
-            previous1 = words.lastOrNull() ?: word,
-            previous2 = if (words.size >= 2) words[words.size - 2] else wordContext.previous1,
-        )
-        composing.setLength(0)
-        host?.suggestionStrip?.clear()
-        checkpointField()
-        applyAutoShift()
-        requestSuggestions()
-    }
+    override fun onSuggestionPicked(index: Int, word: String) = orchestrator.onPick(index, word)
 
     /** A suggestion held down: the strip offers Forget, Cancel and Why. */
     override fun onSuggestionLongPressed(index: Int, word: String) {
-        if (fieldSession.policy.privateField || word.isEmpty()) {
+        if (orchestrator.session.policy.privateField || word.isEmpty()) {
             return
         }
         pendingForget = word
-        pendingExplainQuery = lastQuery
+        pendingExplainQuery = orchestrator.lastQuery
         val actions = listOf(
             Candidate(strings.getString(Keys.ASSISTANT_FORGET, word)),
             Candidate(strings[Keys.ASSISTANT_CANCEL]),
@@ -2850,7 +1854,7 @@ class BorderKeysService :
      * line per term, in the catalogue's words, or the one line saying the word is not offered.
      */
     private fun explainWord(query: String, word: String) {
-        val languages = activeLanguageTags
+        val languages = orchestrator.languageTags
         engine.explain(query, word) { explanation ->
             val view = host ?: return@explain
             val lines = if (explanation == null) {
@@ -2883,144 +1887,9 @@ class BorderKeysService :
         )
     }
 
-    // ---- terminals ------------------------------------------------------------------------
-
-    /**
-     * Types [code] into a terminal: written at once, never composed. A letter extends
-     * [terminalWord], which the strip completes; anything else ends it. A one-shot shift is
-     * spent by the letter it capitalised, as in an ordinary field.
-     */
-    private fun typeIntoTerminal(connection: InputConnection, code: Int) {
-        val letter = if (terminalWord.isEmpty()) Character.isLetter(code) else isWordCharacter(code)
-        if (letter && shiftState == ShiftState.ON) {
-            shiftState = ShiftState.OFF
-            host?.keyboard?.shiftState = shiftState
-        }
-        shiftHeldByUser = false
-        ownEditPending = true
-        writeToTerminal(connection, String(Character.toChars(code)))
-        if (letter) {
-            terminalWord.appendCodePoint(code)
-        } else {
-            terminalWord.setLength(0)
-        }
-        requestTerminalSuggestions()
-    }
-
-    /**
-     * Writes [text] to a terminal: each character as the key that carries it, shift held for a
-     * capital, and as text only where no plain key carries it.
-     */
-    private fun writeToTerminal(connection: InputConnection, text: String) {
-        var index = 0
-        while (index < text.length) {
-            val code = text.codePointAt(index)
-            index += Character.charCount(code)
-            val keyCode = if (code < 128) PhysicalKeys.keyCodeFor(code) else 0
-            if (keyCode == 0) {
-                connection.commitText(String(Character.toChars(code)), 1)
-                continue
-            }
-            val meta = if (Character.isUpperCase(code)) SHIFT_META else 0
-            sendPhysicalKey(connection, keyCode, meta)
-        }
-    }
-
-    /** [count] characters back, as the key events a terminal deletes by. */
-    private fun deleteInTerminal(connection: InputConnection, count: Int = 1) {
-        ownEditPending = true
-        repeat(count) {
-            sendPhysicalKey(connection, android.view.KeyEvent.KEYCODE_DEL, 0)
-        }
-        if (terminalWord.isNotEmpty()) {
-            terminalWord.setLength(terminalWord.offsetByCodePoints(terminalWord.length, -1))
-        }
-        requestTerminalSuggestions()
-    }
-
-    /**
-     * Replaces the letters typed into a terminal with [word], and a space when set to. A word
-     * that continues the letters has only its remainder written; any other deletes them first.
-     */
-    private fun pickIntoTerminal(connection: InputConnection, word: String) {
-        playEffect(EffectEvent.SuggestionPicked, word)
-        val typed = terminalWord.toString()
-        val space = if (preferences.spaceAfterSuggestion) " " else ""
-        ownEditPending = true
-        connection.beginBatchEdit()
-        if (word.length >= typed.length && word.startsWith(typed)) {
-            writeToTerminal(connection, word.substring(typed.length) + space)
-        } else {
-            repeat(typed.codePointCount(0, typed.length)) {
-                sendPhysicalKey(connection, android.view.KeyEvent.KEYCODE_DEL, 0)
-            }
-            writeToTerminal(connection, word + space)
-        }
-        connection.endBatchEdit()
-        terminalWord.setLength(0)
-        if (space.isEmpty()) {
-            terminalWord.append(word)
-        }
-        if (shiftState == ShiftState.ON) {
-            shiftState = ShiftState.OFF
-            host?.keyboard?.shiftState = shiftState
-        }
-        shiftHeldByUser = false
-        host?.suggestionStrip?.clear()
-        requestTerminalSuggestions()
-    }
-
-    /**
-     * Writes a swiped word whole, after a space when letters were typed just before it, and
-     * offers the rest of the decode on the strip. The word stays [terminalWord], so a pick from
-     * the strip replaces it the way it replaces typed letters.
-     */
-    private fun swipeIntoTerminal(connection: InputConnection, cased: List<Candidate>) {
-        val best = cased.first().text
-        ownEditPending = true
-        connection.beginBatchEdit()
-        writeToTerminal(connection, if (terminalWord.isNotEmpty()) " $best" else best)
-        connection.endBatchEdit()
-        terminalWord.setLength(0)
-        terminalWord.append(best)
-        recordSwipeDecode(cased.size)
-        lastQuery = best
-        searchAnswer = searchAnswer.copy(
-            query = best,
-            knownWord = best,
-            correction = best,
-            correctionIsName = cased.first().isProperNoun,
-        )
-        host?.suggestionStrip?.let { strip ->
-            strip.typedIndex = -1
-            strip.appliedIndex = -1
-            strip.setSuggestions(cased)
-        }
-        playEffect(EffectEvent.SwipeAccepted, best)
-    }
-
-    /** Enter in a terminal: the key itself, which is what runs the line. */
-    private fun enterInTerminal(connection: InputConnection) {
-        terminalWord.setLength(0)
-        ownEditPending = true
-        sendPhysicalKey(connection, android.view.KeyEvent.KEYCODE_ENTER, 0)
-        requestTerminalSuggestions()
-    }
-
-    /** The strip's completions of [terminalWord]; a terminal has no words before it to read. */
-    private fun requestTerminalSuggestions() {
-        lastQuery = terminalWord.toString()
-        wordContext = WordContext.NONE
-        if (!fieldSession.policy.suggestionsAllowed) {
-            return
-        }
-        suggestionsRequestedAt = android.os.SystemClock.uptimeMillis()
-        engine.requestSuggestions(lastQuery, null, null)
-    }
-
     override fun onExplainDismissed() {
         host?.setExplainPanelVisible(false)
-        requestSuggestions()
+        orchestrator.requestSuggestions()
     }
 
     /**
@@ -3039,7 +1908,7 @@ class BorderKeysService :
                 refreshBlockedWords(dictionary)
             }
             loadPersonalModel(dictionary)
-            requestSuggestions()
+            orchestrator.requestSuggestions()
         }
     }
 
@@ -3049,260 +1918,7 @@ class BorderKeysService :
         query: String,
         possessive: String?,
         inflection: Boolean,
-    ) {
-        // An answer about an older query is dropped.
-        if (query != lastQuery) {
-            return
-        }
-        if (suggestionsRequestedAt != 0L) {
-            KeyboardStats.suggestionMillis.add(
-                (android.os.SystemClock.uptimeMillis() - suggestionsRequestedAt).toDouble(),
-            )
-            suggestionsRequestedAt = 0L
-        }
-        if (composing.isNotEmpty()) {
-            host?.suggestionStrip?.editorEmpty = false
-        }
-        // The word the corrections heap settled on, in the engine's own case.
-        val marked = candidates.firstOrNull { it.isCorrection }
-        searchAnswer = SearchAnswer(
-            query = query,
-            knownWord = knownWord,
-            correction = marked?.text,
-            correctionIsName = marked?.isProperNoun == true,
-            possessive = possessive,
-            inflection = inflection,
-        )
-        // Every candidate is cased: after the typed prefix mid-word, by the shift state with
-        // nothing typed. Caps lock wins over a name's capital; otherwise a name is capitalised
-        // and any other word starts lower case.
-        val cased = candidates.map { candidate ->
-            val word = candidate.text
-            candidate.copy(
-                text = if (lastQuery.isNotEmpty()) {
-                    AutoCorrection.matchCase(
-                        lastQuery, word, candidate.isProperNoun && preferences.capitaliseNames,
-                    )
-                } else {
-                    when {
-                        shiftState == ShiftState.LOCKED -> word.uppercase()
-                        candidate.isProperNoun && preferences.capitaliseNames ->
-                            word.replaceFirstChar { it.uppercaseChar() }
-                        shiftState == ShiftState.ON -> word.replaceFirstChar { it.uppercaseChar() }
-                        else -> word.replaceFirstChar { it.lowercaseChar() }
-                    }
-                },
-            )
-        }
-        if (!preferences.showSuggestionStrip) {
-            return
-        }
-        val strip = host?.suggestionStrip ?: return
-        // Arranged for the slots that hold words, outlining what a delimiter would commit.
-        val row = suggestionRow.arrange(
-            cased, lastQuery, preferences.suggestionCount.coerceAtMost(strip.wordSlotLimit),
-            correction = outlinedCommit(lastQuery),
-            revertable = pendingCorrection?.takeIf { correctionBeforeCaret(it) }?.typed,
-        )
-        strip.setSuggestions(row)
-        strip.typedIndex = suggestionRow.typedIndex
-        strip.appliedIndex = suggestionRow.appliedIndex
-    }
-
-    /** Where the typed word and the word a delimiter would apply end up on the strip. */
-    private val suggestionRow = SuggestionRow()
-
-    /** The word the engine was last asked about. */
-    private var lastQuery: String = ""
-
-    /** Asks the engine about the composing word; never for a password field. */
-    private fun requestSuggestions() {
-        lastQuery = composing.toString()
-        if (fieldSession.policy.privateField) {
-            refreshPrivateReveal()
-        }
-        if (!fieldSession.policy.suggestionsAllowed) {
-            return
-        }
-        suggestionsRequestedAt = android.os.SystemClock.uptimeMillis()
-        engine.requestSuggestions(lastQuery, wordContext.previous1, wordContext.previous2)
-    }
-
-    /**
-     * Tells the strip whether the field has anything in it; with no text before the caret, the
-     * text after it is read.
-     */
-    private fun updateEditorEmpty(hasTextBeforeCaret: Boolean) {
-        val strip = host?.suggestionStrip ?: return
-        strip.editorEmpty = if (hasTextBeforeCaret) {
-            false
-        } else {
-            currentInputConnection?.getTextAfterCursor(1, 0).isNullOrEmpty()
-        }
-    }
-
-    // ---- composing state ---------------------------------------------------------------------------
-
-    /** Ends the composing region and returns the word that was committed, if any. */
-    private fun finishComposing(connection: InputConnection): String? {
-        composingWord.fromGesture = false
-        composingWord.autoSpaceBefore = false
-        if (composing.isEmpty()) {
-            connection.finishComposingText()
-            return null
-        }
-        val word = composing.toString()
-        connection.finishComposingText()
-        composing.setLength(0)
-        wordContext = wordContext.then(word)
-        KeyboardStats.words++
-        return word
-    }
-
-    private fun resetComposing() {
-        dismissRadialMenu()
-        engine.cancelPendingPreview()
-        engine.cancelPendingGesture()
-        previewComposedThisGesture = false
-        pendingCorrection = null
-        pendingForget = null
-        searchAnswer = searchAnswer.copy(
-            query = "",
-            knownWord = "",
-            correction = null,
-            correctionIsName = false,
-            inflection = false,
-        )
-        composing.setLength(0)
-        terminalWord.setLength(0)
-        composingWord.runningText = true
-        composingWord.fromGesture = false
-        composingWord.autoSpaceBefore = false
-        pendingAutoSpace = false
-        currentInputConnection?.finishComposingText()
-        refreshContextFromEditor()
-        host?.suggestionStrip?.clear()
-        requestSuggestions()
-    }
-
-    /** True when the composing word is the text immediately before the application's caret. */
-    private fun composingMatchesCaret(caret: Int): Boolean {
-        if (composing.isEmpty()) {
-            return false
-        }
-        val connection = currentInputConnection ?: return false
-        val before = connection.getTextBeforeCursor(composing.length, 0) ?: return false
-        return before.length == composing.length && before.contentEquals(composing)
-    }
-
-    /**
-     * Makes the word the caret sits in the one the strip is about, and marks it as the composing
-     * region, without changing the text, so typing continues it. A caret after a delimiter or in
-     * an empty field marks nothing.
-     */
-    private fun adoptWordAtCaret() {
-        if (adoptingWordAtCaret) {
-            return
-        }
-        adoptingWordAtCaret = true
-        try {
-            adoptWordAtCaretNow()
-        } finally {
-            adoptingWordAtCaret = false
-        }
-    }
-
-    private fun adoptWordAtCaretNow() {
-        composing.setLength(0)
-        composingWord.fromGesture = false
-        composingWord.autoSpaceBefore = false
-        composingWord.capitalisedByUser = false
-        // The pending correction stays.
-        val connection = currentInputConnection
-        connection?.finishComposingText()
-
-        val before = connection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
-        if (before.isNullOrEmpty()) {
-            wordContext = WordContext.NONE
-            lastQuery = ""
-            engine.requestSuggestions("", null, null)
-            return
-        }
-        // The run of [isWordCharacter] characters before the caret, starting at its first
-        // letter, is the word; the words before it are its context.
-        var start = before.length
-        while (start > 0 && isWordCharacter(before[start - 1].code)) {
-            start--
-        }
-        while (start < before.length && !Character.isLetter(before[start].code)) {
-            start++
-        }
-        val partial = before.substring(start)
-        val (context1, context2) = contextWordsBefore(before, start)
-        wordContext = WordContext(context1, context2)
-        lastQuery = partial
-        if (partial.isNotEmpty()) {
-            composing.append(partial)
-            val caret = selectionEnd
-            connection.setComposingRegion(caret - partial.length, caret)
-        }
-        engine.requestSuggestions(partial, wordContext.previous1, wordContext.previous2)
-    }
-
-    /** Reads the two words before the cursor back from the editor. */
-    private fun refreshContextFromEditor() {
-        val connection = currentInputConnection
-        val before = connection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
-        if (before.isNullOrEmpty()) {
-            wordContext = WordContext.NONE
-            return
-        }
-        val (context1, context2) = contextWordsBefore(before, before.length)
-        wordContext = WordContext(context1, context2)
-    }
-
-    /**
-     * The one or two words ending at [end] in [before]; a sentence mark or a line break between
-     * them stops the reading, leaving null.
-     */
-    private fun contextWordsBefore(before: CharSequence, end: Int): Pair<String?, String?> {
-        fun wordEndingAt(limit: Int): Pair<String, Int>? {
-            var index = limit
-            while (index > 0 && !isWordCharacter(before[index - 1].code)) {
-                if (isSentenceEndingPunctuation(before[index - 1].code) || before[index - 1] == '\n') {
-                    return null
-                }
-                index--
-            }
-            if (index == 0) {
-                return null
-            }
-            val wordEnd = index
-            while (index > 0 && isWordCharacter(before[index - 1].code)) {
-                index--
-            }
-            return before.substring(index, wordEnd) to index
-        }
-        val first = wordEndingAt(end) ?: return null to null
-        val second = wordEndingAt(first.second)
-        return first.first to second?.first
-    }
-
-    /** True when what precedes the single trailing space is a word character or a digit. */
-    private fun endsWithWordCharacterBeforeSpace(connection: InputConnection): Boolean {
-        val before = connection.getTextBeforeCursor(2, 0) ?: return false
-        return before.length == 2 && before[1] == ' ' &&
-            (isWordCharacter(before[0].code) || before[0].isDigit())
-    }
-
-    /** Marks that close up against the word before them. */
-    private fun isTightPunctuation(code: Int): Boolean =
-        code == '.'.code || code == ','.code || code == '!'.code || code == '?'.code ||
-            code == ';'.code || code == ':'.code
-
-    /** Marks that end a sentence. */
-    private fun isSentenceEndingPunctuation(code: Int): Boolean =
-        code == '.'.code || code == '!'.code || code == '?'.code
+    ) = orchestrator.onSuggestions(candidates, knownWord, query, possessive, inflection)
 
     // The words each event has shown an effect for, for this run only.
     private val effectsShown = HashMap<EffectEvent, MutableSet<String>>()
@@ -3322,201 +1938,6 @@ class BorderKeysService :
             return
         }
         host?.effects?.playWord(word, style, setting.colour.takeIf { it != 0 })
-    }
-
-    /** The space that follows a sentence mark, or nothing at all -- see [PunctuationSpace]. */
-    private fun spaceAfter(code: Int): String {
-        val connection = currentInputConnection
-        val follows = PunctuationSpace.follows(
-            enabled = preferences.spaceAfterPunctuation,
-            addressField = fieldSession.addressField,
-            insideNumbers = preferences.spaceInsideNumbers,
-            tightPunctuation = isTightPunctuation(code),
-            before = { connection?.getTextBeforeCursor(1, 0)?.firstOrNull() },
-            after = { connection?.getTextAfterCursor(1, 0)?.firstOrNull() },
-        )
-        return if (follows) " " else ""
-    }
-
-    /**
-     * Re-derives shift after a delimiter, unless caps lock is on or the user pressed shift
-     * ([heldByUser]). [justCommitted] is what this keystroke wrote; see [applyAutoShift].
-     */
-    private fun shiftAfterDelimiter(heldByUser: Boolean, justCommitted: String = "") {
-        if (shiftState == ShiftState.LOCKED || heldByUser) {
-            return
-        }
-        applyAutoShift(justCommitted)
-    }
-
-    /** Whether [code] is one of ! ? ; : and the text is French. */
-    private fun isFrenchSpacedPunctuation(code: Int): Boolean =
-        (code == '!'.code || code == '?'.code || code == ';'.code || code == ':'.code) &&
-            writingInFrench()
-
-    /**
-     * Whether the text being written is French: the dominant language, or, before there is one,
-     * the only language enabled.
-     */
-    private fun writingInFrench(): Boolean {
-        val dominant = dominantLanguageTag
-        if (dominant != null) {
-            return dominant.startsWith("fr", ignoreCase = true)
-        }
-        val tags = activeLanguageTags
-        return tags.isNotEmpty() && tags.all { it.startsWith("fr", ignoreCase = true) }
-    }
-
-    /**
-     * Sets shift from what the field asks for and the text before the caret, unless the user set
-     * it. [justCommitted] is text just written, appended to what the editor reports.
-     */
-    private fun applyAutoShift(justCommitted: String = "") {
-        if (shiftState == ShiftState.LOCKED && !autoLockedShift) {
-            return
-        }
-        if (shiftHeldByUser || userReleasedAutoLock) {
-            return
-        }
-        val wanted = autoShiftState(justCommitted)
-        autoLockedShift = wanted == ShiftState.LOCKED
-        if (shiftState != wanted) {
-            shiftState = wanted
-            host?.keyboard?.shiftState = shiftState
-        }
-    }
-
-    /**
-     * What shift should be here, per [AutoShift], from the field's caps mode
-     * ([InputConnection.getCursorCapsMode]) and the text before the cursor.
-     */
-    private fun autoShiftState(justCommitted: String = ""): Int {
-        val info = currentInputEditorInfo ?: return ShiftState.OFF
-        return AutoShift.stateFor(
-            autoCapitaliseEnabled = preferences.autoCapitalise,
-            inputType = info.inputType,
-            composingIsEmpty = composing.isEmpty(),
-            forceCapitaliseSentences = preferences.forceCapitaliseSentences,
-            capsMode = {
-                currentInputConnection?.getCursorCapsMode(info.inputType) ?: info.initialCapsMode
-            },
-            textBeforeCursor = {
-                val before = currentInputConnection?.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
-                if (justCommitted.isEmpty()) before else (before ?: "").toString() + justCommitted
-            },
-        )
-    }
-
-    private fun isWordCharacter(code: Int): Boolean =
-        Character.isLetter(code) || code == '\''.code || code == '-'.code
-
-    // ---- learning -----------------------------------------------------------------------------------
-
-    /**
-     * Whether anything is learned, and whether the personal dictionary is consulted: off with the
-     * learning switch or in a private field.
-     */
-    private fun applyLearningGate(preferences: KeyboardPreferences = this.preferences) {
-        fieldSession = fieldSession.copy(
-            policy = fieldSession.policy.withLearning(preferences.learningEnabled),
-        )
-        learning.enabled = fieldSession.policy.personalAllowed
-        engine.setPersonalModelEnabled(learning.enabled)
-    }
-
-    /**
-     * Records a confirmed word, and the pair and triple it makes with [contextWord] and
-     * [grandContextWord], read before the commit. [deliberateCapital] is whether its capital was
-     * typed with shift; [asserted] whether the user chose it on purpose.
-     */
-    private fun recordLearned(
-        word: String,
-        contextWord: String?,
-        grandContextWord: String?,
-        deliberateCapital: Boolean = false,
-        asserted: Boolean = false,
-    ) {
-        if (!learning.enabled || word.length < MIN_LEARNED_LENGTH) {
-            return
-        }
-        // The input-method subtype's tag, recorded with the word.
-        val locale = currentSubtypeTag()
-        val now = System.currentTimeMillis()
-        // A word with nothing before it is paired with the sentence start.
-        val pairContext = contextWord ?: UserBigram.SENTENCE_START
-        learning.recordPair(pairContext, word, now)
-        if (contextWord != null && grandContextWord != null) {
-            learning.recordTriple(grandContextWord, contextWord, word, now)
-        }
-        if (learning.record(word, locale, now, deliberateCapital, asserted)) {
-            playEffect(EffectEvent.LearnedWord, word)
-            engine.learn(
-                listOf(
-                    com.borderkeys.data.dao.LearnedWord(
-                        word, locale, 1, now, deliberateCapital, asserted,
-                    ),
-                ),
-                pairContext, grandContextWord,
-            )
-        }
-        val view = host ?: return
-        view.removeCallbacks(flushLearningRunnable)
-        if (learning.isDue(System.currentTimeMillis())) {
-            flushLearning()
-        } else {
-            view.postDelayed(flushLearningRunnable, LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
-        }
-    }
-
-    /** Writes the buffered learning to the database, off the main thread. */
-    private fun flushLearning() {
-        val batch = drainLearning() ?: return
-        learningScope.launch {
-            runCatching { persistLearning(batch) }
-                .onFailure { error -> android.util.Log.e("BorderKeys", "learning flush failed", error) }
-        }
-    }
-
-    /**
-     * The last flush, from [onDestroy]: waits, up to [FINAL_FLUSH_TIMEOUT_MILLIS], for the writes
-     * in flight and for the rest of the buffer.
-     */
-    private fun flushLearningBeforeDestroy() {
-        val batch = drainLearning()
-        val inFlight = learningJob.children.toList()
-        if (batch == null && inFlight.isEmpty()) {
-            return
-        }
-        runCatching {
-            kotlinx.coroutines.runBlocking {
-                kotlinx.coroutines.withTimeoutOrNull(FINAL_FLUSH_TIMEOUT_MILLIS) {
-                    inFlight.forEach { it.join() }
-                    if (batch != null) {
-                        withContext(Dispatchers.IO) { persistLearning(batch) }
-                    }
-                }
-            }
-        }.onFailure { error ->
-            android.util.Log.w("BorderKeys", "the final learning flush failed", error)
-        }
-    }
-
-    /** What [learning] had accumulated, taken out of it in one go. */
-    private class LearningBatch(
-        val updates: List<com.borderkeys.data.dao.LearnedWord>,
-        val pairs: List<com.borderkeys.data.dao.LearnedBigram>,
-        val triples: List<com.borderkeys.data.dao.LearnedTrigram>,
-    )
-
-    /** Empties [learning], or returns null when there was nothing in it. */
-    private fun drainLearning(): LearningBatch? {
-        val updates = learning.drain()
-        val pairs = learning.drainPairs()
-        val triples = learning.drainTriples()
-        if (updates.isEmpty() && pairs.isEmpty() && triples.isEmpty()) {
-            return null
-        }
-        return LearningBatch(updates, pairs, triples)
     }
 
     private suspend fun persistLearning(batch: LearningBatch) {
@@ -3541,7 +1962,9 @@ class BorderKeysService :
     // ---- clipboard --------------------------------------------------------------------------------------
 
     private fun registerClipboardListener() {
-        if (clipboardListenerRegistered || fieldSession.policy.privateField || !preferences.clipboardEnabled) {
+        if (clipboardListenerRegistered || orchestrator.session.policy.privateField ||
+            !preferences.clipboardEnabled
+        ) {
             return
         }
         // Delivered only while this input method has focus.
@@ -3688,7 +2111,7 @@ class BorderKeysService :
      */
     private fun applyQuickActions(view: KeyboardHostView) {
         val bar = view.quickActions
-        if (!preferences.quickActionsEnabled || fieldSession.policy.privateField) {
+        if (!preferences.quickActionsEnabled || orchestrator.session.policy.privateField) {
             bar.visibility = View.GONE
             return
         }
@@ -3724,8 +2147,8 @@ class BorderKeysService :
         }
         // The actions in NO_REFRESH_QUICK_ACTIONS do not change the field.
         if (steps.singleOrNull() !in NO_REFRESH_QUICK_ACTIONS) {
-            refreshContextFromEditor()
-            requestSuggestions()
+            orchestrator.refreshContextFromEditor()
+            orchestrator.requestSuggestions()
         }
     }
 
@@ -3744,29 +2167,29 @@ class BorderKeysService :
             // The editor's own cut, then the result recorded for undo.
             QuickAction.CUT -> {
                 connection.performContextMenuAction(android.R.id.cut)
-                checkpointField()
+                orchestrator.checkpointField()
             }
             QuickAction.SELECT_WORD -> selectWordAtCursor(connection)
-            QuickAction.DELETE_WORD -> deleteWordBeforeCursor(connection)
+            QuickAction.DELETE_WORD -> orchestrator.deleteWordBeforeCursor()
             QuickAction.CURSOR_START -> {
-                resetComposing()
+                orchestrator.resetComposing()
                 connection.setSelection(0, 0)
             }
             QuickAction.CURSOR_END -> {
-                resetComposing()
+                orchestrator.resetComposing()
                 val all = connection.getExtractedText(ExtractedTextRequest(), 0)?.text?.length ?: 0
                 connection.setSelection(all, all)
             }
             QuickAction.NEWLINE -> {
-                finishComposing(connection)
+                orchestrator.finishWord()
                 connection.commitText("\n", 1)
-                afterNewlineCommitted()
-                wordContext = WordContext.NONE
+                orchestrator.afterNewlineCommitted()
+                orchestrator.clearContext()
             }
             QuickAction.SWITCH_LAYOUT -> switchLanguage()
             QuickAction.SETTINGS -> openSettings()
             QuickAction.COMPOSE -> {
-                if (fieldSession.policy.privateField || !preferences.composerEnabled) return
+                if (orchestrator.session.policy.privateField || !preferences.composerEnabled) return
                 // The draft box starts with the selection, or with the whole field.
                 val selection = currentInputConnection?.getSelectedText(0)?.toString().orEmpty()
                 val whole = selection.ifEmpty {
@@ -3780,28 +2203,28 @@ class BorderKeysService :
                 runCatching { startActivity(intent) }
                 return
             }
-            QuickAction.UNDO -> restoreFieldVersion(fieldHistory.back())
-            QuickAction.REDO -> restoreFieldVersion(fieldHistory.forward())
+            QuickAction.UNDO -> orchestrator.undo()
+            QuickAction.REDO -> orchestrator.redo()
             QuickAction.CAPITAL -> toggleCapitalAtCursor(connection)
             QuickAction.NORMALISE -> normaliseField(connection)
             // Sent as arrow key events.
             QuickAction.CURSOR_LEFT -> {
-                resetComposing()
+                orchestrator.resetComposing()
                 sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_DPAD_LEFT)
             }
             QuickAction.CURSOR_RIGHT -> {
-                resetComposing()
+                orchestrator.resetComposing()
                 sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_DPAD_RIGHT)
             }
             // The timestamp clears the context for the next word.
             QuickAction.TIMESTAMP -> {
-                finishComposing(connection)
+                orchestrator.finishWord()
                 connection.commitText(
                     TimestampPattern.format(preferences.timestampPattern, ZonedDateTime.now(), Locale.getDefault()),
                     1,
                 )
-                checkpointField()
-                wordContext = WordContext.NONE
+                orchestrator.checkpointField()
+                orchestrator.clearContext()
             }
         }
     }
@@ -3813,11 +2236,11 @@ class BorderKeysService :
             return ""
         }
         var end = before.length
-        while (end > 0 && !isWordCharacter(before[end - 1].code)) {
+        while (end > 0 && !TypingOrchestrator.isWordCharacter(before[end - 1].code)) {
             end--
         }
         var start = end
-        while (start > 0 && isWordCharacter(before[start - 1].code)) {
+        while (start > 0 && TypingOrchestrator.isWordCharacter(before[start - 1].code)) {
             start--
         }
         return before.substring(start, end)
@@ -3834,21 +2257,23 @@ class BorderKeysService :
         ) ?: return
         val text = extracted.text?.toString() ?: return
         val base = extracted.startOffset
-        val range = SentenceCase.wordAt(text, extracted.selectionEnd, ::isWordCharacter) ?: return
+        val range = SentenceCase.wordAt(
+            text, extracted.selectionEnd, TypingOrchestrator::isWordCharacter,
+        ) ?: return
         val word = text.substring(range.first, range.last + 1)
         val toggled = SentenceCase.toggleInitial(word)
         if (toggled == word) {
             return
         }
         connection.beginBatchEdit()
-        finishComposing(connection)
+        orchestrator.finishWord()
         val first = base + range.first
         connection.setSelection(first, first + 1)
         connection.commitText(toggled.substring(0, 1), 1)
         connection.setSelection(base + extracted.selectionStart, base + extracted.selectionEnd)
         connection.endBatchEdit()
-        pendingCorrection = null
-        checkpointField()
+        orchestrator.dropPendingCorrection()
+        orchestrator.checkpointField()
     }
 
     /**
@@ -3868,7 +2293,7 @@ class BorderKeysService :
         val base = extracted.startOffset
         val span = FieldRestore.diff(current, target)
         connection.beginBatchEdit()
-        finishComposing(connection)
+        orchestrator.finishWord()
         val boundary = base + span.deleteFrom + span.deleteCount
         connection.setSelection(boundary, boundary)
         if (span.deleteCount > 0) {
@@ -3879,8 +2304,8 @@ class BorderKeysService :
         }
         connection.setSelection(base + extracted.selectionStart, base + extracted.selectionEnd)
         connection.endBatchEdit()
-        pendingCorrection = null
-        checkpointField()
+        orchestrator.dropPendingCorrection()
+        orchestrator.checkpointField()
     }
 
     /** The line the cursor sits on, both sides of it. */
@@ -3894,7 +2319,7 @@ class BorderKeysService :
     }
 
     private fun copyToClipboard(text: String) {
-        if (text.isEmpty() || fieldSession.policy.privateField) {
+        if (text.isEmpty() || orchestrator.session.policy.privateField) {
             return
         }
         val clip = ClipData.newPlainText(null, text)
@@ -3906,7 +2331,7 @@ class BorderKeysService :
 
     /** Opens the clipboard history as a panel of cards, read and decoded off the main thread. */
     private fun offerClipboardHistory() {
-        if (fieldSession.policy.privateField) {
+        if (orchestrator.session.policy.privateField) {
             return
         }
         scope.launch {
@@ -3937,12 +2362,12 @@ class BorderKeysService :
             )
             commitImage(uri, description)
         } else {
-            finishComposing(connection)
+            orchestrator.finishWord()
             connection.commitText(entry.content, 1)
-            checkpointField()
+            orchestrator.checkpointField()
         }
-        refreshContextFromEditor()
-        requestSuggestions()
+        orchestrator.refreshContextFromEditor()
+        orchestrator.requestSuggestions()
     }
 
     override fun onClipPinToggled(entry: com.borderkeys.data.entity.ClipEntry) {
@@ -3973,8 +2398,9 @@ class BorderKeysService :
 
     /** The word being typed, or the letters just before the caret: the panels' search word. */
     private fun searchWordAtCaret(): String {
+        val composing = orchestrator.composingText
         if (composing.isNotEmpty()) {
-            return composing.toString()
+            return composing
         }
         val before = currentInputConnection?.getTextBeforeCursor(SEARCH_QUERY_CHARS, 0)
             ?: return ""
@@ -3988,11 +2414,11 @@ class BorderKeysService :
     /** Inserts an emoji and moves it to the front of the recents; the panel stays open. */
     private fun onEmojiPicked(emoji: String) {
         val connection = currentInputConnection ?: return
-        finishComposing(connection)
+        orchestrator.finishWord()
         connection.commitText(emoji, 1)
-        checkpointField()
-        refreshContextFromEditor()
-        requestSuggestions()
+        orchestrator.checkpointField()
+        orchestrator.refreshContextFromEditor()
+        orchestrator.requestSuggestions()
 
         val updated = (listOf(emoji) + preferences.emojiRecents.filterNot { it == emoji })
             .take(KeyboardPreferences.MAX_EMOJI_RECENTS)
@@ -4003,7 +2429,7 @@ class BorderKeysService :
     }
 
     override fun onPrivateRevealToggled() {
-        if (!fieldSession.policy.privateField) {
+        if (!orchestrator.session.policy.privateField) {
             return
         }
         privateReveal = !privateReveal
@@ -4014,7 +2440,7 @@ class BorderKeysService :
     /** Re-reads a private field's text into the strip while it is being shown. */
     private fun refreshPrivateReveal() {
         val strip = host?.suggestionStrip ?: return
-        if (!fieldSession.policy.privateField || !privateReveal) {
+        if (!orchestrator.session.policy.privateField || !privateReveal) {
             return
         }
         val connection = currentInputConnection ?: return
@@ -4025,8 +2451,8 @@ class BorderKeysService :
 
     override fun onClipboardPanelClosed() {
         host?.setClipboardPanelVisible(false)
-        refreshContextFromEditor()
-        requestSuggestions()
+        orchestrator.refreshContextFromEditor()
+        orchestrator.requestSuggestions()
     }
 
     /** Re-reads the history into an open panel, after something in it changed. */
@@ -4046,15 +2472,17 @@ class BorderKeysService :
 
     /** Selects the word the cursor is inside, so the next action can act on it. */
     private fun selectWordAtCursor(connection: InputConnection) {
-        resetComposing()
+        orchestrator.resetComposing()
         val before = connection.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)?.toString().orEmpty()
         val after = connection.getTextAfterCursor(CONTEXT_WINDOW_CHARS, 0)?.toString().orEmpty()
         var back = 0
-        while (back < before.length && isWordCharacter(before[before.length - 1 - back].code)) {
+        while (back < before.length &&
+            TypingOrchestrator.isWordCharacter(before[before.length - 1 - back].code)
+        ) {
             back++
         }
         var forward = 0
-        while (forward < after.length && isWordCharacter(after[forward].code)) {
+        while (forward < after.length && TypingOrchestrator.isWordCharacter(after[forward].code)) {
             forward++
         }
         if (back == 0 && forward == 0) {
@@ -4065,33 +2493,9 @@ class BorderKeysService :
         val caret = if (extracted != null && extracted.selectionEnd >= 0) {
             extracted.startOffset + extracted.selectionEnd
         } else {
-            selectionEnd
+            orchestrator.selectionEnd
         }
         connection.setSelection(caret - back, caret + forward)
-    }
-
-    /** Deletes back to the start of the word before the cursor, in one press. */
-    private fun deleteWordBeforeCursor(connection: InputConnection) {
-        if (selectionEnd > selectionStart) {
-            connection.commitText("", 1)
-            checkpointField()
-            return
-        }
-        composing.setLength(0)
-        connection.finishComposingText()
-        val before = connection.getTextBeforeCursor(CONTEXT_WINDOW_CHARS, 0)
-        if (before.isNullOrEmpty()) {
-            return
-        }
-        var count = 0
-        while (count < before.length && !isWordCharacter(before[before.length - 1 - count].code)) {
-            count++
-        }
-        while (count < before.length && isWordCharacter(before[before.length - 1 - count].code)) {
-            count++
-        }
-        connection.deleteSurroundingText(count.coerceAtLeast(1), 0)
-        checkpointField()
     }
 
     // ---- the clipboard chip ---------------------------------------------------------------
@@ -4122,7 +2526,7 @@ class BorderKeysService :
      */
     private fun refreshClipboardChip(clip: ClipData? = clipboardManager?.primaryClip) {
         val strip = host?.suggestionStrip ?: return
-        if (fieldSession.policy.privateField || !preferences.clipboardSuggestion) {
+        if (orchestrator.session.policy.privateField || !preferences.clipboardSuggestion) {
             strip.clipboardChip = null
             shownClipSignature = null
             return
@@ -4160,7 +2564,7 @@ class BorderKeysService :
     override fun onClipboardPicked() {
         val connection = currentInputConnection ?: return
         val clip = clipboardManager?.primaryClip ?: return
-        if (clip.itemCount == 0 || fieldSession.policy.privateField) {
+        if (clip.itemCount == 0 || orchestrator.session.policy.privateField) {
             return
         }
         val item = clip.getItemAt(0)
@@ -4171,9 +2575,9 @@ class BorderKeysService :
             return
         }
         val text = item.coerceToText(this)?.toString() ?: return
-        finishComposing(connection)
+        orchestrator.finishWord()
         connection.commitText(text, 1)
-        checkpointField()
+        orchestrator.checkpointField()
         if (preferences.clipboardSuggestionOnce) {
             withdrawnClip = clipSignature(clip)
             host?.suggestionStrip?.clipboardChip = null
@@ -4187,8 +2591,8 @@ class BorderKeysService :
             // Deletes the history entry with this text, unless it is pinned.
             scope.launch(Dispatchers.IO) { DataGraph.clipboard.deleteIfUnpinned(text) }
         }
-        refreshContextFromEditor()
-        requestSuggestions()
+        orchestrator.refreshContextFromEditor()
+        orchestrator.requestSuggestions()
     }
 
     /**
@@ -4217,7 +2621,7 @@ class BorderKeysService :
     }
 
     private fun onClipboardChanged() {
-        if (fieldSession.policy.privateField || !preferences.clipboardEnabled) {
+        if (orchestrator.session.policy.privateField || !preferences.clipboardEnabled) {
             return
         }
         val clip = clipboardManager?.primaryClip ?: return
@@ -4348,10 +2752,6 @@ class BorderKeysService :
         const val PAGE_NUMPAD = 3
         const val SETTINGS_ACTIVITY = "com.borderkeys.settings.SettingsActivity"
 
-        /** Shift held, as a key event carries it, for a capital typed into a terminal. */
-        const val SHIFT_META =
-            android.view.KeyEvent.META_SHIFT_ON or android.view.KeyEvent.META_SHIFT_LEFT_ON
-
         /** The settings activity's extras: a screen to open on, and a clip that screen edits. */
         const val SETTINGS_EXTRA_SCREEN = "com.borderkeys.settings.SCREEN"
         const val SETTINGS_EXTRA_CLIP_ID = "com.borderkeys.settings.CLIP_ID"
@@ -4360,7 +2760,7 @@ class BorderKeysService :
         /** An obsolete snapshot of the personal model, deleted at start. */
         const val LEGACY_USER_MODEL_SNAPSHOT = "user_model.bku"
 
-        /** How long [flushLearningBeforeDestroy] waits for the database. */
+        /** How long the last learning flush, at shutdown, waits for the database. */
         const val FINAL_FLUSH_TIMEOUT_MILLIS = 2_000L
 
         /** Quick actions that do not change the field and refresh no suggestions. */
@@ -4373,8 +2773,6 @@ class BorderKeysService :
         /** The shortest interval between two [maybeDecayPersonalDictionary] runs. */
         const val DECAY_SWEEP_INTERVAL_MILLIS = 24L * 60 * 60 * 1000
 
-        const val DOUBLE_TAP_MILLIS = 400L
-
         const val CONTEXT_WINDOW_CHARS = 64
 
         /** How much of the text before the caret an emoji search reads its word from. */
@@ -4383,14 +2781,8 @@ class BorderKeysService :
         /** How much of a private field's text, either side of the caret, the strip can show. */
         const val PRIVATE_REVEAL_CHARS = 256
 
-        /** How much of the field [checkpointField] and [restoreFieldVersion] read. */
+        /** How much of the field the capital and sentence-case quick actions read. */
         const val FIELD_HISTORY_CHARS = 20_000
-
-        /** The longest gap between two spaces that become a full stop. */
-        const val DOUBLE_SPACE_MILLIS = 1200L
-
-        /** The characters a swiped word follows without a space; see [spaceBeforeSwipedWord]. */
-        const val SWIPE_NO_SPACE_AFTER = "([{\"'/-_@#\n"
 
         /** How much of a copied text the chip shows. */
         const val CHIP_PREVIEW_CHARS = 24
@@ -4400,8 +2792,6 @@ class BorderKeysService :
 
         /** How far either side of the cursor "the line" is looked for. */
         const val LINE_WINDOW_CHARS = 1024
-
-        const val MIN_LEARNED_LENGTH = 2
 
         const val GESTURE_DECODING_NOTICE_MILLIS = 50L
 
