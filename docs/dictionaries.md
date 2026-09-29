@@ -12,8 +12,9 @@ keyboard's suggestions is the quality of those counts.
 The six dictionaries that ship with the application (`en_US`, `ro_RO`, `de_DE`, `es_ES`, `fr_FR`,
 `it_IT`) are built from combined Wortschatz Leipzig corpora (wikipedia, news, and newscrawl
 together, not one genre alone -- a single-genre cut was found to be missing everyday words) via
-`tools/make_pack.py --corpus`, some 100,000 to 128,000 words each once the names are merged in.
-What each one actually used, and its
+`tools/make_pack.py --corpus`, then kept to the rows their language's own evidence supports
+([Which rows a list keeps](#which-rows-a-list-keeps)): some 94,000 to 119,000 words each once the
+names are merged in. What each one actually used, and its
 licence, is recorded in `docs/licensing.md` section 2 rather than here, so there is one place to
 check rather than two that can disagree. This document is about replacing or adding to them, not
 about what currently ships.
@@ -129,9 +130,69 @@ own alphabet, so the words are not what cost the space.
 admits. Only `ß`, `æ` and `œ` can: every other accented letter folds to an unaccented twin, so
 taking it off an overlay changes nothing.
 
+## Which rows a list keeps
+
+A corpus carries its own mistakes: words run together, typos, a language's words written without
+their diacritics, another language's words. `tools/classify_wordlist.py` keeps each bundled list
+to the rows the language's own evidence supports.
+
+```
+python3 tools/classify_wordlist.py --all --review /tmp/review    # report, and the review files
+python3 tools/classify_wordlist.py --all --apply                 # rewrite dictionaries/<tag>.tsv
+```
+
+The first run downloads what it reads into `~/.cache/borderkeys/word-evidence`, about 1.7 GB and
+most of it the news corpora, from pinned commits and files it checks against their SHA-256. It
+needs the `hunspell` binary on PATH. Nothing it reads is shipped; the sources and their licences
+are in `docs/licensing.md` 2.1.2.
+
+| evidence for a row | read from |
+|---|---|
+| spelled, a name, an acronym | the language's Hunspell dictionaries from LibreOffice, asked about the row as written, capitalised and in capitals: `en_US` and `en_GB`, `ro_RO`, `de_DE`, `de_AT` and `de_CH` (frami), `fr`, `es_ES` and `es_MX`, `it_IT` |
+| keyboard | the word lists of Android's stock keyboard, from LineageOS's copy |
+| spoken | the OpenSubtitles 2018 frequency lists (`hermitdave/FrequencyWords`), 50 occurrences or more |
+| written, capitalised | the Leipzig 2020 news corpus: how often the row is written in lower case, and how often capitalised inside a sentence |
+| native | a letter only this language uses among the six |
+| treebank, pairs, name, contraction, base | this repository: the treebank's tags, the corpus pairs, the name lists, the contraction tables, the possessive or elision of a row with evidence |
+| included | `dictionaries/<tag>.words-include`, by hand |
+
+Against a row: `dictionaries/<tag>.words-exclude`, by hand; a twin (below); a typo one edit from
+a commoner word with strong evidence, by 2.0 zipf from six letters, 2.5 at four and five, 3.0 at
+three; another bundled language holding it a full zipf more often; two or three letters, rare,
+with nothing behind them. The commonest 65,000 corpus rows of the English list, and 40,000 to
+45,000 of the others, are kept unless something counts against them and no evidence vouches for
+them; every rarer row needs evidence. Guard words per language stop a run that would drop one.
+
+**Twins** are spellings that differ from an ordinary word of the same folded key only by missing
+diacritics: `maine` beside `mâine`, `etre` beside `être`, `perche` beside `perché`. While one is
+in the list, typing it is typing a word the dictionary knows, and autocorrect never puts the
+accent back. A twin goes when no spelling dictionary accepts it and the accented word is at
+least as common. One that may be a name goes only when the news corpus writes it in lower case
+at least as often as capitalised inside a sentence: `maine` (219 in lower case, 13 capitalised)
+and `putin` (1,393 and 711) go, `raul`, `sara`, `siret` and `mariei` stay. French, Spanish and
+Romanian writers often leave a capital without its accent, so there a twin ten times rarer than
+the accented word goes whatever its capitals: `ecole`, `Paris` beside `París`, `magurele`. The
+Romanian dictionary derives some unaccented forms from rare stems (`rosu` from `ros`), so a
+Romanian spelling it accepts is still a twin when the stock keyboard list holds only the
+accented one.
+
+Last applied on 2026-09-29:
+
+| list | rows before | twins | typos | rare, no evidence | short | foreign | rows after |
+|---|---|---|---|---|---|---|---|
+| `en_US` | 146,493 | 0 | 760 | 7,412 | 240 | 6 | 138,075 |
+| `ro_RO` | 119,490 | 366 | 330 | 3,761 | 107 | 2 | 114,924 |
+| `de_DE` | 110,342 | 5 | 55 | 957 | 97 | 0 | 109,228 |
+| `es_ES` | 109,738 | 217 | 151 | 2,345 | 154 | 3 | 106,868 |
+| `fr_FR` | 105,685 | 356 | 83 | 1,690 | 118 | 6 | 103,432 |
+| `it_IT` | 107,484 | 58 | 137 | 2,010 | 143 | 0 | 105,136 |
+
+Of the 10,000, 20,000 and 50,000 commonest subtitle words, the lists reach as many after as
+before, within 0.1 point: a twin's word is still reached through its accented spelling.
+
 ## Size
 
-`--max-words` defaults to 120,000 and `--min-count` to 3. The six bundled packs are 8.1 to 10.2 MB
+`--max-words` defaults to 120,000 and `--min-count` to 3. The six bundled packs are 7.9 to 9.7 MB
 each, the trie and its text a few megabytes of that and the pairs and triples the rest, five
 bytes apiece in the successor index and the continuation index. Larger than that, built from a
 bigger or less aggressively cut corpus, belongs on the device as an imported pack rather than

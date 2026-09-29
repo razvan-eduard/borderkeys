@@ -212,8 +212,8 @@ gh attestation verify BorderKeys-v0.10.1-core.apk --repo razvan-eduard/borderkey
 - [`docs/guide.md`](docs/guide.md) — the user guide: what every part of the keyboard does and
   where it is switched on, with the store screenshots.
 - [`docs/dictionaries.md`](docs/dictionaries.md) — how a language pack is built from a corpus,
-  how the names list is merged into it, and what the offensive-word lists behind the "Block
-  offensive words" switch do and do not cover.
+  which rows a list keeps and on what evidence, how the names list is merged into it, and what
+  the offensive-word lists behind the "Block offensive words" switch do and do not cover.
 - [`docs/pos-tagging.md`](docs/pos-tagging.md) — what the grammar tags inside a pack are worth,
   measured.
 - [`docs/translations.md`](docs/translations.md) — adding a language or a string to the

@@ -576,6 +576,23 @@ is the number a user gets.
 | `autocorrect_firstletter_en` | 200 | 91.5% | 166 |
 | `autocorrect_marks_en` | 240 | — | 240 |
 | `autocorrect_accents_ro` | 248 | 95.2% | 237 |
+| `autocorrect_twins_ro` | 200 | 93.0% | 186 |
+| `autocorrect_plain_ro` | 200 | 100.0% | 200 |
+| `autocorrect_twins_fr` | 200 | 98.5% | 196 |
+| `autocorrect_plain_fr` | 200 | 100.0% | 200 |
+| `autocorrect_twins_es` | 190 | 100.0% | 188 |
+| `autocorrect_plain_es` | 200 | 100.0% | 200 |
+| `autocorrect_twins_it` | 57 | 100.0% | 57 |
+| `autocorrect_plain_it` | 200 | 100.0% | 200 |
+
+The twin corpora hold the spellings `tools/classify_wordlist.py` dropped as twins
+(`docs/dictionaries.md`, "Which rows a list keeps"), typed without their diacritics, and the
+plain corpora words it kept beside an accented ordinary word, each to be left alone; both are
+written by `tools/make_twin_corpus.py` from the classifier's review files. Before the lists were
+classified the twins restored 0.0%, 1.0%, 5.8% and 1.8% in the engine alone, each twin a word
+the dictionary knew, and the plain corpora read as they do now. A twin that commits another
+accented spelling of its own folded key -- `instanța` for `instanță`, `règle` for `réglé` --
+counts as a miss.
 
 The unknown corpus reads 184 without the inflection guard (`AutoCorrection.Situation.Inflection`,
 `WordStems`); the guard moves no other corpus. The gap on the doubled-letter and first-letter
@@ -714,32 +731,32 @@ model, the pack weight, the personal boost, the edit and completion cost — and
 autocorrect would do with it. That is the question every scoring change starts with, and the one
 a ranked list cannot answer.
 
-### Word-list classification — report only
+### Word-list classification
 
 ```
-python3 tools/classify_wordlist.py --tag en_US --hunspell en_US=<en_US> --hunspell en_US=<en_GB> \
-    --coverage <held-out list> --review <dir>
+python3 tools/classify_wordlist.py --all --review <dir>
 ```
 
-`tools/classify_wordlist.py` judges every row of a list by the language's own evidence and
-reports what it would drop. It is not applied to any shipped list, and the number that decides
-that is the last one it prints: coverage of a held-out conversational frequency list (the
-OpenSubtitles 50k lists, read for measurement only, never shipped) before and after.
+`tools/classify_wordlist.py` keeps each bundled list to the rows the language's own evidence
+supports (`docs/dictionaries.md`, "Which rows a list keeps"), and was applied to all six on
+2026-09-29. A run on a classified list drops nothing. What it prints last is coverage: how many
+of the 10,000, 20,000 and 50,000 commonest words of the language's subtitle frequency list the
+list reaches, by folded key, before and after.
 
-| list | rows | dropped | 10k held-out | 20k | 50k |
-|---|---|---|---|---|---|
-| `en_US` (en_US + en_GB checkers) | 148,892 | 20,567 | 96.2% → 95.9% | 93.6% → 92.9% | 82.5% → 80.3% |
-| `es_ES` (es_ES + es_MX) | 109,770 | 10,679 | 93.8% → 93.3% | 88.0% → 87.1% | 73.4% → 71.4% |
-| `fr_FR` (fr) | 110,590 | 8,528 | 92.3% → 92.0% | 86.2% → 85.5% | 69.6% → 68.2% |
+| list | rows removed | 10k | 20k | 50k |
+|---|---|---|---|---|
+| `en_US` | 8,418 of 146,493 | 97.4% → 97.4% | 95.7% → 95.7% | 86.7% → 86.7% |
+| `ro_RO` | 4,566 of 119,490 | 96.2% → 96.2% | 93.5% → 93.5% | 85.1% → 85.0% |
+| `de_DE` | 1,114 of 110,342 | 92.9% → 92.8% | 87.5% → 87.5% | 71.0% → 71.0% |
+| `es_ES` | 2,870 of 109,738 | 95.5% → 95.5% | 91.1% → 91.1% | 79.1% → 79.1% |
+| `fr_FR` | 2,253 of 105,685 | 94.0% → 94.0% | 89.3% → 89.3% | 75.7% → 75.7% |
+| `it_IT` | 2,348 of 107,484 | 94.8% → 94.8% | 90.3% → 90.2% | 76.3% → 76.3% |
 
-Every run costs coverage. Of the 10,000 commonest English held-out words, 31 would go, and
-they are the words a prose corpus holds at low rank and no checker vouches for: `doin`,
-`comin`, `gettin`, `talkin`, `nothin`, `mmm`, `ahh`, `hah`, plus fragments of the held-out
-list's own tokenisation (`didn`, `isn`). The Spanish and French losses have the same shape
-(`vámonos`, `quizas`, `ecoute`, `peut-etre`). A list may be classified once a conversational
-witness vouches for that tail; until then the tool is a report, and the review file it writes
-is the list to read.
-```
+Every corpus above read the same after as before, except the strip's mean rank, 1.39 to 1.36;
+the swipe gates did not move, and every pack's count of unreachable rows fell, by 18 to 81. The
+review directory holds `<tag>.dropped.tsv`, `<tag>.borderline.tsv` (the dropped rows at 2.5 zipf
+or more) and `<tag>.kept.tsv`, each row with its reason; a real word dropped goes into
+`dictionaries/<tag>.words-include`.
 
 ### Why these are not tests
 
@@ -808,9 +825,10 @@ python3 tools/make_midtypo_corpus.py dictionaries/en_US.tsv
 python3 tools/make_doubled_corpus.py dictionaries/en_US.tsv
 python3 tools/make_firstletter_corpus.py dictionaries/en_US.tsv
 
-# Classify a word list, report only: drops, guard words, coverage of a held-out list
-python3 tools/classify_wordlist.py --tag en_US --hunspell en_US=<en_US> --hunspell en_US=<en_GB> \
-    --coverage <en_50k.txt> --review /tmp/review
+# Classify the word lists: a report and the review files, then --apply to rewrite them
+python3 tools/classify_wordlist.py --all --review /tmp/review
+# The twin and plain corpora, from that review
+python3 tools/make_twin_corpus.py --tag ro_RO --review /tmp/review --out native-tests/data
 
 # Measurements
 native-tests/build/suggest_eval <dict dir> native-tests/data/suggest_en.tsv en-US
