@@ -30,6 +30,10 @@ internal class FakeTypingHost(private val clock: ManualClock) : TypingHost {
     var shiftState = 0
         private set
 
+    /** How many times a private field's text was re-read into the strip. */
+    var privateRevealRefreshes = 0
+        private set
+
     val effects = mutableListOf<Pair<EffectEvent, String>>()
 
     /** Each forgotten word, with whether it was to be blocked when not personal. */
@@ -89,7 +93,9 @@ internal class FakeTypingHost(private val clock: ManualClock) : TypingHost {
 
     override fun onWordReset() = Unit
 
-    override fun refreshPrivateReveal() = Unit
+    override fun refreshPrivateReveal() {
+        privateRevealRefreshes++
+    }
 
     override fun playEffect(event: EffectEvent, word: String) {
         effects += event to word

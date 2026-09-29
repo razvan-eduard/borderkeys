@@ -70,6 +70,43 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
         settle()
     }
 
+    /** Holds the key [code] down until its long press fires, and settles. */
+    fun longPress(code: Int) {
+        clock.advance(KEY_INTERVAL_MILLIS)
+        orchestrator.onKeyLongPress(code)
+        settle()
+    }
+
+    /** Picks [word] from slot [index] of the strip, and settles. */
+    fun pick(index: Int, word: String) {
+        orchestrator.onPick(index, word)
+        settle()
+    }
+
+    /** Slides along the space bar by [steps] characters, and settles. */
+    fun slide(steps: Int) {
+        orchestrator.onCursorNudge(steps)
+        settle()
+    }
+
+    /** Slides the space bar up or down by [lines], and settles. */
+    fun slideLines(lines: Int) {
+        orchestrator.onCursorNudgeLines(lines)
+        settle()
+    }
+
+    /** The application moves the caret to [position], as a tap in the field or an arrow key does. */
+    fun moveCaret(position: Int) {
+        editor.setSelection(position, position)
+        settle()
+    }
+
+    /** Lets [millis] pass with no key pressed, and settles. */
+    fun pause(millis: Long) {
+        clock.advance(millis)
+        settle()
+    }
+
     /** Delivers the selection reports, the engine's answers and the due runnables, until none is left. */
     fun settle() {
         while (true) {
