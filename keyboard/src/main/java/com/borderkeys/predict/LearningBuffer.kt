@@ -3,7 +3,6 @@
 
 package com.borderkeys.predict
 
-import com.borderkeys.data.DictionaryCsv
 import com.borderkeys.data.dao.LearnedBigram
 import com.borderkeys.data.dao.LearnedTrigram
 import com.borderkeys.data.dao.LearnedWord
@@ -236,8 +235,8 @@ class LearningBuffer(
         const val DEFAULT_DEBOUNCE_MILLIS = 4_000L
         const val DEFAULT_MAX_ENTRIES = 64
 
-        /** The longest word recorded, the same as [DictionaryCsv.MAX_WORD_LENGTH]. */
-        const val MAX_WORD_LENGTH = DictionaryCsv.MAX_WORD_LENGTH
+        /** The longest word recorded. */
+        const val MAX_WORD_LENGTH = 64
 
         /** The shortest word recorded. */
         const val MIN_WORD_LENGTH = 2

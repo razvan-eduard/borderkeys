@@ -6,8 +6,6 @@ package com.borderkeys.settings.screen
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.entity.UserBigram
@@ -45,20 +42,16 @@ import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
-/** What this device has learned, with a CSV export and import. */
+/** What this device has learned, and where the taps land on each key. */
 @Composable
 fun DictionaryScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
-    val context = LocalContext.current
     val repository = remember { DataGraph.dictionary }
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf<String?>(null) }
     var confirmingForgetAll by remember { mutableStateOf(false) }
     var confirmingLearningOff by remember { mutableStateOf(false) }
     var confirmingHeatmapOff by remember { mutableStateOf(false) }
@@ -71,48 +64,6 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     val pairCount by repository.pairCount.collectAsStateWithLifecycle(initialValue = 0)
     val tripleCount by repository.tripleCount.collectAsStateWithLifecycle(initialValue = 0)
     val touchTaps by repository.touchTaps.collectAsStateWithLifecycle(initialValue = 0)
-
-    val exporter = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("text/csv"),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            val export = repository.exportCsv()
-            val written = withContext(Dispatchers.IO) {
-                runCatching {
-                    context.contentResolver.openOutputStream(uri)?.use {
-                        it.write(export.csv.encodeToByteArray())
-                    }
-                }.isSuccess
-            }
-            // The count of what was written, not of the list on screen.
-            message = if (written) {
-                strings.getString(Keys.DICTIONARY_EXPORTED_WORDS, export.words)
-            } else {
-                strings[Keys.DICTIONARY_EXPORT_FAILED]
-            }
-        }
-    }
-
-    val importer = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            val csv = withContext(Dispatchers.IO) {
-                runCatching {
-                    context.contentResolver.openInputStream(uri)?.use {
-                        it.readBytes().decodeToString()
-                    }
-                }.getOrNull()
-            }
-            message = if (csv == null) {
-                strings[Keys.DICTIONARY_THE_FILE_COULD_NOT_BE_READ]
-            } else {
-                strings.getString(Keys.DICTIONARY_IMPORTED_WORDS, repository.importCsv(csv))
-            }
-        }
-    }
 
     val themes = remember { DataGraph.themes }
     val update = rememberPreferencesUpdater()
@@ -344,6 +295,10 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
             if (words.size > 200) {
                 Explanation(strings[Keys.DICTIONARY_SHOWING_THE_FIRST_200_USE_SEARCH])
             }
+            TextButton(
+                onClick = { confirmingForgetAll = true },
+                modifier = Modifier.padding(horizontal = 12.dp),
+            ) { Text(strings[Keys.DICTIONARY_FORGET_EVERYTHING]) }
         }
         // Every learned pair and triple, each with its own Forget.
         SettingsSectionCard(strings.getString(Keys.DICTIONARY_PHRASES, pairCount + tripleCount)) {
@@ -400,33 +355,6 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
                     },
                 )
             }
-        }
-        SettingsSectionCard(strings[Keys.DICTIONARY_MOVE_IT_TO_ANOTHER_PHONE]) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                TextButton(onClick = { exporter.launch("borderkeys-dictionary.csv") }) {
-                    Text(strings[Keys.DICTIONARY_EXPORT_CSV])
-                }
-                TextButton(onClick = { importer.launch(arrayOf("text/*", "*/*")) }) {
-                    Text(strings[Keys.DICTIONARY_IMPORT_CSV])
-                }
-                TextButton(onClick = { confirmingForgetAll = true }) {
-                    Text(strings[Keys.DICTIONARY_FORGET_EVERYTHING])
-                }
-            }
-            message?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                )
-            }
-            Explanation(
-                strings[Keys.DICTIONARY_THIS_IS_THE_ONLY_FORM_OF],
-            )
         }
     }
 

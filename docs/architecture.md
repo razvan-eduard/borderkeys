@@ -373,8 +373,8 @@ the entire learning rule.
 with backspace. A word no pack holds is *established* — offered as a completion, treated as a
 known word by autocorrect, predicted after its context — once it has been asserted at all, or
 written `kMinPersonalEvidence` effective times (three at the balanced setting). Until then it is
-recorded and listed. A CSV import asserts every row. Words the packs already hold need none of
-this — `knownSpelling` answers from the packs first.
+recorded and listed. Words the packs already hold need none of this — `knownSpelling` answers
+from the packs first.
 
 **Sentence openers are learned too.** A word committed with nothing before it — an empty
 field, or a sentence end or line break before it — is recorded as a pair under a sentence-start

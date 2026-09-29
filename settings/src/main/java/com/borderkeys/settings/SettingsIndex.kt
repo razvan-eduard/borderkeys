@@ -65,7 +65,6 @@ object SettingsIndex {
         Entry(Screen.Dictionary, null, Keys.DICTIONARY_PHRASES),
         Entry(Screen.Dictionary, Keys.DICTIONARY_PHRASES, Keys.DICTIONARY_NOTHING_LEARNED_YET),
         Entry(Screen.Dictionary, null, Keys.DICTIONARY_BLOCKED),
-        Entry(Screen.Dictionary, null, Keys.DICTIONARY_MOVE_IT_TO_ANOTHER_PHONE),
         Entry(Screen.Effects, null, Keys.PARTICLE_EFFECTS_MY_PRESETS),
         Entry(Screen.Effects, null, Keys.PARTICLE_EFFECTS_ENABLE),
         Entry(Screen.Effects, null, Keys.EFFECTS_TITLE),

@@ -52,8 +52,8 @@ class DictionaryRepository internal constructor(
 
     /**
      * Fires after an edit made by hand -- a word or a phrase forgotten, a word blocked or
-     * unblocked, everything forgotten, a file imported -- so the keyboard can reload what it
-     * holds in memory. The learning flush is not an edit and does not fire it.
+     * unblocked, everything forgotten -- so the keyboard can reload what it holds in memory. The
+     * learning flush is not an edit and does not fire it.
      */
     val edits: SharedFlow<Unit> get() = editsFlow
     private val editsFlow = MutableSharedFlow<Unit>(
@@ -192,25 +192,6 @@ class DictionaryRepository internal constructor(
     suspend fun unblock(word: String) {
         blockedWords.delete(word)
         edited()
-    }
-
-    /** The personal dictionary as CSV, in the format [DictionaryCsv] defines. */
-    suspend fun exportCsv(): CsvExport {
-        val words = userWords.topWords(Int.MAX_VALUE)
-        return CsvExport(DictionaryCsv.encode(words), words.size)
-    }
-
-    /** The CSV text and how many words it carries. */
-    class CsvExport(val csv: String, val words: Int)
-
-    /**
-     * Imports an export, merging counts into whatever is already here. Returns the row count.
-     */
-    suspend fun importCsv(csv: String, now: Long = System.currentTimeMillis()): Int {
-        val updates = DictionaryCsv.decode(csv, now)
-        applyLearned(updates)
-        edited()
-        return updates.size
     }
 
     private companion object {
