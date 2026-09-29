@@ -62,7 +62,8 @@ internal object WordCommit {
      * Decides for [typed]. No rewrite claims a word from a gesture ([fromGesture]). [runningText]
      * is whether the word is part of a sentence, settled as it began ([RunningText]).
      * [possessive] is the engine's possessive for [suggestionQuery], used only when that is
-     * [typed]; [inflection] is [WordStems.shields]'s answer for the same query and suggestion.
+     * [typed] and [typed] is not empty; [inflection] is [WordStems.shields]'s answer for the same
+     * query and suggestion.
      */
     fun decide(
         typed: String,
@@ -99,7 +100,7 @@ internal object WordCommit {
                 }
             }
             // A name's possessive (Engine::possessiveFor), gated like the map, cased as a name.
-            if (settings.autoCorrectOnSpace && prose && possessive != null &&
+            if (settings.autoCorrectOnSpace && prose && possessive != null && typed.isNotEmpty() &&
                 suggestionQuery == typed
             ) {
                 val cased = AutoCorrection.matchCase(typed, possessive, settings.capitaliseNames)

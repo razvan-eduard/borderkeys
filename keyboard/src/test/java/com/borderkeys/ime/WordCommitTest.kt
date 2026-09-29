@@ -141,6 +141,13 @@ class WordCommitTest {
     }
 
     @Test
+    fun `a delimiter with no word typed writes no possessive`() {
+        val outcome = decide("", possessive = "maria's")
+        assertNull(outcome.text)
+        assertEquals(Kind.NONE, outcome.kind)
+    }
+
+    @Test
     fun `autocorrect gets the word none of the rewrites wanted, with its own reason`() {
         val corrected = decide("teh", suggestion = "the")
         assertEquals("the", corrected.text)
