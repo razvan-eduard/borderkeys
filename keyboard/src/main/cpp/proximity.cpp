@@ -385,9 +385,14 @@ uint32_t foldCodePoint(uint32_t codePoint) {
 }
 
 int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut) {
+    return foldUtf8(text, length, out, maxOut, nullptr);
+}
+
+int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut, int* sourceOut) {
     const char* p = text;
     const char* const end = text + length;
     int written = 0;
+    int source = 0;
     while (p < end) {
         if (written >= maxOut) {
             return -1;
@@ -400,8 +405,12 @@ int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut) {
         const uint32_t folded = foldCodePoint(codePoint);
         if (folded != kDroppedCodePoint) {
             out[written] = folded;
+            if (sourceOut != nullptr) {
+                sourceOut[written] = source;
+            }
             ++written;
         }
+        ++source;
         p = next;
     }
     return written;

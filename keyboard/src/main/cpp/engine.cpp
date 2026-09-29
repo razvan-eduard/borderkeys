@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <sys/mman.h>
@@ -596,6 +597,16 @@ bool Engine::setKeyGeometry(const int32_t* codes, const float* centersX, const f
     return true;
 }
 
+void Engine::setTouchModel(bool enabled, float weight, int minTaps) {
+    touchModel_.configure(enabled, weight, minTaps);
+}
+
+void Engine::setTouchPatterns(const int32_t* codes, const float* taps, const float* meanX,
+                              const float* meanY, const float* varianceX, const float* varianceY,
+                              const float* covariance, int count) {
+    touchModel_.set(codes, taps, meanX, meanY, varianceX, varianceY, covariance, count);
+}
+
 const PackedTrie* Engine::activeTrie(int packIndex) const {
     if (packIndex < 0 || packIndex >= kMaxPacks) {
         return nullptr;
@@ -1145,9 +1156,15 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
         const int neighbourCount = geometry_.neighbours(typed, &neighbourCodes, &neighbourCosts);
 
         // Substitution: the finger landed one key over. Slot 0 is the exact match, already
-        // pushed above.
+        // pushed above. With the request's taps, the touch model prices each neighbour.
         for (int i = 1; i < neighbourCount; ++i) {
-            const float cost = frame.cost + neighbourCosts[i];
+            const float step =
+                queryTapped_
+                    ? touchModel_.substitutionCost(geometry_, typed, neighbourCodes[i],
+                                                   queryTapX_[frame.inputPos],
+                                                   queryTapY_[frame.inputPos], neighbourCosts[i])
+                    : neighbourCosts[i];
+            const float cost = frame.cost + step;
             if (cost > maxCost) {
                 continue;
             }
@@ -1957,6 +1974,14 @@ int Engine::candidateForPack(int packIndex, const char* word, size_t wordLength,
 int Engine::suggest(const char* composing, size_t composingLength, const char* previous1,
                     size_t previous1Length, const char* previous2, size_t previous2Length,
                     Candidate* out, int maxOut) {
+    return suggest(composing, composingLength, previous1, previous1Length, previous2,
+                   previous2Length, nullptr, nullptr, 0, out, maxOut);
+}
+
+int Engine::suggest(const char* composing, size_t composingLength, const char* previous1,
+                    size_t previous1Length, const char* previous2, size_t previous2Length,
+                    const float* tapX, const float* tapY, int tapCount, Candidate* out,
+                    int maxOut) {
     if (!created_ || out == nullptr || maxOut <= 0) {
         return 0;
     }
@@ -1965,12 +1990,28 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     phraseCount_ = 0;
 
     uint32_t folded[kMaxComposing];
+    int source[kMaxComposing];
     int foldedLength = 0;
     if (composing != nullptr && composingLength > 0) {
-        foldedLength = foldUtf8(composing, composingLength, folded, kMaxComposing);
+        foldedLength = foldUtf8(composing, composingLength, folded, kMaxComposing, source);
         // Malformed or overlong input gets no suggestions.
         if (foldedLength < 0) {
             return 0;
+        }
+    }
+
+    // The taps line up with the folded code points; each folded one takes its source's tap.
+    struct TapsScope {
+        bool& tapped;
+        ~TapsScope() { tapped = false; }
+    } tapsScope{queryTapped_};
+    queryTapped_ = tapX != nullptr && tapY != nullptr && touchModel_.active();
+    if (queryTapped_) {
+        const float none = std::numeric_limits<float>::quiet_NaN();
+        for (int i = 0; i < foldedLength; ++i) {
+            const bool inRange = source[i] >= 0 && source[i] < tapCount;
+            queryTapX_[i] = inRange ? tapX[source[i]] : none;
+            queryTapY_[i] = inRange ? tapY[source[i]] : none;
         }
     }
 

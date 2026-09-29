@@ -35,6 +35,10 @@ bool sameSpellingIgnoringCase(const char* a, size_t aLength, const char* b, size
 // malformed or longer than `maxOut`. Writes nothing on failure.
 int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut);
 
+// foldUtf8, also writing into `sourceOut` the index of the input code point each folded one
+// came from; a code point that folds to nothing leaves no entry.
+int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut, int* sourceOut);
+
 // The keys on screen and their centres, pushed from Kotlin whenever the view is measured.
 class KeyGeometry {
 public:

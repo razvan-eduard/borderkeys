@@ -724,6 +724,53 @@ class TypingScenarioTest {
         assertFalse((0 until 3).any { rig.orchestrator.taps.isTapped(it) })
     }
 
+    @Test
+    fun `with Learning and the Heatmap on, each request carries where the word's letters were tapped`() {
+        startWithSwitches(learning = true, heatmap = true)
+        rig.tap('t'.code, 4, 11f, 12f)
+        rig.type("h")
+        assertEquals(listOf(11f, Float.NaN) to listOf(12f, Float.NaN), rig.engine.tapsAsked.last())
+    }
+
+    @Test
+    fun `with Learning or the Heatmap off, in a private field or a terminal, no request carries taps`() {
+        val fields = listOf<() -> Unit>(
+            { startWithSwitches(learning = false, heatmap = true) },
+            { startWithSwitches(learning = true, heatmap = false) },
+            {
+                startWithSwitches(learning = true, heatmap = true)
+                rig.startField(privateField = true)
+            },
+            {
+                startWithSwitches(learning = true, heatmap = true)
+                rig.startField(terminalField = true)
+            },
+        )
+        for (field in fields) {
+            field()
+            rig.engine.tapsAsked.clear()
+            rig.tap('t'.code, 4, 11f, 12f)
+            rig.tap('h'.code, 16, 21f, 22f)
+            assertTrue(rig.engine.tapsAsked.isNotEmpty())
+            assertTrue(rig.engine.tapsAsked.all { it == null })
+        }
+    }
+
+    @Test
+    fun `the touch model is on while the heatmap is allowed, at the weight and minimum set`() {
+        rig.orchestrator.applySettings(
+            SMOKE_SETTINGS.copy(learningEnabled = true, heatmapWeight = 1.5f, heatmapMinTaps = 40),
+        )
+        rig.startField()
+        assertEquals(QueuedEngine.TouchModelSetting(true, 1.5f, 40), rig.engine.touchModel)
+        rig.startField(privateField = true)
+        assertEquals(false, rig.engine.touchModel?.enabled)
+        rig.startField()
+        assertEquals(true, rig.engine.touchModel?.enabled)
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true, heatmapEnabled = false))
+        assertEquals(false, rig.engine.touchModel?.enabled)
+    }
+
     // ---- swipes and the ring ------------------------------------------------------------------
 
     @Test
@@ -904,6 +951,14 @@ class TypingScenarioTest {
             listOf(KeyEvent.KEYCODE_T, KeyEvent.KEYCODE_H, KeyEvent.KEYCODE_E),
             rig.host.physicalKeys.map { it.first },
         )
+    }
+
+    /** Opens a fresh field with the Learning switch at [learning] and the Heatmap at [heatmap]. */
+    private fun startWithSwitches(learning: Boolean, heatmap: Boolean) {
+        rig.orchestrator.applySettings(
+            SMOKE_SETTINGS.copy(learningEnabled = learning, heatmapEnabled = heatmap),
+        )
+        rig.startField()
     }
 
     /** Switches the ring on, with [liftKeepsOpen], [timeoutDefault] and [trustedWord], anew. */

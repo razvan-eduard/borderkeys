@@ -28,12 +28,18 @@
  * `--reachable` checks that every word compiled into a shipped pack is retrievable from that
  * pack as itself: it reads the source `.tsv` and queries the pack built from it. `budget` is the
  * number of unreachable rows tolerated, zero when omitted; the exit status is non-zero above it.
+ *
+ * `--centre-taps`, anywhere after the dict dir, taps each letter of a corpus case at its key's
+ * centre, on touch patterns centred on the keys at the reference spread, which price every
+ * substitution as the key geometry does.
  */
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+#include <limits>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -107,9 +113,55 @@ std::vector<Case> readCorpus(const char* path) {
     return cases;
 }
 
+/** Every key of `layout` a pattern centred on it at the reference spread, and the model on. */
+void centrePatterns(Engine& engine, const borderkeys_test::TestLayout& layout) {
+    const float variance = TouchModel::kReferenceSpread * TouchModel::kReferenceSpread;
+    const std::vector<float> taps(layout.count, 1000.0f);
+    const std::vector<float> zero(layout.count, 0.0f);
+    const std::vector<float> spread(layout.count, variance);
+    engine.setTouchPatterns(layout.codes, taps.data(), zero.data(), zero.data(), spread.data(),
+                            spread.data(), zero.data(), layout.count);
+    engine.setTouchModel(true, 1.0f, 1);
+}
+
+/**
+ * Where each code point of `typed` is tapped: an ASCII letter, in either case, at its key's
+ * centre; anything else nowhere, NaN.
+ */
+void centreTaps(const borderkeys_test::TestLayout& layout, const std::string& typed,
+                std::vector<float>& xs, std::vector<float>& ys) {
+    xs.clear();
+    ys.clear();
+    for (const char byte : typed) {
+        const unsigned char unit = static_cast<unsigned char>(byte);
+        // A continuation byte belongs to the code point before it.
+        if ((unit & 0xC0u) == 0x80u) {
+            continue;
+        }
+        float x = std::numeric_limits<float>::quiet_NaN();
+        float y = x;
+        const char letter =
+            (unit >= 'A' && unit <= 'Z') ? static_cast<char>(unit - 'A' + 'a') : byte;
+        layout.centreOf(letter, &x, &y);
+        xs.push_back(x);
+        ys.push_back(y);
+    }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
+    std::vector<char*> arguments(argv, argv + argc);
+    const auto tapsFlag = std::find_if(arguments.begin(), arguments.end(), [](const char* each) {
+        return std::strcmp(each, "--centre-taps") == 0;
+    });
+    const bool centreTapped = tapsFlag != arguments.end();
+    if (centreTapped) {
+        arguments.erase(tapsFlag);
+    }
+    argc = static_cast<int>(arguments.size());
+    argv = arguments.data();
+
     if (argc < 3) {
         std::printf("usage: suggest_eval <dict dir> <corpus.tsv> [tag ...]\n");
         return 2;
@@ -176,6 +228,11 @@ int main(int argc, char** argv) {
         std::printf("the test layout was refused\n");
         return 1;
     }
+    if (centreTapped) {
+        centrePatterns(engine, layout);
+    }
+    std::vector<float> tapXs;
+    std::vector<float> tapYs;
 
     if (reachability) {
         const std::vector<Case> rows = readCorpus(corpusPath);
@@ -284,7 +341,12 @@ int main(int argc, char** argv) {
         std::printf("%-18s %-18s %s\n", "typed", "expected", "autocorrect commits");
         for (const Case& item : cases) {
             Candidate scratch[Engine::kMaxCandidates];
+            if (centreTapped) {
+                centreTaps(layout, item.typed, tapXs, tapYs);
+            }
             engine.suggest(item.typed.c_str(), item.typed.size(), nullptr, 0, nullptr, 0,
+                           centreTapped ? tapXs.data() : nullptr,
+                           centreTapped ? tapYs.data() : nullptr, static_cast<int>(tapXs.size()),
                            scratch, Engine::kMaxCandidates);
             std::string applied;
             // AutoCorrection.correctionFor's known-word guard: a word the dictionaries already
@@ -329,8 +391,13 @@ int main(int argc, char** argv) {
     std::printf("%-18s %-18s %s\n", "typed", "expected", "rank");
     Candidate out[Engine::kMaxCandidates];
     for (const Case& item : cases) {
-        const int count = engine.suggest(item.typed.c_str(), item.typed.size(), nullptr, 0,
-                                         nullptr, 0, out, Engine::kMaxCandidates);
+        if (centreTapped) {
+            centreTaps(layout, item.typed, tapXs, tapYs);
+        }
+        const int count = engine.suggest(
+            item.typed.c_str(), item.typed.size(), nullptr, 0, nullptr, 0,
+            centreTapped ? tapXs.data() : nullptr, centreTapped ? tapYs.data() : nullptr,
+            static_cast<int>(tapXs.size()), out, Engine::kMaxCandidates);
         int rank = -1;
         for (int i = 0; i < count; ++i) {
             uint32_t length = 0;

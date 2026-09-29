@@ -37,7 +37,12 @@ class TypingFlowTest {
 
     private fun field(generation: Int, privateField: Boolean = false) = FieldSession(
         generation = generation,
-        policy = FieldPolicy.of(passwordField = false, privateField = privateField, learningEnabled = true),
+        policy = FieldPolicy.of(
+            passwordField = false,
+            privateField = privateField,
+            learningEnabled = true,
+            heatmapEnabled = true,
+        ),
         addressField = false,
         terminalField = false,
     )

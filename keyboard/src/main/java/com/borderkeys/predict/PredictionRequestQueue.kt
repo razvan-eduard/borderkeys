@@ -14,6 +14,8 @@ internal class PredictionRequestQueue {
     private var pendingComposing: String = ""
     private var pendingPrevious1: String? = null
     private var pendingPrevious2: String? = null
+    private var pendingTapXs: FloatArray? = null
+    private var pendingTapYs: FloatArray? = null
 
     private var workerScheduled = false
     private val generations = NewestWins()
@@ -24,6 +26,13 @@ internal class PredictionRequestQueue {
         private set
     var currentPrevious2: String? = null
         private set
+
+    /** Where each code point of [currentComposing] was tapped, or null for no taps. */
+    var currentTapXs: FloatArray? = null
+        private set
+    var currentTapYs: FloatArray? = null
+        private set
+
     var currentGeneration: Int = -1
         private set
 
@@ -31,9 +40,18 @@ internal class PredictionRequestQueue {
     var droppedRequests: Int = 0
         private set
 
-    /** Records a request. Returns true when no worker is scheduled or running. */
+    /**
+     * Records a request, with where each code point of [composing] was tapped, or null for no
+     * taps. Returns true when no worker is scheduled or running.
+     */
     @Synchronized
-    fun submit(composing: String, previous1: String?, previous2: String?): Boolean {
+    fun submit(
+        composing: String,
+        previous1: String?,
+        previous2: String?,
+        tapXs: FloatArray? = null,
+        tapYs: FloatArray? = null,
+    ): Boolean {
         if (pendingValid) {
             droppedRequests++
         }
@@ -41,6 +59,8 @@ internal class PredictionRequestQueue {
         pendingComposing = composing
         pendingPrevious1 = previous1
         pendingPrevious2 = previous2
+        pendingTapXs = tapXs
+        pendingTapYs = tapYs
 
         val needsWorker = !workerScheduled
         workerScheduled = true
@@ -60,6 +80,8 @@ internal class PredictionRequestQueue {
         currentComposing = pendingComposing
         currentPrevious1 = pendingPrevious1
         currentPrevious2 = pendingPrevious2
+        currentTapXs = pendingTapXs
+        currentTapYs = pendingTapYs
         currentGeneration = generations.issue()
         pendingValid = false
         return true
@@ -79,5 +101,7 @@ internal class PredictionRequestQueue {
         currentComposing = ""
         currentPrevious1 = null
         currentPrevious2 = null
+        currentTapXs = null
+        currentTapYs = null
     }
 }

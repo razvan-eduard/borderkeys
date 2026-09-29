@@ -11,11 +11,28 @@ import com.borderkeys.data.dao.LearnedWord
  * and the callbacks run on the typing flow's thread.
  */
 interface EnginePort {
-    fun requestSuggestions(composing: String, previous1: String?, previous2: String?)
+    /**
+     * Asks about [composing] after [previous1] and [previous2]; [tapXs] and [tapYs] are where each
+     * of its code points was tapped, in the keyboard view's pixels, NaN for none, or null for no
+     * taps.
+     */
+    fun requestSuggestions(
+        composing: String,
+        previous1: String?,
+        previous2: String?,
+        tapXs: FloatArray?,
+        tapYs: FloatArray?,
+    )
 
     fun learn(updates: List<LearnedWord>, previous1: String?, previous2: String?)
 
     fun setPersonalModelEnabled(enabled: Boolean)
+
+    /**
+     * Whether the touch model prices substitutions from taps, how far it moves them from the key
+     * geometry's costs, and how many taps a key needs first.
+     */
+    fun setTouchModel(enabled: Boolean, weight: Float, minTaps: Int)
 
     fun dominantLanguageTag(onResult: (String?) -> Unit)
 

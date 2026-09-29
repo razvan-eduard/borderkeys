@@ -134,7 +134,9 @@ class TypingOrchestrator(
      */
     fun startField(field: FieldSession) {
         session = field
-        session = session.copy(policy = session.policy.withLearning(preferences.learningEnabled))
+        session = session.copy(
+            policy = session.policy.withSwitches(preferences.learningEnabled, preferences.heatmapEnabled),
+        )
         for (flow in flows) {
             flow.startField(session)
         }
@@ -158,7 +160,9 @@ class TypingOrchestrator(
     /** Takes [settings]; with the views up, the learning gate and shift follow them at once. */
     fun applySettings(settings: KeyboardPreferences) {
         preferences = settings
-        session = session.copy(policy = session.policy.withLearning(settings.learningEnabled))
+        session = session.copy(
+            policy = session.policy.withSwitches(settings.learningEnabled, settings.heatmapEnabled),
+        )
         for (flow in flows) {
             flow.applySettings(settings)
         }
@@ -1319,7 +1323,7 @@ class TypingOrchestrator(
 
     /** Asks the engine about the composing word; never for a password field. */
     fun requestSuggestions() {
-        suggestionFlow.request(composing.toString(), wordContext)
+        suggestionFlow.request(composing.toString(), wordContext, composingWord.taps)
     }
 
     /**

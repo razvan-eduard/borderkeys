@@ -19,6 +19,7 @@
 #include "proximity.hpp"
 #include "search_plan.hpp"
 #include "topk.hpp"
+#include "touch_model.hpp"
 #include "user_model.hpp"
 
 #ifdef BORDERKEYS_NEURAL_SWIPE
@@ -132,6 +133,17 @@ public:
                         int count, float keyWidth, float keyHeight);
 
     /**
+     * Whether the touch model prices substitutions, how far it moves them from the geometry's
+     * costs, and how many taps a key needs first; see TouchModel.
+     */
+    void setTouchModel(bool enabled, float weight, int minTaps);
+
+    /** Replaces the touch model's key patterns; see TouchModel::set. */
+    void setTouchPatterns(const int32_t* codes, const float* taps, const float* meanX,
+                          const float* meanY, const float* varianceX, const float* varianceY,
+                          const float* covariance, int count);
+
+    /**
      * How the dictionaries spell `word`, looked up folded, written into `out`; returns the byte
      * count, zero when no dictionary has it.
      */
@@ -171,6 +183,12 @@ public:
     int suggest(const char* composing, size_t composingLength, const char* previous1,
                 size_t previous1Length, const char* previous2, size_t previous2Length,
                 Candidate* out, int maxOut);
+
+    // suggest, with where each code point of `composing` was tapped, in the keyboard view's
+    // pixels: `tapCount` entries, NaN for none. The touch model prices substitutions from them.
+    int suggest(const char* composing, size_t composingLength, const char* previous1,
+                size_t previous1Length, const char* previous2, size_t previous2Length,
+                const float* tapX, const float* tapY, int tapCount, Candidate* out, int maxOut);
 
     /**
      * Decodes a swipe into candidates, best first, from raw touch points in view pixels,
@@ -466,6 +484,12 @@ private:
 
     LanguagePack packs_[kMaxPacks];
     KeyGeometry geometry_;
+    TouchModel touchModel_;
+
+    // The request's taps, aligned with its folded code points; set only while suggest runs.
+    float queryTapX_[kMaxComposing] = {};
+    float queryTapY_[kMaxComposing] = {};
+    bool queryTapped_ = false;
     /** Tier A, the geometric decoder, in every build. */
     std::unique_ptr<GestureDecoder> gestureDecoder_;
 

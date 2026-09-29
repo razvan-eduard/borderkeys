@@ -55,6 +55,21 @@ data class KeyboardPreferences(
      * constants below. What is recorded is the same either way.
      */
     val learningSpeed: Int = LEARNING_BALANCED,
+
+    /**
+     * Whether where the taps land on each key is learned and used to tell which key was meant;
+     * only while [learningEnabled] is on, and never in a private field.
+     */
+    val heatmapEnabled: Boolean = true,
+
+    /** How far the heatmap moves a substitution's cost from the keys' own positions. */
+    val heatmapWeight: Float = DEFAULT_HEATMAP_WEIGHT,
+
+    /** How many taps a key needs before its pattern counts. */
+    val heatmapMinTaps: Int = DEFAULT_HEATMAP_MIN_TAPS,
+
+    /** After how many days a tap counts half as much. */
+    val heatmapHalfLifeDays: Int = DEFAULT_HEATMAP_HALF_LIFE_DAYS,
     val swipeEnabled: Boolean = true,
 
     /**
@@ -665,6 +680,16 @@ data class KeyboardPreferences(
         } else {
             LEARNING_BALANCED
         },
+        heatmapWeight = if (heatmapWeight.isNaN()) {
+            DEFAULT_HEATMAP_WEIGHT
+        } else {
+            heatmapWeight.coerceIn(MIN_HEATMAP_WEIGHT, MAX_HEATMAP_WEIGHT)
+        },
+        heatmapMinTaps = (heatmapMinTaps.coerceIn(MIN_HEATMAP_MIN_TAPS, MAX_HEATMAP_MIN_TAPS) /
+            HEATMAP_MIN_TAPS_STEP) * HEATMAP_MIN_TAPS_STEP,
+        heatmapHalfLifeDays = heatmapHalfLifeDays.coerceIn(
+            MIN_HEATMAP_HALF_LIFE_DAYS, MAX_HEATMAP_HALF_LIFE_DAYS,
+        ),
         bottomOffsetDp = portrait.bottomOffsetDp,
         horizontalOffsetDp = portrait.horizontalOffsetDp,
         landscape = landscape.sanitised(),
@@ -781,6 +806,22 @@ data class KeyboardPreferences(
 
         /** The first time counts. */
         const val LEARNING_IMMEDIATE = 2
+
+        /** [heatmapWeight]'s range and default. */
+        const val MIN_HEATMAP_WEIGHT = 0.5f
+        const val MAX_HEATMAP_WEIGHT = 2.0f
+        const val DEFAULT_HEATMAP_WEIGHT = 1.0f
+
+        /** [heatmapMinTaps]'s range, step and default. */
+        const val MIN_HEATMAP_MIN_TAPS = 10
+        const val MAX_HEATMAP_MIN_TAPS = 100
+        const val HEATMAP_MIN_TAPS_STEP = 10
+        const val DEFAULT_HEATMAP_MIN_TAPS = 30
+
+        /** [heatmapHalfLifeDays]' range and default. */
+        const val MIN_HEATMAP_HALF_LIFE_DAYS = 7
+        const val MAX_HEATMAP_HALF_LIFE_DAYS = 180
+        const val DEFAULT_HEATMAP_HALF_LIFE_DAYS = 60
 
         /** Every dictionary is consulted for every word, whatever language the sentence is in. */
         const val LANGUAGE_LOCK_OFF = 0

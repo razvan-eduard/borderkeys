@@ -16,10 +16,14 @@ data class FieldPolicy(
     val personalAllowed: Boolean,
     /** The keys go in exactly as typed: no correction or rewrite, no space added or removed. */
     val verbatim: Boolean,
+    /** Where the taps land is recorded and used: [personalAllowed], and the Heatmap switch on. */
+    val heatmapAllowed: Boolean,
 ) {
-    /** This policy with the Learning switch at [enabled]. */
-    fun withLearning(enabled: Boolean): FieldPolicy =
-        copy(personalAllowed = enabled && !privateField)
+    /** This policy with the Learning switch at [learning] and the Heatmap switch at [heatmap]. */
+    fun withSwitches(learning: Boolean, heatmap: Boolean): FieldPolicy {
+        val personal = learning && !privateField
+        return copy(personalAllowed = personal, heatmapAllowed = personal && heatmap)
+    }
 
     companion object {
         /** Before any field has started. */
@@ -28,18 +32,25 @@ data class FieldPolicy(
             privateField = false,
             personalAllowed = true,
             verbatim = false,
+            heatmapAllowed = true,
         )
 
         /**
          * The policy of a field: [passwordField] allows no dictionary words and takes the keys
-         * verbatim, [privateField] allows nothing personal, and the personal dictionary needs
-         * [learningEnabled] as well.
+         * verbatim, [privateField] allows nothing personal, the personal dictionary needs
+         * [learningEnabled] as well, and the heatmap needs [heatmapEnabled] on top.
          */
-        fun of(passwordField: Boolean, privateField: Boolean, learningEnabled: Boolean) = FieldPolicy(
+        fun of(
+            passwordField: Boolean,
+            privateField: Boolean,
+            learningEnabled: Boolean,
+            heatmapEnabled: Boolean,
+        ) = FieldPolicy(
             suggestionsAllowed = !passwordField,
             privateField = privateField,
             personalAllowed = learningEnabled && !privateField,
             verbatim = passwordField,
+            heatmapAllowed = learningEnabled && !privateField && heatmapEnabled,
         )
     }
 }

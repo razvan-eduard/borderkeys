@@ -100,12 +100,15 @@ class LearningFlow(
     }
 
     /**
-     * Whether anything is learned, and whether the personal dictionary is consulted: off with the
-     * learning switch or in a private field.
+     * Whether anything is learned, whether the personal dictionary is consulted, and whether the
+     * touch model prices taps: off with their switches or in a private field.
      */
     private fun applyGate() {
         learning.enabled = session.policy.personalAllowed
         engine.setPersonalModelEnabled(learning.enabled)
+        engine.setTouchModel(
+            session.policy.heatmapAllowed, settings.heatmapWeight, settings.heatmapMinTaps,
+        )
     }
 
     /** Writes the buffered learning to the [store]. */

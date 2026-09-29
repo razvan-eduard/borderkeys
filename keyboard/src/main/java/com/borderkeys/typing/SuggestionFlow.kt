@@ -37,10 +37,11 @@ class SuggestionFlow(
     // ---- asking --------------------------------------------------------------------------------
 
     /**
-     * Asks the engine about [query] after [context]. A private field's text is re-read into the
+     * Asks the engine about [query] after [context], with [taps], where each of its code points
+     * was typed, while the field allows the heatmap. A private field's text is re-read into the
      * strip first, and nothing is asked where the field allows no suggestions.
      */
-    fun request(query: String, context: WordContext) {
+    fun request(query: String, context: WordContext, taps: TapTrail) {
         lastQuery = query
         if (session.policy.privateField) {
             host.refreshPrivateReveal()
@@ -49,7 +50,11 @@ class SuggestionFlow(
             return
         }
         requestedAt = clock.uptimeMillis()
-        engine.requestSuggestions(query, context.previous1, context.previous2)
+        val tapped = session.policy.heatmapAllowed && taps.size > 0
+        engine.requestSuggestions(
+            query, context.previous1, context.previous2,
+            if (tapped) taps.copyXs() else null, if (tapped) taps.copyYs() else null,
+        )
     }
 
     /** Asks about a terminal's [word], with no words before it. */
@@ -59,7 +64,7 @@ class SuggestionFlow(
             return
         }
         requestedAt = clock.uptimeMillis()
-        engine.requestSuggestions(word, null, null)
+        engine.requestSuggestions(word, null, null, null, null)
     }
 
     /**
@@ -69,7 +74,7 @@ class SuggestionFlow(
     fun requestAdopted(word: String, context: WordContext) {
         lastQuery = word
         if (session.policy.suggestionsAllowed) {
-            engine.requestSuggestions(word, context.previous1, context.previous2)
+            engine.requestSuggestions(word, context.previous1, context.previous2, null, null)
         }
     }
 
