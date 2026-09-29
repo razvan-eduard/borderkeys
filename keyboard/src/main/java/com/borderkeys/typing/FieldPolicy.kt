@@ -14,6 +14,8 @@ data class FieldPolicy(
     val privateField: Boolean,
     /** The personal dictionary is recorded and consulted. */
     val personalAllowed: Boolean,
+    /** The keys go in exactly as typed: no correction or rewrite, no space added or removed. */
+    val verbatim: Boolean,
 ) {
     /** This policy with the Learning switch at [enabled]. */
     fun withLearning(enabled: Boolean): FieldPolicy =
@@ -21,16 +23,23 @@ data class FieldPolicy(
 
     companion object {
         /** Before any field has started. */
-        val NONE = FieldPolicy(suggestionsAllowed = true, privateField = false, personalAllowed = true)
+        val NONE = FieldPolicy(
+            suggestionsAllowed = true,
+            privateField = false,
+            personalAllowed = true,
+            verbatim = false,
+        )
 
         /**
-         * The policy of a field: [passwordField] allows no dictionary words, [privateField] allows
-         * nothing personal, and the personal dictionary needs [learningEnabled] as well.
+         * The policy of a field: [passwordField] allows no dictionary words and takes the keys
+         * verbatim, [privateField] allows nothing personal, and the personal dictionary needs
+         * [learningEnabled] as well.
          */
         fun of(passwordField: Boolean, privateField: Boolean, learningEnabled: Boolean) = FieldPolicy(
             suggestionsAllowed = !passwordField,
             privateField = privateField,
             personalAllowed = learningEnabled && !privateField,
+            verbatim = passwordField,
         )
     }
 }

@@ -8,7 +8,8 @@ import com.borderkeys.ime.PunctuationSpace
 
 /**
  * The spaces the keyboard writes or takes back on its own: after a mark, before one, the full
- * stop two spaces make, and a space typed right after one it added.
+ * stop two spaces make, and a space typed right after one it added. A field that takes the keys
+ * verbatim gets none of them.
  */
 class SpacingFlow(private val clock: TypingClock) : TypingFlow() {
 
@@ -56,6 +57,7 @@ class SpacingFlow(private val clock: TypingClock) : TypingFlow() {
      */
     fun doubleSpaceMakesPeriod(composingEmpty: Boolean, editor: FieldEditor): Boolean =
         composingEmpty && settings.doubleSpacePeriod && !session.addressField &&
+            !session.policy.verbatim &&
             clock.currentTimeMillis() - lastSpaceAt < DOUBLE_SPACE_MILLIS &&
             endsWithWordCharacterBeforeSpace(editor)
 
@@ -83,7 +85,7 @@ class SpacingFlow(private val clock: TypingClock) : TypingFlow() {
      * except the one French writes before ! ? ; :.
      */
     fun removeSpaceBeforeMark(code: Int, composingEmpty: Boolean, editor: FieldEditor) {
-        if (!composingEmpty || !settings.removeSpaceBeforePunctuation ||
+        if (!composingEmpty || !settings.removeSpaceBeforePunctuation || session.policy.verbatim ||
             !isTightPunctuation(code) || isFrenchSpacedPunctuation(code)
         ) {
             return
@@ -97,7 +99,7 @@ class SpacingFlow(private val clock: TypingClock) : TypingFlow() {
     /** The space that follows the mark [code], or nothing at all; see [PunctuationSpace]. */
     fun spaceAfterMark(code: Int, editor: FieldEditor): String {
         val follows = PunctuationSpace.follows(
-            enabled = settings.spaceAfterPunctuation,
+            enabled = settings.spaceAfterPunctuation && !session.policy.verbatim,
             addressField = session.addressField,
             insideNumbers = settings.spaceInsideNumbers,
             tightPunctuation = isTightPunctuation(code),
