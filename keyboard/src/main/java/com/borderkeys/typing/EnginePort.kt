@@ -35,6 +35,9 @@ interface EnginePort {
      */
     fun setTouchModel(learned: Boolean, weight: Float, minTaps: Int)
 
+    /** Replaces the learned touch patterns; empty ones clear them. */
+    fun setTouchPatterns(patterns: TouchPatterns)
+
     fun dominantLanguageTag(onResult: (String?) -> Unit)
 
     fun dominantPack(onResult: (Int) -> Unit)

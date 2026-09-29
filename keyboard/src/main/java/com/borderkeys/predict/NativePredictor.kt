@@ -222,6 +222,21 @@ internal object NativePredictor {
      */
     external fun nativeSetTouchModel(handle: Long, learned: Boolean, weight: Float, minTaps: Int)
 
+    /**
+     * Replaces the learned touch patterns: per letter code, the tap weight, the mean offset from
+     * the key's centre and the covariance, in key units. Empty arrays clear them.
+     */
+    external fun nativeSetTouchPatterns(
+        handle: Long,
+        codes: IntArray,
+        taps: FloatArray,
+        meanX: FloatArray,
+        meanY: FloatArray,
+        varianceX: FloatArray,
+        varianceY: FloatArray,
+        covariance: FloatArray,
+    )
+
     /** The language tag of [nativeDominantPack]'s pack, or null while the engine is undecided. */
     external fun nativeDominantLanguageTag(handle: Long): String?
 

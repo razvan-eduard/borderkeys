@@ -4,6 +4,7 @@
 package com.borderkeys.typing
 
 import android.text.InputType
+import com.borderkeys.data.entity.KeyTouch
 import com.borderkeys.data.theme.KeyboardPreferences
 
 /**
@@ -179,9 +180,15 @@ internal class ManualClock : TypingClock {
     }
 }
 
-/** Every batch written, in order. */
+/** Every batch written, in order, and the heatmap totals it serves by bucket. */
 internal class MemoryLearningStore : LearningStore {
     val batches = mutableListOf<LearningBatch>()
+
+    /** What [loadTouches] answers, by bucket. */
+    val storedTouches = mutableMapOf<String, List<KeyTouch>>()
+
+    /** Every heatmap total written, in order. */
+    val touches: List<KeyTouch> get() = batches.flatMap { it.touches }
 
     override fun persist(batch: LearningBatch) {
         batches += batch
@@ -192,4 +199,27 @@ internal class MemoryLearningStore : LearningStore {
             batches += batch
         }
     }
+
+    override fun loadTouches(bucket: String, onLoaded: (List<KeyTouch>) -> Unit) {
+        onLoaded(storedTouches[bucket].orEmpty())
+    }
 }
+
+/** The harness's QWERTY letters as the keyboard view would snapshot them, in [bucket]. */
+internal fun harnessGeometry(bucket: KeyGeometrySnapshot.Bucket = HARNESS_BUCKET): KeyGeometrySnapshot {
+    val letters = "qwertyuiopasdfghjklzxcvbnm"
+    val centres = letters.map { com.borderkeys.predict.Pipeline.keyCentre(it) }
+    return KeyGeometrySnapshot(
+        bucket = bucket,
+        keyWidth = HARNESS_KEY_WIDTH,
+        keyHeight = HARNESS_KEY_HEIGHT,
+        density = 2.75f,
+        codes = IntArray(letters.length) { letters[it].code },
+        centreX = FloatArray(letters.length) { centres[it].first },
+        centreY = FloatArray(letters.length) { centres[it].second },
+    )
+}
+
+internal val HARNESS_BUCKET = KeyGeometrySnapshot.Bucket(landscape = false, positionMode = 0, layoutId = "qwerty")
+internal const val HARNESS_KEY_WIDTH = 108f
+internal const val HARNESS_KEY_HEIGHT = 160f

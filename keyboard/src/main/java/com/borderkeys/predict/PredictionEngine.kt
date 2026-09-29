@@ -16,6 +16,7 @@ import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserWord
 import com.borderkeys.ime.WordStems
 import com.borderkeys.typing.EnginePort
+import com.borderkeys.typing.TouchPatterns
 
 /**
  * Owns the native engine and the one thread it runs on. Every native call goes through
@@ -431,6 +432,17 @@ class PredictionEngine(
         worker.post {
             withHandle(Unit) { current ->
                 NativePredictor.nativeSetTouchModel(current, learned, weight, minTaps)
+            }
+        }
+    }
+
+    override fun setTouchPatterns(patterns: TouchPatterns) {
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeSetTouchPatterns(
+                    current, patterns.codes, patterns.taps, patterns.meanX, patterns.meanY,
+                    patterns.varianceX, patterns.varianceY, patterns.covariance,
+                )
             }
         }
     }

@@ -13,6 +13,7 @@ import com.borderkeys.data.dao.UserBigramDao
 import com.borderkeys.data.dao.UserTrigramDao
 import com.borderkeys.data.dao.UserWordDao
 import com.borderkeys.data.entity.BlockedWord
+import com.borderkeys.data.entity.KeyTouch
 import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserWord
@@ -170,6 +171,26 @@ class DictionaryRepository internal constructor(
             keyTouches.deleteAll()
         }
         edited()
+    }
+
+    /** The heatmap's totals for [bucket], as stored. */
+    suspend fun touchesIn(bucket: String): List<KeyTouch> = keyTouches.inBucket(bucket)
+
+    /**
+     * Adds [touches], totals of taps since the last write, to what is stored, the stored totals
+     * first weighed down by their age.
+     */
+    suspend fun applyTouches(touches: List<KeyTouch>, halfLifeMillis: Long) {
+        if (touches.isEmpty()) {
+            return
+        }
+        database.withTransaction {
+            for (touch in touches) {
+                keyTouches.upsert(
+                    KeyTouches.merged(keyTouches.find(touch.bucket, touch.code), touch, halfLifeMillis),
+                )
+            }
+        }
     }
 
     /** Forgets where taps land on every key. The words stay. */

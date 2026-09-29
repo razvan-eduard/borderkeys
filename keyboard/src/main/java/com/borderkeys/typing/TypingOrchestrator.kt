@@ -97,6 +97,10 @@ class TypingOrchestrator(
 
     /** The letter keys as the taps land on them, for the current field and layout. */
     var keyGeometry: KeyGeometrySnapshot? = null
+        set(value) {
+            field = value
+            learningFlow.geometry = value
+        }
 
     /** The editor's selection, as of the last report, [selectionStart] never after [selectionEnd]. */
     var selectionStart = 0
@@ -474,6 +478,7 @@ class TypingOrchestrator(
         // A delimiter ends the word. What replaces the typed word, if anything, is decided by
         // [commitOutcome]; a rewrite is committed in its place and can be reverted.
         val typed = composing.toString()
+        val typedTaps = TypedTaps.of(composing, composingWord.taps)
         val outcome = commitOutcome(typed, shifted)
         val rewrite = outcome.isRewrite
         val correction = outcome.text
@@ -525,7 +530,7 @@ class TypingOrchestrator(
             commitFlow.setPending(
                 PendingCorrection(
                     typed, correction, delimiter, contextWord, grandContextWord,
-                    composingWord.capitalisedByUser, learn = !rewrite,
+                    composingWord.capitalisedByUser, learn = !rewrite, taps = typedTaps,
                 ),
             )
             if (!rewrite) {
@@ -533,7 +538,10 @@ class TypingOrchestrator(
             }
         } else {
             if (typed.isNotEmpty()) {
-                learningFlow.record(typed, contextWord, grandContextWord, composingWord.capitalisedByUser)
+                learningFlow.record(
+                    typed, contextWord, grandContextWord, composingWord.capitalisedByUser,
+                    taps = typedTaps,
+                )
             }
             commitFlow.dropPending()
         }
@@ -619,6 +627,7 @@ class TypingOrchestrator(
         }
         val contextWord = wordContext.previous1
         val grandContextWord = wordContext.previous2
+        val typedTaps = TypedTaps.of(composing, composingWord.taps)
         editor.beginBatchEdit()
         val finished = finishComposing(editor)
         val imeOptions = session.imeOptions
@@ -641,7 +650,10 @@ class TypingOrchestrator(
             afterNewlineCommitted()
         }
         if (finished != null) {
-            learningFlow.record(finished, contextWord, grandContextWord, composingWord.capitalisedByUser)
+            learningFlow.record(
+                finished, contextWord, grandContextWord, composingWord.capitalisedByUser,
+                taps = typedTaps,
+            )
         }
         // Enter clears the context for the next word.
         wordContext = WordContext.NONE
@@ -884,13 +896,17 @@ class TypingOrchestrator(
         }
         val contextWord = wordContext.previous1
         val grandContextWord = wordContext.previous2
+        val typedTaps = TypedTaps.of(composing, composingWord.taps)
         // The caret report this edit causes is not a caret move.
         ownEditPending = true
         editor.beginBatchEdit()
         val finished = finishComposing(editor)
         editor.endBatchEdit()
         if (finished != null) {
-            learningFlow.record(finished, contextWord, grandContextWord, composingWord.capitalisedByUser)
+            learningFlow.record(
+                finished, contextWord, grandContextWord, composingWord.capitalisedByUser,
+                taps = typedTaps,
+            )
         }
     }
 
@@ -1048,7 +1064,7 @@ class TypingOrchestrator(
         }
         learningFlow.record(
             pending.corrected, pending.contextWord, pending.grandContextWord,
-            pending.deliberateCapital,
+            pending.deliberateCapital, taps = pending.taps,
         )
     }
 
@@ -1074,7 +1090,7 @@ class TypingOrchestrator(
         if (revert.learnCorrected) {
             learningFlow.record(
                 pending.corrected, pending.contextWord, pending.grandContextWord,
-                pending.deliberateCapital,
+                pending.deliberateCapital, taps = pending.taps,
             )
         }
         if (!revert.reverted) {
@@ -1085,7 +1101,7 @@ class TypingOrchestrator(
         // personal dictionary, never blocked.
         learningFlow.record(
             pending.typed, pending.contextWord, pending.grandContextWord,
-            pending.deliberateCapital, asserted = true,
+            pending.deliberateCapital, asserted = true, taps = pending.taps,
         )
         host.forgetWord(pending.corrected, blockWhenNotPersonal = false)
         host.playEffect(EffectEvent.CorrectionReverted, pending.typed)
@@ -1180,6 +1196,7 @@ class TypingOrchestrator(
         // Read before the commit.
         val contextWord = wordContext.previous1
         val grandContextWord = wordContext.previous2
+        val typedTaps = TypedTaps.of(composing, composingWord.taps)
         editor.beginBatchEdit()
         // A pick replaces the word being typed or the word the caret sits in; with neither, it
         // is a prediction inserted at the caret. An adopted word is deleted first, when it is
@@ -1222,8 +1239,12 @@ class TypingOrchestrator(
         val words = word.split(' ').filter { it.isNotEmpty() }
         var previous = contextWord
         var grandPrevious = grandContextWord
-        for (part in words) {
-            learningFlow.record(part, previous, grandPrevious, asserted = true)
+        for ((index, part) in words.withIndex()) {
+            // The letters typed before the pick line up with the first word's.
+            learningFlow.record(
+                part, previous, grandPrevious, asserted = true,
+                taps = if (index == 0) typedTaps else null, completion = true,
+            )
             grandPrevious = previous
             previous = part
         }
@@ -1320,6 +1341,9 @@ class TypingOrchestrator(
             revertable = commitFlow.revertableWord(),
         )
     }
+
+    /** Reads the heatmap's stored totals again, after an edit on the settings screen. */
+    fun reloadTouches() = learningFlow.reloadTouches()
 
     /** Asks the engine about the composing word; never for a password field. */
     fun requestSuggestions() {
