@@ -19,9 +19,10 @@ OUT = pathlib.Path("settings/src/main/java/com/borderkeys/settings/SettingsIndex
 # Sources that hold rows of a screen without being named after it.
 EXTRA_SOURCES = {"EventEffectsSection.kt": "Effects"}
 
-# Sources named like a screen that are not reached from Home: no entry in the Screen enum
-# (opened by an intent), rows that only open other screens, or no fixed row at all.
-SKIPPED_SCREENS = {"Home", "Features", "ProcessText", "Transfer"}
+# Sources named like a screen whose rows are not indexed: no entry in the Screen enum (opened by
+# an intent), rows that only open other screens, or no fixed row beyond a card titled like the
+# screen itself.
+SKIPPED_SCREENS = {"Home", "Features", "ProcessText", "Transfer", "LearnedWords", "LearnedPhrases"}
 
 TITLE = r"\(\s*(?:title\s*=\s*)?strings(?:\[|\.getString\()Keys\.([A-Z0-9_]+)"
 CARD = re.compile(r"SettingsSectionCard" + TITLE)

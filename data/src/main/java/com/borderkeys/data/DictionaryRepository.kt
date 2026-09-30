@@ -21,6 +21,7 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
 
@@ -39,12 +40,11 @@ class DictionaryRepository internal constructor(
     val wordCount: Flow<Int> = userWords.observeCount()
     val blocked: Flow<List<BlockedWord>> = blockedWords.observeAll()
 
-    /** The pairs and triples the settings screen lists, most used first. */
-    fun topPairsLive(limit: Int = MAX_PHRASES_LISTED): Flow<List<UserBigram>> =
-        userBigrams.observeTop(limit)
-
-    fun topTriplesLive(limit: Int = MAX_PHRASES_LISTED): Flow<List<UserTrigram>> =
-        userTrigrams.observeTop(limit)
+    /** Every learned pair and triple, most used first. */
+    val phrases: Flow<List<UserPhrase>> =
+        combine(userBigrams.observeAll(), userTrigrams.observeAll()) { pairs, triples ->
+            UserPhrase.merged(pairs, triples)
+        }
 
     val pairCount: Flow<Int> = userBigrams.observeCount()
     val tripleCount: Flow<Int> = userTrigrams.observeCount()
@@ -159,18 +159,37 @@ class DictionaryRepository internal constructor(
         edited()
     }
 
-    /** Forgets one pair and every triple that runs through it. The words stay. */
-    suspend fun forgetPair(previousWord: String, word: String) {
+    /**
+     * Forgets [phrase]: a pair with every triple that runs through it, or one triple, whose pairs
+     * stay. The words stay.
+     */
+    suspend fun forgetPhrase(phrase: UserPhrase) = forgetPhrases(listOf(phrase))
+
+    /** Forgets [phrases] as [forgetPhrase] does, in one transaction. */
+    suspend fun forgetPhrases(phrases: Collection<UserPhrase>) {
+        if (phrases.isEmpty()) {
+            return
+        }
         database.withTransaction {
-            userBigrams.delete(previousWord, word)
-            userTrigrams.deleteContainingPair(previousWord, word)
+            for (phrase in phrases) {
+                val words = phrase.words
+                if (words.size == 2) {
+                    userBigrams.delete(words[0], words[1])
+                    userTrigrams.deleteContainingPair(words[0], words[1])
+                } else {
+                    userTrigrams.delete(words[0], words[1], words[2])
+                }
+            }
         }
         edited()
     }
 
-    /** Forgets one triple. Its pairs and words stay. */
-    suspend fun forgetTriple(previousWord2: String, previousWord1: String, word: String) {
-        userTrigrams.delete(previousWord2, previousWord1, word)
+    /** Forgets every pair and triple. The words stay. */
+    suspend fun forgetAllPhrases() {
+        database.withTransaction {
+            userBigrams.deleteAll()
+            userTrigrams.deleteAll()
+        }
         edited()
     }
 
@@ -235,8 +254,5 @@ class DictionaryRepository internal constructor(
 
         /** Matches UserModel::kMaxTrigrams. */
         const val MAX_TRIGRAMS_IN_MEMORY = 2_048
-
-        /** How many pairs, and how many triples, the settings screen lists. */
-        const val MAX_PHRASES_LISTED = 100
     }
 }
