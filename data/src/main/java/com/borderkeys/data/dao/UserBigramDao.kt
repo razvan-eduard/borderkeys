@@ -55,9 +55,9 @@ interface UserBigramDao {
     @Query("DELETE FROM user_bigrams")
     suspend fun deleteAll()
 
-    /** The pairs the settings screen lists, most used first, kept live by Room. */
-    @Query("SELECT * FROM user_bigrams ORDER BY count DESC, lastUsedAt DESC LIMIT :limit")
-    fun observeTop(limit: Int): Flow<List<UserBigram>>
+    /** Every pair, most used first, then most recent, kept live by Room. */
+    @Query("SELECT * FROM user_bigrams ORDER BY count DESC, lastUsedAt DESC")
+    fun observeAll(): Flow<List<UserBigram>>
 
     @Query("SELECT COUNT(*) FROM user_bigrams")
     fun observeCount(): Flow<Int>

@@ -43,9 +43,16 @@ class SettingsIndexTest {
 
     @Test
     fun `a word finds the card that carries it, under its screen`() {
-        val match = SettingsSearch.find("phrases", ::text).single { it.screen == Screen.Dictionary }
-        assertEquals("Learned phrases", match.title)
+        val match = SettingsSearch.find("learned", ::text).single { it.screen == Screen.Dictionary }
+        assertEquals("Learned", match.title)
         assertEquals(text(Keys.SCREEN_DICTIONARY_AND_HEATMAP), match.place)
+    }
+
+    @Test
+    fun `a list page is found once, by its own title`() {
+        val match = SettingsSearch.find("learned words", ::text).single()
+        assertEquals(Screen.LearnedWords, match.screen)
+        assertEquals(null, match.place)
     }
 
     @Test
@@ -68,7 +75,7 @@ class SettingsIndexTest {
     fun `every word of the query has to be in the title`() {
         assertEquals(1, SettingsSearch.find("learned phrases", ::text).size)
         assertEquals(1, SettingsSearch.find("PHRASES learned", ::text).size)
-        assertEquals(2, SettingsSearch.find("phrases", ::text).size)
+        assertEquals(3, SettingsSearch.find("phrases", ::text).size)
         assertTrue(SettingsSearch.find("learned zebra", ::text).isEmpty())
     }
 
@@ -135,7 +142,7 @@ class SettingsIndexTest {
         const val SCREEN_SUFFIX = "Screen.kt"
         const val CARD_NAME = "SettingsSectionCard"
         val EXTRA_SOURCES = mapOf("EventEffectsSection.kt" to "Effects")
-        val SKIPPED_SCREENS = setOf("Home", "Features", "ProcessText", "Transfer")
+        val SKIPPED_SCREENS = setOf("Home", "Features", "ProcessText", "Transfer", "LearnedWords", "LearnedPhrases")
         const val TITLE = """\(\s*(?:title\s*=\s*)?strings(?:\[|\.getString\()Keys\.([A-Z0-9_]+)"""
         val CARD = Regex(CARD_NAME + TITLE)
         val ANY_CARD = Regex("""SettingsSectionCard\(""")

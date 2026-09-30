@@ -36,7 +36,6 @@ import com.borderkeys.data.KeyTouches
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.borderkeys.data.entity.UserBigram
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.TextShortcut
@@ -64,8 +63,6 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
 
     val wordCount by repository.wordCount.collectAsStateWithLifecycle(initialValue = 0)
     val blocked by repository.blocked.collectAsStateWithLifecycle(initialValue = emptyList())
-    val pairs by repository.topPairsLive().collectAsStateWithLifecycle(initialValue = emptyList())
-    val triples by repository.topTriplesLive().collectAsStateWithLifecycle(initialValue = emptyList())
     val pairCount by repository.pairCount.collectAsStateWithLifecycle(initialValue = 0)
     val tripleCount by repository.tripleCount.collectAsStateWithLifecycle(initialValue = 0)
     val touchTaps by repository.touchTaps.collectAsStateWithLifecycle(initialValue = 0)
@@ -301,60 +298,16 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                 modifier = Modifier.padding(horizontal = 12.dp),
             ) { Text(strings[Keys.DICTIONARY_SHORTCUT_ADD]) }
         }
-        // The list itself is a page of its own.
-        SettingsSectionCard(strings[Keys.SCREEN_LEARNED_WORDS]) {
+        // Each list is a page of its own.
+        SettingsSectionCard(strings[Keys.DICTIONARY_LEARNED]) {
             SettingRow(
-                title = strings.getString(Keys.DICTIONARY_ALL_LEARNED_WORDS, wordCount),
-                trailing = {
-                    Icon(
-                        painter = painterResource(com.borderkeys.keyboard.R.drawable.bk_chevron_down),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.rotate(-90f),
-                    )
-                },
+                title = strings.getString(Keys.DICTIONARY_WORDS_COUNT, wordCount),
+                trailing = { PageChevron() },
             ) { open(Screen.LearnedWords) }
-        }
-        // Every learned pair and triple, each with its own Forget.
-        SettingsSectionCard(strings.getString(Keys.DICTIONARY_PHRASES, pairCount + tripleCount)) {
-            Explanation(strings[Keys.DICTIONARY_PHRASES_NOTE])
-            if (pairs.isEmpty() && triples.isEmpty()) {
-                SettingRow(title = strings[Keys.DICTIONARY_NOTHING_LEARNED_YET])
-            }
-            for (pair in pairs) {
-                val phrase = if (pair.previousWord == UserBigram.SENTENCE_START) {
-                    strings.getString(Keys.DICTIONARY_SENTENCE_OPENER, pair.word)
-                } else {
-                    listOf(pair.previousWord, pair.word).joinToString(WORD_SEPARATOR)
-                }
-                SettingRow(
-                    title = phrase,
-                    subtitle = strings.getString(Keys.DICTIONARY_PHRASE_USED, pair.count),
-                    trailing = {
-                        TextButton(onClick = {
-                            scope.launch { repository.forgetPair(pair.previousWord, pair.word) }
-                        }) { Text(strings[Keys.DICTIONARY_FORGET]) }
-                    },
-                )
-            }
-            for (triple in triples) {
-                val phrase = listOf(triple.previousWord2, triple.previousWord1, triple.word)
-                    .joinToString(WORD_SEPARATOR)
-                SettingRow(
-                    title = phrase,
-                    subtitle = strings.getString(Keys.DICTIONARY_PHRASE_USED, triple.count),
-                    trailing = {
-                        TextButton(onClick = {
-                            scope.launch {
-                                repository.forgetTriple(triple.previousWord2, triple.previousWord1, triple.word)
-                            }
-                        }) { Text(strings[Keys.DICTIONARY_FORGET]) }
-                    },
-                )
-            }
-            if (pairCount + tripleCount > pairs.size + triples.size) {
-                Explanation(strings.getString(Keys.DICTIONARY_SHOWING_PHRASES, pairs.size + triples.size))
-            }
+            SettingRow(
+                title = strings.getString(Keys.DICTIONARY_PHRASES_COUNT, pairCount + tripleCount),
+                trailing = { PageChevron() },
+            ) { open(Screen.LearnedPhrases) }
         }
         SettingsSectionCard(strings.getString(Keys.DICTIONARY_BLOCKED, blocked.size)) {
             Explanation(
@@ -437,8 +390,16 @@ internal fun ConfirmDialog(
     )
 }
 
-/** Between the words of a listed phrase. */
-private const val WORD_SEPARATOR = " "
+/** The arrow at the end of a row that opens a page of its own. */
+@Composable
+private fun PageChevron() {
+    Icon(
+        painter = painterResource(com.borderkeys.keyboard.R.drawable.bk_chevron_down),
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.rotate(-90f),
+    )
+}
 
 /** The layout the heatmap preview shows before anything is learned. */
 private const val DEFAULT_PREVIEW_LAYOUT = "qwerty"

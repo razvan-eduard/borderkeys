@@ -78,9 +78,9 @@ interface UserTrigramDao {
     @Query("DELETE FROM user_trigrams")
     suspend fun deleteAll()
 
-    /** The triples the settings screen lists, most used first, kept live by Room. */
-    @Query("SELECT * FROM user_trigrams ORDER BY count DESC, lastUsedAt DESC LIMIT :limit")
-    fun observeTop(limit: Int): Flow<List<UserTrigram>>
+    /** Every triple, most used first, then most recent, kept live by Room. */
+    @Query("SELECT * FROM user_trigrams ORDER BY count DESC, lastUsedAt DESC")
+    fun observeAll(): Flow<List<UserTrigram>>
 
     @Query("SELECT COUNT(*) FROM user_trigrams")
     fun observeCount(): Flow<Int>
