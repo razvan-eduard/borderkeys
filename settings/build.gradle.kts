@@ -38,6 +38,12 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            all {
+                // The English catalogue the index test reads from disk: a change to it reruns them.
+                it.inputs.file(
+                    rootProject.layout.projectDirectory.file("i18n/src/main/assets/translations/en.json"),
+                ).withPropertyName("englishCatalogue").withPathSensitivity(PathSensitivity.NONE)
+            }
         }
     }
 }

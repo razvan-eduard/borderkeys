@@ -33,6 +33,12 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            all {
+                // The engine header the pack limit test reads from disk: a change to it reruns them.
+                it.inputs.file(
+                    rootProject.layout.projectDirectory.file("keyboard/src/main/cpp/engine.hpp"),
+                ).withPropertyName("engineHeader").withPathSensitivity(PathSensitivity.NONE)
+            }
         }
     }
 }
