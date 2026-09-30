@@ -117,11 +117,14 @@ An unknown field is private.
 
 ### Two checks, not one
 
-Private mode is enforced twice, independently, which is the right number for a rule whose failure
-mode is a password in the personal dictionary:
+Private mode is decided once, at the field's start, into the field's `FieldPolicy`, and enforced
+twice, which is the right number for a rule whose failure mode is a password in the personal
+dictionary:
 
-1. `BorderKeysService` refuses to call `LearningBuffer.record` at all;
-2. `LearningBuffer.enabled` is `false` regardless, so a call that slipped through records nothing.
+1. `LearningFlow` records nothing the policy does not allow — no word, no phrase, no tap — and
+   drops whatever was buffered when a private field starts;
+2. `LearningBuffer.enabled` is `false` regardless, set from the same policy at every field start
+   and every settings change, so a call that slipped through records nothing.
 
 A third, separate switch covers the other direction. `Engine::setPersonalModelEnabled(false)`
 stops the personal model being **consulted**: what this device learned from its owner must not be
@@ -141,9 +144,19 @@ strip, or put back after a correction — raises a second count. A word no dicti
 offered, and left alone by autocorrect, only once it has been chosen or written three times. See
 [`architecture.md`](architecture.md#the-learning-path).
 
+**While the Heatmap switch is on, it also holds where taps land on each key** — per letter and
+per keyboard arrangement (orientation, placement, layout), a tap weight and five sums of the
+taps' offsets from the key's centre: enough for their mean and spread, and nothing that says
+which word was typed or in what order. Raw taps never leave memory, and the totals fade by half
+every thirty days by default. See [`architecture.md`](architecture.md#the-heatmap).
+
+The taps of the word being typed also go with each request to the engine, in every field, to
+price that one answer's corrections; they are used there and kept nowhere.
+
 What is never recorded:
 
-- anything typed in a [private field](#private-fields);
+- anything typed in a [private field](#private-fields), and where its taps landed;
+- where taps land, while Learning or the Heatmap switch is off;
 - any word the user has blocked (`LearningBuffer.setRefusedWords`);
 - the offensive-word list, while that switch is on (`OffensiveWords`);
 - word order beyond three (`kMaxTrigrams`), and only the 2,048 most-used of those.
@@ -156,7 +169,10 @@ through `WordFold` before comparison, so `Shit` is the same refusal as `shit`.
 and triple tables evict least-used entries when full — so a phrase typed once years ago does not
 hold a slot against one typed daily.
 
-Everything learned is visible and deletable in the personal-dictionary screen.
+Everything learned is visible and deletable on the Personal dictionary and heatmap screen. The
+Learned words and Learned phrases pages list every word and phrase, each with a Delete, and a
+search's matches can be deleted together; the heatmap is drawn on the keyboard preview, and
+switching it off deletes it. The heatmap is left out of backups.
 
 ---
 
@@ -225,6 +241,7 @@ useful.
 |---|---|
 | The keyboard exfiltrating what you type | No `INTERNET` permission in the APK, verified on the artefact |
 | A password entering the personal dictionary | `PrivateMode`, enforced twice, on a pure function of `EditorInfo` |
+| The heatmap revealing what was typed | Only per-key totals are written; raw taps never leave memory |
 | An app asking not to be remembered and being remembered anyway | `IME_FLAG_NO_PERSONALIZED_LEARNING` honoured |
 | The database being read after being copied off the device | SQLCipher + Keystore-held key |
 | A copied password landing in the history or on the strip | The platform's sensitive-content flag honoured; private fields capture nothing |
@@ -242,8 +259,8 @@ useful.
 - **A compromised or malicious Android build.** An IME is handed keystrokes by the platform; if
   the platform is hostile, nothing here helps.
 - **Screen capture, or another app with accessibility access.** Outside this app entirely.
-- **Physical access to an unlocked device.** The personal dictionary screen shows what was
-  learned, by design — it has to, or it could not be reviewed and deleted.
+- **Physical access to an unlocked device.** The Personal dictionary and heatmap screen shows
+  what was learned, by design — it has to, or it could not be reviewed and deleted.
 - **Traffic analysis of the assistant's model file**, if a user supplies one from a source that
   watches who downloads it. That transfer is not ours.
 

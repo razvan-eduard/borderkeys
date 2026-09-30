@@ -12,6 +12,48 @@ listed under *Unreleased* and moves under its version when it is tagged. The APK
 attestations and the full commit lists are on the
 [releases page](https://github.com/razvan-eduard/borderkeys/releases).
 
+## Unreleased
+
+- Every tapped letter is read by where the tap landed: a tap near the edge between two keys
+  makes the neighbouring letter a likelier correction, for autocorrect and the strip alike, in
+  every build and with nothing stored. On synthetic taps, autocorrect's right word rose from
+  71–85% to 89–93%.
+- A heatmap, on what is now the Personal dictionary and heatmap screen: with Learning on, the
+  keyboard learns where your own taps land on each key, for each orientation, placement and
+  layout, and reads a key your way once it has thirty taps. The card draws it on the keyboard
+  preview, a glow on each key; how much it counts, how many taps a key needs and how long taps
+  are remembered are its advanced settings. Only a summary per key is kept, never the taps,
+  nothing is learned in a private field, and it stays out of backups. On by default; switching
+  it off asks, then forgets it.
+- The learned words and the learned phrases each have a page of their own, opened from the
+  Learned card: searchable, with Block and Delete on every word and Delete on every phrase, and,
+  while a search filters the list, a button that deletes what it found, after asking. The lists
+  are no longer cut at 200 words and a hundred pairs and triples.
+- The personal dictionary moves only through Backup and transfer: its screen's own CSV export
+  and import are gone.
+- Fixed: a restored backup's words reached the suggestions only once the keyboard restarted;
+  they now count at once.
+- Fixed: Undo right after typing a word took back more than the word, and Redo after some typing
+  wrote the undone text over it.
+- Fixed: in fields built on the platform's own editor, backspace deleted the character before a
+  selection made leftwards, as shift and a slide along the space bar make one, instead of the
+  selection.
+- Fixed: a rewrite the keyboard made — a text shortcut's expansion, a restored apostrophe or
+  capital — was learned as a word when the caret had moved away and backspace came next: "omw"
+  stored "on my way".
+- Fixed: a password field got restored apostrophes, capitals, text shortcuts and the keyboard's
+  own spaces; its keys now go in exactly as typed, and a caret moved back onto a word there no
+  longer has it corrected.
+- Fixed: under a Romanian verdict, "in" is written "în" whichever language pack was installed
+  first.
+- Fixed: letters a digit ends are left as typed: sha256, covid19 and i7 are no longer rewritten
+  as Sha256, Covid19 and I7.
+- Fixed: a space typed before the answer about the previous word arrived, with no word typed,
+  wrote that word's possessive.
+- The typing code is reorganised around one owner of each word, `TypingOrchestrator`, and the
+  flows it drives; every case of the test corpora reads the same, to the digit, and 89 typing
+  scenarios run the real flow on the JVM.
+
 ## v0.10.2 — 2026-09-28
 
 - Fixed: in the plus build, an answer from the assistant no longer starts with a label the

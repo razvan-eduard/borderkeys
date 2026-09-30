@@ -14,6 +14,7 @@ this document goes stale first. File and symbol names are given so you can jump.
 
 - [Module map](#module-map)
 - [The typing path](#the-typing-path)
+- [The typing orchestrator](#the-typing-orchestrator)
 - [The two axes](#the-two-axes)
 - [Scoring: every term](#scoring-every-term)
 - [The gates](#the-gates)
@@ -28,13 +29,14 @@ this document goes stale first. File and symbol names are given so you can jump.
 
 ## Module map
 
-Six Gradle modules. The split is not cosmetic: it is what keeps the typing path free of things
+Seven Gradle modules. The split is not cosmetic: it is what keeps the typing path free of things
 that allocate, and what lets most of the logic be tested on a JVM with no device attached.
 
 | Module | What lives there |
 |---|---|
-| `:keyboard` | The IME itself. Kotlin for the input method, views and policy; C++ for the engine, the trie, the n-gram model, the personal model and both swipe decoders. |
-| `:data` | Room + SQLCipher. The durable copy of everything learned, the clipboard, language packs, themes, drafts. |
+| `:keyboard` | The IME itself. Kotlin for the input method, the typing flow, views and policy; C++ for the engine, the trie, the n-gram model, the personal model, the touch model and both swipe decoders. |
+| `:data` | Room + SQLCipher. The durable copy of everything learned (words, phrases, the heatmap's totals), the clipboard, language packs, themes, drafts. |
+| `:effects` | The particle effects, drawn on a `Canvas` by the keyboard and by the settings preview alike. |
 | `:settings` | The settings application, Jetpack Compose. Never on the typing path. |
 | `:i18n` | Every string the user can read, as JSON catalogues in six languages. No hardcoded text anywhere else. |
 | `:assist` | The optional on-device assistant, vendoring `llama.cpp`. Entirely separate from prediction. |
@@ -47,7 +49,8 @@ for it are absent from the binary rather than disabled in it.
 ### Inside `:keyboard`
 
 ```
-ime/          the input method, the views, and the policy objects
+ime/          the input method, the views, the policy objects, and the dictionary loads
+typing/       the typing flow: TypingOrchestrator and the flows it drives
 predict/      the Kotlin side of the engine: threading, queueing, the learning buffer
 cpp/          the engine
 cpp/gesture/  both swipe decoders
@@ -56,7 +59,10 @@ cpp/gesture/  both swipe decoders
 The policy objects in `ime/` — `AutoCorrection`, `AutoShift`, `LanguageSwitchCorrector`,
 `RunningText`, `Contractions`, `SentenceCase`, `TextShortcuts`, `HabitSpace`, `PrivateMode` —
 hold no `InputConnection` and make no native calls. That is deliberate and it is what makes them
-testable: they take strings and return decisions.
+testable: they take strings and return decisions. The typing package goes one step further: it
+takes nothing from Android but the constants of `KeyEvent` and `EditorInfo`, and reaches the
+field, the engine, the views and the database through interfaces the service implements
+([the typing orchestrator](#the-typing-orchestrator)).
 
 ---
 
@@ -67,13 +73,16 @@ around that.
 
 ```
 touch
-  └─ KeyboardCanvasView          resolves the key arithmetically (no child views)
-      └─ BorderKeysService       updates the composing text, commits to the field
-          └─ PredictionEngine    posts a request to its own HandlerThread
-              └─ PredictionRequestQueue   keeps exactly one pending request
-                  └─ NativePredictor      JNI
-                      └─ Engine::suggest  the search
-          ◀── result posted back to the main looper, tagged with the query it answers
+  └─ KeyboardCanvasView          resolves the key arithmetically (no child views), and the point
+                                 it was chosen at
+      └─ BorderKeysService       Android glue: the field, the views, the panels
+          └─ TypingOrchestrator  the word: its keys, the commit, the correction, spacing, shift,
+                                 learning
+              └─ PredictionEngine    the EnginePort: posts a request to its own HandlerThread
+                  └─ PredictionRequestQueue   keeps exactly one pending request
+                      └─ NativePredictor      JNI, one call per answer
+                          └─ Engine::suggest  the search
+          ◀── the answer posted back to the main looper, tagged with the query it answers
 ```
 
 Three rules hold this together, all in `predict/PredictionEngine.kt`:
@@ -81,8 +90,9 @@ Three rules hold this together, all in `predict/PredictionEngine.kt`:
 - **The UI thread never blocks on JNI.** There is no path from a touch event into the engine.
 - **The handle cannot outlive the engine.** Every native call goes through `withHandle`, under
   one lock, zeroed on release.
-- **Only the newest request matters.** `PredictionRequestQueue` is exactly one deep, with a
-  generation number; a slow answer that arrives after a newer one is dropped rather than shown.
+- **Only the newest request matters.** `PredictionRequestQueue` is exactly one deep, and
+  `NewestWins` numbers every request — the typed ones, and the swipe and pause-preview decodes
+  with one each — so a slow answer that arrives after a newer one is dropped rather than shown.
   This is what stops the strip flickering back to a previous word.
 
 Because the answer arrives late, every result carries the `query` it is about.
@@ -100,19 +110,97 @@ one from the other, and it never was the answer to that question.
    correction. The fold covers Latin, Greek (case, tonos, dialytika and the final sigma),
    Cyrillic (case, and ё and ѐ onto е, ѝ onto и), Armenian and Georgian (case), in
    `proximity.cpp` and, character for character, in `tools/build_dict.py`; the native tests
-   diff the two tables.
+   diff the two tables. The fold also records which typed code point each folded one came
+   from, so the word's taps line up with the query the search walks.
 2. `refreshWeights()`, `resolveContext()` — per-request, per-pack, once rather than per candidate.
-3. Choose which packs to search: the dominant pack when one is decided, otherwise the heaviest
-   when language lock is strict, otherwise all of them.
-4. `searchPacks()` → per pack: `collectEndpoints()` walks the fuzzy neighbourhood, `collectWords()`
-   descends from each endpoint, `searchFrequentWithPrefix()` covers short prefixes the budget
+3. Run the search plan (`search_plan.hpp`): the passes as a table, each with the condition it
+   runs on, what it searches and the edit ceiling it walks under.
+
+   | Pass | Runs when | Searches | Ceiling | Commits |
+   |---|---|---|---|---|
+   | `Primary` | always | the packs the request is [restricted to](#which-pack-a-request-is-restricted-to), or every pack | by length | yes |
+   | `AllPacks` | `Primary` found nothing, a restriction applied, and the lock is not strict | every pack | by length | yes |
+   | `UserModel` | something is typed | the personal trie | — | yes |
+   | `Wide` | something is typed and nothing has been found | every pack | `kFallbackEditCost` | no, the strip only |
+   | `NextWord` | nothing is typed | the personal successors and phrases | — | yes |
+
+   A pack is walked by `collectEndpoints()` over the fuzzy neighbourhood, `collectWords()`
+   descending from each endpoint, and `searchFrequentWithPrefix()` for short prefixes the budget
    cannot cross. With nothing typed, `searchNextWord()` instead walks the pack's successor index
    for the context word -- or the sentence-start list -- keeping the `kSuccessorWalk` strongest
    pairs and scoring those in full, then the 512-word frequent shortlist.
-5. `searchUserModel()` — the personal trie.
-6. Empty-prefix case only: `searchUserSuccessors()`, `searchUserPhrases()`.
-7. Fallback: if nothing at all was found, one wider pass at `kFallbackEditCost`.
-8. Drain the corrections heap, then the main heap, then apply the completion cap.
+4. The answer tiers, each overriding the one before: the corrections heap, then the respelling,
+   then the exact spelling. Then the main heap drains and the completion cap applies.
+
+One native call, `nativeAnswer`, returns the whole answer — the ranking, the correction's index,
+text and name flag, the known spelling and the possessive — and `PredictionAnswer` assembles it on
+the Kotlin side, for the prediction thread and the tests alike. Nothing is left in the engine for
+a later call to read.
+
+---
+
+## The typing orchestrator
+
+`TypingOrchestrator` (`typing/`) owns each word from its first key to what is learned from it:
+the keys, the composing word, the two words before it, the engine's answer, the commit decision,
+the pending correction, spacing, shift and the field's undo history. The service keeps the
+Android glue — the views, the panels, the swipe ring's window, the quick-action bar, the
+clipboard — and the dictionary loads (`DictionaryLoader`: the packs, the bundled-pack repair,
+accents, offensive words, emoji keywords, contractions, blocked words and the personal model).
+
+The word travels as records rather than loose fields:
+
+| Record | What it is |
+|---|---|
+| `ComposingWord` | The word being written: its text, a `TapTrail` kept in step with it (where each code point was typed, or no point), and how it began |
+| `WordContext` | The two words before it, nearest first |
+| `SearchAnswer` | The engine's last answer as the commit decision reads it: the query it answers, the known spelling, the correction and whether it is a name, the possessive, and whether the query inflects a known stem |
+| `PendingCorrection` | A correction just written, until the next key settles it; it carries the typed word's taps |
+| `FieldSession` | One field: its generation (an answer about an older field is dropped), its `FieldPolicy`, and whether it is a terminal or an address field |
+
+`FieldPolicy` is the one gate, decided at the field's start from `PrivateMode` and the switches,
+and again on every settings change:
+
+| Answer | True when |
+|---|---|
+| `suggestionsAllowed` | not a password field |
+| `privateField` | a password field, one that asked for no personalised learning, or one that describes nothing about itself |
+| `personalAllowed` | Learning is on and the field is not private |
+| `verbatim` | a password field: the keys go in exactly as typed, no rewrite, no space added or removed |
+| `heatmapAllowed` | `personalAllowed`, and the Heatmap switch is on |
+
+Everything outside the word is an interface, which is what lets the JVM tests type through the
+real flow:
+
+| Interface | In the app | In the JVM tests |
+|---|---|---|
+| `FieldEditor` | `ConnectionFieldEditor`, over the `InputConnection` | `FakeFieldEditor` |
+| `EnginePort` | `PredictionEngine`, on its worker thread | `QueuedEngine`: the host JNI bridge, drained by the test |
+| `TypingHost` | the service: the views, the strip, effects and stats | `FakeTypingHost` |
+| `RingUi` | the service: the swipe ring's view, its steering and its timeout | `FakeRingUi` |
+| `LearningStore` | Room, through the service | an in-memory store |
+| `TypingClock` | the system clocks | a clock the test moves |
+
+### The flows
+
+The orchestrator drives seven flows, each a `TypingFlow`. The lifecycle is `final` in the base
+class — `startField`, `finishField`, `applySettings`, `shutdown` — so the field generation, the
+policy and flushing exactly once per field are written once. A flow supplies only what it does
+when a field starts (abstract: every flow states what it resets), ends, or the settings change,
+and when the keyboard goes.
+
+| Flow | Owns |
+|---|---|
+| `LearningFlow` | What is learned: the words, pairs and triples, and where the taps land; the buffer, its flush and its gate |
+| `ShiftFlow` | Shift, caps lock and auto-shift, and the casing of the strip's words and a swipe's candidates |
+| `SpacingFlow` | The spaces the keyboard adds or takes back on its own: after a mark, before one, the full stop two spaces make, the space typed out of habit; none in a verbatim field |
+| `TerminalWriter` | A terminal: each key out at once as the key event that carries it |
+| `CommitFlow` | The commit decision (`WordCommit`, its rules a first-claim-wins chain of `CommitRule`s), the pending correction and its revert, and the corrections a change of language leaves wrong |
+| `SuggestionFlow` | The requests, the word last asked about, the answer a delimiter applies, the strip's row |
+| `SwipeFlow` | A swipe between its decode and its word, and the words its ring offers |
+
+Flows never call each other: each talks only to the orchestrator, which hands a field, a
+settings change and each answer to them in a fixed order.
 
 ---
 
@@ -237,6 +325,55 @@ it at compile time against the cheapest possible substitution and the most lenie
 user can dial in. Change any of those five numbers and the build fails rather than a live report
 arriving. It implies `kEditPenalty > 15`.
 
+### Where the tap landed — `touch_model.cpp`
+
+A substitution — a tapped letter read as another key — is priced from where the tap landed.
+Every key has a default pattern, the same for everyone and stored nowhere: taps centred on the
+key, spread `kReferenceSpread` (0.3 key units) both ways. Under it, reading a tap on one key as
+another costs √(d_intended² − d_typed²), the tap's distances from the two centres in key units
+(x in key widths, y in key heights). A tap on a key's centre costs exactly the key geometry's
+centre distance, so centre taps rank as they always did; a tap near an edge makes that neighbour
+cheaper and the others dearer. Nothing goes below `KeyGeometry::kMinSubstitutionCost` (0.2), so
+the safety margin above holds.
+
+A letter without a point is priced by the key geometry alone: a long-press alternative, a key
+reached by sliding onto it (its entry point sits on the edge of the key before), a swiped or
+adopted word, a key the screen reader typed. The taps travel with every request the strip makes
+(`nativeAnswer`'s x and y arrays), in every field, private ones included: they price that one
+answer and are kept nowhere. A terminal's requests carry none.
+
+The heatmap's learned patterns ([the heatmap](#the-heatmap)) take a key's place while Learning
+and the Heatmap are on, the field allows them, and the key has the minimum of taps. The cost then
+moves by the weight towards `kReferenceSpread · √(2 · LLR)`, LLR being the log-likelihood ratio
+of the tap under the typed key's pattern against the intended key's, and the same floor applies.
+
+| Setting | Default | Range | What it is |
+|---|---|---|---|
+| `heatmapWeight` | 1.0 | 0.5–2.0 | How far a learned pattern moves the cost from the default pattern's |
+| `heatmapMinTaps` | 30 | 10–100, by 10 | Taps before a key's own pattern counts; below it the key keeps the default |
+| `heatmapHalfLifeDays` | 30 | 7–180 | After this many days a tap counts half |
+
+Measured on synthetic taps (`tools/make_tap_corpus.py`, six profiles of how taps miss;
+`native-tests/touch_eval`), autocorrect's right word on 4,000 slips into non-words, after 20,000
+taps learned:
+
+| Profile | Geometry only | Default pattern | Learned |
+|---|---|---|---|
+| centred | 83.1% | 91.2% | 91.4% |
+| low | 76.6% | 90.4% | 90.3% |
+| two thumbs | 77.4% | 89.3% | 89.9% |
+| right thumb | 73.4% | 89.3% | 90.4% |
+| precise | 85.4% | 92.7% | 92.7% |
+| sloppy | 70.8% | 88.7% | 88.9% |
+
+Almost all of the gain is reading where the tap landed at all, which is why the default pattern
+prices every tapped letter for everyone; learning a person's pattern adds up to a point on these
+taps, whose Gaussian spread suits the default. A pattern younger than about 20 taps does worse
+than the default, which is what the minimum of 30 guards; the weight is best or within 0.1 of it
+at 1.0 on every profile, and the half-life barely moves the score (7 to 180 days stay within 0.6
+points after a change of grip) — 30 days keeps the rarest letters above the minimum for someone
+typing 500 taps a day.
+
 ### Personal model terms
 
 | Constant | Value | Meaning |
@@ -338,16 +475,22 @@ without its accent) is "and" to the Romanian one.
 
 ### Privacy gates
 
-Two independent checks, which is the right number for a rule whose failure mode is a password in
-the personal dictionary:
+`PrivateMode`, a pure function of the field's `EditorInfo`, decides at the field's start whether
+it must be forgotten entirely, and the field's `FieldPolicy` carries the verdict. It is enforced
+twice, which is the right number for a rule whose failure mode is a password in the personal
+dictionary:
 
-- `PrivateMode` decides whether the field must be forgotten entirely; the service refuses to call
-  `LearningBuffer.record`;
-- `LearningBuffer.enabled` is false regardless.
+- `LearningFlow` records nothing the policy does not allow, and drops what was buffered when a
+  private field starts;
+- `LearningBuffer` refuses every record while its gate is off, and the flow sets that gate from
+  the policy at every field start and every settings change.
 
 `setPersonalModelEnabled(false)` additionally stops the model being *consulted* — what this
 device learned from its owner must not be offered back into a field that asked to be forgotten.
-The model stays loaded and untouched.
+The model stays loaded and untouched. The learned touch patterns follow the same gate
+(`setTouchModel`): outside `heatmapAllowed`, only the default pattern prices a tap. A password
+field is also verbatim: its keys go in exactly as typed, with no rewrite and no space added or
+taken away, and its text never reaches the engine.
 
 `OffensiveWords` keeps its list out of suggestions, corrections and learning while the switch is
 on; entries are folded through `WordFold`, so `Shit` at a sentence start is the same refusal as
@@ -380,25 +523,26 @@ from the packs first.
 field, or a sentence end or line break before it — is recorded as a pair under a sentence-start
 marker the personal model reserves (`\x02start`, a word no key can type), and at a sentence
 start the engine asks the personal model for that marker's successors before the packs' own
-openers fill the remaining slots. The Personal dictionary screen lists such a pair as the word
-"at the start of a sentence".
+openers fill the remaining slots. The Learned phrases page lists such a pair as the word "at the
+start of a sentence".
 
 **The learning switch gates both halves.** Off, nothing typed is recorded and nothing personal
 is offered: the dictionaries alone answer, exactly as in a private field. Switching it off asks
-first, then forgets everything learned.
+first, then forgets everything learned, the heatmap included.
 
 ```
 user commits a word  (types a delimiter after it, swipes it, or picks it from the strip)
-  └─ LearningBuffer            in-memory, debounced; carries count, deliberate capital, assertion
-      └─ Room (:data)          the one durable copy, SQLCipher
-      └─ UserModel (C++)       rebuilt from Room at every start
+  └─ LearningFlow              the gate; the word, its pair and triple, and its taps
+      └─ LearningBuffer        in-memory, debounced; carries count, deliberate capital, assertion
+          └─ Room (:data)      the one durable copy, SQLCipher
+          └─ UserModel (C++)   rebuilt from Room at every start
 ```
 
 **Why the buffer exists.** A key press has two milliseconds to reach `InputConnection`. An
 INSERT is a transaction, a disk write and an encryption pass. So confirmations accumulate in
-memory and flush when the buffer is old enough, full enough, or the input session ends
-(`onFinishInput`). `LearningBuffer` is free of Android and of coroutines — a counter with a clock
-passed in — so the debounce and the eviction are testable on the JVM.
+memory and flush when the buffer is old enough, full enough, or the field ends
+(`LearningFlow.onFieldFinished`). `LearningBuffer` is free of Android and of coroutines — a
+counter with a clock passed in — so the debounce and the eviction are testable on the JVM.
 
 **Structure.** `UserModel` is a node-per-character trie with a sorted child list. Insertion is
 off the hot path by construction; prefix lookup is on it, and is a binary search per character
@@ -416,6 +560,51 @@ it is typed next time (`UserModel::deliberateCapitals`).
 
 **Learning speed** (`setLearningSpeed`) multiplies raw counts into effective counts. It is the
 same number `kMinPersonalEvidence` is measured against, not a separate knob.
+
+### The heatmap
+
+Where the taps land on each key is learned beside the words, only where the field's policy
+allows it (`heatmapAllowed`: Learning and the Heatmap switch on, the field not private), and
+priced as [where the tap landed](#where-the-tap-landed--touch_modelcpp) describes.
+
+```
+a word learned from typing, with its taps  (TypedTaps, from the word's TapTrail)
+  └─ TapAlignment          a sample per letter: its offset from the kept letter's key centre
+      └─ TouchLearning     the current bucket's stored totals, plus the samples not yet written
+          ├─ the engine          per key: taps, mean offset, covariance (nativeSetTouchPatterns)
+          └─ Room (key_touches)  totals by bucket and letter, merged at the learning flush
+```
+
+**When.** At the points a word is learned from typing: a word kept as typed (space, Enter,
+before a swipe), a correction confirmed by the next key (the taps travel on
+`PendingCorrection`), a correction taken back (the letters as typed), and a pick from the strip
+(the typed letters against the picked word's first ones).
+
+**Which taps count.** A tap on the key of the letter kept, or on a ring neighbour of it (within
+1.45 key units, `KeyGeometry::kNeighbourRadius`), gives that letter one sample: the tap's offset
+from that key's centre, in key units, dropped beyond one. A word with any letter untapped gives
+none, so a swiped word, an adopted one or a slide onto a key never teaches the heatmap.
+
+**Buckets.** A tap's position depends on more than its key: the orientation, the keyboard's
+placement and the layout each make a bucket (`portrait/0/qwerty`), with its own totals. The
+keyboard loads the current bucket's totals when the layout or the placement changes it.
+
+**What is stored.** Per bucket and letter: the tap weight and the weighted sums of x, y, x², y²
+and xy, the key's size and the display's density at the last tap, and when that was — enough for
+the mean and the covariance, and nothing that says what was typed. Raw taps never leave memory.
+Every total halves each half-life since its last tap (`KeyTouches.decayed`, `merged`), so a new
+way of holding the phone takes over.
+
+**Forgetting.** Switching Learning or the Heatmap off drops the taps not yet written at once;
+switching the Heatmap off asks, then deletes the table, and Forget everything deletes it too.
+An edit made on the settings screen fires `DictionaryRepository.edits`, and the keyboard reloads
+the current bucket's totals. The table is left out of backups.
+
+**The preview.** The settings screen draws a bucket's stored totals on the keyboard preview
+(`KeyboardCanvasView.touchGlows`, which the keyboard itself never sets): each key's glow centred
+on its mean offset, an ellipse two standard deviations of its covariance wide (`GlowEllipse`),
+its strength from 0.35 at the minimum of taps to full at four times it (`HeatmapGlows`). A key
+below the minimum is a faint circle at its centre, the default pattern.
 
 ---
 
@@ -493,7 +682,7 @@ revisit, and only that.
 It holds no `InputConnection` and makes no native calls, so it tests on plain data. Reading live
 text and asking the engine for a pack-specific candidate (`Engine::candidateForPack` — the one
 place a caller names a pack explicitly rather than accepting `dominantPack`'s verdict) both
-happen in `BorderKeysService`.
+happen in `CommitFlow`, through `FieldEditor` and `EnginePort.candidatesForPack`.
 
 - `recordCorrection(Flag)` tracks each correction applied while the language was believed to be
   something it may not have been, bounded at `MAX_TRACKED`.
@@ -764,4 +953,10 @@ Things that will silently break if not respected.
 - **The engine is single-writer by construction** — a bump allocator, no locks — so it needs one
   thread that is always the same thread. That is why `PredictionEngine` owns a dedicated
   `HandlerThread` rather than using `Dispatchers.Default`.
-- **Two independent privacy checks**, not one. See [the gates](#the-gates).
+- **Two privacy checks**, not one. See [the gates](#privacy-gates).
+- **The typing package holds no Android class.** `com.borderkeys.typing` takes only the
+  constants of `KeyEvent` and `EditorInfo`; the field, the engine, the views and the database
+  are interfaces. That is what lets the JVM rig type through the real flow.
+- **Flows never call each other.** Each talks only to `TypingOrchestrator`.
+- **Raw taps never leave memory.** Only per-key totals are written, and only where
+  `heatmapAllowed` holds.

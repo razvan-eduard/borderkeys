@@ -41,10 +41,13 @@ The whole walk-through, screen by screen, is [`docs/guide.md`](docs/guide.md). I
   six languages inside the app and twenty-one more as packs to download from the releases page;
   thirty layouts from AZERTY, Dvorak and Colemak to the national variants with their own
   letters, eight in scripts of their own and two read from the right, a number row, a number
-  pad and a modifier row; a personal dictionary you can read and edit, word by word and
-  phrase by phrase, that learns the words you open sentences with and offers them first, all
-  behind one learning switch that forgets everything when turned off; "Why?" on any
-  suggestion; text shortcuts; terminals typed into as terminals.
+  pad and a modifier row; a personal dictionary you can read, search and edit, word by word and
+  phrase by phrase, on pages of its own, that learns the words you open sentences with and
+  offers them first, all behind one learning switch that forgets everything when turned off;
+  every tapped letter read by where the tap landed, so a slip towards a neighbouring key is
+  caught, and a heatmap that learns where your own taps land on each key and draws it on the
+  keyboard preview; "Why?" on any suggestion; text shortcuts; terminals typed into as
+  terminals.
 - **Around the keys.** A quick-action bar for what takes several gestures, extendable with
   macros of your own; themes and a theme library; particle effects on five surfaces; panels
   that search by the word under the caret; a slide on the space bar that moves the caret, by
@@ -62,6 +65,7 @@ The whole walk-through, screen by screen, is [`docs/guide.md`](docs/guide.md). I
 <p align="center">
   <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/1_typing.jpg" alt="Steve and Steven offered capitalised from a lower-case stev, in the middle of a sentence" width="30%">
   <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/2_home.jpg" alt="The settings home" width="30%">
+  <img src="fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/21_heatmap.jpg" alt="The heatmap: a glow on each key of the keyboard preview where the taps on it land" width="30%">
 </p>
 
 ## Two builds, one repository
@@ -196,16 +200,20 @@ gh attestation verify BorderKeys-v0.10.1-core.apk --repo razvan-eduard/borderkey
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md) — what each module is and what happens between a
-  finger and a word: the suggestion and learning paths, why autocorrect and the suggestion strip
-  rank separately, every scoring constant with the measurement behind it, the gates that stop a
-  correction, language detection and revert, both swipe tiers, and the dictionary pipeline.
+  finger and a word: the typing orchestrator and the flows it drives, the suggestion and learning
+  paths, why autocorrect and the suggestion strip rank separately, every scoring constant with the
+  measurement behind it, how a tap's position prices a correction and what the heatmap learns,
+  the gates that stop a correction, language detection and revert, both swipe tiers, and the
+  dictionary pipeline.
 - [`docs/privacy.md`](docs/privacy.md) — what the keyboard can and cannot know: the three things
   that enforce zero permissions, how a private field is detected and what stops learning from it,
-  what encryption at rest does *not* buy, and a threat model with both columns filled in.
+  what the personal dictionary and the heatmap hold, what encryption at rest does *not* buy, and
+  a threat model with both columns filled in.
 - [`docs/layouts.md`](docs/layouts.md) — the layout asset format, key codes and flags, how JSON
   becomes hit-testable pixels, and why accents follow your languages rather than your layout.
-- [`docs/testing.md`](docs/testing.md) — tests, build gates, sanitisers and fuzzing, the
-  measurements that are deliberately not tests, and what is not covered.
+- [`docs/testing.md`](docs/testing.md) — tests, the typing scenarios run through the real flow,
+  build gates, sanitisers and fuzzing, the measurements that are deliberately not tests (the touch
+  model's among them), and what is not covered.
 - [`docs/licensing.md`](docs/licensing.md) — every dependency and asset, with its licence and
   a compatibility verdict, plus the reproducible-build settings and the F-Droid anti-feature
   checklist.

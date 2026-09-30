@@ -28,11 +28,12 @@ with a green build and a keyboard that suggests the wrong word.
 
 ### JVM — `./gradlew test`
 
-**576 test functions across 61 files.** No device, no emulator, no Robolectric.
+**813 test functions across 91 files.** No device, no emulator, no Robolectric.
 
 That is possible because the logic is deliberately kept out of the Android classes. The policy
 objects in `ime/` hold no `InputConnection` and make no native calls — they take strings and
-return decisions:
+return decisions — and the typing package reaches the field, the engine and the views only
+through interfaces:
 
 | Class | What its tests pin down |
 |---|---|
@@ -44,9 +45,14 @@ return decisions:
 | `LanguageSwitchCorrector` | Which flags resolve to which replacements, and where the caret lands |
 | `RunningText`, `Contractions`, `SentenceCase`, `TextShortcuts`, `HabitSpace` | Pure text transforms |
 | `LearningBuffer` | Debounce and eviction, with a clock passed in |
-| `PredictionRequestQueue` | The one-deep queue and generation discipline |
+| `PredictionRequestQueue`, `NewestWins` | The one-deep queue, and only the newest request's answer used |
 | `KeyboardGeometry` | Hit-testing arithmetic |
 | `KeyboardPreferences` | Every setting's clamp and default |
+| `FieldPolicy`, `TypingFlow` | A field's five answers from its type and the two switches; the lifecycle every flow shares |
+| `TapTrail`, `TapAlignment` | The taps kept in step with the word through every edit; which taps give the heatmap a sample, and where |
+| `TouchLearning`, `KeyTouches` | The heatmap's stored and pending totals, their decay by half-life and their merge |
+| `UserPhrase` | Pairs and triples in one list, most used first |
+| `GlowEllipse`, `HeatmapGlows` | The heatmap's drawing: a covariance as an ellipse, a bucket's totals as glows |
 
 `KeyboardGeometry` is the clearest case for why the split is worth it: a one-pixel gap between
 two keys is a touch that does nothing, and **neither a device nor a screenshot will show it**.
@@ -62,10 +68,9 @@ offered and the guards were meant to refuse, or the reverse.
 `Pipeline` closes it. It drives the shipping engine through the shipping JNI bridge and then the
 shipping Kotlin -- `WordCommit` with the apostrophe maps of the languages opened, the productive
 possessive, the capital a language always writes, and every guard in `AutoCorrection` --
-against the packs the application ships. Nothing in it is a model of the pipeline; it *is* the
-pipeline, with the editor and the touch surface left out. What still needs a device: the
-composing region, delimiter handling, field state, and what the service decides around all of
-it.
+against the packs the application ships, and it types each case through `TypingOrchestrator`,
+so a case's word ends as it would on a phone. Nothing in it is a model of the pipeline; it *is*
+the pipeline, with the touch surface left out.
 
 | Payload | What it pins |
 |---|---|
@@ -107,12 +112,36 @@ cmake --build native-tests/build --target borderkeys   # the host JNI bridge
 ./gradlew :keyboard:buildDictionaries                  # the packs
 ```
 
+### The typing flow — `TypingScenarioTest`
+
+`TypingRig` builds the real `TypingOrchestrator` with everything around it replaced by
+something a test can hold: an in-memory field with a composing region, a selection and batch
+edits (`FakeFieldEditor`); the engine on the host JNI bridge and the shipped packs, its answers
+queued until the rig delivers them (`QueuedEngine`), so the order of events is the test's and
+never a thread's; a recording host and ring (`FakeTypingHost`, `FakeRingUi`); an in-memory store;
+and a clock the test moves. After each key the rig delivers what reaches the input method before
+the next one — the field's selection reports, the engine's answers, the runnables that fell due —
+and checks that the word's taps are still in step with its text.
+
+**89 scenarios**, each a whole keystroke sequence asserting the field's text and caret and, where
+it matters, what was learned: a word typed and ended by every kind of key, a correction and the
+backspace that takes it back, typing after a caret move into committed text, undo and redo,
+shift and caps lock, the spaces the keyboard adds and takes away, French spacing, a text
+shortcut, a terminal, a password field typed verbatim, swipes — real paths decoded by the host
+bridge's decoder (`SwipePath`) — with their ring lifted, tapped, timed out and cancelled, the
+taps a request carries in every kind of field, and what the heatmap learns from each way a word
+is kept.
+
 ### Native — `ctest --test-dir native-tests/build`
 
 Two registered tests:
 
-- **`engine`** (`borderkeys_tests`) — the engine, folding, the pack format, the gesture decoders.
-  Source: `test_engine.cpp`, `test_fold.cpp`, `test_format.cpp`, `test_gesture.cpp`, `test_tcn.cpp`.
+- **`engine`** (`borderkeys_tests`) — the engine, the touch model, folding, the pack format, the
+  gesture decoders, and the assistant's answer cleanup. Source: `test_engine.cpp`,
+  `test_fold.cpp`, `test_format.cpp`, `test_gesture.cpp`, `test_tcn.cpp`,
+  `test_answer_cleanup.cpp`. The touch model's checks include a centre tap costing exactly the
+  key geometry's distance, `thede` tapped towards the r becoming `there`, and a learned pattern
+  making the same tap dearer to read as a neighbour.
 - **`pack_corpus`** — the pack loader against a committed corpus of deliberately damaged files.
 
 A note on running them: **build every target before `ctest`.** `cmake --build … --target
@@ -180,6 +209,12 @@ adb -s emulator-5554 shell am instrument -w -r -e class com.borderkeys.ImeSmokeT
 ```
 
 The suite leaves the pack it installed and the preferences it set in place.
+
+`DatabaseMigrationTest` checks each database migration against the schemas Room exports into
+`data/schemas`, which the instrumented build carries as assets: a database built at version 7
+with a learned word in it is migrated to 8, validated against the version-8 schema, and still
+holds the word, beside an empty `key_touches` table for the heatmap. It runs the same way, with
+`-e class com.borderkeys.DatabaseMigrationTest`.
 
 ---
 
@@ -527,6 +562,67 @@ strong successor that is itself a rare word reaches the strip: after `ice`, `cre
 `beings`. `PipelineTest` pins four such pairs. What a prose corpus never wrote often enough
 stays out -- `happy birthday` is not among the pairs the packs hold.
 
+### The touch model — `touch_eval`, not gated
+
+```
+python3 tools/make_tap_corpus.py --profile thumbs --taps 60000 --seed 1 > thumbs.tsv
+native-tests/build/touch_eval <dict dir> en-US native-tests/data/qwerty_1080.layout thumbs.tsv \
+    --train-taps 20000 --test-from-taps 40000 --test-words 4000
+```
+
+`make_tap_corpus.py` types words drawn by frequency from `dictionaries/en_US.tsv` on a 1080-pixel
+QWERTY, one tap per letter: the key's centre moved by a profile's offset for that key, plus
+Gaussian noise, the letter typed being the key the tap falls on. Six profiles, in key units:
+centred (spread 0.22), low (0.18 below the centre), two thumbs (towards the middle and low), one
+right thumb (falling short towards the thumb, wider with the reach), precise (0.16) and sloppy
+(0.28). They slip on 0.6% to 13.7% of letters.
+
+`touch_eval` learns the patterns the way the keyboard does — a tap on the key meant or a ring
+neighbour of it is a sample, dropped beyond one key unit, weighed down by the half-life — then
+types the test words that hold a slip into a non-word of three letters or more, and reports what
+autocorrect commits and where the strip ranks the word meant. Autocorrect's right word, after
+20,000 taps, the weight at 1.0 and the minimum at 30:
+
+| Profile | Geometry only | Default pattern | Learned |
+|---|---|---|---|
+| centred | 83.1% | 91.2% | 91.4% |
+| low | 76.6% | 90.4% | 90.3% |
+| two thumbs | 77.4% | 89.3% | 89.9% |
+| right thumb | 73.4% | 89.3% | 90.4% |
+| precise | 85.4% | 92.7% | 92.7% |
+| sloppy | 70.8% | 88.7% | 88.9% |
+
+The learned patterns' mean gain over the default pattern, in points, by taps learned — the
+reason a key needs 30 taps before its own pattern counts:
+
+| Minimum | 250 | 500 | 1,000 | 2,000 | 8,000 | 32,000 |
+|---|---|---|---|---|---|---|
+| 10 | −1.22 | −0.15 | +0.25 | +0.23 | +0.32 | +0.32 |
+| 20 | −0.13 | +0.08 | +0.17 | +0.20 | +0.28 | +0.32 |
+| 30 | 0.00 | 0.00 | +0.12 | +0.15 | +0.28 | +0.32 |
+
+The weight is best or within 0.1 of the best at 1.0 on every profile, and 2.0 is worse on five of
+six. The half-life barely matters: after a change of grip (two thumbs, then one right thumb),
+half-lives of 7 to 180 days stay within 0.6 points of each other, and 30 days keeps the rarest
+letters above the minimum for someone typing 500 taps a day. The taps are Gaussian, which suits
+the default pattern; real taps may reward learning more.
+
+### Readings — the check for a change meant to change nothing
+
+```
+scripts/corpus_readings.sh /tmp/readings-before      # on the commit before
+scripts/corpus_readings.sh /tmp/readings-after       # on the change
+diff -r -x SUMMARY.txt /tmp/readings-before /tmp/readings-after
+```
+
+Writes every corpus's reading, case by case: `native/`, `suggest_eval`'s output for every
+corpus with a shipped pack, and `kotlin/`, one line per case from `PipelineCorpusTest` and
+`PipelineTest` (`-Pborderkeys.readings`): typed, committed, reason, and the engine's ranking
+with its scores. A change that restructures without meaning to change behaviour must read
+identical, to the digit; every step of the typing orchestrator did. `--centre-taps` writes the
+native readings with every letter tapped at its key's centre, which must read as they do with no
+taps at all, since the default touch pattern prices a centre tap as the key geometry does.
+
 ### Correct words the pack has never heard of
 
 ```
@@ -837,6 +933,13 @@ native-tests/build/suggest_eval <dict dir> \
     --autocorrect native-tests/data/autocorrect_accents_ro.tsv ro-RO
 python3 tools/gesture_replay.py --binary native-tests/build/gesture_replay \
     --pack native-tests/build/test_pack.bkd --check-regression
+python3 tools/make_tap_corpus.py --profile thumbs --taps 60000 --seed 1 > thumbs.tsv
+native-tests/build/touch_eval <dict dir> en-US native-tests/data/qwerty_1080.layout thumbs.tsv \
+    --train-taps 20000 --test-from-taps 40000 --test-words 4000
+
+# Readings, before and after a change meant to change nothing
+scripts/corpus_readings.sh /tmp/readings-after
+diff -r -x SUMMARY.txt /tmp/readings-before /tmp/readings-after
 ```
 
 CI runs on push and pull request to `main`; release only on a `v*` tag. See

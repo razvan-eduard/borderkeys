@@ -58,11 +58,17 @@ database and are excluded from system backup and from device-to-device transfer.
   cakes come first, over "pumpkin" the lantern, in the languages switched on; open the clipboard
   over "invoice" and the clips containing it come first.
   A long press on a clip pins, edits or deletes it.
-* A personal dictionary you can see and edit: every learned word and phrase has a Forget
-  right beside it, and a Block for the words. The words you open sentences with are learned
+* A personal dictionary you can see and edit: the learned words and the learned phrases each
+  on a page of their own, searchable, every entry with a Delete and every word with a Block,
+  and what a search finds deletable at once. The words you open sentences with are learned
   and offered first when a sentence begins. One switch gates all of it — off, the
   dictionaries alone suggest, and everything learned is forgotten after asking you — and a
   long press on any suggestion answers "Why?" with the terms that ranked it.
+* A heatmap: visualise your typing accuracy and see how the keyboard adapts to your personal
+  touch. Every tapped letter is read by where the tap landed, so a slip towards the next key
+  is caught; with the heatmap on, the keyboard learns where your own taps land on each key and
+  reads a key your way once it has enough taps. Only a summary per key is kept, never the
+  taps themselves, and nothing is learned in a private field.
 * Settings you can search, a tile in the quick settings, a date-and-time quick action in a
   pattern of your own, clipboard search with wildcards and regular expressions, keyboard
   opacity, and a vibration switch per kind of touch.
