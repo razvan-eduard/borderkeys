@@ -155,11 +155,8 @@ class BorderKeysService :
     private var ringEditorOriginX = Float.NaN
     private var ringEditorOriginY = Float.NaN
 
-    /** The clip whose chip is withheld, or null when none is. */
-    private var withdrawnClip: String? = null
-
-    /** The signature of the clip the chip is showing, or null. */
-    private var shownClipSignature: String? = null
+    /** Which clip the clipboard chip may show. */
+    private val clipOffers = ClipChipOffers()
 
     /** Shows "decoding" on the strip when a swipe's answer is late. */
     private val gestureDecodingRunnable = Runnable { host?.suggestionStrip?.decoding = true }
@@ -840,10 +837,7 @@ class BorderKeysService :
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
         orchestrator.dismissRing()
-        // With "offer it only once" on, the clip shown this session is withheld from now on.
-        if (preferences.clipboardSuggestionOnce && shownClipSignature != null) {
-            withdrawnClip = shownClipSignature
-        }
+        clipOffers.keyboardClosed(preferences.clipboardSuggestionOnce)
         unregisterClipboardListener()
     }
 
@@ -1992,7 +1986,7 @@ class BorderKeysService :
         val clip = ClipData.newPlainText(null, text)
         clipboardManager?.setPrimaryClip(clip)
         // The chip is built from the clip in hand, not read back from the clipboard.
-        withdrawnClip = null
+        clipOffers.copied(clipSignature(clip))
         refreshClipboardChip(clip)
     }
 
@@ -2195,15 +2189,15 @@ class BorderKeysService :
         val strip = host?.suggestionStrip ?: return
         if (orchestrator.session.policy.privateField || !preferences.clipboardSuggestion) {
             strip.clipboardChip = null
-            shownClipSignature = null
+            clipOffers.shown(null)
             return
         }
         val description = clip?.description
         if (clip == null || clip.itemCount == 0 || description == null ||
-            clipSignature(clip) == withdrawnClip || isSensitiveClip(clip)
+            !clipOffers.mayShow(clipSignature(clip)) || isSensitiveClip(clip)
         ) {
             strip.clipboardChip = null
-            shownClipSignature = null
+            clipOffers.shown(null)
             return
         }
         val text = when {
@@ -2225,7 +2219,7 @@ class BorderKeysService :
             }
         }
         strip.clipboardChip = text
-        shownClipSignature = if (text != null) clipSignature(clip) else null
+        clipOffers.shown(if (text != null) clipSignature(clip) else null)
     }
 
     override fun onClipboardPicked() {
@@ -2245,8 +2239,8 @@ class BorderKeysService :
         orchestrator.finishWord()
         connection.commitText(text, 1)
         orchestrator.checkpointField()
+        clipOffers.used(clipSignature(clip), preferences.clipboardSuggestionOnce)
         if (preferences.clipboardSuggestionOnce) {
-            withdrawnClip = clipSignature(clip)
             host?.suggestionStrip?.clipboardChip = null
         }
         if (preferences.clearClipboardAfterInsert) {
@@ -2295,7 +2289,7 @@ class BorderKeysService :
         if (clip.itemCount == 0) {
             return
         }
-        withdrawnClip = null
+        clipOffers.copied(clipSignature(clip))
         refreshClipboardChip()
         if (isSensitiveClip(clip)) {
             return
