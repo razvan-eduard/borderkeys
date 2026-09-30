@@ -96,6 +96,11 @@ android {
                 ).withPropertyName("hostLibrary").withPathSensitivity(PathSensitivity.NONE)
                 it.inputs.files(tasks.named("buildDictionaries"))
                     .withPropertyName("packs").withPathSensitivity(PathSensitivity.RELATIVE)
+                // The assets and the corpora the tests read from disk: a change to one reruns them.
+                it.inputs.dir("src/main/assets")
+                    .withPropertyName("assets").withPathSensitivity(PathSensitivity.RELATIVE)
+                it.inputs.dir(rootProject.layout.projectDirectory.dir("native-tests/data"))
+                    .withPropertyName("corpora").withPathSensitivity(PathSensitivity.RELATIVE)
                 // The directory the pipeline tests write one line per case into; unset writes none.
                 providers.gradleProperty("borderkeys.readings").orNull?.let { directory ->
                     it.systemProperty("borderkeys.readings", directory)
