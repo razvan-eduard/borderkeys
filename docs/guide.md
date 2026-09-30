@@ -122,16 +122,43 @@ ships.
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/14_modifier_row.jpg" alt="The modifier row below the keyboard: esc, tab, ctrl, alt and the arrows" width="30%">
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/15_modifier_row_keys.jpg" alt="Layout &amp; keys: the modifier row's position and the keys on it, reorderable" width="30%">
 </p>
-- **A personal dictionary you can see and edit.** Every learned word is listed with how often
-  you used it, and a `Forget` (remove it) and a `Block` (never suggest it again) right beside
-  it — not a black box. The word pairs and triples it learned are listed on the same screen, each
-  with a Forget of its own, and go with a word when it is forgotten. The words you open
-  sentences with are learned as well, listed as the word "at the start of a sentence", and
-  offered first when a sentence begins. The "Learn at all" switch gates the whole of it: off,
-  nothing you type is recorded and nothing learned is offered, the dictionaries alone
-  suggest, and switching it off asks you first and then forgets everything learned. Holding
-  a suggestion offers the same from the keyboard, and a "Why?": the engine's own account of
-  the word's score, term by term, in plain words.
+- **A personal dictionary you can see and edit.** The Learned card of the Personal dictionary
+  and heatmap screen opens two pages. **Words** lists every learned word with how often you used
+  it, and a `Block` (never suggest it again) and a `Delete` (remove it) right beside it — not a
+  black box. **Phrases** lists the word pairs and triples it learned, each with a Delete of its
+  own; they go with a word when it is deleted, and deleting a pair takes the triples it is part
+  of. Both pages search, and while a search filters the list the button under it deletes exactly
+  what the search found, after asking; without a search it is Forget everything on the Words page
+  (every word, phrase and the heatmap) and Delete all phrases on the Phrases page. The words you
+  open sentences with are learned as well, listed as the word "at the start of a sentence", and
+  offered first when a sentence begins. The Learning switch gates the whole of it: off, nothing
+  you type is recorded and nothing learned is offered, the dictionaries alone suggest, and
+  switching it off asks you first and then forgets everything learned. Holding a suggestion
+  offers the same from the keyboard, and a "Why?": the engine's own account of the word's score,
+  term by term, in plain words.
+
+<p align="center">
+  <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/22_learned_words.jpg" alt="Learned words: a search box, Forget everything, and each word with how often it was used, a Block and a Delete" width="30%">
+  <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/23_learned_phrases.jpg" alt="Learned phrases: what a phrase is, a search box, Delete all phrases, and each pair or triple with a Delete, sentence openers among them" width="30%">
+</p>
+
+- **Taps read where they land, and a heatmap of your own.** Every tapped letter is read by where
+  the tap landed, for everyone and with nothing stored: a tap near the edge between two keys
+  makes the neighbour a likelier correction, so autocorrect and the strip catch the slip. The
+  Heatmap card, on the same screen, learns where your own taps land on each key — low, to one
+  side, wide or tight — and reads a key your way once it has enough taps, thirty by default. The
+  card draws it on the keyboard preview: a glow on each key where your taps land, as wide as they
+  spread and brighter with more taps, and a faint circle on a key with too few so far; with taps
+  in more than one orientation or layout, chips switch between them. How much it counts, how many
+  taps a key needs, and how long taps are remembered sit under its "Advanced settings". It needs
+  Learning, is on by default, keeps a summary per key and never the taps themselves, learns
+  nothing in a private field, stays on the phone rather than going into a backup, and switching
+  it off asks, then forgets it. A tap still types the key it lands on: the heatmap changes which
+  correction is offered, never which key was pressed.
+
+<p align="center">
+  <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/21_heatmap.jpg" alt="The Heatmap card: the switch, learned from 6018 taps, and the keyboard preview with a glow low on each key towards the thumb that types it, faint circles on q, z, x and j" width="30%">
+</p>
 - **Terminals typed into as terminals.** In Termux, ConnectBot, JuiceSSH, Termius and any field
   that declares no text class at all, every key types straight through: a character is written
   the moment it is pressed, never held as composing text, a backspace deletes one character,
@@ -144,7 +171,7 @@ ships.
   shortcut, and comes back with the backspace straight after, like any other correction.
 
 <p align="center">
-  <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/12_text_shortcuts.jpg" alt="The Personal dictionary screen, with the text shortcuts card" width="30%">
+  <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/12_text_shortcuts.jpg" alt="The Personal dictionary and heatmap screen: the text shortcuts card, omw for on my way, and the Learned card's rows for the words and the phrases" width="30%">
 </p>
 
 - **Keys that answer back.** The pressed key shows itself enlarged above your finger while it is
@@ -273,4 +300,6 @@ position, particle effects, quick actions, text shortcuts, saved instructions �
 reads from a
 single file, under your control, on your schedule, with a checklist of exactly what a file
 contains shown before any of it is applied. The two builds can hand their settings and
-dictionaries to each other directly, without a file. Nothing syncs anywhere on its own.
+dictionaries to each other directly, without a file. This is the only way the dictionary moves:
+the Personal dictionary screen has no import or export of its own. The heatmap stays on the
+phone that learned it. Nothing syncs anywhere on its own.
