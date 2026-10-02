@@ -71,6 +71,7 @@ object SettingsIndex {
         Entry(Screen.Effects, Keys.EFFECTS_TITLE, Keys.EFFECTS_ENABLE),
         Entry(Screen.Languages, null, Keys.LANGUAGES_INSTALLED_PACKS),
         Entry(Screen.Languages, Keys.LANGUAGES_INSTALLED_PACKS, Keys.LANGUAGES_NONE_YET),
+        Entry(Screen.Languages, Keys.LANGUAGES_INSTALLED_PACKS, Keys.LANGUAGES_REMEMBER_LANGUAGE),
         Entry(Screen.Languages, null, Keys.LANGUAGES_INCLUDED_WITH_THE_APP),
         Entry(Screen.Languages, null, Keys.LANGUAGES_MORE_TITLE),
         Entry(Screen.Languages, null, Keys.LANGUAGES_IMPORT_YOUR_OWN),

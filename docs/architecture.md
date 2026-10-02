@@ -119,7 +119,7 @@ one from the other, and it never was the answer to that question.
    | Pass | Runs when | Searches | Ceiling | Commits |
    |---|---|---|---|---|
    | `Primary` | always | the packs the request is [restricted to](#which-pack-a-request-is-restricted-to), or every pack | by length | yes |
-   | `AllPacks` | `Primary` found nothing, a restriction applied, and the lock is not strict | every pack | by length | yes |
+   | `OtherPacks` | a restriction applied, the lock is not strict, and another pack could read the letters more closely than `Primary`'s closest reading | every other pack, keeping only [closer readings](#closer-readings) | by length, lowered to what outmatches `Primary` | yes |
    | `UserModel` | something is typed | the personal trie | — | yes |
    | `Wide` | something is typed and nothing has been found | every pack | `kFallbackEditCost` | no, the strip only |
    | `NextWord` | nothing is typed | the personal successors and phrases | — | yes |
@@ -302,6 +302,7 @@ is answered by the evidence and dominance mechanism below, never by drifting a w
 | `kEditPenalty` | **40.0** | The multiplier on every edit. Must clear `ln(worst frequency ratio)` so that one transposition outweighs the gap between the commonest and rarest word in a pack. Floored at 15 by a `static_assert`. |
 | `kInsertCost` | 0.85 | A dropped letter is a commoner slip than a wrong key, so just under a full neighbour substitution. |
 | `kDeleteCost` | **1.6** | Deliberately not the mirror of `kInsertCost`. Supplying a letter someone did not type is the ordinary lossiness of typing; discarding one they *did* type throws away the only direct evidence of intent. At 0.85, 79% of the correct words the pack lacked were overwritten by something *shorter* — `bisection` → `section`, `crewel` → `crew`. Swept 0.85 to 2.0: unknown words left alone 66.0% → 90.0%, the typo and mid-word corpora never move, and the strip holds at 71.9% up to 1.6 and drops from 1.7. |
+| `kRepeatDeleteCost` | **0.75** | Discarding a letter typed right after the same letter: a key struck twice. Priced as `kDeleteCost` it lost to any closer word, and with Romanian also on, `nationaal` became `națională` (a swap, 0.8) instead of `national`. Just under a swap because at 0.6 `aagin`, a swap of `again`, read as a doubled `a` plus a letter and became `aging`. Doubled corpus 187 → 191, unknown words left alone 188 → 191, every other corpus and the strip unchanged. |
 | `kTransposeCost` | 0.80 | One gesture out of order, not two errors. Deliberately only *slightly* cheaper: at the old 0.65 this priced two equally common slips as though one were a thousand times likelier, which let `acm` → `cam` crowd out `acum`. |
 | `kMarkInsertCost` | **0.02** | A mark — an apostrophe or a hyphen — left out is a convention dropped, not a key missed. This is what makes `cant` → `can't` and `wellknown` → `well-known` reachable. At `kEditPenalty` 40 it costs 0.8 points: enough that an exactly-spelled word still wins, little enough that a commoner contraction wins on frequency. |
 | `kMarkDeleteCost` | **3.0** | The same mark in the other direction. Nobody's finger lands on an apostrophe by accident, so discarding one is a contradiction rather than a correction — `the workers' rights` was becoming `the workers rights`. Above `maxEditCostFor`'s largest ceiling (2.5), so no ordinary search reaches a word by dropping a mark; below `kFallbackEditCost` (4.2), so the wide pass may still *show* the stripped word without ever committing it. |
@@ -438,7 +439,9 @@ Everything that can stop a correction, in the order it applies.
 2. **`plausibleCorrectionTarget()`** — `kCorrectionFrequencyFloor = 9.0` nats below the pack's own
    commonest word. Expressed relatively so a smaller corpus does not raise the bar on itself.
    Nine nats is 3.9 Zipf, which separates real targets (`occurred` 4.84, `receive` 5.09, `the`
-   7.81) from junk (`cr` 3.78, `eh` 3.32) cleanly.
+   7.81) from junk (`cr` 3.78, `eh` 3.32) cleanly. A spelling another active pack holds counts
+   when it clears that pack's floor: `great` is rare in the Romanian list and common in the
+   English one, and it is the same word in both.
 3. **`Engine::personalWordEstablished`** — a learned word no pack holds is offered, counts as
    a known word, and is predicted after its context only once *established*: chosen on purpose
    at least once, or written `kMinPersonalEvidence` effective times. Until then it is a count.
@@ -452,7 +455,11 @@ argument rather than a correction:
   (`in` → `în` is two real words that differ by an accent, not a coin toss);
 - **the dictionaries spell the word** — it is a word, and a keyboard does not correct words. The
   engine ranks by likelihood, so a real but uncommon word loses to a longer common one and was
-  being replaced by it;
+  being replaced by it. Once a language leads the evidence, its spelling answers first; when it
+  reads the letters another way (`daca` as `dacă`, `Havard` as the name `Håvard`) that reading
+  is taken, and only when it reads them not at all does another language's spelling count, so
+  `aceasta` stays `aceasta` after an English sentence. A name reads the letters only in the case
+  they were typed in: the English name `Duca` is no reading of `duca`, the Romanian `ducă` is;
 - the suggestion is what was typed, or what was typed in a different case;
 - `typed != suggestionQuery` — a stale answer, see [the typing path](#the-typing-path);
 - `editDistance(stripDiacritics(typed), stripDiacritics(suggestion)) > maxEdits` — a ceiling on
@@ -464,8 +471,10 @@ argument rather than a correction:
   the dictionaries as an ordinary word within `kStemFrequencyFloor` (10.5 nats) of the pack's
   commonest, the ending is one the language forms (`WordStems`, English and Romanian tables),
   and the answer is neither that stem nor another inflection of it nor the typed letters carried
-  on. The prediction worker asks the engine which stems it vouches for beside the other
-  per-request answers, so the delimiter blocks on nothing.
+  on. A stem counts only in the dictionary of the language whose ending made it: `orices` is
+  not the Romanian `orice` with an English plural. The prediction worker asks the engine which
+  stems it vouches for, one language at a time, beside the other per-request answers, so the
+  delimiter blocks on nothing.
 
 ### Cross-pack agreement
 
@@ -637,10 +646,17 @@ it, which is not something anyone can answer by trying values. *How much* eviden
 is the question a person can have an opinion about, and that one is `languageLockMinimum_`, from
 the settings.
 
-`setLanguageLock(minimum, strict)` controls how one-sided the evidence must be before other
-languages stop being searched. When a dominant pack turns out to have nothing for the current
-word, the search **re-runs unrestricted** — the detector is a guess about the sentence, not a
-verdict on the next word.
+`setLanguageLock(minimum, strict)` controls how one-sided the evidence must be before a language
+is decided. Once it is, the other languages are still searched, but offer only [closer
+readings](#closer-readings) of the letters typed — the detector is a guess about the sentence,
+not a verdict on the next word. Strict offers nothing from them at all. Setting it decides the
+language again from the evidence already gathered, so evidence put back before the first field
+sets the lock is judged by that lock, not by the engine's default.
+
+`languageEvidence(tag)` and `setLanguageEvidence(tag, value)` read and set one language's
+evidence, the setter deciding the language again as a committed word does. The service uses them
+to carry the verdict through a restart of the keyboard; the tests, to type each case right after
+a decided sentence without writing the sentence again.
 
 ### Which pack a request is restricted to
 
@@ -654,9 +670,43 @@ const int restrictTo = (dominantPack_ >= 0)   ? dominantPack_
 
 **The preferred pack sits below the detected one, never above it**, and that is the whole meaning
 of the word. `setPreferredLanguage(tag)` says where detection *starts*; it is outranked the moment
-the evidence decides otherwise, and a word it does not hold still falls through to every other
-pack via the empty-heap retry. Set Romanian and write four English words and you get English,
-because by then it is no longer a guess.
+the evidence decides otherwise, and the other packs still offer their closer readings. Set
+Romanian and write four English words and you get English, because by then it is no longer a
+guess.
+
+### Closer readings
+
+A restricted request searches its pack first (`Primary`), recording the closest reading of the
+typed letters it reaches: the edit cost, then the fit — spelling the letters with every mark
+typed, spelling them without a mark typed (`carti` for `carți`), or running on past them. Which
+of its words count as readings:
+
+- an ordinary word always, however rare;
+- a name reached by an edit, or running on, only when it clears the correction floor (`American`
+  counts, `Weathers` does not);
+- a name reached without an edit only in the case the letters were typed in.
+
+`OtherPacks` then searches every other pack and keeps a word only when it reads the letters more
+closely: cheaper by `kLanguageMargin` (0.5), or as cheap and a closer fit. Where `Primary` read
+nothing at all, the decided language says nothing about the word and the others answer as if
+none were decided. Measured cases, the corpora typed right after a sentence in the other
+language:
+
+| Typed after | Decided language reads | Another reads | Result |
+|---|---|---|---|
+| English | `mibtea` as `Mineta`, 1.8 | `mintea`, 1.0 | `mintea`: cheaper by more than the margin |
+| English | `cand` as `candy`, running on | `când`, spelled | `când`: as cheap, closer fit |
+| Romanian | `speeaker` as `speakeri`, 0.75, running on | `speaker`, 0.75, spelled | `speaker` |
+| English | `car` as `car`, spelled | `ar`, `cu`, by edits | `car`, and nothing Romanian beside it |
+| English | `zpart` as `apart`, 1.41 (a diagonal key) | `spart`, 1.0 (a straight one) | `apart`: 0.41 is a near tie, and ties go to the decided language |
+
+The margin is more than a diagonal neighbour costs over a straight one (0.41) and less than a
+deletion costs over a swap (0.8). `TwoLanguageCorpusTest` holds the autocorrect corpora to
+floors with Romanian and English both on, each word typed after a sentence in the other language
+and after one in its own. Before this rule the other language's words were searched only when the
+decided one found nothing at all: Romanian plain words after English went 135 → 200 of 200,
+English transpositions after Romanian 63 → 188 of 200, and no run in its own language lost a
+word.
 
 It is **not** a term in the score, and nothing in the scoring path reads it. That distinction is
 the reason it exists: a pack's `weight` *is* a scoring term (`packWeightLog`), so using weight to
@@ -669,9 +719,15 @@ and requires the pack to be *active*, not merely open. An empty tag, or one nami
 absent or switched off, resolves to −1 and behaves as no preference — which is the default, and
 restores exactly the behaviour that shipped before the setting existed.
 
-`resetLanguageEvidence()` forgets the verdict so a new field decides for itself; the service calls
-it on field start **only when a preferred language is set**, since without one, inheriting the
-previous field's verdict is what the keyboard has always done.
+`resetLanguageEvidence()` forgets the verdict so a new field decides for itself. The service calls
+it on field start unless `rememberDetectedLanguage` is on and no language is preferred. The
+setting is on by default, which keeps what the keyboard has always done within one run: a field
+inherits the previous field's verdict. It also carries that verdict through a restart: whenever
+the keyboard hides, the service writes each language's evidence to the `language_evidence`
+preferences file, and puts it back once the packs have loaded in a new process, so a new session
+starts in the language the last one ended in rather than from equal weights. Off, the file is
+emptied and every field starts undecided. A preferred language takes precedence: every field
+starts from it, and the Languages screen greys the switch.
 
 ### Backward — `LanguageSwitchCorrector`
 

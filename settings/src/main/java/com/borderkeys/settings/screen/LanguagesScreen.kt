@@ -44,6 +44,7 @@ import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.predict.LanguagePackInspector
 import com.borderkeys.settings.DefaultableSlider
+import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PickerChip
@@ -51,6 +52,7 @@ import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.SwitchRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -121,6 +123,23 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
             // Once, under the packs.
             if (packs.isNotEmpty()) {
                 Explanation(strings[Keys.LANGUAGES_PREFERRED_NOTE])
+                // Greyed, not hidden, while a dictionary is Preferred.
+                val preferred = preferences.preferredLanguageTag.isNotEmpty()
+                if (preferred) {
+                    Explanation(strings[Keys.LANGUAGES_REMEMBER_LANGUAGE_NEEDS_NO_PREFERRED])
+                }
+                Disableable(disabled = preferred) {
+                    SwitchRow(
+                        title = strings[Keys.LANGUAGES_REMEMBER_LANGUAGE],
+                        subtitle = strings[Keys.LANGUAGES_REMEMBER_LANGUAGE_NOTE],
+                        checked = preferences.rememberDetectedLanguage,
+                        enabled = !preferred,
+                    ) { keep ->
+                        scope.launch {
+                            DataGraph.themes.updatePreferences { it.copy(rememberDetectedLanguage = keep) }
+                        }
+                    }
+                }
             }
             // How the packs are weighed against each other while writing.
             AdvancedSection(strings[Keys.LANGUAGES_ADVANCED_NOTE]) {

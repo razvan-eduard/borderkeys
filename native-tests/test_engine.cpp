@@ -449,8 +449,11 @@ void runEngineTests() {
         // frequency: "thexx" reaches "thex" at one edit and "the" at two.
         check(loaded.rankOf("thexx", "thex") == 0,
               "the one-edit correction outranks a much more frequent two-edit one");
-        check(loaded.rankOf("thexx", "the") < 0,
-              "and the two-deletion reading is beyond the ceiling too");
+        check(loaded.rankOf("thexy", "the") < 0,
+              "and a reading two deletions away is beyond the ceiling too");
+        // A repeated letter is deleted at kRepeatDeleteCost.
+        check(loaded.rankOf("timmer", "timer") == 0,
+              "a letter typed twice reads as the word with it once");
 
         // Insertion reaches any character, not only keys near the next one: "kyboard" needs an
         // 'e' before the 'y'.

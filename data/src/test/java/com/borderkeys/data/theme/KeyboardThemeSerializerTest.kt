@@ -106,6 +106,7 @@ class KeyboardThemeSerializerTest {
             clipboardRetentionMinutes = 15,
             clipboardEnabled = false,
             perAppLanguageMemory = true,
+            rememberDetectedLanguage = false,
         )
         val bytes = ByteArrayOutputStream().also { output ->
             kotlinx.coroutines.runBlocking {

@@ -126,14 +126,21 @@ internal fun inflectionOf(
     if (correction == null) {
         return false
     }
-    val stems = WordStems.candidates(query, languages).take(NativePredictor.MAX_STEMS_QUERY)
-    if (stems.isEmpty()) {
+    // Each language's endings are checked against that language's dictionary alone.
+    val knownStems = HashSet<String>()
+    for (language in languages) {
+        val stems =
+            WordStems.candidates(query, listOf(language)).take(NativePredictor.MAX_STEMS_QUERY)
+        if (stems.isEmpty()) {
+            continue
+        }
+        val known = BooleanArray(stems.size)
+        if (NativePredictor.nativeKnownStems(handle, language, stems.toTypedArray(), known) > 0) {
+            stems.filterIndexedTo(knownStems) { index, _ -> known[index] }
+        }
+    }
+    if (knownStems.isEmpty()) {
         return false
     }
-    val known = BooleanArray(stems.size)
-    if (NativePredictor.nativeKnownStems(handle, stems.toTypedArray(), known) == 0) {
-        return false
-    }
-    val knownStems = stems.filterIndexed { index, _ -> known[index] }.toSet()
     return WordStems.shields(query, correction, knownStems, languages)
 }

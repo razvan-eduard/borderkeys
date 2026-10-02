@@ -114,8 +114,8 @@ class PipelineCorpusTest {
         const val TYPO_FLOOR = 199
         const val MIDWORD_FLOOR = 192
         const val MIDTYPO_FLOOR = 44
-        const val UNKNOWN_FLOOR = 188
-        const val DOUBLED_FLOOR = 187
+        const val UNKNOWN_FLOOR = 191
+        const val DOUBLED_FLOOR = 191
         const val FIRSTLETTER_FLOOR = 166
         const val MARKS_FLOOR = 240
         const val ACCENTS_FLOOR = 237

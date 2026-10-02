@@ -12,8 +12,11 @@ namespace borderkeys {
 enum class Pass : uint8_t {
     /** The packs the request is restricted to. */
     Primary,
-    /** Every pack, when Primary found nothing and the language is not locked. */
-    AllPacks,
+    /**
+     * The other packs, when the request is restricted and the lock is not strict: a word is kept
+     * only when it matches the typed letters more closely than anything Primary reached.
+     */
+    OtherPacks,
     /** The personal dictionary. */
     UserModel,
     /** Every pack again at kFallbackEditCost, when nothing else found anything. */
@@ -33,6 +36,8 @@ enum class PassSource : uint8_t {
     RestrictedPacks,
     /** Every active pack. */
     AllPacks,
+    /** Every active pack but the one the request is restricted to. */
+    OtherPacks,
     /** The personal words. */
     PersonalWords,
     /** The personal successors and phrases. */
@@ -43,6 +48,8 @@ enum class PassSource : uint8_t {
 enum class PassCeiling : uint8_t {
     /** maxEditCostFor the typed length. */
     ByLength,
+    /** maxEditCostFor the typed length, lowered to what outmatches Primary's closest reading. */
+    PrimaryClosest,
     /** kFallbackEditCost. */
     Fallback,
     /** None: the pass does not walk the packs. */
@@ -59,6 +66,8 @@ struct PlanState {
     bool strict;
     /** How many candidates the passes before this one found. */
     int found;
+    /** Whether a word could read the typed letters more closely than Primary's closest reading. */
+    bool primaryOutmatchable;
 };
 
 /** One pass: when it runs, what it searches, and under what ceiling. */
@@ -75,8 +84,8 @@ constexpr bool always(const PlanState& /*state*/) {
     return true;
 }
 
-constexpr bool restrictedPrimaryFoundNothing(const PlanState& state) {
-    return state.found == 0 && state.restricted && !state.strict;
+constexpr bool restrictedAndOutmatchable(const PlanState& state) {
+    return state.typedLength > 0 && state.restricted && !state.strict && state.primaryOutmatchable;
 }
 
 constexpr bool somethingTyped(const PlanState& state) {
@@ -96,8 +105,8 @@ constexpr bool nothingTyped(const PlanState& state) {
 /** The passes of one request, in the order they run. */
 inline constexpr PassSpec kSearchPlan[] = {
     {Pass::Primary, plan::always, PassSource::RestrictedPacks, PassCeiling::ByLength},
-    {Pass::AllPacks, plan::restrictedPrimaryFoundNothing, PassSource::AllPacks,
-     PassCeiling::ByLength},
+    {Pass::OtherPacks, plan::restrictedAndOutmatchable, PassSource::OtherPacks,
+     PassCeiling::PrimaryClosest},
     {Pass::UserModel, plan::somethingTyped, PassSource::PersonalWords, PassCeiling::None},
     {Pass::Wide, plan::somethingTypedAndNothingFound, PassSource::AllPacks,
      PassCeiling::Fallback},

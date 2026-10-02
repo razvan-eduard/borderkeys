@@ -31,6 +31,17 @@ attestations and the full commit lists are on the
   are no longer cut at 200 words and a hundred pairs and triples.
 - The personal dictionary moves only through Backup and transfer: its screen's own CSV export
   and import are gone.
+- Remember detected language, on the Languages screen: the language you were writing carries
+  into the next field and through a restart of the keyboard. On by default; off, every field
+  starts undecided. With a Preferred dictionary every field starts from it instead.
+- Once a few words have identified the language you are writing, the other dictionaries are
+  still heard, but only for a word that matches what you typed more closely than anything in
+  that language: a Romanian word typed in an English sentence gets its diacritics back, and an
+  English slip after Romanian is corrected into English.
+- Fixed: a letter struck twice, "timmer" for "timer", was read as a different word rather than
+  the one with the letter once.
+- Fixed: a word with another language's ending, "orices", was taken for a form of a word in the
+  first language and left uncorrected.
 - Fixed: a restored backup's words reached the suggestions only once the keyboard restarted;
   they now count at once.
 - Fixed: Undo right after typing a word took back more than the word, and Redo after some typing
