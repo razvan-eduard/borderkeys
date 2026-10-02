@@ -199,6 +199,12 @@ protected against the file being copied elsewhere, which is the realistic threat
 `:app` and `:assist` open the database independently, in separate processes, so the
 read-check-generate-write of the passphrase runs behind a `FileLock` on a marker file.
 
+A backup file that carries the dictionary or the clipboard is written only under a passphrase:
+AES-256-GCM with a key from PBKDF2-HMAC-SHA256 at 600,000 rounds, a fresh salt and nonce for
+every file, and the file's header authenticated together with its contents (`BackupFile`). A file
+written at the earlier 210,000 rounds still opens; one declaring more than 5,000,000 rounds is
+refused before any key is derived.
+
 ---
 
 ## The clipboard
