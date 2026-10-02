@@ -47,6 +47,7 @@ import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.ime.fx.applyParticleLayer
 import com.borderkeys.predict.Candidate
+import com.borderkeys.predict.CorrectionOffer
 import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.predict.ScoreExplanation
 import com.borderkeys.predict.SwipeModelLoad
@@ -1703,10 +1704,14 @@ class BorderKeysService :
     override fun onSuggestions(
         candidates: List<Candidate>,
         knownWord: String,
+        knownWordExact: Boolean,
+        knownWordIsName: Boolean,
         query: String,
         possessive: String?,
-        inflection: Boolean,
-    ) = orchestrator.onSuggestions(candidates, knownWord, query, possessive, inflection)
+        corrections: List<CorrectionOffer>,
+    ) = orchestrator.onSuggestions(
+        candidates, knownWord, knownWordExact, knownWordIsName, query, possessive, corrections,
+    )
 
     // The words each event has shown an effect for, for this run only.
     private val effectsShown = HashMap<EffectEvent, MutableSet<String>>()

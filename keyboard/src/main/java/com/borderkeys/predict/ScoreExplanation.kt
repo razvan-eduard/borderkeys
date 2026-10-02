@@ -24,9 +24,19 @@ class ScoreExplanation(
     val rank: Int,
     val editDistance: Int,
     val addedCharacters: Int,
+    /** The walk's edit cost to the word, in key widths. */
+    val editCost: Float,
+    /** How many edits the walk took. */
+    val edits: Int,
+    /** How many characters the word runs on past the last one typed. */
+    val runOn: Int,
+    /** What the edits cost on the strip, what needing one cost on top, what the run-on cost. */
+    val editPenalty: Float,
+    val surcharge: Float,
+    val completion: Float,
 ) {
     companion object {
-        const val SLOTS = 9
+        const val SLOTS = 15
 
         fun fromSlots(values: FloatArray): ScoreExplanation = ScoreExplanation(
             total = values[0],
@@ -38,6 +48,12 @@ class ScoreExplanation(
             rank = values[6].toInt(),
             editDistance = values[7].toInt(),
             addedCharacters = values[8].toInt(),
+            editCost = values[9],
+            edits = values[10].toInt(),
+            runOn = values[11].toInt(),
+            editPenalty = values[12],
+            surcharge = values[13],
+            completion = values[14],
         )
     }
 }

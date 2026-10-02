@@ -6,6 +6,7 @@ package com.borderkeys.typing
 import com.borderkeys.data.KeyboardStats
 import com.borderkeys.ime.SuggestionRow
 import com.borderkeys.predict.Candidate
+import com.borderkeys.predict.CorrectionOffer
 
 /**
  * What the strip asks the engine and what it is told: the word last asked about, the engine's
@@ -95,23 +96,22 @@ class SuggestionFlow(
         return true
     }
 
-    /** Keeps the engine's answer about [query]; its correction is the candidate it marked. */
+    /** Keeps the engine's answer about [query]. */
     fun keep(
-        candidates: List<Candidate>,
         knownWord: String,
+        knownWordExact: Boolean,
+        knownWordIsName: Boolean,
         query: String,
         possessive: String?,
-        inflection: Boolean,
+        corrections: List<CorrectionOffer>,
     ) {
-        // The word the corrections heap settled on, in the engine's own case.
-        val marked = candidates.firstOrNull { it.isCorrection }
         answer = SearchAnswer(
             query = query,
             knownWord = knownWord,
-            correction = marked?.text,
-            correctionIsName = marked?.isProperNoun == true,
+            knownWordExact = knownWordExact,
+            knownWordIsName = knownWordIsName,
+            corrections = corrections,
             possessive = possessive,
-            inflection = inflection,
         )
     }
 
@@ -121,8 +121,9 @@ class SuggestionFlow(
         answer = answer.copy(
             query = word,
             knownWord = word,
-            correction = word,
-            correctionIsName = isName,
+            knownWordExact = true,
+            knownWordIsName = isName,
+            corrections = listOf(CorrectionOffer(word, isName, inflection = false)),
         )
     }
 
@@ -131,9 +132,9 @@ class SuggestionFlow(
         answer = answer.copy(
             query = "",
             knownWord = "",
-            correction = null,
-            correctionIsName = false,
-            inflection = false,
+            knownWordExact = false,
+            knownWordIsName = false,
+            corrections = emptyList(),
         )
     }
 

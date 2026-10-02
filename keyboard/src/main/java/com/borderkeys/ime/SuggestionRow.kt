@@ -101,11 +101,8 @@ internal class SuggestionRow {
         slot: Int,
         cap: Int,
     ) {
-        // Found by the engine's mark, else by its letters.
-        var at = row.indexOfFirst { it.isCorrection }
-        if (at < 0) {
-            at = row.indexOfFirst { it.text == text }
-        }
+        // Found by its letters.
+        val at = row.indexOfFirst { it.text == text }
         if (at > 0) {
             val marked = row.removeAt(at)
             row.add(slot, marked.copy(text = text, isCorrection = true))

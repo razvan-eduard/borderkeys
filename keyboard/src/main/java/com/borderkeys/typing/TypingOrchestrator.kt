@@ -18,6 +18,7 @@ import com.borderkeys.ime.RunningText
 import com.borderkeys.ime.ShiftState
 import com.borderkeys.ime.WordCommit
 import com.borderkeys.predict.Candidate
+import com.borderkeys.predict.CorrectionOffer
 import com.borderkeys.predict.RefusedWords
 import com.borderkeys.predict.WordFold
 
@@ -1343,9 +1344,11 @@ class TypingOrchestrator(
     fun onSuggestions(
         candidates: List<Candidate>,
         knownWord: String,
+        knownWordExact: Boolean,
+        knownWordIsName: Boolean,
         query: String,
         possessive: String?,
-        inflection: Boolean,
+        corrections: List<CorrectionOffer>,
     ) {
         if (!suggestionFlow.accept(query)) {
             return
@@ -1353,7 +1356,7 @@ class TypingOrchestrator(
         if (composing.isNotEmpty()) {
             host.setEditorEmpty(false)
         }
-        suggestionFlow.keep(candidates, knownWord, query, possessive, inflection)
+        suggestionFlow.keep(knownWord, knownWordExact, knownWordIsName, query, possessive, corrections)
         val cased = shiftFlow.caseForStrip(candidates, lastQuery)
         val slots = suggestionFlow.wordSlots() ?: return
         // Arranged for the slots that hold words, outlining what a delimiter would commit.

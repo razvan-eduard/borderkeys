@@ -7,35 +7,37 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The correction `nativeAnswer` marks by index is the correction it names. */
+/** The list `nativeAnswer` hands over is autocorrect's own: in order, one spelling once, whole. */
 class CorrectionIdentityTest {
 
     @Test
-    fun `the marked candidate is the corrections heap's own answer`() {
+    fun `the bridge's list is the engine's, deduplicated, and the word committed is on it`() {
         Pipeline.require()
         val pipeline = Pipeline.open("ro-RO")
         try {
-            var marked = 0
-            var absent = 0
+            var listed = 0
+            var committedFromList = 0
             for (typed in WORDS) {
-                val view = pipeline.stripWithCorrection(typed)
-                val ranked = view.ranked
-                val at = view.correctionAt
-                val correction = view.correction
-                if (at < 0) {
-                    absent++
-                    // Not among the ranked words.
-                    continue
-                }
-                assertTrue("$typed: index $at is outside ${ranked.size} words", at < ranked.size)
+                val offers = pipeline.corrections(typed)
+                assertTrue("$typed: more than five entries", offers.size <= 5)
                 assertEquals(
-                    "$typed: the marked entry is not the corrections heap's own word",
-                    correction, ranked[at],
+                    "$typed: a spelling listed twice: ${offers.map { it.text }}",
+                    offers.map { it.text.lowercase() }.distinct().size, offers.size,
                 )
-                marked++
+                assertTrue("$typed: an empty entry", offers.none { it.text.isEmpty() })
+                if (offers.isNotEmpty()) {
+                    listed++
+                }
+                val committed = pipeline.commit(typed).committed ?: continue
+                assertTrue(
+                    "$typed: committed $committed, not on the list ${offers.map { it.text }}",
+                    offers.any { it.text.equals(committed, ignoreCase = true) },
+                )
+                committedFromList++
             }
-            assertTrue("no word marked a correction at all -- the index is not being set", marked > 0)
-            println("marked $marked, not in the ranking $absent")
+            assertTrue("no word had a list at all -- the slots are not being filled", listed > 0)
+            assertTrue("no word was corrected from its list", committedFromList > 0)
+            println("listed $listed, committed from the list $committedFromList")
         } finally {
             pipeline.close()
         }

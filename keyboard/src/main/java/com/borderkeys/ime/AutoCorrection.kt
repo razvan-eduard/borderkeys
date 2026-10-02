@@ -3,6 +3,7 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.predict.CorrectionOffer
 import java.text.Normalizer
 
 /** Whether a delimiter should replace what was typed, and with what. */
@@ -47,40 +48,115 @@ internal object AutoCorrection {
         Correctable,
     }
 
+    /** [pick]'s answer: the [Situation] and, when it is [Situation.Correctable], the cased text. */
+    class Pick(val situation: Situation, val text: String?)
+
     /**
-     * Which [Situation] this is, checked in order. [cased] is the answer after [matchCase];
-     * [inflection] is [WordStems.shields]'s answer for [typed] against [suggestion].
+     * What a delimiter does with [typed], given autocorrect's list [corrections] for
+     * [suggestionQuery] and what the dictionaries say of the word: [knownWord] is [typed] when
+     * they spell it, [knownWordExact] whether one spells it exactly, case aside, and
+     * [knownWordIsName] whether that spelling is a name. The word itself is judged first
+     * ([typedSituation]); then each offer in turn ([candidateSituation]), the first that is
+     * [Situation.Correctable] winning, a [Situation.TooShort] offer stopping the walk, an offer
+     * behind a refused one admitted only within the engine's own edit count, and the first
+     * offer's situation standing when none wins.
      */
-    fun situationOf(
+    fun pick(
         typed: String,
-        suggestion: String?,
+        corrections: List<CorrectionOffer>,
         suggestionQuery: String,
         knownWord: String,
-        cased: String,
+        knownWordExact: Boolean,
+        knownWordIsName: Boolean,
         minimumLength: Int,
-        isProperNoun: Boolean = false,
         maxEdits: Int = Int.MAX_VALUE,
         capitaliseNames: Boolean = true,
-        inflection: Boolean = false,
+    ): Pick {
+        typedSituation(
+            typed, corrections, suggestionQuery, knownWord, knownWordExact, knownWordIsName,
+            capitaliseNames,
+        )?.let { return it }
+        var first: Situation? = null
+        for (offer in corrections) {
+            // [capitaliseNames] gates only a name's capital, not [Situation.NameMismatch].
+            val cased = matchCase(typed, offer.text, offer.isName && capitaliseNames)
+            val situation = candidateSituation(
+                typed, offer, cased, minimumLength, maxEdits, behindRefused = first != null,
+            )
+            if (first == null) {
+                first = situation
+            }
+            when (situation) {
+                Situation.Correctable -> return Pick(situation, cased)
+                Situation.TooShort -> return Pick(situation, null)
+                else -> Unit
+            }
+        }
+        return Pick(first ?: Situation.NothingOffered, null)
+    }
+
+    /**
+     * The verdict the typed word settles on its own, or null when the offers decide: nothing
+     * offered and nothing known, an answer about another word, a trailing mark, or a word the
+     * dictionaries spell, which is left alone unless it is a name to capitalise.
+     */
+    private fun typedSituation(
+        typed: String,
+        corrections: List<CorrectionOffer>,
+        suggestionQuery: String,
+        knownWord: String,
+        knownWordExact: Boolean,
+        knownWordIsName: Boolean,
+        capitaliseNames: Boolean,
+    ): Pick? = when {
+        corrections.isEmpty() && knownWord.isEmpty() -> Pick(Situation.NothingOffered, null)
+        typed != suggestionQuery -> Pick(Situation.StaleAnswer, null)
+        typed.isNotEmpty() && typed.last() in TRAILING_MARKS -> Pick(Situation.TrailingMark, null)
+        knownWord.isNotEmpty() && knownWord.equals(typed, ignoreCase = true) -> {
+            val recased = if (knownWordExact && knownWordIsName && capitaliseNames) {
+                matchCase(typed, typed, isProperNoun = true)
+            } else {
+                typed
+            }
+            when {
+                recased != typed -> Pick(Situation.Correctable, recased)
+                knownWordExact -> Pick(Situation.NoChange, null)
+                else -> Pick(Situation.KnownWord, null)
+            }
+        }
+        else -> null
+    }
+
+    /**
+     * Which [Situation] one [offer] is for [typed]; [cased] is the offer after [matchCase]. The
+     * distance is the string distance; [behindRefused], for an offer behind one passed over, the
+     * walk's own edit count counts too.
+     */
+    private fun candidateSituation(
+        typed: String,
+        offer: CorrectionOffer,
+        cased: String,
+        minimumLength: Int,
+        maxEdits: Int,
+        behindRefused: Boolean,
     ): Situation = when {
-        suggestion.isNullOrEmpty() -> Situation.NothingOffered
-        typed != suggestionQuery -> Situation.StaleAnswer
-        typed.isNotEmpty() && typed.last() in TRAILING_MARKS -> Situation.TrailingMark
-        editDistance(stripDiacritics(typed), stripDiacritics(suggestion)) > maxEdits ->
-            Situation.TooFar
-        isProperNoun &&
-            !stripDiacritics(typed).equals(stripDiacritics(suggestion), ignoreCase = true) ->
+        editDistance(stripDiacritics(typed), stripDiacritics(offer.text)) > maxEdits ||
+            (behindRefused && offer.edits > maxEdits) -> Situation.TooFar
+        offer.isName &&
+            !stripDiacritics(typed).equals(stripDiacritics(offer.text), ignoreCase = true) ->
             Situation.NameMismatch
         cased == typed -> Situation.NoChange
         typed.length < minimumLength &&
-            !(typed.length >= MIN_DIACRITIC_LENGTH && isDiacriticOnlyDifference(typed, suggestion)) ->
+            !(typed.length >= MIN_DIACRITIC_LENGTH && isDiacriticOnlyDifference(typed, offer.text)) ->
             Situation.TooShort
-        typed == knownWord && !(isProperNoun && capitaliseNames) -> Situation.KnownWord
-        inflection && !isSameLetters(typed, suggestion) -> Situation.Inflection
+        offer.inflection && !isSameLetters(typed, offer.text) -> Situation.Inflection
         else -> Situation.Correctable
     }
 
-    /** The correction to apply, cased like [typed], or null to commit what was typed. */
+    /**
+     * [pick] for one offer: the correction to apply, cased like [typed], or null to commit what
+     * was typed. [isProperNoun] is the offer's, and the known spelling's when [knownWord] is set.
+     */
     fun correctionFor(
         typed: String,
         suggestion: String?,
@@ -91,14 +167,17 @@ internal object AutoCorrection {
         maxEdits: Int = Int.MAX_VALUE,
         capitaliseNames: Boolean = true,
         inflection: Boolean = false,
-    ): String? {
-        // [capitaliseNames] gates only a name's capital, not [Situation.NameMismatch].
-        val cased = matchCase(typed, suggestion.orEmpty(), isProperNoun && capitaliseNames)
-        val situation = situationOf(typed, suggestion, suggestionQuery, knownWord, cased,
-                                    minimumLength, isProperNoun, maxEdits, capitaliseNames,
-                                    inflection)
-        return if (situation == Situation.Correctable) cased else null
-    }
+    ): String? = pick(
+        typed,
+        if (suggestion.isNullOrEmpty()) emptyList() else listOf(CorrectionOffer(suggestion, isProperNoun, inflection)),
+        suggestionQuery,
+        knownWord,
+        knownWordExact = knownWord.isNotEmpty(),
+        knownWordIsName = isProperNoun && knownWord.isNotEmpty(),
+        minimumLength,
+        maxEdits,
+        capitaliseNames,
+    ).text
 
     /** Whether [typed] and [suggestion] are the same letters once accents, case and marks --
      *  apostrophes and hyphens -- are set aside. */

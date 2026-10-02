@@ -53,6 +53,9 @@ attestations and the full commit lists are on the
   "loke|this", replaced both; it now replaces the first and leaves the second.
 - Fixed: the clipboard chip's "Offer it only once" spent a clip in the app it was copied from,
   so it was gone before the keyboard opened anywhere else.
+- Fixed: when autocorrect's first guess was refused as too far, as a name, or as a form of a
+  word you know, the guesses behind it were never tried: "writet" stayed as typed where
+  "writer" was next on the list.
 - Fixed: a restored backup's words reached the suggestions only once the keyboard restarted;
   they now count at once.
 - Fixed: Undo right after typing a word took back more than the word, and Redo after some typing

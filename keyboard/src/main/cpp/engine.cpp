@@ -1460,8 +1460,8 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
                 }
                 if (commits(currentPass_) && reachesCorrectionHeap(reading) &&
                     plausibleCorrectionTarget(pack, wordIndex)) {
-                    // The heap's own key: a letter past the last one typed is a letter the user
-                    // left out, and any departure from the typed letters pays the surcharge.
+                    // The correction heap's key: run-on letters at kRunOnCost, the surcharge on
+                    // any departure from the typed letters.
                     const float runOnPenalty =
                         correctionStrictness_ * kEditPenalty * kRunOnCost *
                         static_cast<float>(frame.depth);

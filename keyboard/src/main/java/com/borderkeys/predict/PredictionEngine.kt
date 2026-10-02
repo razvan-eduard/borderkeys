@@ -29,15 +29,19 @@ class PredictionEngine(
     /** Receives the engine's answers on the UI thread. */
     interface ResultListener {
         /**
-         * [query] is the composing text the answer is about, as it was asked. [knownWord] is the
-         * dictionaries' spelling of [query], or empty when they do not hold it.
+         * [query] is the composing text the answer is about, as it was asked. [knownWord] is
+         * [query] when the dictionaries spell it, or empty; [knownWordExact] whether one spells it
+         * exactly, case aside, and [knownWordIsName] whether that spelling is a name.
+         * [corrections] is autocorrect's list for [query], best first.
          */
         fun onSuggestions(
             candidates: List<Candidate>,
             knownWord: String,
+            knownWordExact: Boolean,
+            knownWordIsName: Boolean,
             query: String,
             possessive: String?,
-            inflection: Boolean,
+            corrections: List<CorrectionOffer>,
         )
 
         /** A decoded swipe, best first. */
@@ -732,8 +736,8 @@ class PredictionEngine(
     private fun publish() {
         val answer = synchronized(resultLock) { latestAnswer } ?: return
         listener?.onSuggestions(
-            answer.candidates(refused), answer.knownWord, answer.query, answer.possessive,
-            answer.inflection,
+            answer.candidates(refused), answer.knownWord, answer.knownWordExact,
+            answer.knownWordIsName, answer.query, answer.possessive, answer.offers(refused),
         )
     }
 
