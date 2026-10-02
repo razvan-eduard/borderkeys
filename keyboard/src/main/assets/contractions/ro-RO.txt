@@ -8,7 +8,7 @@
 assassins	assassin's	en-US,fr-FR
 domle	dom'le	
 etoo	eto'o	
-mcdonalds	mcdonald's	de-DE,en-US,es-ES
+mcdonalds	mcdonald's	de-DE,es-ES
 moodys	moody's	
 obrien	o'brien	
 poors	poor's	

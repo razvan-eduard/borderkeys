@@ -812,6 +812,16 @@ Two tiers behind one interface (`GestureDecoder`), merged across packs through o
 interface (`GestureScorer`). Passing the scorer as an interface rather than a pointer to `Engine`
 is what removes the header cycle and lets a decoder be tested against a stub with no engine.
 
+Both tiers walk the trie through the keys the finger crossed, and both may step once through the
+trie's mark child — an apostrophe or a hyphen, `marks.hpp` — between two letters, with no key for
+it, at `kSwipeMarkCost` (4 nats) on the word's score. A swipe through d-o-n-t reaches `don't`; a
+bare spelling the pack holds beside its marked twin keeps the lead on frequency (`its` over
+`it's`). When the swipe composes, a candidate whose bare spelling the contraction table rewrites
+is written as the table has it (`TypingOrchestrator.caseSwipedWords`), one text once, so `didnt`
+and `im` swipe to `didn't` and `I'm` as they type to them. The bare spellings the English table
+rewrites that are not words themselves are not in the English list
+(`make_contractions.py --prune-bare`).
+
 ### Tier A — `Shark2Decoder`
 
 Geometric, in the manner of SHARK² (Kristensson and Zhai, 2004). Ships in **every** build and is
@@ -826,7 +836,7 @@ almost every word before measuring anything. Two channels, both needed:
 - **Location**, absolute pixels, no normalisation. Stops shape being fooled: `were` and `tie`
   trace nearly the same figure in nearly the same proportions, in different places.
 
-**77.0% top-1, 90.2% top-3** on 500 recorded traces from FUTO's held-out split, against the
+**77.2% top-1, 90.2% top-3** on 500 recorded traces from FUTO's held-out split, against the
 shipped English pack (`native-tests/data/gestures_futo.csv`, gated in CI). The SHARK² paper
 reports about 80% on English QWERTY; this is our implementation on real swipes, and it is the
 number tier B has to beat to justify its weights.
@@ -849,7 +859,7 @@ their original values.
 ### Tier B — `TcnDecoder`
 
 `plus`-only, behind `BORDERKEYS_NEURAL_SWIPE`, and **on by default** since it was measured:
-**90.6% top-1, 94.8% top-3** on the same 500 traces, 13.6 points above tier A and ahead at every
+**90.4% top-1, 94.6% top-3** on the same 500 traces, 13.2 points above tier A and ahead at every
 word length. A `core` build compiles no tier B at all, so tier A is what that flavour swipes
 with. Three stages:
 
@@ -1036,7 +1046,7 @@ terms, which is the question every scoring change starts with and the one a rank
 answer.
 
 A harness that forgets `setKeyGeometry` measures prefix completion and reports it as the whole
-engine. Current baseline: **71.9% first, mean rank 1.39.**
+engine. Current baseline: **75.0% first, mean rank 1.29.**
 
 ### The context model on held-out text
 

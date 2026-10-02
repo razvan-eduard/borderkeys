@@ -42,6 +42,7 @@ target_compile_definitions(borderkeys_engine PUBLIC BORDERKEYS_NEURAL_SWIPE=1)
 # Scoring constants a sweep may set; empty keeps the engine's own values.
 set(BORDERKEYS_EDIT_PENALTY "" CACHE STRING "kEditPenalty for this build")
 set(BORDERKEYS_CORRECTION_SURCHARGE "" CACHE STRING "kCorrectionSurcharge for this build")
+set(BORDERKEYS_SWIPE_MARK_COST "" CACHE STRING "kSwipeMarkCost for this build")
 set(BORDERKEYS_SLIP_SCALE "" CACHE STRING "kSlipScale for this build")
 set(BORDERKEYS_RUN_ON_COST "" CACHE STRING "kRunOnCost for this build")
 set(BORDERKEYS_DELETE_COST "" CACHE STRING "kDeleteCost for this build")
@@ -71,6 +72,10 @@ function(apply_sweep_definitions target)
     if(BORDERKEYS_CORRECTION_SURCHARGE)
         target_compile_definitions(${target} PUBLIC
             BORDERKEYS_CORRECTION_SURCHARGE=${BORDERKEYS_CORRECTION_SURCHARGE})
+    endif()
+    if(BORDERKEYS_SWIPE_MARK_COST)
+        target_compile_definitions(${target} PUBLIC
+            BORDERKEYS_SWIPE_MARK_COST=${BORDERKEYS_SWIPE_MARK_COST})
     endif()
 endfunction()
 apply_sweep_definitions(borderkeys_engine)

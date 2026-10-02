@@ -50,6 +50,7 @@ private:
         float logProbBlank = 0.f;
         float logProbNonBlank = 0.f;  // -infinity until this prefix has emitted anything
         int32_t letters = 0;          // characters emitted, for the length terms in the score
+        int32_t marks = 0;            // trie marks stepped through with no key of their own
     };
 
     /** log(sigmoid(z_t[slot] for every geometry slot)) + log(intention_t), for one timestep --
@@ -57,8 +58,16 @@ private:
     void keyLogProbsFor(const float* spectralFrame, float intentionFrame, float* outLogProbs) const;
 
     int addOrMergeHypothesis(Hypothesis* hyps, int count, int32_t node, uint32_t lastSymbol,
-                             int32_t lastSlot, int32_t letters, float blankContribution,
-                             float nonBlankContribution) const;
+                             int32_t lastSlot, int32_t letters, int32_t marks,
+                             float blankContribution, float nonBlankContribution) const;
+
+    /**
+     * Extends [h] through every key slot from [node], the trie node the extension starts at, into
+     * [next]; [marks] is the extended prefix's mark count and [markCost] what reaching [node]
+     * through a mark cost.
+     */
+    int extendBySlots(const Hypothesis& h, int32_t node, int32_t marks, float markCost,
+                      const PackedTrie& trie, Hypothesis* next, int nextCount) const;
     int pruneToBeamWidth(Hypothesis* hyps, int count) const;
 
     /** Forgets every position the merge table holds; called before each timestep's extensions. */
@@ -77,6 +86,8 @@ private:
 
     /** The trie symbol under each key slot, resolved once per decode. */
     int slotSymbol_[KeyGeometry::kMaxKeys] = {};
+    /** The trie symbols of the apostrophe and the hyphen, or 0, resolved once per decode. */
+    int markSymbol_[2] = {};
 
     /**
      * Where a (node, last symbol) pair already sits in the beam being built, by open

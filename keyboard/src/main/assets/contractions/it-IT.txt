@@ -643,7 +643,7 @@ darco	d'arco
 darea	d'area	ro-RO
 dargento	d'argento	
 dargo	d'argo	
-daria	d'aria	de-DE,en-US,es-ES,ro-RO
+daria	d'aria	de-DE,en-US,ro-RO
 darma	d'arma	
 darmata	d'armata	
 darredo	d'arredo	
@@ -1372,7 +1372,7 @@ duva	d'uva
 délite	d'élite	fr-FR
 glielha	gliel'ha	
 glielho	gliel'ho	
-greys	grey's	en-US
+greys	grey's	
 labate	l'abate	
 labbandono	l'abbandono	
 labbassamento	l'abbassamento	
@@ -1701,7 +1701,7 @@ lascensore	l'ascensore
 lascesa	l'ascesa	
 lascoli	l'ascoli	
 lascolto	l'ascolto	
-lasd	l'asd	en-US
+lasd	l'asd	
 lasfalto	l'asfalto	
 lasia	l'asia	
 lasilo	l'asilo	
@@ -2042,7 +2042,7 @@ lex	l'ex	de-DE,en-US,es-ES,ro-RO
 lexploit	l'exploit	
 lexpo	l'expo	
 lexport	l'export	
-lf	l'f	de-DE,en-US,es-ES,fr-FR
+lf	l'f	de-DE
 lfbi	l'fbi	
 lha	l'ha	
 lhabitat	l'habitat	
@@ -2314,6 +2314,7 @@ liter	l'iter	de-DE,en-US
 litinerario	l'itinerario	
 liva	l'iva	
 livoriano	l'ivoriano	
+lm	l'm	en-US,es-ES,fr-FR,ro-RO
 loasi	l'oasi	
 lobbiettivo	l'obbiettivo	
 lobbligatorietà	l'obbligatorietà	
@@ -2431,6 +2432,7 @@ lottimo	l'ottimo
 lottobre	l'ottobre	
 loutfit	l'outfit	
 lrt	l'rt	en-US
+ls	l's	de-DE,en-US,es-ES,fr-FR
 lsms	l'sms	
 lubicazione	l'ubicazione	
 luccello	l'uccello	
@@ -2497,7 +2499,7 @@ lutilità	l'utilità
 lutilizzo	l'utilizzo	
 luva	l'uva	
 lè	l'è	
-mcdonalds	mcdonald's	de-DE,en-US,es-ES,ro-RO
+mcdonalds	mcdonald's	de-DE,es-ES,ro-RO
 mezzasta	mezz'asta	
 mezzora	mezz'ora	
 moodys	moody's	

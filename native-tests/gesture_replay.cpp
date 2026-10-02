@@ -26,6 +26,27 @@ namespace {
 
 using namespace borderkeys;
 
+/** Whether `text` is `word` once apostrophes and hyphens are set aside in both. */
+bool sameWordMarksAside(const char* text, uint32_t length, const std::string& word) {
+    size_t at = 0;
+    for (uint32_t i = 0; i < length; ++i) {
+        if (text[i] == '\'' || text[i] == '-') {
+            continue;
+        }
+        while (at < word.size() && (word[at] == '\'' || word[at] == '-')) {
+            ++at;
+        }
+        if (at >= word.size() || word[at] != text[i]) {
+            return false;
+        }
+        ++at;
+    }
+    while (at < word.size() && (word[at] == '\'' || word[at] == '-')) {
+        ++at;
+    }
+    return at == word.size();
+}
+
 struct Layout {
     int32_t codes[64] = {};
     float xs[64] = {};
@@ -159,8 +180,7 @@ int main(int argc, char** argv) {
             for (int i = 0; i < found; ++i) {
                 uint32_t length = 0;
                 const char* const text = engine.candidateText(out[i], &length);
-                if (text != nullptr && length == gesture.word.size() &&
-                    std::memcmp(text, gesture.word.data(), length) == 0) {
+                if (text != nullptr && sameWordMarksAside(text, length, gesture.word)) {
                     rank = i;
                     break;
                 }

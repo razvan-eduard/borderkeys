@@ -13,7 +13,7 @@ gehts	geht's
 germanys	germany's	
 gings	ging's	
 hats	hat's	en-US
-mcdonalds	mcdonald's	en-US,es-ES,ro-RO
+mcdonalds	mcdonald's	es-ES,ro-RO
 moodys	moody's	
 obrien	o'brien	
 oneill	o'neill	

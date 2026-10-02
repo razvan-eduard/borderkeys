@@ -8,7 +8,7 @@
 dalessandro	d'alessandro	
 dalessio	d'alessio	
 desquadra	d'esquadra	
-mcdonalds	mcdonald's	de-DE,en-US,ro-RO
+mcdonalds	mcdonald's	de-DE,ro-RO
 moodys	moody's	
 newells	newell's	
 obrien	o'brien	

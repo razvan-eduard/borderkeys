@@ -10,6 +10,7 @@ import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.CaretNudge
 import com.borderkeys.ime.Composer
+import com.borderkeys.ime.Contractions
 import com.borderkeys.ime.FieldRestore
 import com.borderkeys.ime.KeyCodes
 import com.borderkeys.ime.LanguageSwitchCorrector
@@ -926,11 +927,30 @@ class TypingOrchestrator(
      * the same text.
      */
     fun caseSwipedWords(candidates: List<Candidate>): List<Candidate> {
+        val written = withContractions(candidates)
         if (!preferences.capitaliseNames) {
-            return candidates
+            return written
         }
         composingWord.capitalisedByUser = shiftFlow.heldByUser && shiftFlow.state != ShiftState.OFF
-        return shiftFlow.caseSwiped(candidates)
+        return shiftFlow.caseSwiped(written)
+    }
+
+    /**
+     * [candidates] with each bare spelling the contraction table rewrites written as the table
+     * has it, one text once, the first copy kept.
+     */
+    private fun withContractions(candidates: List<Candidate>): List<Candidate> {
+        if (contractions.isEmpty()) {
+            return candidates
+        }
+        val out = ArrayList<Candidate>(candidates.size)
+        for (candidate in candidates) {
+            val written = Contractions.expansionFor(candidate.text, contractions) ?: candidate.text
+            if (out.none { it.text == written }) {
+                out.add(if (written == candidate.text) candidate else candidate.copy(text = written))
+            }
+        }
+        return out
     }
 
     /**

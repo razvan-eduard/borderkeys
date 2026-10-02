@@ -165,7 +165,7 @@ daide	d'aide
 daider	d'aider	
 daides	d'aides	
 daigle	d'aigle	
-dail	d'ail	en-US
+dail	d'ail	
 dailes	d'ailes	
 dailleurs	d'ailleurs	
 daimer	d'aimer	
@@ -654,7 +654,6 @@ dentente	d'entente
 denterrer	d'enterrer	
 denthousiasme	d'enthousiasme	
 dentraide	d'entraide	
-dentrainement	d'entrainement	
 dentraver	d'entraver	
 dentraînement	d'entraînement	
 dentraînements	d'entraînements	
@@ -718,7 +717,6 @@ destime	d'estime
 destimer	d'estimer	
 detat	d'etat	
 detats	d'etats	
-detre	d'etre	
 deugène	d'eugène	
 deuro	d'euro	
 deurope	d'europe	
@@ -1227,7 +1225,7 @@ dutilisateurs	d'utilisateurs
 dutilisation	d'utilisation	
 dutiliser	d'utiliser	
 dutilité	d'utilité	
-dy	d'y	en-US
+dy	d'y	
 dyeux	d'yeux	
 dyves	d'yves	
 dà	d'à	it-IT
@@ -1833,7 +1831,7 @@ larctique	l'arctique
 lardenne	l'ardenne	
 lardoise	l'ardoise	
 lardèche	l'ardèche	
-largent	l'argent	en-US
+largent	l'argent	
 largentin	l'argentin	
 largentine	l'argentine	
 largile	l'argile	
@@ -2051,9 +2049,6 @@ laïd	l'aïd
 leau	l'eau	
 lecho	l'echo	es-ES
 leco	l'eco	
-lecole	l'ecole	
-lecologie	l'ecologie	
-leconomie	l'economie	
 lecosse	l'ecosse	
 leducation	l'education	
 leffacement	l'effacement	
@@ -2065,7 +2060,6 @@ lefficience	l'efficience
 leffigie	l'effigie	
 leffondrement	l'effondrement	
 leffort	l'effort	
-leglise	l'eglise	
 legypte	l'egypte	
 lehpad	l'ehpad	
 lei	l'ei	en-US,it-IT,ro-RO
@@ -2156,8 +2150,6 @@ lentourage	l'entourage
 lentoure	l'entoure	
 lentourent	l'entourent	
 lentraide	l'entraide	
-lentrainement	l'entrainement	
-lentraineur	l'entraineur	
 lentraînement	l'entraînement	
 lentraîneur	l'entraîneur	
 lentrejeu	l'entrejeu	
@@ -2187,7 +2179,6 @@ lep	l'ep	en-US
 lepfl	l'epfl	
 lepic	l'epic	
 lequateur	l'equateur	
-lequipe	l'equipe	ro-RO
 lermitage	l'ermitage	
 lerreur	l'erreur	
 lesa	l'esa	es-ES,it-IT,ro-RO
@@ -2248,7 +2239,6 @@ leurope	l'europe
 leuropean	l'european	
 leurovision	l'eurovision	
 leuthanasie	l'euthanasie	
-levangile	l'evangile	
 leverest	l'everest	
 lexactitude	l'exactitude	
 lexamen	l'examen	
@@ -2416,7 +2406,6 @@ lifop	l'ifop
 lignorance	l'ignorance	
 lignorer	l'ignorer	
 ligpn	l'igpn	
-lile	l'ile	
 lill	l'ill	
 lillinois	l'illinois	
 lillusion	l'illusion	
@@ -2730,7 +2719,7 @@ loeuvre	l'oeuvre
 loffensive	l'offensive	
 loffice	l'office	
 lofficialisation	l'officialisation	
-lofficier	l'officier	en-US
+lofficier	l'officier	
 loffre	l'offre	
 lofsp	l'ofsp	
 logc	l'ogc	
@@ -2750,7 +2739,7 @@ lolp	l'olp
 lolympia	l'olympia	
 lolympiakos	l'olympiakos	
 lolympique	l'olympique	
-lom	l'om	en-US,es-ES,ro-RO
+lom	l'om	en-US,ro-RO
 lombre	l'ombre	
 lomc	l'omc	
 lomniprésence	l'omniprésence	
@@ -2844,7 +2833,7 @@ louganda	l'ouganda
 louragan	l'ouragan	
 lours	l'ours	
 loutil	l'outil	
-louverture	l'ouverture	en-US
+louverture	l'ouverture	
 louvrage	l'ouvrage	
 louvrier	l'ouvrier	
 louvrir	l'ouvrir	
@@ -2893,7 +2882,7 @@ luqam	l'uqam
 luranium	l'uranium	
 lurbanisation	l'urbanisation	
 lurbanisme	l'urbanisme	
-lurd	l'urd	en-US
+lurd	l'urd	
 lurgence	l'urgence	
 lurine	l'urine	
 lurne	l'urne	
@@ -3125,7 +3114,7 @@ maurait	m'aurait
 mavait	m'avait	
 mavez	m'avez	
 mavoir	m'avoir	
-mcdonalds	mcdonald's	de-DE,en-US,es-ES,ro-RO
+mcdonalds	mcdonald's	de-DE,es-ES,ro-RO
 mempêcher	m'empêcher	
 men	m'en	en-US,it-IT
 mentraîner	m'entraîner	
@@ -3154,12 +3143,11 @@ naient	n'aient
 naimait	n'aimait	
 naime	n'aime	
 naiment	n'aiment	
-nait	n'ait	en-US
+nait	n'ait	
 nallait	n'allait	
 nallez	n'allez	
 nallons	n'allons	
 napparaissent	n'apparaissent	
-napparait	n'apparait	
 napparaît	n'apparaît	
 nappartiennent	n'appartiennent	
 nappartient	n'appartient	
@@ -3214,6 +3202,7 @@ nentraîne	n'entraîne
 nentre	n'entre	
 nentrent	n'entrent	
 nenvisage	n'envisage	
+nes	n'es	de-DE,en-US,es-ES,it-IT,ro-RO
 nest	n'est	de-DE,en-US,it-IT
 neut	n'eut	
 nexcluent	n'excluent	

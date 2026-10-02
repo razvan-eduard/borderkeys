@@ -3,6 +3,8 @@
 
 #include "shark2_decoder.hpp"
 
+#include "../marks.hpp"
+
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -132,7 +134,7 @@ float Shark2Decoder::bestGeometryLogProb(const TemplateCache::Entry& candidate) 
 }
 
 void Shark2Decoder::walk(int packIndex, const PackedTrie& trie, int32_t node, int position,
-                         int depth, uint32_t* letters, TopK<Candidate>& heap) {
+                         int depth, uint32_t* letters, TopK<Candidate>& heap, int marksUsed) {
     if (visitBudget_ <= 0 || depth >= kMaxWordLetters) {
         return;
     }
@@ -167,7 +169,7 @@ void Shark2Decoder::walk(int packIndex, const PackedTrie& trie, int32_t node, in
                     float score = scorer_.packWeightLog(packIndex) +
                                   scorer_.contextLogProb(packIndex,
                                                          static_cast<uint32_t>(wordIndex)) +
-                                  geometryLogProb;
+                                  geometryLogProb - kSwipeMarkCost * static_cast<float>(marksUsed);
                     uint32_t textLength = 0;
                     const char* const text =
                         trie.wordText(static_cast<uint32_t>(wordIndex), &textLength);
@@ -184,6 +186,25 @@ void Shark2Decoder::walk(int packIndex, const PackedTrie& trie, int32_t node, in
         return;
     }
 
+    extend(packIndex, trie, node, position, depth, letters, heap, marksUsed);
+
+    // One mark between two letters: the trie's mark child, with no key of its own crossed.
+    if (marksUsed == 0 && depth >= 1) {
+        for (const uint32_t mark : kMarkCodePoints) {
+            const int symbol = trie.symbolFor(mark);
+            if (symbol <= 0 || visitBudget_ <= 0) {
+                continue;
+            }
+            const int32_t child = trie.walk(node, symbol);
+            if (child >= 0) {
+                extend(packIndex, trie, child, position, depth, letters, heap, 1);
+            }
+        }
+    }
+}
+
+void Shark2Decoder::extend(int packIndex, const PackedTrie& trie, int32_t node, int position,
+                           int depth, uint32_t* letters, TopK<Candidate>& heap, int marksUsed) {
     const int slots = geometry_->keyCount();
     const int8_t* const reachable = nextOccurrence_[position];
     for (int slot = 0; slot < slots; ++slot) {
@@ -201,7 +222,7 @@ void Shark2Decoder::walk(int packIndex, const PackedTrie& trie, int32_t node, in
             continue;
         }
         letters[depth] = codePoint;
-        walk(packIndex, trie, child, next, depth + 1, letters, heap);
+        walk(packIndex, trie, child, next, depth + 1, letters, heap, marksUsed);
         if (visitBudget_ <= 0) {
             return;
         }
@@ -286,7 +307,7 @@ void Shark2Decoder::searchPack(int packIndex, TopK<Candidate>& heap) {
             continue;
         }
         letters[0] = codePoint;
-        walk(packIndex, *trie, child, first, 1, letters, heap);
+        walk(packIndex, *trie, child, first, 1, letters, heap, 0);
         if (visitBudget_ <= 0) {
             return;
         }

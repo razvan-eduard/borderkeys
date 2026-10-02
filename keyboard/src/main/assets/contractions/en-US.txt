@@ -61,7 +61,7 @@ barcelonas	barcelona's	de-DE
 barretts	barrett's	
 barrs	barr's	
 baseballs	baseball's	
-batmans	batman's	de-DE
+batmans	batman's	
 bbcs	bbc's	
 beethovens	beethoven's	de-DE
 beijings	beijing's	
@@ -190,7 +190,7 @@ estonias	estonia's
 ethiopias	ethiopia's	
 euclids	euclid's	
 europes	europe's	
-eus	eu's	es-ES,fr-FR
+eus	eu's	fr-FR
 everybodys	everybody's	
 everyones	everyone's	
 everythings	everything's	
@@ -282,7 +282,7 @@ italys	italy's
 itd	it'd	
 itll	it'll	
 ive	I've	es-ES,fr-FR,ro-RO
-jacksons	jackson's	de-DE,ro-RO
+jacksons	jackson's	de-DE
 jamaicas	jamaica's	
 jamess	james's	
 janes	jane's	de-DE
@@ -304,7 +304,7 @@ kapoors	kapoor's
 kashmirs	kashmir's	
 kates	kate's	
 kazakhstans	kazakhstan's	
-kellys	kelly's	de-DE,es-ES
+kellys	kelly's	de-DE
 kennedys	kennedy's	de-DE
 kentuckys	kentucky's	
 kenyas	kenya's	
@@ -370,7 +370,7 @@ mccains	mccain's
 mccarthys	mccarthy's	
 mcconnells	mcconnell's	
 mcdonalds	mcdonald's	de-DE,es-ES,ro-RO
-medias	media's	es-ES,fr-FR
+medias	media's	es-ES
 meghans	meghan's	de-DE
 melbournes	melbourne's	
 melvilles	melville's	
@@ -606,7 +606,7 @@ washingtons	washington's	de-DE
 wasnt	wasn't	
 watsons	watson's	
 waynes	wayne's	
-wed	we'd	it-IT
+wed	we'd	
 weinsteins	weinstein's	
 wendys	wendy's	
 werent	weren't	
