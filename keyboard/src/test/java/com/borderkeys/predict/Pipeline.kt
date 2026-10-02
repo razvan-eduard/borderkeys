@@ -12,6 +12,7 @@ import org.junit.AssumptionViolatedException
 import java.io.File
 import java.io.FileDescriptor
 import java.io.FileInputStream
+import java.io.FileWriter
 import java.io.PrintWriter
 import java.util.Locale
 
@@ -186,12 +187,12 @@ internal class Pipeline private constructor(
 
         /**
          * A writer for the readings file [name] in the `borderkeys.readings` directory, or null
-         * when that property is unset.
+         * when that property is unset; with [append], the file is added to rather than replaced.
          */
-        fun readings(name: String): PrintWriter? {
+        fun readings(name: String, append: Boolean = false): PrintWriter? {
             val directory = System.getProperty("borderkeys.readings")?.let(::File) ?: return null
             directory.mkdirs()
-            return File(directory, name).printWriter()
+            return PrintWriter(FileWriter(File(directory, name), append))
         }
 
         /** Where the compiled packs are, or null when they have not been built. */

@@ -333,6 +333,13 @@ public:
         int32_t rank = -1;
         int32_t editDistance = 0;
         int32_t addedCharacters = 0;
+        // How the walk reached the word, and what each part of that cost on the strip.
+        float editCost = 0.0f;
+        int32_t edits = 0;
+        int32_t runOn = 0;
+        float editPenalty = 0.0f;
+        float surcharge = 0.0f;
+        float completion = 0.0f;
     };
 
     /** Fills [out] for [candidate] as an answer to [typed]; false when the search does not
@@ -347,6 +354,19 @@ public:
     const Candidate* bestCorrection() const {
         return hasBestCorrection_ ? &bestCorrection_ : nullptr;
     }
+
+    /**
+     * Autocorrect's candidates from the last [suggest] request, best first: the respelling of
+     * the letters typed when there is one, then the correction heap. Returns how many, with
+     * [out] pointing at them. Valid until the next request.
+     */
+    int corrections(const Candidate** out) const {
+        *out = settled_;
+        return settledCount_;
+    }
+
+    /** The multiplier on kEditPenalty and kCorrectionSurcharge in force. */
+    float correctionStrictness() const { return correctionStrictness_; }
 
     // Whether the candidate is a name: a pack word flagged by every active pack that knows it, or
     // a personal word the user capitalised on purpose or the active packs agree is a name.
@@ -374,6 +394,7 @@ private:
     struct Endpoint {
         int32_t node;
         float cost;
+        uint8_t edits;
     };
 
     int packIndexForTag(const char* tag) const;
@@ -426,10 +447,11 @@ private:
     // Offers a candidate, replacing an entry for the same word instead of adding a second one.
     void offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, const char* text,
                         uint32_t textLength) const;
-    // Looks a word up and offers it, unless even the largest personal boost cannot reach the
-    // heap's floor.
+    // Looks a word up and offers it with how it was reached, unless even the largest personal
+    // boost cannot reach the heap's floor.
     void offerScoredWord(TopK<Candidate>& heap, const PackedTrie& trie, int packIndex,
-                         uint32_t wordIndex, float score) const;
+                         uint32_t wordIndex, float score, float editCost, int edits,
+                         int runOn) const;
     // Which language is being written, decided from the words already committed. dominantPack_
     // is -1 until the evidence is one-sided enough to be worth acting on.
     void observeContextLanguage(const uint32_t* folded, int length);
@@ -600,6 +622,10 @@ private:
     TopK<Candidate> correctionHeap_;
     Candidate bestCorrection_{};
     bool hasBestCorrection_ = false;
+
+    /** The respelling, when there is one, then the correction heap drained best first. */
+    Candidate settled_[1 + kMaxCorrections];
+    int settledCount_ = 0;
 
     /** The dictionary's spelling of exactly the letters typed, which outranks the heap above. */
     Candidate bestRespelling_{};
