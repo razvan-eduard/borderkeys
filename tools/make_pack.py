@@ -188,7 +188,7 @@ def read_ngram_counts(path: Path) -> tuple[Counter, Counter]:
 
 # What "proper noun" is called in each tagset the bundled grammars use (see docs/pos-tagging.md):
 # MULTEXT-East for Romanian (Np, plus its inflected forms), Penn for English (NNP/NNPS), STTS for
-# German (NE), UD-derived sets for Spanish and French (PROPN...), and ISDT for Italian (SP). Exact
+# German (NE), UD-derived sets for Spanish and French (PROPN...), and the Italian treebanks' (SP). Exact
 # for the two-letter ones -- "NE" must not match a negation tag, "SP" must not match MULTEXT's
 # "Spsa" preposition -- and a prefix for the rest.
 PROPER_NOUN_TAGS = frozenset({"NE", "SP"})

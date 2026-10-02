@@ -10,14 +10,7 @@
   "hunspell": [
     "hu_HU/hu_HU"
   ],
-  "treebank": {
-    "repository": "UD_Hungarian-Szeged",
-    "files": [
-      "hu_szeged-ud-train.conllu",
-      "hu_szeged-ud-dev.conllu",
-      "hu_szeged-ud-test.conllu"
-    ]
-  },
+  "treebank": null,
   "overlay": {
     "a": "á",
     "e": "é",

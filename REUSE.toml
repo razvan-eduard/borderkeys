@@ -78,14 +78,34 @@ SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 # Part-of-speech tags and transition matrices, derived by tools/build_pos.py from Universal
-# Dependencies treebanks. The treebanks are CC-BY-SA-4.0; Creative Commons declares a one-way
-# compatibility from CC-BY-SA-4.0 to GPL-3.0, so what is derived from them ships under the GPL.
+# Dependencies treebanks. The treebanks are CC-BY-SA-4.0, one CC-BY-4.0; Creative Commons declares a
+# one-way compatibility from CC-BY-SA-4.0 to GPL-3.0, so what is derived from them ships under the GPL.
 # Attribution is in docs/licensing.md, which names each treebank.
 [[annotations]]
 path = "dictionaries/*.pos"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Universal Dependencies contributors"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+# The downloadable packs' grammars, from the treebanks their manifests in tools/languages name:
+# CC-BY-SA-4.0, except Polish LFG, GPL-3.0-only, and Arabic PUD, CC-BY-SA-3.0.
+[[annotations]]
+path = "dictionaries/extra/*.pos"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Universal Dependencies contributors"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+[[annotations]]
+path = "dictionaries/extra/pl_PL.pos"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Universal Dependencies contributors"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+[[annotations]]
+path = "dictionaries/extra/ar.pos"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Universal Dependencies contributors"
+SPDX-License-Identifier = "CC-BY-SA-3.0"
 
 # Every user-facing word in the product, one JSON file per language.
 [[annotations]]

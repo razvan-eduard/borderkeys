@@ -455,9 +455,12 @@ which the Languages screen's "More languages" card points at; the person downloa
 browser and imports it through "Import your own". Its word list lives in `dictionaries/extra/`,
 which the Gradle task above does not compile, and a manifest in `tools/languages/<tag>.json`
 names everything the pipeline needs: the Leipzig corpora, the Hunspell dictionary (a path in
-LibreOffice's repository, or the two files' own URLs), the Universal Dependencies treebank, the
-Wikidata language code, the long-press letters, the single-letter words, and the reachability
-budget once it has been measured.
+LibreOffice's repository, or the two files' own URLs), the Universal Dependencies treebank or
+treebanks at a pinned `release` (`"tags": "composed"` asks for UPOS plus agreement features
+over the treebank's own tagset), the Wikidata language code, the long-press letters, the
+single-letter words, and the reachability budget once it has been measured. A treebank has to
+be licensed for use in a GPL application; a NonCommercial one never is, and a language with
+nothing else carries no grammar.
 
 ```
 python3 tools/new_language.py tools/languages/nl_NL.json

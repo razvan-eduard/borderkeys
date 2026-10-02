@@ -11,14 +11,26 @@
   "hunspell": [
     "he_IL/he_IL"
   ],
-  "treebank": {
-    "repository": "UD_Hebrew-HTB",
-    "files": [
-      "he_htb-ud-train.conllu",
-      "he_htb-ud-dev.conllu",
-      "he_htb-ud-test.conllu"
-    ]
-  },
+  "treebank": [
+    {
+      "repository": "UD_Hebrew-IAHLTwiki",
+      "release": "r2.18",
+      "files": [
+        "he_iahltwiki-ud-train.conllu",
+        "he_iahltwiki-ud-dev.conllu",
+        "he_iahltwiki-ud-test.conllu"
+      ]
+    },
+    {
+      "repository": "UD_Hebrew-IAHLTknesset",
+      "release": "r2.18",
+      "files": [
+        "he_iahltknesset-ud-train.conllu",
+        "he_iahltknesset-ud-dev.conllu",
+        "he_iahltknesset-ud-test.conllu"
+      ]
+    }
+  ],
   "overlay": {},
   "single_letter_words": "",
   "expected_beyond_ascii": [],

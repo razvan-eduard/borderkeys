@@ -112,9 +112,17 @@ French getting a single tag or Romanian giving up its own.
 | Romanian | 255 | RRT's MULTEXT-East |
 | English | 49 | EWT's Penn tags |
 | German | 52 | GSD's STTS |
-| Italian | 38 | ISDT |
+| Italian | 44 | TWITTIRO, MarkIT and ParlaMint, which share one tagset |
 | Spanish | 255 | composed |
 | French | 212 | composed |
+
+Italian is built from every split of UD Italian TWITTIRO, MarkIT and ParlaMint, release 2.18:
+the Italian treebanks whose licences allow it. ISDT, the largest, is CC BY-NC-SA 3.0, and a
+NonCommercial licence cannot pass to a GPL application; the grammar was built from it until 30
+September 2026. Measured on held-out Italian (`suggest_eval --context`, UD Italian PUD), the
+three smaller treebanks together match it or do better at every depth: top three with context
+23.5%, 42.8%, 51.4% and 63.3% at nothing, one, two and three letters typed, against 23.5%,
+42.7%, 51.1% and 63.1% from ISDT, and 23.5%, 42.1%, 50.8% and 62.3% with no grammar at all.
 
 ## Where it applies
 

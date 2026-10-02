@@ -12,12 +12,12 @@
     "ar/ar"
   ],
   "treebank": {
-    "repository": "UD_Arabic-PADT",
+    "repository": "UD_Arabic-PUD",
+    "release": "r2.18",
     "files": [
-      "ar_padt-ud-train.conllu",
-      "ar_padt-ud-dev.conllu",
-      "ar_padt-ud-test.conllu"
-    ]
+      "ar_pud-ud-test.conllu"
+    ],
+    "tags": "composed"
   },
   "overlay": {
     "ا": "أإآ",
