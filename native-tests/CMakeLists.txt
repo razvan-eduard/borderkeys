@@ -39,6 +39,20 @@ target_include_directories(borderkeys_engine PUBLIC ${ENGINE_DIR})
 target_compile_options(borderkeys_engine PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra)
 target_compile_definitions(borderkeys_engine PUBLIC BORDERKEYS_NEURAL_SWIPE=1)
 
+# Scoring constants a sweep may set; empty keeps the engine's own values.
+set(BORDERKEYS_EDIT_PENALTY "" CACHE STRING "kEditPenalty for this build")
+set(BORDERKEYS_CORRECTION_SURCHARGE "" CACHE STRING "kCorrectionSurcharge for this build")
+function(apply_sweep_definitions target)
+    if(BORDERKEYS_EDIT_PENALTY)
+        target_compile_definitions(${target} PUBLIC BORDERKEYS_EDIT_PENALTY=${BORDERKEYS_EDIT_PENALTY})
+    endif()
+    if(BORDERKEYS_CORRECTION_SURCHARGE)
+        target_compile_definitions(${target} PUBLIC
+            BORDERKEYS_CORRECTION_SURCHARGE=${BORDERKEYS_CORRECTION_SURCHARGE})
+    endif()
+endfunction()
+apply_sweep_definitions(borderkeys_engine)
+
 # The test pack, produced by the real writer, tools/build_dict.py.
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(TEST_PACK ${CMAKE_CURRENT_BINARY_DIR}/test_pack.bkd)
@@ -167,6 +181,7 @@ if(JNI_FOUND)
     add_library(borderkeys SHARED ${ENGINE_SOURCES} ${ENGINE_DIR}/jni_bridge.cpp)
     target_include_directories(borderkeys PUBLIC ${ENGINE_DIR} ${JNI_DIRS})
     target_compile_definitions(borderkeys PUBLIC BORDERKEYS_NEURAL_SWIPE=1)
+    apply_sweep_definitions(borderkeys)
     # No -fno-exceptions here: the JDK's desktop jni.h is not built for it.
     target_compile_options(borderkeys PRIVATE -Wall -Wextra)
 else()

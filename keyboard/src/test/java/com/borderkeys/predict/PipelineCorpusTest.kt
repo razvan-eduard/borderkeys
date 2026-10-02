@@ -125,8 +125,8 @@ class PipelineCorpusTest {
         const val DOUBLED_FLOOR = 191
         const val FIRSTLETTER_FLOOR = 167
         const val MARKS_FLOOR = 240
-        const val SLIP_FLOOR = 178
-        const val OMITTED_FLOOR = 184
+        const val SLIP_FLOOR = 179
+        const val OMITTED_FLOOR = 186
         const val EXTRA_FLOOR = 192
         const val RAREPREFIX_FLOOR = 131
         const val KNOWN_FLOOR = 193

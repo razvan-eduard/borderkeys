@@ -676,8 +676,8 @@ is the number a user gets.
 | `autocorrect_doubled_en` | 200 | 95.5% | 191 |
 | `autocorrect_firstletter_en` | 200 | 85.0% | 167 |
 | `autocorrect_marks_en` | 240 | — | 240 |
-| `autocorrect_slip_en` | 200 | 89.0% | 178 |
-| `autocorrect_omitted_en` | 200 | 94.5% | 184 |
+| `autocorrect_slip_en` | 200 | 89.5% | 179 |
+| `autocorrect_omitted_en` | 200 | 95.5% | 186 |
 | `autocorrect_extra_en` | 200 | 96.5% | 192 |
 | `autocorrect_rareprefix_en` | 193 | 73.1% | 131 |
 | `autocorrect_known_en` | 200 | 98.5% left alone | 193 |
@@ -806,18 +806,24 @@ walk the heap's whole list for the first admissible entry; engine alone (`sugges
 before these changes did not model the edit ceiling) and through the whole path
 (`PipelineCorpusTest`):
 
-| corpus | rows | before | heap key | list walk |
-|---|---|---|---|---|
-| `autocorrect_slip_en` | 200 | 89.5% / 175 | 90.5% / 176 | 89.0% / **178** |
-| `suggest_slip_en` (strip) | 200 | 72.0% first, 90.5% top three | same | same |
-| `autocorrect_omitted_en` | 200 | 96.0% / 184 | 94.5% / 184 | 94.5% / **184** |
-| `autocorrect_extra_en` | 200 | 96.0% / 189 | 96.5% / 192 | 96.5% / **192** |
-| `autocorrect_rareprefix_en` | 193 | 65.8% / 116 | 73.6% / 127 | 73.1% / **131** |
-| `autocorrect_known_en` | 200 | 98.5% left alone / 193 | same | same, **193** |
+| corpus | rows | before | heap key | list walk | `kEditPenalty` 25 |
+|---|---|---|---|---|---|
+| `autocorrect_slip_en` | 200 | 89.5% / 175 | 90.5% / 176 | 89.0% / 178 | 89.5% / **179** |
+| `suggest_slip_en` (strip) | 200 | 72.0% first, 90.5% top three | same | same | 76.0% first, 93.0% top three |
+| `autocorrect_omitted_en` | 200 | 96.0% / 184 | 94.5% / 184 | 94.5% / 184 | 95.5% / **186** |
+| `autocorrect_extra_en` | 200 | 96.0% / 189 | 96.5% / 192 | 96.5% / 192 | same, **192** |
+| `autocorrect_rareprefix_en` | 193 | 65.8% / 116 | 73.6% / 127 | 73.1% / 131 | same, **131** |
+| `autocorrect_known_en` | 200 | 98.5% left alone / 193 | same | same | same, **193** |
 
 Each cell is the engine-alone share, then the whole-path count; the bold counts are the floors.
 The list walk also moved the unknown corpus 191 → 190: a rare word one deletion from a frequent
-one is corrected once the name that led its list is passed over.
+one is corrected once the name that led its list is passed over. `kEditPenalty` was swept at 40,
+25, 15, 10 and 8 (`cmake -DBORDERKEYS_EDIT_PENALTY=… -DBORDERKEYS_CORRECTION_SURCHARGE=…` on
+`native-tests`, the surcharge raised to keep the safety margin): the strip's `suggest_en` reads
+71.9% at every value and the native tests pass at every value; the slip's word is first on the
+strip 72.0, 76.0, 79.0, 84.0 and 84.0% of the time; through the whole path 25 gains the two rows
+above and loses none, while 15 loses one unknown and two rare-prefix rows for four omitted, one
+slip and one first-letter row.
 
 The slip corpus loses most of its rows to the edit ceiling or the name rule, not to ranking,
 and the rare-prefix corpus is where completions of a rare word outrank the frequent correction
