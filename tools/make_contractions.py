@@ -14,15 +14,21 @@ a word holding an apostrophe when:
 Each entry carries the tags of the other bundled languages whose own vocabulary holds the bare
 spelling; the keyboard drops the entry while one of those is switched on.
 
+With --prune-bare TAG=HUNSPELL, the bare spellings the table rewrites that TAG's own word list
+holds as ordinary words, and that the Hunspell dictionary at HUNSPELL rejects in every case form,
+are dropped from the list (with --apply) or reported.
+
 Usage
 -----
   tools/make_contractions.py            # report, write nothing
   tools/make_contractions.py --apply
+  tools/make_contractions.py --apply --prune-bare en_US=/path/to/en_US
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import math
 import sys
 from pathlib import Path
@@ -153,6 +159,10 @@ def main() -> int:
     parser.add_argument("--ratio", type=float, default=3.0)
     parser.add_argument("--sample", type=int, default=10)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--prune-bare", action="append", default=[], metavar="TAG[=HUNSPELL]",
+                        help="also drop from TAG's word list the bare spellings the table "
+                             "rewrites, names aside; with =HUNSPELL only those the dictionary "
+                             "at HUNSPELL rejects in every case form; TAG as in the file name")
     arguments = parser.parse_args()
 
     available = [t for t in BUNDLED if (arguments.dictionaries / f"{t}.tsv").is_file()]
@@ -195,11 +205,49 @@ def main() -> int:
             path = arguments.out / f"{BUNDLED[tag]}.txt"
             path.write_text(HEADER + "\n".join(lines) + "\n", encoding="utf-8")
             print(f"    written: {path}")
+        pruned = {item.split("=", 1)[0]: (item.split("=", 1) + [""])[1]
+                  for item in arguments.prune_bare}
+        if tag in pruned:
+            prune_bare(arguments.dictionaries / f"{tag}.tsv", table, names[tag],
+                       Path(pruned[tag]) if pruned[tag] else None, arguments.apply)
         print()
 
     if not arguments.apply:
         print("nothing written -- pass --apply")
     return 0
+
+
+def prune_bare(path: Path, table: dict, names: set[str], hunspell: Path | None,
+               apply: bool) -> None:
+    """Drops from the word list at [path] the rows the table rewrites, names aside, or with
+    [hunspell] only those the spell checker rejects in every case form; reports them, and
+    rewrites the list with --apply."""
+    candidates = sorted(
+        key for key, (written, _count, _rival) in table.items()
+        if key not in names and written.lower() != key.lower()
+    )
+    counts, _ = read_list(path)
+    present = [key for key in candidates if key in counts]
+    if hunspell is None:
+        junk = sorted(present, key=lambda k: -counts[k])
+        print(f"    bare spellings in the list: {len(present)}, all dropped")
+    else:
+        spec = importlib.util.spec_from_file_location(
+            "drop_misspellings", Path(__file__).with_name("drop_misspellings.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        junk = sorted(module.rejected_in_every_case(present, hunspell), key=lambda k: -counts[k])
+        print(f"    bare spellings in the list: {len(present)}, of them rejected by the spell "
+              f"checker: {len(junk)}")
+    for key in junk:
+        print(f"        {key:<12} -> {table[key][0]:<14} {counts[key]:>7,}")
+    if not apply or not junk:
+        return
+    dropped = set(junk)
+    kept = [line for line in path.read_text(encoding="utf-8").splitlines(keepends=True)
+            if line.split("\t", 1)[0] not in dropped]
+    path.write_text("".join(kept), encoding="utf-8")
+    print(f"    dropped {len(junk)} rows from {path}")
 
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@
 
 #include "tcn_ctc_decoder.hpp"
 
+#include "../marks.hpp"
+
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -138,7 +140,8 @@ void TcnCtcDecoder::clearMergeTable() const {
 
 int TcnCtcDecoder::addOrMergeHypothesis(Hypothesis* hyps, int count, int32_t node,
                                         uint32_t lastSymbol, int32_t lastSlot, int32_t letters,
-                                        float blankContribution, float nonBlankContribution) const {
+                                        int32_t marks, float blankContribution,
+                                        float nonBlankContribution) const {
     uint32_t cell = (static_cast<uint32_t>(node) * 0x9E3779B1u) ^ (lastSymbol * 0x85EBCA6Bu);
     cell &= static_cast<uint32_t>(kMergeTableSize - 1);
     for (;;) {
@@ -158,9 +161,37 @@ int TcnCtcDecoder::addOrMergeHypothesis(Hypothesis* hyps, int count, int32_t nod
         return count;  // dropped: the array is full
     }
     hyps[count] = Hypothesis{node,       lastSymbol,           lastSlot,
-                             blankContribution, nonBlankContribution, letters};
+                             blankContribution, nonBlankContribution, letters, marks};
     mergeTable_[cell] = static_cast<int16_t>(count);
     return count + 1;
+}
+
+int TcnCtcDecoder::extendBySlots(const Hypothesis& h, int32_t node, int32_t marks, float markCost,
+                                 const PackedTrie& trie, Hypothesis* next, int nextCount) const {
+    const float total = logSumExp(h.logProbBlank, h.logProbNonBlank);
+    for (int slot = 0; slot < keyCount_; ++slot) {
+        const int symbol = slotSymbol_[slot];
+        if (symbol <= 0) {
+            continue;
+        }
+        const int32_t child = trie.walk(node, symbol);
+        if (child < 0) {
+            continue;
+        }
+        const float charLogProb = keyLogProbs_[slot] - markCost;
+        if (static_cast<uint32_t>(symbol) == h.lastSymbol) {
+            // The same letter again, but as a NEW instance: only reachable by having passed
+            // through a blank first, which is exactly what h.logProbBlank tracks.
+            nextCount = addOrMergeHypothesis(next, nextCount, child, static_cast<uint32_t>(symbol),
+                                             slot, h.letters + 1, marks, kNegInf,
+                                             h.logProbBlank + charLogProb);
+        } else {
+            nextCount = addOrMergeHypothesis(next, nextCount, child, static_cast<uint32_t>(symbol),
+                                             slot, h.letters + 1, marks, kNegInf,
+                                             total + charLogProb);
+        }
+    }
+    return nextCount;
 }
 
 int TcnCtcDecoder::pruneToBeamWidth(Hypothesis* hyps, int count) const {
@@ -200,6 +231,8 @@ int TcnCtcDecoder::decode(const float* intention, const float* spectral, const P
     for (int slot = 0; slot < keyCount_; ++slot) {
         slotSymbol_[slot] = trie.symbolFor(geometry_->codeAt(slot));
     }
+    markSymbol_[0] = trie.symbolFor(kApostrophe);
+    markSymbol_[1] = trie.symbolFor(kHyphen);
 
     Hypothesis* current = beamA_;
     Hypothesis* next = beamB_;
@@ -218,39 +251,31 @@ int TcnCtcDecoder::decode(const float* intention, const float* spectral, const P
 
             // Stay via blank: the prefix is unchanged.
             nextCount = addOrMergeHypothesis(next, nextCount, h.node, h.lastSymbol, h.lastSlot,
-                                             h.letters, /*blank=*/total + blankLogProb, kNegInf);
+                                             h.letters, h.marks, /*blank=*/total + blankLogProb,
+                                             kNegInf);
 
             // Repeat the last emitted symbol without a blank in between: CTC collapses this into
             // the SAME prefix, one instance of the letter, not two.
             if (h.lastSymbol != 0) {
                 nextCount = addOrMergeHypothesis(next, nextCount, h.node, h.lastSymbol, h.lastSlot,
-                                                 h.letters, kNegInf,
+                                                 h.letters, h.marks, kNegInf,
                                                  h.logProbNonBlank + keyLogProbs_[h.lastSlot]);
             }
 
             // Extend via every key the trie can actually follow from here.
-            for (int slot = 0; slot < keyCount_; ++slot) {
-                const int symbol = slotSymbol_[slot];
-                if (symbol <= 0) {
-                    continue;
-                }
-                const int32_t child = trie.walk(h.node, symbol);
-                if (child < 0) {
-                    continue;
-                }
-                const float charLogProb = keyLogProbs_[slot];
-                if (static_cast<uint32_t>(symbol) == h.lastSymbol) {
-                    // The same letter again, but as a NEW instance: only reachable by having
-                    // passed through a blank first, which is exactly what h.logProbBlank tracks.
-                    nextCount = addOrMergeHypothesis(next, nextCount, child,
-                                                     static_cast<uint32_t>(symbol), slot,
-                                                     h.letters + 1, kNegInf,
-                                                     h.logProbBlank + charLogProb);
-                } else {
-                    nextCount = addOrMergeHypothesis(next, nextCount, child,
-                                                     static_cast<uint32_t>(symbol), slot,
-                                                     h.letters + 1, kNegInf,
-                                                     total + charLogProb);
+            nextCount = extendBySlots(h, h.node, h.marks, 0.f, trie, next, nextCount);
+
+            // One mark between two letters: the trie's mark child, with no key of its own.
+            if (h.marks == 0 && h.lastSymbol != 0) {
+                for (const int markSymbol : markSymbol_) {
+                    if (markSymbol <= 0) {
+                        continue;
+                    }
+                    const int32_t markNode = trie.walk(h.node, markSymbol);
+                    if (markNode >= 0) {
+                        nextCount = extendBySlots(h, markNode, 1, kSwipeMarkCost, trie, next,
+                                                  nextCount);
+                    }
                 }
             }
         }

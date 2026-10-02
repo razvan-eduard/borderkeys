@@ -116,15 +116,15 @@ class PipelineCorpusTest {
         const val CORPUS_DIRECTORY = "../native-tests/data"
         const val MISSES_LISTED = 24
 
-        /** Rows answered as the corpus expects, out of 200 -- 240 for the marks corpus and
-         *  248 for the accents corpus. */
+        /** Rows answered as the corpus expects, out of 200 -- 268 for the marks corpus, 248 for
+         *  the accents corpus and 193 for the rare-prefix corpus. */
         const val TYPO_FLOOR = 199
         const val MIDWORD_FLOOR = 192
         const val MIDTYPO_FLOOR = 44
         const val UNKNOWN_FLOOR = 190
         const val DOUBLED_FLOOR = 191
         const val FIRSTLETTER_FLOOR = 167
-        const val MARKS_FLOOR = 240
+        const val MARKS_FLOOR = 268
         const val SLIP_FLOOR = 179
         const val OMITTED_FLOOR = 186
         const val EXTRA_FLOOR = 192

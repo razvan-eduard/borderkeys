@@ -112,6 +112,20 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `a swiped bare spelling the table rewrites composes with its apostrophe`() {
+        rig.orchestrator.contractions = mapOf("didnt" to "didn't", "i" to "I")
+        rig.orchestrator.onGestureCandidates(listOf(Candidate("didnt"), Candidate("didn't"), Candidate("didst")))
+        rig.settle()
+        assertEquals("didn't", rig.orchestrator.composingText)
+        rig.type(" ")
+        assertEquals("didn't ", rig.editor.text)
+        rig.orchestrator.onGestureCandidates(listOf(Candidate("i"), Candidate("in")))
+        rig.settle()
+        rig.type(" ")
+        assertEquals("didn't I ", rig.editor.text)
+    }
+
+    @Test
     fun `the ring's pick replaces the swiped word and adds a space`() {
         rig.orchestrator.composeSwipedWord(swiped("the", "then", "they"))
         rig.settle()

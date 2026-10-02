@@ -324,10 +324,10 @@ in CI rather than being noticed on a device weeks later.
 
 | tier | top-1 | top-3 |
 |---|---|---|
-| A — `Shark2Decoder`, every build | **77.0%** | 90.2% |
-| B — `TcnDecoder`, `plus`, on by default | **90.6%** | 94.8% |
+| A — `Shark2Decoder`, every build | **77.2%** | 90.2% |
+| B — `TcnDecoder`, `plus`, on by default | **90.4%** | 94.6% |
 
-Tier A reads 77.0% rather than the 60.4% it held while only the five geometry constants had been
+Tier A reads 77.2% rather than the 60.4% it held while only the five geometry constants had been
 fitted. The 159 words it missed then were never scored at all: widening the heap from 16 to 256
 moved none of them, so the loss was in the descent rather than in the ranking. A letter was
 reachable only when its key was the single nearest one to some resampled sample, so a key clipped
@@ -377,7 +377,7 @@ keys narrow is a plausible reason, but these corpora differ in language and word
 and this data cannot separate the two.
 
 The levels are not comparable to the gated table above — the same decoder reads 67.0% here and
-77.0% there. Both are QWERTY and both drop taps and out-of-pack words; `swipe-5` is simply a
+77.2% there. Both are QWERTY and both drop taps and out-of-pack words; `swipe-5` is simply a
 harder collection than the held-out test split. Only the movement within a column means anything.
 
 ### Both tiers on other keyboards, with the lexicon — not gated
@@ -409,7 +409,7 @@ python3 tools/tcn_replay.py --binary native-tests/build/tcn_replay --layout azer
 
 | layout | words | tier A top-1 / top-3 | tier B top-1 / top-3 |
 |---|---|---|---|
-| qwerty | English | 77.0% / 90.2% | 90.6% / 94.8% |
+| qwerty | English | 77.2% / 90.2% | 90.4% / 94.6% |
 | dvorak | English | 66.2% / 78.8% | 81.4% / 91.2% |
 | qwertz | English | 50.2% / 63.4% | 63.0% / 72.2% |
 | qwertz | German | 70.2% / 83.6% | 79.8% / 88.0% |
@@ -497,7 +497,7 @@ over the tries, on this machine's release build (`cmake -S native-tests -B nativ
 | beam merges found through a hash table, key symbols resolved once per decode | 3.3 ms | 1.6 ms |
 
 Every step keeps the arithmetic and its order, so the ranks over those 30 gestures are identical
-at each row and the tier B gate above reads the same 90.6% / 94.8% throughout. On the same
+at each row and the tier B gate above reads the same 90.4% / 94.6% throughout. On the same
 phone as above, the neural decode went from 130.9 ms to 3.2 ms mean (6.0 ms max) over eleven
 swipes, and lift to text from 139.8 ms to 11.9 ms; on the emulator, with the tier now reported
 by the engine rather than read off the switch, thirty swipes decoded in 0.2 to 0.6 ms with one
@@ -559,7 +559,7 @@ A case whose right answer is *"leave the word alone"* is written with the typed 
 expectation (`snobul` → `snobul`), because "offers nothing better than what I wrote" is a result
 worth measuring, and it is the result the guards in `AutoCorrection` exist to produce.
 
-Current baseline: **71.9% first place, 81.2% top three, mean rank 1.39**, 32 cases.
+Current baseline: **75.0% first place, 84.4% top three, mean rank 1.29**, 32 cases.
 
 With nothing typed, the pack's successor index is walked before the frequent shortlist, so a
 strong successor that is itself a rare word reaches the strip: after `ice`, `cream` and
@@ -675,7 +675,7 @@ is the number a user gets.
 | `autocorrect_unknown_en` | 200 | 92.5% left alone | 190 |
 | `autocorrect_doubled_en` | 200 | 95.5% | 191 |
 | `autocorrect_firstletter_en` | 200 | 85.0% | 167 |
-| `autocorrect_marks_en` | 240 | — | 240 |
+| `autocorrect_marks_en` | 268 | — | 268 |
 | `autocorrect_slip_en` | 200 | 89.5% | 179 |
 | `autocorrect_omitted_en` | 200 | 95.5% | 186 |
 | `autocorrect_extra_en` | 200 | 96.5% | 192 |

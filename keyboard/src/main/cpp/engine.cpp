@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
 #include "engine.hpp"
-
+#include "marks.hpp"
 #include "reading.hpp"
 
 #include "gesture/shark2_decoder.hpp"
@@ -45,15 +45,6 @@ constexpr float kRunOnCost = static_cast<float>(BORDERKEYS_RUN_ON_COST);
 constexpr float kRunOnCost = 0.6f;
 #endif
 
-// The non-letters composed into a word, the marks; the same set as
-// BorderKeysService.isWordCharacter.
-constexpr uint32_t kApostrophe = 0x27u;
-constexpr uint32_t kHyphen = 0x2Du;
-
-inline bool isMark(uint32_t folded) {
-    return folded == kApostrophe || folded == kHyphen;
-}
-
 // The factor on a neighbouring key's distance when the finger landed on it instead; the result
 // is floored at KeyGeometry::kMinSubstitutionCost. The build may set it for a sweep.
 #ifdef BORDERKEYS_SLIP_SCALE
@@ -62,7 +53,8 @@ constexpr float kSlipScale = static_cast<float>(BORDERKEYS_SLIP_SCALE);
 constexpr float kSlipScale = 1.0f;
 #endif
 
-// carriesFoldedMark, kMaxCorrectionCompletion and Reading are in reading.hpp.
+// kApostrophe, kHyphen and isMark are in marks.hpp; carriesFoldedMark, kMaxCorrectionCompletion
+// and Reading in reading.hpp.
 
 // What a mark missing from the typed word costs, in key widths.
 constexpr float kMarkInsertCost = 0.02f;

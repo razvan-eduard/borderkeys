@@ -42,10 +42,14 @@ private:
     void buildTouchSequence();
     /**
      * Walks the trie recursively, letter by letter, through keys the finger crossed in the order
-     * it crossed them, at most [kMaxWordLetters] deep.
+     * it crossed them, at most [kMaxWordLetters] deep. [marksUsed] is how many marks the path
+     * has stepped through; one is allowed, between two letters.
      */
     void walk(int packIndex, const PackedTrie& trie, int32_t node, int position, int depth,
-              uint32_t* letters, TopK<Candidate>& heap);
+              uint32_t* letters, TopK<Candidate>& heap, int marksUsed);
+    /** Continues [walk] from [node] through every key the finger crosses at or after [position]. */
+    void extend(int packIndex, const PackedTrie& trie, int32_t node, int position, int depth,
+                uint32_t* letters, TopK<Candidate>& heap, int marksUsed);
     bool passesLengthBand(float templateLength) const;
     float shapeDistance(const float* candidateShapeX, const float* candidateShapeY) const;
     float locationDistance(const float* candidateLocationX, const float* candidateLocationY) const;

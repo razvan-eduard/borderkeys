@@ -936,6 +936,8 @@ SAMPLE_WORDS = [
     ("acum", 900), ("cam", 60), ("camera", 55), ("campion", 50), ("camion", 45),
     # "în" folds to the same key as "in".
     ("în", 9000),
+    # A contraction beside its bare spelling, and one with no bare spelling in the list.
+    ("its", 3000), ("it's", 2500), ("don't", 6000),
     # A second spelling of "masă"'s folded key.
     ("masa", 700),
     # The words the committed gesture corpus is recorded against, for the replay harness.

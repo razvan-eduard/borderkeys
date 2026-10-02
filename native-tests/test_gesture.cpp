@@ -194,6 +194,37 @@ void runGestureTests() {
         }
 
         {
+            // A word holding a mark is reached through the keys of its letters alone.
+            Random random(20260902u);
+            const auto topWords = [&](const char* keys) {
+                std::vector<float> xs;
+                std::vector<float> ys;
+                std::vector<int64_t> times;
+                synthesiseGesture(layout, keys, 0.f, random, xs, ys, times);
+                Candidate out[Engine::kMaxCandidates];
+                const int found = engine.decodeGesture(xs.data(), ys.data(), times.data(),
+                                                       static_cast<int>(xs.size()), nullptr, 0,
+                                                       nullptr, 0, out, 8);
+                std::string listed;
+                for (int i = 0; i < found; ++i) {
+                    uint32_t length = 0;
+                    const char* const text = engine.candidateText(out[i], &length);
+                    listed.append(text, length).append(" ");
+                }
+                return listed;
+            };
+            const std::string dont = topWords("dont");
+            check(dont.find("don't ") != std::string::npos,
+                  "a swipe through d-o-n-t reaches the word with its apostrophe");
+            check(dont.find("dont ") == std::string::npos,
+                  "and offers no spelling the pack does not hold");
+            const std::string its = topWords("its");
+            check(its.rfind("its ", 0) == 0,
+                  "a bare spelling the pack holds leads its marked twin on frequency");
+            check(its.find("it's ") != std::string::npos, "with the twin offered beside it");
+        }
+
+        {
             // Engine::decodeGesture bounds the raw log-score into a fixed-temperature softmax over
             // [0, 1000]; the ranking is unchanged by it.
             Random random(99u);
