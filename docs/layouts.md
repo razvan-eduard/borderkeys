@@ -80,7 +80,7 @@ theme's row height, so one description serves every screen size and every theme.
 | Field | Meaning |
 |---|---|
 | `indent` | Leading empty space in key-width units. `0.5` is the classic QWERTY stagger. |
-| `heightScale` | Row height as a multiple of the theme's row height. |
+| `height` | Row height as a multiple of the theme's row height. |
 | `keys` | The keys, left to right. |
 
 A row's total width is `indent + Σ widthUnits`, and is never zero.
@@ -129,7 +129,6 @@ cannot forget one:
 | `MODIFIER` | not a character | styling, and exclusion from swipe |
 | `HAS_ALTERNATIVES` | `alt` is non-empty | the long-press hint |
 | `REPEATABLE` | code is `DELETE` | held-backspace repeat |
-| `SECONDARY_ROW` | — | the optional digit row |
 | `ABSORBS_FREED_WIDTH` | `absorb` is true | width redistribution |
 | `SECONDARY_ROW` | `secondary` is true, or the row `withNumberRow()` adds | the key fill |
 

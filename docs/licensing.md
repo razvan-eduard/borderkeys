@@ -253,6 +253,21 @@ Every file is pinned and checked against a SHA-256 the tool carries.
 | OpenSubtitles 2018 frequency lists, `<code>_full.txt` | `hermitdave/FrequencyWords` commit `525f9b56` | CC BY-SA 4.0 (the lists), MIT (the code) |
 | Wortschatz Leipzig news corpora, 2020, 1M sentences: `eng`, `ron`, `deu`, `fra`, `spa`, `ita` | the file names | CC BY 4.0 |
 
+### 2.1.3 The held-out text the context model is measured on
+
+`tools/make_context_corpus.py` fetches the files below when CI measures the context model
+(`docs/architecture.md`, "The context model on held-out text"). None of them is committed or
+shipped: the sentences are split into words, measured against, and left in the build directory.
+Each file is pinned to Universal Dependencies release 2.18 and checked against a SHA-256 the
+tool carries.
+
+| Source | Licence | The sentences themselves |
+|---|---|---|
+| UD English EWT, `en_ewt-ud-test.conllu` | CC BY-SA 4.0, the annotations | From the LDC English Web Treebank: some in the public domain, portions © Google, Yahoo!, the University of Pennsylvania and other original authors |
+| UD Romanian RRT, `ro_rrt-ud-test.conllu` | CC BY-SA 4.0, the treebank with its text | Under the same licence |
+| UD German GSD, French GSD and Spanish GSD, their `*-ud-test.conllu` | CC BY-SA 4.0, the annotations | Web text over which Google asserts no copyright, collected where copyrighted under exceptions to copyright |
+| UD Italian PUD, `it_pud-ud-test.conllu` | CC BY-SA 3.0 | Wikipedia sentences, made available under CC BY-SA 3.0 |
+
 ### 2.2 Not shipped, and why
 
 | Asset | Position |

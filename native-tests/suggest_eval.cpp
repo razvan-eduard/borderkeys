@@ -29,6 +29,15 @@
  * pack as itself: it reads the source `.tsv` and queries the pack built from it. `budget` is the
  * number of unreachable rows tolerated, zero when omitted; the exit status is non-zero above it.
  *
+ * `--context` measures the context model on held-out text, a corpus from
+ * tools/make_context_corpus.py: each word that has a word before it, asked for with nothing
+ * typed and with its first one, two and three letters typed, once without the words before it
+ * and once with them. A word the pack does not hold is left out. The optional floors are the
+ * top-three shares with context, in percent, for the four rows; the exit status is non-zero
+ * when a row falls below its floor.
+ *
+ *     suggest_eval <dict dir> --context <corpus.txt> <tag> [next one two three]
+ *
  * `--centre-taps`, anywhere after the dict dir, taps each letter of a corpus case at its key's
  * centre, where the default touch patterns price every substitution as the key geometry does.
  */
@@ -112,6 +121,174 @@ std::vector<Case> readCorpus(const char* path) {
     return cases;
 }
 
+/** The lines of a --context corpus, each split at its spaces into words. */
+std::vector<std::vector<std::string>> readRuns(const char* path) {
+    std::vector<std::vector<std::string>> runs;
+    FILE* const file = std::fopen(path, "r");
+    if (file == nullptr) {
+        return runs;
+    }
+    char* line = nullptr;
+    size_t capacity = 0;
+    while (getline(&line, &capacity, file) > 0) {
+        std::string text(line);
+        while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
+            text.pop_back();
+        }
+        if (text.empty() || text[0] == '#') {
+            continue;
+        }
+        std::vector<std::string> words;
+        size_t start = 0;
+        while (start < text.size()) {
+            size_t end = text.find(' ', start);
+            if (end == std::string::npos) {
+                end = text.size();
+            }
+            if (end > start) {
+                words.push_back(text.substr(start, end - start));
+            }
+            start = end + 1;
+        }
+        runs.push_back(std::move(words));
+    }
+    std::free(line);
+    std::fclose(file);
+    return runs;
+}
+
+/** How many code points `text` holds. */
+int codePointCount(const std::string& text) {
+    int count = 0;
+    for (const char byte : text) {
+        if ((static_cast<unsigned char>(byte) & 0xC0u) != 0x80u) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+/** The bytes of `text`'s first `count` code points. */
+size_t codePointBytes(const std::string& text, int count) {
+    size_t at = 0;
+    for (int seen = 0; at < text.size(); ++at) {
+        if ((static_cast<unsigned char>(text[at]) & 0xC0u) != 0x80u) {
+            if (seen == count) {
+                break;
+            }
+            ++seen;
+        }
+    }
+    return at;
+}
+
+/** A --context row's counts: the words asked for, and how many came first and in the top three. */
+struct Tally {
+    int asked = 0;
+    int first = 0;
+    int topThree = 0;
+};
+
+/** Letters typed before the context model is asked, one row each; zero asks for the next word. */
+constexpr int kContextDepths = 4;
+
+/**
+ * The --context measurement: prints a row per depth and returns the exit status, non-zero when a
+ * row with a floor in `floors` falls below it.
+ */
+int measureContext(Engine& engine, const char* corpusPath, const std::string& tag,
+                   char** floors, int floorCount) {
+    const std::vector<std::vector<std::string>> runs = readRuns(corpusPath);
+    if (runs.empty()) {
+        std::printf("no runs read from %s\n", corpusPath);
+        return 1;
+    }
+    // [0] without the words before, [1] with them.
+    Tally tallies[2][kContextDepths];
+    int withContext = 0;
+    int notHeld = 0;
+    Candidate out[Engine::kMaxCandidates];
+    for (const std::vector<std::string>& run : runs) {
+        for (size_t at = 1; at < run.size(); ++at) {
+            // The keyboard's word starts at its first letter.
+            std::string target = run[at];
+            const size_t letter = target.find_first_not_of("'-");
+            if (letter == std::string::npos) {
+                continue;
+            }
+            target.erase(0, letter);
+            ++withContext;
+            if (!engine.exactSpelling(target.c_str(), target.size(), nullptr, nullptr)) {
+                ++notHeld;
+                continue;
+            }
+            const std::string& previous1 = run[at - 1];
+            const std::string* const previous2 = (at >= 2) ? &run[at - 2] : nullptr;
+            const int letters = codePointCount(target);
+            for (int depth = 0; depth < kContextDepths; ++depth) {
+                // Prefixes shorter than the word only.
+                if (depth > 0 && depth >= letters) {
+                    continue;
+                }
+                const size_t typedBytes = codePointBytes(target, depth);
+                for (int arm = 0; arm < 2; ++arm) {
+                    const bool context = arm == 1;
+                    const int count = engine.suggest(
+                        target.c_str(), typedBytes,
+                        context ? previous1.c_str() : nullptr, context ? previous1.size() : 0,
+                        (context && previous2 != nullptr) ? previous2->c_str() : nullptr,
+                        (context && previous2 != nullptr) ? previous2->size() : 0, out,
+                        Engine::kMaxCandidates);
+                    int rank = -1;
+                    for (int i = 0; i < count && i < 3; ++i) {
+                        uint32_t length = 0;
+                        const char* const text = engine.candidateText(out[i], &length);
+                        if (text != nullptr &&
+                            sameSpellingIgnoringCase(text, length, target.c_str(), target.size())) {
+                            rank = i;
+                            break;
+                        }
+                    }
+                    Tally& tally = tallies[arm][depth];
+                    ++tally.asked;
+                    tally.first += (rank == 0) ? 1 : 0;
+                    tally.topThree += (rank >= 0) ? 1 : 0;
+                }
+            }
+        }
+    }
+
+    auto share = [](int part, int whole) {
+        return whole > 0 ? 100.0 * static_cast<double>(part) / static_cast<double>(whole) : 0.0;
+    };
+    std::printf("\ncontext model, %s: %d words with a word before, %d not in the pack (%.1f%%), "
+                "left out\n\n",
+                tag.c_str(), withContext, notHeld, share(notHeld, withContext));
+    std::printf("                     words   without context      with context        gain\n");
+    std::printf("                             first  top three     first  top three   top three\n");
+    static const char* const kRowNames[kContextDepths] = {
+        "next word", "1 letter typed", "2 letters typed", "3 letters typed"};
+    int status = 0;
+    for (int depth = 0; depth < kContextDepths; ++depth) {
+        const Tally& without = tallies[0][depth];
+        const Tally& with = tallies[1][depth];
+        const double withTop = share(with.topThree, with.asked);
+        std::printf("  %-16s %7d   %5.1f%%   %5.1f%%        %5.1f%%   %5.1f%%      %+5.1f\n",
+                    kRowNames[depth], with.asked, share(without.first, without.asked),
+                    share(without.topThree, without.asked), share(with.first, with.asked),
+                    withTop, withTop - share(without.topThree, without.asked));
+        if (depth < floorCount) {
+            const double floor = std::strtod(floors[depth], nullptr);
+            if (withTop + 1e-9 < floor) {
+                std::printf("    %s: top three with context %.1f%%, floor %.1f%%\n",
+                            kRowNames[depth], withTop, floor);
+                status = 1;
+            }
+        }
+    }
+    return status;
+}
+
 /**
  * Where each code point of `typed` is tapped: an ASCII letter, in either case, at its key's
  * centre; anything else nowhere, NaN.
@@ -172,14 +349,20 @@ int main(int argc, char** argv) {
         std::printf("usage: suggest_eval <dict dir> --reachable <dictionary.tsv> <tag>\n");
         return 2;
     }
+    const bool contextMode = std::strcmp(argv[2], "--context") == 0;
+    if (contextMode && argc < 5) {
+        std::printf("usage: suggest_eval <dict dir> --context <corpus.txt> <tag> "
+                    "[next one two three]\n");
+        return 2;
+    }
+    const bool onePack = reachability || contextMode;
     const char* const corpusPath =
-        explaining ? nullptr : ((autocorrectMode || reachability) ? argv[3] : argv[2]);
+        explaining ? nullptr : ((autocorrectMode || onePack) ? argv[3] : argv[2]);
 
     std::vector<std::string> tags;
-    // One pack for --reachable: the question is about one dictionary and the pack built from it,
-    // and argv[5] there is the budget rather than a second tag.
-    const int tagEnd = reachability ? (argc < 5 ? argc : 5) : argc;
-    for (int i = explaining ? 5 : ((autocorrectMode || reachability) ? 4 : 3); i < tagEnd; ++i) {
+    // One pack for --reachable and --context; after its tag come a budget or floors.
+    const int tagEnd = onePack ? (argc < 5 ? argc : 5) : argc;
+    for (int i = explaining ? 5 : ((autocorrectMode || onePack) ? 4 : 3); i < tagEnd; ++i) {
         tags.emplace_back(argv[i]);
     }
     if (tags.empty()) {
@@ -218,6 +401,10 @@ int main(int argc, char** argv) {
     }
     std::vector<float> tapXs;
     std::vector<float> tapYs;
+
+    if (contextMode) {
+        return measureContext(engine, corpusPath, tags.front(), argv + 5, argc - 5);
+    }
 
     if (reachability) {
         const std::vector<Case> rows = readCorpus(corpusPath);

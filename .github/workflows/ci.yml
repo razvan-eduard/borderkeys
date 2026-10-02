@@ -213,6 +213,35 @@ jobs:
           BUDGETS
           exit $status
 
+      # The context model on each bundled language's Universal Dependencies test split. The
+      # floors are the top-three shares with context, in percent, for the next word and after
+      # one, two and three letters, and may only be raised.
+      - name: The context model holds its floors on held-out text
+        run: |
+          set -euo pipefail
+          packs=keyboard/build/generated/dictionaries/dict
+          out=native-tests/build/context
+          python3 tools/make_context_corpus.py "$out"
+          pids=()
+          while read -r language tag next one two three; do
+            ./native-tests/build/suggest_eval "$packs" --context "$out/context_$language.txt" \
+              "$tag" "$next" "$one" "$two" "$three" > "$out/$language.log" 2>&1 &
+            pids+=("$!")
+          done <<'FLOORS'
+          en en-US 25.1 49.6 61.3 74.6
+          ro ro-RO 22.1 40.5 42.2 58.5
+          de de-DE 19.1 43.8 58.1 62.7
+          fr fr-FR 26.2 49.8 58.0 69.9
+          es es-ES 29.4 53.4 55.8 67.2
+          it it-IT 23.4 42.7 51.3 63.2
+          FLOORS
+          status=0
+          for pid in "${pids[@]}"; do
+            wait "$pid" || status=1
+          done
+          cat "$out"/*.log
+          exit $status
+
       # The same loader under the sanitisers, with the checksums repaired after each mutation.
       # A crash fails the build.
       - name: Language-pack loader under ASan and UBSan

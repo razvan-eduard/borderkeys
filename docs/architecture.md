@@ -865,7 +865,7 @@ geometry — a ring of alternatives around the finger plus a separate centre Can
 
 ## Quick actions
 
-`QuickAction` (`:data`) is an enum of 21 actions, each with a stable `id` so that a bar
+`QuickAction` (`:data`) is an enum of 22 actions, each with a stable `id` so that a bar
 configured by a newer build **opens** rather than fails on an older one (`fromIds` drops unknown
 ids). `DEFAULT` is the five that answer *"I want that text somewhere"*:
 `COPY_PREVIOUS_WORD`, `COPY_ALL`, `PASTE`, `CLIPBOARD_HISTORY`, `SELECT_ALL`.
@@ -938,6 +938,7 @@ is that search and one more inside the pair's own list; the next-word search wal
 | `flag_names.py` | Flags proper nouns already in a pack's ordinary rows, by case asymmetry. |
 | `make_ordinary.py` | Which corpus words are lower-case headwords of the spelling dictionary. |
 | `build_pos.py` | Treebank tags and transition matrices → `dictionaries/<tag>.pos`. |
+| `make_context_corpus.py` | Fetches each bundled language's Universal Dependencies test split at a pinned release and writes it as the runs of words the keyboard reads as context, for `suggest_eval --context`. |
 | `classify_wordlist.py` | Keeps a bundled word list to the rows its language's own evidence supports: spelling dictionaries in three case forms, the stock keyboard's word lists, subtitle frequencies, how a news corpus writes the word, the treebank, the name flag, corpus pairs; against twins missing their diacritics, typos, other languages' words and short noise, in two tiers by rank. Applied to all six lists (`docs/dictionaries.md`, "Which rows a list keeps"). |
 | `make_twin_corpus.py` | Writes the twin and plain autocorrect corpora from `classify_wordlist.py`'s review files. |
 | `make_doubled_corpus.py`, `make_firstletter_corpus.py`, `make_midtypo_corpus.py`, `make_unknown_corpus.py`, `make_accent_corpus.py` | The generated autocorrect corpora under `native-tests/data`, each from a seed. |
@@ -1000,14 +1001,50 @@ Two things the entity pipeline deliberately does **not** do, both measured first
 ### Measurement, not opinion
 
 `native-tests/suggest_eval.cpp` runs a corpus (`native-tests/data/suggest_en.tsv`) and prints
-rank-1 accuracy, top-3 and mean rank. It **does not assert and is not a test**: `borderkeys_tests`
-says whether the engine is correct, this says how good its answers are — a number that moves
-rather than a line that passes. `--explain <typed> <candidate>` decomposes one score into its
+rank-1 accuracy, top-3 and mean rank. In that mode it **does not assert and is not a test**:
+`borderkeys_tests` says whether the engine is correct, this says how good its answers are — a
+number that moves rather than a line that passes. Its `--reachable` and `--context` modes do
+assert, against floors, and CI runs both on every bundled pack. `--explain <typed> <candidate>`
+decomposes one score into its
 terms, which is the question every scoring change starts with and the one a ranked list cannot
 answer.
 
 A harness that forgets `setKeyGeometry` measures prefix completion and reports it as the whole
 engine. Current baseline: **71.9% first, mean rank 1.39.**
+
+### The context model on held-out text
+
+`--context <corpus> <tag> [floors]` measures the pairs, triples and grammar on text no part of
+the pack was built from. `tools/make_context_corpus.py` fetches each bundled language's Universal
+Dependencies test split at a pinned release, checked against its SHA-256, and splits every
+sentence into the runs of words the keyboard reads as context (`contextWordsBefore`); nothing of
+it is committed. Every word that has a word before it is asked for with nothing typed and with
+its first one, two and three letters typed, once without the words before it and once with
+them. A word the pack does not hold is left out, and a row leaves out the words no longer than
+the letters it types.
+
+It is held out on both counts: the pairs and triples are counted from the Leipzig corpora, and
+the grammar of the five languages read on their own treebank from its train and dev splits only;
+of the word forms that occur only in the test split, none carries a tag in their `.pos` files.
+Italian reads UD Italian PUD, which is not among the treebanks its grammar comes from.
+
+Top three with context, and the gain in points over the same request without the words before,
+on the packs of 30 September 2026:
+
+| | words | next word | 1 letter | 2 letters | 3 letters |
+|---|---|---|---|---|---|
+| English, EWT | 17,843 | 25.2% (+18.2) | 49.7% (+24.9) | 61.4% (+19.6) | 74.7% (+16.9) |
+| Romanian, RRT | 12,125 | 22.2% (+11.4) | 40.6% (+11.8) | 42.3% (+21.8) | 58.6% (+24.1) |
+| German, GSD | 11,267 | 19.2% (+11.5) | 43.9% (+14.7) | 58.2% (+15.7) | 62.8% (+19.7) |
+| French, GSD | 7,014 | 26.3% (+20.4) | 49.9% (+15.1) | 58.1% (+23.9) | 70.0% (+26.6) |
+| Spanish, GSD | 9,224 | 29.5% (+19.0) | 53.5% (+12.9) | 55.9% (+22.4) | 67.3% (+28.0) |
+| Italian, PUD | 16,805 | 23.5% (+18.2) | 42.8% (+16.2) | 51.4% (+24.4) | 63.3% (+26.7) |
+
+The rows do not compare with each other: the two-letter row has no two-letter words, which are
+the easiest to predict, so it can sit below the one-letter row. The words not in the pack run
+from 5.7% (French) to 9.9% (German, its compounds). CI holds each figure, less 0.1, as a floor
+that only moves up, so a change to the packs or the engine that makes the context model worse
+in any language fails the build.
 
 ---
 
