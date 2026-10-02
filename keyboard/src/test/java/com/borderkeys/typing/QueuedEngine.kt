@@ -142,6 +142,14 @@ internal class QueuedEngine(
     }
 
     /** Drops the suggestion requests not yet served, and the swipe decode; the rest still runs. */
+    override fun knownWords(words: List<String>, onResult: (List<Boolean>) -> Unit) {
+        tasks.addLast(
+            Task(request = false) {
+                onResult(words.map { NativePredictor.nativeKnownSpelling(handle, it) != null })
+            },
+        )
+    }
+
     override fun cancelPending() {
         tasks.removeAll { it.request }
         gestureRequests.cancel()

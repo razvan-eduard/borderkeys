@@ -377,6 +377,18 @@ class PredictionEngine(
         }
     }
 
+    /** Whether the dictionaries hold each of [words], delivered on the UI thread. */
+    override fun knownWords(words: List<String>, onResult: (List<Boolean>) -> Unit) {
+        worker.post {
+            val known = words.map { word ->
+                withHandle(false) { current ->
+                    NativePredictor.nativeKnownSpelling(current, word) != null
+                }
+            }
+            mainHandler.post { onResult(known) }
+        }
+    }
+
     /**
      * Replaces the engine's personal three-word sequences, also with an empty list. Call after
      * [loadUserBigrams].

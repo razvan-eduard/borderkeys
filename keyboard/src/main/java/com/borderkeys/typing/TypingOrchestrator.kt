@@ -19,6 +19,7 @@ import com.borderkeys.ime.ShiftState
 import com.borderkeys.ime.WordCommit
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.RefusedWords
+import com.borderkeys.predict.WordFold
 
 /**
  * Owns each word from its first key to what is learned from it: the keys, the composing word,
@@ -124,6 +125,12 @@ class TypingOrchestrator(
     /** Whether [adoptWordAtCaret] is running; selection reports meanwhile are its own edits. */
     private var adoptingWordAtCaret = false
 
+    /** The word characters right after the caret, read where the caret last moved to. */
+    private var caretTail = ""
+
+    /** The engine's last answer from [askCaretSplit]. */
+    private var caretSplit: CaretSplit? = null
+
     /** The field's undo and redo history for this input session. */
     private val fieldHistory = Composer()
 
@@ -146,6 +153,8 @@ class TypingOrchestrator(
         }
         host.releaseModifiers()
         ownEditPending = false
+        caretTail = currentEditor()?.let(::wordAfterCaret).orEmpty()
+        caretSplit = null
         resetComposing()
         resetFieldHistory()
         applyAutoShift()
@@ -1202,6 +1211,7 @@ class TypingOrchestrator(
         // is a prediction inserted at the caret. An adopted word is deleted first, when it is
         // still the text before the caret.
         val replacesWord = composing.isNotEmpty() || lastQuery.isNotEmpty()
+        val replaced = if (composing.isNotEmpty()) composing.toString() else lastQuery
         if (composing.isEmpty() && lastQuery.isNotEmpty()) {
             val before = editor.textBeforeCursor(lastQuery.length)
             if (before != null && before.toString() == lastQuery) {
@@ -1210,7 +1220,6 @@ class TypingOrchestrator(
         }
         composingWord.clear()
         composingWord.appendUntapped(word)
-        // A replacing pick also deletes the rest of the word after the caret.
         val after = editor.textAfterCursor(CONTEXT_WINDOW_CHARS)
         var tail = 0
         if (after != null && replacesWord) {
@@ -1218,16 +1227,32 @@ class TypingOrchestrator(
                 tail++
             }
         }
-        if (tail > 0) {
+        val tailText = after?.substring(0, tail).orEmpty()
+        // The word characters after the caret go with a replacing pick, unless the pick is the
+        // text it replaces as it stands, or the caret splits two words and the pick does not end
+        // with them.
+        val unchanged = tailText.isNotEmpty() && word == replaced
+        val keepsTail = unchanged ||
+            (tailText.isNotEmpty() && splitsAtCaret(replaced, tailText) &&
+                !WordFold.fold(word).endsWith(WordFold.fold(tailText)))
+        if (tail > 0 && !keepsTail) {
             editor.deleteSurroundingText(0, tail)
         }
-        // A space follows the pick unless one is already next, the setting is off, or the field
-        // holds an address.
-        val nextChar = after?.getOrNull(tail)
-        val space = if (!preferences.spaceAfterSuggestion || session.addressField || nextChar == ' ') "" else " "
+        // A space follows the pick unless one is already next, the setting is off, the field
+        // holds an address, or the pick leaves the text as it stands.
+        val nextChar = after?.getOrNull(if (keepsTail) 0 else tail)
+        val space = if (unchanged || !preferences.spaceAfterSuggestion || session.addressField ||
+            nextChar == ' '
+        ) {
+            ""
+        } else {
+            " "
+        }
         ownEditPending = true
         editor.commitText(word + space, 1)
         editor.endBatchEdit()
+        caretTail = if (keepsTail) tailText else ""
+        caretSplit = null
         composingWord.fromGesture = false
         composingWord.autoSpaceBefore = false
         spacingFlow.spaceAddedAfterPick(space.isNotEmpty())
@@ -1347,7 +1372,33 @@ class TypingOrchestrator(
 
     /** Asks the engine about the composing word; never for a password field. */
     fun requestSuggestions() {
-        suggestionFlow.request(composing.toString(), wordContext, composingWord.taps)
+        val query = composing.toString()
+        askCaretSplit(query)
+        suggestionFlow.request(query, wordContext, composingWord.taps)
+    }
+
+    /** The run of word characters right after the caret. */
+    private fun wordAfterCaret(editor: FieldEditor): String {
+        val after = editor.textAfterCursor(CONTEXT_WINDOW_CHARS) ?: return ""
+        var end = 0
+        while (end < after.length && isWordCharacter(after[end].code)) {
+            end++
+        }
+        return after.substring(0, end)
+    }
+
+    /**
+     * Asks whether [before], the text before the caret, and [caretTail] are two words: the
+     * dictionaries do not hold the run and do hold the tail.
+     */
+    private fun askCaretSplit(before: String) {
+        if (before.isEmpty() || caretTail.isEmpty() || !session.policy.suggestionsAllowed) {
+            return
+        }
+        val tail = caretTail
+        engine.knownWords(listOf(before + tail, tail)) { known ->
+            caretSplit = CaretSplit(before, tail, splits = !known[0] && known[1])
+        }
     }
 
     /**
@@ -1447,6 +1498,8 @@ class TypingOrchestrator(
         // The pending correction stays.
         val editor = currentEditor()
         editor?.finishComposingText()
+        caretTail = editor?.let(::wordAfterCaret).orEmpty()
+        caretSplit = null
 
         val before = editor?.textBeforeCursor(CONTEXT_WINDOW_CHARS)
         if (editor == null || before.isNullOrEmpty()) {
@@ -1471,8 +1524,13 @@ class TypingOrchestrator(
             val caret = selectionEnd
             editor.setComposingRegion(caret - partial.length, caret)
         }
+        askCaretSplit(partial)
         suggestionFlow.requestAdopted(partial, wordContext)
     }
+
+    /** Whether [askCaretSplit]'s last answer has [before] and [tail] as two words. */
+    private fun splitsAtCaret(before: String, tail: String): Boolean =
+        caretSplit?.let { it.before == before && it.tail == tail && it.splits } == true
 
     /** Reads the two words before the cursor back from the editor. */
     fun refreshContextFromEditor() {
@@ -1556,6 +1614,9 @@ class TypingOrchestrator(
      */
     private fun applyAutoShift(justCommitted: String = "") =
         shiftFlow.applyAuto(composing.isEmpty(), justCommitted)
+
+    /** Whether [before] and [tail], the text on either side of the caret, are two words. */
+    private data class CaretSplit(val before: String, val tail: String, val splits: Boolean)
 
     companion object {
         const val CONTEXT_WINDOW_CHARS = 64

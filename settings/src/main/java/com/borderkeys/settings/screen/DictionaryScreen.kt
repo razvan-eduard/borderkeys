@@ -22,6 +22,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +61,9 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
     val scope = rememberCoroutineScope()
     var confirmingLearningOff by remember { mutableStateOf(false) }
     var confirmingHeatmapOff by remember { mutableStateOf(false) }
+    // The limit being dragged to, and the one waiting on the question when words would go.
+    var wordLimitDraft by remember { mutableStateOf<Int?>(null) }
+    var confirmingWordLimit by remember { mutableStateOf<Int?>(null) }
 
     val wordCount by repository.wordCount.collectAsStateWithLifecycle(initialValue = 0)
     val blocked by repository.blocked.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -308,6 +312,27 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                 title = strings.getString(Keys.DICTIONARY_PHRASES_COUNT, pairCount + tripleCount),
                 trailing = { PageChevron() },
             ) { open(Screen.LearnedPhrases) }
+            val shownLimit = wordLimitDraft ?: preferences.learnedWordLimit
+            DefaultableSlider(
+                label = strings.getString(Keys.DICTIONARY_WORDS_KEPT, shownLimit),
+                value = shownLimit.toFloat(),
+                range = KeyboardPreferences.MIN_LEARNED_WORD_LIMIT.toFloat()..
+                    KeyboardPreferences.MAX_LEARNED_WORD_LIMIT.toFloat(),
+                default = KeyboardPreferences.DEFAULT_LEARNED_WORD_LIMIT.toFloat(),
+                onChangeFinished = {
+                    val chosen = wordLimitDraft
+                    when {
+                        chosen == null -> Unit
+                        chosen == preferences.learnedWordLimit -> wordLimitDraft = null
+                        chosen < wordCount -> confirmingWordLimit = chosen
+                        else -> update { it.copy(learnedWordLimit = chosen) }
+                    }
+                },
+            ) { value ->
+                val step = KeyboardPreferences.LEARNED_WORD_LIMIT_STEP
+                wordLimitDraft = (value / step).roundToInt() * step
+            }
+            Explanation(strings[Keys.DICTIONARY_WORDS_KEPT_NOTE])
         }
         SettingsSectionCard(strings.getString(Keys.DICTIONARY_BLOCKED, blocked.size)) {
             Explanation(
@@ -335,6 +360,29 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
         ) {
             update { it.copy(learningEnabled = false) }
             scope.launch { repository.forgetEverything() }
+        }
+    }
+
+    confirmingWordLimit?.let { limit ->
+        ConfirmDialog(
+            title = strings[Keys.DICTIONARY_WORDS_KEPT_TRIM_TITLE],
+            text = strings.getString(Keys.DICTIONARY_WORDS_KEPT_TRIM_TEXT, wordCount - limit),
+            confirmLabel = strings[Keys.DICTIONARY_WORDS_KEPT_TRIM_CONFIRM],
+            onDismiss = {
+                confirmingWordLimit = null
+                wordLimitDraft = null
+            },
+        ) {
+            wordLimitDraft = limit
+            update { it.copy(learnedWordLimit = limit) }
+            scope.launch { repository.keepWords(limit) }
+        }
+    }
+
+    // The draft gives way once the stored limit reaches it.
+    LaunchedEffect(preferences.learnedWordLimit) {
+        if (wordLimitDraft == preferences.learnedWordLimit) {
+            wordLimitDraft = null
         }
     }
 

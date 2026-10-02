@@ -72,9 +72,8 @@ class DictionaryRepository internal constructor(
 
     fun search(query: String): Flow<List<UserWord>> = userWords.observeMatching(query)
 
-    /** The set pushed into the native engine at service start. */
-    suspend fun topWords(limit: Int = MAX_WORDS_IN_MEMORY): List<UserWord> =
-        userWords.topWords(limit)
+    /** The [limit] words used most, the set pushed into the native engine. */
+    suspend fun topWords(limit: Int): List<UserWord> = userWords.topWords(limit)
 
     suspend fun blockedWordSet(): Set<String> = blockedWords.allWords().toSet()
 
@@ -115,10 +114,10 @@ class DictionaryRepository internal constructor(
     /**
      * Halves the stored count of every word, pair and triple nobody has written in a
      * [PersonalWordDecay.HALF_LIFE_MILLIS] or longer, then deletes the words written once before
-     * [PersonalWordDecay.UNCONFIRMED_LIFE_MILLIS] and those past [MAX_WORDS_IN_MEMORY], with
-     * their phrases.
+     * [PersonalWordDecay.UNCONFIRMED_LIFE_MILLIS] and those past the [keep] used most, with their
+     * phrases.
      */
-    suspend fun decayStaleEntries(now: Long = System.currentTimeMillis()) {
+    suspend fun decayStaleEntries(keep: Int, now: Long = System.currentTimeMillis()) {
         val cutoff = now - PersonalWordDecay.HALF_LIFE_MILLIS
         val unconfirmedCutoff = now - PersonalWordDecay.UNCONFIRMED_LIFE_MILLIS
         database.withTransaction {
@@ -130,12 +129,21 @@ class DictionaryRepository internal constructor(
                 userTrigrams.deleteInvolving(word)
             }
             userWords.deleteUnconfirmedBefore(unconfirmedCutoff)
+            deleteWordsBeyond(keep)
+        }
+    }
 
-            for (word in userWords.wordsBeyond(MAX_WORDS_IN_MEMORY)) {
-                userBigrams.deleteInvolving(word)
-                userTrigrams.deleteInvolving(word)
-                userWords.delete(word)
-            }
+    /** Deletes the words past the [keep] used most, with every phrase they are part of. */
+    suspend fun keepWords(keep: Int) {
+        database.withTransaction { deleteWordsBeyond(keep) }
+        edited()
+    }
+
+    private suspend fun deleteWordsBeyond(keep: Int) {
+        for (word in userWords.wordsBeyond(keep)) {
+            userBigrams.deleteInvolving(word)
+            userTrigrams.deleteInvolving(word)
+            userWords.delete(word)
         }
     }
 
@@ -247,8 +255,6 @@ class DictionaryRepository internal constructor(
     }
 
     private companion object {
-        const val MAX_WORDS_IN_MEMORY = 20_000
-
         /** Matches UserModel::kMaxBigrams. */
         const val MAX_BIGRAMS_IN_MEMORY = 4_096
 

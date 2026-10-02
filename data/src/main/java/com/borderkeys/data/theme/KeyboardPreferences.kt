@@ -57,6 +57,12 @@ data class KeyboardPreferences(
     val learningSpeed: Int = LEARNING_BALANCED,
 
     /**
+     * How many learned words are kept, a multiple of [LEARNED_WORD_LIMIT_STEP]; past it, the words
+     * used least are forgotten with the phrases they are in.
+     */
+    val learnedWordLimit: Int = DEFAULT_LEARNED_WORD_LIMIT,
+
+    /**
      * Whether where the taps land on each key is learned, and the learned patterns used to tell
      * which key was meant; only while [learningEnabled] is on, and never in a private field.
      */
@@ -692,6 +698,8 @@ data class KeyboardPreferences(
         } else {
             heatmapWeight.coerceIn(MIN_HEATMAP_WEIGHT, MAX_HEATMAP_WEIGHT)
         },
+        learnedWordLimit = (learnedWordLimit.coerceIn(MIN_LEARNED_WORD_LIMIT, MAX_LEARNED_WORD_LIMIT) /
+            LEARNED_WORD_LIMIT_STEP) * LEARNED_WORD_LIMIT_STEP,
         heatmapMinTaps = (heatmapMinTaps.coerceIn(MIN_HEATMAP_MIN_TAPS, MAX_HEATMAP_MIN_TAPS) /
             HEATMAP_MIN_TAPS_STEP) * HEATMAP_MIN_TAPS_STEP,
         heatmapHalfLifeDays = heatmapHalfLifeDays.coerceIn(
@@ -813,6 +821,12 @@ data class KeyboardPreferences(
 
         /** The first time counts. */
         const val LEARNING_IMMEDIATE = 2
+
+        /** [learnedWordLimit]'s range, step and default. */
+        const val MIN_LEARNED_WORD_LIMIT = 1_000
+        const val MAX_LEARNED_WORD_LIMIT = 50_000
+        const val LEARNED_WORD_LIMIT_STEP = 1_000
+        const val DEFAULT_LEARNED_WORD_LIMIT = 20_000
 
         /** [heatmapWeight]'s range and default. */
         const val MIN_HEATMAP_WEIGHT = 0.5f

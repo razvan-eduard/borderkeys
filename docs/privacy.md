@@ -167,7 +167,8 @@ through `WordFold` before comparison, so `Shit` is the same refusal as `shit`.
 
 `PersonalWordDecay` (`:data`) is how the dictionary forgets without being told to, and the pair
 and triple tables evict least-used entries when full — so a phrase typed once years ago does not
-hold a slot against one typed daily.
+hold a slot against one typed daily. The words themselves stop at the *Words kept* setting,
+20,000 by default: past it, the words used least are deleted with their phrases.
 
 Everything learned is visible and deletable on the Personal dictionary and heatmap screen. The
 Learned words and Learned phrases pages list every word and phrase, each with a Delete, and a

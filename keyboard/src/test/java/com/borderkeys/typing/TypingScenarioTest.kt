@@ -397,6 +397,40 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `a pick where the caret splits two run-together words keeps the second`() {
+        rig.startField("lokethis")
+        rig.moveCaret("loke".length)
+        rig.pick(1, "like")
+        assertEquals("like this", rig.editor.text)
+        assertEquals("like ".length, rig.editor.selectionEnd)
+    }
+
+    @Test
+    fun `a word typed right before another is replaced without it`() {
+        rig.startField("this")
+        rig.moveCaret(0)
+        rig.type("loke")
+        rig.pick(1, "like")
+        assertEquals("like this", rig.editor.text)
+    }
+
+    @Test
+    fun `a pick that ends with the letters after the caret takes them`() {
+        rig.startField("sonething")
+        rig.moveCaret("sone".length)
+        rig.pick(1, "something")
+        assertEquals("something ", rig.editor.text)
+    }
+
+    @Test
+    fun `picking the text before the caret as typed leaves the word whole`() {
+        rig.startField("hello world")
+        rig.moveCaret("hello wor".length)
+        rig.pick(1, "wor")
+        assertEquals("hello world", rig.editor.text)
+    }
+
+    @Test
     fun `holding backspace deletes the word before the caret`() {
         rig.type("hello world")
         rig.longPress(KeyCodes.DELETE)

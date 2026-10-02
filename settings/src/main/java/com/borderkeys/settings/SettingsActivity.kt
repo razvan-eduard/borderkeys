@@ -49,9 +49,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.takeOrElse
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
@@ -327,13 +338,11 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                 title = {
                     val title = strings[current.titleKey]
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            if (current == Screen.Home && hasAssistant) {
-                                strings.getString(Keys.HOME_TITLE_PLUS, title)
-                            } else {
-                                title
-                            },
-                        )
+                        if (current == Screen.Home && hasAssistant) {
+                            PlusTitle(strings[Keys.HOME_TITLE_PLUS], title)
+                        } else {
+                            Text(title)
+                        }
                         if (current == Screen.Home) {
                             Spacer(Modifier.width(16.dp))
                             OutlinedTextField(
@@ -396,6 +405,64 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
         }
     }
 }
+
+/**
+ * [template] with [title] in place of its `%s`; the rest of the template is drawn semi-bold in the
+ * assistant's moving ring colours, over a drop shadow.
+ */
+@Composable
+private fun PlusTitle(template: String, title: String) {
+    val before = template.substringBefore(TITLE_SLOT)
+    val after = template.substringAfter(TITLE_SLOT, missingDelimiterValue = "")
+    Row {
+        if (before.isNotEmpty()) {
+            RingText(before, Modifier.alignByBaseline())
+        }
+        Text(title, modifier = Modifier.alignByBaseline())
+        if (after.isNotEmpty()) {
+            RingText(after, Modifier.alignByBaseline())
+        }
+    }
+}
+
+/**
+ * [text] laid out once, semi-bold, and drawn in the assistant's moving ring colours over a drop
+ * shadow; the colours move in the draw phase alone.
+ */
+@Composable
+private fun RingText(text: String, modifier: Modifier = Modifier) {
+    val shift = rememberRingShift()
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val density = LocalDensity.current
+    val base = LocalTextStyle.current
+    val fontSize = base.fontSize.takeOrElse { MaterialTheme.typography.titleLarge.fontSize }
+    val span = with(density) { fontSize.toPx() }
+    val shadow = Shadow(
+        color = Color.Black.copy(alpha = PLUS_SHADOW_ALPHA),
+        offset = Offset(0f, with(density) { PLUS_SHADOW_DROP.toPx() }),
+        blurRadius = with(density) { PLUS_SHADOW_BLUR.toPx() },
+    )
+    Text(
+        text,
+        style = base.copy(color = Color.Transparent, fontWeight = FontWeight.SemiBold),
+        onTextLayout = { layout = it },
+        modifier = modifier
+            .graphicsLayer()
+            .drawWithContent {
+                layout?.let {
+                    drawText(it, brush = ringBrush(shift.value, span = span), alpha = 1f, shadow = shadow)
+                }
+            },
+    )
+}
+
+/** Where a title template takes the screen's title. */
+private const val TITLE_SLOT = "%s"
+
+/** The plus mark's shadow: how strong, how far down it falls, and how soft its edge is. */
+private const val PLUS_SHADOW_ALPHA = 0.45f
+private val PLUS_SHADOW_DROP = 1.5.dp
+private val PLUS_SHADOW_BLUR = 3.dp
 
 /** One line of text with its label, the probe field's height in its one-line modes. */
 private val PROBE_FIELD_HEIGHT = 68.dp

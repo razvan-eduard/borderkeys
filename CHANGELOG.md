@@ -31,6 +31,10 @@ attestations and the full commit lists are on the
   are no longer cut at 200 words and a hundred pairs and triples.
 - The personal dictionary moves only through Backup and transfer: its screen's own CSV export
   and import are gone.
+- In the plus build, the home screen's title carries the assistant's moving colours.
+- Words kept, on the Personal dictionary and heatmap screen: how many learned words the keyboard
+  keeps, 20,000 by default, from 1,000 to 50,000. Past the limit, the words used least are
+  forgotten with the phrases they are in; lowering it below the words already learned asks first.
 - Remember detected language, on the Languages screen: the language you were writing carries
   into the next field and through a restart of the keyboard. On by default; off, every field
   starts undecided. With a Preferred dictionary every field starts from it instead.
@@ -42,6 +46,10 @@ attestations and the full commit lists are on the
   the one with the letter once.
 - Fixed: a word with another language's ending, "orices", was taken for a form of a word in the
   first language and left uncorrected.
+- Fixed: a word picked from the strip while the caret sat between two words run together,
+  "loke|this", replaced both; it now replaces the first and leaves the second.
+- Fixed: the clipboard chip's "Offer it only once" spent a clip in the app it was copied from,
+  so it was gone before the keyboard opened anywhere else.
 - Fixed: a restored backup's words reached the suggestions only once the keyboard restarted;
   they now count at once.
 - Fixed: Undo right after typing a word took back more than the word, and Redo after some typing
@@ -62,7 +70,7 @@ attestations and the full commit lists are on the
 - Fixed: a space typed before the answer about the previous word arrived, with no word typed,
   wrote that word's possessive.
 - The typing code is reorganised around one owner of each word, `TypingOrchestrator`, and the
-  flows it drives; every case of the test corpora reads the same, to the digit, and 89 typing
+  flows it drives; every case of the test corpora reads the same, to the digit, and 93 typing
   scenarios run the real flow on the JVM.
 
 ## v0.10.2 — 2026-09-28

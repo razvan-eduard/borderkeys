@@ -202,6 +202,25 @@ and when the keyboard goes.
 Flows never call each other: each talks only to the orchestrator, which hands a field, a
 settings change and each answer to them in a fixed order.
 
+### What a pick replaces
+
+A pick replaces the word being typed, or the part of a word before the caret that the strip was
+asked about. The letters right after the caret, up to the first character that is not a letter,
+an apostrophe or a hyphen, go with it too, except in two cases:
+
+- the pick is the text it replaces as it stands, the typed chip: nothing changes and no space is
+  added;
+- the caret splits two words, and the pick does not end with the second. Two words means the
+  dictionaries do not hold the whole run and do hold the part after the caret: "loke|this". The
+  pick replaces the part before the caret and the usual space follows it, giving "like this".
+
+A run the dictionaries hold is one word, so a pick inside "wor|ld" replaces all of it, and a pick
+that ends with the letters after the caret takes them: "sone|thing" picked as "something". The
+orchestrator reads those letters where the caret moves to and asks `EnginePort.knownWords` about
+the run and the tail before each request the strip makes while they are there, so the answer
+reaches it ahead of the words it could pick. Nothing is asked in a field that allows no
+suggestions, or when nothing follows the caret.
+
 ---
 
 ## The two axes
@@ -561,6 +580,10 @@ rebuilt on nearly every insertion.
 **Caps and eviction.** `kMaxBigrams = 4096`, `kMaxTrigrams = 2048` — half, because a triple is
 both rarer and narrower, firing only when the last two words match. When full, the least-used
 entry is dropped, so a phrase typed once years ago does not hold a slot against one typed daily.
+Words are capped by the *Words kept* setting (`learnedWordLimit`, 20,000 by default, 1,000 to
+50,000): the daily sweep deletes the words past that many, by count and then recency, with the
+phrases they are in, and the engine loads the same words in the same order. Lowering the setting
+below the words already learned asks first, then deletes them at once (`keepWords`).
 `PersonalWordDecay` (`:data`) is how the dictionary forgets without being told to.
 
 **Deliberate capitals.** A word the user capitalised *themselves* — shift physically pressed for
