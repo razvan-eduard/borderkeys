@@ -122,7 +122,10 @@ object BackupFile {
         }
     }
 
-    const val FORMAT = 1
+    const val FORMAT = 2
+
+    /** The first format whose header is authenticated with the ciphertext. */
+    private const val HEADER_BOUND_FORMAT = 2
 
     /** The name the picker is offered, without an extension; the system adds ".json". */
     const val SUGGESTED_NAME = "borderkeys-backup"
@@ -130,8 +133,9 @@ object BackupFile {
 
     private const val APPLICATION = "borderkeys"
 
-    /** PBKDF2-HMAC-SHA256 rounds, the figure OWASP gives for it. */
-    private const val ITERATIONS = 210_000
+    /** PBKDF2-HMAC-SHA256 rounds a new file declares, and the most a file may declare. */
+    private const val WRITE_ITERATIONS = 600_000
+    private const val MAX_READ_ITERATIONS = 5_000_000
     private const val KEY_BITS = 256
     private const val SALT_BYTES = 16
     private const val IV_BYTES = 12
@@ -161,19 +165,25 @@ object BackupFile {
         }
         val salt = ByteArray(SALT_BYTES).also { SecureRandom().nextBytes(it) }
         val iv = ByteArray(IV_BYTES).also { SecureRandom().nextBytes(it) }
+        val header = Envelope(
+            format = FORMAT,
+            application = APPLICATION,
+            encrypted = true,
+            salt = encode(salt),
+            iv = encode(iv),
+            iterations = WRITE_ITERATIONS,
+            payload = "",
+        )
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, keyFrom(passphrase, salt), GCMParameterSpec(TAG_BITS, iv))
+        cipher.init(
+            Cipher.ENCRYPT_MODE,
+            keyFrom(passphrase, salt, WRITE_ITERATIONS),
+            GCMParameterSpec(TAG_BITS, iv),
+        )
+        cipher.updateAAD(headerBytes(header))
         return json.encodeToString(
             Envelope.serializer(),
-            Envelope(
-                format = FORMAT,
-                application = APPLICATION,
-                encrypted = true,
-                salt = encode(salt),
-                iv = encode(iv),
-                iterations = ITERATIONS,
-                payload = encode(cipher.doFinal(plain)),
-            ),
+            header.copy(payload = encode(cipher.doFinal(plain))),
         )
     }
 
@@ -194,6 +204,9 @@ object BackupFile {
             if (passphrase.isEmpty()) {
                 return Result.failed(Failure.NEEDS_PASSPHRASE)
             }
+            if (envelope.iterations !in 1..MAX_READ_ITERATIONS) {
+                return Result.failed(Failure.DAMAGED)
+            }
             val salt = runCatching { decode(envelope.salt) }.getOrNull()
                 ?: return Result.failed(Failure.DAMAGED)
             val iv = runCatching { decode(envelope.iv) }.getOrNull()
@@ -205,6 +218,9 @@ object BackupFile {
                     keyFrom(passphrase, salt, envelope.iterations),
                     GCMParameterSpec(TAG_BITS, iv),
                 )
+                if (envelope.format >= HEADER_BOUND_FORMAT) {
+                    cipher.updateAAD(headerBytes(envelope))
+                }
                 cipher.doFinal(bytes)
             }.getOrNull() ?: return Result.failed(Failure.WRONG_PASSPHRASE)
         }
@@ -220,20 +236,25 @@ object BackupFile {
         runCatching { json.decodeFromString(Envelope.serializer(), text).encrypted }
             .getOrDefault(false)
 
-    private fun keyFrom(passphrase: String, salt: ByteArray, iterations: Int = ITERATIONS) =
-        SecretKeySpec(
-            SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-                .generateSecret(
-                    PBEKeySpec(
-                        passphrase.toCharArray(),
-                        salt,
-                        iterations.coerceIn(1, ITERATIONS),
-                        KEY_BITS,
-                    ),
-                )
-                .encoded,
-            "AES",
-        )
+    /** The header fields authenticated with the ciphertext, one per line, payload aside. */
+    private fun headerBytes(envelope: Envelope): ByteArray =
+        listOf(
+            envelope.application,
+            envelope.format,
+            envelope.encrypted,
+            envelope.salt,
+            envelope.iv,
+            envelope.iterations,
+        ).joinToString("\n").toByteArray()
+
+    private fun keyFrom(passphrase: String, salt: ByteArray, iterations: Int) =
+        SecretKeySpec(deriveKey(passphrase, salt, iterations, KEY_BITS), "AES")
+
+    /** PBKDF2-HMAC-SHA256 of [passphrase] over [salt], [bits] long. */
+    internal fun deriveKey(passphrase: String, salt: ByteArray, iterations: Int, bits: Int): ByteArray =
+        SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+            .generateSecret(PBEKeySpec(passphrase.toCharArray(), salt, iterations, bits))
+            .encoded
 
     // java.util's encoder, which also runs off a device.
     private fun encode(bytes: ByteArray): String =

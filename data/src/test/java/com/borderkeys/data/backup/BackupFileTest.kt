@@ -105,7 +105,7 @@ class BackupFileTest {
     @Test
     fun `a file from a later format is refused rather than half read`() {
         val text = BackupFile.write(settingsOnly, passphrase = "")
-            .replace("\"format\":1", "\"format\":99")
+            .replace("\"format\":2", "\"format\":99")
         assertEquals(BackupFile.Failure.NOT_A_BACKUP, BackupFile.read(text, "").failure)
     }
 
@@ -127,6 +127,62 @@ class BackupFileTest {
         assertFalse(payload!!.isSensitive)
         assertNull(payload.preferences)
     }
+
+    @Test
+    fun `a new file declares the current format and round count`() {
+        val text = BackupFile.write(sensitive, passphrase = "correct horse")
+        assertTrue(text.contains("\"format\":2"))
+        assertTrue(text.contains("\"iterations\":600000"))
+    }
+
+    @Test
+    fun `a file written at the earlier round count still opens`() {
+        val text = javaClass.getResource("/backup-format1-210k.json")!!.readText()
+        assertTrue(text.contains("\"format\":1"))
+        assertTrue(text.contains("\"iterations\":210000"))
+        val payload = BackupFile.read(text, passphrase = "correct horse").payload
+        assertEquals(listOf(BackupWord("cana", "ro-RO", 12)), payload?.words)
+    }
+
+    @Test
+    fun `a round count above the cap is refused before anything is derived`() {
+        val text = BackupFile.write(sensitive, passphrase = "correct horse")
+            .replace("\"iterations\":600000", "\"iterations\":5000001")
+        assertEquals(BackupFile.Failure.DAMAGED, BackupFile.read(text, "correct horse").failure)
+    }
+
+    @Test
+    fun `an encrypted file without a round count is damaged`() {
+        val text = BackupFile.write(sensitive, passphrase = "correct horse")
+            .replace("\"iterations\":600000,", "")
+        assertEquals(BackupFile.Failure.DAMAGED, BackupFile.read(text, "correct horse").failure)
+    }
+
+    @Test
+    fun `the key derivation matches the published vectors`() {
+        // RFC 7914, section 11.
+        assertEquals(
+            "55ac046e56e3089fec1691c22544b605f94185216dde0465e68b9d57c20dacbc" +
+                "49ca9cccf179b645991664b39d77ef317c71b845b1e30bd509112041d3a19783",
+            BackupFile.deriveKey("passwd", "salt".toByteArray(), 1, 512).hex(),
+        )
+        assertEquals(
+            "4ddcd8f60b98be21830cee5ef22701f9641a4418d04c0414aeff08876b34ab56" +
+                "a1d425a1225833549adb841b51c9b3176a272bdebba1d078478f62b397f33c8d",
+            BackupFile.deriveKey("Password", "NaCl".toByteArray(), 80_000, 512).hex(),
+        )
+    }
+
+    @Test
+    fun `a changed header is refused the way a wrong passphrase is`() {
+        val text = BackupFile.write(sensitive, passphrase = "correct horse")
+        val downgraded = text.replace("\"format\":2", "\"format\":1")
+        val result = BackupFile.read(downgraded, "correct horse")
+        assertNull(result.payload)
+        assertEquals(BackupFile.Failure.WRONG_PASSPHRASE, result.failure)
+    }
+
+    private fun ByteArray.hex() = joinToString("") { "%02x".format(it) }
 
     @Test
     fun `the clipboard counts as private too`() {

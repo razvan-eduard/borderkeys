@@ -53,6 +53,10 @@ attestations and the full commit lists are on the
   "loke|this", replaced both; it now replaces the first and leaves the second.
 - Fixed: the clipboard chip's "Offer it only once" spent a clip in the app it was copied from,
   so it was gone before the keyboard opened anywhere else.
+- Fixed: the key of an encrypted backup was derived with 210,000 rounds. A new file declares
+  600,000, its header is sealed together with its contents, and a file claiming more than
+  5,000,000 rounds is refused as damaged before any work is done. Files already written still
+  open, and the screen says so while the key is being derived.
 - Swiping reaches contractions: a swipe through d-o-n-t writes "don't", and a swipe through the
   letters of a bare spelling the keyboard already restores an apostrophe to, "didnt" or "im",
   writes it with the apostrophe. Those bare spellings are gone from the English list, so the

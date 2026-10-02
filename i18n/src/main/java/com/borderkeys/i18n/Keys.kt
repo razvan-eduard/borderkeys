@@ -177,6 +177,7 @@ object Keys {
     const val BACKUP_REVIEW_IMPORT = "backup_review_import"
     const val BACKUP_REVIEW_TITLE = "backup_review_title"
     const val BACKUP_WHAT = "backup_what"
+    const val BACKUP_WORKING = "backup_working"
     const val BACKUP_WRITE = "backup_write"
     const val BACKUP_WRITTEN = "backup_written"
     const val CLIP_IMAGE = "clip_image"

@@ -71,6 +71,7 @@ fun BackupScreen(modifier: Modifier = Modifier) {
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
+            notice = strings[Keys.BACKUP_WORKING]
             val text = withContext(Dispatchers.IO) {
                 BackupFile.write(backups.gather(parts), if (private) passphrase else "")
             }
@@ -99,8 +100,10 @@ fun BackupScreen(modifier: Modifier = Modifier) {
                 notice = strings[Keys.BACKUP_ERROR_DAMAGED]
                 return@launch
             }
+            notice = strings[Keys.BACKUP_WORKING]
             val result = withContext(Dispatchers.Default) { BackupFile.read(text, passphrase) }
             val payload = result.payload
+            notice = ""
             if (payload == null) {
                 notice = when (result.failure) {
                     BackupFile.Failure.WRONG_PASSPHRASE ->
