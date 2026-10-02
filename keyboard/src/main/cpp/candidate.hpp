@@ -15,8 +15,8 @@ struct Candidate {
     // Word index inside that pack, or entry index inside the user model.
     int32_t wordIndex;
     float score;
-    // How the word was reached from the typed letters: the walk's edit cost in key widths, how
-    // many edits it took, and how many characters the word runs on past the last one typed.
+    // The walk's edit cost in key widths, its edit count, and the characters past the last one
+    // typed.
     float editCost = 0.0f;
     uint8_t edits = 0;
     uint8_t runOn = 0;

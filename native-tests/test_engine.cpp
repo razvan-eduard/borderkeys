@@ -895,8 +895,7 @@ void runEngineTests() {
         const Candidate* none = nullptr;
         check(loaded.engine.corrections(&none) == 0, "and an empty list");
 
-        // The list: best first, at most the respelling plus the heap, every entry resolving,
-        // and each carrying how the walk reached it.
+        // The list: sorted, at most the respelling plus the heap, every entry resolving.
         loaded.engine.suggest("thexx", 5, nullptr, 0, nullptr, 0, out, Engine::kMaxCandidates);
         const Candidate* list = nullptr;
         const int count = loaded.engine.corrections(&list);
@@ -920,8 +919,7 @@ void runEngineTests() {
         check(loaded.corrections("keybosr").find("keyboard/1/1 ") != std::string::npos,
               "an edit plus a run-on letter carries one of each");
 
-        // "ther": "there" runs on by one letter, "the" discards a typed letter; the run-on is
-        // priced as an omitted letter, below a deletion.
+        // A run-on letter is priced below a deletion.
         const std::string ther = loaded.corrections("ther");
         const size_t there = ther.find("there/0/1 ");
         const size_t the = ther.find("the/1/0 ");

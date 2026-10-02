@@ -4,32 +4,62 @@
 package com.borderkeys.ime
 
 import com.borderkeys.ime.AutoCorrection.Situation
+import com.borderkeys.predict.CorrectionOffer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
  * One case per [AutoCorrection.Situation], including the two that are exceptions to the rule
- * above them.
+ * above them, and how [AutoCorrection.pick] walks a list of several offers.
  */
 class SituationTest {
+
+    private fun offer(
+        text: String,
+        isName: Boolean = false,
+        inflection: Boolean = false,
+        edits: Int = 0,
+    ) = CorrectionOffer(text, isName, inflection, edits)
+
+    private fun pick(
+        typed: String,
+        vararg offers: CorrectionOffer,
+        suggestionQuery: String = typed,
+        knownWord: String = "",
+        knownWordExact: Boolean = false,
+        knownWordIsName: Boolean = false,
+        minimumLength: Int = 3,
+        maxEdits: Int = Int.MAX_VALUE,
+        capitaliseNames: Boolean = true,
+    ): AutoCorrection.Pick = AutoCorrection.pick(
+        typed, offers.toList(), suggestionQuery, knownWord, knownWordExact, knownWordIsName,
+        minimumLength, maxEdits, capitaliseNames,
+    )
 
     private fun situation(
         typed: String,
         suggestion: String?,
         suggestionQuery: String = typed,
         knownWord: String = "",
+        knownWordExact: Boolean = false,
         minimumLength: Int = 3,
         isProperNoun: Boolean = false,
         maxEdits: Int = Int.MAX_VALUE,
         capitaliseNames: Boolean = true,
         inflection: Boolean = false,
-    ): Situation {
-        val cased = AutoCorrection.matchCase(typed, suggestion.orEmpty(),
-                                             isProperNoun && capitaliseNames)
-        return AutoCorrection.situationOf(typed, suggestion, suggestionQuery, knownWord, cased,
-                                          minimumLength, isProperNoun, maxEdits, capitaliseNames,
-                                          inflection)
-    }
+    ): Situation = pick(
+        typed,
+        *listOfNotNull(suggestion?.takeIf { it.isNotEmpty() }?.let { offer(it, isProperNoun, inflection) })
+            .toTypedArray(),
+        suggestionQuery = suggestionQuery,
+        knownWord = knownWord,
+        knownWordExact = knownWordExact,
+        knownWordIsName = isProperNoun && knownWord.isNotEmpty(),
+        minimumLength = minimumLength,
+        maxEdits = maxEdits,
+        capitaliseNames = capitaliseNames,
+    ).situation
 
     @Test
     fun `nothing offered`() {
@@ -48,6 +78,17 @@ class SituationTest {
         assertEquals(Situation.TooFar, situation("snobul", "noul", maxEdits = 1))
         // The same pair is correctable once the ceiling admits two edits.
         assertEquals(Situation.Correctable, situation("snobul", "noul", maxEdits = 3))
+    }
+
+    @Test
+    fun `behind a refused entry the walk's edit count is a ceiling too`() {
+        // The first entry is judged by its letters alone.
+        assertEquals(Situation.Correctable,
+            pick("badder", offer("ladder", edits = 2), maxEdits = 1).situation)
+        assertEquals(Situation.TooFar,
+            pick("badder", offer("bladders"), offer("ladder", edits = 2), maxEdits = 1).situation)
+        assertEquals("ladder",
+            pick("badder", offer("bladders"), offer("ladder", edits = 1), maxEdits = 1).text)
     }
 
     @Test
@@ -73,16 +114,22 @@ class SituationTest {
 
     @Test
     fun `a word the dictionaries spell is left alone`() {
+        // Spelled exactly, case aside: nothing to change.
+        assertEquals(Situation.NoChange,
+            situation("put", "out", knownWord = "put", knownWordExact = true))
+        // Spelled only in another case, as a name: known, and not recased.
         assertEquals(Situation.KnownWord, situation("put", "out", knownWord = "put"))
     }
 
     @Test
     fun `a name being recased is correctable though the dictionaries spell it`() {
-        assertEquals(Situation.Correctable,
-            situation("ana", "ana", knownWord = "ana", isProperNoun = true))
+        val recased = pick("ana", offer("ana", isName = true), knownWord = "ana",
+                           knownWordExact = true, knownWordIsName = true)
+        assertEquals(Situation.Correctable, recased.situation)
+        assertEquals("Ana", recased.text)
         // With the capital switched off, nothing changes.
         assertEquals(Situation.NoChange,
-            situation("ana", "ana", knownWord = "ana", isProperNoun = true,
+            situation("ana", "ana", knownWord = "ana", knownWordExact = true, isProperNoun = true,
                       capitaliseNames = false))
     }
 
@@ -97,5 +144,34 @@ class SituationTest {
     @Test
     fun `an ordinary correction`() {
         assertEquals(Situation.Correctable, situation("teh", "the"))
+    }
+
+    @Test
+    fun `the first admissible of several wins`() {
+        val picked = pick("loke", offer("looked"), offer("like"), maxEdits = 1)
+        assertEquals(Situation.Correctable, picked.situation)
+        assertEquals("like", picked.text)
+    }
+
+    @Test
+    fun `a refusal of the best does not refuse the second`() {
+        val name = pick("thanks", offer("Hanks", isName = true), offer("thank"), maxEdits = 2)
+        assertEquals("thank", name.text)
+        val inflected = pick("smooths", offer("smooth", inflection = true), offer("smooths"), offer("smoothes"))
+        assertEquals("smoothes", inflected.text)
+    }
+
+    @Test
+    fun `a too short first offer stops the walk`() {
+        val picked = pick("ab", offer("abc"), offer("ab"), offer("abd"), minimumLength = 3)
+        assertEquals(Situation.TooShort, picked.situation)
+        assertNull(picked.text)
+    }
+
+    @Test
+    fun `the reason on exhaustion is the first offer's`() {
+        val picked = pick("snobul", offer("noul"), offer("snob", isName = true), maxEdits = 1)
+        assertEquals(Situation.TooFar, picked.situation)
+        assertNull(picked.text)
     }
 }

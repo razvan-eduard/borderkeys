@@ -116,17 +116,12 @@ internal class Pipeline private constructor(
         return "${outcome.typed}\t${outcome.committed ?: "-"}\t${outcome.reason}\t$ranking"
     }
 
-    /** The ranked words for [typed], and the index of the engine's correction among them, or -1. */
-    fun stripWithCorrection(typed: String, previous: String? = null): CorrectionView {
-        val answer = answerRequest(handle, typed, previous, null, languages, scratch)
-        return CorrectionView(answer.words.filterNotNull(), answer.correctionAt, answer.correction)
-    }
+    /** Autocorrect's list for [typed], best first, as the bridge hands it over. */
+    fun corrections(typed: String, previous: String? = null): List<CorrectionOffer> =
+        answerRequest(handle, typed, previous, null, languages, scratch).corrections
 
     /** The buffers the engine's answers are read through. */
     private val scratch = AnswerScratch()
-
-    /** The engine's ranking, the index of its correction in it, and the correction itself. */
-    data class CorrectionView(val ranked: List<String>, val correctionAt: Int, val correction: String?)
 
     /** Each word of [phrase] typed in turn, with a space after it, into one field. */
     fun commitPhrase(phrase: String): List<Outcome> {

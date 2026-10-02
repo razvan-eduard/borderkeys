@@ -96,7 +96,7 @@ Three rules hold this together, all in `predict/PredictionEngine.kt`:
   This is what stops the strip flickering back to a previous word.
 
 Because the answer arrives late, every result carries the `query` it is about.
-`AutoCorrection.correctionFor` refuses outright when `typed != suggestionQuery` — otherwise a
+`AutoCorrection.pick` refuses outright when `typed != suggestionQuery` — otherwise a
 delimiter typed before the answer landed would apply a correction computed for a different word.
 That is the real cause behind reports like *"tinde" became "idependent"*: no edit budget reaches
 one from the other, and it never was the answer to that question.
@@ -259,10 +259,8 @@ The two heaps are keyed differently because they price the letters the user did 
 differently. On the strip a letter the word runs on past the typed ones is a completion, 0.5 a
 letter, because the word may not be finished. At a delimiter it is finished, so in the correction
 heap the same letter is a letter the user left out, priced at `kRunOnCost` 0.6 key widths (24
-points), and any departure from the typed letters pays the surcharge. Before this, `loke` put
-`looked` (an insertion plus a run-on letter, −49.1) above `like` (one slip, −49.7) in the heap,
-and the guards then refused `looked` as too far and corrected nothing; under the heap's own key
-`looked` reads −72.6 and `like` leads.
+points), and any departure from the typed letters pays the surcharge. For `loke`, `like` (one
+slip, −49.7) leads `looked` (an insertion plus a run-on letter, −72.6).
 
 `settleCorrection()` leaves the whole list behind, best first: the respelling of the letters
 typed when there is one, then the heap drained, up to five entries, each carrying the walk's
@@ -304,7 +302,7 @@ Without that condition the completion is free on top of an uncertain edit, and a
 inflected form wins — the failure that kept this barred entirely until it was measured.
 
 `bestCorrection()` decides nothing. Whether the word is applied remains
-`AutoCorrection.correctionFor`'s to say, and it still applies every guard below.
+`AutoCorrection.pick`'s to say, over the whole list, and it still applies every guard below.
 
 ### The third axis: language
 
@@ -335,7 +333,7 @@ is answered by the evidence and dominance mechanism below, never by drifting a w
 |---|---|---|
 | `kEditPenalty` | **40.0** | The multiplier on every edit. Must clear `ln(worst frequency ratio)` so that one transposition outweighs the gap between the commonest and rarest word in a pack. Floored at 15 by a `static_assert`. |
 | `kInsertCost` | 0.85 | A dropped letter is a commoner slip than a wrong key, so just under a full neighbour substitution. |
-| `kRunOnCost` | **0.6** | What a letter the word has past the last one typed costs in the correction heap, the strip keeping `kCompletionPenalty`. At a delimiter the word is finished, so the letter was left out. Priced at the strip's 0.5 a letter, a word run on past the typed letters headed the heap above every one-slip correction (`loke`: `looked` −49.1 over `like` −49.7). Priced as `kInsertCost` 0.85 it lost to a doubled letter (`kRepeatDeleteCost` 0.75): `reall` became `real`, `usuall` `usual`, and the mid-word corpus fell 192 → 189. At 0.6 it sits below the repeat deletion and the swap and above the mark; 0.5 reads the same on every corpus. |
+| `kRunOnCost` | **0.6** | What a letter the word has past the last one typed costs in the correction heap; the strip keeps `kCompletionPenalty`. At a delimiter the word is finished, so the letter was left out. Below the repeat deletion (0.75) and the swap (0.8), above the mark. |
 | `kDeleteCost` | **1.6** | Deliberately not the mirror of `kInsertCost`. Supplying a letter someone did not type is the ordinary lossiness of typing; discarding one they *did* type throws away the only direct evidence of intent. At 0.85, 79% of the correct words the pack lacked were overwritten by something *shorter* — `bisection` → `section`, `crewel` → `crew`. Swept 0.85 to 2.0: unknown words left alone 66.0% → 90.0%, the typo and mid-word corpora never move, and the strip holds at 71.9% up to 1.6 and drops from 1.7. |
 | `kRepeatDeleteCost` | **0.75** | Discarding a letter typed right after the same letter: a key struck twice. Priced as `kDeleteCost` it lost to any closer word, and with Romanian also on, `nationaal` became `națională` (a swap, 0.8) instead of `national`. Just under a swap because at 0.6 `aagin`, a swap of `again`, read as a doubled `a` plus a letter and became `aging`. Doubled corpus 187 → 191, unknown words left alone 188 → 191, every other corpus and the strip unchanged. |
 | `kTransposeCost` | 0.80 | One gesture out of order, not two errors. Deliberately only *slightly* cheaper: at the old 0.65 this priced two equally common slips as though one were a thousand times likelier, which let `acm` → `cam` crowd out `acum`. |
@@ -481,10 +479,21 @@ Everything that can stop a correction, in the order it applies.
    a known word, and is predicted after its context only once *established*: chosen on purpose
    at least once, or written `kMinPersonalEvidence` effective times. Until then it is a count.
 
-### In `AutoCorrection.correctionFor`
+### In `AutoCorrection.pick`
 
-Returns null — commit what was typed — in every case where applying a correction would be an
-argument rather than a correction:
+The engine hands over autocorrect's whole list, up to five entries best first (see [the two
+heaps](#the-two-axes)), with what the dictionaries say of the typed word. The word is judged
+first: nothing offered and nothing known, an answer about another word, a trailing mark, or a
+word the dictionaries spell, which is never corrected (`NoChange` when a dictionary spells it
+exactly, `KnownWord` when only in another case, `Correctable` only when it is a name to
+capitalise). Then the entries in turn: one too far, a name whose letters are not the typed ones,
+one that changes nothing once cased, or an inflection of a known stem is passed over for the
+next; a typed word shorter than the minimum stops the walk; the first entry left standing is
+applied, and when none is, the first entry's reason stands. `pipeline_cases.tsv` pins `loke` →
+`like` and `writet` → `writer`.
+
+What is typed stays as typed in every case where applying a correction would be an argument
+rather than a correction:
 
 - the word is shorter than `minimumLength`, **unless** the only difference is a diacritic
   (`in` → `în` is two real words that differ by an accent, not a coin toss);

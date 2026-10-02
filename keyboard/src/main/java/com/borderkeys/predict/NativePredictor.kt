@@ -58,10 +58,11 @@ internal object NativePredictor {
     /**
      * Answers one request. Fills [outWords], [outScores] and [outProperNoun] with the best
      * candidates, best first, and returns how many were written; an empty [composing] asks for
-     * the next word. [outCorrectionIndex] receives the entry the corrections heap settled on, or
-     * -1, and is left as it is when no candidate is written. For a typed word, [outTexts]
-     * receives [TEXT_KNOWN_SPELLING], [TEXT_POSSESSIVE] and [TEXT_CORRECTION], and
-     * [outCorrectionName][0] whether that correction is a name; a slot with none is left as it is.
+     * the next word. For a typed word, [outTexts] receives [TEXT_KNOWN_SPELLING] and
+     * [TEXT_POSSESSIVE], a slot with none left as it is; [outCorrections] receives autocorrect's
+     * list, best first, up to [CORRECTION_SLOTS] entries, the rest left null, [outEdits] how many
+     * edits the walk took to each, and [outFlags] whether each entry is a name, then
+     * [FLAG_EXACT_SPELLING] and [FLAG_EXACT_SPELLING_NAME].
      */
     external fun nativeAnswer(
         handle: Long,
@@ -73,9 +74,10 @@ internal object NativePredictor {
         outWords: Array<String?>,
         outScores: FloatArray,
         outProperNoun: BooleanArray,
-        outCorrectionIndex: IntArray,
         outTexts: Array<String?>,
-        outCorrectionName: BooleanArray,
+        outCorrections: Array<String?>,
+        outEdits: IntArray,
+        outFlags: BooleanArray,
     ): Int
 
     /** [nativeAnswer]'s text slot: how the dictionaries spell the typed word. */
@@ -84,11 +86,20 @@ internal object NativePredictor {
     /** [nativeAnswer]'s text slot: the possessive of a name missing its apostrophe. */
     const val TEXT_POSSESSIVE = 1
 
-    /** [nativeAnswer]'s text slot: autocorrect's answer. */
-    const val TEXT_CORRECTION = 2
-
     /** How many text slots [nativeAnswer] fills. */
-    const val TEXT_SLOTS = 3
+    const val TEXT_SLOTS = 2
+
+    /** How many entries of autocorrect's list [nativeAnswer] writes at most. */
+    const val CORRECTION_SLOTS = 5
+
+    /** [nativeAnswer]'s flag: a dictionary spells the typed letters exactly, case aside. */
+    const val FLAG_EXACT_SPELLING = CORRECTION_SLOTS
+
+    /** [nativeAnswer]'s flag: that exact spelling is a name. */
+    const val FLAG_EXACT_SPELLING_NAME = CORRECTION_SLOTS + 1
+
+    /** How many flags [nativeAnswer] fills. */
+    const val FLAG_SLOTS = CORRECTION_SLOTS + 2
 
     /**
      * Records that the user committed [word] after [prev1] and [prev2]. [asserted] is whether it

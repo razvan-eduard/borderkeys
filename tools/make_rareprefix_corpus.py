@@ -76,6 +76,9 @@ def main():
         sys.exit("no eligible words")
 
     rows = rng.sample(rows, min(args.count, len(rows)))
+    # One row per typed form: a form two words mangle to is kept for the first of them.
+    seen = set()
+    rows = [row for row in rows if not (row[0] in seen or seen.add(row[0]))]
     rows.sort()
 
     print("# Slips on frequent words that begin a rare word: one letter hit one key over or one")

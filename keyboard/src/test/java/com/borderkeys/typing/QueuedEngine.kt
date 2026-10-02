@@ -6,6 +6,7 @@ package com.borderkeys.typing
 import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.predict.AnswerScratch
 import com.borderkeys.predict.Candidate
+import com.borderkeys.predict.CorrectionOffer
 import com.borderkeys.predict.NativePredictor
 import com.borderkeys.predict.NewestWins
 import com.borderkeys.predict.PredictionEngine
@@ -27,10 +28,12 @@ internal class QueuedEngine(
     var onSuggestions: (
         candidates: List<Candidate>,
         knownWord: String,
+        knownWordExact: Boolean,
+        knownWordIsName: Boolean,
         query: String,
         possessive: String?,
-        inflection: Boolean,
-    ) -> Unit = { _, _, _, _, _ -> }
+        corrections: List<CorrectionOffer>,
+    ) -> Unit = { _, _, _, _, _, _, _ -> }
 
     private class Task(val request: Boolean, val run: () -> Unit)
 
@@ -75,8 +78,9 @@ internal class QueuedEngine(
                     handle, composing, previous1, previous2, languages, scratch, tapXs, tapYs,
                 )
                 onSuggestions(
-                    answer.candidates(refused), answer.knownWord, answer.query, answer.possessive,
-                    answer.inflection,
+                    answer.candidates(refused), answer.knownWord, answer.knownWordExact,
+                    answer.knownWordIsName, answer.query, answer.possessive,
+                    answer.offers(refused),
                 )
             },
         )

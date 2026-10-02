@@ -102,3 +102,7 @@ don't	-	NoChange
 # --- correct, and absent from the pack --------------------------------------------------------
 snobul	-	NothingOffered
 abaft	-	NothingOffered
+
+# --- the first admissible entry of autocorrect's list, not only its first --------------------
+loke	like	Correctable
+writet	writer	Correctable

@@ -13,13 +13,12 @@
  * names the typed word itself.
  *
  * The bare form measures where the strip ranks the expected word; `--autocorrect` measures what
- * the space bar commits, which is a different heap. It walks autocorrect's list as the keyboard
- * does: a word the dictionaries already spell is left alone; a candidate more edits away than
- * the ceiling (one, two from eight letters) or a name whose letters are not the typed ones is
- * passed over for the next; a typed word under three letters stops the walk unless the candidate
- * only restores its accents. It does not model the inflection guard or the contraction and
- * possessive rewrites, so it reads a little differently from PipelineCorpusTest, which runs the
- * real Kotlin.
+ * the space bar commits, which is a different heap, walking autocorrect's list: a word the
+ * dictionaries spell is left alone; a candidate past the edit ceiling (one edit, two from eight
+ * letters) or a name whose letters are not the typed ones is passed over, and one behind a
+ * passed-over entry must also be within the ceiling by the walk's own edit count; a typed word
+ * under three letters stops the walk unless the candidate only restores its accents. The
+ * inflection guard and the contraction and possessive rewrites are not modelled.
  *
  * Usage:
  *     suggest_eval <dict dir> <corpus.tsv> [tag ...]
@@ -119,7 +118,8 @@ std::string committedFor(Engine& engine, const std::string& typed) {
     const int maxEdits = typedCount >= 8 ? 2 : 1;
     const Candidate* list = nullptr;
     const int count = engine.corrections(&list);
-    for (int i = 0; i < count; ++i) {
+    bool behindRefused = false;
+    for (int i = 0; i < count; ++i, behindRefused = true) {
         uint32_t length = 0;
         const char* const text = engine.candidateText(list[i], &length);
         if (text == nullptr || length == 0) {
@@ -133,7 +133,9 @@ std::string committedFor(Engine& engine, const std::string& typed) {
         const bool sameLetters =
             wordCount == typedCount &&
             std::memcmp(wordFolded, typedFolded, sizeof(uint32_t) * typedCount) == 0;
-        if (osaDistance(typedFolded, typedCount, wordFolded, wordCount) > maxEdits) {
+        // Behind a refused entry the walk's own edit count is a ceiling too.
+        if (osaDistance(typedFolded, typedCount, wordFolded, wordCount) > maxEdits ||
+            (behindRefused && list[i].edits > maxEdits)) {
             continue;
         }
         if (engine.candidateIsProperNoun(list[i]) && !sameLetters) {
@@ -587,8 +589,7 @@ int main(int argc, char** argv) {
         std::printf("  ---\n");
         std::printf("  total               %+9.3f\n", parts.total);
 
-        // Autocorrect's own list, under its own key. Copied out, since every explain call below
-        // makes the request again and rewrites it.
+        // Autocorrect's list, copied out before the explain calls below make the request again.
         const Candidate* settled = nullptr;
         const int count = engine.corrections(&settled);
         std::vector<Candidate> list(settled, settled + count);
@@ -611,7 +612,7 @@ int main(int argc, char** argv) {
                         onStrip ? list[i].score - languageModel : 0.0f, list[i].score,
                         engine.candidateIsProperNoun(list[i]) ? "name" : "");
         }
-        // The request made once more, so the walk below reads this word's list.
+        // The request made once more for the walk below.
         engine.explainScore(typed, std::strlen(typed), wanted, std::strlen(wanted), &parts);
         const std::string committed = committedFor(engine, typed);
         if (!committed.empty()) {

@@ -4,6 +4,7 @@
 package com.borderkeys.ime
 
 import com.borderkeys.data.theme.TextShortcut
+import com.borderkeys.predict.CorrectionOffer
 
 /**
  * What a delimiter writes in place of the word just typed, and why. The first [CommitRule] to
@@ -68,8 +69,9 @@ internal object WordCommit {
      * [verbatim] field every word stays as typed. No rewrite claims a word from a gesture
      * ([fromGesture]). [runningText] is whether the word is part of a sentence, settled as it
      * began ([RunningText]). [possessive] is the engine's possessive for [suggestionQuery], used
-     * only when that is [typed] and [typed] is not empty; [inflection] is [WordStems.shields]'s
-     * answer for the same query and suggestion.
+     * only when that is [typed] and [typed] is not empty; [corrections] is autocorrect's list for
+     * the same query, [knownWord], [knownWordExact] and [knownWordIsName] what the dictionaries
+     * say of it (see [AutoCorrection.pick]).
      */
     fun decide(
         typed: String,
@@ -80,16 +82,17 @@ internal object WordCommit {
         shortcuts: List<TextShortcut>,
         contractions: Map<String, String>,
         possessive: String?,
-        suggestion: String?,
+        corrections: List<CorrectionOffer>,
         suggestionQuery: String,
         knownWord: String,
-        isProperNoun: Boolean,
-        inflection: Boolean,
+        knownWordExact: Boolean,
+        knownWordIsName: Boolean,
         settings: Settings,
     ): Outcome {
         val word = Word(
             typed, endedBy, verbatim, fromGesture, runningText, shortcuts, contractions,
-            possessive, suggestion, suggestionQuery, knownWord, isProperNoun, inflection, settings,
+            possessive, corrections, suggestionQuery, knownWord, knownWordExact, knownWordIsName,
+            settings,
         )
         for (rule in RULES) {
             rule.claim(word)?.let { return it }
@@ -107,11 +110,11 @@ internal object WordCommit {
         val shortcuts: List<TextShortcut>,
         val contractions: Map<String, String>,
         val possessive: String?,
-        val suggestion: String?,
+        val corrections: List<CorrectionOffer>,
         val suggestionQuery: String,
         val knownWord: String,
-        val isProperNoun: Boolean,
-        val inflection: Boolean,
+        val knownWordExact: Boolean,
+        val knownWordIsName: Boolean,
         val settings: Settings,
     ) {
         /** Part of a sentence, as it began, and holding no digit. */
@@ -196,19 +199,16 @@ internal object WordCommit {
     /** Autocorrect's decision, with its situation as the reason. */
     private fun autocorrect(word: Word): Outcome {
         val settings = word.settings
-        val cased = AutoCorrection.matchCase(
-            word.typed, word.suggestion.orEmpty(), word.isProperNoun && settings.capitaliseNames,
+        val pick = AutoCorrection.pick(
+            word.typed, word.corrections, word.suggestionQuery, word.knownWord,
+            word.knownWordExact, word.knownWordIsName, settings.minimumLength,
+            AutoCorrection.maxEditsFor(word.typed.length, settings.correctionDistance),
+            settings.capitaliseNames,
         )
-        val maxEdits = AutoCorrection.maxEditsFor(word.typed.length, settings.correctionDistance)
-        val situation = AutoCorrection.situationOf(
-            word.typed, word.suggestion, word.suggestionQuery, word.knownWord, cased,
-            settings.minimumLength, word.isProperNoun, maxEdits, settings.capitaliseNames,
-            word.inflection,
-        )
-        return if (situation == AutoCorrection.Situation.Correctable) {
-            Outcome(cased, Kind.CORRECTION, situation, situation.name)
+        return if (pick.situation == AutoCorrection.Situation.Correctable) {
+            Outcome(pick.text, Kind.CORRECTION, pick.situation, pick.situation.name)
         } else {
-            Outcome(null, Kind.NONE, situation, situation.name)
+            Outcome(null, Kind.NONE, pick.situation, pick.situation.name)
         }
     }
 }
