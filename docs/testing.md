@@ -825,6 +825,19 @@ strip 72.0, 76.0, 79.0, 84.0 and 84.0% of the time; through the whole path 25 ga
 above and loses none, while 15 loses one unknown and two rare-prefix rows for four omitted, one
 slip and one first-letter row.
 
+`kSlipScale`, the factor on a neighbouring key's distance in the walk, was swept at 0.6, 0.7 and
+0.8 with a cap of one edit up to four typed letters and two from five (`BORDERKEYS_SLIP_SCALE`),
+and the reference's whole edit model was measured in the same units (slip 0.425, swap 0.51,
+delete 0.85, budgets 0.51 / 0.85 / 1.275 / 1.7 by typed length, depth caps 0.85 / 1.275:
+`BORDERKEYS_TRANSPOSE_COST`, `_DELETE_COST`, `_CEILING_3/4/5/8`, `_DEPTH_CAP_4/7`). Engine alone,
+slip / first letter / omitted / mid-word / rare prefix / strip first place: 1.0 reads 179 / 170 /
+191 / 196 / 141 / 71.9%; 0.8 reads 180 / 172 / 184 / 196 / 133 / 71.9%; 0.7 reads 180 / 172 /
+175 / 196 / 124 / 71.9%; 0.6 reads 179 / 172 / 174 / 196 / 123 / 68.8%; the reference's model
+147 / 149 / 162 / 177 / 110 / 65.6%, its budgets alone 140 / 149 / 174 / 194 / 123 / 65.6%, its
+costs with our budgets 176 / 170 / 162 / 177 / 110 / 65.6%. The slip corpus and the first-letter
+corpus gain at most two rows at any value below 1.0; the omitted and rare-prefix corpora lose
+five to twenty-seven. The cap on its own moved one unknown row and nothing else, and is not kept.
+
 The slip corpus loses most of its rows to the edit ceiling or the name rule, not to ranking,
 and the rare-prefix corpus is where completions of a rare word outrank the frequent correction
 (`cente` → `center`, `arge` → `large`). Of the known corpus's 7 misses, 5 are names the list

@@ -37,8 +37,13 @@ constexpr float kEditPenalty = 25.0f;
 // What an inserted letter costs, in key widths.
 constexpr float kInsertCost = 0.85f;
 
-// What a letter the word has past the last one typed costs autocorrect, in key widths.
+// What a letter the word has past the last one typed costs autocorrect, in key widths. The
+// build may set it for a sweep.
+#ifdef BORDERKEYS_RUN_ON_COST
+constexpr float kRunOnCost = static_cast<float>(BORDERKEYS_RUN_ON_COST);
+#else
 constexpr float kRunOnCost = 0.6f;
+#endif
 
 // The non-letters composed into a word, the marks; the same set as
 // BorderKeysService.isWordCharacter.
@@ -48,6 +53,14 @@ constexpr uint32_t kHyphen = 0x2Du;
 inline bool isMark(uint32_t folded) {
     return folded == kApostrophe || folded == kHyphen;
 }
+
+// The factor on a neighbouring key's distance when the finger landed on it instead; the result
+// is floored at KeyGeometry::kMinSubstitutionCost. The build may set it for a sweep.
+#ifdef BORDERKEYS_SLIP_SCALE
+constexpr float kSlipScale = static_cast<float>(BORDERKEYS_SLIP_SCALE);
+#else
+constexpr float kSlipScale = 1.0f;
+#endif
 
 // carriesFoldedMark, kMaxCorrectionCompletion and Reading are in reading.hpp.
 
@@ -59,13 +72,21 @@ constexpr float kMarkInsertCost = 0.02f;
 constexpr float kMarkDeleteCost = 3.0f;
 
 // What discarding a typed letter costs, in key widths.
+#ifdef BORDERKEYS_DELETE_COST
+constexpr float kDeleteCost = static_cast<float>(BORDERKEYS_DELETE_COST);
+#else
 constexpr float kDeleteCost = 1.6f;
+#endif
 
 // What discarding a letter typed right after the same letter costs, in key widths.
 constexpr float kRepeatDeleteCost = 0.75f;
 
 // What swapping two adjacent letters costs, in key widths.
+#ifdef BORDERKEYS_TRANSPOSE_COST
+constexpr float kTransposeCost = static_cast<float>(BORDERKEYS_TRANSPOSE_COST);
+#else
 constexpr float kTransposeCost = 0.80f;
+#endif
 
 // What each character a completion adds beyond what was typed costs.
 constexpr float kCompletionPenalty = 0.5f;
@@ -99,7 +120,8 @@ constexpr float kMinCorrectionStrictness = 0.5f;
 constexpr float kMaxCorrectionStrictness = 2.0f;
 
 // A personal word reached by the cheapest edit, at the most lenient strictness, cannot tie or
-// beat a correctly typed word.
+// beat a correctly typed word. kMinSubstitutionCost is the floor after kSlipScale; a mark
+// insertion is below the margin, and the personal dictionary is offered to the strip only.
 static_assert(
     kMinCorrectionStrictness *
             (kEditPenalty * KeyGeometry::kMinSubstitutionCost + kCorrectionSurcharge) >
@@ -151,15 +173,51 @@ constexpr int kMaxRunAhead = 2;
 
 constexpr size_t kArenaBytes = 512 * 1024;
 
-// How much finger error to tolerate, by prefix length; none below three characters.
+// How much finger error to tolerate, by prefix length; none below three characters. The build
+// may set each band for a sweep.
+#ifndef BORDERKEYS_CEILING_3
+#define BORDERKEYS_CEILING_3 1.7f
+#endif
+#ifndef BORDERKEYS_CEILING_4
+#define BORDERKEYS_CEILING_4 1.7f
+#endif
+#ifndef BORDERKEYS_CEILING_5
+#define BORDERKEYS_CEILING_5 2.5f
+#endif
+#ifndef BORDERKEYS_CEILING_8
+#define BORDERKEYS_CEILING_8 2.5f
+#endif
 float maxEditCostFor(int length) {
     if (length <= 2) {
         return 0.0f;
     }
-    if (length <= 4) {
-        return 1.7f;
+    if (length == 3) {
+        return static_cast<float>(BORDERKEYS_CEILING_3);
     }
-    return 2.5f;
+    if (length == 4) {
+        return static_cast<float>(BORDERKEYS_CEILING_4);
+    }
+    if (length <= 7) {
+        return static_cast<float>(BORDERKEYS_CEILING_5);
+    }
+    return static_cast<float>(BORDERKEYS_CEILING_8);
+}
+
+// What a path may have spent before the typed position reaches 4, then 7; the ceiling itself
+// when the build sets neither.
+float depthCeilingFor(int inputPos, float maxCost) {
+#ifdef BORDERKEYS_DEPTH_CAP_4
+    if (inputPos < 4) {
+        return std::min(maxCost, static_cast<float>(BORDERKEYS_DEPTH_CAP_4));
+    }
+#endif
+#ifdef BORDERKEYS_DEPTH_CAP_7
+    if (inputPos < 7) {
+        return std::min(maxCost, static_cast<float>(BORDERKEYS_DEPTH_CAP_7));
+    }
+#endif
+    (void)inputPos;
+    return maxCost;
 }
 
 // The edit ceiling for the second pass, run only when the first found nothing.
@@ -1278,22 +1336,26 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
         if (!fuzzy) {
             continue;
         }
+        const float maxCostHere = depthCeilingFor(frame.inputPos, maxCost);
 
         const uint32_t* neighbourCodes = nullptr;
         const float* neighbourCosts = nullptr;
         const int neighbourCount = geometry_.neighbours(typed, &neighbourCodes, &neighbourCosts);
 
         // Substitution: the finger landed one key over. Slot 0 is the exact match, already
-        // pushed above. With the request's taps, the touch model prices each neighbour.
+        // pushed above. With the request's taps, the touch model prices each neighbour; the
+        // distance is scaled by kSlipScale and floored.
         for (int i = 1; i < neighbourCount; ++i) {
-            const float step =
+            const float distance =
                 queryTapped_
                     ? touchModel_.substitutionCost(geometry_, typed, neighbourCodes[i],
                                                    queryTapX_[frame.inputPos],
                                                    queryTapY_[frame.inputPos], neighbourCosts[i])
                     : neighbourCosts[i];
+            const float step =
+                std::max(kSlipScale * distance, KeyGeometry::kMinSubstitutionCost);
             const float cost = frame.cost + step;
-            if (cost > maxCost) {
+            if (cost > maxCostHere) {
                 continue;
             }
             const int symbol = trie.symbolFor(neighbourCodes[i]);
@@ -1316,21 +1378,21 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
         const float deleteCost = isMark(folded[frame.inputPos]) ? kMarkDeleteCost
                                  : repeat                       ? kRepeatDeleteCost
                                                                 : kDeleteCost;
-        if (frame.cost + deleteCost <= maxCost && stackSize < 512) {
+        if (frame.cost + deleteCost <= maxCostHere && stackSize < 512) {
             stack[stackSize++] = Frame{frame.node, static_cast<int16_t>(frame.inputPos + 1), 0,
                                        frame.cost + deleteCost, edited};
         }
 
         // Insertion: a character of the word was missed. Every alphabet symbol the trie has from
         // here, a mark at kMarkInsertCost, without consuming input, bounded by runAhead.
-        if (frame.runAhead < kMaxRunAhead && frame.cost + kMarkInsertCost <= maxCost) {
+        if (frame.runAhead < kMaxRunAhead && frame.cost + kMarkInsertCost <= maxCostHere) {
             const int alphabetSize = trie.alphabetSize();
             const int markSymbols[] = {trie.symbolFor(kApostrophe), trie.symbolFor(kHyphen)};
             const auto isMarkSymbol = [&markSymbols](int symbol) {
                 return symbol == markSymbols[0] || symbol == markSymbols[1];
             };
             for (int symbol = 1; symbol <= alphabetSize && stackSize < 512; ++symbol) {
-                if (isMarkSymbol(symbol) || frame.cost + kInsertCost > maxCost) {
+                if (isMarkSymbol(symbol) || frame.cost + kInsertCost > maxCostHere) {
                     continue;
                 }
                 const int32_t child = trie.walk(frame.node, symbol);
@@ -1355,7 +1417,7 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
         }
 
         // Transposition: two adjacent characters in the wrong order.
-        if (frame.inputPos + 1 < foldedLength && frame.cost + kTransposeCost <= maxCost) {
+        if (frame.inputPos + 1 < foldedLength && frame.cost + kTransposeCost <= maxCostHere) {
             const int firstSymbol = trie.symbolFor(folded[frame.inputPos + 1]);
             const int secondSymbol = trie.symbolFor(typed);
             if (firstSymbol > 0 && secondSymbol > 0) {
