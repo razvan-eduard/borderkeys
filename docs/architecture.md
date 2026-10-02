@@ -238,7 +238,7 @@ ranking.**
 
 Ranking them together means pricing *"a longer word starting with this"* against *"a different
 word one slip away"*, and there is no honest exchange rate between those. The attempt to set one
-is why `kEditPenalty` is 40 and why a `static_assert` has to defend it.
+is why `kEditPenalty` is 25 and why a `static_assert` has to defend it.
 
 Concretely: typing `teh`, the strip held `tehran`, `tehran's`, `Tehan`, `Tehrani` and six more
 before `the`. Autocorrect read the strip's first entry, so it applied none of them. That was not
@@ -252,15 +252,15 @@ second pass over any dictionary:
 |---|---|---|
 | Holds | 16 candidates | 4 (`kMaxCorrections`) |
 | Admits | everything reached | `reachesCorrectionHeap()` **and** `plausibleCorrectionTarget()` |
-| Keyed on | `ln w + context − strictness·(40·cost + 3) − 0.5·depth` | `ln w + context − strictness·(40·cost + 40·0.6·depth + 3)` |
+| Keyed on | `ln w + context − strictness·(kEditPenalty·cost + 3) − 0.5·depth` | `ln w + context − strictness·(kEditPenalty·(cost + kRunOnCost·depth) + 3)` |
 | Read by | the strip | `corrections()` → `AutoCorrection` |
 
 The two heaps are keyed differently because they price the letters the user did not type
 differently. On the strip a letter the word runs on past the typed ones is a completion, 0.5 a
 letter, because the word may not be finished. At a delimiter it is finished, so in the correction
-heap the same letter is a letter the user left out, priced at `kRunOnCost` 0.6 key widths (24
+heap the same letter is a letter the user left out, priced at `kRunOnCost` 0.6 key widths (15
 points), and any departure from the typed letters pays the surcharge. For `loke`, `like` (one
-slip, −49.7) leads `looked` (an insertion plus a run-on letter, −72.6).
+slip, −34.7) leads `looked` (an insertion plus a run-on letter, −50.9).
 
 `settleCorrection()` leaves the whole list behind, best first: the respelling of the letters
 typed when there is one, then the heap drained, up to five entries, each carrying the walk's
@@ -283,9 +283,9 @@ results, and the routing between them *is* the correction hierarchy:
 
 Three consequences worth stating plainly, because each was a device report before it was a rule:
 
-- On the strip a one-character completion costs `kCompletionPenalty` 0.5 and an edit roughly 43,
-  so **a completion beats a correction by about 86 to 1** there. In the correction heap the
-  completion costs 27 against a slip's 43 and a doubled letter's 33, so typing `believ` still
+- On the strip a one-character completion costs `kCompletionPenalty` 0.5 and an edit roughly 28,
+  so **a completion beats a correction by about 56 to 1** there. In the correction heap the
+  completion costs 18 against a slip's 28 and a doubled letter's 21.75, so typing `believ` still
   commits `believe`, not `belief`, and `reall` commits `really`, not `real`, on a margin rather
   than on a free letter. Correction-first was measured at 12.0% on mid-word typing against
   98.5% for this.
@@ -331,13 +331,13 @@ is answered by the evidence and dominance mechanism below, never by drifting a w
 
 | Constant | Value | Why |
 |---|---|---|
-| `kEditPenalty` | **40.0** | The multiplier on every edit. Must clear `ln(worst frequency ratio)` so that one transposition outweighs the gap between the commonest and rarest word in a pack. Floored at 15 by a `static_assert`. |
+| `kEditPenalty` | **25.0** | The multiplier on every edit, in nats per key width. One edit outweighs a frequency ratio of e^25; a second edit outweighs any first. Floored at 15 by a `static_assert`; `BORDERKEYS_EDIT_PENALTY` and `BORDERKEYS_CORRECTION_SURCHARGE` set it and the surcharge for a sweep build of `native-tests`. |
 | `kInsertCost` | 0.85 | A dropped letter is a commoner slip than a wrong key, so just under a full neighbour substitution. |
 | `kRunOnCost` | **0.6** | What a letter the word has past the last one typed costs in the correction heap; the strip keeps `kCompletionPenalty`. At a delimiter the word is finished, so the letter was left out. Below the repeat deletion (0.75) and the swap (0.8), above the mark. |
 | `kDeleteCost` | **1.6** | Deliberately not the mirror of `kInsertCost`. Supplying a letter someone did not type is the ordinary lossiness of typing; discarding one they *did* type throws away the only direct evidence of intent. At 0.85, 79% of the correct words the pack lacked were overwritten by something *shorter* — `bisection` → `section`, `crewel` → `crew`. Swept 0.85 to 2.0: unknown words left alone 66.0% → 90.0%, the typo and mid-word corpora never move, and the strip holds at 71.9% up to 1.6 and drops from 1.7. |
 | `kRepeatDeleteCost` | **0.75** | Discarding a letter typed right after the same letter: a key struck twice. Priced as `kDeleteCost` it lost to any closer word, and with Romanian also on, `nationaal` became `națională` (a swap, 0.8) instead of `national`. Just under a swap because at 0.6 `aagin`, a swap of `again`, read as a doubled `a` plus a letter and became `aging`. Doubled corpus 187 → 191, unknown words left alone 188 → 191, every other corpus and the strip unchanged. |
 | `kTransposeCost` | 0.80 | One gesture out of order, not two errors. Deliberately only *slightly* cheaper: at the old 0.65 this priced two equally common slips as though one were a thousand times likelier, which let `acm` → `cam` crowd out `acum`. |
-| `kMarkInsertCost` | **0.02** | A mark — an apostrophe or a hyphen — left out is a convention dropped, not a key missed. This is what makes `cant` → `can't` and `wellknown` → `well-known` reachable. At `kEditPenalty` 40 it costs 0.8 points: enough that an exactly-spelled word still wins, little enough that a commoner contraction wins on frequency. |
+| `kMarkInsertCost` | **0.02** | A mark — an apostrophe or a hyphen — left out is a convention dropped, not a key missed. This is what makes `cant` → `can't` and `wellknown` → `well-known` reachable. At `kEditPenalty` 25 it costs 0.5 points: enough that an exactly-spelled word still wins, little enough that a commoner contraction wins on frequency. |
 | `kMarkDeleteCost` | **3.0** | The same mark in the other direction. Nobody's finger lands on an apostrophe by accident, so discarding one is a contradiction rather than a correction — `the workers' rights` was becoming `the workers rights`. Above `maxEditCostFor`'s largest ceiling (2.5), so no ordinary search reaches a word by dropping a mark; below `kFallbackEditCost` (4.2), so the wide pass may still *show* the stripped word without ever committing it. |
 | `kCompletionPenalty` | **0.5** | Per character a completion adds. Was 0.12, which let longer commoner words push the typed word out of the 16 entirely — typing `car` offered `care`, `cartea`, `carol`, `carmen`, with `car` nowhere. 0.5 is measured: first-place accuracy 61.5% → 68.8%. Past ~1.0 it starts costing the half-typed words completion exists for. |
 | `kCorrectionSurcharge` | **3.0** | A flat charge for having needed a correction *at all*, on top of per-edit cost. Charged once to any candidate with cost > 0. Completions are untouched. Without it, Romanian `si` (≈80× commoner) displaced correctly-typed `stiu`. |

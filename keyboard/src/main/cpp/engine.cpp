@@ -27,8 +27,12 @@ namespace {
 
 // Scoring constants, in natural log units.
 
-// What one key width of finger error costs.
-constexpr float kEditPenalty = 40.0f;
+// What one key width of finger error costs. The build may set it for a sweep.
+#ifdef BORDERKEYS_EDIT_PENALTY
+constexpr float kEditPenalty = static_cast<float>(BORDERKEYS_EDIT_PENALTY);
+#else
+constexpr float kEditPenalty = 25.0f;
+#endif
 
 // What an inserted letter costs, in key widths.
 constexpr float kInsertCost = 0.85f;
@@ -81,8 +85,13 @@ constexpr float kBackoffLogFactor = -0.9162907f;  // ln(0.4)
 
 constexpr float kMaxUserBoost = 3.0f;
 
-// A flat cost for any candidate reached with an edit, on top of the per-edit cost.
+// A flat cost for any candidate reached with an edit, on top of the per-edit cost. The build
+// may set it for a sweep.
+#ifdef BORDERKEYS_CORRECTION_SURCHARGE
+constexpr float kCorrectionSurcharge = static_cast<float>(BORDERKEYS_CORRECTION_SURCHARGE);
+#else
 constexpr float kCorrectionSurcharge = 3.0f;
+#endif
 
 // The range setCorrectionStrictness() clamps to, a multiplier on kEditPenalty and
 // kCorrectionSurcharge.
