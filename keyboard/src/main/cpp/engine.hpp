@@ -152,14 +152,18 @@ public:
     /**
      * Whether `word` may stand as the stem of a regular inflection: an active pack holds it
      * folded, not as a name, within kStemFrequencyFloor of the pack's commonest word -- or the
-     * personal dictionary holds it established.
+     * personal dictionary holds it established. With [tag], only that language's pack answers,
+     * the language whose ending made the stem.
      */
-    bool vouchesForStem(const char* word, size_t length) const;
+    bool vouchesForStem(const char* word, size_t length, const char* tag = nullptr) const;
 
     /** The language being written, by the evidence, or -1 when none leads. */
     int preferredPack() const;
 
-    /** Locates a spelling the dictionaries hold that differs from `word` only by case. */
+    /**
+     * Locates a spelling the dictionaries hold that differs from `word` only by case: the
+     * language being written's, when one leads and holds the letters at all, else any pack's.
+     */
     bool exactSpelling(const char* word, size_t length, int* packOut, uint32_t* wordOut) const;
 
     /**
@@ -265,19 +269,30 @@ public:
     void setCorrectionStrictness(float scale);
 
     /**
-     * How much one-sided evidence is wanted before the dictionaries for other languages stop
-     * being searched. At or below zero they are always searched.
+     * How much one-sided evidence is wanted before a language is decided. Once one is, the other
+     * dictionaries offer only words closer to the typed letters than the decided one reached, or
+     * nothing at all when [strict]. At or below zero no language is ever decided. The evidence
+     * already gathered is decided again under the new minimum.
      */
     void setLanguageLock(float minimumEvidence, bool strict);
 
     /**
-     * Which language the search is restricted to while none has been recognised; null or empty
-     * clears it. Not a scoring term.
+     * Which language is searched first while none has been recognised, the others offering only
+     * closer words; null or empty clears it. Not a scoring term.
      */
     void setPreferredLanguage(const char* tag);
 
-    /** Forgets which language the conversation is in; called when the field changes. */
+    /** Forgets which language the conversation is in. */
     void resetLanguageEvidence();
+
+    /** The evidence gathered for the open pack with [tag], or zero when no open pack has it. */
+    float languageEvidence(const char* tag) const;
+
+    /**
+     * Sets the evidence for the open pack with [tag] and decides the language from all of it
+     * again, as a committed word does; a tag no open pack has is ignored.
+     */
+    void setLanguageEvidence(const char* tag, float evidence);
 
     /** Whether two-word suggestions are offered at all. Off by default. */
     void setPhraseSuggestions(bool enabled) { phraseSuggestions_ = enabled; }
@@ -339,8 +354,14 @@ public:
     /** Whether every active pack that knows [folded] flags it a name; false when none knows it. */
     bool packsAgreeProperNoun(const uint32_t* folded, int foldedLength) const;
 
-    /** Whether a word is within kCorrectionFrequencyFloor of its pack's commonest word. */
+    /**
+     * Whether a word is common enough to be a correction: within kCorrectionFrequencyFloor of
+     * its pack's commonest word, or so in another active pack holding the same spelling.
+     */
     bool plausibleCorrectionTarget(const LanguagePack& pack, uint32_t wordIndex) const;
+
+    /** Whether a word is within kCorrectionFrequencyFloor of its own pack's commonest word. */
+    bool commonIn(const LanguagePack& pack, uint32_t wordIndex) const;
 
     /** Whether [candidate] carries the typed letters on further, rather than being reached by an
      *  edit. */
@@ -413,9 +434,74 @@ private:
     // is -1 until the evidence is one-sided enough to be worth acting on.
     void observeContextLanguage(const uint32_t* folded, int length);
 
-    /** Runs the prefix search over every active pack, or over [onlyPack] when it is not -1. */
+    /** Sets dominantPack_ from languageEvidence_ and the lock's minimum. */
+    void decideDominantPack();
+
+    /**
+     * Runs the prefix search over every active pack, or over [onlyPack] when it is not -1,
+     * leaving out [skipPack] when it is not -1.
+     */
     void searchPacks(const uint32_t* folded, int foldedLength, int onlyPack,
-                     TopK<Candidate>& heap);
+                     TopK<Candidate>& heap, int skipPack = -1);
+
+    /** Locates, in the pack at [index], a spelling that differs from `word` only by case. */
+    bool exactSpellingIn(int index, const char* word, size_t length, const uint32_t* folded,
+                         int foldedLength, uint32_t* wordOut) const;
+
+    /**
+     * The spelling, in the pack at [index], that reads `word`'s letters -- keeping every mark
+     * they were typed with and, for a name, the case -- or -1.
+     */
+    int32_t readingIn(int index, const char* word, size_t length, const uint32_t* folded,
+                      int foldedLength) const;
+
+    /**
+     * How a word reads the typed letters, closest first, for an edit cost of zero: spelling them
+     * with every mark typed, spelling them without a mark typed, or running on past them.
+     */
+    enum class Fit : uint8_t {
+        Spells,
+        DropsTypedMark,
+        RunsOn,
+    };
+
+    /** How closely a word matches the typed letters: its edit cost, then its fit. */
+    struct Closeness {
+        float cost;
+        Fit fit;
+    };
+
+    /** How the word [text] fits the typed letters when reached at no cost, [depth] past them. */
+    Fit fitOf(int depth, const char* text, uint32_t length) const;
+
+    /**
+     * Whether [text], folding to [typedText]'s key, keeps every mark it was typed with and, with
+     * [matchCase], which of its letters were typed as capitals.
+     */
+    static bool readsAsTyped(const char* typedText, uint32_t typedLength, const char* text,
+                             uint32_t length, bool matchCase);
+
+    /**
+     * Records a word Primary reached as its closest reading so far: any ordinary word; a name
+     * reached by an edit or running on only when common enough to be a correction, and one
+     * reached freely only in the case it was typed in.
+     */
+    void notePrimaryReach(const LanguagePack& pack, uint32_t wordIndex, float cost, Fit fit);
+
+    /**
+     * Whether a word at [cost] and [fit] reads the typed letters better than Primary's closest
+     * reading: cheaper by kLanguageMargin, or as cheap and a closer fit.
+     */
+    bool closerThanPrimary(float cost, Fit fit) const;
+
+    /** The closest reading Primary reached, while primaryReached_. */
+    Closeness primaryClosest_ = {0.0f, Fit::Spells};
+    bool primaryReached_ = false;
+
+    /** The word being typed, as typed, for one request; and whether it carries a folded mark. */
+    const char* typedText_ = nullptr;
+    uint32_t typedTextLength_ = 0;
+    bool typedCarriesMark_ = false;
 
     /** Runs one pass of kSearchPlan: sets its ceiling and searches its source. */
     void runPass(const PassSpec& spec, const uint32_t* folded, int foldedLength, int restrictTo,

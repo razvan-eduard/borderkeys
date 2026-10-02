@@ -67,7 +67,7 @@ class PredictionEngine(
 
     private val queue = PredictionRequestQueue()
 
-    /** The tags handed to [setActiveLanguages], read on the worker for [WordStems]. */
+    /** The tags handed to [setActiveLanguages], read on the worker. */
     private var activeTags: List<String> = emptyList()
 
     /** The last answer served, published on the UI thread. Guarded by [resultLock]. */
@@ -319,6 +319,33 @@ class PredictionEngine(
         worker.post {
             withHandle(Unit) { current ->
                 NativePredictor.nativeResetLanguageEvidence(current)
+            }
+        }
+    }
+
+    /**
+     * The evidence gathered for each active language, by tag, or null once the engine is shut
+     * down. Delivered on the UI thread.
+     */
+    fun languageEvidence(onResult: (Map<String, Float>?) -> Unit) {
+        worker.post {
+            val evidence = withHandle<Map<String, Float>?>(null) { current ->
+                activeTags.associateWith { tag -> NativePredictor.nativeLanguageEvidence(current, tag) }
+            }
+            mainHandler.post { onResult(evidence) }
+        }
+    }
+
+    /**
+     * Puts back evidence [languageEvidence] delivered, and decides the language from it. A tag
+     * with no open pack is ignored.
+     */
+    fun restoreLanguageEvidence(evidence: Map<String, Float>) {
+        worker.post {
+            withHandle(Unit) { current ->
+                for ((tag, value) in evidence) {
+                    NativePredictor.nativeSetLanguageEvidence(current, tag, value)
+                }
             }
         }
     }

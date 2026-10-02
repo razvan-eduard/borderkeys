@@ -203,11 +203,18 @@ data class KeyboardPreferences(
 
     /**
      * The language tag detection starts from before anything has been recognised, or empty for
-     * none. Once [languageLock]'s evidence names a language, that one answers instead, and a word
-     * the preferred dictionary lacks still falls through to the others. A tag naming a pack that
-     * is gone or switched off behaves as none.
+     * none. Once [languageLock]'s evidence names a language, that one answers instead, and the
+     * other dictionaries still offer words that match the typed letters more closely. A tag naming
+     * a pack that is gone or switched off behaves as none.
      */
     val preferredLanguageTag: String = "",
+
+    /**
+     * Whether the language detected carries into the next field and through a restart of the
+     * keyboard; off, every field starts undecided. With a [preferredLanguageTag], every field
+     * starts from that one instead.
+     */
+    val rememberDetectedLanguage: Boolean = true,
 
     /**
      * What happens to a correction already applied once [languageLock]'s evidence decides the

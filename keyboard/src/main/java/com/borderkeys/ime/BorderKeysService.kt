@@ -472,6 +472,7 @@ class BorderKeysService :
             numpadLayout = LayoutLoader.load(assets, NUMPAD_LAYOUT)
             // A failed load leaves the keyboard typing without dictionaries.
             runCatching { dictionaryLoader.load() }
+                .onSuccess { restoreLanguageEvidence() }
                 .onFailure { error -> degradeWithoutDictionaries(error) }
             File(filesDir, LEGACY_USER_MODEL_SNAPSHOT).delete()
         }
@@ -803,8 +804,7 @@ class BorderKeysService :
             KeyboardPreferences.languageLockStrict(preferences.languageLock),
         )
         engine.setPreferredLanguage(preferences.preferredLanguageTag)
-        // With a preferred language, each field starts without a language verdict.
-        if (preferences.preferredLanguageTag.isNotEmpty()) {
+        if (!remembersLanguage(preferences)) {
             engine.resetLanguageEvidence()
         }
         engine.setPhraseSuggestions(preferences.phraseSuggestions)
@@ -839,6 +839,43 @@ class BorderKeysService :
         orchestrator.dismissRing()
         clipOffers.keyboardClosed(preferences.clipboardSuggestionOnce)
         unregisterClipboardListener()
+        saveLanguageEvidence()
+    }
+
+    /** Whether a field starts in the language the last one was written in. */
+    private fun remembersLanguage(settings: KeyboardPreferences): Boolean =
+        settings.rememberDetectedLanguage && settings.preferredLanguageTag.isEmpty()
+
+    /** Writes the language evidence to [LANGUAGE_EVIDENCE_PREFS], or empties it when not kept. */
+    private fun saveLanguageEvidence() {
+        val store = getSharedPreferences(LANGUAGE_EVIDENCE_PREFS, MODE_PRIVATE)
+        if (!remembersLanguage(preferences)) {
+            store.edit().clear().apply()
+            return
+        }
+        engine.languageEvidence { evidence ->
+            if (evidence == null) {
+                return@languageEvidence
+            }
+            val editor = store.edit().clear()
+            for ((tag, value) in evidence) {
+                editor.putFloat(tag, value)
+            }
+            editor.apply()
+        }
+    }
+
+    /** Puts back the evidence [saveLanguageEvidence] wrote, when the settings keep it. */
+    private fun restoreLanguageEvidence() {
+        if (!remembersLanguage(DataGraph.themes.currentPreferences())) {
+            return
+        }
+        val saved = getSharedPreferences(LANGUAGE_EVIDENCE_PREFS, MODE_PRIVATE).all
+            .mapNotNull { (tag, value) -> (value as? Float)?.let { tag to it } }
+            .toMap()
+        if (saved.isNotEmpty()) {
+            engine.restoreLanguageEvidence(saved)
+        }
     }
 
     /** Closes the ring when the window hides. */
@@ -2430,6 +2467,9 @@ class BorderKeysService :
         /** The preferences file where [maybeDecayPersonalDictionary] records its last run. */
         const val DECAY_PREFS = "personal_dictionary_decay"
         const val DECAY_LAST_SWEEP_AT = "last_sweep_at"
+
+        /** The preferences file holding the language evidence, a float per language tag. */
+        const val LANGUAGE_EVIDENCE_PREFS = "language_evidence"
 
         /** The shortest interval between two [maybeDecayPersonalDictionary] runs. */
         const val DECAY_SWEEP_INTERVAL_MILLIS = 24L * 60 * 60 * 1000

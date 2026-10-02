@@ -54,6 +54,9 @@ constexpr float kMarkDeleteCost = 3.0f;
 // What discarding a typed letter costs, in key widths.
 constexpr float kDeleteCost = 1.6f;
 
+// What discarding a letter typed right after the same letter costs, in key widths.
+constexpr float kRepeatDeleteCost = 0.75f;
+
 // What swapping two adjacent letters costs, in key widths.
 constexpr float kTransposeCost = 0.80f;
 
@@ -160,6 +163,10 @@ constexpr float kLanguageEvidenceFullGap = 2.302585f;
 
 // The share of the evidence one language must hold to count as the one being written.
 constexpr float kLanguageDominanceShare = 0.7f;
+
+// How much cheaper, in edit cost, another language's word must read the typed letters than the
+// decided language's closest reading.
+constexpr float kLanguageMargin = 0.5f;
 
 // How much the part-of-speech transition counts where the n-gram model has nothing.
 constexpr float kGrammarWeight = 0.75f;
@@ -618,10 +625,8 @@ const PackedTrie* Engine::activeTrie(int packIndex) const {
 void Engine::setLanguageLock(float minimumEvidence, bool strict) {
     languageLockMinimum_ = minimumEvidence;
     strictLanguage_ = strict;
-    // Turning the lock off releases a locked language at once.
-    if (minimumEvidence <= 0.0f) {
-        dominantPack_ = -1;
-    }
+    // Decided again under the new minimum; turning the lock off releases a locked language.
+    decideDominantPack();
 }
 
 void Engine::resolvePreferredPack() {
@@ -653,6 +658,105 @@ void Engine::resetLanguageEvidence() {
     dominantPack_ = -1;
     // The de-duplication guard is reset too.
     lastObservedWord_ = 0;
+}
+
+float Engine::languageEvidence(const char* tag) const {
+    const int index = (tag == nullptr) ? -1 : packIndexForTag(tag);
+    return (index < 0) ? 0.0f : languageEvidence_[index];
+}
+
+void Engine::setLanguageEvidence(const char* tag, float evidence) {
+    const int index = (tag == nullptr) ? -1 : packIndexForTag(tag);
+    if (index < 0) {
+        return;
+    }
+    languageEvidence_[index] = (evidence > 0.0f) ? evidence : 0.0f;
+    decideDominantPack();
+}
+
+Engine::Fit Engine::fitOf(int depth, const char* text, uint32_t length) const {
+    if (depth > 0) {
+        return Fit::RunsOn;
+    }
+    if (!typedCarriesMark_ || text == nullptr || length == 0) {
+        return Fit::Spells;
+    }
+    return readsAsTyped(typedText_, typedTextLength_, text, length, false) ? Fit::Spells
+                                                                            : Fit::DropsTypedMark;
+}
+
+bool Engine::readsAsTyped(const char* typedText, uint32_t typedLength, const char* text,
+                          uint32_t length, bool matchCase) {
+    if (typedText == nullptr || text == nullptr) {
+        return true;
+    }
+    const char* typed = typedText;
+    const char* const typedEnd = typedText + typedLength;
+    const char* word = text;
+    const char* const wordEnd = text + length;
+    while (typed != nullptr && typed < typedEnd) {
+        uint32_t typedCode = 0;
+        typed = utf8Decode(typed, typedEnd, &typedCode);
+        if (typed == nullptr) {
+            return true;
+        }
+        const uint32_t typedFold = foldCodePoint(typedCode);
+        if (typedFold == kDroppedCodePoint) {
+            continue;
+        }
+        uint32_t wordCode = 0;
+        uint32_t wordFold = kDroppedCodePoint;
+        while (wordFold == kDroppedCodePoint && word != nullptr && word < wordEnd) {
+            word = utf8Decode(word, wordEnd, &wordCode);
+            wordFold = (word == nullptr) ? kDroppedCodePoint : foldCodePoint(wordCode);
+        }
+        if (wordFold == kDroppedCodePoint) {
+            return true;
+        }
+        // A typed letter the fold changes beyond its case carries a mark.
+        const uint32_t typedLower = lowerCodePoint(typedCode);
+        if (typedFold != typedLower && lowerCodePoint(wordCode) != typedLower) {
+            return false;
+        }
+        if (matchCase && (typedCode != typedLower) != (wordCode != lowerCodePoint(wordCode))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void Engine::notePrimaryReach(const LanguagePack& pack, uint32_t wordIndex, float cost, Fit fit) {
+    if (pack.trie().isProperNoun(wordIndex)) {
+        if (cost > 0.0f || fit == Fit::RunsOn) {
+            if (!plausibleCorrectionTarget(pack, wordIndex)) {
+                return;
+            }
+        } else {
+            uint32_t length = 0;
+            const char* const text = pack.trie().wordText(wordIndex, &length);
+            if (text == nullptr ||
+                !readsAsTyped(typedText_, typedTextLength_, text, length, true)) {
+                return;
+            }
+        }
+    }
+    if (!primaryReached_ || cost < primaryClosest_.cost ||
+        (cost == primaryClosest_.cost && fit < primaryClosest_.fit)) {
+        primaryClosest_ = Closeness{cost, fit};
+        primaryReached_ = true;
+    }
+}
+
+bool Engine::closerThanPrimary(float cost, Fit fit) const {
+    // Where Primary reached no reading, every word is closer.
+    if (!primaryReached_) {
+        return true;
+    }
+    if (cost + kLanguageMargin <= primaryClosest_.cost) {
+        return true;
+    }
+    // At the same cost, the closer fit.
+    return cost == primaryClosest_.cost && fit < primaryClosest_.fit;
 }
 
 int Engine::heaviestPack() const {
@@ -718,14 +822,20 @@ void Engine::observeContextLanguage(const uint32_t* folded, int length) {
         }
     }
 
-    float total = 0.0f;
-    float best = 0.0f;
-    int bestIndex = -1;
     for (int i = 0; i < kMaxPacks; ++i) {
         languageEvidence_[i] *= kLanguageEvidenceDecay;
         if (i == owner) {
             languageEvidence_[i] += award;
         }
+    }
+    decideDominantPack();
+}
+
+void Engine::decideDominantPack() {
+    float total = 0.0f;
+    float best = 0.0f;
+    int bestIndex = -1;
+    for (int i = 0; i < kMaxPacks; ++i) {
         if (packs_[i].isOpen() && packs_[i].active) {
             total += languageEvidence_[i];
             if (languageEvidence_[i] > best) {
@@ -1179,8 +1289,13 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
             }
         }
 
-        // Deletion: a typed character the word does not have, priced by whether it is a mark.
-        const float deleteCost = isMark(folded[frame.inputPos]) ? kMarkDeleteCost : kDeleteCost;
+        // Deletion: a typed character the word does not have, priced by whether it is a mark and
+        // whether it repeats the character typed before it.
+        const bool repeat =
+            frame.inputPos > 0 && folded[frame.inputPos] == folded[frame.inputPos - 1];
+        const float deleteCost = isMark(folded[frame.inputPos]) ? kMarkDeleteCost
+                                 : repeat                       ? kRepeatDeleteCost
+                                                                : kDeleteCost;
         if (frame.cost + deleteCost <= maxCost && stackSize < 512) {
             stack[stackSize++] = Frame{frame.node, static_cast<int16_t>(frame.inputPos + 1), 0,
                                        frame.cost + deleteCost};
@@ -1246,6 +1361,19 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
         int16_t depth;
     };
 
+    // How far the walk may carry past this endpoint: kMaxFreeCompletion uncorrected,
+    // kMaxCompletionAfterEdit after an edit, and in OtherPacks only while it outmatches Primary.
+    int completionLimit =
+        (endpoint.cost <= 0.0f) ? kMaxFreeCompletion : kMaxCompletionAfterEdit;
+    if (currentPass_ == Pass::OtherPacks) {
+        if (!closerThanPrimary(endpoint.cost, Fit::Spells)) {
+            return;
+        }
+        if (!closerThanPrimary(endpoint.cost, Fit::RunsOn)) {
+            completionLimit = 0;
+        }
+    }
+
     Frame* const stack = arena_.allocateArray<Frame>(1024);
     if (stack == nullptr) {
         return;
@@ -1260,10 +1388,6 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
     const float editComponent = endpoint.cost > 0.0f
         ? -correctionStrictness_ * (kEditPenalty * endpoint.cost + kCorrectionSurcharge)
         : 0.0f;
-    // How far the walk may carry past this endpoint: kMaxFreeCompletion uncorrected,
-    // kMaxCompletionAfterEdit after an edit.
-    const int completionLimit =
-        (endpoint.cost <= 0.0f) ? kMaxFreeCompletion : kMaxCompletionAfterEdit;
 
     while (stackSize > 0) {
         if (visitBudget_ <= 0) {
@@ -1280,16 +1404,35 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
 
             for (uint32_t offset = 0; offset < spellings; ++offset) {
                 const uint32_t wordIndex = static_cast<uint32_t>(firstIndex) + offset;
+
+                // text tells Exact from Respelling, gives the fit, and marks a blocked spelling.
+                uint32_t textLength = 0;
+                const char* text = nullptr;
+                if ((endpoint.cost <= 0.0f && frame.depth == 0) ||
+                    (currentPass_ == Pass::Primary && !blocked_.empty())) {
+                    text = trie.wordText(wordIndex, &textLength);
+                }
+                const Fit fit = (frame.depth > 0)        ? Fit::RunsOn
+                                : (endpoint.cost > 0.0f) ? Fit::Spells
+                                                         : fitOf(0, text, textLength);
+                if (currentPass_ == Pass::Primary) {
+                    if (!isBlocked(text, textLength)) {
+                        notePrimaryReach(pack, wordIndex, endpoint.cost, fit);
+                    }
+                } else if (currentPass_ == Pass::OtherPacks &&
+                           !closerThanPrimary(endpoint.cost, fit)) {
+                    continue;
+                }
+
                 const float score = weightLog + contextLogProb(packIndex, wordIndex) +
                                     editComponent - lengthPenalty;
                 offerScoredWord(heap, trie, packIndex, wordIndex, score);
 
                 // Everything reaches the strip; only a committing pass reaches the respelling
-                // tier and the correction heap. text is read only to tell Exact from Respelling.
-                uint32_t textLength = 0;
-                const char* text = nullptr;
-                if (endpoint.cost <= 0.0f && frame.depth == 0) {
-                    text = trie.wordText(wordIndex, &textLength);
+                // tier and the correction heap.
+                if (endpoint.cost > 0.0f || frame.depth > 0) {
+                    text = nullptr;
+                    textLength = 0;
                 }
                 const Reading reading = readingOf(endpoint.cost, frame.depth, text, textLength);
 
@@ -1475,6 +1618,15 @@ void Engine::searchFrequentWithPrefix(int packIndex, const uint32_t* folded, int
             uint32_t codePoint = 0;
             cursor = utf8Decode(cursor, end, &codePoint);
             ++extra;
+        }
+
+        const Fit fit = fitOf(extra, text, textLength);
+        if (currentPass_ == Pass::Primary) {
+            if (!isBlocked(text, textLength)) {
+                notePrimaryReach(pack, wordIndex, 0.0f, fit);
+            }
+        } else if (currentPass_ == Pass::OtherPacks && !closerThanPrimary(0.0f, fit)) {
+            continue;
         }
 
         float score = weightLog + contextLogProb(packIndex, wordIndex) -
@@ -1689,12 +1841,12 @@ void Engine::searchUserModel(const uint32_t* folded, int foldedLength, TopK<Cand
 }
 
 void Engine::searchPacks(const uint32_t* folded, int foldedLength, int onlyPack,
-                         TopK<Candidate>& heap) {
+                         TopK<Candidate>& heap, int skipPack) {
     for (int i = 0; i < kMaxPacks; ++i) {
         if (!packs_[i].isOpen() || !packs_[i].active) {
             continue;
         }
-        if (onlyPack >= 0 && i != onlyPack) {
+        if ((onlyPack >= 0 && i != onlyPack) || i == skipPack) {
             continue;
         }
         if (foldedLength == 0) {
@@ -1800,42 +1952,80 @@ bool Engine::exactSpelling(const char* word, size_t length, int* packOut,
     if (foldedLength <= 0) {
         return false;
     }
-    // Only the preferred language answers, when there is one; otherwise every pack.
+    // The language being written answers first: its own spelling, or nothing when it holds the
+    // letters only with other marks. Otherwise every pack.
     const int preferred = preferredPack();
-    for (int index = 0; index < kMaxPacks; ++index) {
-        if (preferred >= 0 && index != preferred) {
-            continue;
-        }
-        const LanguagePack& pack = packs_[index];
-        if (!pack.isOpen() || !pack.active) {
-            continue;
-        }
-        const int32_t firstIndex = pack.trie().lookupFolded(folded, foldedLength);
-        if (firstIndex < 0) {
-            continue;
-        }
-        const uint32_t spellings = pack.trie().spellingsFrom(static_cast<uint32_t>(firstIndex));
-        for (uint32_t offset = 0; offset < spellings; ++offset) {
-            const uint32_t wordIndex = static_cast<uint32_t>(firstIndex) + offset;
-            uint32_t candidateLength = 0;
-            const char* const candidate = pack.trie().wordText(wordIndex, &candidateLength);
-            if (candidate == nullptr ||
-                !sameSpellingIgnoringCase(candidate, candidateLength, word, length)) {
-                continue;
-            }
-            // A name matches only in its own case.
-            if (pack.trie().isProperNoun(wordIndex) &&
-                (candidateLength != length || std::memcmp(candidate, word, length) != 0)) {
-                continue;
-            }
+    if (preferred >= 0 && packs_[preferred].isOpen() && packs_[preferred].active) {
+        if (exactSpellingIn(preferred, word, length, folded, foldedLength, wordOut)) {
             if (packOut != nullptr) {
-                *packOut = index;
-            }
-            if (wordOut != nullptr) {
-                *wordOut = wordIndex;
+                *packOut = preferred;
             }
             return true;
         }
+        if (readingIn(preferred, word, length, folded, foldedLength) >= 0) {
+            return false;
+        }
+    }
+    for (int index = 0; index < kMaxPacks; ++index) {
+        if (index == preferred || !packs_[index].isOpen() || !packs_[index].active) {
+            continue;
+        }
+        if (exactSpellingIn(index, word, length, folded, foldedLength, wordOut)) {
+            if (packOut != nullptr) {
+                *packOut = index;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+int32_t Engine::readingIn(int index, const char* word, size_t length, const uint32_t* folded,
+                          int foldedLength) const {
+    const PackedTrie& trie = packs_[index].trie();
+    const int32_t firstIndex = trie.lookupFolded(folded, foldedLength);
+    if (firstIndex < 0) {
+        return -1;
+    }
+    const uint32_t spellings = trie.spellingsFrom(static_cast<uint32_t>(firstIndex));
+    for (uint32_t offset = 0; offset < spellings; ++offset) {
+        const uint32_t wordIndex = static_cast<uint32_t>(firstIndex) + offset;
+        uint32_t textLength = 0;
+        const char* const text = trie.wordText(wordIndex, &textLength);
+        if (text != nullptr && textLength != 0 && !isBlocked(text, textLength) &&
+            readsAsTyped(word, static_cast<uint32_t>(length), text, textLength,
+                         trie.isProperNoun(wordIndex))) {
+            return static_cast<int32_t>(wordIndex);
+        }
+    }
+    return -1;
+}
+
+bool Engine::exactSpellingIn(int index, const char* word, size_t length, const uint32_t* folded,
+                             int foldedLength, uint32_t* wordOut) const {
+    const LanguagePack& pack = packs_[index];
+    const int32_t firstIndex = pack.trie().lookupFolded(folded, foldedLength);
+    if (firstIndex < 0) {
+        return false;
+    }
+    const uint32_t spellings = pack.trie().spellingsFrom(static_cast<uint32_t>(firstIndex));
+    for (uint32_t offset = 0; offset < spellings; ++offset) {
+        const uint32_t wordIndex = static_cast<uint32_t>(firstIndex) + offset;
+        uint32_t candidateLength = 0;
+        const char* const candidate = pack.trie().wordText(wordIndex, &candidateLength);
+        if (candidate == nullptr ||
+            !sameSpellingIgnoringCase(candidate, candidateLength, word, length)) {
+            continue;
+        }
+        // A name matches only in its own case.
+        if (pack.trie().isProperNoun(wordIndex) &&
+            (candidateLength != length || std::memcmp(candidate, word, length) != 0)) {
+            continue;
+        }
+        if (wordOut != nullptr) {
+            *wordOut = wordIndex;
+        }
+        return true;
     }
     return false;
 }
@@ -1862,30 +2052,37 @@ int Engine::knownSpelling(const char* word, size_t length, char* out, int outByt
     if (foldedLength <= 0) {
         return 0;
     }
-    // Step -1 visits the preferred pack; the steps after it visit the others in order.
+    // Step -1 visits the preferred pack; the steps after it visit the others in order. The
+    // first round takes a reading of the letters, the second any spelling.
     const int preferred = preferredPack();
-    for (int step = -1; step < kMaxPacks; ++step) {
-        const int index = (step < 0) ? preferred : step;
-        if (index < 0 || (step >= 0 && index == preferred)) {
-            continue;
+    for (int round = 0; round < 2; ++round) {
+        for (int step = -1; step < kMaxPacks; ++step) {
+            const int index = (step < 0) ? preferred : step;
+            if (index < 0 || (step >= 0 && index == preferred)) {
+                continue;
+            }
+            const LanguagePack& pack = packs_[index];
+            if (!pack.isOpen() || !pack.active) {
+                continue;
+            }
+            const int32_t spelling =
+                (round == 0)
+                    ? readingIn(index, word, length, folded, foldedLength)
+                    : firstUnblockedSpelling(pack.trie(),
+                                             pack.trie().lookupFolded(folded, foldedLength));
+            if (spelling < 0) {
+                continue;
+            }
+            uint32_t textLength = 0;
+            const char* const text = pack.trie().wordText(static_cast<uint32_t>(spelling),
+                                                          &textLength);
+            if (text == nullptr || textLength == 0 ||
+                textLength > static_cast<uint32_t>(outBytes)) {
+                continue;
+            }
+            std::memcpy(out, text, textLength);
+            return static_cast<int>(textLength);
         }
-        const LanguagePack& pack = packs_[index];
-        if (!pack.isOpen() || !pack.active) {
-            continue;
-        }
-        const int32_t spelling =
-            firstUnblockedSpelling(pack.trie(), pack.trie().lookupFolded(folded, foldedLength));
-        if (spelling < 0) {
-            continue;
-        }
-        uint32_t textLength = 0;
-        const char* const text = pack.trie().wordText(static_cast<uint32_t>(spelling),
-                                                      &textLength);
-        if (text == nullptr || textLength == 0 || textLength > static_cast<uint32_t>(outBytes)) {
-            continue;
-        }
-        std::memcpy(out, text, textLength);
-        return static_cast<int>(textLength);
     }
     // Then an established personal word, while the personal model is on.
     const int32_t entry = personalModelEnabled_ ? userModel_.entryIndexFor(word, length) : -1;
@@ -1901,7 +2098,7 @@ int Engine::knownSpelling(const char* word, size_t length, char* out, int outByt
     return 0;
 }
 
-bool Engine::vouchesForStem(const char* word, size_t length) const {
+bool Engine::vouchesForStem(const char* word, size_t length, const char* tag) const {
     if (!created_ || word == nullptr || length == 0) {
         return false;
     }
@@ -1910,9 +2107,11 @@ bool Engine::vouchesForStem(const char* word, size_t length) const {
     if (foldedLength <= 0) {
         return false;
     }
+    const bool oneLanguage = tag != nullptr && tag[0] != '\0';
+    const int onlyPack = oneLanguage ? packIndexForTag(tag) : -1;
     for (int i = 0; i < kMaxPacks; ++i) {
         const LanguagePack& pack = packs_[i];
-        if (!pack.isOpen() || !pack.active) {
+        if (!pack.isOpen() || !pack.active || (oneLanguage && i != onlyPack)) {
             continue;
         }
         const int32_t index =
@@ -2030,14 +2229,24 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     const int restrictTo = (dominantPack_ >= 0)  ? dominantPack_
                            : (preferredPack_ >= 0) ? preferredPack_
                                                    : (strictLanguage_ ? heaviestPack() : -1);
+    primaryReached_ = false;
+    typedText_ = composing;
+    typedTextLength_ = static_cast<uint32_t>(composingLength);
+    typedCarriesMark_ = composing != nullptr && carriesFoldedMark(composing, typedTextLength_);
     for (const PassSpec& spec : kSearchPlan) {
-        const PlanState state{foldedLength, restrictTo >= 0, strictLanguage_, heap.size()};
+        // Whether a word from another pack could still read the letters more closely.
+        const bool outmatchable = !primaryReached_ || primaryClosest_.cost >= kLanguageMargin ||
+                                  primaryClosest_.fit != Fit::Spells;
+        const PlanState state{foldedLength, restrictTo >= 0, strictLanguage_, heap.size(),
+                              outmatchable};
         if (!spec.runs(state)) {
             continue;
         }
         PassScope pass(*this, spec.pass);
         runPass(spec, folded, foldedLength, restrictTo, heap);
     }
+    typedText_ = nullptr;
+    typedTextLength_ = 0;
 
     settleCorrection(composing, composingLength);
     return writeStrip(folded, foldedLength, heap, out, maxOut);
@@ -2048,6 +2257,15 @@ void Engine::runPass(const PassSpec& spec, const uint32_t* folded, int foldedLen
     switch (spec.ceiling) {
         case PassCeiling::ByLength:
             editCostCeiling_ = maxEditCostFor(foldedLength);
+            break;
+        case PassCeiling::PrimaryClosest:
+            editCostCeiling_ = maxEditCostFor(foldedLength);
+            if (primaryReached_) {
+                const float outmatching = (primaryClosest_.fit != Fit::Spells)
+                                              ? primaryClosest_.cost
+                                              : primaryClosest_.cost - kLanguageMargin;
+                editCostCeiling_ = std::max(0.0f, std::min(editCostCeiling_, outmatching));
+            }
             break;
         case PassCeiling::Fallback:
             editCostCeiling_ = kFallbackEditCost;
@@ -2061,6 +2279,9 @@ void Engine::runPass(const PassSpec& spec, const uint32_t* folded, int foldedLen
             break;
         case PassSource::AllPacks:
             searchPacks(folded, foldedLength, -1, heap);
+            break;
+        case PassSource::OtherPacks:
+            searchPacks(folded, foldedLength, -1, heap, restrictTo);
             break;
         case PassSource::PersonalWords:
             searchUserModel(folded, foldedLength, heap);
@@ -2234,6 +2455,51 @@ int reportedEditDistance(const uint32_t* a, int aLength, const uint32_t* b, int 
 }  // namespace
 
 bool Engine::plausibleCorrectionTarget(const LanguagePack& pack, uint32_t wordIndex) const {
+    if (commonIn(pack, wordIndex)) {
+        return true;
+    }
+    // Or common in another active pack that holds the same spelling.
+    bool othersActive = false;
+    for (int i = 0; i < kMaxPacks; ++i) {
+        othersActive = othersActive || (&packs_[i] != &pack && packs_[i].isOpen() &&
+                                        packs_[i].active);
+    }
+    if (!othersActive) {
+        return false;
+    }
+    uint32_t length = 0;
+    const char* const text = pack.trie().wordText(wordIndex, &length);
+    uint32_t folded[kMaxComposing];
+    const int foldedLength =
+        (text == nullptr || length == 0) ? 0 : foldUtf8(text, length, folded, kMaxComposing);
+    if (foldedLength <= 0) {
+        return false;
+    }
+    for (int i = 0; i < kMaxPacks; ++i) {
+        const LanguagePack& other = packs_[i];
+        if (&other == &pack || !other.isOpen() || !other.active) {
+            continue;
+        }
+        const int32_t firstIndex = other.trie().lookupFolded(folded, foldedLength);
+        if (firstIndex < 0) {
+            continue;
+        }
+        const uint32_t spellings = other.trie().spellingsFrom(static_cast<uint32_t>(firstIndex));
+        for (uint32_t offset = 0; offset < spellings; ++offset) {
+            const uint32_t index = static_cast<uint32_t>(firstIndex) + offset;
+            uint32_t otherLength = 0;
+            const char* const otherText = other.trie().wordText(index, &otherLength);
+            if (otherText != nullptr &&
+                sameSpellingIgnoringCase(otherText, otherLength, text, length) &&
+                commonIn(other, index)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool Engine::commonIn(const LanguagePack& pack, uint32_t wordIndex) const {
     // Without a frequent list, every target is plausible.
     if (pack.frequentWordCount() <= 0) {
         return true;

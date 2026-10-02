@@ -649,13 +649,17 @@ jboolean nativeExplainScore(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring
     return JNI_TRUE;
 }
 
-/** Which of `stems`, at most kMaxStemsQuery, the engine vouches for; see
+/** Which of `stems`, at most kMaxStemsQuery, the pack for `tag` vouches for; see
  *  Engine::vouchesForStem. */
-jint nativeKnownStems(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray words,
-                      jbooleanArray outKnown) {
+jint nativeKnownStems(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring tag,
+                      jobjectArray words, jbooleanArray outKnown) {
     constexpr jsize kMaxStemsQuery = 64;
     Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || words == nullptr || outKnown == nullptr) {
+    if (engine == nullptr || tag == nullptr || words == nullptr || outKnown == nullptr) {
+        return 0;
+    }
+    char tagBuffer[kStringBufferBytes];
+    if (copyString(env, tag, tagBuffer, sizeof(tagBuffer)) <= 0) {
         return 0;
     }
     const jsize count = env->GetArrayLength(words);
@@ -671,7 +675,8 @@ jint nativeKnownStems(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray 
         if (value != nullptr) {
             env->DeleteLocalRef(value);
         }
-        flags[i] = (length > 0 && engine->vouchesForStem(buffer, static_cast<size_t>(length)))
+        flags[i] = (length > 0 &&
+                    engine->vouchesForStem(buffer, static_cast<size_t>(length), tagBuffer))
             ? JNI_TRUE
             : JNI_FALSE;
         known += (flags[i] == JNI_TRUE) ? 1 : 0;
@@ -832,6 +837,29 @@ void nativeResetLanguageEvidence(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle
         return;
     }
     engine->resetLanguageEvidence();
+}
+
+jfloat nativeLanguageEvidence(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring tag) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || tag == nullptr) {
+        return 0.0f;
+    }
+    char buffer[kStringBufferBytes];
+    const jsize length = copyString(env, tag, buffer, sizeof(buffer));
+    return (length > 0) ? static_cast<jfloat>(engine->languageEvidence(buffer)) : 0.0f;
+}
+
+void nativeSetLanguageEvidence(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring tag,
+                               jfloat evidence) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || tag == nullptr) {
+        return;
+    }
+    char buffer[kStringBufferBytes];
+    const jsize length = copyString(env, tag, buffer, sizeof(buffer));
+    if (length > 0) {
+        engine->setLanguageEvidence(buffer, static_cast<float>(evidence));
+    }
 }
 
 void nativeLoadUserBigrams(JNIEnv* env, jobject /*thiz*/, jlong handle, jobjectArray previous,
@@ -1119,6 +1147,10 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeSetPreferredLanguage)},
     {"nativeResetLanguageEvidence", "(J)V",
      reinterpret_cast<void*>(nativeResetLanguageEvidence)},
+    {"nativeLanguageEvidence", "(JLjava/lang/String;)F",
+     reinterpret_cast<void*>(nativeLanguageEvidence)},
+    {"nativeSetLanguageEvidence", "(JLjava/lang/String;F)V",
+     reinterpret_cast<void*>(nativeSetLanguageEvidence)},
     {"nativeSetPhraseSuggestions", "(JZ)V",
      reinterpret_cast<void*>(nativeSetPhraseSuggestions)},
     {"nativeLoadSwipeWeights", "(J[B)Z", reinterpret_cast<void*>(nativeLoadSwipeWeights)},
@@ -1127,7 +1159,7 @@ const JNINativeMethod kMethods[] = {
     {"nativeLastDecodeUsedNeural", "(J)Z",
      reinterpret_cast<void*>(nativeLastDecodeUsedNeural)},
     {"nativeWarmSwipeModel", "(J)Z", reinterpret_cast<void*>(nativeWarmSwipeModel)},
-    {"nativeKnownStems", "(J[Ljava/lang/String;[Z)I",
+    {"nativeKnownStems", "(JLjava/lang/String;[Ljava/lang/String;[Z)I",
      reinterpret_cast<void*>(nativeKnownStems)},
     {"nativeExplainScore", "(JLjava/lang/String;Ljava/lang/String;[F)Z",
      reinterpret_cast<void*>(nativeExplainScore)},

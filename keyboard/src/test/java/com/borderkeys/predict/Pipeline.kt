@@ -145,6 +145,23 @@ internal class Pipeline private constructor(
     fun languageLock(minimumEvidence: Float, strict: Boolean = false) =
         NativePredictor.nativeSetLanguageLock(handle, minimumEvidence, strict)
 
+    /** The language searched first while none has been recognised; null clears it. */
+    fun preferredLanguage(tag: String?) = NativePredictor.nativeSetPreferredLanguage(handle, tag)
+
+    /** Forgets which language is being written, as a field that starts undecided does. */
+    fun forgetLanguage() = NativePredictor.nativeResetLanguageEvidence(handle)
+
+    /** The evidence gathered for each open language, by tag. */
+    fun languageEvidence(): Map<String, Float> =
+        languages.associateWith { NativePredictor.nativeLanguageEvidence(handle, it) }
+
+    /** Puts back evidence [languageEvidence] read, and the verdict it decides. */
+    fun restoreLanguageEvidence(evidence: Map<String, Float>) {
+        for ((tag, value) in evidence) {
+            NativePredictor.nativeSetLanguageEvidence(handle, tag, value)
+        }
+    }
+
     /**
      * Records [word] in the personal dictionary the way the service does. [asserted] is a tap
      * on the strip or a reverted correction; anything else is a delimiter typed past the word.

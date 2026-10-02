@@ -158,6 +158,12 @@ internal object NativePredictor {
     /** Forgets which language the conversation is in. */
     external fun nativeResetLanguageEvidence(handle: Long)
 
+    /** The evidence gathered for the open pack with [tag], or zero when none has it. */
+    external fun nativeLanguageEvidence(handle: Long, tag: String): Float
+
+    /** Sets the evidence for the open pack with [tag] and decides the language again. */
+    external fun nativeSetLanguageEvidence(handle: Long, tag: String, evidence: Float)
+
     /** Whether a suggestion may be two words. */
     external fun nativeSetPhraseSuggestions(handle: Long, enabled: Boolean)
 
@@ -177,10 +183,16 @@ internal object NativePredictor {
     external fun nativeWarmSwipeModel(handle: Long): Boolean
 
     /**
-     * Marks in [outKnown] which of [stems] may stand as the stem of a regular inflection, and
-     * returns how many. At most [MAX_STEMS_QUERY] stems.
+     * Marks in [outKnown] which of [stems] may stand as the stem of a regular inflection in the
+     * language [tag], whose endings made them, and returns how many. At most [MAX_STEMS_QUERY]
+     * stems.
      */
-    external fun nativeKnownStems(handle: Long, stems: Array<String>, outKnown: BooleanArray): Int
+    external fun nativeKnownStems(
+        handle: Long,
+        tag: String,
+        stems: Array<String>,
+        outKnown: BooleanArray,
+    ): Int
 
     /** The bridge's cap on one [nativeKnownStems] call. */
     const val MAX_STEMS_QUERY = 64

@@ -513,6 +513,21 @@ class KeyboardPreferencesTest {
         )
     }
 
+    @Test
+    fun `twenty thousand learned words are kept by default, and the limit is clamped to its steps`() {
+        assertEquals(20_000, KeyboardPreferences().learnedWordLimit)
+        assertEquals(
+            KeyboardPreferences.MIN_LEARNED_WORD_LIMIT,
+            KeyboardPreferences(learnedWordLimit = 0).sanitised().learnedWordLimit,
+        )
+        assertEquals(
+            KeyboardPreferences.MAX_LEARNED_WORD_LIMIT,
+            KeyboardPreferences(learnedWordLimit = Int.MAX_VALUE).sanitised().learnedWordLimit,
+        )
+        assertEquals(5_000, KeyboardPreferences(learnedWordLimit = 5_600).sanitised().learnedWordLimit)
+    }
+
+    @Test
     /** Strict is the only setting that stops consulting the others before it has decided. */
     @Test
     fun `only strict refuses to guess`() {
