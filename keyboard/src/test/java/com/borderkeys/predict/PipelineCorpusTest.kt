@@ -34,6 +34,11 @@ class PipelineCorpusTest {
             Corpus("en-US", "autocorrect_doubled_en.tsv", DOUBLED_FLOOR),
             Corpus("en-US", "autocorrect_firstletter_en.tsv", FIRSTLETTER_FLOOR),
             Corpus("en-US", "autocorrect_marks_en.tsv", MARKS_FLOOR),
+            Corpus("en-US", "autocorrect_slip_en.tsv", SLIP_FLOOR),
+            Corpus("en-US", "autocorrect_omitted_en.tsv", OMITTED_FLOOR),
+            Corpus("en-US", "autocorrect_extra_en.tsv", EXTRA_FLOOR),
+            Corpus("en-US", "autocorrect_rareprefix_en.tsv", RAREPREFIX_FLOOR),
+            Corpus("en-US", "autocorrect_known_en.tsv", KNOWN_FLOOR),
             Corpus("ro-RO", "autocorrect_accents_ro.tsv", ACCENTS_FLOOR),
             Corpus("ro-RO", "autocorrect_twins_ro.tsv", TWINS_RO_FLOOR),
             Corpus("ro-RO", "autocorrect_plain_ro.tsv", PLAIN_RO_FLOOR),
@@ -97,7 +102,9 @@ class PipelineCorpusTest {
                 failures += "  ${corpus.file}: ${tally.right} right, floor ${corpus.floor}"
             }
         }
-        println("autocorrect corpora through the whole path:\n$report")
+        val summary = "autocorrect corpora through the whole path:\n$report"
+        println(summary)
+        Pipeline.readings("SUMMARY.txt", append = true)?.use { it.print(summary) }
         assertTrue(
             "${failures.size} corpora fell below their floor:\n" + failures.joinToString("\n") +
                 "\n$report",
@@ -116,8 +123,13 @@ class PipelineCorpusTest {
         const val MIDTYPO_FLOOR = 44
         const val UNKNOWN_FLOOR = 191
         const val DOUBLED_FLOOR = 191
-        const val FIRSTLETTER_FLOOR = 166
+        const val FIRSTLETTER_FLOOR = 167
         const val MARKS_FLOOR = 240
+        const val SLIP_FLOOR = 176
+        const val OMITTED_FLOOR = 184
+        const val EXTRA_FLOOR = 192
+        const val RAREPREFIX_FLOOR = 128
+        const val KNOWN_FLOOR = 193
         const val ACCENTS_FLOOR = 237
 
         /** Out of 200, 190 for the Spanish twins and 57 for the Italian ones. */

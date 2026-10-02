@@ -13,7 +13,13 @@
  * names the typed word itself.
  *
  * The bare form measures where the strip ranks the expected word; `--autocorrect` measures what
- * the space bar commits, which is a different heap.
+ * the space bar commits, which is a different heap. It walks autocorrect's list as the keyboard
+ * does: a word the dictionaries already spell is left alone; a candidate more edits away than
+ * the ceiling (one, two from eight letters) or a name whose letters are not the typed ones is
+ * passed over for the next; a typed word under three letters stops the walk unless the candidate
+ * only restores its accents. It does not model the inflection guard or the contraction and
+ * possessive rewrites, so it reads a little differently from PipelineCorpusTest, which runs the
+ * real Kotlin.
  *
  * Usage:
  *     suggest_eval <dict dir> <corpus.tsv> [tag ...]
@@ -54,9 +60,97 @@
 #include <vector>
 
 #include "engine.hpp"
+#include "proximity.hpp"
 #include "test_support.hpp"
 
 using namespace borderkeys;
+
+namespace {
+
+/** Optimal string alignment distance: Levenshtein with a swap of two adjacent code points as
+ *  one edit. */
+int osaDistance(const uint32_t* a, int aLength, const uint32_t* b, int bLength) {
+    constexpr int kCap = 64;
+    if (aLength > kCap || bLength > kCap) {
+        return kCap;
+    }
+    int rows[3][kCap + 1];
+    int* twoBack = rows[0];
+    int* previous = rows[1];
+    int* current = rows[2];
+    for (int j = 0; j <= bLength; ++j) {
+        previous[j] = j;
+    }
+    for (int i = 1; i <= aLength; ++i) {
+        current[0] = i;
+        for (int j = 1; j <= bLength; ++j) {
+            const int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+            int best = previous[j] + 1;
+            best = std::min(best, current[j - 1] + 1);
+            best = std::min(best, previous[j - 1] + cost);
+            if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) {
+                best = std::min(best, twoBack[j - 2] + 1);
+            }
+            current[j] = best;
+        }
+        int* const rotate = twoBack;
+        twoBack = previous;
+        previous = current;
+        current = rotate;
+    }
+    return previous[bLength];
+}
+
+/** What the keyboard commits for `typed` from autocorrect's list, or empty for nothing. */
+std::string committedFor(Engine& engine, const std::string& typed) {
+    // A word the dictionaries already spell is never replaced.
+    char spelling[128];
+    const int spelled =
+        engine.knownSpelling(typed.c_str(), typed.size(), spelling, sizeof(spelling) - 1);
+    if (spelled > 0 && typed.size() == static_cast<size_t>(spelled) &&
+        std::memcmp(spelling, typed.c_str(), typed.size()) == 0) {
+        return std::string();
+    }
+    uint32_t typedFolded[64];
+    const int typedCount = foldUtf8(typed.c_str(), typed.size(), typedFolded, 64);
+    if (typedCount <= 0) {
+        return std::string();
+    }
+    const int maxEdits = typedCount >= 8 ? 2 : 1;
+    const Candidate* list = nullptr;
+    const int count = engine.corrections(&list);
+    for (int i = 0; i < count; ++i) {
+        uint32_t length = 0;
+        const char* const text = engine.candidateText(list[i], &length);
+        if (text == nullptr || length == 0) {
+            continue;
+        }
+        uint32_t wordFolded[64];
+        const int wordCount = foldUtf8(text, length, wordFolded, 64);
+        if (wordCount <= 0) {
+            continue;
+        }
+        const bool sameLetters =
+            wordCount == typedCount &&
+            std::memcmp(wordFolded, typedFolded, sizeof(uint32_t) * typedCount) == 0;
+        if (osaDistance(typedFolded, typedCount, wordFolded, wordCount) > maxEdits) {
+            continue;
+        }
+        if (engine.candidateIsProperNoun(list[i]) && !sameLetters) {
+            continue;
+        }
+        if (length == typed.size() && std::memcmp(text, typed.c_str(), length) == 0) {
+            continue;
+        }
+        if (typedCount < 3 && !(typedCount >= 2 && sameLetters)) {
+            break;
+        }
+        return std::string(text, length);
+    }
+    return std::string();
+}
+
+}  // namespace
 
 namespace {
 
@@ -486,15 +580,44 @@ int main(int argc, char** argv) {
             std::printf("  personal boost      %+9.3f\n", parts.personal);
         }
         std::printf("  edit + completion   %+9.3f\n", parts.rest);
+        std::printf("    edits %d, run-on %d, cost %.2f: penalty %+.3f, surcharge %+.3f, "
+                    "completion %+.3f\n",
+                    parts.edits, parts.runOn, parts.editCost, -parts.editPenalty,
+                    -parts.surcharge, -parts.completion);
         std::printf("  ---\n");
         std::printf("  total               %+9.3f\n", parts.total);
-        const Candidate* const best = engine.bestCorrection();
-        if (best != nullptr) {
+
+        // Autocorrect's own list, under its own key. Copied out, since every explain call below
+        // makes the request again and rewrites it.
+        const Candidate* settled = nullptr;
+        const int count = engine.corrections(&settled);
+        std::vector<Candidate> list(settled, settled + count);
+        std::vector<std::string> words;
+        for (const Candidate& entry : list) {
             uint32_t length = 0;
-            const char* const text = engine.candidateText(*best, &length);
-            std::printf("  autocorrect would take '%.*s'\n", (int)length, text ? text : "?");
+            const char* const text = engine.candidateText(entry, &length);
+            words.emplace_back(text != nullptr ? text : "?", text != nullptr ? length : 1u);
+        }
+        std::printf("\n  autocorrect's list, best first (%d):\n", count);
+        std::printf("  %-16s %5s %6s %5s %9s %10s %9s\n", "word", "edits", "run-on", "cost",
+                    "LM", "edit terms", "total");
+        for (int i = 0; i < count; ++i) {
+            Engine::ScoreParts entry;
+            const bool onStrip = engine.explainScore(typed, std::strlen(typed), words[i].c_str(),
+                                                     words[i].size(), &entry);
+            const float languageModel = onStrip ? entry.languageModel + entry.packWeight : 0.0f;
+            std::printf("  %-16s %5d %6d %5.2f %+9.3f %+10.3f %+9.3f %s\n", words[i].c_str(),
+                        list[i].edits, list[i].runOn, list[i].editCost, languageModel,
+                        onStrip ? list[i].score - languageModel : 0.0f, list[i].score,
+                        engine.candidateIsProperNoun(list[i]) ? "name" : "");
+        }
+        // The request made once more, so the walk below reads this word's list.
+        engine.explainScore(typed, std::strlen(typed), wanted, std::strlen(wanted), &parts);
+        const std::string committed = committedFor(engine, typed);
+        if (!committed.empty()) {
+            std::printf("  autocorrect would take '%s'\n", committed.c_str());
         } else {
-            std::printf("  autocorrect has no correction for this\n");
+            std::printf("  autocorrect would leave it\n");
         }
         return 0;
     }
@@ -520,23 +643,7 @@ int main(int argc, char** argv) {
                            centreTapped ? tapXs.data() : nullptr,
                            centreTapped ? tapYs.data() : nullptr, static_cast<int>(tapXs.size()),
                            scratch, Engine::kMaxCandidates);
-            std::string applied;
-            // AutoCorrection.correctionFor's known-word guard: a word the dictionaries already
-            // spell is never replaced. The same call PredictionEngine makes for knownWord.
-            char spelling[128];
-            const int spelled = engine.knownSpelling(item.typed.c_str(), item.typed.size(),
-                                                     spelling, sizeof(spelling) - 1);
-            const bool alreadyAWord =
-                spelled > 0 && item.typed.size() == static_cast<size_t>(spelled) &&
-                std::memcmp(spelling, item.typed.c_str(), item.typed.size()) == 0;
-            const Candidate* const best = alreadyAWord ? nullptr : engine.bestCorrection();
-            if (best != nullptr) {
-                uint32_t length = 0;
-                const char* const text = engine.candidateText(*best, &length);
-                if (text != nullptr) {
-                    applied.assign(text, length);
-                }
-            }
+            const std::string applied = committedFor(engine, item.typed);
             if (applied.empty()) {
                 ++none;
             } else if (applied == item.expected) {

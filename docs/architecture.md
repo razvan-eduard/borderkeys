@@ -252,10 +252,22 @@ second pass over any dictionary:
 |---|---|---|
 | Holds | 16 candidates | 4 (`kMaxCorrections`) |
 | Admits | everything reached | `reachesCorrectionHeap()` **and** `plausibleCorrectionTarget()` |
-| Read by | the strip | `bestCorrection()` → `AutoCorrection` |
+| Keyed on | `ln w + context − strictness·(40·cost + 3) − 0.5·depth` | `ln w + context − strictness·(40·cost + 40·0.6·depth + 3)` |
+| Read by | the strip | `corrections()` → `AutoCorrection` |
 
-Only the best correction is ever read; the other three exist so that the best is the best of
-several rather than the first one reached.
+The two heaps are keyed differently because they price the letters the user did not type
+differently. On the strip a letter the word runs on past the typed ones is a completion, 0.5 a
+letter, because the word may not be finished. At a delimiter it is finished, so in the correction
+heap the same letter is a letter the user left out, priced at `kRunOnCost` 0.6 key widths (24
+points), and any departure from the typed letters pays the surcharge. Before this, `loke` put
+`looked` (an insertion plus a run-on letter, −49.1) above `like` (one slip, −49.7) in the heap,
+and the guards then refused `looked` as too far and corrected nothing; under the heap's own key
+`looked` reads −72.6 and `like` leads.
+
+`settleCorrection()` leaves the whole list behind, best first: the respelling of the letters
+typed when there is one, then the heap drained, up to five entries, each carrying the walk's
+edit cost, edit count and run-on count (`Candidate.editCost`, `edits`, `runOn`). `bestCorrection()`
+is still the first of them, overridden by the exact spelling as before.
 
 ### What decides which heap — `Reading`
 
@@ -273,9 +285,12 @@ results, and the routing between them *is* the correction hierarchy:
 
 Three consequences worth stating plainly, because each was a device report before it was a rule:
 
-- A one-character completion costs `kCompletionPenalty` 0.5 and an edit costs roughly 43, so
-  **a completion beats a correction by about 86 to 1**. Typing `believ` commits `believe`, not
-  `belief`. Correction-first was measured at 12.0% on mid-word typing against 98.5% for this.
+- On the strip a one-character completion costs `kCompletionPenalty` 0.5 and an edit roughly 43,
+  so **a completion beats a correction by about 86 to 1** there. In the correction heap the
+  completion costs 27 against a slip's 43 and a doubled letter's 33, so typing `believ` still
+  commits `believe`, not `belief`, and `reall` commits `really`, not `real`, on a margin rather
+  than on a free letter. Correction-first was measured at 12.0% on mid-word typing against
+  98.5% for this.
 - A `LongCompletion` never reaches the corrections heap, which is why `teh` commits `the`
   although `tehran` outranks it in the strip by 25.7 points.
 - A `Respelling` outranks the heap outright rather than competing in it, because the two are not
@@ -320,6 +335,7 @@ is answered by the evidence and dominance mechanism below, never by drifting a w
 |---|---|---|
 | `kEditPenalty` | **40.0** | The multiplier on every edit. Must clear `ln(worst frequency ratio)` so that one transposition outweighs the gap between the commonest and rarest word in a pack. Floored at 15 by a `static_assert`. |
 | `kInsertCost` | 0.85 | A dropped letter is a commoner slip than a wrong key, so just under a full neighbour substitution. |
+| `kRunOnCost` | **0.6** | What a letter the word has past the last one typed costs in the correction heap, the strip keeping `kCompletionPenalty`. At a delimiter the word is finished, so the letter was left out. Priced at the strip's 0.5 a letter, a word run on past the typed letters headed the heap above every one-slip correction (`loke`: `looked` −49.1 over `like` −49.7). Priced as `kInsertCost` 0.85 it lost to a doubled letter (`kRepeatDeleteCost` 0.75): `reall` became `real`, `usuall` `usual`, and the mid-word corpus fell 192 → 189. At 0.6 it sits below the repeat deletion and the swap and above the mark; 0.5 reads the same on every corpus. |
 | `kDeleteCost` | **1.6** | Deliberately not the mirror of `kInsertCost`. Supplying a letter someone did not type is the ordinary lossiness of typing; discarding one they *did* type throws away the only direct evidence of intent. At 0.85, 79% of the correct words the pack lacked were overwritten by something *shorter* — `bisection` → `section`, `crewel` → `crew`. Swept 0.85 to 2.0: unknown words left alone 66.0% → 90.0%, the typo and mid-word corpora never move, and the strip holds at 71.9% up to 1.6 and drops from 1.7. |
 | `kRepeatDeleteCost` | **0.75** | Discarding a letter typed right after the same letter: a key struck twice. Priced as `kDeleteCost` it lost to any closer word, and with Romanian also on, `nationaal` became `națională` (a swap, 0.8) instead of `national`. Just under a swap because at 0.6 `aagin`, a swap of `again`, read as a doubled `a` plus a letter and became `aging`. Doubled corpus 187 → 191, unknown words left alone 188 → 191, every other corpus and the strip unchanged. |
 | `kTransposeCost` | 0.80 | One gesture out of order, not two errors. Deliberately only *slightly* cheaper: at the old 0.65 this priced two equally common slips as though one were a thousand times likelier, which let `acm` → `cam` crowd out `acum`. |

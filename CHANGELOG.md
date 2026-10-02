@@ -42,6 +42,9 @@ attestations and the full commit lists are on the
   still heard, but only for a word that matches what you typed more closely than anything in
   that language: a Romanian word typed in an English sentence gets its diacritics back, and an
   English slip after Romanian is corrected into English.
+- Fixed: a word one slip away, "like" for "loke", was passed over for a longer word that ran on
+  past the typed letters, which was then too far to apply, so nothing was corrected. Autocorrect
+  now prices a letter past the last one typed as a letter left out.
 - Fixed: a letter struck twice, "timmer" for "timer", was read as a different word rather than
   the one with the letter once.
 - Fixed: a word with another language's ending, "orices", was taken for a form of a word in the

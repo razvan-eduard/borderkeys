@@ -56,7 +56,19 @@ for CORPUS in "$DATA"/autocorrect_*.tsv; do
     fi
     "$EVAL" "$PACKS" --autocorrect "$CORPUS" "$TAG" $TAPS > "$OUT/native/$NAME.txt"
 done
-"$EVAL" "$PACKS" "$DATA/suggest_en.tsv" en-US $TAPS > "$OUT/native/suggest_en.txt"
+for CORPUS in "$DATA"/suggest_*.tsv; do
+    NAME="$(basename "$CORPUS" .tsv)"
+    "$EVAL" "$PACKS" "$CORPUS" en-US $TAPS > "$OUT/native/$NAME.txt"
+done
+
+# SUMMARY.txt: one line per native reading with its headline count, then the pipeline tests'
+# reports. Excluded from the diff of two runs (`-x SUMMARY.txt`), read on its own.
+{
+    for FILE in "$OUT"/native/*.txt; do
+        printf '%-28s %s\n' "$(basename "$FILE" .txt)" \
+            "$(grep -E '^(cases|commits expected|commits nothing|first|top three) ' "$FILE" | tr -s ' ' | paste -sd ';' -)"
+    done
+} > "$OUT/SUMMARY.txt"
 
 if [ -n "$TAPS" ]; then
     rmdir "$OUT/kotlin"
@@ -68,5 +80,10 @@ fi
     --tests 'com.borderkeys.predict.PipelineCorpusTest' \
     --tests 'com.borderkeys.predict.PipelineTest' \
     --rerun -Pborderkeys.readings="$OUT/kotlin"
+
+if [ -f "$OUT/kotlin/SUMMARY.txt" ]; then
+    { echo; cat "$OUT/kotlin/SUMMARY.txt"; } >> "$OUT/SUMMARY.txt"
+    rm "$OUT/kotlin/SUMMARY.txt"
+fi
 
 echo "native: $(ls "$OUT/native" | wc -l | tr -d ' ') files, kotlin: $(ls "$OUT/kotlin" | wc -l | tr -d ' ') files in $OUT"

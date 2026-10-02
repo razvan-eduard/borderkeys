@@ -141,6 +141,28 @@ struct LoadedEngine {
         return text;
     }
 
+    /**
+     * Autocorrect's candidates for `composing`, best first, each `word` followed by
+     * `/edits/runOn`, after the request has been made.
+     */
+    std::string corrections(const char* composing) {
+        Candidate out[Engine::kMaxCandidates];
+        engine.suggest(composing, std::strlen(composing), nullptr, 0, nullptr, 0, out,
+                       Engine::kMaxCandidates);
+        const Candidate* list = nullptr;
+        const int count = engine.corrections(&list);
+        std::string text;
+        for (int i = 0; i < count; ++i) {
+            uint32_t wordLength = 0;
+            const char* const word = engine.candidateText(list[i], &wordLength);
+            char parts[24];
+            std::snprintf(parts, sizeof(parts), "/%d/%d ", list[i].edits, list[i].runOn);
+            text.append(word != nullptr ? word : "?", word != nullptr ? wordLength : 1)
+                .append(parts);
+        }
+        return text;
+    }
+
     /** The rank of `expected` among the suggestions for `composing`, or -1. */
     int rankOf(const char* composing, const char* expected, const char* previous = nullptr) {
         Candidate out[Engine::kMaxCandidates];
@@ -870,6 +892,42 @@ void runEngineTests() {
         loaded.engine.suggest("", 0, nullptr, 0, nullptr, 0, out, Engine::kMaxCandidates);
         check(loaded.engine.bestCorrection() == nullptr,
               "nothing typed means nothing to correct");
+        const Candidate* none = nullptr;
+        check(loaded.engine.corrections(&none) == 0, "and an empty list");
+
+        // The list: best first, at most the respelling plus the heap, every entry resolving,
+        // and each carrying how the walk reached it.
+        loaded.engine.suggest("thexx", 5, nullptr, 0, nullptr, 0, out, Engine::kMaxCandidates);
+        const Candidate* list = nullptr;
+        const int count = loaded.engine.corrections(&list);
+        check(count > 0 && count <= 5, "the list holds at most five candidates");
+        bool sorted = true;
+        bool resolves = true;
+        for (int i = 0; i < count; ++i) {
+            sorted = sorted && (i == 0 || list[i].score <= list[i - 1].score);
+            uint32_t length = 0;
+            resolves = resolves && loaded.engine.candidateText(list[i], &length) != nullptr;
+        }
+        check(sorted, "the list is in score order");
+        check(resolves, "every entry resolves to text");
+        check(loaded.engine.bestCorrection() != nullptr &&
+                  loaded.engine.bestCorrection()->wordIndex == list[0].wordIndex,
+              "the best correction is the list's first entry");
+        check(loaded.corrections("thexx").find("thex/1/0 ") != std::string::npos,
+              "a one-substitution candidate carries one edit and no run-on");
+        check(loaded.corrections("keyboar").find("keyboard/0/1 ") != std::string::npos,
+              "a one-letter completion carries no edit and one run-on letter");
+        check(loaded.corrections("keybosr").find("keyboard/1/1 ") != std::string::npos,
+              "an edit plus a run-on letter carries one of each");
+
+        // "ther": "there" runs on by one letter, "the" discards a typed letter; the run-on is
+        // priced as an omitted letter, below a deletion.
+        const std::string ther = loaded.corrections("ther");
+        const size_t there = ther.find("there/0/1 ");
+        const size_t the = ther.find("the/1/0 ");
+        check(there != std::string::npos, "a run-on candidate reaches the list");
+        check(the == std::string::npos || there < the,
+              "and sits above the candidate reached by discarding a typed letter");
     }
 
     section("a word written once or twice is kept but not offered");
