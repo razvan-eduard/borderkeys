@@ -707,6 +707,27 @@ jstring nativeCandidateForPack(JNIEnv* env, jobject /*thiz*/, jlong handle, jint
     return env->NewStringUTF(spelling);
 }
 
+/** The spelling the dictionaries hold for `word`; see Engine::knownSpelling. */
+jstring nativeKnownSpelling(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || word == nullptr) {
+        return nullptr;
+    }
+    char buffer[kStringBufferBytes];
+    const jsize length = copyString(env, word, buffer, sizeof(buffer));
+    if (length <= 0) {
+        return nullptr;
+    }
+    char spelling[kStringBufferBytes];
+    const int written = engine->knownSpelling(buffer, static_cast<size_t>(length), spelling,
+                                              sizeof(spelling) - 1);
+    if (written <= 0) {
+        return nullptr;
+    }
+    spelling[written] = '\0';
+    return env->NewStringUTF(spelling);
+}
+
 jint nativeDominantPack(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
     Engine* const engine = engineFrom(handle);
     return engine == nullptr ? -1 : static_cast<jint>(engine->dominantPack());
@@ -1175,6 +1196,8 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeDominantLanguageTag)},
     {"nativeCandidateForPack", "(JILjava/lang/String;)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeCandidateForPack)},
+    {"nativeKnownSpelling", "(JLjava/lang/String;)Ljava/lang/String;",
+     reinterpret_cast<void*>(nativeKnownSpelling)},
     {"nativeDominantPack", "(J)I", reinterpret_cast<void*>(nativeDominantPack)},
 };
 

@@ -603,6 +603,8 @@ class BorderKeysService :
                 val wasForcingDebugRing = preferences.debugForceRadialRing
                 val offensiveSwitchFlipped =
                     preferences.blockOffensiveWords != newPreferences.blockOffensiveWords
+                val wordLimitChanged =
+                    preferences.learnedWordLimit != newPreferences.learnedWordLimit
                 val swipeModelFlipped =
                     preferences.experimentalSwipeModelEnabled !=
                         newPreferences.experimentalSwipeModelEnabled
@@ -612,7 +614,7 @@ class BorderKeysService :
                     applySwipeModel(newPreferences.experimentalSwipeModelEnabled)
                 }
                 particleEffects = newParticleEffects
-                if (offensiveSwitchFlipped) {
+                if (offensiveSwitchFlipped || wordLimitChanged) {
                     scope.launch(Dispatchers.IO) {
                         dictionaryLoader.reloadPersonal()
                         withContext(Dispatchers.Main) { orchestrator.requestSuggestions() }
@@ -837,7 +839,10 @@ class BorderKeysService :
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
         orchestrator.dismissRing()
-        clipOffers.keyboardClosed(preferences.clipboardSuggestionOnce)
+        clipOffers.keyboardClosed(
+            preferences.clipboardSuggestionOnce,
+            currentInputEditorInfo?.packageName,
+        )
         unregisterClipboardListener()
         saveLanguageEvidence()
     }
@@ -1739,7 +1744,8 @@ class BorderKeysService :
         if (now - lastSweep < DECAY_SWEEP_INTERVAL_MILLIS) {
             return
         }
-        DataGraph.dictionary.decayStaleEntries(now)
+        val limit = DataGraph.themes.preferences.first().learnedWordLimit
+        DataGraph.dictionary.decayStaleEntries(limit, now)
         prefs.edit().putLong(DECAY_LAST_SWEEP_AT, now).apply()
     }
 
@@ -2023,7 +2029,7 @@ class BorderKeysService :
         val clip = ClipData.newPlainText(null, text)
         clipboardManager?.setPrimaryClip(clip)
         // The chip is built from the clip in hand, not read back from the clipboard.
-        clipOffers.copied(clipSignature(clip))
+        clipOffers.copied(clipSignature(clip), currentInputEditorInfo?.packageName)
         refreshClipboardChip(clip)
     }
 
@@ -2226,7 +2232,7 @@ class BorderKeysService :
         val strip = host?.suggestionStrip ?: return
         if (orchestrator.session.policy.privateField || !preferences.clipboardSuggestion) {
             strip.clipboardChip = null
-            clipOffers.shown(null)
+            clipOffers.shown(null, currentInputEditorInfo?.packageName)
             return
         }
         val description = clip?.description
@@ -2234,7 +2240,7 @@ class BorderKeysService :
             !clipOffers.mayShow(clipSignature(clip)) || isSensitiveClip(clip)
         ) {
             strip.clipboardChip = null
-            clipOffers.shown(null)
+            clipOffers.shown(null, currentInputEditorInfo?.packageName)
             return
         }
         val text = when {
@@ -2256,7 +2262,10 @@ class BorderKeysService :
             }
         }
         strip.clipboardChip = text
-        clipOffers.shown(if (text != null) clipSignature(clip) else null)
+        clipOffers.shown(
+            if (text != null) clipSignature(clip) else null,
+            currentInputEditorInfo?.packageName,
+        )
     }
 
     override fun onClipboardPicked() {
@@ -2326,7 +2335,7 @@ class BorderKeysService :
         if (clip.itemCount == 0) {
             return
         }
-        clipOffers.copied(clipSignature(clip))
+        clipOffers.copied(clipSignature(clip), currentInputEditorInfo?.packageName)
         refreshClipboardChip()
         if (isSensitiveClip(clip)) {
             return

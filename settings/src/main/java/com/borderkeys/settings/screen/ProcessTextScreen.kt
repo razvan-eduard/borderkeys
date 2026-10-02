@@ -8,6 +8,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.runtime.State
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -16,7 +21,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.ScrollState
@@ -87,7 +91,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -130,6 +133,11 @@ import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.openKeyboardPicker
 import com.borderkeys.settings.rememberBorderKeysDefaultState
+import com.borderkeys.settings.RingBackground
+import com.borderkeys.settings.rememberRingShift
+import com.borderkeys.settings.ringBackground
+import com.borderkeys.settings.ringBorder
+import com.borderkeys.settings.ringBrush
 import com.mohamedrejeb.richeditor.model.RichTextState
 import com.mohamedrejeb.richeditor.ui.BasicRichTextEditor
 import kotlin.math.PI
@@ -449,15 +457,7 @@ fun ProcessTextScreen(
     // A box resting against the bottom of the screen, lifted by imePadding above whatever
     // keyboard rises.
     val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
-    // No `label` argument: NoHardcodedTextTest reads every `label = "..."` as user-facing text.
-    val ring = rememberInfiniteTransition()
-    val ringShift by ring.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(RING_PERIOD_MILLIS, easing = LinearEasing),
-        ),
-    )
+    val ringShift = rememberRingShift()
 
     if (!isDefaultKeyboard) {
         Column(modifier = modifier.fillMaxSize()) {
@@ -504,8 +504,6 @@ fun ProcessTextScreen(
                 // Before the clip, so the shadow falls outside the rounded corners.
                 .shadow(elevation = BOX_ELEVATION, shape = shape)
                 .clip(shape)
-                // The moving gradient ring around the box.
-                .background(ringBrush(ringShift))
                 // Beside the gesture below, so the two share one coordinate space.
                 .onGloballyPositioned { outerCoords = it }
                 .swipeToToggleKeyboard(
@@ -536,6 +534,8 @@ fun ProcessTextScreen(
                     }
                 },
         ) {
+        // The moving gradient ring around the box.
+        RingBackground(ringShift, Modifier.matchParentSize())
         // A Surface, which sets LocalContentColor for everything inside.
         Surface(
             modifier = Modifier.padding(RING_WIDTH).scale(focusSettle.value),
@@ -767,7 +767,7 @@ fun ProcessTextScreen(
                         // While a model runs, the field is covered, cut to its own outline.
                         if (busy) {
                             val pulse = rememberInfiniteTransition()
-                            val workingAlpha by pulse.animateFloat(
+                            val workingAlpha = pulse.animateFloat(
                                 initialValue = 1f,
                                 targetValue = 0.35f,
                                 animationSpec = infiniteRepeatable(
@@ -779,7 +779,7 @@ fun ProcessTextScreen(
                                 modifier = Modifier
                                     .matchParentSize()
                                     .clip(MaterialTheme.shapes.medium)
-                                    .background(ringBrush(ringShift, alpha = WORKING_SCRIM_ALPHA))
+                                    .ringBackground(ringShift, alpha = WORKING_SCRIM_ALPHA)
                                     .padding(RING_WIDTH)
                                     .clip(MaterialTheme.shapes.medium)
                                     .background(
@@ -789,11 +789,12 @@ fun ProcessTextScreen(
                                 Text(
                                     // The task's label, set by runTask for the whole run.
                                     notice,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = workingAlpha),
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     style = MaterialTheme.typography.titleMedium,
                                     modifier = Modifier
                                         .align(Alignment.Center)
-                                        .padding(horizontal = 24.dp),
+                                        .padding(horizontal = 24.dp)
+                                        .graphicsLayer { alpha = workingAlpha.value },
                                 )
                                 Button(
                                     onClick = {
@@ -1135,7 +1136,7 @@ fun ProcessTextScreen(
 @Composable
 private fun NotDefaultKeyboardBox(
     shape: RoundedCornerShape,
-    ringShift: Float,
+    ringShift: State<Float>,
     onChooseKeyboard: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1144,9 +1145,9 @@ private fun NotDefaultKeyboardBox(
         modifier = Modifier
             .fillMaxWidth()
             .imePadding()
-            .clip(shape)
-            .background(ringBrush(ringShift)),
+            .clip(shape),
     ) {
+        RingBackground(ringShift, Modifier.matchParentSize())
         Surface(
             modifier = Modifier.padding(RING_WIDTH),
             shape = shape,
@@ -1183,36 +1184,10 @@ private fun NotDefaultKeyboardBox(
 private val INSERT_GREEN = Color(0xFF43A047)
 
 /**
- * The moving gradient around the box, looping without a seam; [shift] slides its start and end
- * along the diagonal.
- */
-private fun ringBrush(shift: Float, alpha: Float = 1f): Brush {
-    val span = 900f
-    val x = (shift * span * 2f) - span
-    val colours = if (alpha >= 1f) AI_RING_COLOURS else AI_RING_COLOURS.map { it.copy(alpha = alpha) }
-    return Brush.linearGradient(
-        colors = colours,
-        start = Offset(x, 0f),
-        end = Offset(x + span, span),
-    )
-}
-
-private val AI_RING_COLOURS = listOf(
-    Color(0xFF8B5CF6), // violet
-    Color(0xFF3B82F6), // blue
-    Color(0xFFEF4444), // red
-    Color(0xFF6D28D9), // purple
-    Color(0xFF8B5CF6), // violet again
-)
-
-/**
  * The context window assumed for chunk sizing until the active model's row has been read; below
  * every model in KnownAssistModels.
  */
 private const val DEFAULT_CONTEXT_TOKENS = 2048
-
-/** How long one pass of the ring takes to loop. */
-private const val RING_PERIOD_MILLIS = 5000
 
 /** The ring's own thickness. */
 private val RING_WIDTH = 2.5.dp
@@ -1390,7 +1365,7 @@ private fun VerticalScrollbar(
  * alpha, a half sine of it, so each cycle starts and ends transparent. [focused] stops it.
  */
 @Composable
-private fun SwipeUpHint(ringShift: Float, focused: Boolean, modifier: Modifier = Modifier) {
+private fun SwipeUpHint(ringShift: State<Float>, focused: Boolean, modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val progress = remember { Animatable(0f) }
     // Hides the text once focus arrives, multiplied with the rise's alpha.
@@ -1417,15 +1392,24 @@ private fun SwipeUpHint(ringShift: Float, focused: Boolean, modifier: Modifier =
         }
     }
     val baseStyle = MaterialTheme.typography.labelLarge
-    val eased = progress.value
-    val alpha = sin(eased * PI.toFloat()).coerceIn(0f, 1f) * focusFade.value
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     Text(
         strings[Keys.COMPOSER_SWIPE_HINT],
         style = baseStyle.copy(
             fontSize = baseStyle.fontSize * SWIPE_HINT_SIZE_MULTIPLIER,
-            brush = ringBrush(ringShift, alpha = alpha),
+            color = Color.Transparent,
         ),
-        modifier = modifier.offset(y = -SWIPE_HINT_DISTANCE * eased),
+        onTextLayout = { layout = it },
+        modifier = modifier
+            .offset { IntOffset(0, -(SWIPE_HINT_DISTANCE * progress.value).roundToPx()) }
+            .graphicsLayer()
+            .drawWithContent {
+                val alpha = sin(progress.value * PI.toFloat()).coerceIn(0f, 1f) * focusFade.value
+                val measured = layout
+                if (alpha > 0f && measured != null) {
+                    drawText(measured, brush = ringBrush(ringShift.value), alpha = alpha)
+                }
+            },
     )
 }
 
@@ -1520,17 +1504,18 @@ private data class Rail(
 private fun AssistMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
-    ringShift: Float,
+    ringShift: State<Float>,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val shape = RoundedCornerShape(MENU_CORNER_RADIUS)
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
-        shape = RoundedCornerShape(MENU_CORNER_RADIUS),
+        modifier = Modifier.ringBorder(ringShift, MENU_BORDER_WIDTH, shape),
+        shape = shape,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 2.dp,
         shadowElevation = MENU_SHADOW_ELEVATION,
-        border = BorderStroke(MENU_BORDER_WIDTH, ringBrush(ringShift)),
         content = content,
     )
 }

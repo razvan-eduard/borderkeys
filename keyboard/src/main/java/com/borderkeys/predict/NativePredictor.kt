@@ -258,6 +258,9 @@ internal object NativePredictor {
      */
     external fun nativeCandidateForPack(handle: Long, packIndex: Int, word: String): String?
 
+    /** The spelling the dictionaries hold for [word], in any case or marks, or null for none. */
+    external fun nativeKnownSpelling(handle: Long, word: String): String?
+
     /** The pack the conversation is currently considered written in, or -1 when undecided. */
     external fun nativeDominantPack(handle: Long): Int
 }

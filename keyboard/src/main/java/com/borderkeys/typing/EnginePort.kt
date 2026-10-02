@@ -44,6 +44,9 @@ interface EnginePort {
 
     fun candidatesForPack(dominantPack: Int, words: List<String>, onResult: (List<String?>) -> Unit)
 
+    /** Whether the dictionaries hold each of [words], in any case or marks. */
+    fun knownWords(words: List<String>, onResult: (List<Boolean>) -> Unit)
+
     fun cancelPending()
 
     /**

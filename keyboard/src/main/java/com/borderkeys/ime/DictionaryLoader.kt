@@ -154,7 +154,9 @@ internal class DictionaryLoader(
         val hidden = if (preferences().blockOffensiveWords) offensiveWords else emptySet()
         fun shown(word: String) = hidden.isEmpty() || WordFold.fold(word) !in hidden
         engine.loadUserWords(
-            dictionary.topWords().filter { shown(it.word) }.map { it.decayed(now) },
+            dictionary.topWords(preferences().learnedWordLimit)
+                .filter { shown(it.word) }
+                .map { it.decayed(now) },
         )
         engine.loadUserBigrams(
             dictionary.topBigrams()

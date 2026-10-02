@@ -6,7 +6,7 @@ package com.borderkeys.predict
 import java.text.Normalizer
 import java.util.Locale
 
-/** A word in lower case with its accents stripped, for matching the offensive-word list. */
+/** A word in lower case with its accents stripped. */
 object WordFold {
 
     /** [word] folded; the same instance when it is already plain lower-case letters. */

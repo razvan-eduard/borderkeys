@@ -507,6 +507,8 @@ fun DefaultableSlider(
      * currently bypasses.
      */
     enabled: Boolean = true,
+    /** Runs when a drag ends and after a reset, once [onChange] has the value. */
+    onChangeFinished: (() -> Unit)? = null,
     onChange: (Float) -> Unit,
 ) {
     val strings = LocalStrings.current
@@ -524,7 +526,13 @@ fun DefaultableSlider(
                 modifier = Modifier.weight(1f),
             )
             if (enabled && value != default) {
-                IconButton(onClick = { onChange(default) }, modifier = Modifier.size(28.dp)) {
+                IconButton(
+                    onClick = {
+                        onChange(default)
+                        onChangeFinished?.invoke()
+                    },
+                    modifier = Modifier.size(28.dp),
+                ) {
                     Icon(
                         painter = painterResource(android.R.drawable.ic_menu_close_clear_cancel),
                         contentDescription = strings[Keys.COMMON_RESET_TO_DEFAULT],
@@ -540,6 +548,7 @@ fun DefaultableSlider(
             steps = steps,
             onValueChange = onChange,
             enabled = enabled,
+            onValueChangeFinished = onChangeFinished,
             modifier = Modifier.fillMaxWidth(),
         )
     }

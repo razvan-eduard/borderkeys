@@ -528,6 +528,10 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `the language written carries over by default`() {
+        assertTrue(KeyboardPreferences().rememberDetectedLanguage)
+    }
+
     /** Strict is the only setting that stops consulting the others before it has decided. */
     @Test
     fun `only strict refuses to guess`() {

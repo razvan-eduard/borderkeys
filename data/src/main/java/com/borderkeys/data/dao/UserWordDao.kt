@@ -24,8 +24,8 @@ interface UserWordDao {
     )
     fun observeMatching(query: String): Flow<List<UserWord>>
 
-    /** The words pushed into the native model at service start, most used first. */
-    @Query("SELECT * FROM user_words ORDER BY count DESC LIMIT :limit")
+    /** The first [limit] words in [wordsBeyond]'s order: by count, then by recency. */
+    @Query("SELECT * FROM user_words ORDER BY count DESC, lastUsedAt DESC LIMIT :limit")
     suspend fun topWords(limit: Int): List<UserWord>
 
     @Query("SELECT * FROM user_words WHERE word = :word LIMIT 1")
