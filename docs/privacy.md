@@ -253,9 +253,10 @@ useful.
 
 - **Code running as this app on an unlocked device.** It can use the Keystore key. See
   [above](#encryption-at-rest-and-its-limits).
-- **The lock screen after a reboot.** The keyboard is not direct-boot aware: its database key
-  lives in the Keystore and is unreadable before the first unlock, so an alphanumeric device
-  password is typed on the system's own keyboard until then. Below Android 13 the platform has
+- **The lock screen after a reboot.** The keyboard is not direct-boot aware: its settings, the
+  wrapped database passphrase and the database itself live in credential-encrypted storage, which
+  Android does not mount before the first unlock, so an alphanumeric device password is typed on
+  the system's own keyboard until then. Below Android 13 the platform has
   no sensitive-content flag, so a copied password is recorded there like any other clip.
 - **A compromised or malicious Android build.** An IME is handed keystrokes by the platform; if
   the platform is hostile, nothing here helps.

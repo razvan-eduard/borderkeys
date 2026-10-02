@@ -56,7 +56,7 @@ row reports it ready.
 
 ## Status
 
-The shipped checkpoint is the one exported on 2026-09-16 (`model.bkw`, weight-file version 2,
+The shipped checkpoint is the one exported on 2026-09-16 (`model.bkw`, weight-file version 3,
 642,241 parameters, about 2.5 MB), trained under the fixed feature scaling -- the runtime
 scale-compensation shim an earlier checkpoint needed is gone. To replace it: train with `train.py`, evaluate with
 `eval_ctc.py`, export with `export_weights.py`, copy the result over

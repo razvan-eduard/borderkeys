@@ -391,9 +391,12 @@ mixed, so each is measured against the pack that holds its words. A corpus filte
 pack keeps only the rows that happen to be words in both languages and reads 36%; that figure
 is a mistake, not a result. The layouts added since -- Colemak, Colemak-DH, Workman, Bépo, the
 two Turkish arrangements, the national variants, and the ten in other scripts -- have no
-recorded gestures in the collection, so they carry no figure here: the geometric tier needs
-only the layout and the pack, and the neural tier reaches a Latin layout through folding and
-the other scripts not at all.
+recorded gestures in the collection, so they carry no figure here. Both tiers run on every
+layout: the geometric tier needs only the layout and the pack, and the neural tier takes the
+layout's key centres (`TcnCtcDecoder::setLayout`) and is picked for any layout once its weights
+are loaded. What exists is a measurement only for the Latin layouts the collection covers; on
+the other scripts the neural tier runs with weights trained on Latin traces and its accuracy
+there is unmeasured.
 
 ```
 tools/swipe_model/.venv/bin/python3 tools/swipe_model/futo_layout_corpus.py azerty \
@@ -540,15 +543,17 @@ below it.
 
 Requires torch and the FUTO dataset, which is why it is a manual run rather than a gate.
 
-### Suggestion quality — the one that does not
+### Suggestion quality — a measurement in one mode, a gate in two others
 
 ```
 native-tests/build/suggest_eval <dict dir> native-tests/data/suggest_en.tsv en-US
 ```
 
-Prints rank-1 accuracy, top-3 and mean rank over a corpus of `typed<TAB>expected` cases. It
-**does not assert and is not a test**, deliberately — same contract as `gesture_replay`: a corpus
-in, a measurement out, no verdict.
+Prints rank-1 accuracy, top-3 and mean rank over a corpus of `typed<TAB>expected` cases. In this
+mode it **does not assert and is not a test**, deliberately — same contract as `gesture_replay`: a
+corpus in, a measurement out, no verdict. Its `--reachable` and `--context` modes are different:
+both take floors and exit non-zero below them, and CI runs them on every bundled pack
+(`.github/workflows/ci.yml`, the swipe-reachability and context steps).
 
 A case whose right answer is *"leave the word alone"* is written with the typed word as its own
 expectation (`snobul` → `snobul`), because "offers nothing better than what I wrote" is a result
