@@ -11,14 +11,7 @@
   "hunspell": [
     "bg_BG/bg_BG"
   ],
-  "treebank": {
-    "repository": "UD_Bulgarian-BTB",
-    "files": [
-      "bg_btb-ud-train.conllu",
-      "bg_btb-ud-dev.conllu",
-      "bg_btb-ud-test.conllu"
-    ]
-  },
+  "treebank": null,
   "overlay": {},
   "single_letter_words": "авиосу",
   "expected_beyond_ascii": [],

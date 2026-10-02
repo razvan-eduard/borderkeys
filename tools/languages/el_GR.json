@@ -12,11 +12,11 @@
     "el_GR/el_GR"
   ],
   "treebank": {
-    "repository": "UD_Greek-GDT",
+    "repository": "UD_Greek-GUD",
+    "release": "r2.18",
     "files": [
-      "el_gdt-ud-train.conllu",
-      "el_gdt-ud-dev.conllu",
-      "el_gdt-ud-test.conllu"
+      "el_gud-ud-train.conllu",
+      "el_gud-ud-test.conllu"
     ]
   },
   "overlay": {

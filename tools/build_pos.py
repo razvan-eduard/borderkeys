@@ -46,6 +46,9 @@ def compose(upos, feats):
 # Below this many distinct XPOS values the composed tag is used instead.
 MIN_USEFUL_XPOS = 20
 
+# At or above this share of tokens whose XPOS repeats their UPOS, the composed tag is used instead.
+XPOS_COPY_SHARE = 0.9
+
 
 def rows(path):
     """(form, upos, xpos, feats) for every real token, with None between sentences."""
@@ -64,15 +67,18 @@ def rows(path):
 
 def uses_xpos(paths):
     """Whether the treebank fills its own fine tagset (XPOS), which is then preferred to a
-    composed one."""
+    composed one: more than MIN_USEFUL_XPOS values, and not a copy of UPOS."""
     seen = set()
+    tokens = 0
+    copies = 0
     for path in paths:
         for row in rows(path):
-            if row is not None:
-                seen.add(row[2])
-            if len(seen) > MIN_USEFUL_XPOS:
-                return True
-    return False
+            if row is None:
+                continue
+            seen.add(row[2])
+            tokens += 1
+            copies += row[1] == row[2]
+    return len(seen) > MIN_USEFUL_XPOS and copies < XPOS_COPY_SHARE * tokens
 
 
 def tokens(path, xpos):
@@ -93,10 +99,12 @@ def main():
                         help="JSON, read by tools/build_dict.py --grammar")
     parser.add_argument("--coarse", action="store_true",
                         help="use bare UPOS rather than UPOS plus agreement features")
+    parser.add_argument("--composed", action="store_true",
+                        help="use UPOS plus agreement features even where the treebanks fill XPOS")
     arguments = parser.parse_args()
 
     column = 1 if arguments.coarse else 2
-    xpos = not arguments.coarse and uses_xpos(arguments.treebank)
+    xpos = not arguments.coarse and not arguments.composed and uses_xpos(arguments.treebank)
     word_tags = collections.defaultdict(collections.Counter)
     tag_counts = collections.Counter()
     transitions = collections.defaultdict(collections.Counter)

@@ -7,7 +7,7 @@ A manifest in tools/languages/<tag>.json names the corpora, the spelling diction
 treebank and the long-press letters of one language. This runs the pipeline the six bundled
 packs went through, step by step, each step skipped when its output is already there:
 
-    fetch      the Leipzig corpora, the LibreOffice Hunspell dictionary, the UD treebank
+    fetch      the Leipzig corpora, the LibreOffice Hunspell dictionary, the UD treebanks
     overlay    the long-press letters into keyboard/src/main/assets/accents/<tag>.json, when
                the language has any
     names      the person and entity lists from Wikidata
@@ -45,7 +45,7 @@ BUNDLED = ("en_US", "ro_RO", "de_DE", "es_ES", "fr_FR", "it_IT")
 LEIPZIG = "https://downloads.wortschatz-leipzig.de/corpora/{name}.tar.gz"
 HUNSPELL = "https://raw.githubusercontent.com/LibreOffice/dictionaries/master/{path}.{ext}"
 ENGLISH_HUNSPELL = "en/en_US"
-TREEBANK = "https://raw.githubusercontent.com/UniversalDependencies/{repository}/master/{file}"
+TREEBANK = "https://raw.githubusercontent.com/UniversalDependencies/{repository}/{release}/{file}"
 USER_AGENT = "BorderKeys-tools (https://github.com/razvan-eduard/borderkeys)"
 
 STEPS = ("fetch", "overlay", "names", "grammar", "corpus", "ordinary", "pack", "clean", "compile", "check")
@@ -122,11 +122,17 @@ class Language:
         return self.work / "hunspell" / Path(ENGLISH_HUNSPELL).name
 
     @property
-    def treebank_files(self) -> list:
+    def treebanks(self) -> list:
+        """The manifest's treebank, or its list of them; each at its release, master when none."""
         treebank = self.manifest.get("treebank")
         if not treebank:
             return []
-        return [self.work / "treebank" / name for name in treebank["files"]]
+        return treebank if isinstance(treebank, list) else [treebank]
+
+    @property
+    def treebank_files(self) -> list:
+        return [self.work / "treebank" / name
+                for treebank in self.treebanks for name in treebank["files"]]
 
     @property
     def persons(self) -> Path:
@@ -180,10 +186,12 @@ class Language:
         for base, dic, aff in self.hunspell_sources + [english]:
             download(dic, base.with_suffix(".dic"))
             download(aff, base.with_suffix(".aff"))
-        treebank = self.manifest.get("treebank")
-        if treebank:
-            for name, target in zip(treebank["files"], self.treebank_files):
-                download(TREEBANK.format(repository=treebank["repository"], file=name), target)
+        for treebank in self.treebanks:
+            release = treebank.get("release", "master")
+            for name in treebank["files"]:
+                download(TREEBANK.format(repository=treebank["repository"], release=release,
+                                         file=name),
+                         self.work / "treebank" / name)
 
     def overlay(self) -> None:
         target = ACCENTS / f"{self.tag}.json"
@@ -212,8 +220,12 @@ class Language:
         if not self.treebank_files:
             log("no treebank for this language: the pack carries no grammar")
             return
-        run([sys.executable, HERE / "build_pos.py", "--treebank", *self.treebank_files,
-             "--out", self.grammar])
+        command = [sys.executable, HERE / "build_pos.py", "--treebank", *self.treebank_files,
+                   "--out", self.grammar]
+        # A treebank marked "tags": "composed" is tagged UPOS plus agreement features.
+        if any(treebank.get("tags") == "composed" for treebank in self.treebanks):
+            command.append("--composed")
+        run(command)
 
     def corpus(self) -> None:
         if self.first_count.is_file():

@@ -35,7 +35,7 @@ object BundledDictionaries {
         Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 97_406, 8_016_384),
         Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 93_966, 7_897_344),
         Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 100_737, 9_184_772),
-        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 95_592, 8_218_768),
+        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 95_592, 8_219_260),
     )
 
     /** Opens one for reading. The caller closes it; the install path copies and validates. */

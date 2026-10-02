@@ -11,11 +11,12 @@
     "pl_PL/pl_PL"
   ],
   "treebank": {
-    "repository": "UD_Polish-PDB",
+    "repository": "UD_Polish-LFG",
+    "release": "r2.18",
     "files": [
-      "pl_pdb-ud-train.conllu",
-      "pl_pdb-ud-dev.conllu",
-      "pl_pdb-ud-test.conllu"
+      "pl_lfg-ud-train.conllu",
+      "pl_lfg-ud-dev.conllu",
+      "pl_lfg-ud-test.conllu"
     ]
   },
   "overlay": {
