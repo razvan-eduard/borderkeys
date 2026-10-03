@@ -279,6 +279,7 @@ class QuickActionsView(
         QuickAction.CURSOR_LEFT -> Keys.ACTION_CURSOR_LEFT
         QuickAction.CURSOR_RIGHT -> Keys.ACTION_CURSOR_RIGHT
         QuickAction.TIMESTAMP -> Keys.ACTION_TIMESTAMP
+        QuickAction.PRIVATE_COPY -> Keys.ACTION_PRIVATE_COPY
     }
 
     /** Whether labels are drawn: on, on a horizontal bar. */
@@ -307,7 +308,10 @@ class QuickActionsView(
         QuickAction.CURSOR_LEFT -> R.drawable.bk_action_cursor_left
         QuickAction.CURSOR_RIGHT -> R.drawable.bk_action_cursor_right
         QuickAction.TIMESTAMP -> R.drawable.bk_action_timestamp
+        QuickAction.PRIVATE_COPY -> R.drawable.bk_action_copy_private
     }
+
+    override fun getAccessibilityClassName(): CharSequence = QuickActionsView::class.java.name
 
     /** Whether this view paints the surface behind itself; off under [KeyboardHostView]. */
     var drawsBackground: Boolean = true

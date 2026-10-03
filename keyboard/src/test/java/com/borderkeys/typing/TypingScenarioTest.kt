@@ -484,6 +484,24 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `a private copy takes the selection, and says so when there is none`() {
+        rig.startField("hello world")
+        assertNull(rig.orchestrator.privateCopyText())
+        assertEquals(listOf(Keys.CLIP_PRIVATE_NOTHING_SELECTED), rig.host.notices)
+        rig.editor.setSelection(6, 11)
+        assertEquals("world", rig.orchestrator.privateCopyText())
+        assertEquals(1, rig.host.notices.size)
+    }
+
+    @Test
+    fun `a private field gives no private copy`() {
+        rig.startField("hello world", privateField = true)
+        rig.editor.setSelection(0, 5)
+        assertNull(rig.orchestrator.privateCopyText())
+        assertTrue(rig.host.notices.isEmpty())
+    }
+
+    @Test
     fun `pasted text lands after the word in progress`() {
         rig.startField()
         rig.type("hi")

@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 9,
-    "identityHash": "40b0034afecb675868a6652eed5435f5",
+    "identityHash": "637daf43d004e55d69e28e1060ee8095",
     "entities": [
       {
         "tableName": "clip_entries",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `content` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `pinnedAt` INTEGER, `contentHash` INTEGER NOT NULL, `uri` TEXT, `mimeType` TEXT, `mediaFile` TEXT, `sizeBytes` INTEGER NOT NULL, `thumbnail` BLOB)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `content` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `pinnedAt` INTEGER, `contentHash` INTEGER NOT NULL, `uri` TEXT, `mimeType` TEXT, `mediaFile` TEXT, `sizeBytes` INTEGER NOT NULL, `thumbnail` BLOB, `isPrivate` INTEGER NOT NULL, `sourcePackage` TEXT)",
         "fields": [
           {
             "fieldPath": "id",
@@ -62,6 +62,17 @@
             "fieldPath": "thumbnail",
             "columnName": "thumbnail",
             "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "isPrivate",
+            "columnName": "isPrivate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourcePackage",
+            "columnName": "sourcePackage",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -591,7 +602,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '40b0034afecb675868a6652eed5435f5')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '637daf43d004e55d69e28e1060ee8095')"
     ]
   }
 }

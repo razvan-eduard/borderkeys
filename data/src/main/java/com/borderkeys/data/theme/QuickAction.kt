@@ -91,6 +91,12 @@ enum class QuickAction(val id: Int) {
      * `timestampPattern` preference give it.
      */
     TIMESTAMP(22),
+
+    /**
+     * Keeps the selection in the clipboard history as a private entry, which never touches the
+     * system clipboard and outlives the retention window and the history limit.
+     */
+    PRIVATE_COPY(23),
     ;
 
     /**

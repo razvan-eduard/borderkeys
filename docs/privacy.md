@@ -228,6 +228,13 @@ directory is swept at every start. Pasting hands the field a URI of the keyboard
 which decrypts into a pipe, with a read grant for that insertion only; a field that takes no
 images is told so on the strip. Images never match a search and are left out of backups.
 
+A *Keep privately* entry, from the quick-action bar or from other apps' text-selection menu once
+that is turned on, goes into the history flagged private with the app it came from: the system
+clipboard is never written, other keyboards and apps never see it, and the retention timer, the
+item limit and *Forget everything when the keyboard closes* leave it alone until you delete it.
+A backup carries the flag. The menu entry takes at most ten copies from one app and thirty in all
+per minute.
+
 The keyboard holds no clipboard listener that runs when it is not the active input method — it
 has no permission that would let it, and on modern Android an IME cannot read the clipboard while
 not focused anyway.

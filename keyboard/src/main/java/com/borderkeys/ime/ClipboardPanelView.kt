@@ -349,6 +349,21 @@ class ClipboardPanelView(
         canvas.restore()
         paints.label.textAlign = previous
 
+        val note = sourceNote(entry)
+        if (note != null) {
+            // The source app, small, at the end edge, below the pin's corner.
+            val notePaint = paints.labelSecondary
+            val previousAlign = notePaint.textAlign
+            notePaint.textAlign = if (rightToLeft) Paint.Align.LEFT else Paint.Align.RIGHT
+            canvas.drawText(
+                note,
+                if (rightToLeft) cardRect.left + inset else cardRect.right - inset,
+                top + cardHeightPx - inset,
+                notePaint,
+            )
+            notePaint.textAlign = previousAlign
+        }
+
         if (entry.isPinned) {
             // A pinned card's dot, at the corner opposite the start edge.
             canvas.drawCircle(
@@ -417,7 +432,24 @@ class ClipboardPanelView(
     private fun labelFor(entry: ClipEntry): String = when {
         entry.isImage && thumbnails[entry.id] == null -> strings[Keys.CLIP_IMAGE_UNAVAILABLE]
         entry.isImage -> strings[Keys.CLIP_IMAGE]
+        entry.isPrivate -> "$PRIVATE_GLYPH ${entry.content}"
         else -> entry.content
+    }
+
+    /** The app labels of private entries' sources, by package, resolved once each. */
+    private val sourceLabels = HashMap<String, String>()
+
+    /** "via <app>" for a private entry whose source is known, or null. */
+    private fun sourceNote(entry: ClipEntry): String? {
+        val source = entry.sourcePackage?.takeIf { entry.isPrivate } ?: return null
+        val label = sourceLabels.getOrPut(source) {
+            runCatching {
+                context.packageManager.getApplicationLabel(
+                    context.packageManager.getApplicationInfo(source, 0),
+                ).toString()
+            }.getOrDefault(source)
+        }
+        return strings.getString(Keys.CLIPBOARD_PRIVATE_FROM, label)
     }
 
     private fun cardAt(y: Float): Int {
@@ -530,6 +562,9 @@ class ClipboardPanelView(
     }
 
     private companion object {
+        /** Marks a private entry's card. */
+        const val PRIVATE_GLYPH = "\uD83D\uDD12"
+
         /** The pinned "back" bar, as a fraction of a key row. */
         const val HEADER_HEIGHT_ROWS = 0.66f
 

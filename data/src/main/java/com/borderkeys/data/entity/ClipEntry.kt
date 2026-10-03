@@ -41,6 +41,15 @@ data class ClipEntry(
 
     /** The stored image's thumbnail, a small WebP, or null. */
     val thumbnail: ByteArray? = null,
+
+    /**
+     * Kept privately: never on the system clipboard, and exempt from the retention window, the
+     * history limit and clearing on close.
+     */
+    val isPrivate: Boolean = false,
+
+    /** The package the private copy was made in, or null. */
+    val sourcePackage: String? = null,
 ) {
     val isPinned: Boolean get() = pinnedAt != null
 

@@ -44,6 +44,26 @@
         </activity-alias>
 
         <!--
+            "Keep privately with BorderKeys" in the same menu: keeps the selection as a private
+            clipboard entry and shows nothing. Off until the Clipboard screen turns it on
+            (PrivateCopyActivity.setOffered).
+        -->
+        <activity
+            android:name="com.borderkeys.settings.PrivateCopyActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:label="@string/process_text_label_private_copy"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!--
             Four more entries in the same menu that run their action on the selection at once:
             Correct, Shorten, Summarise, and Custom, which opens a picker of the custom actions.
             SettingsActivity tells the aliases apart by the component name on the intent.

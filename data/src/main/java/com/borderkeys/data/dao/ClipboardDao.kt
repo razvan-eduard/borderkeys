@@ -18,7 +18,7 @@ interface ClipboardDao {
     @Query(
         """
         SELECT * FROM clip_entries
-        WHERE pinnedAt IS NOT NULL OR createdAt >= :expiryCutoff
+        WHERE pinnedAt IS NOT NULL OR isPrivate = 1 OR createdAt >= :expiryCutoff
         ORDER BY pinnedAt IS NULL, COALESCE(pinnedAt, createdAt) DESC
         """,
     )
@@ -37,14 +37,18 @@ interface ClipboardDao {
     suspend fun updateContent(id: Long, content: String, contentHash: Long): Int
 
     /**
-     * Inserts, or, when something with this [contentHash] is already there, sets only its
-     * `createdAt`, in one statement. `pinnedAt` and the row's `id` are kept.
+     * Inserts, or, when something with this [contentHash] is already there, sets its `createdAt`,
+     * keeps it private if either is, and fills a missing source, in one statement. `pinnedAt` and
+     * the row's `id` are kept.
      */
     @Query(
         """
-        INSERT INTO clip_entries (content, createdAt, contentHash, uri, mimeType, mediaFile, sizeBytes, thumbnail)
-        VALUES (:content, :createdAt, :contentHash, :uri, :mimeType, :mediaFile, :sizeBytes, :thumbnail)
-        ON CONFLICT(contentHash) DO UPDATE SET createdAt = :createdAt
+        INSERT INTO clip_entries (content, createdAt, contentHash, uri, mimeType, mediaFile, sizeBytes, thumbnail, isPrivate, sourcePackage)
+        VALUES (:content, :createdAt, :contentHash, :uri, :mimeType, :mediaFile, :sizeBytes, :thumbnail, :isPrivate, :sourcePackage)
+        ON CONFLICT(contentHash) DO UPDATE SET
+            createdAt = :createdAt,
+            isPrivate = MAX(isPrivate, :isPrivate),
+            sourcePackage = COALESCE(sourcePackage, :sourcePackage)
         """,
     )
     suspend fun upsert(
@@ -56,6 +60,8 @@ interface ClipboardDao {
         mediaFile: String? = null,
         sizeBytes: Long = 0L,
         thumbnail: ByteArray? = null,
+        isPrivate: Boolean = false,
+        sourcePackage: String? = null,
     )
 
     /** The stored images' names, for the sweep. */
@@ -71,11 +77,17 @@ interface ClipboardDao {
      */
     @Query(
         """
-        INSERT OR IGNORE INTO clip_entries (content, createdAt, pinnedAt, contentHash)
-        VALUES (:content, :createdAt, :pinnedAt, :contentHash)
+        INSERT OR IGNORE INTO clip_entries (content, createdAt, pinnedAt, contentHash, isPrivate)
+        VALUES (:content, :createdAt, :pinnedAt, :contentHash, :isPrivate)
         """,
     )
-    suspend fun insertIfAbsent(content: String, createdAt: Long, pinnedAt: Long?, contentHash: Long)
+    suspend fun insertIfAbsent(
+        content: String,
+        createdAt: Long,
+        pinnedAt: Long?,
+        contentHash: Long,
+        isPrivate: Boolean = false,
+    )
 
     @Query("UPDATE clip_entries SET pinnedAt = :pinnedAt WHERE id = :id")
     suspend fun setPinned(id: Long, pinnedAt: Long?)
@@ -83,7 +95,7 @@ interface ClipboardDao {
     @Query("DELETE FROM clip_entries WHERE id = :id")
     suspend fun delete(id: Long)
 
-    @Query("DELETE FROM clip_entries WHERE pinnedAt IS NULL AND createdAt < :expiryCutoff")
+    @Query("DELETE FROM clip_entries WHERE pinnedAt IS NULL AND isPrivate = 0 AND createdAt < :expiryCutoff")
     suspend fun deleteExpired(expiryCutoff: Long): Int
 
     /** Everything, pinned included. The "clear clipboard history" button. */
@@ -94,18 +106,18 @@ interface ClipboardDao {
     @Query("DELETE FROM clip_entries WHERE uri IS NOT NULL OR mediaFile IS NOT NULL")
     suspend fun deleteImages(): Int
 
-    /** Everything that is not pinned, whatever its age. Used when the keyboard closes. */
-    @Query("DELETE FROM clip_entries WHERE pinnedAt IS NULL")
+    /** Everything neither pinned nor private, whatever its age. Used when the keyboard closes. */
+    @Query("DELETE FROM clip_entries WHERE pinnedAt IS NULL AND isPrivate = 0")
     suspend fun deleteUnpinned(): Int
 
     @Query("SELECT COUNT(*) FROM clip_entries")
     suspend fun count(): Int
 
-    /** Drops the oldest unpinned entries once the history grows past [keep]. */
+    /** Drops the oldest entries neither pinned nor private once the history grows past [keep]. */
     @Query(
         """
         DELETE FROM clip_entries WHERE id IN (
-            SELECT id FROM clip_entries WHERE pinnedAt IS NULL
+            SELECT id FROM clip_entries WHERE pinnedAt IS NULL AND isPrivate = 0
             ORDER BY createdAt DESC LIMIT -1 OFFSET :keep
         )
         """,

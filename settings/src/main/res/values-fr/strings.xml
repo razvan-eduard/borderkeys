@@ -12,5 +12,6 @@
     <string name="process_text_label_shorten">Raccourcir avec BorderKeys</string>
     <string name="process_text_label_summarise">Résumer avec BorderKeys</string>
     <string name="process_text_label_custom">Action personnalisée avec BorderKeys</string>
+    <string name="process_text_label_private_copy">Garder en privé avec BorderKeys</string>
 
 </resources>

@@ -916,7 +916,7 @@ geometry — a ring of alternatives around the finger plus a separate centre Can
 
 ## Quick actions
 
-`QuickAction` (`:data`) is an enum of 22 actions, each with a stable `id` so that a bar
+`QuickAction` (`:data`) is an enum of 23 actions, each with a stable `id` so that a bar
 configured by a newer build **opens** rather than fails on an older one (`fromIds` drops unknown
 ids). `DEFAULT` is the five that answer *"I want that text somewhere"*:
 `COPY_PREVIOUS_WORD`, `COPY_ALL`, `PASTE`, `CLIPBOARD_HISTORY`, `SELECT_ALL`.
@@ -926,8 +926,14 @@ The rest cover cursor movement (`CURSOR_START/END/LEFT/RIGHT`), selection (`SELE
 `timestampPattern` preference gives it), case (`CAPITAL` flips the current
 word's first letter and leaves the cursor alone; `NORMALISE` capitalises every sentence in the
 field and changes nothing else), history (`UNDO`/`REDO` step through what *this keyboard* did to
-the field this session), and `COMPOSE` — a draft box the application cannot see, seeded from the
-selection.
+the field this session), `COMPOSE` — a draft box the application cannot see, seeded from the
+selection — and `PRIVATE_COPY`, which keeps the selection in the clipboard history as a private
+entry: the system clipboard is never written, and the entry outlives the retention window, the
+history limit and clearing on close. The selection is read through `FieldEditor.selectedText` by
+`TypingOrchestrator.privateCopyText`, which tells the strip when nothing is selected. The same
+entry is offered in other apps' text-selection menu by `PrivateCopyActivity` (`:settings`), off
+until the Clipboard screen turns it on, drawing nothing and returning nothing, rate-limited by
+`PrivateCopyRateLimit` to ten copies from one app and thirty in all per minute.
 
 `NEWLINE` is worth a button because in a messaging app the return key sends the message, and the
 gesture for "new line without sending" is different in every one of them.

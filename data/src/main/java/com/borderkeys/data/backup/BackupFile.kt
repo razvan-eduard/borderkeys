@@ -91,7 +91,13 @@ data class BackupTrigram(
 )
 
 @Serializable
-data class BackupClip(val content: String, val createdAt: Long, val pinned: Boolean)
+data class BackupClip(
+    val content: String,
+    val createdAt: Long,
+    val pinned: Boolean,
+    /** Kept privately; a file written before the field reads as not private. */
+    val private: Boolean = false,
+)
 
 @Serializable
 data class BackupModel(val fileName: String, val sha256: String, val active: Boolean)

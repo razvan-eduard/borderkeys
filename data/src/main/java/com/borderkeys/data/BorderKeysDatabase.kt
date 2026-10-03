@@ -197,12 +197,14 @@ abstract class BorderKeysDatabase : RoomDatabase() {
             }
         }
 
-        /** Version 8 to 9: a copied image's bytes, size and thumbnail. */
+        /** Version 8 to 9: a copied image's bytes, size and thumbnail; the private copy's flag and source. */
         val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `mediaFile` TEXT")
                 db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `sizeBytes` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `thumbnail` BLOB")
+                db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `isPrivate` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `sourcePackage` TEXT")
             }
         }
 

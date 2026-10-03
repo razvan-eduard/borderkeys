@@ -26,6 +26,8 @@ internal class ConnectionFieldEditor(private val connection: () -> InputConnecti
         )
     }
 
+    override fun selectedText(): CharSequence? = connection()?.getSelectedText(0)?.takeIf { it.isNotEmpty() }
+
     override fun cursorCapsMode(modes: Int): Int = connection()?.getCursorCapsMode(modes) ?: 0
 
     override fun beginBatchEdit() {

@@ -17,6 +17,9 @@ interface FieldEditor {
      */
     fun extractedText(maxChars: Int): FieldText?
 
+    /** The selected text, or null when nothing is selected or the field does not answer. */
+    fun selectedText(): CharSequence?
+
     /** The capital modes of [modes] that apply at the caret. */
     fun cursorCapsMode(modes: Int): Int
 
