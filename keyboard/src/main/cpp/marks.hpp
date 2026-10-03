@@ -20,10 +20,10 @@ inline bool isMark(uint32_t folded) {
 
 // What a swipe decoder charges, in nats, for the one mark a word may hold between two keys the
 // finger crossed. The build may set it for a sweep.
-#ifdef BORDERKEYS_SWIPE_MARK_COST
-constexpr float kSwipeMarkCost = static_cast<float>(BORDERKEYS_SWIPE_MARK_COST);
+#ifdef BORDERKEYS_MARK_STEP_COST
+constexpr float kMarkStepCost = static_cast<float>(BORDERKEYS_MARK_STEP_COST);
 #else
-constexpr float kSwipeMarkCost = 4.0f;
+constexpr float kMarkStepCost = 4.0f;
 #endif
 
 }  // namespace borderkeys

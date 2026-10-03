@@ -829,7 +829,7 @@ is what removes the header cycle and lets a decoder be tested against a stub wit
 
 Both tiers walk the trie through the keys the finger crossed, and both may step once through the
 trie's mark child — an apostrophe or a hyphen, `marks.hpp` — between two letters, with no key for
-it, at `kSwipeMarkCost` (4 nats) on the word's score. A swipe through d-o-n-t reaches `don't`; a
+it, at `kMarkStepCost` (4 nats) on the word's score. A swipe through d-o-n-t reaches `don't`; a
 bare spelling the pack holds beside its marked twin keeps the lead on frequency (`its` over
 `it's`). When the swipe composes, a candidate whose bare spelling the contraction table rewrites
 is written as the table has it (`TypingOrchestrator.caseSwipedWords`), one text once, so `didnt`

@@ -169,7 +169,7 @@ void Shark2Decoder::walk(int packIndex, const PackedTrie& trie, int32_t node, in
                     float score = scorer_.packWeightLog(packIndex) +
                                   scorer_.contextLogProb(packIndex,
                                                          static_cast<uint32_t>(wordIndex)) +
-                                  geometryLogProb - kSwipeMarkCost * static_cast<float>(marksUsed);
+                                  geometryLogProb - kMarkStepCost * static_cast<float>(marksUsed);
                     uint32_t textLength = 0;
                     const char* const text =
                         trie.wordText(static_cast<uint32_t>(wordIndex), &textLength);

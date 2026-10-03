@@ -273,7 +273,7 @@ int TcnCtcDecoder::decode(const float* intention, const float* spectral, const P
                     }
                     const int32_t markNode = trie.walk(h.node, markSymbol);
                     if (markNode >= 0) {
-                        nextCount = extendBySlots(h, markNode, 1, kSwipeMarkCost, trie, next,
+                        nextCount = extendBySlots(h, markNode, 1, kMarkStepCost, trie, next,
                                                   nextCount);
                     }
                 }
