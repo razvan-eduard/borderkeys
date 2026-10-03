@@ -42,15 +42,16 @@ constexpr float kInsertCost = 0.85f;
 #ifdef BORDERKEYS_RUN_ON_COST
 constexpr float kRunOnCost = static_cast<float>(BORDERKEYS_RUN_ON_COST);
 #else
-constexpr float kRunOnCost = 0.6f;
+constexpr float kRunOnCost = 0.5f;
 #endif
 
 // The factor on a neighbouring key's distance when the finger landed on it instead; the result
-// is floored at KeyGeometry::kMinSubstitutionCost. The build may set it for a sweep.
+// is floored at KeyGeometry::kMinSubstitutionCost. A straight neighbour then costs less than an
+// insertion, a diagonal one more. The build may set it for a sweep.
 #ifdef BORDERKEYS_SLIP_SCALE
 constexpr float kSlipScale = static_cast<float>(BORDERKEYS_SLIP_SCALE);
 #else
-constexpr float kSlipScale = 1.0f;
+constexpr float kSlipScale = 0.8f;
 #endif
 
 // kApostrophe, kHyphen and isMark are in marks.hpp; carriesFoldedMark, kMaxCorrectionCompletion
@@ -1286,6 +1287,13 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
 
     const PackedTrie& trie = pack.trie();
     const bool fuzzy = maxCost > 0.0f && geometry_.isSet();
+    // Edits a path may carry: one up to four typed letters, two from five; the strip-only pass
+    // is not capped, nor any pass when the build sets BORDERKEYS_NO_EDIT_CAP.
+#ifdef BORDERKEYS_NO_EDIT_CAP
+    const int maxEdits = INT8_MAX;
+#else
+    const int maxEdits = currentPass_ == Pass::Wide ? INT8_MAX : (foldedLength <= 4 ? 1 : 2);
+#endif
 
     while (stackSize > 0) {
         if (visitBudget_ <= 0) {
@@ -1325,7 +1333,7 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
             }
         }
 
-        if (!fuzzy) {
+        if (!fuzzy || frame.edits >= maxEdits) {
             continue;
         }
         const float maxCostHere = depthCeilingFor(frame.inputPos, maxCost);

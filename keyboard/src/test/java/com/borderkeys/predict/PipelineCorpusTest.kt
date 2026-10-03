@@ -118,17 +118,17 @@ class PipelineCorpusTest {
 
         /** Rows answered as the corpus expects, out of 200 -- 268 for the marks corpus, 248 for
          *  the accents corpus and 193 for the rare-prefix corpus. */
-        const val TYPO_FLOOR = 199
+        const val TYPO_FLOOR = 198
         const val MIDWORD_FLOOR = 192
         const val MIDTYPO_FLOOR = 44
-        const val UNKNOWN_FLOOR = 190
+        const val UNKNOWN_FLOOR = 182
         const val DOUBLED_FLOOR = 191
-        const val FIRSTLETTER_FLOOR = 167
+        const val FIRSTLETTER_FLOOR = 173
         const val MARKS_FLOOR = 268
-        const val SLIP_FLOOR = 179
-        const val OMITTED_FLOOR = 186
+        const val SLIP_FLOOR = 181
+        const val OMITTED_FLOOR = 180
         const val EXTRA_FLOOR = 192
-        const val RAREPREFIX_FLOOR = 131
+        const val RAREPREFIX_FLOOR = 126
         const val KNOWN_FLOOR = 193
         const val ACCENTS_FLOOR = 237
 

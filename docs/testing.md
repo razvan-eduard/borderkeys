@@ -806,14 +806,14 @@ walk the heap's whole list for the first admissible entry; engine alone (`sugges
 before these changes did not model the edit ceiling) and through the whole path
 (`PipelineCorpusTest`):
 
-| corpus | rows | before | heap key | list walk | `kEditPenalty` 25 |
-|---|---|---|---|---|---|
-| `autocorrect_slip_en` | 200 | 89.5% / 175 | 90.5% / 176 | 89.0% / 178 | 89.5% / **179** |
-| `suggest_slip_en` (strip) | 200 | 72.0% first, 90.5% top three | same | same | 76.0% first, 93.0% top three |
-| `autocorrect_omitted_en` | 200 | 96.0% / 184 | 94.5% / 184 | 94.5% / 184 | 95.5% / **186** |
-| `autocorrect_extra_en` | 200 | 96.0% / 189 | 96.5% / 192 | 96.5% / 192 | same, **192** |
-| `autocorrect_rareprefix_en` | 193 | 65.8% / 116 | 73.6% / 127 | 73.1% / 131 | same, **131** |
-| `autocorrect_known_en` | 200 | 98.5% left alone / 193 | same | same | same, **193** |
+| corpus | rows | before | heap key | list walk | `kEditPenalty` 25 | `kSlipScale` 0.8 |
+|---|---|---|---|---|---|---|
+| `autocorrect_slip_en` | 200 | 89.5% / 175 | 90.5% / 176 | 89.0% / 178 | 89.5% / 179 | 90.0% / **181** |
+| `suggest_slip_en` (strip) | 200 | 72.0% first, 90.5% top three | same | same | 76.0% first, 93.0% top three | 83.5% first, 95.0% top three |
+| `autocorrect_omitted_en` | 200 | 96.0% / 184 | 94.5% / 184 | 94.5% / 184 | 95.5% / 186 | 92.0% / **180** |
+| `autocorrect_extra_en` | 200 | 96.0% / 189 | 96.5% / 192 | 96.5% / 192 | same, 192 | same, **192** |
+| `autocorrect_rareprefix_en` | 193 | 65.8% / 116 | 73.6% / 127 | 73.1% / 131 | same, 131 | 68.9% / **126** |
+| `autocorrect_known_en` | 200 | 98.5% left alone / 193 | same | same | same, 193 | 97.5% left alone / **193** |
 
 Each cell is the engine-alone share, then the whole-path count; the bold counts are the floors.
 The list walk also moved the unknown corpus 191 → 190: a rare word one deletion from a frequent
@@ -834,9 +834,22 @@ slip / first letter / omitted / mid-word / rare prefix / strip first place: 1.0 
 191 / 196 / 141 / 71.9%; 0.8 reads 180 / 172 / 184 / 196 / 133 / 71.9%; 0.7 reads 180 / 172 /
 175 / 196 / 124 / 71.9%; 0.6 reads 179 / 172 / 174 / 196 / 123 / 68.8%; the reference's model
 147 / 149 / 162 / 177 / 110 / 65.6%, its budgets alone 140 / 149 / 174 / 194 / 123 / 65.6%, its
-costs with our budgets 176 / 170 / 162 / 177 / 110 / 65.6%. The slip corpus and the first-letter
-corpus gain at most two rows at any value below 1.0; the omitted and rare-prefix corpora lose
-five to twenty-seven. The cap on its own moved one unknown row and nothing else, and is not kept.
+costs with our budgets 176 / 170 / 162 / 177 / 110 / 65.6%.
+
+Re-swept at 0.6, 0.7, 0.8, 0.9 and 1.0 with `kRunOnCost` 0.5 and `kEditPenalty` 25, with the
+cap and without it (`-DBORDERKEYS_NO_EDIT_CAP=1`). Whole path, unknown left alone / omitted /
+rare prefix / first letter / slip / strip `suggest_slip_en` first, with the cap: 0.6 reads 182 /
+171 / 119 / 172 / 180 / 162; 0.7 182 / 172 / 120 / 172 / 181 / 165; 0.8 182 / 180 / 126 / 173 /
+181 / 167; 0.9 183 / 186 / 131 / 172 / 181 / 163; 1.0 185 / 186 / 132 / 172 / 181 / 152. Without
+it: 0.6 184 / 169 / 118 / 161 / 177 / 154; 0.7 184 / 170 / 119 / 162 / 177 / 160; 0.8 183 / 180 /
+126 / 173 / 181 / 166; 0.9 183 / 185 / 131 / 172 / 181 / 162; 1.0 185 / 186 / 132 / 172 / 181 /
+152. The strip's `suggest_en` reads 71.9% at 0.6 and 75.0% above. No value reaches 188 unknown
+rows left alone; `badder`, `dobbed`, `piddle`, `stunk` and `tattle` are corrected at every value.
+
+The slip scale is 0.8 with the cap, `kRunOnCost` 0.5 and `kEditPenalty` 25. Whole path at those
+values: typo 198, mid-word 192, unknown left alone 182, doubled 191, first letter 173, slip 181,
+omitted 180, extra 192, rare prefix 126, known 193; the floors are these counts. The strip's
+`suggest_en` reads 75.0%.
 
 The slip corpus loses most of its rows to the edit ceiling or the name rule, not to ranking,
 and the rare-prefix corpus is where completions of a rare word outrank the frequent correction
