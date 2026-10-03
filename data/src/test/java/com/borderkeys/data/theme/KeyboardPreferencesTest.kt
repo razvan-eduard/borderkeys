@@ -619,6 +619,25 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `custom layouts keep one per id and the choices only well-formed pairs`() {
+        val layouts = listOf(
+            CustomLayout("custom-1", " Mine ", "ro-RO", "{}"),
+            CustomLayout("custom-1", "Newer", "und", "{\"rows\":[]}"),
+            CustomLayout("mine", "Bad id", "und", "{}"),
+            CustomLayout("custom-2", "", "und", "{}"),
+            CustomLayout("custom-3", "Empty", "und", "  "),
+        )
+        val kept = KeyboardPreferences(
+            customLayouts = layouts,
+            subtypeLayouts = mapOf("qwerty" to "custom-1", "azerty" to "azerty", "Bad Id" to "custom-1", "colemak" to "dvorak"),
+        ).sanitised()
+        assertEquals(listOf(CustomLayout("custom-1", "Newer", "und", "{\"rows\":[]}")), kept.customLayouts)
+        assertEquals(mapOf("qwerty" to "custom-1", "colemak" to "dvorak"), kept.subtypeLayouts)
+        assertEquals("custom-2", CustomLayout.nextId(kept.customLayouts))
+        assertEquals("custom-1", CustomLayout.nextId(emptyList()))
+    }
+
+    @Test
     fun `the remembered voice keyboard and its set are bounded`() {
         val long = KeyboardPreferences(voiceKeyboardId = "x".repeat(1_000), voiceKeyboardSet = "y".repeat(10_000)).sanitised()
         assertEquals(KeyboardPreferences.MAX_INPUT_METHOD_ID_CHARS, long.voiceKeyboardId.length)

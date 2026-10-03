@@ -302,6 +302,18 @@ terminals and editors. Layout assets can place the same keys themselves with the
    `python3 tools/check_layouts.py` checks that every asset, subtype and label agree, and CI
    runs it.
 
+### Your own layouts
+
+A layout the user writes is a `CustomLayout` in the preferences: its `custom-<n>` id, a name, a
+language tag and the same JSON an asset holds, so a backup carries it. The Your layouts screen
+starts one from any built-in, validates it as it is typed with `LayoutValidator`, which holds it
+to the rules above as `tools/check_layouts.py` holds the assets, previews it while it is valid,
+and imports or exports a file, the export with the user's text flicks written into each key's
+`flicks`. On the Layout screen each subtype may draw one of them instead of its own
+(`subtypeLayouts`, by the subtype's layout id); `LayoutChoice` resolves the pair, keeping the
+custom id as the layout's id so the heatmap's totals follow it, and falls back to the subtype's
+asset when the chosen layout is gone or no longer parses.
+
 **Do not rely on the asset's top-level `label`.** The loader does not read it, and the comment
 says why: the value the files carry is an English word, not a catalogue key, so the one place it
 could have been shown would have shown it untranslated. Any user-visible layout name belongs in

@@ -35,6 +35,12 @@ data class KeyboardPreferences(
     /** What a short drag off a key does, by key and direction; see [KeyFlick]. */
     val keyFlicks: List<KeyFlick> = emptyList(),
 
+    /** Layouts the user wrote; see [CustomLayout]. */
+    val customLayouts: List<CustomLayout> = emptyList(),
+
+    /** The layout each subtype draws, by the subtype's own layout id, where it is not its own. */
+    val subtypeLayouts: Map<String, String> = emptyMap(),
+
     /** Whether a drag along backspace selects, character by character, for the lift to delete. */
     val backspaceSlideSelects: Boolean = true,
 
@@ -660,6 +666,8 @@ data class KeyboardPreferences(
         assistTranslateModel = assistTranslateModel.take(MAX_MODEL_FILE_NAME_CHARS),
         assistWriteModel = assistWriteModel.take(MAX_MODEL_FILE_NAME_CHARS),
         keyFlicks = KeyFlick.sanitised(keyFlicks),
+        customLayouts = CustomLayout.sanitised(customLayouts),
+        subtypeLayouts = CustomLayout.sanitisedChoices(subtypeLayouts),
         trackpointSpeed = trackpointSpeed.coerceIn(MIN_TRACKPOINT_SPEED, MAX_TRACKPOINT_SPEED),
         flickMinFraction = flickMinFraction.coerceIn(MIN_FLICK_MIN_FRACTION, MAX_FLICK_MIN_FRACTION),
         flickMaxFraction = flickMaxFraction.coerceIn(MIN_FLICK_MAX_FRACTION, MAX_FLICK_MAX_FRACTION),

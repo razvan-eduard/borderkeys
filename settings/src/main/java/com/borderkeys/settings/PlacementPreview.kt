@@ -48,11 +48,13 @@ fun PlacementPreview(
     touchGlows: TouchGlows? = null,
     /** Set, the keys take taps and report the tapped key's code; the preview is otherwise inert. */
     onKeyPicked: ((Int) -> Unit)? = null,
+    /** A layout to draw instead of the asset [layoutId] names. */
+    layout: KeyboardLayout? = null,
 ) {
     val context = LocalContext.current
     val strings = LocalStrings.current
     val paints = remember { ThemePaints() }
-    val layout = remember(layoutId) { LayoutLoader.load(context.assets, layoutId) }
+    val layout = layout ?: remember(layoutId) { LayoutLoader.load(context.assets, layoutId) }
     val (theme, lightTheme, preferences) = appearance
 
     Box(

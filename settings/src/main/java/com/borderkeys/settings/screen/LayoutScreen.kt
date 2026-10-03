@@ -282,16 +282,40 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
         }
 
         SettingsSectionCard(strings[Keys.LAYOUT_LAYOUTS_ON_THIS_KEYBOARD]) {
+            SettingRow(strings[Keys.LAYOUT_OWN_LAYOUTS], strings[Keys.LAYOUT_OWN_LAYOUTS_NOTE]) { open(Screen.CustomLayouts) }
             if (subtypes.isEmpty()) {
                 SettingRow(
                     title = strings[Keys.LAYOUT_NONE_ENABLED_YET],
                     subtitle = strings[Keys.LAYOUT_ENABLE_BORDERKEYS_FIRST_THEN_ITS_LAYOUTS],
                 )
             }
+            // A subtype's layout id from its extra value, as the input method reads it.
+            fun layoutIdOf(extraValue: String): String {
+                val id = extraValue.split(",").firstOrNull { it.startsWith("layout=") }?.removePrefix("layout=").orEmpty()
+                return if (id.isEmpty() || id.endsWith("_qwerty")) "qwerty" else id
+            }
             for (subtype in subtypes) {
+                val own = layoutIdOf(subtype.extraValue)
+                val chosen = preferences.subtypeLayouts[own]
                 SettingRow(
                     title = subtype.languageTag.ifEmpty { strings[Keys.LAYOUT_LAYOUT] },
-                    subtitle = subtype.extraValue.ifEmpty { strings[Keys.LAYOUT_KEYBOARD] },
+                    subtitle = own,
+                    content = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(strings[Keys.CUSTOM_LAYOUTS_FOR_SUBTYPE], style = MaterialTheme.typography.bodySmall)
+                            PickerChip(strings[Keys.CUSTOM_LAYOUTS_DEFAULT], chosen == null) {
+                                update { it.copy(subtypeLayouts = it.subtypeLayouts - own) }
+                            }
+                            for (custom in preferences.customLayouts) {
+                                PickerChip(custom.name, chosen == custom.id) {
+                                    update { it.copy(subtypeLayouts = it.subtypeLayouts + (own to custom.id)) }
+                                }
+                            }
+                        }
+                    },
                 )
             }
             Button(
