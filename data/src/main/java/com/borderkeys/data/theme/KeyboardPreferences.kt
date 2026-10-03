@@ -35,6 +35,15 @@ data class KeyboardPreferences(
     /** What a short drag off a key does, by key and direction; see [KeyFlick]. */
     val keyFlicks: List<KeyFlick> = emptyList(),
 
+    /** Whether a drag along backspace selects, character by character, for the lift to delete. */
+    val backspaceSlideSelects: Boolean = true,
+
+    /** Whether the space bar held still becomes a joystick for the caret. */
+    val spaceTrackpoint: Boolean = true,
+
+    /** How fast the joystick moves, in percent of its default pace. */
+    val trackpointSpeed: Int = DEFAULT_TRACKPOINT_SPEED,
+
     /** How far a press must travel, as a fraction of the key's diagonal, to be a flick. */
     val flickMinFraction: Float = DEFAULT_FLICK_MIN_FRACTION,
 
@@ -651,6 +660,7 @@ data class KeyboardPreferences(
         assistTranslateModel = assistTranslateModel.take(MAX_MODEL_FILE_NAME_CHARS),
         assistWriteModel = assistWriteModel.take(MAX_MODEL_FILE_NAME_CHARS),
         keyFlicks = KeyFlick.sanitised(keyFlicks),
+        trackpointSpeed = trackpointSpeed.coerceIn(MIN_TRACKPOINT_SPEED, MAX_TRACKPOINT_SPEED),
         flickMinFraction = flickMinFraction.coerceIn(MIN_FLICK_MIN_FRACTION, MAX_FLICK_MIN_FRACTION),
         flickMaxFraction = flickMaxFraction.coerceIn(MIN_FLICK_MAX_FRACTION, MAX_FLICK_MAX_FRACTION),
         voiceKeyboardId = voiceKeyboardId.take(MAX_INPUT_METHOD_ID_CHARS),
@@ -962,6 +972,10 @@ data class KeyboardPreferences(
 
         /** A model file name longer than any real one; a stored value past it is truncated. */
         const val MAX_MODEL_FILE_NAME_CHARS = 255
+
+        const val DEFAULT_TRACKPOINT_SPEED = 100
+        const val MIN_TRACKPOINT_SPEED = 50
+        const val MAX_TRACKPOINT_SPEED = 200
 
         const val DEFAULT_FLICK_MIN_FRACTION = 0.28f
         const val MIN_FLICK_MIN_FRACTION = 0.10f

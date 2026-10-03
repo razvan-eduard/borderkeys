@@ -75,6 +75,10 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
                 contentMimeTypes = contentMimeTypes,
             ),
         )
+        // The platform reports where the caret sits in a field that opens with text.
+        if (text.isNotEmpty()) {
+            orchestrator.onSelectionChanged(editor.selectionStart, editor.selectionEnd)
+        }
         if (settle) {
             settle()
         }
@@ -134,6 +138,24 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
     /** Slides the space bar up or down by [lines], and settles. */
     fun slideLines(lines: Int) {
         orchestrator.onCursorNudgeLines(lines)
+        settle()
+    }
+
+    /** Drags along backspace by [steps] characters, negative leftwards, and settles. */
+    fun backspaceSelect(steps: Int) {
+        orchestrator.onBackspaceSelect(steps)
+        settle()
+    }
+
+    /** Drags along backspace by [lines] lines, and settles. */
+    fun backspaceSelectLines(lines: Int) {
+        orchestrator.onBackspaceSelectLines(lines)
+        settle()
+    }
+
+    /** Lifts after a drag along backspace, and settles. */
+    fun backspaceLift() {
+        orchestrator.onBackspaceSelectionLift()
         settle()
     }
 

@@ -117,6 +117,13 @@ ships.
   letters or below the keyboard — for terminals and editors. Ctrl and Alt apply to the next key,
   and with shift held the caret keys select.
 
+- **The caret without touching the text.** A slide on the space bar moves the caret by character
+  or by line, and selects with shift held; the space bar held still for a moment becomes a
+  joystick that keeps the caret moving the way you lean, faster the further you lean; a drag left
+  along backspace selects the text behind the caret character by character, or line by line when
+  you drag up, and lifting deletes it. Each has its switch on the Layout screen, the joystick a
+  speed too.
+
 - **Key flicks.** A short drag off any key in one of eight directions writes a text of your own,
   runs a quick action or presses another key, set per key and direction on the Key flicks screen,
   where you tap the key on a live keyboard and then the direction; the key shows a small label at

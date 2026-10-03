@@ -161,6 +161,24 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 subtitle = strings[Keys.SIZE_SPACE_CURSOR_NOTE],
                 checked = preferences.spaceCursorControl,
             ) { value -> update { it.copy(spaceCursorControl = value) } }
+            SwitchRow(
+                title = strings[Keys.LAYOUT_SPACE_TRACKPOINT],
+                subtitle = strings[Keys.LAYOUT_SPACE_TRACKPOINT_NOTE],
+                checked = preferences.spaceTrackpoint,
+            ) { value -> update { it.copy(spaceTrackpoint = value) } }
+            SectionHeader(strings[Keys.LAYOUT_TRACKPOINT_SPEED])
+            DefaultableSlider(
+                label = strings.getString(Keys.LAYOUT_SPEED_PERCENT, preferences.trackpointSpeed),
+                value = preferences.trackpointSpeed.toFloat(),
+                range = KeyboardPreferences.MIN_TRACKPOINT_SPEED.toFloat()..KeyboardPreferences.MAX_TRACKPOINT_SPEED.toFloat(),
+                default = KeyboardPreferences.DEFAULT_TRACKPOINT_SPEED.toFloat(),
+                enabled = preferences.spaceTrackpoint,
+            ) { value -> update { it.copy(trackpointSpeed = value.toInt()) } }
+            SwitchRow(
+                title = strings[Keys.LAYOUT_BACKSPACE_SLIDE],
+                subtitle = strings[Keys.LAYOUT_BACKSPACE_SLIDE_NOTE],
+                checked = preferences.backspaceSlideSelects,
+            ) { value -> update { it.copy(backspaceSlideSelects = value) } }
             // The two ways a key press can be felt without being seen.
             SwitchRow(
                 title = strings[Keys.SIZE_KEY_SOUND],

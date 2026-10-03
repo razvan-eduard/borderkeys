@@ -52,7 +52,8 @@ The whole walk-through, screen by screen, is [`docs/guide.md`](docs/guide.md). I
 - **Around the keys.** A quick-action bar for what takes several gestures, extendable with
   macros of your own; themes and a theme library; particle effects on five surfaces; panels
   that search by the word under the caret; a slide on the space bar that moves the caret, by
-  character or by line, and selects with shift held; a tile in the quick settings; settings
+  character or by line, and selects with shift held, a hold on it that steers the caret like a
+  joystick, and a drag along backspace that selects for the lift to delete; a tile in the quick settings; settings
   with a search box and everything seldom needed folded away.
 - **Privacy.** No permission, no socket, no telemetry. Private mode is automatic in password
   fields and wherever an app asks for no personalised learning; the clipboard history never

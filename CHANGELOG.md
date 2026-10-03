@@ -57,6 +57,12 @@ attestations and the full commit lists are on the
   600,000, its header is sealed together with its contents, and a file claiming more than
   5,000,000 rounds is refused as damaged before any work is done. Files already written still
   open, and the screen says so while the key is being derived.
+- Hold the space bar still for a moment and it becomes a joystick: lean the finger in a direction
+  and the cursor keeps moving that way, faster the further you lean, at a speed you set. With it
+  on, holding the space bar no longer switches the layout; the globe key does. Drag left along
+  backspace to select the text behind the cursor character by character, or up and down by line,
+  and lift to delete it; a plain hold still deletes word by word. Both have switches on the
+  Layout screen.
 - Key flicks: a short drag off any key in one of eight directions writes a text of yours, runs a
   quick action or presses another key, set per key and direction on the new Key flicks screen,
   where you tap the key on a live keyboard and then the direction. The key shows a small label at

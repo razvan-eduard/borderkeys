@@ -375,6 +375,55 @@ class TypingOrchestrator(
         editor.endBatchEdit()
     }
 
+    /**
+     * A drag along backspace moved [steps] characters, negative leftwards: the selection grows
+     * from the caret, one anchor per drag; in a terminal the characters are counted for the lift.
+     */
+    fun onBackspaceSelect(steps: Int) {
+        dismissRing()
+        val editor = currentEditor() ?: return
+        if (session.terminalField) {
+            backspaceSelectedChars = (backspaceSelectedChars - steps).coerceAtLeast(0)
+            return
+        }
+        val length = editor.extractedText(0)?.text?.length ?: return
+        val next = CaretNudge.slide(
+            start = selectionStart, end = selectionEnd, previous = lastNudge,
+            steps = steps, length = length, selecting = true,
+        )
+        applyNudge(editor, next)
+    }
+
+    /** A drag along backspace moved [lines] lines: the selection grows by lines the same way. */
+    fun onBackspaceSelectLines(lines: Int) {
+        dismissRing()
+        val editor = currentEditor() ?: return
+        if (session.terminalField) {
+            return
+        }
+        val text = editor.extractedText(0)?.text ?: return
+        val next = CaretNudge.slideLines(
+            text = text, start = selectionStart, end = selectionEnd, previous = lastNudge,
+            lines = lines, selecting = true,
+        )
+        applyNudge(editor, next)
+    }
+
+    /** The lift after a drag along backspace deletes what it selected; a terminal gets that many deletes. */
+    fun onBackspaceSelectionLift() {
+        if (session.terminalField) {
+            repeat(backspaceSelectedChars) { deleteInTerminal() }
+            backspaceSelectedChars = 0
+            return
+        }
+        if (selectionEnd > selectionStart) {
+            handleDelete()
+        }
+    }
+
+    /** The characters a drag along backspace has counted in a terminal, awaiting the lift. */
+    private var backspaceSelectedChars = 0
+
     /** Moves the caret up or down by [lines], keeping its column; with shift held it selects. */
     fun onCursorNudgeLines(lines: Int) {
         dismissRing()
