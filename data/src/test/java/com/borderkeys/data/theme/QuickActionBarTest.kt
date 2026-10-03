@@ -111,10 +111,26 @@ class QuickActionBarTest {
         val ineligible = setOf(
             QuickAction.CLIPBOARD_HISTORY, QuickAction.SWITCH_LAYOUT,
             QuickAction.SETTINGS, QuickAction.COMPOSE,
+            QuickAction.PICK_KEYBOARD, QuickAction.VOICE_INPUT,
         )
         for (action in QuickAction.entries) {
             assertEquals(action.name, action !in ineligible, action.macroEligible)
         }
+    }
+
+    @Test
+    fun `the keyboard and voice actions keep their ids and stay out of macros`() {
+        assertEquals(QuickAction.PRIVATE_COPY, QuickAction.fromId(23))
+        assertEquals(QuickAction.PICK_KEYBOARD, QuickAction.fromId(24))
+        assertEquals(QuickAction.VOICE_INPUT, QuickAction.fromId(25))
+        assertEquals(
+            listOf(QuickAction.CUT.id, QuickAction.PRIVATE_COPY.id),
+            QuickActionBar.sanitisedSteps(
+                selfId = 1000,
+                steps = listOf(QuickAction.CUT.id, QuickAction.PICK_KEYBOARD.id, QuickAction.VOICE_INPUT.id, QuickAction.PRIVATE_COPY.id),
+                customActions = emptyList(),
+            ),
+        )
     }
 
     @Test

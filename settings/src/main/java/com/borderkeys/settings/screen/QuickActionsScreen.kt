@@ -47,6 +47,7 @@ import com.borderkeys.keyboard.R
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.VoiceKeyboards
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.PlacementPreview
 import com.borderkeys.settings.SectionHeader
@@ -63,6 +64,7 @@ import com.borderkeys.settings.rememberPreferencesUpdater
 @Composable
 fun QuickActionsScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val themes = remember { DataGraph.themes }
     val update = rememberPreferencesUpdater()
     // What PlacementPreview takes; only its preferences are read below.
@@ -184,10 +186,13 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULT]) }
                 }
                 Explanation(strings[Keys.QUICK_BUTTONS_NOTE])
+                val voiceKeyboards = remember { VoiceKeyboards.enabled(context) }
                 val addableBuiltins = QuickAction.entries.filterNot { builtin ->
                     chosen.any { it is QuickActionBarItem.Builtin && it.action == builtin } ||
                         // Not offered while the draft box is switched off.
-                        (builtin == QuickAction.COMPOSE && !preferences.composerEnabled)
+                        (builtin == QuickAction.COMPOSE && !preferences.composerEnabled) ||
+                        // Not offered while no enabled keyboard offers voice typing.
+                        (builtin == QuickAction.VOICE_INPUT && voiceKeyboards.isEmpty())
                 }
                 if (chosen.size < KeyboardPreferences.MAX_QUICK_ACTIONS &&
                     (addableBuiltins.isNotEmpty() || pinnableCustomActions.isNotEmpty())
@@ -497,6 +502,8 @@ internal fun iconFor(action: QuickAction): Int = when (action) {
     QuickAction.CURSOR_RIGHT -> R.drawable.bk_action_cursor_right
     QuickAction.TIMESTAMP -> R.drawable.bk_action_timestamp
     QuickAction.PRIVATE_COPY -> R.drawable.bk_action_copy_private
+    QuickAction.PICK_KEYBOARD -> R.drawable.bk_action_pick_keyboard
+    QuickAction.VOICE_INPUT -> R.drawable.bk_action_voice_input
 }
 
 internal fun labelFor(action: QuickAction): String = when (action) {
@@ -523,4 +530,6 @@ internal fun labelFor(action: QuickAction): String = when (action) {
     QuickAction.CURSOR_RIGHT -> Keys.ACTION_CURSOR_RIGHT
     QuickAction.TIMESTAMP -> Keys.ACTION_TIMESTAMP
     QuickAction.PRIVATE_COPY -> Keys.ACTION_PRIVATE_COPY
+    QuickAction.PICK_KEYBOARD -> Keys.ACTION_PICK_KEYBOARD
+    QuickAction.VOICE_INPUT -> Keys.ACTION_VOICE_INPUT
 }

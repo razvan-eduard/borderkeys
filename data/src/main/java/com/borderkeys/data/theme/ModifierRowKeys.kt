@@ -23,11 +23,13 @@ object ModifierRowKeys {
     const val PAGE_DOWN = "page_down"
     const val FORWARD_DELETE = "forward_delete"
     const val INSERT = "insert"
+    const val KEYBOARD_PICKER = "ime_picker"
+    const val VOICE = "voice"
 
     /** Every key the row can carry, in the order the editor offers them. */
     val ALL: List<String> = listOf(
         ESCAPE, TAB, CONTROL, ALT, LEFT, DOWN, UP, RIGHT,
-        HOME, END, PAGE_UP, PAGE_DOWN, FORWARD_DELETE, INSERT,
+        HOME, END, PAGE_UP, PAGE_DOWN, FORWARD_DELETE, INSERT, KEYBOARD_PICKER, VOICE,
     )
 
     /** The row as shipped. */

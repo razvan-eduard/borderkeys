@@ -113,6 +113,8 @@ object LayoutLoader {
         KeyCodes.LANGUAGE -> "🌐"
         KeyCodes.EMOJI -> "☺"
         KeyCodes.SETTINGS -> "⚙"
+        KeyCodes.KEYBOARD_PICKER -> "\u2328"
+        KeyCodes.VOICE -> "\uD83C\uDF99"
         else -> KeyboardLayout.modifierCap(code) ?: ""
     }
 }

@@ -591,6 +591,14 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `the remembered voice keyboard and its set are bounded`() {
+        val long = KeyboardPreferences(voiceKeyboardId = "x".repeat(1_000), voiceKeyboardSet = "y".repeat(10_000)).sanitised()
+        assertEquals(KeyboardPreferences.MAX_INPUT_METHOD_ID_CHARS, long.voiceKeyboardId.length)
+        assertEquals(KeyboardPreferences.MAX_INPUT_METHOD_SET_CHARS, long.voiceKeyboardSet.length)
+        assertEquals("com.a/.Voice", KeyboardPreferences(voiceKeyboardId = "com.a/.Voice").sanitised().voiceKeyboardId)
+    }
+
+    @Test
     fun `every image size step survives sanitising, and the ends are clamped`() {
         for (megabytes in KeyboardPreferences.IMAGE_SIZE_STEPS) {
             assertEquals(

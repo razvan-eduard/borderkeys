@@ -1406,6 +1406,8 @@ class BorderKeysService :
             )
             KeyCodes.LANGUAGE -> switchLanguage()
             KeyCodes.SETTINGS -> toggleQuickSettings()
+            KeyCodes.KEYBOARD_PICKER -> pickKeyboard(hold = false)
+            KeyCodes.VOICE -> voiceInput(hold = false)
             KeyCodes.EMOJI -> toggleEmojiPanel()
             KeyCodes.CONTROL -> setArmedModifiers(control = !controlArmed, alt = altArmed)
             KeyCodes.ALT -> setArmedModifiers(control = controlArmed, alt = !altArmed)
@@ -1463,7 +1465,8 @@ class BorderKeysService :
 
     /**
      * Holding a key that has no alternates: space switches the layout, shift locks, backspace
-     * deletes a word, and enter, the globe or the settings key open the quick panel.
+     * deletes a word, the globe and the picker key open the system's keyboard picker, the voice
+     * key its chooser, and enter or the settings key open the quick panel.
      */
     override fun onKeyLongPress(code: Int, keyIndex: Int): Boolean {
         if (code == ' '.code) {
@@ -1473,10 +1476,12 @@ class BorderKeysService :
         if (orchestrator.onKeyLongPress(code)) {
             return true
         }
-        if (code != KeyCodes.ENTER && code != KeyCodes.LANGUAGE && code != KeyCodes.SETTINGS) {
-            return false
+        when (code) {
+            KeyCodes.LANGUAGE, KeyCodes.KEYBOARD_PICKER -> pickKeyboard(hold = true)
+            KeyCodes.VOICE -> voiceInput(hold = true)
+            KeyCodes.ENTER, KeyCodes.SETTINGS -> toggleQuickSettings()
+            else -> return false
         }
-        toggleQuickSettings()
         return true
     }
 
@@ -1513,8 +1518,14 @@ class BorderKeysService :
             result = result.withNumberRow()
         }
         if (preferences.modifierRow) {
+            // The voice key is shown only while an enabled keyboard offers voice typing.
+            val names = if (voiceKeyboards().isEmpty()) {
+                preferences.modifierRowKeys.filterNot { it == com.borderkeys.data.theme.ModifierRowKeys.VOICE }
+            } else {
+                preferences.modifierRowKeys
+            }
             result = result.withModifierRow(
-                keys = preferences.modifierRowKeys.map { KeyCodes.named(it) },
+                keys = names.map { KeyCodes.named(it) },
                 atBottom = preferences.modifierRowPosition == KeyboardPreferences.MODIFIER_ROW_BELOW,
             )
         }
@@ -1606,6 +1617,52 @@ class BorderKeysService :
     /** Switches to this input method's next subtype, that is its next layout. */
     private fun switchLanguage() {
         switchToNextInputMethod(true)
+    }
+
+    private fun inputMethodManager(): android.view.inputmethod.InputMethodManager? =
+        getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+
+    /**
+     * The picker key: a tap goes back to the previous keyboard when the setting says so, and
+     * opens the system's picker otherwise or on [hold], or when there is no previous keyboard.
+     */
+    private fun pickKeyboard(hold: Boolean) {
+        if (!hold && preferences.pickerKeySwitchesBack && switchToPreviousInputMethod()) {
+            return
+        }
+        inputMethodManager()?.showInputMethodPicker()
+    }
+
+    /** The enabled input methods offering a voice subtype, this keyboard aside, with that subtype. */
+    private fun voiceKeyboards(): List<Pair<android.view.inputmethod.InputMethodInfo, android.view.inputmethod.InputMethodSubtype>> {
+        val manager = inputMethodManager() ?: return emptyList()
+        return manager.enabledInputMethodList
+            .filter { it.packageName != packageName }
+            .mapNotNull { method ->
+                manager.getEnabledInputMethodSubtypeList(method, true)
+                    .firstOrNull { it.mode == VOICE_SUBTYPE_MODE }
+                    ?.let { method to it }
+            }
+    }
+
+    /**
+     * The voice key: switches to the voice keyboard [VoiceInput] decides on and remembers it,
+     * or shows the system's picker when it decides on that, or when no keyboard offers voice typing.
+     */
+    private fun voiceInput(hold: Boolean) {
+        val keyboards = voiceKeyboards()
+        val available = keyboards.map { it.first.id }
+        when (val step = VoiceInput.decide(available, preferences.voiceKeyboardId, preferences.voiceKeyboardSet, hold)) {
+            is VoiceInput.Step.Switch -> {
+                val (method, subtype) = keyboards.first { it.first.id == step.id }
+                val signature = VoiceInput.signature(available)
+                if (preferences.voiceKeyboardId != step.id || preferences.voiceKeyboardSet != signature) {
+                    updatePreferences { it.copy(voiceKeyboardId = step.id, voiceKeyboardSet = signature) }
+                }
+                switchInputMethod(method.id, subtype)
+            }
+            VoiceInput.Step.Picker, VoiceInput.Step.None -> inputMethodManager()?.showInputMethodPicker()
+        }
     }
 
     // ---- the panel on the keyboard ------------------------------------------------------------
@@ -1967,6 +2024,8 @@ class BorderKeysService :
             )
             QuickAction.PASTE -> onClipboardPicked()
             QuickAction.PRIVATE_COPY -> privateCopy()
+            QuickAction.PICK_KEYBOARD -> pickKeyboard(hold = false)
+            QuickAction.VOICE_INPUT -> voiceInput(hold = false)
             QuickAction.CLIPBOARD_HISTORY -> offerClipboardHistory()
             QuickAction.SELECT_ALL -> connection.performContextMenuAction(android.R.id.selectAll)
             // The editor's own cut, then the result recorded for undo.
@@ -2572,8 +2631,13 @@ class BorderKeysService :
         const val FINAL_FLUSH_TIMEOUT_MILLIS = 2_000L
 
         /** Quick actions that do not change the field and refresh no suggestions. */
-        val NO_REFRESH_QUICK_ACTIONS =
-            setOf(QuickAction.CLIPBOARD_HISTORY, QuickAction.COMPOSE, QuickAction.PRIVATE_COPY)
+        val NO_REFRESH_QUICK_ACTIONS = setOf(
+            QuickAction.CLIPBOARD_HISTORY, QuickAction.COMPOSE, QuickAction.PRIVATE_COPY,
+            QuickAction.PICK_KEYBOARD, QuickAction.VOICE_INPUT,
+        )
+
+        /** The subtype mode of a keyboard that takes dictation. */
+        const val VOICE_SUBTYPE_MODE = "voice"
 
         /** The preferences file where [maybeDecayPersonalDictionary] records its last run. */
         const val DECAY_PREFS = "personal_dictionary_decay"
