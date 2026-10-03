@@ -5,9 +5,9 @@
 set -e
 
 # Generates the F-Droid metadata tree `fdroid update` expects for both BorderKeys flavors:
-# metadata/<applicationId>/en-US/{icon.png, summary.txt, description.txt, phoneScreenshots/*,
-# changelogs/<versionCode>.txt} -- sourced from this repo's own fastlane/ store listing plus a
-# git-log-generated changelog. Both flavors share one versionCode, so one changelog is written
+# metadata/<applicationId>/<locale>/{summary.txt, description.txt} for every listed locale, plus
+# en-US/{icon.png, phoneScreenshots/*, changelogs/<versionCode>.txt} -- sourced from this repo's
+# own fastlane/ store listing plus a git-log-generated changelog. Both flavors share one versionCode, so one changelog is written
 # under both application IDs.
 
 APPS=(com.borderkeys com.borderkeys.plus)
@@ -58,21 +58,26 @@ fi
 
 for APP_ID in "${APPS[@]}"; do
     echo "Processing $APP_ID..."
+    # Each locale's summary and description; the icon, screenshots and changelog are en-US only.
+    for LOCALE_DIR in "fastlane/$APP_ID/metadata/android"/*/; do
+        LOCALE=$(basename "$LOCALE_DIR")
+        LOCALE_TARGET="$METADATA_DIR/$APP_ID/$LOCALE"
+        mkdir -p "$LOCALE_TARGET"
+        if [ -f "$LOCALE_DIR/short_description.txt" ]; then
+            cp "$LOCALE_DIR/short_description.txt" "$LOCALE_TARGET/summary.txt"
+        fi
+        if [ -f "$LOCALE_DIR/full_description.txt" ]; then
+            cp "$LOCALE_DIR/full_description.txt" "$LOCALE_TARGET/description.txt"
+        fi
+        echo "  $LOCALE summary and description synced."
+    done
+
     FASTLANE_DIR="fastlane/$APP_ID/metadata/android/en-US"
     TARGET_DIR="$METADATA_DIR/$APP_ID/en-US"
-    mkdir -p "$TARGET_DIR"
 
     if [ -f "$FASTLANE_DIR/images/icon.png" ]; then
         cp "$FASTLANE_DIR/images/icon.png" "$TARGET_DIR/icon.png"
         echo "  Icon synced."
-    fi
-    if [ -f "$FASTLANE_DIR/short_description.txt" ]; then
-        cp "$FASTLANE_DIR/short_description.txt" "$TARGET_DIR/summary.txt"
-        echo "  Summary synced."
-    fi
-    if [ -f "$FASTLANE_DIR/full_description.txt" ]; then
-        cp "$FASTLANE_DIR/full_description.txt" "$TARGET_DIR/description.txt"
-        echo "  Description synced."
     fi
     if [ -d "$FASTLANE_DIR/images/phoneScreenshots" ]; then
         mkdir -p "$TARGET_DIR/phoneScreenshots" "$TARGET_DIR/images/phoneScreenshots"

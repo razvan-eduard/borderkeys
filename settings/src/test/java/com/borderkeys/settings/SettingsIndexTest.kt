@@ -12,7 +12,7 @@ import org.junit.Test
 
 /**
  * The generated index against the screen sources it was generated from, and the search over
- * it against the English catalogue.
+ * it against every catalogue.
  *
  * The first test is the same scan tools/gen_settings_index.py runs; a stale index fails it, with
  * the regeneration command in the message.
@@ -21,8 +21,13 @@ class SettingsIndexTest {
 
     private val screens = File("src/main/java/com/borderkeys/settings/screen")
 
-    private val english: Map<String, String> =
-        LanguageManager.parse(File("../i18n/src/main/assets/translations/en.json").readText())
+    private val translations = File("../i18n/src/main/assets/translations")
+
+    private val catalogues: Map<String, Map<String, String>> =
+        translations.listFiles()!!.filter { it.extension == "json" }
+            .associate { it.name.removeSuffix(".json") to LanguageManager.parse(it.readText()) }
+
+    private val english: Map<String, String> = catalogues.getValue("en")
 
     private fun text(key: String): String = english.getValue(key)
 
@@ -34,11 +39,50 @@ class SettingsIndexTest {
     }
 
     @Test
-    fun `every indexed title is in the catalogue`() {
-        for (entry in SettingsIndex.entries) {
-            assertTrue("${entry.key} is not in en.json", entry.key in english)
-            entry.cardKey?.let { assertTrue("$it is not in en.json", it in english) }
+    fun `every indexed title is in every catalogue`() {
+        for ((language, catalogue) in catalogues) {
+            for (entry in SettingsIndex.entries) {
+                assertTrue("${entry.key} is not in $language.json", entry.key in catalogue)
+                entry.cardKey?.let { assertTrue("$it is not in $language.json", it in catalogue) }
+            }
         }
+    }
+
+    @Test
+    fun `every screen is found by its own title in every catalogue`() {
+        for ((language, catalogue) in catalogues) {
+            for (screen in Screen.entries) {
+                if (screen == Screen.Home) continue
+                val title = SettingsSearch.plain(catalogue.getValue(screen.titleKey))
+                val matches = SettingsSearch.find(title, catalogue::getValue, limit = Int.MAX_VALUE)
+                assertTrue(
+                    "$language: '$title' does not find ${screen.name}",
+                    matches.any { it.screen == screen && it.place == null },
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `a query typed without accents finds the accented title`() {
+        val romanian = catalogues.getValue("ro")
+        val title = SettingsSearch.plain(romanian.getValue(Keys.SCREEN_DICTIONARY_AND_HEATMAP))
+        val bare = java.text.Normalizer.normalize(title, java.text.Normalizer.Form.NFD)
+            .filter { Character.getType(it) != Character.NON_SPACING_MARK.toInt() }
+        assertTrue(title != bare)
+        assertTrue(SettingsSearch.find(bare, romanian::getValue).any { it.screen == Screen.Dictionary && it.place == null })
+    }
+
+    @Test
+    fun `folding drops accents, case and width and joins the kana`() {
+        assertEquals("stergere", SettingsSearch.fold("Ștergere"))
+        assertEquals("stergere", SettingsSearch.fold("Ştergere"))
+        assertEquals("grosse", SettingsSearch.fold("Größe"))
+        assertEquals("istanbul", SettingsSearch.fold("İstanbul"))
+        assertEquals("istanbul", SettingsSearch.fold("ıstanbul"))
+        assertEquals("かたかな", SettingsSearch.fold("カタカナ"))
+        assertEquals("かたかな", SettingsSearch.fold("ｶﾀｶﾅ"))
+        assertEquals("abc", SettingsSearch.fold("ＡＢＣ"))
     }
 
     @Test

@@ -112,7 +112,7 @@ the build if that ever changes.
 | `:effects`  | The particle effects, drawn on a `Canvas` by the keyboard and by the settings preview alike. |
 | `:settings` | Every line of Compose in the repository.                          |
 | `:assist`   | Local text assistant, own process, `plus` flavor only.            |
-| `:i18n`     | Every sentence the app shows, in six languages, as JSON — see [`docs/translations.md`](docs/translations.md). |
+| `:i18n`     | Every sentence the app shows, in twenty-two languages, as JSON — see [`docs/translations.md`](docs/translations.md). |
 
 ## Flavors
 

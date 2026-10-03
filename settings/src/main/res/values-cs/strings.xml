@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Czech translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">Napsat koncept v BorderKeys</string>
+    <string name="process_text_label_correct">Opravit v BorderKeys</string>
+    <string name="process_text_label_shorten">Zkrátit v BorderKeys</string>
+    <string name="process_text_label_summarise">Shrnout v BorderKeys</string>
+    <string name="process_text_label_custom">Vlastní akce v BorderKeys</string>
+    <string name="process_text_label_private_copy">Uložit soukromě v BorderKeys</string>
+
+</resources>

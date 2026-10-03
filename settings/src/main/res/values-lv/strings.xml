@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Latvian translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">Melnraksts ar BorderKeys</string>
+    <string name="process_text_label_correct">Labot ar BorderKeys</string>
+    <string name="process_text_label_shorten">Saīsināt ar BorderKeys</string>
+    <string name="process_text_label_summarise">Apkopot ar BorderKeys</string>
+    <string name="process_text_label_custom">Pielāgota darbība ar BorderKeys</string>
+    <string name="process_text_label_private_copy">Saglabāt privāti ar BorderKeys</string>
+
+</resources>

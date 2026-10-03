@@ -38,7 +38,7 @@ that allocate, and what lets most of the logic be tested on a JVM with no device
 | `:data` | Room + SQLCipher. The durable copy of everything learned (words, phrases, the heatmap's totals), the clipboard, language packs, themes, drafts. |
 | `:effects` | The particle effects, drawn on a `Canvas` by the keyboard and by the settings preview alike. |
 | `:settings` | The settings application, Jetpack Compose. Never on the typing path. |
-| `:i18n` | Every string the user can read, as JSON catalogues in six languages. No hardcoded text anywhere else. |
+| `:i18n` | Every string the user can read, as JSON catalogues in twenty-two languages. No hardcoded text anywhere else. |
 | `:assist` | The optional on-device assistant, vendoring `llama.cpp`. Entirely separate from prediction. |
 | `:app` | The two flavours, `core` and `plus`, and nothing else. |
 

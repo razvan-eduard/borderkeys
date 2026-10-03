@@ -19,7 +19,10 @@ class NoHardcodedTextTest {
         "SectionHeader", "Explanation", "Text", "SettingRow", "ColourRow", "ThemeSlider",
         "ModeChip", "SpeedChip",
     )
-    private val named = listOf("title", "subtitle", "label", "text", "description", "summary")
+    private val named = listOf(
+        "title", "subtitle", "label", "text", "description", "summary", "contentDescription",
+        "placeholder", "hint",
+    )
 
     @Test
     fun `no user-facing literal is left in a settings source`() {

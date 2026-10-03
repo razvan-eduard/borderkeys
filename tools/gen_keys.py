@@ -29,7 +29,7 @@ object Keys {
 
 def main():
     keys = sorted(json.loads(CATALOGUE.read_text(encoding="utf-8")))
-    body = "".join(f'    const val {k.upper()} = "{k}"\n' for k in keys)
+    body = "".join(f'    const val {k.upper().replace("-", "_")} = "{k}"\n' for k in keys)
     OUT.write_text(HEADER + body + "}\n", encoding="utf-8")
     print(f"{len(keys)} keys -> {OUT}")
 

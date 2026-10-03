@@ -30,25 +30,38 @@ object LanguageResolution {
             return override
         }
         for (tag in preferred) {
-            val normalized = normalize(tag)
-            if (normalized in available) {
-                return normalized
-            }
-            val base = normalized.substringBefore('-')
-            if (base in available) {
-                return base
-            }
+            candidates(tag).firstOrNull { it in available }?.let { return it }
         }
         return Strings.Languages.DEFAULT
     }
 
+    /** Whether [language] is written right to left. */
+    fun isRightToLeft(language: String): Boolean =
+        candidates(language).lastOrNull() in RIGHT_TO_LEFT
+
     /**
-     * Lowercases the language and drops everything after the region, so the tags a phone hands
-     * out (`ro-RO`, `ro_RO`, `en-Latn-US`) compare against file names.
+     * The codes a tag may be served by, best first: the language with its region, then the bare
+     * language. Simplified Chinese, by script or region, is `zh-cn`; Traditional has no fallback.
      */
-    private fun normalize(tag: String): String {
-        val cleaned = tag.replace('_', '-').lowercase()
-        val parts = cleaned.split('-')
-        return if (parts.size <= 1) parts[0] else parts[0] + "-" + parts[parts.size - 1]
+    private fun candidates(tag: String): List<String> {
+        val parts = tag.replace('_', '-').lowercase().split('-').filter { it.isNotEmpty() }
+        if (parts.isEmpty()) return emptyList()
+        val language = ALIASES[parts[0]] ?: parts[0]
+        val script = parts.drop(1).firstOrNull { it.length == 4 }
+        val region = parts.drop(1).lastOrNull { it.length == 2 || it.length == 3 && it.all(Char::isDigit) }
+        if (language == CHINESE) {
+            val traditional = script == "hant" || script == null && region in TRADITIONAL_REGIONS
+            return if (traditional) listOfNotNull(region?.let { "$CHINESE-$it" }) else listOf(SIMPLIFIED_CHINESE)
+        }
+        return listOfNotNull(region?.let { "$language-$it" }, language)
     }
+
+    private const val CHINESE = "zh"
+    private const val SIMPLIFIED_CHINESE = "zh-cn"
+    private val TRADITIONAL_REGIONS = setOf("tw", "hk", "mo")
+
+    /** Legacy codes Android still hands out, by the code the catalogues use. */
+    private val ALIASES = mapOf("in" to "id", "iw" to "he", "ji" to "yi", "tl" to "fil")
+
+    private val RIGHT_TO_LEFT = setOf("ar", "fa", "he", "ur", "ps", "sd", "ug", "yi", "dv", "ckb")
 }

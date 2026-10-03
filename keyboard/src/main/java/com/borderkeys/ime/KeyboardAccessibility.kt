@@ -262,7 +262,7 @@ class KeyboardAccessibility(
         }
         val alternates = geometry.altLength[index]
         return if (alternates > 0) {
-            strings.getString(Keys.KEY_HOLD_FOR_MORE, label, alternates)
+            strings.counted(Keys.KEY_HOLD_FOR_MORE, alternates, label, alternates)
         } else {
             label
         }

@@ -1,0 +1,1 @@
+BorderKeys cu un asistent de text care rulează pe dispozitiv

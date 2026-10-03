@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Korean translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">BorderKeys로 초안 작성</string>
+    <string name="process_text_label_correct">BorderKeys로 수정</string>
+    <string name="process_text_label_shorten">BorderKeys로 줄이기</string>
+    <string name="process_text_label_summarise">BorderKeys로 요약</string>
+    <string name="process_text_label_custom">BorderKeys로 사용자 지정 작업</string>
+    <string name="process_text_label_private_copy">BorderKeys에 비공개로 보관</string>
+
+</resources>

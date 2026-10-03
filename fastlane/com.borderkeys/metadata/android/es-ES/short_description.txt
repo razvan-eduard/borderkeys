@@ -1,0 +1,1 @@
+Teclado sin permisos y sin acceso a la red

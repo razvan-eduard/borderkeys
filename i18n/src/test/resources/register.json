@@ -1,0 +1,157 @@
+{
+  "cs": {
+    "register": "formal",
+    "forbidden": [
+      "(?i)\\b(tebe|tobě|tebou|tvůj|tvoje|tvá|tvé|tvého|tvému|tvým|tvých|tvými|tvou|tvoji)\\b",
+      "\\b(Klepni|Vyber|Zapni|Vypni|Otevři|Zadej|Smaž|Ulož|Zkus|Podrž|Přetáhni|Nastav|Přidej|Odeber|Zvol|Napiš|Posuň|Přejeď)\\b"
+    ]
+  },
+  "de": {
+    "register": "informal",
+    "forbidden": [
+      "(?<![.!?:;—]\\s)(?<!^)\\bSie\\b",
+      "(?<![.!?:;—]\\s)(?<!^)\\b(Ihnen|Ihre[mnrs]?|Ihr)\\b",
+      "\\bIhnen\\b"
+    ]
+  },
+  "es": {
+    "register": "informal",
+    "forbidden": [
+      "\\b[Uu]sted(es)?\\b",
+      "\\b(Seleccione|Mantenga|Pulse|Elija|Escriba|Introduzca|Pruebe|Abra|Compruebe|Elimine|Borre|Deslice|Utilice|Vuelva|Haga|Desea|Instale|Importe|Guarde|Asegúrese|Espere|Arrastre)\\b"
+    ]
+  },
+  "fa": {
+    "register": "formal",
+    "forbidden": [
+      "(?<!\\S)(تو|ترا|تورا)(?!\\S)",
+      "(?<!\\S)(کن|بزن|بکش|بگذار|ببین|بنویس|بردار|برو|بده|بخوان|بیاور)(?![^\\s،.؛:!؟])"
+    ]
+  },
+  "fil": {
+    "register": "informal",
+    "forbidden": [
+      "(?i)\\b(po|ninyo|kayo|inyo|inyong|niyo|kayong)\\b"
+    ]
+  },
+  "fr": {
+    "register": "formal",
+    "forbidden": [
+      "\\b(tu|toi|ta|tes|te)\\b",
+      "\\bt['’]"
+    ],
+    "exceptKeys": [
+      "feature_sample_.*"
+    ]
+  },
+  "hu": {
+    "register": "formal",
+    "forbidden": [
+      "(?i)\\b(te|téged|neked|veled|tőled|nálad|rólad|hozzád|általad|tiéd|tiéid|benned|belőled)\\b",
+      "(?i)\\b(koppints|válassz|kapcsold|nyisd|húzd|írd|tartsd|próbáld|töröld|mentsd|csúsztass|kapcsolj|nyomd|add)\\b"
+    ]
+  },
+  "id": {
+    "register": "formal",
+    "forbidden": [
+      "(?i)\\b(kamu|kau|engkau|dikau|dirimu|milikmu|kalian)\\b"
+    ]
+  },
+  "it": {
+    "register": "informal",
+    "forbidden": [
+      "(?<![.!?:;]\\s)(?<!^)\\b(Lei|Suo|Sua|Suoi|Sue)\\b",
+      "\\b(Tenga|Prema|Selezioni|Scelga|Scriva|Inserisca|Provi|Apra|Controlli|Elimini|Utilizzi|Faccia|Desidera|Installi|Importi|Salvi|Vada|Si assicuri|Attenda|Incolli|Trascini|Rilasci)\\b"
+    ]
+  },
+  "ja": {
+    "register": "formal",
+    "forbidden": [
+      "(?<![まで])(だ|である|する|した|ない|いる|できる|なる|ある)。",
+      "(君|お前|あんた)"
+    ]
+  },
+  "ko": {
+    "register": "formal",
+    "forbidden": [
+      "(?<![가-힣])(너|너의|네가|니가|너를|너에게|당신)(?![가-힣])",
+      "(?<!니)다\\.(?!\\S)"
+    ]
+  },
+  "lv": {
+    "register": "formal",
+    "forbidden": [
+      "(?i)\\b(tu|tev|tevi|tevis|tavs|tava|tavu|tavi|tavas|tavā|tavam|tavai|taviem|tavām|tavos)\\b",
+      "\\b(Pieskaries|Izvēlies|Turi|Velc|Ievadi|Mēģini|Raksti|Dzēs)\\b"
+    ]
+  },
+  "nl": {
+    "register": "informal",
+    "forbidden": [
+      "\\b(u|uw|U|Uw)\\b"
+    ],
+    "exceptKeys": [
+      "clipboard_h_min"
+    ]
+  },
+  "pl": {
+    "register": "informal",
+    "forbidden": [
+      "\\b(Pan|Pani|Pana|Panu|Panem|Panią|Państwo|Państwa|Państwu)\\b"
+    ]
+  },
+  "pt": {
+    "register": "formal",
+    "forbidden": [
+      "(?i)\\b(tu|teu|tua|teus|tuas|contigo|ti)\\b"
+    ]
+  },
+  "ro": {
+    "register": "informal",
+    "forbidden": [
+      "\\b(dumneavoastră|dvs)\\b",
+      "\\bați\\b",
+      "\\b\\w+(ați|eți)\\b",
+      "\\b(porniți|opriți|doriți|citiți|găsiți|primiți|reporniți|definiți|construiți)\\b"
+    ],
+    "allowedWords": [
+      "\\w*octeți",
+      "săgeți",
+      "candidați",
+      "rulați",
+      "repeți"
+    ]
+  },
+  "ru": {
+    "register": "formal",
+    "forbidden": [
+      "(?i)\\b(ты|тебя|тебе|тобой|твой|твоя|твоё|твое|твои|твоего|твоей|твоих|твоим|твоими|твоему|твою)\\b",
+      "\\b(Нажми|Выбери|Открой|Включи|Выключи|Введи|Удали|Сохрани|Попробуй|Проведи|Удерживай|Коснись|Проверь|Перетащи|Добавь|Убери|Сдвинь)\\b"
+    ]
+  },
+  "tr": {
+    "register": "formal",
+    "forbidden": [
+      "(?i)\\b(sen|seni|sana|senin|sende|senden|seninle|kendin)\\b"
+    ]
+  },
+  "uk": {
+    "register": "formal",
+    "forbidden": [
+      "(?i)\\b(ти|тебе|тобі|тобою|твій|твоя|твоє|твої|твого|твоєї|твоїх|твоїм|твоїми|твоєму|твою)\\b",
+      "\\b(Натисни|Вибери|Відкрий|Увімкни|Вимкни|Введи|Видали|Збережи|Спробуй|Проведи|Утримуй|Торкнися|Перевір|Перетягни|Додай|Прибери)\\b"
+    ]
+  },
+  "vi": {
+    "register": "neutral",
+    "forbidden": [
+      "(?i)\\b(quý vị|mày|cậu|tao)\\b"
+    ]
+  },
+  "zh-cn": {
+    "register": "informal",
+    "forbidden": [
+      "您"
+    ]
+  }
+}

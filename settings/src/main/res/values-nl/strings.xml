@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Dutch translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">Concept maken met BorderKeys</string>
+    <string name="process_text_label_correct">Corrigeren met BorderKeys</string>
+    <string name="process_text_label_shorten">Inkorten met BorderKeys</string>
+    <string name="process_text_label_summarise">Samenvatten met BorderKeys</string>
+    <string name="process_text_label_custom">Eigen actie met BorderKeys</string>
+    <string name="process_text_label_private_copy">Privé bewaren met BorderKeys</string>
+
+</resources>

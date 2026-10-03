@@ -155,7 +155,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
 
         SettingsSectionCard(strings[Keys.CLIPBOARD_EXCLUDED_TITLE]) {
             Explanation(strings[Keys.CLIPBOARD_EXCLUDED_NOTE])
-            Explanation(strings.getString(Keys.CLIPBOARD_EXCLUDED_KNOWN, ClipboardExclusions.KNOWN.size))
+            Explanation(strings.counted(Keys.CLIPBOARD_EXCLUDED_KNOWN, ClipboardExclusions.KNOWN.size))
             PackageListEditor(preferences.clipboardExcludedPackages, strings[Keys.CLIPBOARD_EXCLUDED_PACKAGE]) { change ->
                 update { it.copy(clipboardExcludedPackages = change(it.clipboardExcludedPackages)) }
             }
@@ -164,7 +164,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
         SettingsSectionCard(strings[Keys.CLIPBOARD_RETENTION_TITLE]) {
             SectionHeader(strings[Keys.CLIPBOARD_HOW_MANY_ITEMS])
             StepSlider(
-                label = strings.getString(
+                label = strings.counted(
                     Keys.CLIPBOARD_ITEMS, preferences.clipboardMaxEntries,
                 ),
                 steps = KeyboardPreferences.HISTORY_SIZE_STEPS,
@@ -300,18 +300,18 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
 private fun formatRetention(strings: LanguageManager, minutes: Int): String {
     val day = 24 * 60
     return when {
-        minutes < 60 -> strings.getString(Keys.CLIPBOARD_MINUTES, minutes)
+        minutes < 60 -> strings.counted(Keys.CLIPBOARD_MINUTES, minutes)
         minutes == 60 -> strings[Keys.CLIPBOARD_1_HOUR]
         minutes < day -> if (minutes % 60 == 0) {
-            strings.getString(Keys.CLIPBOARD_HOURS, minutes / 60)
+            strings.counted(Keys.CLIPBOARD_HOURS, minutes / 60)
         } else {
             strings.getString(Keys.CLIPBOARD_H_MIN, minutes / 60, minutes % 60)
         }
         minutes == day -> strings[Keys.CLIPBOARD_1_DAY]
         minutes == 7 * day -> strings[Keys.CLIPBOARD_1_WEEK]
         minutes == 30 * day -> strings[Keys.CLIPBOARD_1_MONTH]
-        minutes % (7 * day) == 0 -> strings.getString(Keys.CLIPBOARD_WEEKS, minutes / (7 * day))
-        else -> strings.getString(Keys.CLIPBOARD_DAYS, minutes / day)
+        minutes % (7 * day) == 0 -> strings.counted(Keys.CLIPBOARD_WEEKS, minutes / (7 * day))
+        else -> strings.counted(Keys.CLIPBOARD_DAYS, minutes / day)
     }
 }
 

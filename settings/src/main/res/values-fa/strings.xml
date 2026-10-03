@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Persian translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">پیش‌نویس با BorderKeys</string>
+    <string name="process_text_label_correct">اصلاح با BorderKeys</string>
+    <string name="process_text_label_shorten">کوتاه کردن با BorderKeys</string>
+    <string name="process_text_label_summarise">خلاصه کردن با BorderKeys</string>
+    <string name="process_text_label_custom">کنش دلخواه با BorderKeys</string>
+    <string name="process_text_label_private_copy">نگه‌داری خصوصی با BorderKeys</string>
+
+</resources>

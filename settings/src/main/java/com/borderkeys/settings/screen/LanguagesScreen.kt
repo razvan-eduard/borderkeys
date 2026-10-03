@@ -117,7 +117,7 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
             }
             if (atLimit) {
                 Explanation(
-                    strings.getString(Keys.LANGUAGES_LIMIT_REACHED, LanguagePackRepository.MAX_ENABLED),
+                    strings.counted(Keys.LANGUAGES_LIMIT_REACHED, LanguagePackRepository.MAX_ENABLED),
                 )
             }
             // Once, under the packs.
@@ -160,7 +160,7 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
                 for (candidate in installable) {
                     SettingRow(
                         title = candidate.displayName,
-                        subtitle = strings.getString(Keys.LANGUAGES_WORDS_WRITTEN_IN_THIS_REPOSITORY_A, candidate.wordCount),
+                        subtitle = strings.counted(Keys.LANGUAGES_WORDS_WRITTEN_IN_THIS_REPOSITORY_A, candidate.wordCount),
                         trailing = {
                             TextButton(
                                 enabled = !importing,
@@ -271,8 +271,9 @@ private suspend fun importPack(
                     licenseNote = strings[Keys.LANGUAGES_NOT_RECORDED_SET_BY_WHOEVER_BUILT],
                 ),
             )
-            val added = strings.getString(
+            val added = strings.counted(
                 Keys.LANGUAGES_ADDED_WORDS_FOR_2,
+                info.wordCount,
                 info.wordCount,
                 info.tag,
                 pack.sha256.take(16),
@@ -283,7 +284,7 @@ private suspend fun importPack(
 }
 
 /** The language tag as a person would read it, falling back to the tag itself. */
-private fun displayNameFor(tag: String): String {
+internal fun displayNameFor(tag: String): String {
     val locale = java.util.Locale.forLanguageTag(tag)
     val name = locale.getDisplayName(java.util.Locale.getDefault())
     return if (name.isBlank() || name == tag) tag else name
@@ -340,7 +341,7 @@ private suspend fun installBundled(
                     licenseNote = strings[Keys.LANGUAGES_CC_BY_LEIPZIG],
                 ),
             )
-            val added = strings.getString(Keys.LANGUAGES_ADDED_WORDS_FOR, info.wordCount, info.tag)
+            val added = strings.counted(Keys.LANGUAGES_ADDED_WORDS_FOR, info.wordCount, info.wordCount, info.tag)
             if (room) added else added + " " + switchedOffNote(strings)
         }
     }
@@ -351,7 +352,7 @@ private suspend fun installBundled(
  * [LanguagePackRepository.MAX_ENABLED] packs were on.
  */
 private fun switchedOffNote(strings: LanguageManager): String =
-    strings.getString(Keys.LANGUAGES_ADDED_SWITCHED_OFF, LanguagePackRepository.MAX_ENABLED)
+    strings.counted(Keys.LANGUAGES_ADDED_SWITCHED_OFF, LanguagePackRepository.MAX_ENABLED)
 
 /**
  * One installed pack. [canSwitchOn] is false once [LanguagePackRepository.MAX_ENABLED] packs are
@@ -372,7 +373,7 @@ private fun PackRow(
         SettingRow(
             title = strings.getString(Keys.LANGUAGES_TEXT, pack.displayName, pack.tag),
             subtitle = buildString {
-                append(strings.getString(Keys.LANGUAGES_WORDS_KB, pack.wordCount, pack.sizeBytes / 1024))
+                append(strings.counted(Keys.LANGUAGES_WORDS_KB, pack.wordCount, pack.wordCount, pack.sizeBytes / 1024))
                 append(" · ").append(pack.licenseNote.ifEmpty { strings[Keys.LANGUAGES_LICENCE_NOT_RECORDED] })
                 if (pack.integrityFailedAt != null) {
                     append(strings[Keys.LANGUAGES_SWITCHED_ITSELF_OFF_THE_FILE_NO])

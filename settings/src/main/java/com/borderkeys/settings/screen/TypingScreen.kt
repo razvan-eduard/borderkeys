@@ -260,7 +260,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 )
                 DefaultableSlider(
-                    label = strings.getString(Keys.CORRECTIONS_LETTERS_OR_MORE, preferences.minCorrectionLength),
+                    label = strings.counted(Keys.CORRECTIONS_LETTERS_OR_MORE, preferences.minCorrectionLength),
                     value = preferences.minCorrectionLength.toFloat(),
                     range = KeyboardPreferences.MIN_CORRECTION_LENGTH.toFloat()..
                         KeyboardPreferences.MAX_CORRECTION_LENGTH.toFloat(),
@@ -553,7 +553,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 // How many words, how a pause is detected, and what closes the ring.
                 AdvancedSection(strings[Keys.RADIAL_ADVANCED_NOTE]) {
                     DefaultableSlider(
-                        label = strings.getString(Keys.RADIAL_COUNT, preferences.radialSuggestionCount),
+                        label = strings.counted(Keys.RADIAL_COUNT, preferences.radialSuggestionCount),
                         value = preferences.radialSuggestionCount.toFloat(),
                         range = KeyboardPreferences.MIN_RADIAL_SUGGESTIONS.toFloat()..
                             KeyboardPreferences.MAX_RADIAL_SUGGESTIONS.toFloat(),
@@ -577,7 +577,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                         update { it.copy(radialPauseDwellMillis = (value * 1000f).roundToInt()) }
                     }
                     DefaultableSlider(
-                        label = strings.getString(
+                        label = strings.counted(
                             Keys.RADIAL_MIN_PATH_LETTERS,
                             "%.1f".format(preferences.radialMinPathLetters),
                         ),
@@ -637,7 +637,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
 
         SettingsSectionCard(strings[Keys.TERMINAL_TITLE]) {
             Explanation(strings[Keys.TERMINAL_NOTE])
-            Explanation(strings.getString(Keys.TERMINAL_KNOWN, TerminalApps.KNOWN.size))
+            Explanation(strings.counted(Keys.TERMINAL_KNOWN, TerminalApps.KNOWN.size))
             PackageListEditor(preferences.terminalPackages, strings[Keys.TERMINAL_PACKAGE]) { change ->
                 update { it.copy(terminalPackages = change(it.terminalPackages)) }
             }

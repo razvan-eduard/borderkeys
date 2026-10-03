@@ -1656,6 +1656,7 @@ class BorderKeysService :
         view.radialSuggestionMenu.rightToLeft = alphabeticLayout.rightToLeft
         view.emojiPanel.rightToLeft = alphabeticLayout.rightToLeft
         view.clipboardPanel.rightToLeft = alphabeticLayout.rightToLeft
+        view.quickActions.rightToLeft = alphabeticLayout.rightToLeft
     }
 
     /** The page a field asks for: the numeric keypad for a number or phone field, when set to. */

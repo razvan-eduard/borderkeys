@@ -148,7 +148,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                 }
                 SettingRow(
                     title = if (touchTaps > 0) {
-                        strings.getString(Keys.DICTIONARY_HEATMAP_TAPS, touchTaps)
+                        strings.counted(Keys.DICTIONARY_HEATMAP_TAPS, touchTaps)
                     } else {
                         strings[Keys.DICTIONARY_HEATMAP_NOTHING_YET]
                     },
@@ -211,7 +211,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                     )
                     DefaultableSlider(
-                        label = strings.getString(
+                        label = strings.counted(
                             Keys.DICTIONARY_HEATMAP_TAPS_COUNT,
                             preferences.heatmapMinTaps,
                         ),
@@ -231,7 +231,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                     )
                     DefaultableSlider(
-                        label = strings.getString(
+                        label = strings.counted(
                             Keys.DICTIONARY_HEATMAP_DAYS,
                             preferences.heatmapHalfLifeDays,
                         ),
@@ -366,7 +366,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
     confirmingWordLimit?.let { limit ->
         ConfirmDialog(
             title = strings[Keys.DICTIONARY_WORDS_KEPT_TRIM_TITLE],
-            text = strings.getString(Keys.DICTIONARY_WORDS_KEPT_TRIM_TEXT, wordCount - limit),
+            text = strings.counted(Keys.DICTIONARY_WORDS_KEPT_TRIM_TEXT, wordCount - limit),
             confirmLabel = strings[Keys.DICTIONARY_WORDS_KEPT_TRIM_CONFIRM],
             onDismiss = {
                 confirmingWordLimit = null

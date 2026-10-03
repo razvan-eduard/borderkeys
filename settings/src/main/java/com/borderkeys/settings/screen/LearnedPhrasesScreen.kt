@@ -90,7 +90,7 @@ fun LearnedPhrasesScreen(modifier: Modifier = Modifier) {
         items(listed, key = { it.words.joinToString(KEY_SEPARATOR) }) { phrase ->
             SettingRow(
                 title = textOf(phrase, strings),
-                subtitle = strings.getString(Keys.DICTIONARY_PHRASE_USED, phrase.count),
+                subtitle = strings.counted(Keys.DICTIONARY_PHRASE_USED, phrase.count),
                 trailing = {
                     TextButton(onClick = { scope.launch { repository.forgetPhrase(phrase) } }) {
                         Text(strings[Keys.DICTIONARY_DELETE])

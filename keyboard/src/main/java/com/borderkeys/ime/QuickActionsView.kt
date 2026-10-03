@@ -210,10 +210,23 @@ class QuickActionsView(
     private fun shownCount(): Int =
         if (collapsible && !expanded) 1 else items.size
 
+    /** Whether the letters on the keys read right to left; an icon drawn to mirror then does. */
+    var rightToLeft: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                resolveIcons()
+                invalidate()
+            }
+        }
+
     private fun resolveIcons() {
+        val direction = if (rightToLeft) LAYOUT_DIRECTION_RTL else LAYOUT_DIRECTION_LTR
         for (index in icons.indices) {
             icons[index] = if (index < items.size) {
-                ContextCompat.getDrawable(context, iconFor(items[index]))
+                ContextCompat.getDrawable(context, iconFor(items[index]))?.also {
+                    androidx.core.graphics.drawable.DrawableCompat.setLayoutDirection(it, direction)
+                }
             } else {
                 null
             }
