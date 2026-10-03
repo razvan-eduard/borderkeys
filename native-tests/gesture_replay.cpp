@@ -56,6 +56,31 @@ struct Layout {
     float keyHeight = 0.f;
 };
 
+/** The code point [text] starts with, as UTF-8; the first byte when it is not valid UTF-8. */
+int32_t firstCodePoint(const char* text) {
+    const auto* bytes = reinterpret_cast<const unsigned char*>(text);
+    const unsigned char lead = bytes[0];
+    int extra = 0;
+    int32_t value = lead;
+    if ((lead & 0xE0u) == 0xC0u) {
+        extra = 1;
+        value = lead & 0x1Fu;
+    } else if ((lead & 0xF0u) == 0xE0u) {
+        extra = 2;
+        value = lead & 0x0Fu;
+    } else if ((lead & 0xF8u) == 0xF0u) {
+        extra = 3;
+        value = lead & 0x07u;
+    }
+    for (int i = 1; i <= extra; ++i) {
+        if ((bytes[i] & 0xC0u) != 0x80u) {
+            return lead;
+        }
+        value = (value << 6) | (bytes[i] & 0x3Fu);
+    }
+    return value;
+}
+
 bool loadLayout(const char* path, Layout* layout) {
     std::FILE* const file = std::fopen(path, "r");
     if (file == nullptr) {
@@ -75,7 +100,7 @@ bool loadLayout(const char* path, Layout* layout) {
             continue;
         }
         if (std::sscanf(line, "%15s %f %f", code, &a, &b) == 3 && layout->count < 64) {
-            layout->codes[layout->count] = static_cast<unsigned char>(code[0]);
+            layout->codes[layout->count] = firstCodePoint(code);
             layout->xs[layout->count] = a;
             layout->ys[layout->count] = b;
             ++layout->count;

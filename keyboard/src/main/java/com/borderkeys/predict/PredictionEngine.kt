@@ -89,6 +89,8 @@ class PredictionEngine(
     private val geometryCodes = IntArray(MAX_KEYS)
     private val geometryX = FloatArray(MAX_KEYS)
     private val geometryY = FloatArray(MAX_KEYS)
+    private val aliasCodes = IntArray(MAX_ALIAS_PAIRS)
+    private val aliasBases = IntArray(MAX_ALIAS_PAIRS)
 
     // A copy of the view's capture buffers, taken before the gesture crosses threads.
     private val gestureX = FloatArray(MAX_GESTURE_POINTS)
@@ -227,16 +229,28 @@ class PredictionEngine(
         }
     }
 
-    /** Pushes the key centres and the key size to the engine. */
-    fun setKeyGeometry(count: Int, keyWidth: Float, keyHeight: Float, fill: (IntArray, FloatArray, FloatArray) -> Int) {
+    /**
+     * Pushes the key centres and the key size to the engine, and the long-press letters a swipe
+     * may reach, from [aliases] (a letter and its key's code at the same index).
+     */
+    fun setKeyGeometry(
+        count: Int,
+        keyWidth: Float,
+        keyHeight: Float,
+        aliases: (IntArray, IntArray) -> Int = { _, _ -> 0 },
+        fill: (IntArray, FloatArray, FloatArray) -> Int,
+    ) {
         val written = fill(geometryCodes, geometryX, geometryY)
         if (written <= 0 || keyWidth <= 0f || keyHeight <= 0f) {
             return
         }
+        val aliasCount = aliases(aliasCodes, aliasBases)
+        val codes = aliasCodes.copyOf(aliasCount)
+        val bases = aliasBases.copyOf(aliasCount)
         worker.post {
             withHandle(Unit) { current ->
                 NativePredictor.nativeSetKeyGeometry(
-                    current, geometryCodes, geometryX, geometryY, keyWidth, keyHeight,
+                    current, geometryCodes, geometryX, geometryY, keyWidth, keyHeight, codes, bases,
                 )
             }
         }
@@ -418,24 +432,35 @@ class PredictionEngine(
     }
 
     /**
-     * Loads tier B's weights from a `.bkw` file's bytes and warms the model, then reports on the
-     * main thread whether they loaded. Always false in a `core` build.
+     * Makes [script]'s model the one the layout decodes with, loading it first from [read] when
+     * it is not held, and warms it; reports on the main thread whether it is ready. A null
+     * [script] decodes with tier A. Always false in a `core` build.
      */
-    fun loadSwipeWeights(bytes: ByteArray, onResult: (Boolean) -> Unit) {
+    fun useSwipeModel(script: Int?, read: () -> ByteArray?, onResult: (Boolean) -> Unit) {
         worker.post {
-            val loaded = withHandle(false) { current ->
-                if (!NativePredictor.nativeLoadSwipeWeights(current, bytes)) {
+            val ready = withHandle(false) { current ->
+                if (script == null) {
+                    NativePredictor.nativeSelectSwipeScript(current, NO_SWIPE_SCRIPT)
+                    return@withHandle false
+                }
+                NativePredictor.nativeSelectSwipeScript(current, script)
+                if (NativePredictor.nativeHasSwipeModel(current, script)) {
+                    return@withHandle true
+                }
+                val bytes = read() ?: return@withHandle false
+                if (!NativePredictor.nativeLoadSwipeWeights(current, script, bytes)) {
                     false
                 } else {
+                    NativePredictor.nativeSelectSwipeScript(current, script)
                     NativePredictor.nativeWarmSwipeModel(current)
                     true
                 }
             }
-            mainHandler.post { onResult(loaded) }
+            mainHandler.post { onResult(ready) }
         }
     }
 
-    /** Switches tier B on or off. Off frees its weights; on again needs [loadSwipeWeights]. */
+    /** Switches tier B on or off. Off frees its weights; on again needs [useSwipeModel]. */
     fun setSwipeModelEnabled(enabled: Boolean) {
         worker.post {
             withHandle(Unit) { current ->
@@ -742,9 +767,14 @@ class PredictionEngine(
     }
 
     companion object {
+        /** The script id that decodes with tier A. */
+        const val NO_SWIPE_SCRIPT = -1
+
         /** Matches Engine::kMaxCandidates in engine.hpp. */
         const val MAX_RESULTS = 16
         private const val MAX_KEYS = 64
+        /** Matches kMaxAliasPairs in the bridge. */
+        private const val MAX_ALIAS_PAIRS = 1024
         /** Matches GESTURE_CAPACITY in KeyboardCanvasView and kMaxGesturePoints in the bridge. */
         private const val MAX_GESTURE_POINTS = 512
     }

@@ -30,18 +30,19 @@ from architecture import (
 
 MAGIC = 0x3157424B  # 'B' 'K' 'W' '1', little-endian -- must equal TcnWeights::kMagic
 VERSION = 3          # must equal TcnWeights::kVersion -- bumped for the architecture descriptor
+VERSION_HALF = 4     # must equal TcnWeights::kVersionHalf: the same payload as IEEE half floats
 RESERVED = 0
 
 EXPECTED_FLOAT_COUNT = expected_float_count()
 
 
-def header_bytes() -> bytes:
+def header_bytes(version: int = VERSION) -> bytes:
     """Magic, version, the architecture descriptor, the payload's float count, one reserved word.
 
     TcnWeights::describeMismatch checks every field against its own constant and names the first
     that differs.
     """
-    words = [MAGIC, VERSION]
+    words = [MAGIC, version]
     words += [value for _name, value in DESCRIPTOR_FIELDS]
     words += [EXPECTED_FLOAT_COUNT, RESERVED]
     return struct.pack(f"<{len(words)}I", *words)
@@ -104,7 +105,7 @@ def export_tensors(model, key_embedding) -> list:
     return tensors
 
 
-def write_bkw(model, key_embedding, out_path: Path) -> None:
+def write_bkw(model, key_embedding, out_path: Path, half: bool = False) -> None:
     model.eval()
     key_embedding.eval()
     tensors = export_tensors(model, key_embedding)
@@ -115,9 +116,9 @@ def write_bkw(model, key_embedding, out_path: Path) -> None:
             f"{EXPECTED_FLOAT_COUNT} -- model.py and tcn_weights.hpp have drifted apart",
         )
     with out_path.open("wb") as f:
-        f.write(header_bytes())
+        f.write(header_bytes(VERSION_HALF if half else VERSION))
         for tensor in tensors:
-            f.write(tensor.detach().cpu().numpy().astype("<f4").tobytes())
+            f.write(tensor.detach().cpu().numpy().astype("<f2" if half else "<f4").tobytes())
 
 
 GOLDEN_MAGIC = 0x31474B42  # 'B' 'K' 'G' '1', little-endian
@@ -230,6 +231,8 @@ def main() -> int:
     parser.add_argument("--upgrade", type=Path, default=None,
                         help="Rewrite this .bkw file's header for the current version, keeping "
                              "its weights. Needs no checkpoint and no torch.")
+    parser.add_argument("--half", action="store_true",
+                        help="Write the payload as IEEE half floats (version 4), half the size.")
     parser.add_argument("--selftest", action="store_true",
                         help="Export a freshly initialised (untrained) model and verify it "
                              "round-trips, instead of exporting a real checkpoint.")
@@ -267,7 +270,7 @@ def main() -> int:
     state = torch.load(arguments.checkpoint, map_location="cpu")
     model.load_state_dict(state["model"] if "model" in state else state)
     key_embedding.load_state_dict(state["key_embedding"])
-    write_bkw(model, key_embedding, arguments.out)
+    write_bkw(model, key_embedding, arguments.out, half=arguments.half)
     print(f"wrote {arguments.out} ({arguments.out.stat().st_size:,} bytes)")
     if arguments.golden is not None:
         write_golden(model, key_embedding, arguments.golden)

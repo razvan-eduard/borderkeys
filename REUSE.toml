@@ -187,6 +187,14 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# The script layouts' swipe weights, plus-only: the Latin weights above fine-tuned by
+# tools/swipe_model/train.py on swipes of the same corpus laid onto each layout.
+[[annotations]]
+path = "keyboard/src/plus/assets/swipe/*.bkw"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 BorderKeys contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # The recorded swipe accuracy the CI gates compare against, one file per decoder.
 [[annotations]]
 path = "docs/gesture-accuracy*.json"

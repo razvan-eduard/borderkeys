@@ -391,12 +391,12 @@ mixed, so each is measured against the pack that holds its words. A corpus filte
 pack keeps only the rows that happen to be words in both languages and reads 36%; that figure
 is a mistake, not a result. The layouts added since -- Colemak, Colemak-DH, Workman, Bépo, the
 two Turkish arrangements, the national variants, and the ten in other scripts -- have no
-recorded gestures in the collection, so they carry no figure here. Both tiers run on every
-layout: the geometric tier needs only the layout and the pack, and the neural tier takes the
-layout's key centres (`TcnCtcDecoder::setLayout`) and is picked for any layout once its weights
-are loaded. What exists is a measurement only for the Latin layouts the collection covers; on
-the other scripts the neural tier runs with weights trained on Latin traces and its accuracy
-there is unmeasured.
+recorded gestures in the collection, and carry no figure here. The geometric tier runs on every
+layout, from the layout and the pack. The neural tier takes the layout's key centres
+(`TcnCtcDecoder::setLayout`) and runs on a Latin layout with the Latin weights and on a layout in
+another script with that script's own weights (`SwipeModels.modelFor`); a script without its own
+weights decodes geometrically. The measurement below covers only the Latin layouts the
+collection holds.
 
 ```
 tools/swipe_model/.venv/bin/python3 tools/swipe_model/futo_layout_corpus.py azerty \

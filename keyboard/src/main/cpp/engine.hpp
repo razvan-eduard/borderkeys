@@ -129,8 +129,14 @@ public:
      * anything open and not named is closed and its slot freed. An empty set closes everything.
      */
     void setActiveLanguages(const char* const* tags, const float* weights, int count);
+    /**
+     * The keys and their centres, and the long-press letters a swipe may reach on them:
+     * `aliasCodes[i]` on the key of `aliasBases[i]`; see KeyGeometry::setAliases.
+     */
     bool setKeyGeometry(const int32_t* codes, const float* centersX, const float* centersY,
-                        int count, float keyWidth, float keyHeight);
+                        int count, float keyWidth, float keyHeight,
+                        const int32_t* aliasCodes = nullptr, const int32_t* aliasBases = nullptr,
+                        int aliasCount = 0);
 
     /**
      * Whether the learned touch patterns count, how far they move a substitution's cost from the
@@ -209,10 +215,32 @@ public:
     bool lastDecodeUsedNeural() const { return lastDecodeUsedNeural_; }
 
     /**
-     * Loads tier B's weights, building its decoder if needed. Always false without
-     * `BORDERKEYS_NEURAL_SWIPE`.
+     * Loads tier B's weights for [script], building its decoder if needed: the slot already
+     * holding [script], else a free one, else the one selected least recently. Always false
+     * without `BORDERKEYS_NEURAL_SWIPE`.
      */
-    bool loadSwipeWeights(const uint8_t* data, size_t length);
+    bool loadSwipeWeights(int script, const uint8_t* data, size_t length);
+
+    /** [loadSwipeWeights] for [kLatinSwipeScript]. */
+    bool loadSwipeWeights(const uint8_t* data, size_t length) {
+        return loadSwipeWeights(kLatinSwipeScript, data, length);
+    }
+
+    /**
+     * Which script's model [decodeGesture] uses for the layout now set; one with no model loaded,
+     * or [kNoSwipeScript], decodes with tier A.
+     */
+    void selectSwipeScript(int script);
+
+    /** Whether a model for [script] is loaded. */
+    bool hasSwipeModel(int script) const;
+
+    /** The script the app's Latin layouts share, and the one meaning no model. */
+    static constexpr int kLatinSwipeScript = 0;
+    static constexpr int kNoSwipeScript = -1;
+
+    /** How many models are held at once. */
+    static constexpr int kMaxSwipeModels = 2;
 
     /**
      * Switches [decodeGesture] to tier B once its weights are loaded, and frees tier B when turned
@@ -603,9 +631,20 @@ private:
     std::unique_ptr<GestureDecoder> gestureDecoder_;
 
 #ifdef BORDERKEYS_NEURAL_SWIPE
-    /** Tier B, `plus` only, used once its weights are loaded and it is enabled. */
-    std::unique_ptr<TcnDecoder> neuralDecoder_;
+    /** One loaded model: the script it serves, its decoder, and when it was last selected. */
+    struct NeuralSlot {
+        int script = kNoSwipeScript;
+        std::unique_ptr<TcnDecoder> decoder;
+        uint64_t selectedAt = 0;
+    };
+    /** Tier B, `plus` only, used once a model for the selected script is loaded and it is enabled. */
+    NeuralSlot neuralSlots_[kMaxSwipeModels];
+    int selectedScript_ = kLatinSwipeScript;
+    uint64_t selectionClock_ = 0;
     bool neuralEnabled_ = false;
+
+    /** The decoder for the selected script, loaded; null when there is none. */
+    TcnDecoder* activeNeural() const;
 #endif
     bool lastDecodeUsedNeural_ = false;
 #ifdef BORDERKEYS_NEURAL_SWIPE

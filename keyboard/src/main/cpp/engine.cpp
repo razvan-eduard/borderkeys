@@ -485,7 +485,10 @@ bool Engine::create() {
 void Engine::destroy() {
     gestureDecoder_.reset();
 #ifdef BORDERKEYS_NEURAL_SWIPE
-    neuralDecoder_.reset();
+    for (NeuralSlot& slot : neuralSlots_) {
+        slot.decoder.reset();
+        slot.script = kNoSwipeScript;
+    }
     neuralEnabled_ = false;
 #endif
     for (LanguagePack& pack : packs_) {
@@ -497,37 +500,117 @@ void Engine::destroy() {
     created_ = false;
 }
 
-bool Engine::loadSwipeWeights(const uint8_t* data, size_t length) {
+bool Engine::loadSwipeWeights(int script, const uint8_t* data, size_t length) {
 #ifdef BORDERKEYS_NEURAL_SWIPE
-    if (!created_) {
+    if (!created_ || script < 0) {
         return false;
     }
+    // The slot holding [script], else a free one, else the one selected least recently.
+    NeuralSlot* target = nullptr;
+    for (NeuralSlot& slot : neuralSlots_) {
+        if (slot.script == script) {
+            target = &slot;
+        }
+    }
+    for (NeuralSlot& slot : neuralSlots_) {
+        if (target == nullptr && !slot.decoder) {
+            target = &slot;
+        }
+    }
+    if (target == nullptr) {
+        target = &neuralSlots_[0];
+        for (NeuralSlot& slot : neuralSlots_) {
+            if (slot.selectedAt < target->selectedAt) {
+                target = &slot;
+            }
+        }
+    }
     // Builds tier B; on failure tier A carries on.
-    if (!neuralDecoder_) {
-        neuralDecoder_.reset(new (std::nothrow) TcnDecoder(*this));
-        if (!neuralDecoder_) {
+    if (!target->decoder || target->script != script) {
+        target->decoder.reset(new (std::nothrow) TcnDecoder(*this));
+        target->script = script;
+        if (!target->decoder) {
+            target->script = kNoSwipeScript;
             return false;
         }
     }
-    if (!neuralDecoder_->loadWeights(data, length)) {
+    if (!target->decoder->loadWeights(data, length)) {
         // A failed load frees the decoder.
-        neuralDecoder_.reset();
+        target->decoder.reset();
+        target->script = kNoSwipeScript;
         return false;
+    }
+    if (script == selectedScript_) {
+        // Loaded for the script in use: that counts as its selection.
+        target->selectedAt = ++selectionClock_;
+        if (geometry_.isSet()) {
+            target->decoder->setLayout(geometry_);
+        }
     }
     return true;
 #else
+    (void)script;
     (void)data;
     (void)length;
     return false;
 #endif
 }
 
+void Engine::selectSwipeScript(int script) {
+#ifdef BORDERKEYS_NEURAL_SWIPE
+    selectedScript_ = script;
+    TcnDecoder* const decoder = activeNeural();
+    if (decoder != nullptr) {
+        for (NeuralSlot& slot : neuralSlots_) {
+            if (slot.decoder.get() == decoder) {
+                slot.selectedAt = ++selectionClock_;
+            }
+        }
+        if (geometry_.isSet()) {
+            decoder->setLayout(geometry_);
+        }
+    }
+#else
+    (void)script;
+#endif
+}
+
+bool Engine::hasSwipeModel(int script) const {
+#ifdef BORDERKEYS_NEURAL_SWIPE
+    for (const NeuralSlot& slot : neuralSlots_) {
+        if (slot.script == script && slot.decoder && slot.decoder->hasWeights()) {
+            return true;
+        }
+    }
+#else
+    (void)script;
+#endif
+    return false;
+}
+
+#ifdef BORDERKEYS_NEURAL_SWIPE
+TcnDecoder* Engine::activeNeural() const {
+    if (selectedScript_ < 0) {
+        return nullptr;
+    }
+    for (const NeuralSlot& slot : neuralSlots_) {
+        if (slot.script == selectedScript_ && slot.decoder && slot.decoder->hasWeights()) {
+            return slot.decoder.get();
+        }
+    }
+    return nullptr;
+}
+#endif
+
 void Engine::setSwipeModelEnabled(bool enabled) {
 #ifdef BORDERKEYS_NEURAL_SWIPE
     neuralEnabled_ = enabled;
     if (!enabled) {
-        // The decoder and its weights are freed.
-        neuralDecoder_.reset();
+        // The decoders and their weights are freed.
+        for (NeuralSlot& slot : neuralSlots_) {
+            slot.decoder.reset();
+            slot.script = kNoSwipeScript;
+        }
     }
 #else
     (void)enabled;
@@ -536,8 +619,8 @@ void Engine::setSwipeModelEnabled(bool enabled) {
 
 bool Engine::warmSwipeModel() {
 #ifdef BORDERKEYS_NEURAL_SWIPE
-    if (!created_ || !neuralDecoder_ || !neuralDecoder_->hasWeights() || !geometry_.isSet() ||
-        geometry_.keyCount() < 2) {
+    TcnDecoder* const neural = activeNeural();
+    if (!created_ || neural == nullptr || !geometry_.isSet() || geometry_.keyCount() < 2) {
         return false;
     }
     // A straight stroke between the layout's first and last keys, decoded once.
@@ -564,7 +647,7 @@ bool Engine::warmSwipeModel() {
 
     // Straight to the decoder, bypassing the candidate heap and the context.
     Candidate discarded[kMaxCandidates];
-    (void)neuralDecoder_->decode(xs, ys, ts, kWarmPoints, discarded, kMaxCandidates);
+    (void)neural->decode(xs, ys, ts, kWarmPoints, discarded, kMaxCandidates);
     return true;
 #else
     return false;
@@ -651,17 +734,19 @@ void Engine::setActiveLanguages(const char* const* tags, const float* weights, i
 }
 
 bool Engine::setKeyGeometry(const int32_t* codes, const float* centersX, const float* centersY,
-                            int count, float keyWidth, float keyHeight) {
+                            int count, float keyWidth, float keyHeight,
+                            const int32_t* aliasCodes, const int32_t* aliasBases, int aliasCount) {
     if (!geometry_.set(codes, centersX, centersY, count, keyWidth, keyHeight)) {
         return false;
     }
+    geometry_.setAliases(aliasCodes, aliasBases, aliasCount);
     // The decoders rebuild their gesture templates for the new key centres.
     if (gestureDecoder_) {
         gestureDecoder_->setLayout(geometry_);
     }
 #ifdef BORDERKEYS_NEURAL_SWIPE
-    if (neuralDecoder_) {
-        neuralDecoder_->setLayout(geometry_);
+    if (TcnDecoder* const neural = activeNeural()) {
+        neural->setLayout(geometry_);
     }
 #endif
     return true;
@@ -1013,15 +1098,22 @@ int Engine::decodeGesture(const float* xs, const float* ys, const int64_t* ts, i
 
     GestureDecoder* decoder = gestureDecoder_.get();
 #ifdef BORDERKEYS_NEURAL_SWIPE
-    // Tier B decodes the whole request when enabled and loaded, tier A otherwise.
-    if (neuralEnabled_ && neuralDecoder_ && neuralDecoder_->hasWeights()) {
-        decoder = neuralDecoder_.get();
+    // Tier B decodes the whole request when enabled and loaded for the layout's script, tier A otherwise.
+    if (neuralEnabled_) {
+        if (TcnDecoder* const neural = activeNeural()) {
+            decoder = neural;
+        }
     }
 #endif
     lastDecodeUsedNeural_ = decoder != gestureDecoder_.get();
 
     Candidate raw[kMaxCandidates];
-    const int produced = decoder->decode(xs, ys, ts, count, raw, kMaxCandidates);
+    int produced = decoder->decode(xs, ys, ts, count, raw, kMaxCandidates);
+    if (produced <= 0 && lastDecodeUsedNeural_) {
+        // A gesture tier B finds nothing for is sent to tier A once.
+        lastDecodeUsedNeural_ = false;
+        produced = gestureDecoder_->decode(xs, ys, ts, count, raw, kMaxCandidates);
+    }
     if (produced <= 0) {
         return 0;
     }
@@ -1067,8 +1159,10 @@ void Engine::normaliseGestureScores(Candidate* candidates, int count) {
 
 const char* Engine::gestureDecoderName() const {
 #ifdef BORDERKEYS_NEURAL_SWIPE
-    if (neuralEnabled_ && neuralDecoder_ && neuralDecoder_->hasWeights()) {
-        return neuralDecoder_->name();
+    if (neuralEnabled_) {
+        if (const TcnDecoder* const neural = activeNeural()) {
+            return neural->name();
+        }
     }
 #endif
     return gestureDecoder_ ? gestureDecoder_->name() : "none";

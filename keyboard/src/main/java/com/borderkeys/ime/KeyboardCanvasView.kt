@@ -788,6 +788,9 @@ class KeyboardCanvasView(
         centersYOut: FloatArray,
     ): Int = geometry.exportGeometry(codesOut, centersXOut, centersYOut)
 
+    /** [KeyboardGeometry.exportAliases]. */
+    fun exportAliases(codesOut: IntArray, basesOut: IntArray): Int = geometry.exportAliases(codesOut, basesOut)
+
     /** The id of the layout on the keys. */
     val layoutId: String get() = layout.id
 

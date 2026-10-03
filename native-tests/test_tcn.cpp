@@ -159,6 +159,25 @@ void runTcnTests() {
         badCount[countAt] = static_cast<uint8_t>(badCount[countAt] + 1);
         check(!weights->loadFromBytes(badCount.data(), badCount.size()),
               "a float count that disagrees with the architecture is refused");
+
+        // Version 4: the same payload as half floats, two bytes a value.
+        std::vector<uint8_t> half(TcnWeights::kHeaderBytes + kTcnWeightsFloatCount * sizeof(uint16_t), 0);
+        TcnWeights::writeHeader(half.data(), TcnWeights::kVersionHalf);
+        const uint16_t bits[] = {0x3C00u, 0xC000u, 0x3800u, 0x0001u, 0x7BFFu, 0x8000u};
+        for (size_t i = 0; i < sizeof(bits) / sizeof(bits[0]); ++i) {
+            std::memcpy(half.data() + TcnWeights::kHeaderBytes + i * sizeof(uint16_t), &bits[i], sizeof(uint16_t));
+        }
+        check(weights->loadFromBytes(half.data(), half.size()), "a half-float file loads");
+        const float* const values = reinterpret_cast<const float*>(weights.get());
+        check(values[0] == 1.0f && values[1] == -2.0f && values[2] == 0.5f,
+              "half floats read back as the floats they stand for");
+        check(std::fabs(values[3] - 5.9604645e-8f) < 1e-12f, "a subnormal half reads back");
+        check(values[4] == 65504.0f && values[5] == 0.0f && std::signbit(values[5]),
+              "the largest half and negative zero read back");
+        std::vector<uint8_t> halfLong = half;
+        halfLong.resize(TcnWeights::kHeaderBytes + kTcnWeightsFloatCount * sizeof(float));
+        check(!weights->loadFromBytes(halfLong.data(), halfLong.size()),
+              "a half-float header over a float32 payload is refused by its length");
     }
 
     section("the shipped weights load");
@@ -450,5 +469,28 @@ void runTcnTests() {
               "a truncated weight file is refused");
         check(std::strcmp(engine.gestureDecoderName(), "SHARK2") == 0,
               "a refused load leaves tier A decoding");
+
+        // One model per script, two held at once, the one selected least recently given up.
+        check(engine.loadSwipeWeights(Engine::kLatinSwipeScript, zeroed.data(), zeroed.size()),
+              "the Latin model loads");
+        engine.selectSwipeScript(Engine::kLatinSwipeScript);
+        check(std::strcmp(engine.gestureDecoderName(), "SHARK2") != 0, "a Latin layout decodes with it");
+        engine.selectSwipeScript(1);
+        check(std::strcmp(engine.gestureDecoderName(), "SHARK2") == 0,
+              "a layout whose script has no model decodes with tier A");
+        check(engine.loadSwipeWeights(1, zeroed.data(), zeroed.size()), "a second script's model loads");
+        check(std::strcmp(engine.gestureDecoderName(), "SHARK2") != 0, "and that layout decodes with it");
+        check(engine.hasSwipeModel(Engine::kLatinSwipeScript) && engine.hasSwipeModel(1),
+              "two models are held at once");
+        check(engine.loadSwipeWeights(2, zeroed.data(), zeroed.size()), "a third script's model loads");
+        check(!engine.hasSwipeModel(Engine::kLatinSwipeScript) && engine.hasSwipeModel(1) &&
+                  engine.hasSwipeModel(2),
+              "the third takes the slot selected least recently");
+        engine.selectSwipeScript(Engine::kNoSwipeScript);
+        check(std::strcmp(engine.gestureDecoderName(), "SHARK2") == 0, "no script decodes with tier A");
+        engine.setSwipeModelEnabled(false);
+        check(!engine.hasSwipeModel(1) && !engine.hasSwipeModel(2), "switching off frees every model");
+        engine.setSwipeModelEnabled(true);
+        engine.selectSwipeScript(Engine::kLatinSwipeScript);
     }
 }

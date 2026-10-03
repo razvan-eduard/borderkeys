@@ -149,7 +149,7 @@ void Shark2Decoder::walk(int packIndex, const PackedTrie& trie, int32_t node, in
         float lastX = 0.f;
         float lastY = 0.f;
         const float radius = kEndpointRadius * geometry_->keyWidth();
-        if (geometry_->centreOf(letters[depth - 1], &lastX, &lastY)) {
+        if (geometry_->centreOfLetter(letters[depth - 1], &lastX, &lastY)) {
             const float dx = lastX - endX;
             const float dy = lastY - endY;
             const int32_t wordIndex =
@@ -212,19 +212,22 @@ void Shark2Decoder::extend(int packIndex, const PackedTrie& trie, int32_t node, 
         if (next >= kNoOccurrence) {
             continue;  // the finger never crosses this key again
         }
-        const uint32_t codePoint = geometry_->codeAt(slot);
-        const int symbol = trie.symbolFor(codePoint);
-        if (symbol <= 0) {
-            continue;
-        }
-        const int32_t child = trie.walk(node, symbol);
-        if (child < 0) {
-            continue;
-        }
-        letters[depth] = codePoint;
-        walk(packIndex, trie, child, next, depth + 1, letters, heap, marksUsed);
-        if (visitBudget_ <= 0) {
-            return;
+        // The key's own letter, then the long-press letters it lends.
+        for (int k = -1; k < geometry_->aliasCount(slot); ++k) {
+            const uint32_t codePoint = k < 0 ? geometry_->codeAt(slot) : geometry_->aliasAt(slot, k);
+            const int symbol = trie.symbolFor(codePoint);
+            if (symbol <= 0) {
+                continue;
+            }
+            const int32_t child = trie.walk(node, symbol);
+            if (child < 0) {
+                continue;
+            }
+            letters[depth] = codePoint;
+            walk(packIndex, trie, child, next, depth + 1, letters, heap, marksUsed);
+            if (visitBudget_ <= 0) {
+                return;
+            }
         }
     }
 }
@@ -298,18 +301,22 @@ void Shark2Decoder::searchPack(int packIndex, TopK<Candidate>& heap) {
         if (dx * dx + dy * dy > radiusSquared) {
             continue;
         }
-        const int symbol = trie->symbolFor(codePoint);
-        if (symbol <= 0) {
-            continue;
-        }
-        const int32_t child = trie->walk(trie->root(), symbol);
-        if (child < 0) {
-            continue;
-        }
-        letters[0] = codePoint;
-        walk(packIndex, *trie, child, first, 1, letters, heap, 0);
-        if (visitBudget_ <= 0) {
-            return;
+        // The key's own letter, then the long-press letters it lends.
+        for (int k = -1; k < geometry_->aliasCount(slot); ++k) {
+            const uint32_t letter = k < 0 ? codePoint : geometry_->aliasAt(slot, k);
+            const int symbol = trie->symbolFor(letter);
+            if (symbol <= 0) {
+                continue;
+            }
+            const int32_t child = trie->walk(trie->root(), symbol);
+            if (child < 0) {
+                continue;
+            }
+            letters[0] = letter;
+            walk(packIndex, *trie, child, first, 1, letters, heap, 0);
+            if (visitBudget_ <= 0) {
+                return;
+            }
         }
     }
 }
