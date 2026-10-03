@@ -165,8 +165,14 @@ class ClipboardPanelView(
         invalidate()
     }
 
-    /** Decodes an image at the card's size, or null when the clip's grant is gone. */
+    /** Decodes the stored thumbnail, or a legacy entry's image at the card's size while its grant holds. */
     private fun decodeThumbnail(entry: ClipEntry): Bitmap? {
+        val stored = entry.thumbnail
+        if (stored != null) {
+            return runCatching {
+                android.graphics.BitmapFactory.decodeByteArray(stored, 0, stored.size)
+            }.getOrNull()
+        }
         val uri = entry.uri ?: return null
         return runCatching {
             val target = cardHeightPx.toInt().coerceAtLeast(MIN_THUMBNAIL_PX)

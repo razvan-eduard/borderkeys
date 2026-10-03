@@ -29,6 +29,16 @@
                 android:resource="@xml/method" />
         </service>
 
+        <!--
+            Serves a stored clipboard image to the field it is pasted into, decrypted on the way
+            out. Not exported: reached only through the grant commitContent hands the field.
+        -->
+        <provider
+            android:name="com.borderkeys.ime.ClipMediaProvider"
+            android:authorities="${applicationId}.clipmedia"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
     </application>
 
 </manifest>

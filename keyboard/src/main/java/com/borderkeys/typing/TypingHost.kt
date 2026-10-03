@@ -55,6 +55,9 @@ interface TypingHost {
 
     fun playEffect(event: EffectEvent, word: String)
 
+    /** Shows the catalogue text [key] on the strip for a moment. */
+    fun showNotice(key: String)
+
     /** Offers [replacements] on the language-revert panel. */
     fun offerLanguageReplacements(replacements: List<LanguageSwitchCorrector.Replacement>)
 

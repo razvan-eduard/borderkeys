@@ -176,7 +176,7 @@ object DataGraph {
     }
 
     val clipboard: ClipboardRepository by lazy {
-        ClipboardRepository(database.clipboardDao(), themes.preferences)
+        ClipboardRepository(database.clipboardDao(), themes.preferences, ClipMediaStore(unlockedContext))
     }
 
     val dictionary: DictionaryRepository by lazy {

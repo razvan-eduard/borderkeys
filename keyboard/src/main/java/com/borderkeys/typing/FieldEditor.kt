@@ -37,6 +37,12 @@ interface FieldEditor {
     fun setSelection(start: Int, end: Int)
 
     fun performEditorAction(actionId: Int)
+
+    /**
+     * Hands the field the content at [uri], of [mimeType], described by [label], with read access
+     * for the insertion; false when the field did not take it.
+     */
+    fun commitContent(uri: String, mimeType: String, label: String?): Boolean
 }
 
 /** What [FieldEditor.extractedText] reports: a window of the field's text and the selection. */

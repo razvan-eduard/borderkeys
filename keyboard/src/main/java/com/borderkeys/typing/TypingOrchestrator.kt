@@ -18,6 +18,7 @@ import com.borderkeys.ime.PhysicalKeys
 import com.borderkeys.ime.RunningText
 import com.borderkeys.ime.ShiftState
 import com.borderkeys.ime.WordCommit
+import com.borderkeys.i18n.Keys
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.CorrectionOffer
 import com.borderkeys.predict.RefusedWords
@@ -1212,6 +1213,39 @@ class TypingOrchestrator(
     }
 
     // ---- picks ---------------------------------------------------------------------------------
+
+    // ---- the clipboard -----------------------------------------------------------------------
+
+    /** Writes [text] from the clipboard at the caret, the word in progress finished first. */
+    fun pasteText(text: String) {
+        val editor = currentEditor() ?: return
+        finishWord()
+        editor.commitText(text, 1)
+        checkpointField()
+        refreshContextFromEditor()
+        requestSuggestions()
+    }
+
+    /**
+     * Hands the field the image at [uri], of [mimeType], the word in progress finished first;
+     * when the field takes no such content, the strip says so. Returns whether it was taken.
+     */
+    fun pasteImage(uri: String, mimeType: String): Boolean {
+        val editor = currentEditor() ?: return false
+        if (!session.acceptsContent(mimeType)) {
+            host.showNotice(Keys.CLIP_IMAGE_NOT_ACCEPTED)
+            return false
+        }
+        finishWord()
+        if (!editor.commitContent(uri, mimeType, null)) {
+            host.showNotice(Keys.CLIP_IMAGE_NOT_ACCEPTED)
+            return false
+        }
+        checkpointField()
+        refreshContextFromEditor()
+        requestSuggestions()
+        return true
+    }
 
     /** A word picked from the strip or the ring, [index] being its slot. */
     fun onPick(index: Int, word: String) {

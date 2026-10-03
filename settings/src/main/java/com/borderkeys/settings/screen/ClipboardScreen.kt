@@ -118,6 +118,14 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
                     }
                 }
             }
+            SectionHeader(strings[Keys.CLIPBOARD_IMAGE_MAX_SIZE])
+            StepSlider(
+                label = strings.getString(Keys.CLIPBOARD_MEGABYTES, preferences.clipboardImageMaxMb),
+                steps = KeyboardPreferences.IMAGE_SIZE_STEPS,
+                current = preferences.clipboardImageMaxMb,
+                default = KeyboardPreferences.DEFAULT_CLIPBOARD_IMAGE_MAX_MB,
+            ) { value -> update { it.copy(clipboardImageMaxMb = value) } }
+            Explanation(strings[Keys.CLIPBOARD_IMAGE_MAX_SIZE_NOTE])
             SwitchRow(
                 title = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE],
                 subtitle = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE_NOTE],
@@ -197,7 +205,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
             }
             for (entry in ClipSearch.filter(entries, search)) {
                 SettingRow(
-                    title = entry.content.take(80).replace('\n', ' '),
+                    title = if (entry.isImage) strings[Keys.CLIP_IMAGE] else entry.content.take(80).replace('\n', ' '),
                     subtitle = if (entry.isPinned) strings[Keys.CLIPBOARD_PINNED_NEVER_EXPIRES] else strings[Keys.CLIPBOARD_EXPIRES_ON_THE_TIMER],
                     trailing = {
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

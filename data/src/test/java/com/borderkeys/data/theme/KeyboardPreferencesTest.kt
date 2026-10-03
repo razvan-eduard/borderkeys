@@ -591,6 +591,18 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `every image size step survives sanitising, and the ends are clamped`() {
+        for (megabytes in KeyboardPreferences.IMAGE_SIZE_STEPS) {
+            assertEquals(
+                megabytes,
+                KeyboardPreferences(clipboardImageMaxMb = megabytes).sanitised().clipboardImageMaxMb,
+            )
+        }
+        assertEquals(1, KeyboardPreferences(clipboardImageMaxMb = 0).sanitised().clipboardImageMaxMb)
+        assertEquals(50, KeyboardPreferences(clipboardImageMaxMb = 500).sanitised().clipboardImageMaxMb)
+    }
+
+    @Test
     fun `the steps are ordered, so a slider moves one way`() {
         assertEquals(
             KeyboardPreferences.RETENTION_STEPS.sorted(),

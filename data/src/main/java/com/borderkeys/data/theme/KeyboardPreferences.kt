@@ -25,6 +25,9 @@ data class KeyboardPreferences(
      * images already remembered.
      */
     val clipboardImages: Boolean = false,
+
+    /** The largest copied image kept, in megabytes; a larger one is not remembered. */
+    val clipboardImageMaxMb: Int = DEFAULT_CLIPBOARD_IMAGE_MAX_MB,
     /** Hard cap on unpinned history, independent of the retention window. */
     val clipboardMaxEntries: Int = 60,
 
@@ -626,6 +629,7 @@ data class KeyboardPreferences(
         themeMode = if (themeMode == THEME_MODE_AUTO_SYSTEM) THEME_MODE_AUTO_SYSTEM else THEME_MODE_MANUAL,
         clipboardRetentionMinutes = clipboardRetentionMinutes.coerceIn(1, 60 * 24 * 30),
         clipboardMaxEntries = clipboardMaxEntries.coerceIn(1, 1000),
+        clipboardImageMaxMb = clipboardImageMaxMb.coerceIn(MIN_CLIPBOARD_IMAGE_MAX_MB, MAX_CLIPBOARD_IMAGE_MAX_MB),
         // The portrait placement comes from `portrait` above.
         heightScale = portrait.heightScale,
         widthScale = portrait.widthScale,
@@ -979,6 +983,13 @@ data class KeyboardPreferences(
 
         /** How many entries are kept, as the values a slider steps through. */
         val HISTORY_SIZE_STEPS: List<Int> = listOf(10, 20, 30, 50, 75, 100, 150, 200, 500)
+
+        const val DEFAULT_CLIPBOARD_IMAGE_MAX_MB = 10
+        const val MIN_CLIPBOARD_IMAGE_MAX_MB = 1
+        const val MAX_CLIPBOARD_IMAGE_MAX_MB = 50
+
+        /** The image size slider's stops, in megabytes. */
+        val IMAGE_SIZE_STEPS: List<Int> = listOf(1, 2, 5, 10, 20, 50)
 
         /** The step nearest [value], for putting a stored number back on a slider. */
         fun nearestStep(steps: List<Int>, value: Int): Int {

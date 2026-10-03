@@ -52,6 +52,7 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
         passwordField: Boolean = false,
         privateField: Boolean = false,
         userUnlocked: Boolean = true,
+        contentMimeTypes: List<String> = emptyList(),
         settle: Boolean = true,
     ) {
         editor.reset(text)
@@ -70,6 +71,7 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
                 inputType = inputType,
                 imeOptions = imeOptions,
                 described = true,
+                contentMimeTypes = contentMimeTypes,
             ),
         )
         if (settle) {
