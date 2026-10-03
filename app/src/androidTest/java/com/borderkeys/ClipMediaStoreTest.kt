@@ -85,7 +85,9 @@ class ClipMediaStoreTest {
             assertTrue(cursor.moveToFirst())
             assertEquals(bytes.size.toLong(), cursor.getLong(cursor.getColumnIndexOrThrow(android.provider.OpenableColumns.SIZE)))
         }
-        val outside = ClipMediaProvider.uriFor(context, "../x.png")
+        val outside = android.net.Uri.parse(
+            "content://${ClipMediaProvider.authority(context)}/${ClipMediaProvider.ROOT}/../x.png",
+        )
         assertNull(context.contentResolver.getType(outside))
         assertNull(runCatching { context.contentResolver.openInputStream(outside) }.getOrNull())
 

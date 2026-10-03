@@ -44,7 +44,11 @@
             android:name="com.borderkeys.ime.ClipMediaProvider"
             android:authorities="${applicationId}.clipmedia"
             android:exported="false"
-            android:grantUriPermissions="true" />
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/clip_media_paths" />
+        </provider>
 
     </application>
 
