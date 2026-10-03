@@ -64,8 +64,8 @@ internal class AnswerScratch {
     val properNoun = BooleanArray(PredictionEngine.MAX_RESULTS)
     val texts = arrayOfNulls<String>(NativePredictor.TEXT_SLOTS)
     val corrections = arrayOfNulls<String>(NativePredictor.CORRECTION_SLOTS)
-    val edits = IntArray(NativePredictor.CORRECTION_SLOTS)
-    val flags = BooleanArray(NativePredictor.FLAG_SLOTS)
+    val correctionNames = BooleanArray(NativePredictor.CORRECTION_SLOTS)
+    val spellingFlags = BooleanArray(NativePredictor.SPELLING_FLAGS)
 }
 
 /**
@@ -85,11 +85,11 @@ internal fun answerRequest(
 ): PredictionAnswer {
     scratch.texts.fill(null)
     scratch.corrections.fill(null)
-    scratch.edits.fill(0)
-    scratch.flags.fill(false)
+    scratch.correctionNames.fill(false)
+    scratch.spellingFlags.fill(false)
     val count = NativePredictor.nativeAnswer(
         handle, composing, previous1, previous2, tapXs, tapYs, scratch.words, scratch.scores,
-        scratch.properNoun, scratch.texts, scratch.corrections, scratch.edits, scratch.flags,
+        scratch.properNoun, scratch.texts, scratch.corrections, scratch.correctionNames, scratch.spellingFlags,
     )
     val spelling = scratch.texts[NativePredictor.TEXT_KNOWN_SPELLING]
     val knownStems = if (composing.isNotEmpty()) knownStemsOf(handle, composing, languages) else emptySet()
@@ -98,7 +98,7 @@ internal fun answerRequest(
         val text = scratch.corrections[index] ?: break
         val inflection =
             knownStems.isNotEmpty() && WordStems.shields(composing, text, knownStems, languages)
-        corrections.add(CorrectionOffer(text, scratch.flags[index], inflection, scratch.edits[index]))
+        corrections.add(CorrectionOffer(text, scratch.correctionNames[index], inflection))
     }
     return PredictionAnswer(
         query = composing,
@@ -111,8 +111,8 @@ internal fun answerRequest(
         } else {
             ""
         },
-        knownWordExact = scratch.flags[NativePredictor.FLAG_EXACT_SPELLING],
-        knownWordIsName = scratch.flags[NativePredictor.FLAG_EXACT_SPELLING_NAME],
+        knownWordExact = scratch.spellingFlags[NativePredictor.SPELLING_EXACT],
+        knownWordIsName = scratch.spellingFlags[NativePredictor.SPELLING_NAME],
         possessive = scratch.texts[NativePredictor.TEXT_POSSESSIVE],
     )
 }

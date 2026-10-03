@@ -34,13 +34,13 @@ constexpr jsize kTextKnownSpelling = 0;
 constexpr jsize kTextPossessive = 1;
 constexpr jsize kTextSlots = 2;
 
-// nativeAnswer's `outCorrections` holds autocorrect's list, and `outFlags` one flag per entry
-// followed by two about the typed word; the same as NativePredictor's CORRECTION_SLOTS and FLAG_
-// constants.
+// nativeAnswer's `outCorrections` holds autocorrect's list and `outCorrectionNames` whether each
+// entry is a name; `outSpellingFlags` holds two flags about the typed word. The same as
+// NativePredictor's CORRECTION_SLOTS and SPELLING_ constants.
 constexpr jsize kCorrectionSlots = 5;
-constexpr jsize kFlagExactSpelling = kCorrectionSlots;
-constexpr jsize kFlagExactSpellingName = kCorrectionSlots + 1;
-constexpr jsize kFlagSlots = kCorrectionSlots + 2;
+constexpr jsize kSpellingExact = 0;
+constexpr jsize kSpellingName = 1;
+constexpr jsize kSpellingFlagSlots = 2;
 
 Engine* engineFrom(jlong handle) {
     return reinterpret_cast<Engine*>(static_cast<intptr_t>(handle));
@@ -267,13 +267,13 @@ void setText(JNIEnv* env, jobjectArray array, jsize slot, const char* text) {
 /**
  * Fills `outTexts` for the typed [word]: how the dictionaries spell it and its possessive; a slot
  * with none is left as it is. `outCorrections` receives autocorrect's list for the request just
- * served, best first, one spelling once, `outEdits` how many edits the walk took to each, and
- * `outFlags` whether each entry is a name, then whether a dictionary spells the typed letters
- * exactly and whether that spelling is a name.
+ * served, best first, one spelling once, `outCorrectionNames` whether each entry is a name, and
+ * `outSpellingFlags` whether a dictionary spells the typed letters exactly and whether that
+ * spelling is a name.
  */
 void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t length,
-                jobjectArray outTexts, jobjectArray outCorrections, jintArray outEdits,
-                jbooleanArray outFlags) {
+                jobjectArray outTexts, jobjectArray outCorrections, jbooleanArray outCorrectionNames,
+                jbooleanArray outSpellingFlags) {
     if (outTexts == nullptr || env->GetArrayLength(outTexts) < kTextSlots) {
         return;
     }
@@ -288,14 +288,14 @@ void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t leng
         text[possessive] = '\0';
         setText(env, outTexts, kTextPossessive, text);
     }
-    if (outCorrections == nullptr || outEdits == nullptr || outFlags == nullptr ||
+    if (outCorrections == nullptr || outCorrectionNames == nullptr || outSpellingFlags == nullptr ||
         env->GetArrayLength(outCorrections) < kCorrectionSlots ||
-        env->GetArrayLength(outEdits) < kCorrectionSlots ||
-        env->GetArrayLength(outFlags) < kFlagSlots) {
+        env->GetArrayLength(outCorrectionNames) < kCorrectionSlots ||
+        env->GetArrayLength(outSpellingFlags) < kSpellingFlagSlots) {
         return;
     }
-    jboolean flags[kFlagSlots] = {};
-    jint edits[kCorrectionSlots] = {};
+    jboolean names[kCorrectionSlots] = {};
+    jboolean spelling[kSpellingFlagSlots] = {};
     const Candidate* list = nullptr;
     const int count = engine.corrections(&list);
     const char* written[kCorrectionSlots];
@@ -318,8 +318,7 @@ void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t leng
         std::memcpy(text, source, sourceLength);
         text[sourceLength] = '\0';
         setText(env, outCorrections, slot, text);
-        flags[slot] = engine.candidateIsProperNoun(list[i]) ? JNI_TRUE : JNI_FALSE;
-        edits[slot] = list[i].edits;
+        names[slot] = engine.candidateIsProperNoun(list[i]) ? JNI_TRUE : JNI_FALSE;
         written[slot] = source;
         writtenLength[slot] = sourceLength;
         ++slot;
@@ -327,12 +326,12 @@ void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t leng
     int exactPack = -1;
     uint32_t exactWord = 0;
     if (engine.exactSpelling(word, length, &exactPack, &exactWord)) {
-        flags[kFlagExactSpelling] = JNI_TRUE;
+        spelling[kSpellingExact] = JNI_TRUE;
         const Candidate exact{exactPack, static_cast<int32_t>(exactWord), 0.0f};
-        flags[kFlagExactSpellingName] = engine.candidateIsProperNoun(exact) ? JNI_TRUE : JNI_FALSE;
+        spelling[kSpellingName] = engine.candidateIsProperNoun(exact) ? JNI_TRUE : JNI_FALSE;
     }
-    env->SetIntArrayRegion(outEdits, 0, kCorrectionSlots, edits);
-    env->SetBooleanArrayRegion(outFlags, 0, kFlagSlots, flags);
+    env->SetBooleanArrayRegion(outCorrectionNames, 0, kCorrectionSlots, names);
+    env->SetBooleanArrayRegion(outSpellingFlags, 0, kSpellingFlagSlots, spelling);
     if (env->ExceptionCheck() == JNI_TRUE) {
         env->ExceptionClear();
     }
@@ -364,7 +363,8 @@ int copyTaps(JNIEnv* env, jfloatArray tapXs, jfloatArray tapYs, float* xs, float
 jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing, jstring prev1,
                   jstring prev2, jfloatArray tapXs, jfloatArray tapYs, jobjectArray outWords,
                   jfloatArray outScores, jbooleanArray outProperNoun, jobjectArray outTexts,
-                  jobjectArray outCorrections, jintArray outEdits, jbooleanArray outFlags) {
+                  jobjectArray outCorrections, jbooleanArray outCorrectionNames,
+                  jbooleanArray outSpellingFlags) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || outWords == nullptr || outScores == nullptr ||
         outProperNoun == nullptr) {
@@ -419,7 +419,7 @@ jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing
     // For a typed word: how the dictionaries spell it, its possessive, and autocorrect's list.
     if (composingLength > 0) {
         writeTexts(env, *engine, composingBuffer, static_cast<size_t>(composingLength), outTexts,
-                   outCorrections, outEdits, outFlags);
+                   outCorrections, outCorrectionNames, outSpellingFlags);
     }
     if (found <= 0) {
         return 0;

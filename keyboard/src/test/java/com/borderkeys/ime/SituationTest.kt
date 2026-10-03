@@ -19,8 +19,7 @@ class SituationTest {
         text: String,
         isName: Boolean = false,
         inflection: Boolean = false,
-        edits: Int = 0,
-    ) = CorrectionOffer(text, isName, inflection, edits)
+    ) = CorrectionOffer(text, isName, inflection)
 
     private fun pick(
         typed: String,
@@ -78,17 +77,6 @@ class SituationTest {
         assertEquals(Situation.TooFar, situation("snobul", "noul", maxEdits = 1))
         // The same pair is correctable once the ceiling admits two edits.
         assertEquals(Situation.Correctable, situation("snobul", "noul", maxEdits = 3))
-    }
-
-    @Test
-    fun `behind a refused entry the walk's edit count is a ceiling too`() {
-        // The first entry is judged by its letters alone.
-        assertEquals(Situation.Correctable,
-            pick("badder", offer("ladder", edits = 2), maxEdits = 1).situation)
-        assertEquals(Situation.TooFar,
-            pick("badder", offer("bladders"), offer("ladder", edits = 2), maxEdits = 1).situation)
-        assertEquals("ladder",
-            pick("badder", offer("bladders"), offer("ladder", edits = 1), maxEdits = 1).text)
     }
 
     @Test

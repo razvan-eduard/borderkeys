@@ -57,9 +57,8 @@ internal object AutoCorrection {
      * they spell it, [knownWordExact] whether one spells it exactly, case aside, and
      * [knownWordIsName] whether that spelling is a name. The word itself is judged first
      * ([typedSituation]); then each offer in turn ([candidateSituation]), the first that is
-     * [Situation.Correctable] winning, a [Situation.TooShort] offer stopping the walk, an offer
-     * behind a refused one admitted only within the engine's own edit count, and the first
-     * offer's situation standing when none wins.
+     * [Situation.Correctable] winning, a [Situation.TooShort] offer stopping the walk, and the
+     * first offer's situation standing when none wins.
      */
     fun pick(
         typed: String,
@@ -81,7 +80,7 @@ internal object AutoCorrection {
             // [capitaliseNames] gates only a name's capital, not [Situation.NameMismatch].
             val cased = matchCase(typed, offer.text, offer.isName && capitaliseNames)
             val situation = candidateSituation(
-                typed, offer, cased, minimumLength, maxEdits, behindRefused = first != null,
+                typed, offer, cased, minimumLength, maxEdits,
             )
             if (first == null) {
                 first = situation
@@ -128,9 +127,7 @@ internal object AutoCorrection {
     }
 
     /**
-     * Which [Situation] one [offer] is for [typed]; [cased] is the offer after [matchCase]. The
-     * distance is the string distance; [behindRefused], for an offer behind one passed over, the
-     * walk's own edit count counts too.
+     * Which [Situation] one [offer] is for [typed]; [cased] is the offer after [matchCase].
      */
     private fun candidateSituation(
         typed: String,
@@ -138,10 +135,8 @@ internal object AutoCorrection {
         cased: String,
         minimumLength: Int,
         maxEdits: Int,
-        behindRefused: Boolean,
     ): Situation = when {
-        editDistance(stripDiacritics(typed), stripDiacritics(offer.text)) > maxEdits ||
-            (behindRefused && offer.edits > maxEdits) -> Situation.TooFar
+        editDistance(stripDiacritics(typed), stripDiacritics(offer.text)) > maxEdits -> Situation.TooFar
         offer.isName &&
             !stripDiacritics(typed).equals(stripDiacritics(offer.text), ignoreCase = true) ->
             Situation.NameMismatch
