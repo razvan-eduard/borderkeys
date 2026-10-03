@@ -25,7 +25,6 @@
  *     suggest_eval <dict dir> --autocorrect <corpus.tsv> [tag ...]
  *     suggest_eval <dict dir> --explain <typed> <candidate> [tag ...]
  *     suggest_eval <dict dir> --reachable <dictionary.tsv> <tag> [budget]
- *     suggest_eval <dict dir> --words <tag>
  *
  * Packs are named by tag (default en-US). The corpus form prints per-case ranks, then rank-1
  * accuracy, top-3 accuracy, and the mean rank of the cases it found at all. The explain form
@@ -171,41 +170,6 @@ std::string packPath(const char* directory, const std::string& tag) {
         }
     }
     return std::string(directory) + "/" + file + ".bkd";
-}
-
-/**
- * The `--words` dump: one line per word of the pack, its text, the unigram log-probability the
- * engine reads and 1 for a name, else 0, tab-separated, in the pack's own order.
- */
-int dumpWords(const std::string& tag, const std::string& path) {
-    struct stat info {};
-    if (stat(path.c_str(), &info) != 0) {
-        std::printf("cannot stat %s\n", path.c_str());
-        return 1;
-    }
-    const int fd = ::open(path.c_str(), O_RDONLY);
-    if (fd < 0) {
-        std::printf("cannot open %s\n", path.c_str());
-        return 1;
-    }
-    LanguagePack pack;
-    const int32_t status = pack.open(tag.c_str(), fd, 0, info.st_size);
-    ::close(fd);
-    if (status != kBkdOk) {
-        std::printf("the pack %s was refused: %d\n", path.c_str(), status);
-        return 1;
-    }
-    const PackedTrie& trie = pack.trie();
-    for (uint32_t i = 0; i < trie.wordCount(); ++i) {
-        uint32_t length = 0;
-        const char* const text = trie.wordText(i, &length);
-        if (text == nullptr) {
-            continue;
-        }
-        std::printf("%.*s\t%.6f\t%d\n", static_cast<int>(length), text, trie.unigramLogProb(i),
-                    trie.isProperNoun(i) ? 1 : 0);
-    }
-    return 0;
 }
 
 bool loadPack(Engine& engine, const std::string& tag, const std::string& path) {
@@ -464,13 +428,6 @@ int main(int argc, char** argv) {
         return 2;
     }
     const char* const directory = argv[1];
-    if (std::strcmp(argv[2], "--words") == 0) {
-        if (argc < 4) {
-            std::printf("usage: suggest_eval <dict dir> --words <tag>\n");
-            return 2;
-        }
-        return dumpWords(argv[3], packPath(directory, argv[3]));
-    }
     // `--autocorrect <corpus>` measures what the space bar commits; the bare corpus form
     // measures where the strip ranks the right word.
     const bool autocorrectMode = std::strcmp(argv[2], "--autocorrect") == 0;
