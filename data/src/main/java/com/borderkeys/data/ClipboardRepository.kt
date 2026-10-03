@@ -14,6 +14,8 @@ import java.security.MessageDigest
 class ClipboardRepository internal constructor(
     private val dao: ClipboardDao,
     private val preferences: Flow<KeyboardPreferences>,
+    /** Where a copied image's bytes are kept; none in a test. */
+    private val media: ClipMediaFiles? = null,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     /** The live history, its cutoff recomputed whenever the retention setting changes. */
@@ -22,24 +24,49 @@ class ClipboardRepository internal constructor(
         dao.observeLive(expiryCutoff(settings))
     }
 
-    /** Remembers a copied image by its URI, not its bytes. */
-    suspend fun rememberImage(uri: String, mimeType: String): Boolean {
-        if (uri.isEmpty()) {
-            return false
-        }
+    /** Why a copied image was not remembered. */
+    enum class ImageRefusal { OFF, TOO_LARGE, NOT_AN_IMAGE }
+
+    /** The most bytes a copied image may have, by the settings. */
+    suspend fun imageCapBytes(): Long = ClipMedia.capBytes(preferences.first().clipboardImageMaxMb)
+
+    /**
+     * Remembers a copied image by its bytes, deduplicated by their hash: the same picture copied
+     * twice is one entry moved to the top. Null when remembered, else why not.
+     */
+    suspend fun rememberImageBytes(bytes: ByteArray, mimeType: String): ImageRefusal? {
         val settings = preferences.first()
         if (!settings.clipboardEnabled || !settings.clipboardImages) {
-            return false
+            return ImageRefusal.OFF
         }
+        if (bytes.isEmpty() || bytes.size.toLong() > ClipMedia.capBytes(settings.clipboardImageMaxMb)) {
+            return ImageRefusal.TOO_LARGE
+        }
+        val stored = media?.store(bytes, mimeType) ?: return ImageRefusal.NOT_AN_IMAGE
         dao.upsert(
-            content = uri,
+            content = "",
             createdAt = now(),
-            contentHash = contentHash(uri),
-            uri = uri,
+            contentHash = contentHash(bytes),
+            uri = null,
             mimeType = mimeType,
+            mediaFile = stored.name,
+            sizeBytes = stored.sizeBytes,
+            thumbnail = stored.thumbnail,
         )
         dao.trimUnpinnedTo(settings.clipboardMaxEntries)
-        return true
+        sweepMedia()
+        return null
+    }
+
+    /** The bytes of the stored image [mediaFile], or null. */
+    fun imageBytes(mediaFile: String): ByteArray? = media?.read(mediaFile)
+
+    /** The entry keeping the stored image [mediaFile], or null. */
+    suspend fun entryForMedia(mediaFile: String): ClipEntry? = dao.findByMediaFile(mediaFile)
+
+    /** Deletes every stored image no entry refers to. */
+    suspend fun sweepMedia() {
+        media?.sweep(dao.mediaFiles().toSet())
     }
 
     /**
@@ -69,7 +96,10 @@ class ClipboardRepository internal constructor(
         dao.setPinned(id, if (pinned) now() else null)
     }
 
-    suspend fun delete(id: Long) = dao.delete(id)
+    suspend fun delete(id: Long) {
+        dao.delete(id)
+        sweepMedia()
+    }
 
     /**
      * Rewrites a text entry. Another entry already holding the new text is removed first, so
@@ -83,6 +113,7 @@ class ClipboardRepository internal constructor(
         val other = dao.findByHash(hash)
         if (other != null && other.id != id) {
             dao.delete(other.id)
+            sweepMedia()
         }
         return dao.updateContent(id, content, hash) > 0
     }
@@ -97,21 +128,35 @@ class ClipboardRepository internal constructor(
             return false
         }
         dao.delete(entry.id)
+        sweepMedia()
         return true
     }
 
-    suspend fun deleteAll() = dao.deleteAll()
+    suspend fun deleteAll() {
+        dao.deleteAll()
+        sweepMedia()
+    }
 
     /** Forgets every remembered image. Called when the images switch is turned off. */
-    suspend fun deleteImages(): Int = dao.deleteImages()
+    suspend fun deleteImages(): Int {
+        val deleted = dao.deleteImages()
+        sweepMedia()
+        return deleted
+    }
 
     /** Forgets everything unpinned, whatever its age. Called when the keyboard closes. */
-    suspend fun deleteUnpinned(): Int = dao.deleteUnpinned()
+    suspend fun deleteUnpinned(): Int {
+        val deleted = dao.deleteUnpinned()
+        sweepMedia()
+        return deleted
+    }
 
     /** Deletes what the retention window has expired. */
     suspend fun purgeExpired(): Int {
         val settings = preferences.first()
-        return dao.deleteExpired(expiryCutoff(settings))
+        val deleted = dao.deleteExpired(expiryCutoff(settings))
+        sweepMedia()
+        return deleted
     }
 
     private fun expiryCutoff(settings: KeyboardPreferences): Long =
@@ -119,8 +164,11 @@ class ClipboardRepository internal constructor(
 
     companion object {
         /** The first eight bytes of the content's SHA-256, as a signed long: the unique key. */
-        fun contentHash(content: String): Long {
-            val digest = MessageDigest.getInstance("SHA-256").digest(content.encodeToByteArray())
+        fun contentHash(content: String): Long = contentHash(content.encodeToByteArray())
+
+        /** The first eight bytes of the bytes' SHA-256, as a signed long: the unique key. */
+        fun contentHash(content: ByteArray): Long {
+            val digest = MessageDigest.getInstance("SHA-256").digest(content)
             var value = 0L
             for (index in 0 until 8) {
                 value = (value shl 8) or (digest[index].toLong() and 0xFF)

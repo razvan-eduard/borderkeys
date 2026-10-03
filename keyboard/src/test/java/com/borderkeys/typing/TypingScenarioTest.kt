@@ -7,6 +7,7 @@ import android.text.InputType
 import android.view.KeyEvent
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.TextShortcut
+import com.borderkeys.i18n.Keys
 import com.borderkeys.ime.KeyCodes
 import com.borderkeys.ime.ShiftState
 import com.borderkeys.predict.Candidate
@@ -480,6 +481,43 @@ class TypingScenarioTest {
         assertTrue("written only after the debounce", rig.store.batches.isEmpty())
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
         assertEquals(listOf("hello"), rig.store.batches.flatMap { batch -> batch.updates.map { it.word } })
+    }
+
+    @Test
+    fun `pasted text lands after the word in progress`() {
+        rig.startField()
+        rig.type("hi")
+        rig.orchestrator.pasteText(" there")
+        assertEquals("hi there", rig.editor.text)
+        assertNull(rig.editor.composingText)
+    }
+
+    @Test
+    fun `a pasted image goes to a field that takes images, after the word in progress`() {
+        rig.startField(contentMimeTypes = listOf("image/*"))
+        rig.type("hi")
+        assertTrue(rig.orchestrator.pasteImage("content://clips/000/a.png", "image/png"))
+        assertEquals(listOf("image/png content://clips/000/a.png"), rig.editor.contents)
+        assertEquals("hi", rig.editor.text)
+        assertNull(rig.editor.composingText)
+        assertTrue(rig.host.notices.isEmpty())
+    }
+
+    @Test
+    fun `a field that takes no images says so on the strip and gets nothing`() {
+        rig.startField(contentMimeTypes = listOf("text/plain"))
+        rig.type("hi")
+        assertFalse(rig.orchestrator.pasteImage("content://clips/000/a.png", "image/png"))
+        assertTrue(rig.editor.contents.isEmpty())
+        assertEquals(listOf(Keys.CLIP_IMAGE_NOT_ACCEPTED), rig.host.notices)
+    }
+
+    @Test
+    fun `a field that declares images but refuses the commit is told apart from one that takes it`() {
+        rig.startField(contentMimeTypes = listOf("*/*"))
+        rig.editor.takesContent = false
+        assertFalse(rig.orchestrator.pasteImage("content://clips/000/a.png", "image/webp"))
+        assertEquals(listOf(Keys.CLIP_IMAGE_NOT_ACCEPTED), rig.host.notices)
     }
 
     @Test

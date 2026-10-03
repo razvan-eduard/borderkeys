@@ -20,7 +20,15 @@ data class FieldSession(
     val initialCapsMode: Int = 0,
     /** The field described itself; without that, shift is never set automatically. */
     val described: Boolean = false,
+    /** The content types the field takes through commitContent, as it declared them. */
+    val contentMimeTypes: List<String> = emptyList(),
 ) {
+    /** Whether the field takes content of [mimeType]: an exact type, its family, or anything. */
+    fun acceptsContent(mimeType: String): Boolean = contentMimeTypes.any { accepted ->
+        accepted == "*/*" || accepted.equals(mimeType, ignoreCase = true) ||
+            (accepted.endsWith("/*") && mimeType.startsWith(accepted.dropLast(1), ignoreCase = true))
+    }
+
     companion object {
         /** Before any field has started. */
         val NONE = FieldSession(

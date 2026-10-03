@@ -38,6 +38,12 @@ internal class FakeFieldEditor : FieldEditor {
     /** The editor actions performed, in order. */
     val actions = mutableListOf<Int>()
 
+    /** The content committed, in order, as `mimeType uri`. */
+    val contents = mutableListOf<String>()
+
+    /** Whether the field takes committed content. */
+    var takesContent = true
+
     /** The field's text. */
     val text: String get() = content.toString()
 
@@ -155,6 +161,14 @@ internal class FakeFieldEditor : FieldEditor {
             selectionStart = start
             selectionEnd = end
         }
+    }
+
+    override fun commitContent(uri: String, mimeType: String, label: String?): Boolean {
+        if (!takesContent) {
+            return false
+        }
+        contents += "$mimeType $uri"
+        return true
     }
 
     override fun performEditorAction(actionId: Int) {

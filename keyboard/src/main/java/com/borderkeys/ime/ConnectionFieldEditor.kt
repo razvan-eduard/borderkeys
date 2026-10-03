@@ -5,6 +5,7 @@ package com.borderkeys.ime
 
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputContentInfo
 import com.borderkeys.typing.FieldEditor
 import com.borderkeys.typing.FieldText
 
@@ -61,5 +62,16 @@ internal class ConnectionFieldEditor(private val connection: () -> InputConnecti
 
     override fun performEditorAction(actionId: Int) {
         connection()?.performEditorAction(actionId)
+    }
+
+    override fun commitContent(uri: String, mimeType: String, label: String?): Boolean {
+        val connection = connection() ?: return false
+        val info = InputContentInfo(
+            android.net.Uri.parse(uri),
+            android.content.ClipDescription(label, arrayOf(mimeType)),
+        )
+        return connection.commitContent(
+            info, InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null,
+        )
     }
 }

@@ -117,6 +117,13 @@ internal class FakeTypingHost(private val clock: ManualClock) : TypingHost {
         privateRevealRefreshes++
     }
 
+    /** The notices shown, in order, by catalogue key. */
+    val notices = mutableListOf<String>()
+
+    override fun showNotice(key: String) {
+        notices += key
+    }
+
     override fun playEffect(event: EffectEvent, word: String) {
         effects += event to word
     }

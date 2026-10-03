@@ -57,6 +57,10 @@ attestations and the full commit lists are on the
   600,000, its header is sealed together with its contents, and a file claiming more than
   5,000,000 rounds is refused as damaged before any work is done. Files already written still
   open, and the screen says so while the key is being derived.
+- A copied image is kept as a picture, not as a link the copying app can take back: encrypted on
+  this device, with a small preview in the clipboard history, the same picture copied twice kept
+  once. Largest image kept, on the Clipboard screen, sets the limit, 10 MB by default. Pasting
+  into a field that takes no images now says so on the strip.
 - The keyboard is there on the lock screen after a restart, before the first unlock: it draws
   with your theme, size and layout settings, and types without dictionaries, learning, clipboard,
   settings or composer until the device is unlocked, then carries on with all of them. The

@@ -123,6 +123,17 @@ class SuggestionStripView(
             }
         }
 
+    /** A short message shown in place of the row, or null. */
+    var notice: String? = null
+        set(value) {
+            if (field != value) {
+                field = value
+                noticeChars = value?.toCharArray() ?: CharArray(0)
+                invalidate()
+            }
+        }
+    private var noticeChars = CharArray(0)
+
     /** Shows the decoding notice while a swipe is still being decoded. */
     var decoding: Boolean = false
         set(value) {
@@ -398,6 +409,11 @@ class SuggestionStripView(
                 // No particles on the private row.
                 particles.release()
                 drawPrivateRow(canvas)
+                return
+            }
+            if (noticeChars.isNotEmpty()) {
+                particles.release()
+                drawNotice(canvas, noticeChars, noticeChars.size)
                 return
             }
             if (decoding && count == 0) {

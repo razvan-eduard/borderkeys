@@ -8,6 +8,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.borderkeys.data.BorderKeysDatabase
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,6 +41,26 @@ class DatabaseMigrationTest {
                 db.query("SELECT COUNT(*) FROM key_touches").use {
                     it.moveToFirst()
                     assertEquals(0, it.getInt(0))
+                }
+            }
+    }
+
+    @Test
+    fun version8Gains9sImageColumnsAndKeepsItsClips() {
+        helper.createDatabase(DATABASE, 8).use { db ->
+            db.execSQL(
+                "INSERT INTO clip_entries (content, createdAt, pinnedAt, contentHash, uri, mimeType) " +
+                    "VALUES ('hello', 1000, NULL, 42, NULL, NULL)",
+            )
+        }
+        helper.runMigrationsAndValidate(DATABASE, 9, true, BorderKeysDatabase.MIGRATION_8_9)
+            .use { db ->
+                db.query("SELECT content, mediaFile, sizeBytes, thumbnail FROM clip_entries").use {
+                    it.moveToFirst()
+                    assertEquals("hello", it.getString(0))
+                    assertTrue(it.isNull(1))
+                    assertEquals(0L, it.getLong(2))
+                    assertTrue(it.isNull(3))
                 }
             }
     }

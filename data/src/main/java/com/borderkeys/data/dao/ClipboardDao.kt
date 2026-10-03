@@ -31,7 +31,7 @@ interface ClipboardDao {
     @Query(
         """
         UPDATE clip_entries SET content = :content, contentHash = :contentHash
-        WHERE id = :id AND uri IS NULL
+        WHERE id = :id AND uri IS NULL AND mediaFile IS NULL
         """,
     )
     suspend fun updateContent(id: Long, content: String, contentHash: Long): Int
@@ -42,8 +42,8 @@ interface ClipboardDao {
      */
     @Query(
         """
-        INSERT INTO clip_entries (content, createdAt, contentHash, uri, mimeType)
-        VALUES (:content, :createdAt, :contentHash, :uri, :mimeType)
+        INSERT INTO clip_entries (content, createdAt, contentHash, uri, mimeType, mediaFile, sizeBytes, thumbnail)
+        VALUES (:content, :createdAt, :contentHash, :uri, :mimeType, :mediaFile, :sizeBytes, :thumbnail)
         ON CONFLICT(contentHash) DO UPDATE SET createdAt = :createdAt
         """,
     )
@@ -53,7 +53,17 @@ interface ClipboardDao {
         contentHash: Long,
         uri: String?,
         mimeType: String?,
+        mediaFile: String? = null,
+        sizeBytes: Long = 0L,
+        thumbnail: ByteArray? = null,
     )
+
+    /** The stored images' names, for the sweep. */
+    @Query("SELECT mediaFile FROM clip_entries WHERE mediaFile IS NOT NULL")
+    suspend fun mediaFiles(): List<String>
+
+    @Query("SELECT * FROM clip_entries WHERE mediaFile = :mediaFile LIMIT 1")
+    suspend fun findByMediaFile(mediaFile: String): ClipEntry?
 
     /**
      * Inserts, or does nothing when something with this [contentHash] is already there, in one
@@ -81,7 +91,7 @@ interface ClipboardDao {
     suspend fun deleteAll()
 
     /** Drops every remembered image, pinned or not: switching the feature off means off. */
-    @Query("DELETE FROM clip_entries WHERE uri IS NOT NULL")
+    @Query("DELETE FROM clip_entries WHERE uri IS NOT NULL OR mediaFile IS NOT NULL")
     suspend fun deleteImages(): Int
 
     /** Everything that is not pinned, whatever its age. Used when the keyboard closes. */

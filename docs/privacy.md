@@ -218,6 +218,16 @@ app named on the Clipboard screen, is not recorded either, flagged or not; the k
 way to learn which app made a copy beyond the field it is attached to, so this is the extent of
 that check.
 
+A copied image, with *Remember copied images* on, is kept as its bytes, not as a reference the
+copying app can revoke: the bytes are read while the clip's grant holds, capped at the *Largest
+image kept* setting (10 MB by default, 1 to 50), encrypted with AES-256-GCM under a key the Android
+Keystore holds, and written under the keyboard's own files directory named by their SHA-256, so the
+same picture copied twice is one entry. The row keeps an 80-pixel WebP thumbnail of at most 10 KB,
+which is what the history panel draws. A file is deleted when no entry refers to it, and the
+directory is swept at every start. Pasting hands the field a URI of the keyboard's own provider,
+which decrypts into a pipe, with a read grant for that insertion only; a field that takes no
+images is told so on the strip. Images never match a search and are left out of backups.
+
 The keyboard holds no clipboard listener that runs when it is not the active input method — it
 has no permission that would let it, and on modern Android an IME cannot read the clipboard while
 not focused anyway.

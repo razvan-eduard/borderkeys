@@ -27,14 +27,27 @@ data class ClipEntry(
     val pinnedAt: Long? = null,
     val contentHash: Long,
 
-    /** The content URI of a copied image, or null for text. */
+    /** The content URI a copied image was remembered by before its bytes were kept, or null. */
     val uri: String? = null,
 
     /** The clip's MIME type, so the panel knows what it is looking at without guessing. */
     val mimeType: String? = null,
+
+    /** The stored image's name in the media store, `partition/sha256.extension`, or null. */
+    val mediaFile: String? = null,
+
+    /** The stored image's size in bytes; 0 for text. */
+    val sizeBytes: Long = 0L,
+
+    /** The stored image's thumbnail, a small WebP, or null. */
+    val thumbnail: ByteArray? = null,
 ) {
     val isPinned: Boolean get() = pinnedAt != null
 
-    /** True when this entry is an image rather than text. */
-    val isImage: Boolean get() = uri != null && mimeType?.startsWith("image/") == true
+    /** True when this entry is an image rather than text: its bytes are kept, or a URI was. */
+    val isImage: Boolean
+        get() = (mediaFile != null || uri != null) && mimeType?.startsWith("image/") == true
+
+    /** True when the image's bytes are kept. */
+    val hasMedia: Boolean get() = mediaFile != null
 }

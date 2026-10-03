@@ -20,7 +20,6 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsRequest
 import android.view.inputmethod.InlineSuggestionsResponse
 import android.view.inputmethod.InputConnection
-import android.view.inputmethod.InputContentInfo
 import android.widget.inline.InlinePresentationSpec
 import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.common.TextViewStyle
@@ -207,6 +206,8 @@ class BorderKeysService :
     // ---- the typing flow -----------------------------------------------------------------------
 
     /** The views and the input method, as [orchestrator] reaches them. */
+    private val clearNotice = Runnable { host?.suggestionStrip?.notice = null }
+
     private val typingHost = object : TypingHost {
         override val viewAttached: Boolean
             get() = host != null
@@ -294,6 +295,13 @@ class BorderKeysService :
             this@BorderKeysService.forgetWord(word, blockWhenNotPersonal)
 
         override fun subtypeTag(): String = currentSubtypeTag()
+
+        override fun showNotice(key: String) {
+            val strip = host?.suggestionStrip ?: return
+            strip.notice = strings[key]
+            strip.removeCallbacks(clearNotice)
+            strip.postDelayed(clearNotice, NOTICE_MILLIS)
+        }
 
         override val modifiersArmed: Boolean
             get() = controlArmed || altArmed
@@ -508,6 +516,7 @@ class BorderKeysService :
             .onSuccess { restoreLanguageEvidence() }
             .onFailure { error -> degradeWithoutDictionaries(error) }
         File(filesDir, LEGACY_USER_MODEL_SNAPSHOT).delete()
+        runCatching { DataGraph.clipboard.sweepMedia() }
     }
 
     /** What reads credential-encrypted storage: the settings, the packs and the dictionary edits. */
@@ -859,6 +868,7 @@ class BorderKeysService :
             imeOptions = info?.imeOptions ?: 0,
             initialCapsMode = info?.initialCapsMode ?: 0,
             described = info != null,
+            contentMimeTypes = info?.contentMimeTypes?.toList().orEmpty(),
         )
         engine.setLearningSpeed(
             KeyboardPreferences.learningSpeedFactor(preferences.learningSpeed),
@@ -2146,22 +2156,19 @@ class BorderKeysService :
     }
 
     override fun onClipPicked(entry: com.borderkeys.data.entity.ClipEntry) {
-        val view = host
-        view?.setClipboardPanelVisible(false)
-        val connection = currentInputConnection ?: return
+        host?.setClipboardPanelVisible(false)
         if (entry.isImage) {
-            val uri = android.net.Uri.parse(entry.uri)
-            val description = android.content.ClipDescription(
-                null, arrayOf(entry.mimeType ?: "image/*"),
-            )
-            commitImage(uri, description)
+            // A stored image is served by the keyboard's own provider; a legacy entry by its URI.
+            val media = entry.mediaFile
+            val uri = if (media != null) {
+                ClipMediaProvider.uriFor(this, media).toString()
+            } else {
+                entry.uri ?: return
+            }
+            orchestrator.pasteImage(uri, entry.mimeType ?: "image/*")
         } else {
-            orchestrator.finishWord()
-            connection.commitText(entry.content, 1)
-            orchestrator.checkpointField()
+            orchestrator.pasteText(entry.content)
         }
-        orchestrator.refreshContextFromEditor()
-        orchestrator.requestSuggestions()
     }
 
     override fun onClipPinToggled(entry: com.borderkeys.data.entity.ClipEntry) {
@@ -2357,7 +2364,6 @@ class BorderKeysService :
     }
 
     override fun onClipboardPicked() {
-        val connection = currentInputConnection ?: return
         val clip = clipboardManager?.primaryClip ?: return
         if (clip.itemCount == 0 || orchestrator.session.policy.privateField) {
             return
@@ -2366,13 +2372,11 @@ class BorderKeysService :
         val uri = item.uri
         val description = clip.description
         if (uri != null && description != null && description.hasMimeType("image/*")) {
-            commitImage(uri, description)
+            orchestrator.pasteImage(uri.toString(), description.getMimeType(0) ?: "image/*")
             return
         }
         val text = item.coerceToText(this)?.toString() ?: return
-        orchestrator.finishWord()
-        connection.commitText(text, 1)
-        orchestrator.checkpointField()
+        orchestrator.pasteText(text)
         clipOffers.used(clipSignature(clip), preferences.clipboardSuggestionOnce)
         if (preferences.clipboardSuggestionOnce) {
             host?.suggestionStrip?.clipboardChip = null
@@ -2386,34 +2390,24 @@ class BorderKeysService :
             // Deletes the history entry with this text, unless it is pinned.
             scope.launch(Dispatchers.IO) { DataGraph.clipboard.deleteIfUnpinned(text) }
         }
-        orchestrator.refreshContextFromEditor()
-        orchestrator.requestSuggestions()
     }
 
-    /**
-     * Hands an image to the editor through commitContent, when its contentMimeTypes accept the
-     * type; otherwise does nothing.
-     */
-    private fun commitImage(
-        uri: android.net.Uri,
-        description: android.content.ClipDescription,
-    ) {
-        val connection = currentInputConnection ?: return
-        val accepted = currentInputEditorInfo?.contentMimeTypes.orEmpty()
-        val supported = accepted.any { mime ->
-            description.hasMimeType(mime) || mime == "*/*"
+    /** Up to [cap] bytes at [uri], or null when it cannot be read or holds more. */
+    private fun readClipBytes(uri: android.net.Uri, cap: Long): ByteArray? = runCatching {
+        contentResolver.openInputStream(uri)?.use { stream ->
+            val out = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(64 * 1024)
+            var total = 0L
+            while (true) {
+                val read = stream.read(buffer)
+                if (read < 0) break
+                total += read
+                if (total > cap) return@use null
+                out.write(buffer, 0, read)
+            }
+            out.toByteArray()
         }
-        if (!supported) {
-            return
-        }
-        val info = InputContentInfo(uri, description)
-        // Grants the editor read access to the URI for this insertion.
-        connection.commitContent(
-            info,
-            InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION,
-            null,
-        )
-    }
+    }.getOrNull()
 
     private fun onClipboardChanged() {
         if (orchestrator.session.policy.privateField || !preferences.clipboardEnabled) {
@@ -2440,10 +2434,11 @@ class BorderKeysService :
         val description = clip.description
         val uri = clip.getItemAt(0).uri
         if (uri != null && description != null && description.hasMimeType("image/*")) {
-            // An image is remembered by its URI.
+            // The bytes are read while the clip's grant holds.
             val mime = description.getMimeType(0) ?: "image/*"
             scope.launch(Dispatchers.IO) {
-                DataGraph.clipboard.rememberImage(uri.toString(), mime)
+                val bytes = readClipBytes(uri, DataGraph.clipboard.imageCapBytes()) ?: return@launch
+                DataGraph.clipboard.rememberImageBytes(bytes, mime)
             }
             return
         }
@@ -2554,6 +2549,9 @@ class BorderKeysService :
 
         /** An obsolete snapshot of the personal model, deleted at start. */
         const val LEGACY_USER_MODEL_SNAPSHOT = "user_model.bku"
+
+        /** How long a notice stays on the strip. */
+        const val NOTICE_MILLIS = 2_000L
 
         /** How long the last learning flush, at shutdown, waits for the database. */
         const val FINAL_FLUSH_TIMEOUT_MILLIS = 2_000L
