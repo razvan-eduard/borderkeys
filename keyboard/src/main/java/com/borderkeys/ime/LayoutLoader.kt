@@ -96,14 +96,33 @@ object LayoutLoader {
             flags = flags and KeyFlags.LETTER.inv()
         }
 
+        // "flicks": the text a short drag in a direction writes, by compass point.
+        val flickJson = json.optJSONObject("flicks")
+        val flicks: Array<String>? = if (flickJson == null) {
+            null
+        } else {
+            Array(KeyboardLayout.FLICK_DIRECTIONS) { direction ->
+                flickJson.optString(FLICK_NAMES[direction], "").take(MAX_FLICK_TEXT_CHARS)
+            }
+        }
+        if (flicks != null && flicks.any { it.isNotEmpty() }) {
+            flags = flags or KeyFlags.HAS_FLICKS
+        }
+
         return KeyboardLayout.Key(
             code = code,
             label = label,
             alternatives = alternatives,
             widthUnits = json.optDouble("w", 1.0).toFloat().coerceIn(0.25f, 12f),
             flags = flags,
+            flicks = if (flicks != null && flicks.any { it.isNotEmpty() }) flicks else KeyboardLayout.NO_FLICKS,
         )
     }
+
+    /** The compass points a key's "flicks" object is keyed by, north first and clockwise. */
+    val FLICK_NAMES = arrayOf("n", "ne", "e", "se", "s", "sw", "w", "nw")
+
+    private const val MAX_FLICK_TEXT_CHARS = 200
 
     private fun defaultLabel(code: Int): String = when (code) {
         KeyCodes.SHIFT -> "⇧"

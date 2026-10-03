@@ -504,6 +504,15 @@ internal fun iconFor(action: QuickAction): Int = when (action) {
     QuickAction.PRIVATE_COPY -> R.drawable.bk_action_copy_private
     QuickAction.PICK_KEYBOARD -> R.drawable.bk_action_pick_keyboard
     QuickAction.VOICE_INPUT -> R.drawable.bk_action_voice_input
+    QuickAction.WORD_LEFT -> R.drawable.bk_action_word_left
+    QuickAction.WORD_RIGHT -> R.drawable.bk_action_word_right
+    QuickAction.SELECT_WORD_LEFT -> R.drawable.bk_action_select_word_left
+    QuickAction.SELECT_WORD_RIGHT -> R.drawable.bk_action_select_word_right
+    QuickAction.SELECT_TO_LINE_START -> R.drawable.bk_action_select_to_line_start
+    QuickAction.SELECT_TO_LINE_END -> R.drawable.bk_action_select_to_line_end
+    QuickAction.DELETE_WORD_FORWARD -> R.drawable.bk_action_delete_word_forward
+    QuickAction.ESCAPE -> R.drawable.bk_action_escape
+    QuickAction.TAB -> R.drawable.bk_action_tab
 }
 
 internal fun labelFor(action: QuickAction): String = when (action) {
@@ -532,4 +541,13 @@ internal fun labelFor(action: QuickAction): String = when (action) {
     QuickAction.PRIVATE_COPY -> Keys.ACTION_PRIVATE_COPY
     QuickAction.PICK_KEYBOARD -> Keys.ACTION_PICK_KEYBOARD
     QuickAction.VOICE_INPUT -> Keys.ACTION_VOICE_INPUT
+    QuickAction.WORD_LEFT -> Keys.ACTION_WORD_LEFT
+    QuickAction.WORD_RIGHT -> Keys.ACTION_WORD_RIGHT
+    QuickAction.SELECT_WORD_LEFT -> Keys.ACTION_SELECT_WORD_LEFT
+    QuickAction.SELECT_WORD_RIGHT -> Keys.ACTION_SELECT_WORD_RIGHT
+    QuickAction.SELECT_TO_LINE_START -> Keys.ACTION_SELECT_TO_LINE_START
+    QuickAction.SELECT_TO_LINE_END -> Keys.ACTION_SELECT_TO_LINE_END
+    QuickAction.DELETE_WORD_FORWARD -> Keys.ACTION_DELETE_WORD_FORWARD
+    QuickAction.ESCAPE -> Keys.ACTION_ESCAPE
+    QuickAction.TAB -> Keys.ACTION_TAB
 }

@@ -916,7 +916,7 @@ geometry — a ring of alternatives around the finger plus a separate centre Can
 
 ## Quick actions
 
-`QuickAction` (`:data`) is an enum of 25 actions, each with a stable `id` so that a bar
+`QuickAction` (`:data`) is an enum of 34 actions, each with a stable `id` so that a bar
 configured by a newer build **opens** rather than fails on an older one (`fromIds` drops unknown
 ids). `DEFAULT` is the five that answer *"I want that text somewhere"*:
 `COPY_PREVIOUS_WORD`, `COPY_ALL`, `PASTE`, `CLIPBOARD_HISTORY`, `SELECT_ALL`.
@@ -939,7 +939,11 @@ to the previous keyboard, its hold opening the picker; `VOICE_INPUT` switches to
 among the enabled input methods, the one `VoiceInput` decides on (the remembered one while the set
 it was chosen from is unchanged, the only one when there is one, the picker otherwise or on a
 hold), and is offered only while one is enabled. The same two exist as keys for the modifier row
-(`ime_picker`, `voice`), and the globe's hold opens the picker.
+(`ime_picker`, `voice`), and the globe's hold opens the picker. `WORD_LEFT`, `WORD_RIGHT`,
+`SELECT_WORD_LEFT`, `SELECT_WORD_RIGHT`, `SELECT_TO_LINE_START`, `SELECT_TO_LINE_END`,
+`DELETE_WORD_FORWARD`, `ESCAPE` and `TAB` are hardware keys with modifiers, sent by
+`TypingOrchestrator.runEditingAction`; they exist for the flicks (`docs/layouts.md`), which run a
+quick action as one of their three kinds, through `TypingOrchestrator.onFlick`.
 
 `NEWLINE` is worth a button because in a messaging app the return key sends the message, and the
 gesture for "new line without sending" is different in every one of them.
@@ -1118,7 +1122,8 @@ Things that will silently break if not respected.
 - **No hardcoded user-visible strings.** Everything lives in the `:i18n` JSON catalogues, six
   languages. `extract_strings.py` / `inject_strings.py` round-trip them.
 - **The draw path allocates nothing.** `KeyboardCanvasView` resolves touches arithmetically;
-  there are no child views per key. `InlineSuggestionsHostView` is the one place framework
+  there are no child views per key. The flick labels are eight packed slots per key in
+  `KeyboardGeometry`, read by index like the labels. `InlineSuggestionsHostView` is the one place framework
   `View`s are hosted, and it has no alternative.
 - **`Candidate` is twelve bytes of plain data** crossing JNI on a path that may not allocate. Do
   not add fields to it; `continuesTyped` recognising a completion from text rather than a flag is

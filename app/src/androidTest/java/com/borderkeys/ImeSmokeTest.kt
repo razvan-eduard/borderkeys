@@ -20,6 +20,7 @@ import androidx.test.uiautomator.Until
 import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.entity.LanguagePackEntry
+import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.i18n.Keys
@@ -188,6 +189,26 @@ class ImeSmokeTest {
             settle()
         } finally {
             runBlocking { DataGraph.themes.updatePreferences { it.copy(quickActionsEnabled = false) } }
+        }
+    }
+
+    @Test
+    fun aShortDragOffAKeyWritesItsFlick() {
+        runBlocking {
+            DataGraph.themes.updatePreferences {
+                it.copy(keyFlicks = listOf(KeyFlick('a'.code, KeyFlick.NORTH, KeyFlick.TEXT, "@")))
+            }
+        }
+        try {
+            settle()
+            val a = waitForKey("a").visibleBounds
+            // Up by most of the key's height: past the flick's start, within its end.
+            val from = Point(a.centerX(), a.centerY())
+            val to = Point(a.centerX(), a.centerY() - (a.height() * 0.8f).toInt())
+            swipe(listOf(from, to))
+            assertField("@")
+        } finally {
+            runBlocking { DataGraph.themes.updatePreferences { it.copy(keyFlicks = emptyList()) } }
         }
     }
 

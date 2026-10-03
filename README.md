@@ -41,7 +41,8 @@ The whole walk-through, screen by screen, is [`docs/guide.md`](docs/guide.md). I
   six languages inside the app and twenty-one more as packs to download from the releases page;
   thirty layouts from AZERTY, Dvorak and Colemak to the national variants with their own
   letters, eight in scripts of their own and two read from the right, a number row, a number
-  pad and a modifier row; a personal dictionary you can read, search and edit, word by word and
+  pad and a modifier row; flicks of your own on any key, eight directions each; a personal
+  dictionary you can read, search and edit, word by word and
   phrase by phrase, on pages of its own, that learns the words you open sentences with and
   offers them first, all behind one learning switch that forgets everything when turned off;
   every tapped letter read by where the tap landed, so a slip towards a neighbouring key is

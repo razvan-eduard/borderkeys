@@ -32,6 +32,15 @@ data class KeyboardPreferences(
     /** Whether other apps' text-selection menu offers Keep privately with BorderKeys. */
     val privateCopyInTextMenu: Boolean = false,
 
+    /** What a short drag off a key does, by key and direction; see [KeyFlick]. */
+    val keyFlicks: List<KeyFlick> = emptyList(),
+
+    /** How far a press must travel, as a fraction of the key's diagonal, to be a flick. */
+    val flickMinFraction: Float = DEFAULT_FLICK_MIN_FRACTION,
+
+    /** How far a press may travel, as a fraction of the key's diagonal, and still be a flick. */
+    val flickMaxFraction: Float = DEFAULT_FLICK_MAX_FRACTION,
+
     /**
      * Whether the keyboard-picker key switches back to the previous keyboard at once, its hold
      * opening the picker; off, a tap opens the picker.
@@ -641,6 +650,9 @@ data class KeyboardPreferences(
         },
         assistTranslateModel = assistTranslateModel.take(MAX_MODEL_FILE_NAME_CHARS),
         assistWriteModel = assistWriteModel.take(MAX_MODEL_FILE_NAME_CHARS),
+        keyFlicks = KeyFlick.sanitised(keyFlicks),
+        flickMinFraction = flickMinFraction.coerceIn(MIN_FLICK_MIN_FRACTION, MAX_FLICK_MIN_FRACTION),
+        flickMaxFraction = flickMaxFraction.coerceIn(MIN_FLICK_MAX_FRACTION, MAX_FLICK_MAX_FRACTION),
         voiceKeyboardId = voiceKeyboardId.take(MAX_INPUT_METHOD_ID_CHARS),
         voiceKeyboardSet = voiceKeyboardSet.take(MAX_INPUT_METHOD_SET_CHARS),
         themeMode = if (themeMode == THEME_MODE_AUTO_SYSTEM) THEME_MODE_AUTO_SYSTEM else THEME_MODE_MANUAL,
@@ -950,6 +962,13 @@ data class KeyboardPreferences(
 
         /** A model file name longer than any real one; a stored value past it is truncated. */
         const val MAX_MODEL_FILE_NAME_CHARS = 255
+
+        const val DEFAULT_FLICK_MIN_FRACTION = 0.28f
+        const val MIN_FLICK_MIN_FRACTION = 0.10f
+        const val MAX_FLICK_MIN_FRACTION = 0.60f
+        const val DEFAULT_FLICK_MAX_FRACTION = 1.41f
+        const val MIN_FLICK_MAX_FRACTION = 0.50f
+        const val MAX_FLICK_MAX_FRACTION = 2.00f
 
         /** An input method id is `package/class`; a set of them is a few joined. */
         const val MAX_INPUT_METHOD_ID_CHARS = 300

@@ -42,6 +42,7 @@ import com.borderkeys.data.theme.TimestampPattern
 import com.borderkeys.data.theme.QuickActionBar
 import com.borderkeys.data.theme.QuickActionBarItem
 import com.borderkeys.data.theme.KeyboardAppearance
+import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.data.theme.ParticleEffectsSettings
@@ -301,6 +302,11 @@ class BorderKeysService :
             strip.notice = strings[key]
             strip.removeCallbacks(clearNotice)
             strip.postDelayed(clearNotice, NOTICE_MILLIS)
+        }
+
+        override fun runQuickAction(id: Int) {
+            val action = QuickAction.fromId(id) ?: return
+            onQuickAction(QuickActionBarItem.Builtin(action))
         }
 
         override val modifiersArmed: Boolean
@@ -718,6 +724,8 @@ class BorderKeysService :
             view.keyboard.spaceCursorEnabled = newPreferences.spaceCursorControl
             view.keyboard.holdHintsEnabled = newPreferences.longPressHints
             view.keyboard.longPressDelayMillis = newPreferences.longPressMillis.toLong()
+            view.keyboard.flickMinFraction = newPreferences.flickMinFraction
+            view.keyboard.flickMaxFraction = newPreferences.flickMaxFraction
             view.keyboard.radialMenuEnabled = newPreferences.radialMenuEnabled
             view.keyboard.radialPauseDwellMillis =
                 newPreferences.radialPauseDwellMillis.toLong()
@@ -817,6 +825,8 @@ class BorderKeysService :
         view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
         view.keyboard.holdHintsEnabled = preferences.longPressHints
         view.keyboard.longPressDelayMillis = preferences.longPressMillis.toLong()
+        view.keyboard.flickMinFraction = preferences.flickMinFraction
+        view.keyboard.flickMaxFraction = preferences.flickMaxFraction
         view.keyboard.radialMenuEnabled = preferences.radialMenuEnabled
         view.keyboard.radialPauseDwellMillis = preferences.radialPauseDwellMillis.toLong()
         view.keyboard.radialMinPathLetters = preferences.radialMinPathLetters
@@ -1392,6 +1402,26 @@ class BorderKeysService :
 
     override fun onText(text: CharSequence) = orchestrator.onText(text)
 
+    /**
+     * A flick on the key at [keyIndex]: the user's own flick for the key's code first, else the
+     * layout's text; a key the orchestrator leaves goes where a tap on it goes.
+     */
+    override fun onFlick(keyIndex: Int, direction: Int) {
+        val view = host ?: return
+        val code = view.keyboard.keyCodeAt(keyIndex)
+        val own = preferences.keyFlicks.firstOrNull { it.keyCode == code && it.direction == direction }
+        if (own != null) {
+            if (!orchestrator.onFlick(own)) {
+                onKey(KeyCodes.named(own.value), keyIndex, Float.NaN, Float.NaN)
+            }
+            return
+        }
+        val text = view.keyboard.flickTextAt(keyIndex, direction)
+        if (text.isNotEmpty()) {
+            orchestrator.onText(text)
+        }
+    }
+
     /** The typing flow's keys go to [orchestrator]; pages, panels and the modifiers stay here. */
     override fun onKey(code: Int, keyIndex: Int, x: Float, y: Float) {
         if (orchestrator.onKey(code, keyIndex, x, y)) {
@@ -1535,7 +1565,20 @@ class BorderKeysService :
         if (!preferences.languageKey) {
             result = result.withoutLanguageKey()
         }
+        if (preferences.keyFlicks.isNotEmpty()) {
+            result = result.withFlickLabels(flickLabelsByKey(preferences.keyFlicks))
+        }
         return result
+    }
+
+    /** The user's flick labels by key code, eight per key north first and clockwise, "" for none. */
+    private fun flickLabelsByKey(flicks: List<KeyFlick>): Map<Int, Array<String>> {
+        val byKey = HashMap<Int, Array<String>>()
+        for (flick in flicks) {
+            val labels = byKey.getOrPut(flick.keyCode) { Array(KeyboardLayout.FLICK_DIRECTIONS) { "" } }
+            labels[flick.direction] = KeyFlick.shownLabel(flick).ifEmpty { FLICK_PLACEHOLDER }
+        }
+        return byKey
     }
 
     /** The symbols page [KeyboardPreferences.symbolsNumberPosition] asks for. */
@@ -2024,6 +2067,10 @@ class BorderKeysService :
             )
             QuickAction.PASTE -> onClipboardPicked()
             QuickAction.PRIVATE_COPY -> privateCopy()
+            QuickAction.WORD_LEFT, QuickAction.WORD_RIGHT, QuickAction.SELECT_WORD_LEFT,
+            QuickAction.SELECT_WORD_RIGHT, QuickAction.SELECT_TO_LINE_START,
+            QuickAction.SELECT_TO_LINE_END, QuickAction.DELETE_WORD_FORWARD, QuickAction.ESCAPE,
+            QuickAction.TAB -> orchestrator.runEditingAction(action)
             QuickAction.PICK_KEYBOARD -> pickKeyboard(hold = false)
             QuickAction.VOICE_INPUT -> voiceInput(hold = false)
             QuickAction.CLIPBOARD_HISTORY -> offerClipboardHistory()
@@ -2626,6 +2673,9 @@ class BorderKeysService :
 
         /** How long a notice stays on the strip. */
         const val NOTICE_MILLIS = 2_000L
+
+        /** Marks a flick with no label of its own on the key, so the slot shows and is reachable. */
+        const val FLICK_PLACEHOLDER = "\u2022"
 
         /** How long the last learning flush, at shutdown, waits for the database. */
         const val FINAL_FLUSH_TIMEOUT_MILLIS = 2_000L

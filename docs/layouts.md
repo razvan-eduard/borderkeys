@@ -97,6 +97,7 @@ A row's total width is `indent + Σ widthUnits`, and is never zero.
 | `w` | Width in key-width units. Defaults to 1. |
 | `absorb` | This key, not the space bar, takes the width of an optional key the layout drops. |
 | `secondary` | Drawn in the modifier fill without being a modifier, so a digit block reads as one against the symbols around it. |
+| `flicks` | An object of compass points, `n`, `ne`, `e`, `se`, `s`, `sw`, `w`, `nw`, each the text a short drag off the key in that direction writes. The user's own flicks, set on the Key flicks screen, lie over these. |
 
 `c` and `code` are two spellings of the same field: `c` wins when present, otherwise `code` is
 resolved through `KeyCodes.named()`.
@@ -117,6 +118,9 @@ Codes are ints. A character key's code **is** its code point; actions are negati
 | `EMOJI` | −6 |
 | `SETTINGS` | −7 |
 | `SYMBOLS_SHIFT` | −8 |
+| `ESCAPE` … `INSERT` | −9 … −22, the modifier row's hardware keys |
+| `KEYBOARD_PICKER` | −23 |
+| `VOICE` | −24 |
 | `NONE` | −100 |
 
 Flags are a bitmask, derived by the loader rather than written in the asset — so a layout author
@@ -128,9 +132,10 @@ cannot forget one:
 | `PREVIEW` | as above | the pop-up bubble |
 | `MODIFIER` | not a character | styling, and exclusion from swipe |
 | `HAS_ALTERNATIVES` | `alt` is non-empty | the long-press hint |
-| `REPEATABLE` | code is `DELETE` | held-backspace repeat |
+| `REPEATABLE` | code is `DELETE`, or a modifier-row key that repeats | held-backspace repeat |
 | `ABSORBS_FREED_WIDTH` | `absorb` is true | width redistribution |
 | `SECONDARY_ROW` | `secondary` is true, or the row `withNumberRow()` adds | the key fill |
+| `HAS_FLICKS` | `flicks` names a direction, or the user set one | the flick labels, and the press followed off the key |
 
 **Space is a character but gets neither `LETTER` nor `PREVIEW`** — it is not a swipe letter and a
 preview bubble over the space bar is noise.
@@ -185,7 +190,8 @@ nothing on the classpath.
 ## Long press: two sources
 
 A key's long-press characters come from **two independent places**, and keeping them separate is
-what makes accents follow the user's languages rather than their layout.
+what makes accents follow the user's languages rather than their layout. A short drag off the key
+is a third source of its own, the flicks below.
 
 ### 1. The layout's own `alt`
 
@@ -218,6 +224,21 @@ malformed overlay means a key without that accent, never a keyboard that will no
 
 `longPressMillis` is a user setting, clamped to `[MIN_LONG_PRESS_MILLIS, MAX_LONG_PRESS_MILLIS]`.
 `longPressHints` (default on) controls whether the alternatives are hinted on the key face.
+
+### Flicks
+
+A press that travels off its key in one of eight directions, past *A flick starts after* and with
+a path shorter than *A flick ends before*, both fractions of the key's diagonal (28% and 141% by
+default, on the Key flicks screen), is a flick: it writes a text, runs a quick action or presses another key, as the user set for that
+key and direction (`KeyFlick`, in the preferences, so backups carry it), or as the layout's own
+`flicks` object says. `FlickClassifier` decides on the lift from the start point, the end point,
+the path length and the time: within the minimum it is a tap; with a path past the maximum it has
+left the key and is a word swipe once the press lasted over 150 ms or the path bent, a flick being
+one straight stroke, wherever it ends. The press
+is followed from its first point for every letter and every key with flicks, so a swipe loses no
+sample to the decision; past the tap distance the hold is off, and a key with flicks never slides
+onto its neighbour. The labels sit on the key's edges and corners; the hold hint keeps the
+top-right corner. A screen reader gets each flick as a custom action on the key.
 
 ---
 
@@ -286,10 +307,8 @@ a working keyboard.
 
 ## What is deliberately not here
 
-- **No per-key user customisation.** A user cannot reassign what a given key's long press holds;
-  `alt` is layout data and accents follow enabled languages. Some keyboards offer a grid of
-  user-assigned subkeys per key. This does not, and that is a real feature difference rather than
-  an oversight.
+- **No user-assigned long presses.** `alt` is layout data and accents follow enabled languages;
+  what the user assigns per key are the eight flicks, not the hold.
 - **No pixel positions, ever.** If you find yourself wanting one in an asset, the answer is a
   width unit or a height scale.
 - **No per-key `View`s.** `KeyboardCanvasView` draws dozens of keys from parallel arrays;
