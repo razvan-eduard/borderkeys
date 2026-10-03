@@ -41,6 +41,23 @@ object KeyCodes {
     const val KEYBOARD_PICKER = -23
     /** Switches to a voice keyboard. */
     const val VOICE = -24
+
+    /** Dead keys: the next letter takes the accent; see [DeadKeys]. */
+    const val DEAD_ACUTE = -25
+    const val DEAD_GRAVE = -26
+    const val DEAD_CIRCUMFLEX = -27
+    const val DEAD_DIAERESIS = -28
+    const val DEAD_TILDE = -29
+    const val DEAD_CARON = -30
+    const val DEAD_BREVE = -31
+    const val DEAD_CEDILLA = -32
+    const val DEAD_OGONEK = -33
+    const val DEAD_RING = -34
+    const val DEAD_MACRON = -35
+    const val DEAD_COMMA_BELOW = -36
+
+    /** The compose key: the next keys spell a character; see [ComposeSequences]. */
+    const val COMPOSE = -37
     const val NONE = -100
 
     fun isCharacter(code: Int): Boolean = code > 0
@@ -85,6 +102,19 @@ object KeyCodes {
         "insert" -> INSERT
         "ime_picker" -> KEYBOARD_PICKER
         "voice" -> VOICE
+        "dead_acute" -> DEAD_ACUTE
+        "dead_grave" -> DEAD_GRAVE
+        "dead_circumflex" -> DEAD_CIRCUMFLEX
+        "dead_diaeresis" -> DEAD_DIAERESIS
+        "dead_tilde" -> DEAD_TILDE
+        "dead_caron" -> DEAD_CARON
+        "dead_breve" -> DEAD_BREVE
+        "dead_cedilla" -> DEAD_CEDILLA
+        "dead_ogonek" -> DEAD_OGONEK
+        "dead_ring" -> DEAD_RING
+        "dead_macron" -> DEAD_MACRON
+        "dead_comma_below" -> DEAD_COMMA_BELOW
+        "compose" -> COMPOSE
         else -> NONE
     }
 }

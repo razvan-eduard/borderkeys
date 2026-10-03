@@ -294,6 +294,19 @@ private fun keyName(code: Int, strings: com.borderkeys.i18n.LanguageManager): St
         KeyCodes.INSERT -> strings[Keys.KEY_INSERT]
         KeyCodes.KEYBOARD_PICKER -> strings[Keys.KEY_KEYBOARD_PICKER]
         KeyCodes.VOICE -> strings[Keys.KEY_VOICE]
+        KeyCodes.COMPOSE -> strings[Keys.KEY_COMPOSE]
+        KeyCodes.DEAD_ACUTE -> strings[Keys.KEY_DEAD_ACUTE]
+        KeyCodes.DEAD_GRAVE -> strings[Keys.KEY_DEAD_GRAVE]
+        KeyCodes.DEAD_CIRCUMFLEX -> strings[Keys.KEY_DEAD_CIRCUMFLEX]
+        KeyCodes.DEAD_DIAERESIS -> strings[Keys.KEY_DEAD_DIAERESIS]
+        KeyCodes.DEAD_TILDE -> strings[Keys.KEY_DEAD_TILDE]
+        KeyCodes.DEAD_CARON -> strings[Keys.KEY_DEAD_CARON]
+        KeyCodes.DEAD_BREVE -> strings[Keys.KEY_DEAD_BREVE]
+        KeyCodes.DEAD_CEDILLA -> strings[Keys.KEY_DEAD_CEDILLA]
+        KeyCodes.DEAD_OGONEK -> strings[Keys.KEY_DEAD_OGONEK]
+        KeyCodes.DEAD_RING -> strings[Keys.KEY_DEAD_RING]
+        KeyCodes.DEAD_MACRON -> strings[Keys.KEY_DEAD_MACRON]
+        KeyCodes.DEAD_COMMA_BELOW -> strings[Keys.KEY_DEAD_COMMA_BELOW]
         else -> ""
     }
 }

@@ -171,6 +171,9 @@ jobs:
       - name: The layout assets, their subtypes and their labels agree
         run: python3 tools/check_layouts.py
 
+      - name: The compose table matches its generator
+        run: python3 tools/make_compose.py --check
+
       # Every header compiles on its own, with libstdc++.
       - name: Headers are self-contained
         run: |

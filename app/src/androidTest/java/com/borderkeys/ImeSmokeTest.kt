@@ -23,6 +23,7 @@ import com.borderkeys.data.entity.LanguagePackEntry
 import com.borderkeys.data.theme.CustomLayout
 import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.data.theme.ModifierRowKeys
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
@@ -190,6 +191,27 @@ class ImeSmokeTest {
             settle()
         } finally {
             runBlocking { DataGraph.themes.updatePreferences { it.copy(quickActionsEnabled = false) } }
+        }
+    }
+
+    @Test
+    fun aDeadAcuteThenEWritesEAcute() {
+        runBlocking {
+            DataGraph.themes.updatePreferences {
+                it.copy(modifierRow = true, modifierRowKeys = listOf(ModifierRowKeys.DEAD_ACUTE, ModifierRowKeys.ESCAPE))
+            }
+        }
+        try {
+            settle()
+            tapKey(DEAD_ACUTE_KEY)
+            tapKey("e")
+            assertField("é")
+        } finally {
+            runBlocking {
+                DataGraph.themes.updatePreferences {
+                    it.copy(modifierRow = false, modifierRowKeys = ModifierRowKeys.DEFAULT)
+                }
+            }
         }
     }
 
@@ -891,6 +913,9 @@ class ImeSmokeTest {
 
         /** The backspace key's spoken name, from the catalogue. */
         const val DELETE_KEY = "Delete"
+
+        /** The dead acute's spoken name, up to the hold hint. */
+        const val DEAD_ACUTE_KEY = "Dead key: Acute accent"
         const val QUICK_ACTIONS_VIEW = "com.borderkeys.ime.QuickActionsView"
 
         /** The name the system shows for this keyboard, from the manifest's ime_name. */

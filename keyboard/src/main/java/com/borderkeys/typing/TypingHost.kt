@@ -61,6 +61,12 @@ interface TypingHost {
     /** Runs the quick action with [id], as a tap on its button would. */
     fun runQuickAction(id: Int)
 
+    /**
+     * Shows what is pending: the dead key [deadCode] drawn pressed, 0 for none, [locked] when it
+     * stays; the compose sequence typed so far, null for none.
+     */
+    fun showAccent(deadCode: Int, locked: Boolean, composing: String?)
+
     /** Offers [replacements] on the language-revert panel. */
     fun offerLanguageReplacements(replacements: List<LanguageSwitchCorrector.Replacement>)
 

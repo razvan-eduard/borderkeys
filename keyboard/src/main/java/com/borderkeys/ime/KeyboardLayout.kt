@@ -227,7 +227,7 @@ class KeyboardLayout(
         if (rows.isEmpty() || id.contains(MODIFIER_ROW_SUFFIX) || id.contains(MODIFIER_ROW_BOTTOM_SUFFIX)) {
             return this
         }
-        val chosen = keys.filter { MODIFIER_CAPS.containsKey(it) }.distinct()
+        val chosen = keys.filter { modifierCap(it) != null }.distinct()
             .take(MAX_MODIFIER_KEYS)
             .ifEmpty { DEFAULT_MODIFIER_KEYS }
         val width = LETTER_ROW_UNITS / chosen.size
@@ -236,7 +236,7 @@ class KeyboardLayout(
             chosen.map { code ->
                 Key(
                     code = code,
-                    label = MODIFIER_CAPS.getValue(code),
+                    label = modifierCap(code).orEmpty(),
                     alternatives = "",
                     widthUnits = width,
                     flags = if (KeyCodes.repeatsOnModifierRow(code)) {
@@ -283,6 +283,7 @@ class KeyboardLayout(
             KeyCodes.INSERT to "ins",
             KeyCodes.KEYBOARD_PICKER to "\u2328",
             KeyCodes.VOICE to "\uD83C\uDF99",
+            KeyCodes.COMPOSE to "\u2384",
         )
 
         /** The row as shipped, left to right. */
@@ -292,7 +293,7 @@ class KeyboardLayout(
         )
 
         /** The cap of a modifier-row key that a layout asset names without a label. */
-        internal fun modifierCap(code: Int): String? = MODIFIER_CAPS[code]
+        internal fun modifierCap(code: Int): String? = MODIFIER_CAPS[code] ?: DeadKeys.cap(code)
 
         /** The most keys the modifier row takes. */
         const val MAX_MODIFIER_KEYS = 12

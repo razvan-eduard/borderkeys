@@ -121,6 +121,8 @@ Codes are ints. A character key's code **is** its code point; actions are negati
 | `ESCAPE` … `INSERT` | −9 … −22, the modifier row's hardware keys |
 | `KEYBOARD_PICKER` | −23 |
 | `VOICE` | −24 |
+| `DEAD_ACUTE` … `DEAD_COMMA_BELOW` | −25 … −36, named `dead_acute`, `dead_grave`, `dead_circumflex`, `dead_diaeresis`, `dead_tilde`, `dead_caron`, `dead_breve`, `dead_cedilla`, `dead_ogonek`, `dead_ring`, `dead_macron`, `dead_comma_below` |
+| `COMPOSE` | −37, named `compose` |
 | `NONE` | −100 |
 
 Flags are a bitmask, derived by the loader rather than written in the asset — so a layout author
@@ -199,7 +201,7 @@ nothing on the classpath.
 
 A key's long-press characters come from **two independent places**, and keeping them separate is
 what makes accents follow the user's languages rather than their layout. A short drag off the key
-is a third source of its own, the flicks below.
+is a third source of its own, the flicks below, and dead keys a fourth.
 
 ### 1. The layout's own `alt`
 
@@ -247,6 +249,22 @@ is followed from its first point for every letter and every key with flicks, so 
 sample to the decision; past the tap distance the hold is off, and a key with flicks never slides
 onto its neighbour. The labels sit on the key's edges and corners; the hold hint keeps the
 top-right corner. A screen reader gets each flick as a custom action on the key.
+
+### Dead keys and the compose key
+
+The modifier row may carry twelve dead keys and a compose key (the Layout screen's row editor
+offers them; the base assets carry none, as accents follow the languages). A dead key latches
+until the next character: a letter takes its mark, composed under NFC to one code point
+(`DeadKeys`, with Latvian's comma-below letters as the one override); space writes the bare
+accent; a character that takes no mark is written after the bare accent. Pressed twice or held
+it locks, every letter taking the mark until it is pressed again. Backspace drops it without
+deleting, and so do a new field, a caret moved elsewhere and any key that is not a character or
+shift. The pending key is drawn pressed, the only sign of it. The compose key gathers the next
+characters until they spell an entry of `assets/compose/latin.json` (`tools/make_compose.py`
+writes it, CI checks it: every accent's ASCII mark with every letter it composes with, and the
+X11 symbol sequences people know), the sequence so far shown on the strip; backspace steps it
+back, and a sequence that can spell nothing is dropped. `AccentFlow` holds both, so the flow
+types the result as the key it stands for would be typed.
 
 ---
 

@@ -57,6 +57,10 @@ attestations and the full commit lists are on the
   600,000, its header is sealed together with its contents, and a file claiming more than
   5,000,000 rounds is refused as damaged before any work is done. Files already written still
   open, and the screen says so while the key is being derived.
+- Dead keys and a compose key for the modifier row: twelve accents that go on the next letter,
+  tapped twice or held to stay on every letter until tapped again, and a compose key after which
+  a few keys spell a character, ' e for é, o c for ©, - - - for —. The pending key is drawn
+  pressed, and the compose sequence shows on the strip as you type it.
 - Your layouts, a new screen under Layout & keys: write a layout of your own as the keyboard's
   own layout files are written, starting from any built-in one; the editor checks it as you type
   with the same rules the built-in ones must meet, shows it, and imports or exports a file. Any

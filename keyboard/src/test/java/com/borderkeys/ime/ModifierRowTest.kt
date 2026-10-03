@@ -17,6 +17,14 @@ class ModifierRowTest {
     private val base = KeyboardLayout.fallbackQwerty()
 
     @Test
+    fun `the row carries dead keys and the compose key, each capped with its mark`() {
+        val layout = base.withModifierRow(listOf(KeyCodes.DEAD_ACUTE, KeyCodes.DEAD_COMMA_BELOW, KeyCodes.COMPOSE))
+        assertEquals(listOf(KeyCodes.DEAD_ACUTE, KeyCodes.DEAD_COMMA_BELOW, KeyCodes.COMPOSE), layout.rows[0].keys.map { it.code })
+        assertEquals("\u25CC\u0301", layout.rows[0].keys[0].label)
+        assertEquals("\u2384", layout.rows[0].keys[2].label)
+    }
+
+    @Test
     fun `the row goes above the letters and carries the eight keys across the full width`() {
         val layout = base.withModifierRow()
         assertEquals(base.rows.size + 1, layout.rows.size)
