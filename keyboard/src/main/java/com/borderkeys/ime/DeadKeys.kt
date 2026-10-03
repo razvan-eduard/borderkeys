@@ -7,8 +7,8 @@ import java.text.Normalizer
 
 /**
  * What a dead key does to the next character: the letter with its mark, composed to one
- * precomposed code point under NFC, or nothing when no such character exists. Pure, and free of
- * Android classes, so the typing flow can use it.
+ * precomposed code point under NFC, or nothing when no such character exists. Pure, free of
+ * Android classes.
  */
 object DeadKeys {
 

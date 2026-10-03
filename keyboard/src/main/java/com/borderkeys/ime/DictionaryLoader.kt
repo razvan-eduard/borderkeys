@@ -47,6 +47,14 @@ internal class DictionaryLoader(
     var accentSignature: String = ""
         private set
 
+    /** The enabled packs' tags, whose accents [accentOverlays] holds. */
+    var accentTags: List<String> = emptyList()
+        private set
+
+    /** Every accents file by tag, for the languages the user adds; see [AccentOverlays.withExtra]. */
+    var everyAccentOverlay: Map<String, Map<Char, String>> = emptyMap()
+        private set
+
     /** The emoji panel's keywords for the languages switched on; see [EmojiKeywords]. */
     var emojiKeywords: Map<String, List<String>> = emptyMap()
         private set
@@ -80,6 +88,10 @@ internal class DictionaryLoader(
             // The accents, offensive words, emoji keywords and contractions of the enabled packs.
             accentOverlays = AccentOverlays.merge(enabled.map { AccentOverlays.load(assets, it.tag) })
             accentSignature = enabled.joinToString(",") { it.tag }
+            accentTags = enabled.map { it.tag }
+            if (everyAccentOverlay.isEmpty()) {
+                everyAccentOverlay = AccentOverlays.loadAll(assets)
+            }
             orchestrator.languageTags = enabled.map { it.tag }
             offensiveWords = OffensiveWords.merge(enabled.map { OffensiveWords.load(assets, it.tag) })
             emojiKeywords = EmojiKeywords.load(assets, enabled.map { it.tag })
@@ -111,6 +123,7 @@ internal class DictionaryLoader(
                 }
             }
             engine.setActiveLanguages(tags, weights)
+            engine.markPacksLoaded(tags.toList())
 
             val dictionary = DataGraph.dictionary
             refreshBlockedWords(dictionary)

@@ -3,10 +3,21 @@
 
 package com.borderkeys.settings.screen
 
+import android.content.Context
 import android.net.Uri
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,6 +44,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.CustomLayout
 import com.borderkeys.data.theme.KeyFlick
+import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.ime.LayoutChoice
+import com.borderkeys.keyboard.R
+import com.borderkeys.settings.move
 import com.borderkeys.i18n.Keys
 import com.borderkeys.ime.LayoutValidator
 import com.borderkeys.settings.Explanation
@@ -62,6 +77,7 @@ fun CustomLayoutsScreen(modifier: Modifier = Modifier) {
     val preferences = appearance.preferences
     val builtIns = remember { context.assets.list("layouts").orEmpty().map { it.removeSuffix(".json") }.sorted() }
 
+    val usage = remember(preferences.subtypeLayouts, preferences.subtypeLayoutsLandscape) { layoutUsage(context, preferences) }
     var editing by remember { mutableStateOf<CustomLayout?>(null) }
     var deleting by remember { mutableStateOf<CustomLayout?>(null) }
     var picking by remember { mutableStateOf(false) }
@@ -72,21 +88,36 @@ fun CustomLayoutsScreen(modifier: Modifier = Modifier) {
             if (preferences.customLayouts.isEmpty()) {
                 Explanation(strings[Keys.CUSTOM_LAYOUTS_NONE])
             }
-            for (layout in preferences.customLayouts) {
-                val parsed = remember(layout.json) { LayoutValidator.parse(layout.json) }
-                SettingRow(
-                    title = layout.name,
-                    subtitle = if (parsed != null) {
-                        strings.getString(Keys.CUSTOM_LAYOUTS_ROWS, parsed.rows.size, parsed.keyCount)
-                    } else {
-                        strings[Keys.LAYOUT_ERROR_JSON]
+            Explanation(strings[Keys.CUSTOM_LAYOUTS_ORDER_NOTE])
+            val listed = builtIns.filterNot { it.startsWith("symbols") || it == "numpad" }
+            val order = CustomLayout.ordered(preferences.customLayouts.map { it.id } + listed, preferences.layoutOrder)
+            order.forEachIndexed { index, id ->
+                val custom = preferences.customLayouts.firstOrNull { it.id == id }
+                val parsed = remember(custom?.json) { custom?.let { LayoutValidator.parse(it.json) } }
+                val badges = buildList {
+                    add(strings[if (custom != null) Keys.CUSTOM_LAYOUTS_OWN else Keys.CUSTOM_LAYOUTS_BUILT_IN])
+                    usage.portrait[id]?.let { addAll(it) }
+                    usage.landscape[id]?.forEach { add(strings.getString(Keys.CUSTOM_LAYOUTS_USED_LANDSCAPE, it)) }
+                }
+                LayoutListRow(
+                    title = custom?.name ?: id,
+                    detail = when {
+                        custom == null -> null
+                        parsed != null -> strings.getString(
+                            Keys.CUSTOM_LAYOUTS_SIZE,
+                            strings.counted(Keys.CUSTOM_LAYOUTS_ROWS, parsed.rows.size),
+                            strings.counted(Keys.CUSTOM_LAYOUTS_KEYS, parsed.keyCount),
+                        )
+                        else -> strings[Keys.LAYOUT_ERROR_JSON]
                     },
-                    trailing = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TextButton(onClick = { editing = layout }) { Text(strings[Keys.CUSTOM_LAYOUTS_EDIT]) }
-                            TextButton(onClick = { deleting = layout }) { Text(strings[Keys.CUSTOM_LAYOUTS_DELETE]) }
-                        }
+                    badges = badges,
+                    index = index,
+                    onMoveTop = { update { it.copy(layoutOrder = move(order, index, 0)) } },
+                    onMoveUp = { update { it.copy(layoutOrder = move(order, index, index - 1)) } },
+                    onEdit = {
+                        editing = custom ?: copyOf(context, id, preferences.customLayouts)
                     },
+                    onDelete = if (custom != null) ({ deleting = custom }) else null,
                 )
             }
             if (preferences.customLayouts.size < CustomLayout.MAX_CUSTOM_LAYOUTS) {
@@ -102,13 +133,7 @@ fun CustomLayoutsScreen(modifier: Modifier = Modifier) {
                                 selected = false,
                                 onClick = {
                                     picking = false
-                                    val json = context.assets.open("layouts/$id.json").use { it.readBytes().decodeToString() }
-                                    editing = CustomLayout(
-                                        id = CustomLayout.nextId(preferences.customLayouts),
-                                        name = id,
-                                        languageTag = LayoutValidator.parse(json)?.languageTag ?: "und",
-                                        json = json,
-                                    )
+                                    editing = copyOf(context, id, preferences.customLayouts)
                                 },
                                 label = { Text(id) },
                                 modifier = Modifier.padding(vertical = 2.dp),
@@ -147,6 +172,7 @@ fun CustomLayoutsScreen(modifier: Modifier = Modifier) {
                             current.copy(
                                 customLayouts = current.customLayouts.filterNot { it.id == doomed.id },
                                 subtypeLayouts = current.subtypeLayouts.filterValues { it != doomed.id },
+                                subtypeLayoutsLandscape = current.subtypeLayoutsLandscape.filterValues { it != doomed.id },
                             )
                         }
                         deleting = null
@@ -295,3 +321,91 @@ internal fun withFlicksBaked(json: String, flicks: List<KeyFlick>): String {
 }
 
 private const val MAX_PROBLEMS_SHOWN = 6
+
+/** A new layout of the user's own, started from the built-in [id]. */
+private fun copyOf(context: Context, id: String, existing: List<CustomLayout>): CustomLayout {
+    val json = context.assets.open("layouts/$id.json").use { it.readBytes().decodeToString() }
+    return CustomLayout(
+        id = CustomLayout.nextId(existing),
+        name = id,
+        languageTag = LayoutValidator.parse(json)?.languageTag ?: "und",
+        json = json,
+    )
+}
+
+/** Which enabled subtypes draw each layout id, by language tag, upright and, where it differs, in landscape. */
+private class LayoutUsage(val portrait: Map<String, List<String>>, val landscape: Map<String, List<String>>)
+
+private fun layoutUsage(context: Context, preferences: KeyboardPreferences): LayoutUsage {
+    val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+    val ours = manager?.enabledInputMethodList?.firstOrNull { it.packageName == context.packageName }
+    val subtypes = ours?.let { manager.getEnabledInputMethodSubtypeList(it, true) }.orEmpty()
+    val portrait = HashMap<String, MutableList<String>>()
+    val landscape = HashMap<String, MutableList<String>>()
+    val sideways = LayoutChoice.forOrientation(preferences.subtypeLayouts, preferences.subtypeLayoutsLandscape, landscape = true)
+    for (subtype in subtypes) {
+        val own = LayoutChoice.layoutIdOf(subtype.extraValue)
+        val tag = subtype.languageTag.ifEmpty { own }
+        val upright = preferences.subtypeLayouts[own] ?: own
+        portrait.getOrPut(upright) { ArrayList() } += tag
+        val turned = sideways[own] ?: own
+        if (turned != upright) {
+            landscape.getOrPut(turned) { ArrayList() } += tag
+        }
+    }
+    return LayoutUsage(portrait, landscape)
+}
+
+/** One row of the Your layouts list: its name, a detail line, its badges, and its controls. */
+@Composable
+private fun LayoutListRow(
+    title: String,
+    detail: String?,
+    badges: List<String>,
+    index: Int,
+    onMoveTop: () -> Unit,
+    onMoveUp: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: (() -> Unit)?,
+) {
+    val strings = LocalStrings.current
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            IconButton(onClick = onMoveTop, enabled = index > 0, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    painter = painterResource(R.drawable.bk_reorder_top),
+                    contentDescription = strings[Keys.QUICK_MOVE_TOP],
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            IconButton(onClick = onMoveUp, enabled = index > 0, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    painter = painterResource(R.drawable.bk_reorder_up),
+                    contentDescription = strings[Keys.QUICK_MOVE_UP],
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            TextButton(onClick = onEdit) { Text(strings[Keys.CUSTOM_LAYOUTS_EDIT]) }
+            if (onDelete != null) {
+                TextButton(onClick = onDelete) { Text(strings[Keys.CUSTOM_LAYOUTS_DELETE]) }
+            }
+        }
+        if (detail != null) {
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 2.dp)) {
+            for (badge in badges) {
+                Text(
+                    badge,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier
+                        .padding(vertical = 2.dp)
+                        .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+        }
+    }
+}

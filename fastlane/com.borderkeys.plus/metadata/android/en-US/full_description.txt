@@ -49,11 +49,17 @@ database and are excluded from system backup and from device-to-device transfer.
   Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek, Armenian and Georgian in their
   own scripts; Hebrew and Arabic read from the right, with the suggestions, the ring and the
   emoji and clipboard panels following. A number row, and a symbols page with the digits in a 3×3 block beside the
-  symbols, at the right or the left, on near-square keys.
+  symbols, at the right or the left, on near-square keys. Key flicks: a short drag off any key in
+  one of eight directions writes a text of yours, runs a quick action or presses another key.
+  Layouts of your own, written and checked in the app, drawn for any language you choose. The
+  accents of any language on a letter's long press, and the keys your languages need on a free
+  flick.
 * An optional modifier row for terminals and editors: Esc, Tab, Ctrl, Alt and the arrows,
   with Home, End, Page up, Page down, forward Delete and Insert on offer, in the order you
   choose, above the letters or below the keyboard, each sent as the hardware key it names.
-  Ctrl and Alt apply to the next key; with shift held, the arrows select.
+  Ctrl and Alt apply to the next key; with shift held, the arrows select. Twelve accent
+  modifiers put their accent on the next letter, and a compose key spells a character from the
+  keys typed after it.
 * Panels that search by the word under the caret: open the emoji panel over "cake" and the
   cakes come first, over "pumpkin" the lantern, in the languages switched on; open the clipboard
   over "invoice" and the clips containing it come first.
@@ -109,9 +115,10 @@ yourself, and every version is kept so you can walk back to what you started wit
 
 This build also carries a neural swipe decoder — a small network hand-written in C++ with
 no machine-learning runtime, its weights trained on a free corpus — and uses it by default:
-on 500 recorded swipes it reads 91 in 100 correctly where the geometric decoder reads 77. A
-switch turns it off, and its weights are freed the moment it goes off, so with the switch off
-this build costs no more memory than the free one.
+on 500 recorded swipes it reads 91 in 100 correctly where the geometric decoder reads 77.
+Layouts in other alphabets get a model of their own, trained on swipes synthesised from each
+language's words. A switch turns it off, and its weights are freed the moment it goes off,
+so with the switch off this build costs no more memory than the free one.
 
 * No model is bundled and none can be downloaded automatically — there is still no
   INTERNET permission anywhere in the app. A model arrives only when you pick a GGUF file

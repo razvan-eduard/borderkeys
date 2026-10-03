@@ -39,9 +39,13 @@ The whole walk-through, screen by screen, is [`docs/guide.md`](docs/guide.md). I
   bounded when on; a names dictionary built from Wikidata; swipe typing that is geometric in
   `core` and neural in `plus`, with an optional ring of alternatives around a paused swipe;
   six languages inside the app and twenty-one more as packs to download from the releases page;
+  the settings and the keyboard's own text in twenty-two languages, laid out right to left in Persian;
   thirty layouts from AZERTY, Dvorak and Colemak to the national variants with their own
   letters, eight in scripts of their own and two read from the right, a number row, a number
-  pad and a modifier row; flicks of your own on any key, eight directions each; a personal
+  pad and a modifier row; layouts of your own, written and checked in the app and drawn for any
+  language; the accents of any language on a letter's long press; accent modifiers and a compose
+  key for the modifier row; flicks of your own on any key,
+  eight directions each; a personal
   dictionary you can read, search and edit, word by word and
   phrase by phrase, on pages of its own, that learns the words you open sentences with and
   offers them first, all behind one learning switch that forgets everything when turned off;

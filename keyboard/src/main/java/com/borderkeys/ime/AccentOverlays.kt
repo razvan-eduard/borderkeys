@@ -7,8 +7,8 @@ import android.content.res.AssetManager
 import org.json.JSONObject
 
 /**
- * The diacritics the enabled languages lend to the letter keys' long press, from
- * `assets/accents/<tag>.json`. A missing or malformed file lends none.
+ * The diacritics the enabled languages, and the ones the user adds, lend to the letter keys'
+ * long press, from `assets/accents/<tag>.json`. A missing or malformed file lends none.
  */
 object AccentOverlays {
 
@@ -28,6 +28,38 @@ object AccentOverlays {
             }
         }
     }.getOrElse { emptyMap() }
+
+    /** Every accents file, by its language tag; a malformed one lends none. */
+    fun loadAll(assets: AssetManager): Map<String, Map<Char, String>> =
+        assets.list(DIRECTORY).orEmpty()
+            .filter { it.endsWith(".json") }
+            .map { it.removeSuffix(".json") }
+            .sorted()
+            .associateWith { load(assets, it) }
+
+    /**
+     * The tags of [overlays] that lend an accent to one of [letters], a layout's letter keys, in
+     * [overlays]' order.
+     */
+    fun lendingTo(letters: Set<Char>, overlays: Map<String, Map<Char, String>>): List<String> {
+        val lower = letters.mapTo(HashSet()) { it.lowercaseChar() }
+        return overlays.filter { (_, map) -> map.any { (letter, forms) -> letter in lower && forms.isNotEmpty() } }
+            .keys.toList()
+    }
+
+    /**
+     * The overlay a layout's long press takes: [enabled], the enabled packs' own, then the
+     * forms of each of [extra] that is not among [enabledTags], in order.
+     */
+    fun withExtra(
+        enabled: Map<Char, String>,
+        enabledTags: Collection<String>,
+        extra: List<String>,
+        overlays: Map<String, Map<Char, String>>,
+    ): Map<Char, String> {
+        val added = extra.filter { it !in enabledTags }.mapNotNull { overlays[it] }
+        return if (added.isEmpty()) enabled else merge(listOf(enabled) + added)
+    }
 
     /** One overlay from several, in order, each letter's forms concatenated without repeats. */
     fun merge(perLanguage: List<Map<Char, String>>): Map<Char, String> {

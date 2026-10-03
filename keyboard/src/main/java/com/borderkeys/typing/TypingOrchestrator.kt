@@ -88,6 +88,13 @@ class TypingOrchestrator(
             spacingFlow.languageTags = value
         }
 
+    /** The shown layout's modmap: what shift and control turn a character into. */
+    var modmap: com.borderkeys.ime.Modmap
+        get() = shiftFlow.modmap
+        set(value) {
+            shiftFlow.modmap = value
+        }
+
     /** The compose key's table; see [ComposeSequences]. */
     var composeSequences: ComposeSequences
         get() = accentFlow.sequences
@@ -318,8 +325,9 @@ class TypingOrchestrator(
     }
 
     /**
-     * A key while a dead key or a compose sequence waits: a character resolves it, backspace
-     * steps it back, shift leaves it, any other key drops it. Returns whether the key is spent.
+     * A key while a dead key or a compose sequence waits: a character resolves it, an arrow
+     * writes a dead key's bare combining mark, backspace steps it back, shift leaves it, any
+     * other key drops it. Returns whether the key is spent.
      */
     private fun onKeyWhileAccentPending(code: Int, keyIndex: Int, x: Float, y: Float): Boolean {
         if (code == KeyCodes.DELETE) {
@@ -327,6 +335,13 @@ class TypingOrchestrator(
         }
         if (code == KeyCodes.SHIFT) {
             return false
+        }
+        if (KeyCodes.isArrow(code)) {
+            val mark = accentFlow.onArrow()
+            if (mark != null) {
+                onText(mark)
+                return true
+            }
         }
         if (!KeyCodes.isCharacter(code)) {
             accentFlow.clear()
@@ -552,7 +567,7 @@ class TypingOrchestrator(
         // Under an armed control or alt, a character goes out as its hardware key; one with no
         // hardware key releases the modifiers and is typed.
         if (host.modifiersArmed) {
-            val keyCode = PhysicalKeys.keyCodeFor(code)
+            val keyCode = PhysicalKeys.keyCodeFor(modmap.forControl(code))
             if (keyCode != 0) {
                 handleHardwareKey(keyCode)
                 return

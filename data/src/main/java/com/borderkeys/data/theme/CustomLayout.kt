@@ -6,8 +6,8 @@ package com.borderkeys.data.theme
 import kotlinx.serialization.Serializable
 
 /**
- * A layout the user wrote, as the JSON a layout asset holds, kept in the preferences so a backup
- * carries it. [id] is `custom-<n>`, stable once given: the heatmap keys its totals by it.
+ * A layout the user wrote, as the JSON a layout asset holds, stored in the preferences. [id] is
+ * `custom-<n>`, stable once given: the heatmap keys its totals by it.
  */
 @Serializable
 data class CustomLayout(
@@ -49,14 +49,35 @@ data class CustomLayout(
             return "$PREFIX${highest + 1}"
         }
 
-        /** The layout choices by subtype layout, both ids bounded and shaped like layout ids. */
-        fun sanitisedChoices(choices: Map<String, String>): Map<String, String> =
+        /**
+         * The layout choices by subtype layout, both ids bounded and shaped like layout ids; a
+         * subtype mapped to itself is kept only with [keepOwn].
+         */
+        fun sanitisedChoices(choices: Map<String, String>, keepOwn: Boolean = false): Map<String, String> =
             choices.entries
-                .filter { (subtype, chosen) -> LAYOUT_ID.matches(subtype) && LAYOUT_ID.matches(chosen) && subtype != chosen }
+                .filter { (subtype, chosen) ->
+                    LAYOUT_ID.matches(subtype) && LAYOUT_ID.matches(chosen) && (keepOwn || subtype != chosen)
+                }
                 .take(MAX_CHOICES)
                 .associate { it.key to it.value }
 
+        /** [order]'s layout ids, each once, bounded. */
+        fun sanitisedOrder(order: List<String>): List<String> =
+            order.filter { LAYOUT_ID.matches(it) }.distinct().take(MAX_ORDER)
+
+        /**
+         * [ids] in [order]: those it names first, as it names them, then the rest as they were,
+         * the ids of [custom] layouts before the others.
+         */
+        fun ordered(ids: List<String>, order: List<String>): List<String> {
+            val known = ids.toSet()
+            val named = order.filter { it in known }
+            val rest = ids.filterNot { it in named.toSet() }
+            return named + rest.sortedBy { if (isCustomId(it)) 0 else 1 }
+        }
+
         private val LAYOUT_ID = Regex("""^[a-z0-9_-]{1,40}$""")
+        const val MAX_ORDER = 128
         const val MAX_CHOICES = 64
     }
 }

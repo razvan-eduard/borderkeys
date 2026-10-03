@@ -215,6 +215,11 @@ class PredictionEngine(
     var lastLoadStatus: Int = 0
         private set
 
+    /** Marks [tags] as loaded and active in [PackLoad], after every load already posted. */
+    fun markPacksLoaded(tags: List<String>) {
+        worker.post { PackLoad.set(tags) }
+    }
+
     fun setActiveLanguages(tags: Array<String>, weights: FloatArray) {
         val active = tags.toList()
         worker.post {

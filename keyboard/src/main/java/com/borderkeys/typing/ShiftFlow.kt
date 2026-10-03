@@ -6,6 +6,7 @@ package com.borderkeys.typing
 import android.view.KeyEvent
 import com.borderkeys.ime.AutoCorrection
 import com.borderkeys.ime.AutoShift
+import com.borderkeys.ime.Modmap
 import com.borderkeys.ime.ShiftState
 import com.borderkeys.predict.Candidate
 
@@ -71,8 +72,11 @@ class ShiftFlow(
         host.showShiftState(state)
     }
 
+    /** The shown layout's modmap, which [shifted] follows. */
+    var modmap: Modmap = Modmap.NONE
+
     /** [code] as the letter key types it under the current shift. */
-    fun shifted(code: Int): Int = if (state != ShiftState.OFF) Character.toUpperCase(code) else code
+    fun shifted(code: Int): Int = if (state != ShiftState.OFF) modmap.shifted(code) else code
 
     /** A one-shot shift is spent. */
     fun spendOneShot() {

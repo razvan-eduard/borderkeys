@@ -199,7 +199,7 @@ and when the keyboard goes.
 | `CommitFlow` | The commit decision (`WordCommit`, its rules a first-claim-wins chain of `CommitRule`s), the pending correction and its revert, and the corrections a change of language leaves wrong |
 | `SuggestionFlow` | The requests, the word last asked about, the answer a delimiter applies, the strip's row |
 | `SwipeFlow` | A swipe between its decode and its word, and the words its ring offers |
-| `AccentFlow` | A dead key waiting for its letter, latched or locked, and a compose sequence being spelled against `ComposeSequences` |
+| `AccentFlow` | An accent modifier (dead key) waiting for its letter, latched or locked, and a compose sequence being spelled against `ComposeSequences` |
 
 Flows never call each other: each talks only to the orchestrator, which hands a field, a
 settings change and each answer to them in a fixed order.
@@ -939,11 +939,11 @@ to the previous keyboard, its hold opening the picker; `VOICE_INPUT` switches to
 among the enabled input methods, the one `VoiceInput` decides on (the remembered one while the set
 it was chosen from is unchanged, the only one when there is one, the picker otherwise or on a
 hold), and is offered only while one is enabled. The same two exist as keys for the modifier row
-(`ime_picker`, `voice`), and the globe's hold opens the picker. `WORD_LEFT`, `WORD_RIGHT`,
+(`ime_picker`, `voice`); the globe's hold switches the layout, as the space bar's does. `WORD_LEFT`, `WORD_RIGHT`,
 `SELECT_WORD_LEFT`, `SELECT_WORD_RIGHT`, `SELECT_TO_LINE_START`, `SELECT_TO_LINE_END`,
 `DELETE_WORD_FORWARD`, `ESCAPE` and `TAB` are hardware keys with modifiers, sent by
-`TypingOrchestrator.runEditingAction`; they exist for the flicks (`docs/layouts.md`), which run a
-quick action as one of their three kinds, through `TypingOrchestrator.onFlick`.
+`TypingOrchestrator.runEditingAction`, and a flick (`docs/layouts.md`) runs any quick action as
+one of its three kinds, through `TypingOrchestrator.onFlick`.
 
 `NEWLINE` is worth a button because in a messaging app the return key sends the message, and the
 gesture for "new line without sending" is different in every one of them.

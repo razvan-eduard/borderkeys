@@ -96,8 +96,7 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                     preferences.modifierRowPosition == KeyboardPreferences.MODIFIER_ROW_BELOW,
                 ) { update { it.copy(modifierRowPosition = KeyboardPreferences.MODIFIER_ROW_BELOW) } }
             }
-            ModifierRowKeysEditor(preferences.modifierRowKeys, update)
-            Explanation(strings[Keys.LAYOUT_DEAD_KEYS_NOTE])
+            ModifierRowKeysEditor(preferences.modifierRowKeys, preferences.deadKeys, update)
             SwitchRow(
                 title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
                 subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
@@ -132,6 +131,19 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 checked = preferences.accentedCharacters,
             ) { value -> update { it.copy(accentedCharacters = value) } }
             SwitchRow(
+                title = strings[Keys.LAYOUT_EXTRA_ACCENTS],
+                subtitle = strings[Keys.LAYOUT_EXTRA_ACCENTS_NOTE],
+                checked = preferences.extraAccents,
+                enabled = preferences.accentedCharacters,
+            ) { value -> update { it.copy(extraAccents = value) } }
+            ExtraAccentLanguages(preferences, update)
+            SwitchRow(
+                title = strings[Keys.LAYOUT_DEAD_KEYS],
+                subtitle = strings[Keys.LAYOUT_DEAD_KEYS_NOTE],
+                checked = preferences.deadKeys,
+                enabled = preferences.modifierRow,
+            ) { value -> update { it.copy(deadKeys = value) } }
+            SwitchRow(
                 title = strings[Keys.LAYOUT_LONG_PRESS_HINTS],
                 subtitle = strings[Keys.LAYOUT_LONG_PRESS_HINTS_NOTE],
                 checked = preferences.longPressHints,
@@ -152,6 +164,7 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 checked = preferences.languageKey,
             ) { value -> update { it.copy(languageKey = value) } }
             SettingRow(strings[Keys.LAYOUT_FLICKS], strings[Keys.LAYOUT_FLICKS_NOTE]) { open(Screen.KeyFlicks) }
+            SettingRow(strings[Keys.LAYOUT_EXTRA_KEYS], strings[Keys.LAYOUT_EXTRA_KEYS_NOTE]) { open(Screen.ExtraKeys) }
             SwitchRow(
                 title = strings[Keys.LAYOUT_PICKER_KEY_SWITCHES_BACK],
                 subtitle = strings[Keys.LAYOUT_PICKER_KEY_SWITCHES_BACK_NOTE],
@@ -290,19 +303,18 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                     subtitle = strings[Keys.LAYOUT_ENABLE_BORDERKEYS_FIRST_THEN_ITS_LAYOUTS],
                 )
             }
-            // A subtype's layout id from its extra value, as the input method reads it.
-            fun layoutIdOf(extraValue: String): String {
-                val id = extraValue.split(",").firstOrNull { it.startsWith("layout=") }?.removePrefix("layout=").orEmpty()
-                return if (id.isEmpty() || id.endsWith("_qwerty")) "qwerty" else id
-            }
+            val orderedCustom = com.borderkeys.data.theme.CustomLayout
+                .ordered(preferences.customLayouts.map { it.id }, preferences.layoutOrder)
+                .mapNotNull { id -> preferences.customLayouts.firstOrNull { it.id == id } }
             for (subtype in subtypes) {
-                val own = layoutIdOf(subtype.extraValue)
+                val own = com.borderkeys.ime.LayoutChoice.layoutIdOf(subtype.extraValue)
                 val chosen = preferences.subtypeLayouts[own]
+                val chosenLandscape = preferences.subtypeLayoutsLandscape[own]
                 SettingRow(
                     title = subtype.languageTag.ifEmpty { strings[Keys.LAYOUT_LAYOUT] },
                     subtitle = own,
                     content = {
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
@@ -310,9 +322,28 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                             PickerChip(strings[Keys.CUSTOM_LAYOUTS_DEFAULT], chosen == null) {
                                 update { it.copy(subtypeLayouts = it.subtypeLayouts - own) }
                             }
-                            for (custom in preferences.customLayouts) {
+                            for (custom in orderedCustom) {
                                 PickerChip(custom.name, chosen == custom.id) {
                                     update { it.copy(subtypeLayouts = it.subtypeLayouts + (own to custom.id)) }
+                                }
+                            }
+                        }
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(strings[Keys.CUSTOM_LAYOUTS_IN_LANDSCAPE], style = MaterialTheme.typography.bodySmall)
+                            PickerChip(strings[Keys.CUSTOM_LAYOUTS_AS_UPRIGHT], chosenLandscape == null) {
+                                update { it.copy(subtypeLayoutsLandscape = it.subtypeLayoutsLandscape - own) }
+                            }
+                            PickerChip(strings[Keys.CUSTOM_LAYOUTS_DEFAULT], chosenLandscape == own) {
+                                update { it.copy(subtypeLayoutsLandscape = it.subtypeLayoutsLandscape + (own to own)) }
+                            }
+                            for (custom in orderedCustom) {
+                                PickerChip(custom.name, chosenLandscape == custom.id) {
+                                    update {
+                                        it.copy(subtypeLayoutsLandscape = it.subtypeLayoutsLandscape + (own to custom.id))
+                                    }
                                 }
                             }
                         }
@@ -348,6 +379,7 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
 @Composable
 private fun ModifierRowKeysEditor(
     stored: List<String>,
+    accentKeys: Boolean,
     update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit,
 ) {
     val strings = LocalStrings.current
@@ -370,7 +402,7 @@ private fun ModifierRowKeysEditor(
         ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULT]) }
     }
     Explanation(strings[Keys.LAYOUT_MODIFIER_ROW_KEYS_NOTE])
-    val addable = ModifierRowKeys.ALL.filterNot { it in chosen }
+    val addable = ModifierRowKeys.addable(chosen, accentKeys)
     if (chosen.size < ModifierRowKeys.MAX && addable.isNotEmpty()) {
         Row(
             modifier = Modifier.fillMaxWidth()
@@ -399,7 +431,7 @@ private fun ModifierRowKeysEditor(
 }
 
 /** The catalogue key naming a modifier-row key, the same name its accessibility node carries. */
-private fun modifierKeyLabel(name: String): String = when (name) {
+internal fun modifierKeyLabel(name: String): String = when (name) {
     ModifierRowKeys.ESCAPE -> Keys.KEY_ESCAPE
     ModifierRowKeys.TAB -> Keys.KEY_TAB
     ModifierRowKeys.CONTROL -> Keys.KEY_CONTROL

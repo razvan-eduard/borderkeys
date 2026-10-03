@@ -44,6 +44,9 @@ object ModifierRowKeys {
         DEAD_ACUTE, DEAD_GRAVE, DEAD_CIRCUMFLEX, DEAD_DIAERESIS, DEAD_TILDE, DEAD_CARON, DEAD_BREVE, DEAD_CEDILLA, DEAD_OGONEK, DEAD_RING, DEAD_MACRON, DEAD_COMMA_BELOW,
     )
 
+    /** The keys the `deadKeys` switch draws or leaves out: the accent modifiers and compose. */
+    val ACCENT_KEYS: List<String> = DEAD_KEYS + COMPOSE
+
     /** Every key the row can carry, in the order the editor offers them. */
     val ALL: List<String> = listOf(
         ESCAPE, TAB, CONTROL, ALT, LEFT, DOWN, UP, RIGHT,
@@ -55,6 +58,17 @@ object ModifierRowKeys {
 
     /** The most keys one row takes; past this each key is too narrow to hit. */
     const val MAX = 12
+
+    /**
+     * The keys of [names] the row draws: the [ACCENT_KEYS] only while [accentKeys] is on, the
+     * voice key only while [voice] is.
+     */
+    fun drawn(names: List<String>, accentKeys: Boolean, voice: Boolean): List<String> =
+        names.filter { (accentKeys || it !in ACCENT_KEYS) && (voice || it != VOICE) }
+
+    /** The keys the editor offers to add: every one [names] lacks, the [ACCENT_KEYS] only while [accentKeys]. */
+    fun addable(names: List<String>, accentKeys: Boolean): List<String> =
+        ALL.filter { it !in names && (accentKeys || it !in ACCENT_KEYS) }
 
     fun sanitised(names: List<String>): List<String> =
         names.distinct().filter { it in ALL }.take(MAX)

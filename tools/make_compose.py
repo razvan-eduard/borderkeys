@@ -1,89 +1,149 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 BorderKeys contributors
-"""Writes keyboard/src/main/assets/compose/latin.json, the compose key's table.
+"""Writes keyboard/src/main/assets/compose/compose.json, the compose key's table.
 
-Accented letters come from Unicode itself: for each accent's ASCII mark and each letter, the
-pair composes under NFC to one character, mark then letter, and letter then mark where the mark
-is not a letter itself. Symbols follow the X11 compose sequences most people know. No
-sequence may be the start of another, since the keyboard writes a full match at once; the
-script fails rather than write such a table.
-
-    python3 tools/make_compose.py            # writes the asset
-    python3 tools/make_compose.py --check    # fails when the asset differs
+The sequences are read from tools/compose in file-name order: the extra, Arabic and Cyrillic
+JSON trees, then X11's en_US.UTF-8 Compose list (its <Multi_key> sequences only, key names
+resolved through keysymdef.h and the names the list defines). The first sequence wins; one that
+repeats an earlier one, or starts or extends it, is dropped. A result naming a key is written as
+the character that key types. With --check, fails when the asset differs.
 """
 
 import json
 import pathlib
+import re
 import sys
-import unicodedata
 
-OUT = pathlib.Path(__file__).resolve().parent.parent / "keyboard/src/main/assets/compose/latin.json"
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+SOURCES = ROOT / "tools/compose"
+OUT = ROOT / "keyboard/src/main/assets/compose/compose.json"
 
-# ASCII mark -> combining mark
-MARKS = {
-    "'": "́",
-    "`": "̀",
-    "^": "̂",
-    '"': "̈",
-    "~": "̃",
-    "v": "̌",
-    "u": "̆",
-    ",": "̧",
-    ";": "̨",
-    "o": "̊",
-    "_": "̄",
-    ".": "̇",
+# Key names a JSON tree may give as a result, to the text the key types.
+NAMED_RESULTS = {
+    "nbsp": " ",
+    "\\n": "\n",
+    "\\t": "\t",
+    "combining_aigu": "́",
+    "combining_alef_above": "ٰ",
+    "combining_alef_below": "ٖ",
+    "combining_arabic_inverted_v": "ٛ",
+    "combining_arabic_v": "ٚ",
+    "combining_breve": "̆",
+    "combining_dammah": "ُ",
+    "combining_dammatan": "ٌ",
+    "combining_fatha": "َ",
+    "combining_fathatan": "ً",
+    "combining_grave": "̀",
+    "combining_hamza_above": "ٔ",
+    "combining_hamza_below": "ٕ",
+    "combining_inverted_breve": "̑",
+    "combining_kasra": "ِ",
+    "combining_kasratan": "ٍ",
+    "combining_payerok": "꙽",
+    "combining_pokrytie": "҇",
+    "combining_shaddah": "ّ",
+    "combining_slavonic_dasia": "҅",
+    "combining_slavonic_psili": "҆",
+    "combining_sukun": "ْ",
+    "combining_titlo": "҃",
+    "combining_trema": "̈",
+    "combining_vertical_tilde": "̾",
+    "combining_vzmet": "꙯",
 }
 
-LETTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+KEYSYM = re.compile(r"^#define XK_(\S+)\s+\S+\s*/\*.U\+([0-9a-fA-F]+)\s")
+LINE = re.compile(r'^((?:\s*<[^>]+>)+)\s*:\s*"((?:[^"\\]+|\\.)+)"\s*(\S+)?\s*(?:#.+)?$')
+KEY = re.compile(r"\s*<(?:U([a-fA-F0-9]{4,6})|([^>]+))>")
 
-SYMBOLS = {
-    "oc": "©", "or": "®", "tm": "™", "sm": "℠",
-    "---": "—", "--.": "–", "..": "…", "<<": "«", ">>": "»", "<'": "‘", ">'": "’",
-    "<\"": "“", ">\"": "”", ",'": "‚", ",\"": "„",
-    "=e": "€", "l-": "£", "y=": "¥", "c/": "¢", "c=": "€", "=c": "€",
-    "ss": "ß", "ae": "æ", "AE": "Æ", "oe": "œ", "OE": "Œ", "o/": "ø", "O/": "Ø", "d-": "đ", "D-": "Đ",
-    "th": "þ", "TH": "Þ", "dh": "ð", "DH": "Ð", "l/": "ł", "L/": "Ł", "ng": "ŋ", "NG": "Ŋ",
-    "12": "½", "14": "¼", "34": "¾", "13": "⅓", "23": "⅔", "18": "⅛",
-    "^1": "¹", "^2": "²", "^3": "³", "_0": "₀", "_1": "₁", "_2": "₂", "_3": "₃",
-    "+-": "±", "-:": "÷", "xx": "×", "=/": "≠", "<=": "≤", ">=": "≥", "~=": "≈",
-    "!!": "¡", "??": "¿", "so": "§", "p!": "¶", "*0": "°", "mu": "µ", "^.": "·",
-    "->": "→", "<-": "←", "-^": "↑", "-v": "↓",
-}
+
+def keysyms(path: pathlib.Path) -> dict:
+    names = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        m = KEYSYM.match(line)
+        if m:
+            names[m.group(1)] = chr(int(m.group(2), 16))
+    return names
+
+
+def result_text(raw: str) -> str:
+    return raw[1] if len(raw) == 2 and raw[0] == "\\" else raw
+
+
+def x11_sequences(path: pathlib.Path, names: dict) -> list:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    names = dict(names)
+    for line in lines:
+        m = LINE.match(line)
+        if m and m.group(3):
+            names[m.group(3)] = result_text(m.group(2))
+    out = []
+    prefix = "<Multi_key>"
+    for line in lines:
+        if not line.startswith(prefix):
+            continue
+        m = LINE.match(line[len(prefix):])
+        if not m:
+            continue
+        keys = []
+        for code, name in KEY.findall(m.group(1)):
+            if code:
+                character = chr(int(code, 16))
+            elif len(name) == 1:
+                character = name
+            else:
+                character = names.get(name)
+            if character is None or len(character) != 1 or ord(character) > 0xFFFF:
+                keys = None
+                break
+            keys.append(character)
+        if keys:
+            out.append(("".join(keys), result_text(m.group(2))))
+    return out
+
+
+def json_sequences(path: pathlib.Path) -> list:
+    text = "".join(
+        line[: line.find("//")] + "\n" if "//" in line else line
+        for line in path.read_text(encoding="utf-8").splitlines(True)
+    )
+    out = []
+
+    def walk(tree, prefix):
+        for key, value in tree.items():
+            if isinstance(value, str):
+                if re.fullmatch(r"[a-z]+_[a-z_]+", value) and value not in NAMED_RESULTS:
+                    raise SystemExit(f"make_compose: {path.name} names an unknown key {value!r}")
+                out.append((prefix + key, NAMED_RESULTS.get(value, value)))
+            else:
+                walk(value, prefix + key)
+
+    walk(json.loads(text), "")
+    return out
 
 
 def build() -> dict:
-    table = dict(SYMBOLS)
-    for mark, combining in MARKS.items():
-        for letter in LETTERS:
-            composed = unicodedata.normalize("NFC", letter + combining)
-            if len(composed) != 1:
-                continue
-            # Letter then mark only where the mark is no letter itself.
-            orders = (mark + letter, letter + mark) if not mark.isalpha() else (mark + letter,)
-            for sequence in orders:
-                table.setdefault(sequence, composed)
-    # The space after a mark writes the mark itself.
-    for mark in MARKS:
-        if mark not in LETTERS:
-            table.setdefault(mark + " ", mark)
-    prefix_clashes = sorted(
-        (a, b) for a in table for b in table if a != b and b.startswith(a)
-    )
-    if prefix_clashes:
-        # Drop the longer entry: the shorter one is the common one, written at once.
-        for _, longer in prefix_clashes:
-            table.pop(longer, None)
+    names = keysyms(SOURCES / "keysymdef.h")
+    sequences = []
+    for path in sorted(SOURCES.iterdir()):
+        if path.suffix == ".json":
+            sequences += json_sequences(path)
+        elif path.suffix == ".pre":
+            sequences += x11_sequences(path, names)
+    table = {}
+    prefixes = set()
+    for sequence, text in sequences:
+        starts_one = any(sequence[:end] in table for end in range(1, len(sequence) + 1))
+        if starts_one or sequence in prefixes:
+            continue
+        table[sequence] = text
+        for end in range(1, len(sequence)):
+            prefixes.add(sequence[:end])
     return dict(sorted(table.items()))
 
 
 def main() -> int:
     table = build()
-    for a in table:
-        for b in table:
-            if a != b and b.startswith(a):
-                raise SystemExit(f"make_compose: {a!r} starts {b!r}")
     text = json.dumps({"sequences": table}, ensure_ascii=False, indent=1) + "\n"
     if "--check" in sys.argv:
         if not OUT.is_file() or OUT.read_text(encoding="utf-8") != text:
@@ -92,7 +152,7 @@ def main() -> int:
         return 0
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(text, encoding="utf-8")
-    print(f"make_compose: {len(table)} sequences -> {OUT.relative_to(OUT.parents[4])}")
+    print(f"make_compose: {len(table)} sequences -> {OUT.relative_to(ROOT)}")
     return 0
 
 

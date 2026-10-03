@@ -108,6 +108,22 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `the layout's modmap turns shift on i into a dotted capital, and control on one letter into another's key`() {
+        rig.orchestrator.modmap = com.borderkeys.ime.Modmap(
+            shift = mapOf('i'.code to 'İ'.code),
+            ctrl = mapOf('с'.code to 'c'.code),
+        )
+        rig.startField()
+        rig.press(KeyCodes.SHIFT)
+        rig.type("i")
+        rig.type("i")
+        assertEquals("İi", rig.editor.text)
+        rig.host.modifiersArmed = true
+        rig.type("с")
+        assertEquals(listOf(KeyEvent.KEYCODE_C to 0), rig.host.physicalKeys)
+    }
+
+    @Test
     fun `a swipe across the keys types the word`() {
         rig.orchestrator.composeSwipedWord(swiped("the", "then", "they"))
         rig.settle()
@@ -529,6 +545,18 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `an arrow after a dead key writes its bare combining mark and moves nothing`() {
+        rig.startField("e")
+        rig.press(KeyCodes.DEAD_ACUTE)
+        rig.press(KeyCodes.ARROW_LEFT)
+        assertEquals("é", rig.editor.text)
+        assertTrue(rig.host.physicalKeys.isEmpty())
+        assertEquals("0/false/-", rig.host.accents.last())
+        rig.press(KeyCodes.ARROW_LEFT)
+        assertEquals(listOf(android.view.KeyEvent.KEYCODE_DPAD_LEFT), rig.host.physicalKeys.map { it.first })
+    }
+
+    @Test
     fun `shift then a dead key then a letter gives the capital with its accent`() {
         rig.startField()
         rig.press(KeyCodes.SHIFT)
@@ -567,7 +595,7 @@ class TypingScenarioTest {
     @Test
     fun `the compose key spells a character from the keys after it`() {
         rig.orchestrator.composeSequences = ComposeSequences.parse(
-            java.io.File("src/main/assets/compose/latin.json").readText(),
+            java.io.File("src/main/assets/compose/compose.json").readText(),
         )
         rig.startField()
         rig.press(KeyCodes.COMPOSE)
@@ -660,6 +688,18 @@ class TypingScenarioTest {
         rig.type("abc")
         assertTrue(rig.flick(KeyFlick('c'.code, KeyFlick.WEST, KeyFlick.COMMAND, QuickAction.DELETE_WORD.id.toString())))
         assertEquals(listOf(QuickAction.DELETE_WORD.id), rig.host.quickActions)
+    }
+
+    @Test
+    fun `a delete-word flick deletes the word being composed`() {
+        rig.startField("one ")
+        rig.type("abc")
+        assertTrue(rig.flick(KeyFlick('c'.code, KeyFlick.WEST, KeyFlick.COMMAND, QuickAction.DELETE_WORD.id.toString())))
+        assertEquals(listOf(QuickAction.DELETE_WORD.id), rig.host.quickActions)
+        rig.orchestrator.deleteWordBeforeCursor()
+        rig.settle()
+        assertEquals("one ", rig.editor.text)
+        assertNull(rig.editor.composingText)
     }
 
     @Test
@@ -1100,6 +1140,20 @@ class TypingScenarioTest {
         rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
         assertEquals("t h w", touchedLetters())
         assertEquals(0.3, rig.store.touches.single { it.code == 'w'.code }.sumX, 1e-5)
+    }
+
+    @Test
+    fun `a custom layout's letters reach the field, and its id is the heatmap bucket`() {
+        val custom = HARNESS_BUCKET.copy(layoutId = "custom-1")
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true, heatmapEnabled = true))
+        rig.orchestrator.keyGeometry = harnessGeometry(custom)
+        rig.startField()
+        tapWord("the")
+        rig.type(" ")
+        assertEquals("the ", rig.editor.text)
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals("t h e", touchedLetters())
+        assertEquals(setOf(custom.key), rig.store.touches.map { it.bucket }.toSet())
     }
 
     @Test

@@ -8,8 +8,9 @@ import com.borderkeys.ime.DeadKeys
 
 /**
  * A dead key waiting for its letter, or a compose sequence being spelled. A dead key latches
- * until the next character; pressed twice, or held, it locks until pressed again. The compose
- * key gathers characters until they spell an entry of [sequences], or none can.
+ * until the next character; pressed twice, or held, it locks until pressed again; an arrow
+ * writes its bare combining mark. The compose key gathers characters until they spell an entry
+ * of [sequences], or none can.
  */
 class AccentFlow(private val host: TypingHost) : TypingFlow() {
 
@@ -110,6 +111,15 @@ class AccentFlow(private val host: TypingHost) : TypingFlow() {
         }
         val combined = DeadKeys.combine(shifted, dead)
         return if (combined != null) Resolution.Code(combined) else Resolution.TextThenCode(accent.spacing, shifted)
+    }
+
+    /** An arrow while a dead key waits: its combining mark, the dead key released; null when none waits. */
+    fun onArrow(): String? {
+        val accent = DeadKeys.accent(deadCode) ?: return null
+        deadCode = 0
+        deadLocked = false
+        show()
+        return accent.mark.toString()
     }
 
     /** Backspace while pending: a compose sequence loses its last character, a dead key is dropped. Returns whether it was taken. */

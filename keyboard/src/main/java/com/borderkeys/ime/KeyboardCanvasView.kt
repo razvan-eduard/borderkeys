@@ -25,6 +25,7 @@ import android.view.ViewConfiguration
 import com.borderkeys.ime.fx.ParticleSurface
 import com.borderkeys.ime.fx.RoundedRectElement
 import com.borderkeys.theme.ThemePaints
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import com.borderkeys.i18n.LanguageManager
@@ -226,6 +227,8 @@ class KeyboardCanvasView(
         gestureStartY = y
         gesturePastTap = false
         gestureLeftKey = false
+        gestureMinFraction = flickMinFraction
+        gestureMaxFraction = flickMaxFraction
         gesture.begin(x, y, eventTime)
     }
 
@@ -251,9 +254,37 @@ class KeyboardCanvasView(
             gesture.pathLength(), eventTime - pointerDownAt[gesturePointer],
             geometry.keyRight[index] - geometry.keyLeft[index],
             geometry.keyBottom[index] - geometry.keyTop[index],
-            flickMinFraction, gestureLeftKey || gestureActive,
+            gestureMinFraction, gestureLeftKey || gestureActive,
         )
     }
+
+    /** The flick key [index] takes for a press from the gesture's start to ([x], [y]); -1 for none. */
+    private fun flickFor(index: Int, x: Float, y: Float): Int =
+        FlickClassifier.flickDirection(x - gestureStartX, y - gestureStartY) { hasFlick(index, it) }
+
+    /** How many letter keys the followed press has passed over, a key counted again only after another. */
+    private fun lettersPassed(): Int {
+        var passed = 0
+        var last = NO_KEY
+        for (i in 0 until gesture.count) {
+            val index = findKeyAt(gesture.xs[i], gesture.ys[i])
+            if (index != NO_KEY && index != last && KeyFlags.has(geometry.keyFlags[index], KeyFlags.LETTER)) {
+                passed++
+                last = index
+            }
+        }
+        return passed
+    }
+
+    /** Whether the followed press on key [index] may be a word: swipe typing on, a letter, two letters passed. */
+    private fun isWordCandidate(index: Int): Boolean =
+        swipeEnabled && index != NO_KEY && KeyFlags.has(geometry.keyFlags[index], KeyFlags.LETTER) &&
+            gesture.count >= MIN_GESTURE_POINTS && lettersPassed() >= 2
+
+    /** A press that came back near where it began: longer than a tap, its displacement under half its path. */
+    private fun isReturnTrip(x: Float, y: Float, eventTime: Long): Boolean =
+        eventTime - pointerDownAt[gesturePointer] > FlickClassifier.SWIPE_MILLIS &&
+            hypot(x - gestureStartX, y - gestureStartY) < gesture.pathLength() / 2
 
     /** Whether key [index] has a flick in [direction]. */
     private fun hasFlick(index: Int, direction: Int): Boolean =
@@ -383,7 +414,7 @@ class KeyboardCanvasView(
             wasRingOpen -> listener?.onGestureRingResolved()
             verdict == FlickClassifier.SWIPE && count >= MIN_GESTURE_POINTS ->
                 listener?.onGesture(gesture.xs, gesture.ys, gesture.times, count)
-            verdict >= 0 && key != NO_KEY && hasFlick(key, verdict) -> listener?.onFlick(key, verdict)
+            verdict >= 0 && key != NO_KEY && flickFor(key, x, y) >= 0 -> listener?.onFlick(key, flickFor(key, x, y))
             key != NO_KEY && verdict != FlickClassifier.SWIPE ->
                 listener?.onKey(geometry.keyCode[key], key, gestureStartX, gestureStartY)
         }
@@ -527,8 +558,6 @@ class KeyboardCanvasView(
     private var trackpointY = 0f
     private var trackpointPointerId = -1
 
-    private val trackpointDeadZonePx: Float
-        get() = Trackpoint.DEAD_ZONE_DP * resources.displayMetrics.density
 
     private val trackpointArmRunnable = Runnable { startTrackpoint() }
     private val trackpointTickRunnable = object : Runnable {
@@ -545,7 +574,7 @@ class KeyboardCanvasView(
             }
             val tick = Trackpoint.tick(
                 trackpointX - trackpointCentreX, trackpointY - trackpointCentreY,
-                trackpointDeadZonePx, halfDiagonal, trackpointSpeedPercent,
+                Trackpoint.DEAD_ZONE_PX, halfDiagonal, trackpointSpeedPercent,
             )
             if (tick.xSteps != 0) {
                 listener?.onCursorNudge(tick.xSteps)
@@ -709,6 +738,10 @@ class KeyboardCanvasView(
     /** Whether the pending press has moved past the tap distance, and whether it has left the key. */
     private var gesturePastTap = false
     private var gestureLeftKey = false
+
+    /** [flickMinFraction] and [flickMaxFraction] as they were when the pending press went down. */
+    private var gestureMinFraction = KeyboardPreferences.DEFAULT_FLICK_MIN_FRACTION
+    private var gestureMaxFraction = KeyboardPreferences.DEFAULT_FLICK_MAX_FRACTION
 
 
     /** One Path per trail segment, recycled with `rewind()`. */
@@ -1076,12 +1109,12 @@ class KeyboardCanvasView(
             return
         }
         paints.label.textSize = labelTextSize[index]
-        // A one-letter label is upper-cased as it is drawn while shift is on.
+        // A one-letter label is drawn as shift turns it while shift is on.
         val chars = if (shiftState != ShiftState.OFF && length == 1 &&
             Character.isLowerCase(geometry.labelChars[geometry.labelOffset[index]])
         ) {
             shiftedLabel[0] =
-                Character.toUpperCase(geometry.labelChars[geometry.labelOffset[index]])
+                layout.modmap.shiftedChar(geometry.labelChars[geometry.labelOffset[index]])
             shiftedLabel
         } else {
             geometry.labelChars
@@ -1200,11 +1233,11 @@ class KeyboardCanvasView(
     /** The alternative at [position], already cased for the current shift state. */
     fun alternativeCharAt(position: Int): Char = altCharAt(alternativesKey, position)
 
-    /** An alternative, upper-cased while shift is on. */
+    /** An alternative, as shift turns it while shift is on. */
     private fun altCharAt(index: Int, position: Int): Char {
         val character = geometry.altChars[geometry.altOffset[index] + position]
         return if (shiftState != ShiftState.OFF && Character.isLowerCase(character)) {
-            Character.toUpperCase(character)
+            layout.modmap.shiftedChar(character)
         } else {
             character
         }
@@ -1270,7 +1303,7 @@ class KeyboardCanvasView(
             out[position] = geometry.labelChars[offset + position]
         }
         if (shiftState != ShiftState.OFF && length == 1 && Character.isLowerCase(out[0])) {
-            out[0] = Character.toUpperCase(out[0])
+            out[0] = layout.modmap.shiftedChar(out[0])
         }
         return length
     }
@@ -1440,7 +1473,7 @@ class KeyboardCanvasView(
             if (trackpointArmed) {
                 val dx = x - spaceStartX
                 val dy = y - spaceStartY
-                if (dx * dx + dy * dy > trackpointDeadZonePx * trackpointDeadZonePx) {
+                if (dx * dx + dy * dy > Trackpoint.DEAD_ZONE_PX * Trackpoint.DEAD_ZONE_PX) {
                     removeCallbacks(trackpointArmRunnable)
                     trackpointArmed = false
                 }
@@ -1473,18 +1506,20 @@ class KeyboardCanvasView(
                     removeCallbacks(repeatRunnable)
                     repeatKey = NO_KEY
                 }
-                if (FlickClassifier.pastTap(gestureStartX, gestureStartY, x, y, keyWidth, keyHeight, flickMinFraction)) {
+                if (FlickClassifier.pastTap(gestureStartX, gestureStartY, x, y, keyWidth, keyHeight, gestureMinFraction)) {
                     gesturePastTap = true
                     hidePreview()
                 }
             }
-            if (!gestureLeftKey && FlickClassifier.leftKey(gesture.pathLength(), keyWidth, keyHeight, flickMaxFraction)) {
+            if (!gestureLeftKey &&
+                FlickClassifier.leftKey(hypot(x - gestureStartX, y - gestureStartY), keyWidth, keyHeight, gestureMaxFraction)
+            ) {
                 gestureLeftKey = true
             }
             if (!gestureLeftKey) {
                 return
             }
-            if (swipeEnabled && KeyFlags.has(geometry.keyFlags[previous], KeyFlags.LETTER)) {
+            if (swipeEnabled && KeyFlags.has(geometry.keyFlags[previous], KeyFlags.LETTER) && lettersPassed() >= 2) {
                 beginGesture(previous)
                 if (radialMenuEnabled) {
                     updatePauseDetection()
@@ -1541,12 +1576,25 @@ class KeyboardCanvasView(
         ) {
             val verdict = classifyPress(x, y, eventTime)
             val key = gestureKey
+            val word = isWordCandidate(key)
+            val flick = when {
+                verdict < 0 -> -1
+                word -> FlickClassifier.direction(x - gestureStartX, y - gestureStartY).takeIf { hasFlick(key, it) } ?: -1
+                else -> flickFor(key, x, y)
+            }
+            if (flick < 0 && word && (verdict >= 0 || isReturnTrip(x, y, eventTime))) {
+                // A short swipe over two letter keys with no flick of its own is a word.
+                beginGesture(key)
+                finishGesture(x, y, eventTime)
+                pointerKey[pointerId] = NO_KEY
+                return
+            }
             disarmGesture()
-            if (verdict >= 0 && hasFlick(key, verdict)) {
+            if (flick >= 0) {
                 pointerKey[pointerId] = NO_KEY
                 endPress(key)
                 cancelPendingCallbacks()
-                listener?.onFlick(key, verdict)
+                listener?.onFlick(key, flick)
                 return
             }
         } else if (pointerId == gesturePointer) {

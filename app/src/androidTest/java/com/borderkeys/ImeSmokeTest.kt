@@ -3,6 +3,8 @@
 
 package com.borderkeys
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -33,6 +35,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Assume.assumeTrue
@@ -82,6 +85,7 @@ class ImeSmokeTest {
                     numberRow = false,
                     modifierRow = false,
                     languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_OFF,
+                    rememberDetectedLanguage = false,
                     featuresTourSeen = true,
                 )
             }
@@ -127,6 +131,8 @@ class ImeSmokeTest {
                 )
             }
         }
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        instrumentation.runOnMainSync { clipboard.setPrimaryClip(ClipData.newPlainText(null, CLIP_BEFORE)) }
         try {
             type("secret")
             settle()
@@ -147,6 +153,9 @@ class ImeSmokeTest {
             assertTrue(row!!.isPrivate)
             assertEquals(context.packageName, row.sourcePackage)
             assertField("secret")
+            var held: CharSequence? = null
+            instrumentation.runOnMainSync { held = clipboard.primaryClip?.getItemAt(0)?.text }
+            assertEquals("the system clipboard", CLIP_BEFORE, held?.toString())
         } finally {
             runBlocking {
                 DataGraph.clipboard.deleteAll()
@@ -198,7 +207,11 @@ class ImeSmokeTest {
     fun aDeadAcuteThenEWritesEAcute() {
         runBlocking {
             DataGraph.themes.updatePreferences {
-                it.copy(modifierRow = true, modifierRowKeys = listOf(ModifierRowKeys.DEAD_ACUTE, ModifierRowKeys.ESCAPE))
+                it.copy(
+                    modifierRow = true,
+                    deadKeys = true,
+                    modifierRowKeys = listOf(ModifierRowKeys.DEAD_ACUTE, ModifierRowKeys.ESCAPE),
+                )
             }
         }
         try {
@@ -209,6 +222,138 @@ class ImeSmokeTest {
         } finally {
             runBlocking {
                 DataGraph.themes.updatePreferences {
+                    it.copy(modifierRow = false, deadKeys = false, modifierRowKeys = ModifierRowKeys.DEFAULT)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun theComposeKeySpellsACharacterFromTheKeysAfterIt() {
+        withAccentKeys(listOf(ModifierRowKeys.COMPOSE, ModifierRowKeys.ESCAPE)) {
+            tapKey(COMPOSE_KEY)
+            type("ae")
+            assertField("æ")
+        }
+    }
+
+    @Test
+    fun anArrowAfterAnAccentModifierWritesItsBareMark() {
+        withAccentKeys(listOf(ModifierRowKeys.DEAD_ACUTE, ModifierRowKeys.LEFT)) {
+            type("e")
+            tapKey(DEAD_ACUTE_KEY)
+            tapKey(LEFT_ARROW_KEY)
+            assertField("é")
+        }
+    }
+
+    @Test
+    fun onTheTurkishLayoutShiftTurnsIIntoADottedCapital() {
+        selectSubtype(TURKISH_Q_SUBTYPE, firstKey = "q")
+        try {
+            tapKey(SHIFT)
+            type("i")
+            assertField("İ")
+        } finally {
+            selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
+        }
+    }
+
+    @Test
+    fun aLandscapeChoiceDrawsWhenThePhoneTurns() {
+        val qwerty = context.assets.open("layouts/qwerty.json").use { it.readBytes().decodeToString() }
+        val own = CustomLayout("custom-1", "Sideways", "und", qwerty.replaceFirst("\"c\": \"q\"", "\"c\": \"q\", \"alt\": \"ø\""))
+        runBlocking {
+            DataGraph.themes.updatePreferences {
+                it.copy(customLayouts = listOf(own), subtypeLayoutsLandscape = mapOf("qwerty" to "custom-1"))
+            }
+        }
+        try {
+            settle()
+            val upright = waitForKey("q").contentDescription.orEmpty()
+            device.setOrientationLeft()
+            val deadline = System.currentTimeMillis() + LAUNCH_TIMEOUT
+            while (findKey("q")?.contentDescription.orEmpty() == upright) {
+                check(System.currentTimeMillis() < deadline) { "the landscape layout never drew: $upright" }
+                Thread.sleep(SETTLE_MILLIS)
+            }
+        } finally {
+            device.setOrientationNatural()
+            device.unfreezeRotation()
+            runBlocking {
+                DataGraph.themes.updatePreferences { it.copy(customLayouts = emptyList(), subtypeLayoutsLandscape = emptyMap()) }
+            }
+        }
+    }
+
+    @Test
+    fun theGlobeStepsThroughTheLayoutsInTheListsOrder() {
+        val before = device.executeShellCommand("settings get secure enabled_input_methods").trim()
+        val ime = "${context.packageName}/com.borderkeys.ime.BorderKeysService"
+        val three = before.split(':').filterNot { it.startsWith(ime) } +
+            "$ime;$ENGLISH_SUBTYPE;$GERMAN_QWERTZ_SUBTYPE;$RUSSIAN_SUBTYPE"
+        device.executeShellCommand("settings put secure enabled_input_methods ${three.joinToString(":")}")
+        runBlocking {
+            DataGraph.themes.updatePreferences {
+                it.copy(languageKey = true, layoutOrder = listOf("qwerty", "russian", "qwertz"))
+            }
+        }
+        try {
+            selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
+            tapKey(LANGUAGE_KEY)
+            waitForKey("й", LAUNCH_TIMEOUT)
+        } finally {
+            runBlocking { DataGraph.themes.updatePreferences { it.copy(languageKey = false, layoutOrder = emptyList()) } }
+            device.executeShellCommand("settings put secure enabled_input_methods $before")
+            selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
+        }
+    }
+
+    @Test
+    fun anExtraKeySwitchedOffLeavesItsCornerToTheNext() {
+        runBlocking { DataGraph.themes.updatePreferences { it.copy(extraKeysOff = listOf("ß")) } }
+        selectSubtype(GERMAN_QWERTZ_SUBTYPE, firstKey = "q")
+        try {
+            val a = waitForKey("a").visibleBounds
+            swipe(listOf(Point(a.centerX(), a.centerY()), Point(a.centerX() + a.width() / 2, a.centerY() + a.height() / 2)))
+            assertField("€")
+        } finally {
+            runBlocking { DataGraph.themes.updatePreferences { it.copy(extraKeysOff = emptyList()) } }
+            selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
+        }
+    }
+
+    /** Runs [block] with the modifier row on, the accent modifiers drawn, and [keys] on the row. */
+    private fun withAccentKeys(keys: List<String>, block: () -> Unit) {
+        runBlocking {
+            DataGraph.themes.updatePreferences { it.copy(modifierRow = true, deadKeys = true, modifierRowKeys = keys) }
+        }
+        try {
+            settle()
+            block()
+        } finally {
+            runBlocking {
+                DataGraph.themes.updatePreferences {
+                    it.copy(modifierRow = false, deadKeys = false, modifierRowKeys = ModifierRowKeys.DEFAULT)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun withAccentModifiersOffTheRowLeavesThemOut() {
+        runBlocking {
+            DataGraph.themes.updatePreferences {
+                it.copy(modifierRow = true, modifierRowKeys = listOf(ModifierRowKeys.DEAD_ACUTE, ModifierRowKeys.ESCAPE))
+            }
+        }
+        try {
+            settle()
+            waitForKey(ESCAPE_KEY)
+            assertNull(device.findObject(By.descStartsWith(DEAD_ACUTE_KEY)))
+        } finally {
+            runBlocking {
+                DataGraph.themes.updatePreferences {
                     it.copy(modifierRow = false, modifierRowKeys = ModifierRowKeys.DEFAULT)
                 }
             }
@@ -216,24 +361,23 @@ class ImeSmokeTest {
     }
 
     @Test
-    fun aLayoutOfTheUsersOwnDrawsForItsSubtype() {
-        val qwerty = context.assets.open("layouts/qwerty.json").use { it.readBytes().decodeToString() }
-        // The q key's long press gains a letter QWERTY does not have.
-        val own = CustomLayout("custom-1", "Smoke", "und", qwerty.replaceFirst("\"c\": \"q\"", "\"c\": \"q\", \"alt\": \"ø\""))
+    fun aLanguageSwitchedOnUnderAccentsFromOtherLanguagesLendsItsAccents() {
+        settle()
+        val before = waitForKey("e").contentDescription.orEmpty()
         runBlocking {
             DataGraph.themes.updatePreferences {
-                it.copy(customLayouts = listOf(own), subtypeLayouts = mapOf("qwerty" to "custom-1"))
+                it.copy(extraAccents = true, extraAccentLanguages = listOf("fr-FR"))
             }
         }
         try {
-            settle()
-            val q = waitForKey("q")
-            assertTrue("the q key's description: ${q.contentDescription}", q.contentDescription.orEmpty().contains("Hold"))
-            type("q")
-            assertField("q")
+            val deadline = System.currentTimeMillis() + KEY_TIMEOUT
+            while (findKey("e")?.contentDescription.orEmpty() == before) {
+                check(System.currentTimeMillis() < deadline) { "the French accents never reached the e key: $before" }
+                Thread.sleep(SETTLE_MILLIS)
+            }
         } finally {
             runBlocking {
-                DataGraph.themes.updatePreferences { it.copy(customLayouts = emptyList(), subtypeLayouts = emptyMap()) }
+                DataGraph.themes.updatePreferences { it.copy(extraAccents = false, extraAccentLanguages = emptyList()) }
             }
         }
     }
@@ -486,6 +630,47 @@ class ImeSmokeTest {
     }
 
     @Test
+    fun aLayoutOfTheUsersOwnDrawsForItsSubtype() {
+        val qwerty = context.assets.open("layouts/qwerty.json").use { it.readBytes().decodeToString() }
+        // The q key's long press gains a letter QWERTY does not have.
+        val own = CustomLayout("custom-1", "Smoke", "und", qwerty.replaceFirst("\"c\": \"q\"", "\"c\": \"q\", \"alt\": \"ø\""))
+        runBlocking {
+            DataGraph.themes.updatePreferences {
+                it.copy(customLayouts = listOf(own), subtypeLayouts = mapOf("qwerty" to "custom-1"))
+            }
+        }
+        try {
+            settle()
+            val q = waitForKey("q")
+            assertTrue("the q key's description: ${q.contentDescription}", q.contentDescription.orEmpty().contains("Hold"))
+            type("q")
+            assertField("q")
+        } finally {
+            runBlocking {
+                DataGraph.themes.updatePreferences { it.copy(customLayouts = emptyList(), subtypeLayouts = emptyMap()) }
+            }
+        }
+    }
+
+    @Test
+    fun aHoldOnTheGlobeSwitchesTheLayout() {
+        val before = device.executeShellCommand("settings get secure enabled_input_methods").trim()
+        val ime = "${context.packageName}/com.borderkeys.ime.BorderKeysService"
+        val both = before.split(':').filterNot { it.startsWith(ime) } + "$ime;$ENGLISH_SUBTYPE;$RUSSIAN_SUBTYPE"
+        device.executeShellCommand("settings put secure enabled_input_methods ${both.joinToString(":")}")
+        runBlocking { DataGraph.themes.updatePreferences { it.copy(languageKey = true) } }
+        try {
+            selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
+            waitForKey(LANGUAGE_KEY).longClick()
+            waitForKey("й", LAUNCH_TIMEOUT)
+        } finally {
+            runBlocking { DataGraph.themes.updatePreferences { it.copy(languageKey = false) } }
+            device.executeShellCommand("settings put secure enabled_input_methods $before")
+            selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
+        }
+    }
+
+    @Test
     fun onTheHebrewLayoutTheFirstSuggestionSitsAtTheRightEndOfTheStrip() {
         selectSubtype(HEBREW_SUBTYPE, firstKey = "ק")
         try {
@@ -506,10 +691,12 @@ class ImeSmokeTest {
         }
         try {
             // The second pack reaches the engine off the main thread once the repository says
-            // so, and the keys are redrawn with its letters on their long press when it has.
+            // so; the keys show its letters on their long press, and the engine has it loaded.
             val deadline = System.currentTimeMillis() + LAUNCH_TIMEOUT
-            while (findKey("a")?.contentDescription?.contains(ROMANIAN_HOLD_HINT) != true) {
-                check(System.currentTimeMillis() < deadline) { "the Romanian letters never reached the keys" }
+            while (findKey("a")?.contentDescription?.contains(ROMANIAN_HOLD_HINT) != true ||
+                ROMANIAN !in com.borderkeys.predict.PackLoad.active.value
+            ) {
+                check(System.currentTimeMillis() < deadline) { "the Romanian pack never reached the keys and the engine" }
                 Thread.sleep(SETTLE_MILLIS)
             }
             settle()
@@ -889,6 +1076,7 @@ class ImeSmokeTest {
     }
 
     private companion object {
+        const val CLIP_BEFORE = "on the clipboard before"
         const val ENGLISH = "en-US"
         const val ROMANIAN = "ro-RO"
 
@@ -914,8 +1102,18 @@ class ImeSmokeTest {
         /** The backspace key's spoken name, from the catalogue. */
         const val DELETE_KEY = "Delete"
 
-        /** The dead acute's spoken name, up to the hold hint. */
-        const val DEAD_ACUTE_KEY = "Dead key: Acute accent"
+        /** The globe key's spoken name, from the catalogue. */
+        const val LANGUAGE_KEY = "Language"
+
+        /** The compose and left-arrow keys' spoken names, from the catalogue. */
+        const val COMPOSE_KEY = "Compose"
+        const val LEFT_ARROW_KEY = "Left arrow"
+
+        /** The escape key's spoken name, from the catalogue. */
+        const val ESCAPE_KEY = "Escape"
+
+        /** The acute accent modifier's spoken name, up to the hold hint. */
+        const val DEAD_ACUTE_KEY = "Accent modifier: Acute accent"
         const val QUICK_ACTIONS_VIEW = "com.borderkeys.ime.QuickActionsView"
 
         /** The name the system shows for this keyboard, from the manifest's ime_name. */
@@ -928,6 +1126,8 @@ class ImeSmokeTest {
 
         /** Subtype ids from res/xml/method.xml; the secure setting takes them as an Int prints. */
         const val ENGLISH_SUBTYPE = 0x0B0DE002
+        const val GERMAN_QWERTZ_SUBTYPE = 0x0B0DE005
+        const val TURKISH_Q_SUBTYPE = 0x0B0DE00E
         const val RUSSIAN_SUBTYPE = 0x0B0DE016
         const val HEBREW_SUBTYPE = 0x0B0DE01E
         const val SLIDE_INSET_PX = 12
