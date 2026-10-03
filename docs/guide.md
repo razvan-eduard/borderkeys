@@ -124,6 +124,11 @@ ships.
   you drag up, and lifting deletes it. Each has its switch on the Layout screen, the joystick a
   speed too.
 
+- **Your own layouts.** Write a layout as the keyboard's own layout files are written, rows of
+  keys with relative widths, starting from any built-in; the editor checks it as you type,
+  previews it, and imports or exports a file. Any of the keyboard's layouts can then draw yours
+  instead of its own.
+
 - **Key flicks.** A short drag off any key in one of eight directions writes a text of your own,
   runs a quick action or presses another key, set per key and direction on the Key flicks screen,
   where you tap the key on a live keyboard and then the direction; the key shows a small label at

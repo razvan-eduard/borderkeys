@@ -204,6 +204,17 @@ class BackupFileTest {
     }
 
     @Test
+    fun `a layout of the user's own travels with the settings`() {
+        val own = com.borderkeys.data.theme.CustomLayout("custom-4", "Mine", "und", "{\"rows\":[{\"keys\":[{\"c\":\"a\"}]}]}")
+        val payload = BackupPayload(
+            preferences = KeyboardPreferences(customLayouts = listOf(own), subtypeLayouts = mapOf("qwerty" to "custom-4")),
+        )
+        val read = BackupFile.read(BackupFile.write(payload, passphrase = ""), "").payload!!.preferences!!
+        assertEquals(listOf(own), read.customLayouts)
+        assertEquals(mapOf("qwerty" to "custom-4"), read.subtypeLayouts)
+    }
+
+    @Test
     fun `the clipboard counts as private too`() {
         val clips = BackupPayload(clips = listOf(BackupClip("a card number", 1L, false)))
         assertTrue(clips.isSensitive)

@@ -13,6 +13,7 @@ enum class Screen(val titleKey: String) {
     Languages(Keys.SCREEN_LANGUAGES),
     Layout(Keys.SCREEN_LAYOUT),
     KeyFlicks(Keys.SCREEN_KEY_FLICKS),
+    CustomLayouts(Keys.SCREEN_CUSTOM_LAYOUTS),
     Theme(Keys.SCREEN_THEME),
     Size(Keys.SCREEN_SIZE_AND_POSITION),
     Effects(Keys.SCREEN_PARTICLE_EFFECTS),

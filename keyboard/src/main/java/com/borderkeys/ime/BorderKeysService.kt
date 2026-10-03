@@ -145,6 +145,14 @@ class BorderKeysService :
         preferences.placementFor(isLandscape())
 
     private var alphabeticLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
+
+    /** The layout id the current subtype names, which the user's choice may stand in for. */
+    private var subtypeLayoutId: String = DEFAULT_ALPHABETIC_LAYOUT
+
+    /** The letter layout for [subtypeLayoutId]: the user's choice for it, else its asset. */
+    private fun resolveLetterLayout(): KeyboardLayout = LayoutChoice.resolve(
+        subtypeLayoutId, preferences.subtypeLayouts, preferences.customLayouts,
+    ) { id -> LayoutLoader.load(assets, id) }
     private var symbolsLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var symbolsNumpadLeftLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var symbolsNumpadRightLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
@@ -494,9 +502,8 @@ class BorderKeysService :
         scope.launch(Dispatchers.IO) {
             val manager = getSystemService(Context.INPUT_METHOD_SERVICE)
                 as? android.view.inputmethod.InputMethodManager
-            alphabeticLayout = LayoutLoader.load(
-                assets, layoutIdFromSubtype(manager?.currentInputMethodSubtype),
-            )
+            subtypeLayoutId = layoutIdFromSubtype(manager?.currentInputMethodSubtype)
+            alphabeticLayout = resolveLetterLayout()
             symbolsLayout = LayoutLoader.load(assets, SYMBOLS_LAYOUT)
             symbolsNumpadLeftLayout = LayoutLoader.load(assets, SYMBOLS_NUMPAD_LEFT_LAYOUT)
             symbolsNumpadRightLayout = LayoutLoader.load(assets, SYMBOLS_NUMPAD_RIGHT_LAYOUT)
@@ -687,7 +694,18 @@ class BorderKeysService :
         val swipeModelFlipped =
             preferences.experimentalSwipeModelEnabled !=
                 newPreferences.experimentalSwipeModelEnabled
+        val layoutChoiceChanged = preferences.subtypeLayouts != newPreferences.subtypeLayouts ||
+            preferences.customLayouts != newPreferences.customLayouts
         preferences = newPreferences
+        if (layoutChoiceChanged) {
+            scope.launch(Dispatchers.IO) {
+                val layout = resolveLetterLayout()
+                withContext(Dispatchers.Main) {
+                    alphabeticLayout = layout
+                    host?.let { showPage(page) }
+                }
+            }
+        }
         orchestrator.applySettings(newPreferences)
         if (swipeModelFlipped) {
             applySwipeModel(newPreferences.experimentalSwipeModelEnabled)
@@ -1660,8 +1678,9 @@ class BorderKeysService :
     /** Loads the letter layout the new subtype names and redraws the current page. */
     override fun onCurrentInputMethodSubtypeChanged(subtype: android.view.inputmethod.InputMethodSubtype?) {
         super.onCurrentInputMethodSubtypeChanged(subtype)
+        subtypeLayoutId = layoutIdFromSubtype(subtype)
         scope.launch(Dispatchers.IO) {
-            val layout = LayoutLoader.load(assets, layoutIdFromSubtype(subtype))
+            val layout = resolveLetterLayout()
             withContext(Dispatchers.Main) {
                 alphabeticLayout = layout
                 host?.let { showPage(page) }

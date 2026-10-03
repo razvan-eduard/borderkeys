@@ -57,6 +57,10 @@ attestations and the full commit lists are on the
   600,000, its header is sealed together with its contents, and a file claiming more than
   5,000,000 rounds is refused as damaged before any work is done. Files already written still
   open, and the screen says so while the key is being derived.
+- Your layouts, a new screen under Layout & keys: write a layout of your own as the keyboard's
+  own layout files are written, starting from any built-in one; the editor checks it as you type
+  with the same rules the built-in ones must meet, shows it, and imports or exports a file. Any
+  layout on the keyboard can then draw yours instead of its own.
 - Hold the space bar still for a moment and it becomes a joystick: lean the finger in a direction
   and the cursor keeps moving that way, faster the further you lean, at a speed you set. With it
   on, holding the space bar no longer switches the layout; the globe key does. Drag left along

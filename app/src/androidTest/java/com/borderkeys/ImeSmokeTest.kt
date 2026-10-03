@@ -20,6 +20,7 @@ import androidx.test.uiautomator.Until
 import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.entity.LanguagePackEntry
+import com.borderkeys.data.theme.CustomLayout
 import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.QuickAction
@@ -189,6 +190,29 @@ class ImeSmokeTest {
             settle()
         } finally {
             runBlocking { DataGraph.themes.updatePreferences { it.copy(quickActionsEnabled = false) } }
+        }
+    }
+
+    @Test
+    fun aLayoutOfTheUsersOwnDrawsForItsSubtype() {
+        val qwerty = context.assets.open("layouts/qwerty.json").use { it.readBytes().decodeToString() }
+        // The q key's long press gains a letter QWERTY does not have.
+        val own = CustomLayout("custom-1", "Smoke", "und", qwerty.replaceFirst("\"c\": \"q\"", "\"c\": \"q\", \"alt\": \"ø\""))
+        runBlocking {
+            DataGraph.themes.updatePreferences {
+                it.copy(customLayouts = listOf(own), subtypeLayouts = mapOf("qwerty" to "custom-1"))
+            }
+        }
+        try {
+            settle()
+            val q = waitForKey("q")
+            assertTrue("the q key's description: ${q.contentDescription}", q.contentDescription.orEmpty().contains("Hold"))
+            type("q")
+            assertField("q")
+        } finally {
+            runBlocking {
+                DataGraph.themes.updatePreferences { it.copy(customLayouts = emptyList(), subtypeLayouts = emptyMap()) }
+            }
         }
     }
 

@@ -129,6 +129,8 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.test.core)
+    // org.json is a stub on the JVM; the real one lets the tests parse the layout assets.
+    testImplementation(libs.org.json)
 }
 
 /** Compiles the word lists in `dictionaries/` into `.bkd` packs with `tools/build_dict.py`. */
