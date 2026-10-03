@@ -496,6 +496,7 @@ internal fun iconFor(action: QuickAction): Int = when (action) {
     QuickAction.CURSOR_LEFT -> R.drawable.bk_action_cursor_left
     QuickAction.CURSOR_RIGHT -> R.drawable.bk_action_cursor_right
     QuickAction.TIMESTAMP -> R.drawable.bk_action_timestamp
+    QuickAction.PRIVATE_COPY -> R.drawable.bk_action_copy_private
 }
 
 internal fun labelFor(action: QuickAction): String = when (action) {
@@ -521,4 +522,5 @@ internal fun labelFor(action: QuickAction): String = when (action) {
     QuickAction.CURSOR_LEFT -> Keys.ACTION_CURSOR_LEFT
     QuickAction.CURSOR_RIGHT -> Keys.ACTION_CURSOR_RIGHT
     QuickAction.TIMESTAMP -> Keys.ACTION_TIMESTAMP
+    QuickAction.PRIVATE_COPY -> Keys.ACTION_PRIVATE_COPY
 }

@@ -1966,6 +1966,7 @@ class BorderKeysService :
                 connection.getExtractedText(ExtractedTextRequest(), 0)?.text?.toString().orEmpty(),
             )
             QuickAction.PASTE -> onClipboardPicked()
+            QuickAction.PRIVATE_COPY -> privateCopy()
             QuickAction.CLIPBOARD_HISTORY -> offerClipboardHistory()
             QuickAction.SELECT_ALL -> connection.performContextMenuAction(android.R.id.selectAll)
             // The editor's own cut, then the result recorded for undo.
@@ -2120,6 +2121,20 @@ class BorderKeysService :
         val breakAfter = after.indexOf('\n')
         val tail = if (breakAfter >= 0) after.substring(0, breakAfter) else after
         return before.substring(start) + tail
+    }
+
+    /** Keeps the selection in the history as a private entry; the system clipboard is not touched. */
+    private fun privateCopy() {
+        if (!unlocked) {
+            return
+        }
+        val text = orchestrator.privateCopyText() ?: return
+        if (text.length > MAX_CLIP_LENGTH) {
+            return
+        }
+        val source = currentInputEditorInfo?.packageName
+        scope.launch(Dispatchers.IO) { DataGraph.clipboard.rememberPrivately(text, source) }
+        typingHost.showNotice(Keys.CLIP_PRIVATE)
     }
 
     private fun copyToClipboard(text: String) {
@@ -2557,7 +2572,8 @@ class BorderKeysService :
         const val FINAL_FLUSH_TIMEOUT_MILLIS = 2_000L
 
         /** Quick actions that do not change the field and refresh no suggestions. */
-        val NO_REFRESH_QUICK_ACTIONS = setOf(QuickAction.CLIPBOARD_HISTORY, QuickAction.COMPOSE)
+        val NO_REFRESH_QUICK_ACTIONS =
+            setOf(QuickAction.CLIPBOARD_HISTORY, QuickAction.COMPOSE, QuickAction.PRIVATE_COPY)
 
         /** The preferences file where [maybeDecayPersonalDictionary] records its last run. */
         const val DECAY_PREFS = "personal_dictionary_decay"

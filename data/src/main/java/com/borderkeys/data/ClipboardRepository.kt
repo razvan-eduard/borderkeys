@@ -89,6 +89,27 @@ class ClipboardRepository internal constructor(
         return true
     }
 
+    /**
+     * Keeps [content] privately: never on the system clipboard, with history on or off, exempt
+     * from the retention window, the history limit and clearing on close; [sourcePackage] is the
+     * app it was taken from. The same text kept again stays private. False for empty text.
+     */
+    suspend fun rememberPrivately(content: String, sourcePackage: String?): Boolean {
+        if (content.isEmpty()) {
+            return false
+        }
+        dao.upsert(
+            content = content,
+            createdAt = now(),
+            contentHash = contentHash(content),
+            uri = null,
+            mimeType = null,
+            isPrivate = true,
+            sourcePackage = sourcePackage?.takeIf { it.isNotBlank() },
+        )
+        return true
+    }
+
     /** The most recent entries, newest first, read once. */
     suspend fun recent(limit: Int): List<ClipEntry> = entries.first().take(limit)
 

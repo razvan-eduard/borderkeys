@@ -12,5 +12,6 @@
     <string name="process_text_label_shorten">Scurtează cu BorderKeys</string>
     <string name="process_text_label_summarise">Rezumă cu BorderKeys</string>
     <string name="process_text_label_custom">Acțiune personalizată cu BorderKeys</string>
+    <string name="process_text_label_private_copy">Păstrează privat cu BorderKeys</string>
 
 </resources>

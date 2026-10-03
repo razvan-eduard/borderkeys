@@ -124,6 +124,7 @@ class BackupRepository(
                         content = it.content,
                         createdAt = it.createdAt,
                         pinned = it.isPinned,
+                        private = it.isPrivate,
                     )
                 }
         } else {
@@ -314,6 +315,7 @@ class BackupRepository(
                     createdAt = clip.createdAt,
                     pinnedAt = if (clip.pinned) clip.createdAt else null,
                     contentHash = hash,
+                    isPrivate = clip.private,
                 )
                 added += 1
             }

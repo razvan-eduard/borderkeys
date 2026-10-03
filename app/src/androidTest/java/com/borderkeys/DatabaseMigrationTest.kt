@@ -55,12 +55,14 @@ class DatabaseMigrationTest {
         }
         helper.runMigrationsAndValidate(DATABASE, 9, true, BorderKeysDatabase.MIGRATION_8_9)
             .use { db ->
-                db.query("SELECT content, mediaFile, sizeBytes, thumbnail FROM clip_entries").use {
+                db.query("SELECT content, mediaFile, sizeBytes, thumbnail, isPrivate, sourcePackage FROM clip_entries").use {
                     it.moveToFirst()
                     assertEquals("hello", it.getString(0))
                     assertTrue(it.isNull(1))
                     assertEquals(0L, it.getLong(2))
                     assertTrue(it.isNull(3))
+                    assertEquals(0, it.getInt(4))
+                    assertTrue(it.isNull(5))
                 }
             }
     }

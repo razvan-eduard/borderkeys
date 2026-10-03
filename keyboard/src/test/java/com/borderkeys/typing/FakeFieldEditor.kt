@@ -83,6 +83,12 @@ internal class FakeFieldEditor : FieldEditor {
     override fun extractedText(maxChars: Int): FieldText =
         FieldText(content.toString(), 0, selectionStart, selectionEnd)
 
+    override fun selectedText(): CharSequence? {
+        val start = minOf(selectionStart, selectionEnd)
+        val end = maxOf(selectionStart, selectionEnd)
+        return if (start == end) null else content.substring(start, end)
+    }
+
     override fun cursorCapsMode(modes: Int): Int =
         CapsMode.at(content, minOf(selectionStart, selectionEnd), modes)
 

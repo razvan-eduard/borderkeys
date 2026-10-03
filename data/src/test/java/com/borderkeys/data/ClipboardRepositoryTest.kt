@@ -24,7 +24,7 @@ class ClipboardRepositoryTest {
         private var nextId = 1L
 
         override fun observeLive(expiryCutoff: Long): Flow<List<ClipEntry>> =
-            rows.map { list -> list.filter { it.pinnedAt != null || it.createdAt >= expiryCutoff } }
+            rows.map { list -> list.filter { it.pinnedAt != null || it.isPrivate || it.createdAt >= expiryCutoff } }
 
         override suspend fun findByHash(contentHash: Long): ClipEntry? =
             rows.value.firstOrNull { it.contentHash == contentHash }
@@ -45,15 +45,27 @@ class ClipboardRepositoryTest {
             mediaFile: String?,
             sizeBytes: Long,
             thumbnail: ByteArray?,
+            isPrivate: Boolean,
+            sourcePackage: String?,
         ) {
             val existing = findByHash(contentHash)
             rows.value = if (existing != null) {
-                rows.value.map { if (it.id == existing.id) it.copy(createdAt = createdAt) else it }
+                rows.value.map {
+                    if (it.id == existing.id) {
+                        it.copy(
+                            createdAt = createdAt,
+                            isPrivate = it.isPrivate || isPrivate,
+                            sourcePackage = it.sourcePackage ?: sourcePackage,
+                        )
+                    } else {
+                        it
+                    }
+                }
             } else {
                 rows.value + ClipEntry(
                     id = nextId++, content = content, createdAt = createdAt, contentHash = contentHash,
                     uri = uri, mimeType = mimeType, mediaFile = mediaFile, sizeBytes = sizeBytes,
-                    thumbnail = thumbnail,
+                    thumbnail = thumbnail, isPrivate = isPrivate, sourcePackage = sourcePackage,
                 )
             }
         }
@@ -63,9 +75,15 @@ class ClipboardRepositoryTest {
         override suspend fun findByMediaFile(mediaFile: String): ClipEntry? =
             rows.value.firstOrNull { it.mediaFile == mediaFile }
 
-        override suspend fun insertIfAbsent(content: String, createdAt: Long, pinnedAt: Long?, contentHash: Long) {
+        override suspend fun insertIfAbsent(
+            content: String,
+            createdAt: Long,
+            pinnedAt: Long?,
+            contentHash: Long,
+            isPrivate: Boolean,
+        ) {
             if (findByHash(contentHash) == null) {
-                rows.value = rows.value + ClipEntry(nextId++, content, createdAt, pinnedAt, contentHash)
+                rows.value = rows.value + ClipEntry(nextId++, content, createdAt, pinnedAt, contentHash, isPrivate = isPrivate)
             }
         }
 
@@ -77,7 +95,8 @@ class ClipboardRepositoryTest {
             rows.value = rows.value.filterNot { it.id == id }
         }
 
-        override suspend fun deleteExpired(expiryCutoff: Long): Int = remove { it.pinnedAt == null && it.createdAt < expiryCutoff }
+        override suspend fun deleteExpired(expiryCutoff: Long): Int =
+            remove { it.pinnedAt == null && !it.isPrivate && it.createdAt < expiryCutoff }
 
         override suspend fun deleteAll() {
             rows.value = emptyList()
@@ -85,12 +104,12 @@ class ClipboardRepositoryTest {
 
         override suspend fun deleteImages(): Int = remove { it.uri != null || it.mediaFile != null }
 
-        override suspend fun deleteUnpinned(): Int = remove { it.pinnedAt == null }
+        override suspend fun deleteUnpinned(): Int = remove { it.pinnedAt == null && !it.isPrivate }
 
         override suspend fun count(): Int = rows.value.size
 
         override suspend fun trimUnpinnedTo(keep: Int): Int {
-            val unpinned = rows.value.filter { it.pinnedAt == null }.sortedByDescending { it.createdAt }
+            val unpinned = rows.value.filter { it.pinnedAt == null && !it.isPrivate }.sortedByDescending { it.createdAt }
             val dropped = unpinned.drop(keep).map { it.id }.toSet()
             return remove { it.id in dropped }
         }
@@ -191,6 +210,49 @@ class ClipboardRepositoryTest {
         assertEquals(1, dao.rows.value.size)
         assertEquals(1, media.files.size)
         assertTrue(media.files.keys.single().endsWith(".jpg"))
+    }
+
+    @Test
+    fun `a private copy is kept with history off, flagged, with its source`() = runTest {
+        settings.value = KeyboardPreferences(clipboardEnabled = false)
+        assertTrue(!repository.remember("plain"))
+        assertTrue(repository.rememberPrivately("secret", "com.example.notes"))
+        val row = dao.rows.value.single()
+        assertTrue(row.isPrivate)
+        assertEquals("secret", row.content)
+        assertEquals("com.example.notes", row.sourcePackage)
+        assertTrue(!repository.rememberPrivately("", "com.example.notes"))
+    }
+
+    @Test
+    fun `the private flag survives the same text copied again, either way round`() = runTest {
+        repository.remember("secret")
+        repository.rememberPrivately("secret", "com.example.notes")
+        assertTrue(dao.rows.value.single().isPrivate)
+        assertEquals("com.example.notes", dao.rows.value.single().sourcePackage)
+        clock = 5_000L
+        repository.remember("secret")
+        val row = dao.rows.value.single()
+        assertTrue(row.isPrivate)
+        assertEquals(5_000L, row.createdAt)
+    }
+
+    @Test
+    fun `a private entry outlives the timer, the limit and clearing on close`() = runTest {
+        settings.value = KeyboardPreferences(clipboardMaxEntries = 1, clipboardRetentionMinutes = 1)
+        repository.rememberPrivately("secret", null)
+        clock += 10 * 60_000L
+        repository.remember("newer")
+        repository.remember("newest")
+        assertTrue(dao.rows.value.any { it.isPrivate })
+        assertEquals(2, dao.rows.value.size)
+        repository.purgeExpired()
+        assertTrue(dao.rows.value.any { it.isPrivate })
+        repository.deleteUnpinned()
+        assertEquals(listOf("secret"), dao.rows.value.map { it.content })
+        assertTrue(repository.recent(10).single().isPrivate)
+        repository.deleteAll()
+        assertTrue(dao.rows.value.isEmpty())
     }
 
     @Test

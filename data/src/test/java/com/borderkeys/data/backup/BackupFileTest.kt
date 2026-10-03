@@ -185,6 +185,25 @@ class BackupFileTest {
     private fun ByteArray.hex() = joinToString("") { "%02x".format(it) }
 
     @Test
+    fun `a private clip keeps its flag through a file, and an older file reads as not private`() {
+        val clips = BackupPayload(
+            clips = listOf(
+                BackupClip("a card number", 1L, false, private = true),
+                BackupClip("a note", 2L, true),
+            ),
+        )
+        val text = BackupFile.write(clips, passphrase = "correct horse")
+        val read = BackupFile.read(text, "correct horse").payload!!.clips
+        assertEquals(listOf(true, false), read.map { it.private })
+
+        val older = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString(
+            BackupPayload.serializer(),
+            """{"clips":[{"content":"a note","createdAt":2,"pinned":true}]}""",
+        )
+        assertFalse(older.clips.single().private)
+    }
+
+    @Test
     fun `the clipboard counts as private too`() {
         val clips = BackupPayload(clips = listOf(BackupClip("a card number", 1L, false)))
         assertTrue(clips.isSensitive)

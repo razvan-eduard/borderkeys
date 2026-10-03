@@ -6,6 +6,7 @@ package com.borderkeys.settings.screen
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.PrivateCopyActivity
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -59,6 +60,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
     val repository = remember { DataGraph.clipboard }
     val themes = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val update = rememberPreferencesUpdater()
     val entries by repository.entries.collectAsStateWithLifecycle(initialValue = emptyList())
     val preferences by themes.preferences
@@ -117,6 +119,14 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
                         DataGraph.clipboard.deleteImages()
                     }
                 }
+            }
+            SwitchRow(
+                title = strings[Keys.CLIPBOARD_PRIVATE_MENU],
+                subtitle = strings[Keys.CLIPBOARD_PRIVATE_NOTE],
+                checked = preferences.privateCopyInTextMenu,
+            ) { value ->
+                PrivateCopyActivity.setOffered(context, value)
+                update { it.copy(privateCopyInTextMenu = value) }
             }
             SectionHeader(strings[Keys.CLIPBOARD_IMAGE_MAX_SIZE])
             StepSlider(
@@ -206,7 +216,14 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
             for (entry in ClipSearch.filter(entries, search)) {
                 SettingRow(
                     title = if (entry.isImage) strings[Keys.CLIP_IMAGE] else entry.content.take(80).replace('\n', ' '),
-                    subtitle = if (entry.isPinned) strings[Keys.CLIPBOARD_PINNED_NEVER_EXPIRES] else strings[Keys.CLIPBOARD_EXPIRES_ON_THE_TIMER],
+                    subtitle = when {
+                        entry.isPrivate -> listOfNotNull(
+                            strings[Keys.CLIP_PRIVATE],
+                            entry.sourcePackage?.let { strings.getString(Keys.CLIPBOARD_PRIVATE_FROM, it) },
+                        ).joinToString(" · ")
+                        entry.isPinned -> strings[Keys.CLIPBOARD_PINNED_NEVER_EXPIRES]
+                        else -> strings[Keys.CLIPBOARD_EXPIRES_ON_THE_TIMER]
+                    },
                     trailing = {
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             TextButton(

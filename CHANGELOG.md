@@ -57,6 +57,9 @@ attestations and the full commit lists are on the
   600,000, its header is sealed together with its contents, and a file claiming more than
   5,000,000 rounds is refused as damaged before any work is done. Files already written still
   open, and the screen says so while the key is being derived.
+- Keep privately, a quick action and, once turned on, an entry in other apps' text-selection
+  menu: the selection goes into the clipboard history as a private item that never touches the
+  system clipboard and stays until you delete it, marked with the app it came from.
 - A copied image is kept as a picture, not as a link the copying app can take back: encrypted on
   this device, with a small preview in the clipboard history, the same picture copied twice kept
   once. Largest image kept, on the Clipboard screen, sets the limit, 10 MB by default. Pasting

@@ -21,6 +21,7 @@ import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.entity.LanguagePackEntry
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.predict.LanguagePackInspector
@@ -109,6 +110,46 @@ class ImeSmokeTest {
         settle()
         tapKey(SPACE)
         assertField("the ")
+    }
+
+    @Test
+    fun keepPrivatelyStoresTheSelectionWithoutTheSystemClipboard() {
+        runBlocking {
+            DataGraph.clipboard.deleteAll()
+            DataGraph.themes.updatePreferences {
+                it.copy(
+                    quickActionsEnabled = true,
+                    quickActions = listOf(QuickAction.PRIVATE_COPY.id),
+                    quickActionsMode = KeyboardPreferences.QUICK_ACTIONS_FULL,
+                )
+            }
+        }
+        try {
+            type("secret")
+            settle()
+            device.pressKeyCode(KeyEvent.KEYCODE_A, KeyEvent.META_CTRL_ON)
+            settle()
+            val bar = device.wait(Until.findObject(By.clazz(QUICK_ACTIONS_VIEW)), KEY_TIMEOUT)
+            assertNotNull(
+                "the quick-action bar; on screen: " +
+                    device.findObjects(By.pkg(context.packageName)).map { "${it.className}:${it.contentDescription}" },
+                bar,
+            )
+            val bounds = bar.visibleBounds
+            // The one button sits at the bar's start edge.
+            device.click(bounds.left + bounds.height() / 2, bounds.centerY())
+            settle()
+            val row = runBlocking { DataGraph.clipboard.recent(10) }.firstOrNull { it.content == "secret" }
+            assertNotNull("the private row", row)
+            assertTrue(row!!.isPrivate)
+            assertEquals(context.packageName, row.sourcePackage)
+            assertField("secret")
+        } finally {
+            runBlocking {
+                DataGraph.clipboard.deleteAll()
+                DataGraph.themes.updatePreferences { it.copy(quickActionsEnabled = false) }
+            }
+        }
     }
 
     @Test
@@ -748,6 +789,7 @@ class ImeSmokeTest {
         /** What every mode's content description starts with; the mode's own name follows. */
         const val PROBE_PREFIX = "probe-"
         const val EDIT_TEXT = "android.widget.EditText"
+        const val QUICK_ACTIONS_VIEW = "com.borderkeys.ime.QuickActionsView"
         const val SPACE = "Space"
         const val SHIFT = "Shift"
         const val DELETE = "Delete"

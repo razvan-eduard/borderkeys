@@ -1247,6 +1247,22 @@ class TypingOrchestrator(
         return true
     }
 
+    /**
+     * The selection, for a private copy: null in a private field, and null with the strip told
+     * when nothing is selected.
+     */
+    fun privateCopyText(): String? {
+        if (session.policy.privateField) {
+            return null
+        }
+        val selected = currentEditor()?.selectedText()?.toString()
+        if (selected.isNullOrEmpty()) {
+            host.showNotice(Keys.CLIP_PRIVATE_NOTHING_SELECTED)
+            return null
+        }
+        return selected
+    }
+
     /** A word picked from the strip or the ring, [index] being its slot. */
     fun onPick(index: Int, word: String) {
         val editor = currentEditor() ?: return

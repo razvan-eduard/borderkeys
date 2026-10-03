@@ -28,6 +28,9 @@ data class KeyboardPreferences(
 
     /** The largest copied image kept, in megabytes; a larger one is not remembered. */
     val clipboardImageMaxMb: Int = DEFAULT_CLIPBOARD_IMAGE_MAX_MB,
+
+    /** Whether other apps' text-selection menu offers Keep privately with BorderKeys. */
+    val privateCopyInTextMenu: Boolean = false,
     /** Hard cap on unpinned history, independent of the retention window. */
     val clipboardMaxEntries: Int = 60,
 
