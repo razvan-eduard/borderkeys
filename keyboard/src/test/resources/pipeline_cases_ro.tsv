@@ -8,7 +8,7 @@ daca	dacă	Correctable
 in	în	Correctable
 
 # --- a correct Romanian word is left alone ----------------------------------------------------
-snobul	-	NothingOffered
+snobul	-	TooFar
 cana	-	NoChange
 
 # --- a capitalised word, as the first word of a field -----------------------------------------

@@ -453,6 +453,9 @@ void runEngineTests() {
         check(loaded.rankOf("tara", "țară") >= 0, "and does so for t-comma as well");
         check(loaded.rankOf("keyboarf", "keyboard") >= 0,
               "a neighbouring-key slip is corrected using the pushed-down geometry");
+        check(loaded.rankOf("bard", "bars") >= 0 &&
+                  loaded.rankOf("bard", "bars") < loaded.rankOf("bard", "board"),
+              "a straight neighbour's slip outranks an inserted letter of an equally common word");
 
         // A correction must not displace a word that needed none, however much more frequent
         // the correction is.

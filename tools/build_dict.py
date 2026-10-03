@@ -944,6 +944,7 @@ SAMPLE_WORDS = [
     ("these", 18000), ("people", 22000), ("should", 19000), ("because", 21000),
     ("through", 14000), ("another", 12000), ("between", 11000), ("important", 6000),
     ("different", 7000), ("question", 5000), ("together", 6500), ("water", 4000),
+    ("bars", 500), ("board", 500),
 ]
 
 SAMPLE_NGRAMS = {
