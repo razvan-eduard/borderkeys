@@ -610,23 +610,58 @@ class BorderKeysService :
             SwipeModelLoad.set(SwipeModelLoad.State.Failed)
             return
         }
+        engine.setSwipeModelEnabled(true)
+        useSwipeModelForLayout()
+    }
+
+    /** The script models the build ships, by file name; none in `core`. */
+    private val shippedSwipeModels: Set<String> by lazy {
+        runCatching { assets.list(SwipeModels.DIRECTORY)?.toSet() }.getOrNull().orEmpty()
+    }
+
+    /** Failed loads by model asset, kept across starts; [SwipeModels.MAX_FAILURES] write one off. */
+    private val swipeModelFailures by lazy { getSharedPreferences(SWIPE_MODEL_FAILURES_PREFS, MODE_PRIVATE) }
+
+    private fun deadSwipeModels(): Set<String> =
+        swipeModelFailures.all.filter { (_, count) -> (count as? Int ?: 0) >= SwipeModels.MAX_FAILURES }.keys
+
+    /**
+     * Has the engine decode the letter layout with its model ([SwipeModels.modelFor]), loading it
+     * when it is not held, or with the geometric decoder when it has none. Does nothing while the
+     * model is off or written off.
+     */
+    private fun useSwipeModelForLayout() {
+        if (!preferences.experimentalSwipeModelEnabled || preferences.swipeModelFailed || !unlocked) {
+            return
+        }
+        val letters = alphabeticLayout.rows.flatMap { row -> row.keys.map { it.label } }
+        val model = SwipeModels.modelFor(alphabeticLayout.id, letters, shippedSwipeModels, deadSwipeModels())
+        if (model == null) {
+            engine.useSwipeModel(null, read = { null }) { SwipeModelLoad.set(SwipeModelLoad.State.Ready) }
+            return
+        }
         SwipeModelLoad.set(SwipeModelLoad.State.Loading)
-        swipeModelJob = scope.launch(Dispatchers.IO) {
-            val bytes = runCatching {
-                assets.open(SWIPE_MODEL_ASSET).use { it.readBytes() }
-            }.getOrNull()
-            if (bytes == null) {
-                withContext(Dispatchers.Main) { failSwipeModel(null) }
-                return@launch
+        engine.useSwipeModel(
+            model.script,
+            read = { runCatching { assets.open(model.asset).use { it.readBytes() } }.getOrNull() },
+        ) { ready ->
+            if (ready) {
+                SwipeModelLoad.set(SwipeModelLoad.State.Ready)
+                return@useSwipeModel
             }
-            withContext(Dispatchers.Main) {
-                engine.setSwipeModelEnabled(true)
-                engine.loadSwipeWeights(bytes) { loaded ->
-                    if (loaded) {
-                        SwipeModelLoad.set(SwipeModelLoad.State.Ready)
-                    } else {
-                        failSwipeModel("the swipe model's weights are not valid")
-                    }
+            val failures = swipeModelFailures.getInt(model.asset, 0) + 1
+            swipeModelFailures.edit().putInt(model.asset, failures).apply()
+            if (model == SwipeModels.LATIN) {
+                if (failures >= SwipeModels.MAX_FAILURES) {
+                    failSwipeModel("the swipe model's weights could not be loaded")
+                } else {
+                    SwipeModelLoad.set(SwipeModelLoad.State.Off)
+                }
+            } else {
+                android.util.Log.w("BorderKeys", "the swipe model ${model.asset} could not be loaded")
+                // The geometric decoder takes the layout once this one is written off.
+                if (failures >= SwipeModels.MAX_FAILURES) {
+                    useSwipeModelForLayout()
                 }
             }
         }
@@ -1146,7 +1181,10 @@ class BorderKeysService :
         if (keyWidth <= 0f || keyHeight <= 0f) {
             return
         }
-        engine.setKeyGeometry(0, keyWidth, keyHeight) { codes, x, y ->
+        engine.setKeyGeometry(
+            0, keyWidth, keyHeight,
+            aliases = { codes, bases -> view.exportAliases(codes, bases) },
+        ) { codes, x, y ->
             view.exportGeometry(codes, x, y)
         }
         orchestrator.keyGeometry = keyGeometrySnapshot(view, keyWidth, keyHeight)

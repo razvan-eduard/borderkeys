@@ -304,6 +304,13 @@ jobs:
             --corpus "$PWD/native-tests/data/gestures_futo.csv" \
             --check-regression
 
+      # Each shipped script model, on polylines through its own layout for held-out words of its
+      # pack, against docs/gesture-accuracy-tcn-<layout>.json. The packs are compiled here.
+      - name: Script swipe models
+        run: |
+          set -euo pipefail
+          python3 tools/script_swipe_eval.py --shipped --build-packs --check-regression
+
       - name: Publish reports
         if: always()
         uses: actions/upload-artifact@v7

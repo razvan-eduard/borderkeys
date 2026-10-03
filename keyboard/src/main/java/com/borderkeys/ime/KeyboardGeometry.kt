@@ -220,6 +220,31 @@ class KeyboardGeometry {
         return candidate
     }
 
+    /**
+     * The letters on each letter key's long press, each as a pair: the letter into [codesOut],
+     * its key's code into [basesOut] at the same index. Returns how many were written.
+     */
+    fun exportAliases(codesOut: IntArray, basesOut: IntArray): Int {
+        var written = 0
+        for (index in 0 until keyCount) {
+            if (!KeyFlags.has(keyFlags[index], KeyFlags.LETTER)) {
+                continue
+            }
+            val start = altOffset[index]
+            var i = start
+            while (i < start + altLength[index] && written < codesOut.size) {
+                val code = Character.codePointAt(altChars, i)
+                i += Character.charCount(code)
+                if (Character.isLetter(code)) {
+                    codesOut[written] = code
+                    basesOut[written] = keyCode[index]
+                    written++
+                }
+            }
+        }
+        return written
+    }
+
     /** Letter keys only, in the form the native engine wants for proximity correction. */
     fun exportGeometry(codesOut: IntArray, centersXOut: FloatArray, centersYOut: FloatArray): Int {
         var written = 0

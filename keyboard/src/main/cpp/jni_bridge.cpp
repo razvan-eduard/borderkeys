@@ -179,7 +179,7 @@ void nativeSetActiveLanguages(JNIEnv* env, jobject /*thiz*/, jlong handle, jobje
 
 void nativeSetKeyGeometry(JNIEnv* env, jobject /*thiz*/, jlong handle, jintArray codes,
                           jfloatArray centersX, jfloatArray centersY, jfloat keyWidth,
-                          jfloat keyHeight) {
+                          jfloat keyHeight, jintArray aliasCodes, jintArray aliasBases) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || codes == nullptr || centersX == nullptr || centersY == nullptr) {
         return;
@@ -203,9 +203,33 @@ void nativeSetKeyGeometry(JNIEnv* env, jobject /*thiz*/, jlong handle, jintArray
         return;
     }
 
+    // The long-press letters of every key, before KeyGeometry keeps kMaxAliases a key.
+    constexpr int kMaxAliasPairs = 1024;
+    jint aliasCodeBuffer[kMaxAliasPairs];
+    jint aliasBaseBuffer[kMaxAliasPairs];
+    jsize aliasCount = 0;
+    if (aliasCodes != nullptr && aliasBases != nullptr) {
+        aliasCount = env->GetArrayLength(aliasCodes);
+        if (env->GetArrayLength(aliasBases) < aliasCount) {
+            aliasCount = env->GetArrayLength(aliasBases);
+        }
+        if (aliasCount > kMaxAliasPairs) {
+            aliasCount = kMaxAliasPairs;
+        }
+        env->GetIntArrayRegion(aliasCodes, 0, aliasCount, aliasCodeBuffer);
+        env->GetIntArrayRegion(aliasBases, 0, aliasCount, aliasBaseBuffer);
+        if (env->ExceptionCheck() == JNI_TRUE) {
+            env->ExceptionClear();
+            aliasCount = 0;
+        }
+    }
+
     engine->setKeyGeometry(reinterpret_cast<const int32_t*>(codeBuffer), xBuffer, yBuffer,
                            static_cast<int>(limited), static_cast<float>(keyWidth),
-                           static_cast<float>(keyHeight));
+                           static_cast<float>(keyHeight),
+                           reinterpret_cast<const int32_t*>(aliasCodeBuffer),
+                           reinterpret_cast<const int32_t*>(aliasBaseBuffer),
+                           static_cast<int>(aliasCount));
 }
 
 void nativeSetTouchPatterns(JNIEnv* env, jobject /*thiz*/, jlong handle, jintArray codes,
@@ -800,8 +824,9 @@ jstring nativeDominantLanguageTag(JNIEnv* env, jobject /*thiz*/, jlong handle) {
     return tag == nullptr ? nullptr : env->NewStringUTF(tag);
 }
 
-/** Loads tier B's weights from a byte array; false in a `core` build. */
-jboolean nativeLoadSwipeWeights(JNIEnv* env, jobject /*thiz*/, jlong handle, jbyteArray weights) {
+/** Loads tier B's weights for [script] from a byte array; false in a `core` build. */
+jboolean nativeLoadSwipeWeights(JNIEnv* env, jobject /*thiz*/, jlong handle, jint script,
+                                jbyteArray weights) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || weights == nullptr) {
         return JNI_FALSE;
@@ -814,8 +839,8 @@ jboolean nativeLoadSwipeWeights(JNIEnv* env, jobject /*thiz*/, jlong handle, jby
     if (bytes == nullptr) {
         return JNI_FALSE;
     }
-    const bool loaded =
-        engine->loadSwipeWeights(reinterpret_cast<const uint8_t*>(bytes), static_cast<size_t>(length));
+    const bool loaded = engine->loadSwipeWeights(
+        static_cast<int>(script), reinterpret_cast<const uint8_t*>(bytes), static_cast<size_t>(length));
     env->ReleaseByteArrayElements(weights, bytes, JNI_ABORT);
     return loaded ? JNI_TRUE : JNI_FALSE;
 }
@@ -834,6 +859,21 @@ void nativeSetSwipeModelEnabled(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
         return;
     }
     engine->setSwipeModelEnabled(enabled == JNI_TRUE);
+}
+
+/** Which script's model the layout now set decodes with; one not loaded decodes with tier A. */
+void nativeSelectSwipeScript(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jint script) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return;
+    }
+    engine->selectSwipeScript(static_cast<int>(script));
+}
+
+/** Whether a model for [script] is loaded. */
+jboolean nativeHasSwipeModel(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jint script) {
+    Engine* const engine = engineFrom(handle);
+    return (engine != nullptr && engine->hasSwipeModel(static_cast<int>(script))) ? JNI_TRUE : JNI_FALSE;
 }
 
 /** Runs one discarded decode through tier B; false when there is nothing to warm. */
@@ -1176,10 +1216,10 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeInspectPack)},
     {"nativeSetActiveLanguages", "(J[Ljava/lang/String;[F)V",
      reinterpret_cast<void*>(nativeSetActiveLanguages)},
-    {"nativeSetKeyGeometry", "(J[I[F[FFF)V", reinterpret_cast<void*>(nativeSetKeyGeometry)},
+    {"nativeSetKeyGeometry", "(J[I[F[FFF[I[I)V", reinterpret_cast<void*>(nativeSetKeyGeometry)},
     {"nativeAnswer",
      "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[F[F[Ljava/lang/String;[F[Z"
-     "[Ljava/lang/String;[Ljava/lang/String;[I[Z)I",
+     "[Ljava/lang/String;[Ljava/lang/String;[Z[Z)I",
      reinterpret_cast<void*>(nativeAnswer)},
     {"nativeSetTouchModel", "(JZFI)V", reinterpret_cast<void*>(nativeSetTouchModel)},
     {"nativeSetTouchPatterns", "(J[I[F[F[F[F[F[F)V",
@@ -1208,7 +1248,9 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeSetLanguageEvidence)},
     {"nativeSetPhraseSuggestions", "(JZ)V",
      reinterpret_cast<void*>(nativeSetPhraseSuggestions)},
-    {"nativeLoadSwipeWeights", "(J[B)Z", reinterpret_cast<void*>(nativeLoadSwipeWeights)},
+    {"nativeLoadSwipeWeights", "(JI[B)Z", reinterpret_cast<void*>(nativeLoadSwipeWeights)},
+    {"nativeSelectSwipeScript", "(JI)V", reinterpret_cast<void*>(nativeSelectSwipeScript)},
+    {"nativeHasSwipeModel", "(JI)Z", reinterpret_cast<void*>(nativeHasSwipeModel)},
     {"nativeSetSwipeModelEnabled", "(JZ)V",
      reinterpret_cast<void*>(nativeSetSwipeModelEnabled)},
     {"nativeLastDecodeUsedNeural", "(J)Z",

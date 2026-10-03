@@ -170,25 +170,26 @@ int TcnCtcDecoder::extendBySlots(const Hypothesis& h, int32_t node, int32_t mark
                                  const PackedTrie& trie, Hypothesis* next, int nextCount) const {
     const float total = logSumExp(h.logProbBlank, h.logProbNonBlank);
     for (int slot = 0; slot < keyCount_; ++slot) {
-        const int symbol = slotSymbol_[slot];
-        if (symbol <= 0) {
-            continue;
-        }
-        const int32_t child = trie.walk(node, symbol);
-        if (child < 0) {
-            continue;
-        }
-        const float charLogProb = keyLogProbs_[slot] - markCost;
-        if (static_cast<uint32_t>(symbol) == h.lastSymbol) {
-            // The same letter again, but as a NEW instance: only reachable by having passed
-            // through a blank first, which is exactly what h.logProbBlank tracks.
-            nextCount = addOrMergeHypothesis(next, nextCount, child, static_cast<uint32_t>(symbol),
-                                             slot, h.letters + 1, marks, kNegInf,
-                                             h.logProbBlank + charLogProb);
-        } else {
-            nextCount = addOrMergeHypothesis(next, nextCount, child, static_cast<uint32_t>(symbol),
-                                             slot, h.letters + 1, marks, kNegInf,
-                                             total + charLogProb);
+        for (const int symbol : slotSymbol_[slot]) {
+            if (symbol <= 0) {
+                continue;
+            }
+            const int32_t child = trie.walk(node, symbol);
+            if (child < 0) {
+                continue;
+            }
+            const float charLogProb = keyLogProbs_[slot] - markCost;
+            if (static_cast<uint32_t>(symbol) == h.lastSymbol || slot == h.lastSlot) {
+                // The same letter or key again, as a NEW instance: only reachable through a
+                // blank first, which is exactly what h.logProbBlank tracks.
+                nextCount = addOrMergeHypothesis(next, nextCount, child,
+                                                 static_cast<uint32_t>(symbol), slot, h.letters + 1,
+                                                 marks, kNegInf, h.logProbBlank + charLogProb);
+            } else {
+                nextCount = addOrMergeHypothesis(next, nextCount, child,
+                                                 static_cast<uint32_t>(symbol), slot, h.letters + 1,
+                                                 marks, kNegInf, total + charLogProb);
+            }
         }
     }
     return nextCount;
@@ -229,7 +230,11 @@ int TcnCtcDecoder::decode(const float* intention, const float* spectral, const P
     }
 
     for (int slot = 0; slot < keyCount_; ++slot) {
-        slotSymbol_[slot] = trie.symbolFor(geometry_->codeAt(slot));
+        slotSymbol_[slot][0] = trie.symbolFor(geometry_->codeAt(slot));
+        for (int k = 0; k < KeyGeometry::kMaxAliases; ++k) {
+            const uint32_t alias = geometry_->aliasAt(slot, k);
+            slotSymbol_[slot][k + 1] = alias != 0u ? trie.symbolFor(alias) : 0;
+        }
     }
     markSymbol_[0] = trie.symbolFor(kApostrophe);
     markSymbol_[1] = trie.symbolFor(kHyphen);

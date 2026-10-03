@@ -225,6 +225,57 @@ void runGestureTests() {
         }
 
         {
+            // A letter only on another key's long press is reached through that key: w on q.
+            TestLayout moved;
+            float qx = 0.f;
+            float qy = 0.f;
+            moved.centreOf('q', &qx, &qy);
+            TestLayout withoutW;
+            withoutW.count = 0;
+            for (int i = 0; i < moved.count; ++i) {
+                if (moved.codes[i] == 'w') {
+                    moved.xs[i] = qx;
+                    moved.ys[i] = qy;
+                    continue;
+                }
+                withoutW.codes[withoutW.count] = moved.codes[i];
+                withoutW.xs[withoutW.count] = moved.xs[i];
+                withoutW.ys[withoutW.count] = moved.ys[i];
+                ++withoutW.count;
+            }
+            const int32_t aliasCodes[1] = {'w'};
+            const int32_t aliasBases[1] = {'q'};
+            const auto reachesWater = [&](bool aliased) {
+                engine.setKeyGeometry(withoutW.codes, withoutW.xs, withoutW.ys, withoutW.count,
+                                      withoutW.keyWidth, withoutW.keyHeight,
+                                      aliased ? aliasCodes : nullptr,
+                                      aliased ? aliasBases : nullptr, aliased ? 1 : 0);
+                Random random(20260903u);
+                std::vector<float> xs;
+                std::vector<float> ys;
+                std::vector<int64_t> times;
+                synthesiseGesture(moved, "water", 0.f, random, xs, ys, times);
+                Candidate out[Engine::kMaxCandidates];
+                const int found = engine.decodeGesture(xs.data(), ys.data(), times.data(),
+                                                       static_cast<int>(xs.size()), nullptr, 0,
+                                                       nullptr, 0, out, 8);
+                for (int i = 0; i < found && i < 3; ++i) {
+                    uint32_t length = 0;
+                    const char* const text = engine.candidateText(out[i], &length);
+                    if (text != nullptr && length == 5 && std::memcmp(text, "water", 5) == 0) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            check(!reachesWater(false),
+                  "without its long-press letter, a word spelled with it is out of a swipe's reach");
+            check(reachesWater(true), "with w on the q key's long press, a swipe reaches \"water\"");
+            engine.setKeyGeometry(layout.codes, layout.xs, layout.ys, layout.count,
+                                  layout.keyWidth, layout.keyHeight);
+        }
+
+        {
             // Engine::decodeGesture bounds the raw log-score into a fixed-temperature softmax over
             // [0, 1000]; the ranking is unchanged by it.
             Random random(99u);

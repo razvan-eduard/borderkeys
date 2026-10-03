@@ -45,7 +45,10 @@ internal object NativePredictor {
     /** Sets which loaded packs take part in scoring, and with what weight. */
     external fun nativeSetActiveLanguages(handle: Long, tags: Array<String>, weights: FloatArray)
 
-    /** Pushes the key centres and the key size, in the view's pixels. */
+    /**
+     * Pushes the key centres and the key size, in the view's pixels, and the long-press letters
+     * a swipe may reach: [aliasCodes] on the key of the same index in [aliasBases].
+     */
     external fun nativeSetKeyGeometry(
         handle: Long,
         codes: IntArray,
@@ -53,6 +56,8 @@ internal object NativePredictor {
         centersY: FloatArray,
         keyWidth: Float,
         keyHeight: Float,
+        aliasCodes: IntArray,
+        aliasBases: IntArray,
     )
 
     /**
@@ -178,8 +183,14 @@ internal object NativePredictor {
     /** Whether a suggestion may be two words. */
     external fun nativeSetPhraseSuggestions(handle: Long, enabled: Boolean)
 
-    /** Loads tier B's weights from a `.bkw` file's bytes. False when invalid or in `core`. */
-    external fun nativeLoadSwipeWeights(handle: Long, weights: ByteArray): Boolean
+    /** Loads tier B's weights for [script]; false in `core`. */
+    external fun nativeLoadSwipeWeights(handle: Long, script: Int, weights: ByteArray): Boolean
+
+    /** Which script's model the layout now set decodes with; one not loaded decodes with tier A. */
+    external fun nativeSelectSwipeScript(handle: Long, script: Int)
+
+    /** Whether a model for [script] is loaded. */
+    external fun nativeHasSwipeModel(handle: Long, script: Int): Boolean
 
     /** Switches tier B on or off; off frees its weights. A no-op in `core`. */
     external fun nativeSetSwipeModelEnabled(handle: Long, enabled: Boolean)

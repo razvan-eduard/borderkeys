@@ -279,7 +279,7 @@ internal class Pipeline private constructor(
             }
             NativePredictor.nativeSetKeyGeometry(
                 handle, codes.toIntArray(), xs.toFloatArray(), ys.toFloatArray(),
-                KEY_WIDTH, KEY_HEIGHT,
+                KEY_WIDTH, KEY_HEIGHT, IntArray(0), IntArray(0),
             )
         }
 

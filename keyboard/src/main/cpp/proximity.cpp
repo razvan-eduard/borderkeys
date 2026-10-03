@@ -422,6 +422,47 @@ void KeyGeometry::clear() {
     keyHeight_ = 0.0f;
     std::memset(asciiIndex_, -1, sizeof(asciiIndex_));
     std::memset(neighbourCount_, 0, sizeof(neighbourCount_));
+    std::memset(aliasCount_, 0, sizeof(aliasCount_));
+}
+
+void KeyGeometry::setAliases(const int32_t* codes, const int32_t* baseCodes, int count) {
+    std::memset(aliasCount_, 0, sizeof(aliasCount_));
+    if (codes == nullptr || baseCodes == nullptr) {
+        return;
+    }
+    for (int i = 0; i < count; ++i) {
+        if (codes[i] <= 0 || baseCodes[i] <= 0) {
+            continue;
+        }
+        const uint32_t folded = foldCodePoint(static_cast<uint32_t>(codes[i]));
+        const int slot = indexOf(foldCodePoint(static_cast<uint32_t>(baseCodes[i])));
+        if (slot < 0 || indexOf(folded) >= 0 || aliasCount_[slot] >= kMaxAliases) {
+            continue;
+        }
+        bool known = false;
+        for (int k = 0; k < aliasCount_[slot]; ++k) {
+            known = known || aliases_[slot][k] == folded;
+        }
+        if (!known) {
+            aliases_[slot][aliasCount_[slot]++] = folded;
+        }
+    }
+}
+
+bool KeyGeometry::centreOfLetter(uint32_t folded, float* x, float* y) const {
+    if (centreOf(folded, x, y)) {
+        return true;
+    }
+    for (int slot = 0; slot < count_; ++slot) {
+        for (int k = 0; k < aliasCount_[slot]; ++k) {
+            if (aliases_[slot][k] == folded) {
+                *x = centersX_[slot];
+                *y = centersY_[slot];
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 int KeyGeometry::indexOf(uint32_t folded) const {

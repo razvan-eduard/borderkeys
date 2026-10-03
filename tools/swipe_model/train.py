@@ -33,14 +33,32 @@ QWERTY_LETTERS = letters_in_order(_QWERTY_CENTERS_BY_LETTER)
 QWERTY_CENTERS = _QWERTY_CENTERS_BY_LETTER
 
 
+def load_layout(path: Path | None) -> tuple[tuple[str, ...], dict[str, tuple[float, float]]]:
+    """A replay layout's letters and centres, normalised as the runtime does
+    (synthesise.ReplayLayout); FUTO's QWERTY when [path] is None."""
+    if path is None:
+        return QWERTY_LETTERS, QWERTY_CENTERS
+    from synthesise import ReplayLayout
+
+    centres = ReplayLayout(path).normalised()
+    return letters_in_order(centres), centres
+
+
 class SwipeDataset(Dataset):
-    def __init__(self, jsonl_path: Path, augment: bool, seed: int = 0):
+    def __init__(self, jsonl_path: Path, augment: bool, seed: int = 0, layout: Path | None = None):
         self.records = []
         with jsonl_path.open(encoding="utf-8") as f:
             for line in f:
                 self.records.append(json.loads(line))
-        self.letter_index = {c: i for i, c in enumerate(QWERTY_LETTERS)}
-        self.key_centers = np.array([QWERTY_CENTERS[c] for c in QWERTY_LETTERS], dtype=np.float32)
+        letters, centres = load_layout(layout)
+        self.letter_index = {c: i for i, c in enumerate(letters)}
+        self.key_centers = np.array([centres[c] for c in letters], dtype=np.float32)
+        # The synthesised words are spelled as the dictionary has them; the letters the layout
+        # lacks are written as synthesise.py swiped them.
+        from synthesise import long_press, project
+
+        aliases = long_press(layout) if layout is not None else {}
+        self.project = (lambda word: project(word, set(letters), aliases) or word) if layout is not None else (lambda word: word)
         self.augment = augment
         self.rng = np.random.default_rng(seed)
 
@@ -55,7 +73,7 @@ class SwipeDataset(Dataset):
         ts = np.array(record["ts"], dtype=np.float64)
         key_centers = self.key_centers
 
-        word = record["word"].lower()
+        word = self.project(record["word"].lower())
         reversed_word = False
         if self.augment:
             xs, ys, key_centers, reversed_word = augment_trajectory_and_layout(
@@ -140,17 +158,34 @@ def main() -> int:
                              "and --data as the interrupted run, since the cosine schedule and the "
                              "per-epoch step count are both derived from those, not stored "
                              "independently of them.")
+    parser.add_argument("--layout", type=Path, default=None,
+                        help="a replay layout (native-tests/data/*.layout) the data was swiped on; "
+                             "FUTO's QWERTY when omitted")
+    parser.add_argument("--init", type=Path, default=None,
+                        help="a checkpoint whose model and key embedding the run starts from")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else
                         ("mps" if torch.backends.mps.is_available() else "cpu"))
+    parser.add_argument("--seed", type=int, default=None,
+                        help="seeds the weights, the augmentation and the batch order")
     arguments = parser.parse_args()
 
+    generator = None
+    if arguments.seed is not None:
+        torch.manual_seed(arguments.seed)
+        generator = torch.Generator().manual_seed(arguments.seed)
     device = torch.device(arguments.device)
-    train_set = SwipeDataset(arguments.data / "train.jsonl", augment=True)
+    train_set = SwipeDataset(arguments.data / "train.jsonl", augment=True, layout=arguments.layout,
+                             seed=arguments.seed or 0)
     train_loader = DataLoader(train_set, batch_size=arguments.batch_size, shuffle=True,
-                              collate_fn=collate, drop_last=True)
+                              collate_fn=collate, drop_last=True, generator=generator)
 
     model = TcnEncoder().to(device)
     key_embedding = KeyEmbedding().to(device)
+    if arguments.init is not None and not arguments.resume:
+        initial = torch.load(arguments.init, map_location=device)
+        model.load_state_dict(initial["model"])
+        key_embedding.load_state_dict(initial["key_embedding"])
+        print(f"started from {arguments.init}")
     print(f"TcnEncoder: {model.parameter_count():,} parameters, "
           f"KeyEmbedding: {key_embedding.parameter_count():,} parameters")
 

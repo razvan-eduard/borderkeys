@@ -70,3 +70,34 @@ disagrees with `tcn_weights.hpp`, so a stale copy is caught rather than quietly 
 
 `export_weights.py --upgrade <file>` rewrites an older file's header for the current version,
 keeping its payload byte for byte. It needs neither a checkpoint nor torch.
+
+## Models for other scripts
+
+The network takes the key centres as an input, so a model for another script is the same
+architecture trained on that script's layout and words. There are no recorded swipes outside
+QWERTY, so the training swipes are synthesised, and every figure for these scripts is relative
+to the synthesiser.
+
+The plus build ships one model per script layout in `keyboard/src/plus/assets/swipe/<layout>.bkw`
+(russian, ukrainian, bulgarian, serbian, macedonian, greek, armenian, georgian, hebrew, arabic);
+a layout without one decodes geometrically. The models shipped now are the Latin model
+fine-tuned for six epochs on 200,000 swipes per layout made by laying the corpus's own QWERTY
+swipes onto the layout's words; they stand until the from-scratch models below are trained and
+compared.
+
+- `synthesise.py --generator polyline` draws straight lines through a word's key centres with
+  `gesture_replay.py`'s jitter (±14 px) and timing (8–14 ms a sample);
+  `--generator flow --flow flow.pt` samples `flow.py`'s learned synthesiser around the same path.
+  Words are spelled as the layout can type them (ё→е, ъ→ь, ѝ→и, marks dropped), and every seventh
+  word by frequency is held out for evaluation.
+- `flow.py train` fits the synthesiser: a conditional rectified-flow model (1.88 M parameters, a
+  dilated 1-D convolution with a time embedding) of how a recorded swipe departs from its ideal
+  path, in key units, with its pace; sampling takes 32 Euler steps, then a capture pass gives the
+  stroke the corpus's durations and sample intervals.
+- `train_script.sh <layout> <word list> <generator> "<seeds>" [flow.pt]` synthesises once, trains
+  from scratch for 80 epochs per seed (`train.py --seed`), resumes from a checkpoint after a stop,
+  logs every epoch to `train_<layout>-<generator>-s<seed>.log`, and exports with
+  `export_weights.py --half`: weight-file version 4, the payload as IEEE half floats, 1.3 MB
+  instead of 2.6 MB. `tcn_weights.cpp` reads versions 3 and 4.
+- `tools/script_swipe_eval.py` measures a model against the geometric decoder on held-out words;
+  the layout file is `native-tests/data/<name>_1080.layout`, written by `tools/layout_to_replay.py`.

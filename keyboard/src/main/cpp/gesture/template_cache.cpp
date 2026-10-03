@@ -47,15 +47,9 @@ bool TemplateCache::build(Entry& entry, const uint32_t* letters, int letterCount
     bool hasDoubledLetter = false;
 
     for (int i = 0; i < letterCount; ++i) {
-        const uint32_t* neighbourCodes = nullptr;
-        const float* neighbourCosts = nullptr;
-        // Slot zero of the neighbour ring is the key itself.
-        if (geometry_->neighbours(letters[i], &neighbourCodes, &neighbourCosts) <= 0) {
-            return false;
-        }
         float x = 0.f;
         float y = 0.f;
-        if (!geometry_->centreOf(letters[i], &x, &y)) {
+        if (!geometry_->centreOfLetter(letters[i], &x, &y)) {
             return false;
         }
         // A doubled letter lands on the same point; buildLoopVariant traces a loop there instead.

@@ -69,8 +69,9 @@ public:
     float keyEmbedOutputBias[kSpectralDim];
 
     static constexpr uint32_t kMagic = 0x3157424Bu;  // 'B' 'K' 'W' '1', little-endian
-    // The weights format version; any other is refused.
+    // The weights format versions: the payload as float32, or as IEEE half floats; any other is refused.
     static constexpr uint32_t kVersion = 3u;
+    static constexpr uint32_t kVersionHalf = 4u;
 
     /** The architecture a file was exported for, written by `tools/swipe_model/export_weights.py`
      *  from `architecture.py`, in this declaration order. Checked field by field at load. */
@@ -82,8 +83,8 @@ public:
     /** What in `data` does not match this architecture's header, or null when nothing. */
     static const char* describeMismatch(const uint8_t* data, size_t length);
 
-    /** Writes the header this architecture expects into [kHeaderBytes] of `out`. */
-    static void writeHeader(uint8_t* out);
+    /** Writes the header this architecture expects into [kHeaderBytes] of `out`, for [version]. */
+    static void writeHeader(uint8_t* out, uint32_t version = kVersion);
 
     /**
      * Reads a whole `.bkw` file's bytes into this object; false, with nothing loaded, for

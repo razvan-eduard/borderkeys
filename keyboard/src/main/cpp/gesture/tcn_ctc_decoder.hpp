@@ -85,7 +85,8 @@ private:
     float keyLogProbs_[KeyGeometry::kMaxKeys] = {};
 
     /** The trie symbol under each key slot, resolved once per decode. */
-    int slotSymbol_[KeyGeometry::kMaxKeys] = {};
+    // Each slot's own letter's symbol, then its long-press letters'; 0 where the trie has none.
+    int slotSymbol_[KeyGeometry::kMaxKeys][KeyGeometry::kMaxAliases + 1] = {};
     /** The trie symbols of the apostrophe and the hyphen, or 0, resolved once per decode. */
     int markSymbol_[2] = {};
 

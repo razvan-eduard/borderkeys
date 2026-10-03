@@ -43,6 +43,8 @@ int foldUtf8(const char* text, size_t length, uint32_t* out, int maxOut, int* so
 class KeyGeometry {
 public:
     static constexpr int kMaxKeys = 64;
+    // The most long-press letters one key lends a swipe.
+    static constexpr int kMaxAliases = 4;
     // The most keys in one key's neighbour ring.
     static constexpr int kMaxNeighbours = 8;
 
@@ -60,6 +62,21 @@ public:
 
     /** The centre of a key in the view's pixels; false when the character is not on the layout. */
     bool centreOf(uint32_t folded, float* x, float* y) const;
+
+    // The letters a key's long press reaches, `codes[i]` on the key of `baseCodes[i]`, folded
+    // here. One that is a key itself, one whose base is not a key, and past kMaxAliases on one
+    // key are dropped. [set] clears them.
+    void setAliases(const int32_t* codes, const int32_t* baseCodes, int count);
+
+    int aliasCount(int slot) const {
+        return (slot >= 0 && slot < count_) ? aliasCount_[slot] : 0;
+    }
+    uint32_t aliasAt(int slot, int index) const {
+        return (index >= 0 && index < aliasCount(slot)) ? aliases_[slot][index] : 0u;
+    }
+
+    /** [centreOf], or for a long-press letter the centre of the key that holds it. */
+    bool centreOfLetter(uint32_t folded, float* x, float* y) const;
 
     int keyCount() const { return count_; }
     float keyWidth() const { return keyWidth_; }
@@ -99,6 +116,9 @@ private:
 
     // The slot of each ASCII character, for a single-read lookup.
     int8_t asciiIndex_[128] = {};
+
+    int aliasCount_[kMaxKeys] = {};
+    uint32_t aliases_[kMaxKeys][kMaxAliases] = {};
 };
 
 }  // namespace borderkeys
