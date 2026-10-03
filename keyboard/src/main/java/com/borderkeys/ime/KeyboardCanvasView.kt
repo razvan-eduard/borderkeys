@@ -3,6 +3,9 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.data.theme.KeyFlick
+import com.borderkeys.data.theme.KeyboardPreferences
+
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
@@ -89,6 +92,9 @@ class KeyboardCanvasView(
 
         /** The space bar was slid up or down by [lines] lines, positive downwards. */
         fun onCursorNudgeLines(lines: Int)
+
+        /** The key at [keyIndex] was flicked in [direction], 0 north and clockwise, where it has a flick. */
+        fun onFlick(keyIndex: Int, direction: Int)
     }
 
     var listener: Listener? = null
@@ -111,6 +117,10 @@ class KeyboardCanvasView(
             }
         }
     var swipeEnabled: Boolean = true
+
+    /** How far a press travels, in key diagonals, before it is a flick, and the most it may and still be one. */
+    var flickMinFraction: Float = KeyboardPreferences.DEFAULT_FLICK_MIN_FRACTION
+    var flickMaxFraction: Float = KeyboardPreferences.DEFAULT_FLICK_MAX_FRACTION
 
     /** Whether a pause mid-swipe is detected, for the ring. */
     var radialMenuEnabled: Boolean = false
@@ -182,9 +192,57 @@ class KeyboardCanvasView(
         pointerKey[gesturePointer] = fromKey
         cancelPendingCallbacks()
         dismissAlternatives()
-        // Starts at the pointer-down time, on the clock the samples carry.
-        gesture.begin(gestureStartX, gestureStartY, pointerDownAt[gesturePointer])
+        invalidateTrail()
     }
+
+    /** Whether key [index] may begin a flick or a swipe: a letter, or a key with flicks, space aside. */
+    private fun mayFlickOrSwipe(index: Int): Boolean {
+        val flags = geometry.keyFlags[index]
+        return geometry.keyCode[index] != ' '.code &&
+            ((swipeEnabled && KeyFlags.has(flags, KeyFlags.LETTER)) || KeyFlags.has(flags, KeyFlags.HAS_FLICKS))
+    }
+
+    /** Starts following [pointerId] on key [index] from ([x], [y]) at [eventTime], its points kept. */
+    private fun armGesture(pointerId: Int, index: Int, x: Float, y: Float, eventTime: Long) {
+        gesturePointer = pointerId
+        gestureKey = index
+        gestureStartX = x
+        gestureStartY = y
+        gesturePastTap = false
+        gestureLeftKey = false
+        gesture.begin(x, y, eventTime)
+    }
+
+    private fun disarmGesture() {
+        gesturePointer = -1
+        gestureKey = NO_KEY
+        gesturePastTap = false
+        gestureLeftKey = false
+        gesture.reset()
+    }
+
+    /**
+     * [FlickClassifier]'s answer for the pending press ending at ([x], [y]): a tap, a swipe, or
+     * a direction.
+     */
+    private fun classifyPress(x: Float, y: Float, eventTime: Long): Int {
+        val index = gestureKey
+        if (index == NO_KEY) {
+            return FlickClassifier.TAP
+        }
+        return FlickClassifier.classify(
+            gestureStartX, gestureStartY, x, y,
+            gesture.pathLength(), eventTime - pointerDownAt[gesturePointer],
+            geometry.keyRight[index] - geometry.keyLeft[index],
+            geometry.keyBottom[index] - geometry.keyTop[index],
+            flickMinFraction, gestureLeftKey || gestureActive,
+        )
+    }
+
+    /** Whether key [index] has a flick in [direction]. */
+    private fun hasFlick(index: Int, direction: Int): Boolean =
+        direction in 0 until KeyboardLayout.FLICK_DIRECTIONS &&
+            geometry.flickLength[index * KeyboardLayout.FLICK_DIRECTIONS + direction] > 0
 
     /** Captures every sample the motion event carries, the historical ones included. */
     private fun captureGestureSamples(event: MotionEvent, pointerIndex: Int) {
@@ -296,20 +354,24 @@ class KeyboardCanvasView(
         }
     }
 
-    private fun finishGesture() {
+    private fun finishGesture(x: Float, y: Float, eventTime: Long) {
         removeCallbacks(pauseRunnable)
         val wasRingOpen = ringOpen
         ringOpen = false
         val count = gesture.count
+        val key = gestureKey
+        val verdict = classifyPress(x, y, eventTime)
         gestureActive = false
-        gesturePointer = -1
         invalidateTrailFully()
-        if (wasRingOpen) {
-            listener?.onGestureRingResolved()
-        } else if (count >= MIN_GESTURE_POINTS) {
-            listener?.onGesture(gesture.xs, gesture.ys, gesture.times, count)
+        when {
+            wasRingOpen -> listener?.onGestureRingResolved()
+            verdict == FlickClassifier.SWIPE && count >= MIN_GESTURE_POINTS ->
+                listener?.onGesture(gesture.xs, gesture.ys, gesture.times, count)
+            verdict >= 0 && key != NO_KEY && hasFlick(key, verdict) -> listener?.onFlick(key, verdict)
+            key != NO_KEY && verdict != FlickClassifier.SWIPE ->
+                listener?.onKey(geometry.keyCode[key], key, gestureStartX, gestureStartY)
         }
-        gesture.reset()
+        disarmGesture()
     }
 
     private fun abandonGesture() {
@@ -317,8 +379,7 @@ class KeyboardCanvasView(
         val wasRingOpen = ringOpen
         ringOpen = false
         gestureActive = false
-        gesturePointer = -1
-        gesture.reset()
+        disarmGesture()
         invalidateTrailFully()
         if (wasRingOpen) {
             listener?.onGestureRingCancelled()
@@ -339,8 +400,7 @@ class KeyboardCanvasView(
         if (gesturePointer in 0 until MAX_POINTERS) {
             pointerKey[gesturePointer] = NO_KEY
         }
-        gesturePointer = -1
-        gesture.reset()
+        disarmGesture()
         invalidateTrailFully()
     }
 
@@ -488,9 +548,15 @@ class KeyboardCanvasView(
 
     /** The virtual view hierarchy a screen reader explores, built from [geometry]. */
     private val accessibility = KeyboardAccessibility(this, geometry, strings).apply {
-        listener = KeyboardAccessibility.Listener { code, keyIndex ->
+        listener = object : KeyboardAccessibility.Listener {
             // A key the reader activated goes where a completed tap goes, with no point.
-            this@KeyboardCanvasView.listener?.onKey(code, keyIndex, Float.NaN, Float.NaN)
+            override fun onAccessibilityKey(code: Int, keyIndex: Int) {
+                this@KeyboardCanvasView.listener?.onKey(code, keyIndex, Float.NaN, Float.NaN)
+            }
+
+            override fun onAccessibilityFlick(keyIndex: Int, direction: Int) {
+                this@KeyboardCanvasView.listener?.onFlick(keyIndex, direction)
+            }
         }
     }
 
@@ -504,6 +570,13 @@ class KeyboardCanvasView(
     private var gestureActive = false
     private var gestureStartX = 0f
     private var gestureStartY = 0f
+
+    /** The key the pending press began on, while [gesturePointer] may still flick or swipe. */
+    private var gestureKey = NO_KEY
+
+    /** Whether the pending press has moved past the tap distance, and whether it has left the key. */
+    private var gesturePastTap = false
+    private var gestureLeftKey = false
 
 
     /** One Path per trail segment, recycled with `rewind()`. */
@@ -714,6 +787,14 @@ class KeyboardCanvasView(
     /** The key at ([x], [y]), from the compiled geometry. */
     fun findKeyAt(x: Float, y: Float): Int = geometry.findKeyAt(x, y)
 
+    /** The code of the key at [index], or [KeyCodes.NONE] outside the layout. */
+    fun keyCodeAt(index: Int): Int =
+        if (index in 0 until geometry.keyCount) geometry.keyCode[index] else KeyCodes.NONE
+
+    /** The flick label the layout gives key [index] in [direction], "" for none. */
+    fun flickTextAt(index: Int, direction: Int): String =
+        if (index in 0 until geometry.keyCount) geometry.flickLabel(index, direction) else ""
+
     // ---- drawing -------------------------------------------------------------------------------
 
     private fun recordBackground(viewWidth: Int, viewHeight: Int) {
@@ -803,8 +884,44 @@ class KeyboardCanvasView(
         canvas.drawCircle(cx, cy, radius, shiftLockLedPaint)
     }
 
+    /**
+     * Draws the flick labels around the key's edges and corners, north first and clockwise; the
+     * north-east corner is left to the hold hint when the key has one.
+     */
+    private fun drawFlickLabels(canvas: Canvas, index: Int) {
+        if (!KeyFlags.has(geometry.keyFlags[index], KeyFlags.HAS_FLICKS)) {
+            return
+        }
+        val left = geometry.keyLeft[index] + paints.hintCellHalfWidthPx
+        val right = geometry.keyRight[index] - paints.hintCellHalfWidthPx
+        val centreX = geometry.centerX[index]
+        val top = geometry.keyTop[index] + paints.hintCellTopInsetPx
+        val middle = geometry.centerY[index] + paints.hint.textSize * FLICK_MIDDLE_BASELINE_FRACTION
+        val bottom = geometry.keyBottom[index] - paints.hint.textSize * FLICK_BOTTOM_INSET_FRACTION
+        val holdHint = holdHintsEnabled && (geometry.altLength[index] > 0 || holdsAMenu(geometry.keyCode[index]))
+        for (direction in 0 until KeyboardLayout.FLICK_DIRECTIONS) {
+            val slot = index * KeyboardLayout.FLICK_DIRECTIONS + direction
+            val length = geometry.flickLength[slot]
+            if (length == 0 || (direction == KeyFlick.NORTH_EAST && holdHint)) {
+                continue
+            }
+            val x = when (direction) {
+                KeyFlick.NORTH, KeyFlick.SOUTH -> centreX
+                KeyFlick.NORTH_EAST, KeyFlick.EAST, KeyFlick.SOUTH_EAST -> right
+                else -> left
+            }
+            val y = when (direction) {
+                KeyFlick.NORTH, KeyFlick.NORTH_EAST, KeyFlick.NORTH_WEST -> top
+                KeyFlick.EAST, KeyFlick.WEST -> middle
+                else -> bottom
+            }
+            canvas.drawText(geometry.flickChars, geometry.flickOffset[slot], length, x, y, paints.hint)
+        }
+    }
+
     private fun drawLabel(canvas: Canvas, index: Int) {
         drawHoldHint(canvas, index)
+        drawFlickLabels(canvas, index)
         val length = geometry.labelLength[index]
         if (length == 0) {
             return
@@ -1067,7 +1184,7 @@ class KeyboardCanvasView(
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 val pointerIndex = event.actionIndex
                 onPointerUp(event.getPointerId(pointerIndex),
-                    event.getX(pointerIndex), event.getY(pointerIndex))
+                    event.getX(pointerIndex), event.getY(pointerIndex), event.eventTime)
             }
             MotionEvent.ACTION_CANCEL -> cancelAllPointers()
         }
@@ -1089,11 +1206,9 @@ class KeyboardCanvasView(
         startPress(index)
         showPreview(index, pointerId)
 
-        // A press on a letter records where a swipe from it would start.
-        if (swipeEnabled && !gestureActive && KeyFlags.has(geometry.keyFlags[index], KeyFlags.LETTER)) {
-            gesturePointer = pointerId
-            gestureStartX = x
-            gestureStartY = y
+        // A press that may flick or swipe is followed from here, its points kept.
+        if (!gestureActive && gesturePointer == -1 && mayFlickOrSwipe(index)) {
+            armGesture(pointerId, index, x, y, eventTime)
         }
 
         if (hapticEnabled) {
@@ -1149,15 +1264,42 @@ class KeyboardCanvasView(
             return
         }
 
-        // A swipe begins once the finger travels past the touch slop without lifting.
-        if (swipeEnabled && !gestureActive && pointerId == gesturePointer &&
-            KeyFlags.has(geometry.keyFlags[previous], KeyFlags.LETTER)
-        ) {
-            val dx = x - gestureStartX
-            val dy = y - gestureStartY
-            if (dx * dx + dy * dy > touchSlop * touchSlop) {
+        // A followed press: its points are kept; past the tap distance the hold is off; once it
+        // leaves the key a letter's press becomes a swipe, and a key with flicks waits for the lift.
+        if (!gestureActive && pointerId == gesturePointer && gestureKey == previous) {
+            eventSamples.bind(event, pointerIndex)
+            gesture.capture(eventSamples)
+            eventSamples.release()
+            val keyWidth = geometry.keyRight[previous] - geometry.keyLeft[previous]
+            val keyHeight = geometry.keyBottom[previous] - geometry.keyTop[previous]
+            if (!gesturePastTap) {
+                // A finger moving past the touch slop is not holding the key.
+                val dx = x - gestureStartX
+                val dy = y - gestureStartY
+                if (dx * dx + dy * dy > touchSlop * touchSlop) {
+                    removeCallbacks(longPressRunnable)
+                    removeCallbacks(repeatRunnable)
+                    repeatKey = NO_KEY
+                }
+                if (FlickClassifier.pastTap(gestureStartX, gestureStartY, x, y, keyWidth, keyHeight, flickMinFraction)) {
+                    gesturePastTap = true
+                    hidePreview()
+                }
+            }
+            if (!gestureLeftKey && FlickClassifier.leftKey(gesture.pathLength(), keyWidth, keyHeight, flickMaxFraction)) {
+                gestureLeftKey = true
+            }
+            if (!gestureLeftKey) {
+                return
+            }
+            if (swipeEnabled && KeyFlags.has(geometry.keyFlags[previous], KeyFlags.LETTER)) {
                 beginGesture(previous)
-                captureGestureSamples(event, pointerIndex)
+                if (radialMenuEnabled) {
+                    updatePauseDetection()
+                }
+                return
+            }
+            if (KeyFlags.has(geometry.keyFlags[previous], KeyFlags.HAS_FLICKS)) {
                 return
             }
         }
@@ -1174,12 +1316,11 @@ class KeyboardCanvasView(
         pointerChosenY[pointerId] = Float.NaN
         startPress(index)
         showPreview(index, pointerId)
-        if (swipeEnabled && !gestureActive && KeyFlags.has(geometry.keyFlags[index], KeyFlags.LETTER)) {
-            gesturePointer = pointerId
-            gestureStartX = x
-            gestureStartY = y
-        } else if (pointerId == gesturePointer) {
-            gesturePointer = -1
+        if (pointerId == gesturePointer) {
+            disarmGesture()
+        }
+        if (!gestureActive && gesturePointer == -1 && mayFlickOrSwipe(index)) {
+            armGesture(pointerId, index, x, y, event.eventTime)
         }
         run {
             longPressPointer = pointerId
@@ -1187,7 +1328,7 @@ class KeyboardCanvasView(
         }
     }
 
-    private fun onPointerUp(pointerId: Int, x: Float, y: Float) {
+    private fun onPointerUp(pointerId: Int, x: Float, y: Float, eventTime: Long) {
         if (pointerId >= MAX_POINTERS) {
             return
         }
@@ -1198,9 +1339,26 @@ class KeyboardCanvasView(
             stopLongPressRepeat()
         }
         if (gestureActive && pointerId == gesturePointer) {
-            finishGesture()
+            finishGesture(x, y, eventTime)
             pointerKey[pointerId] = NO_KEY
             return
+        }
+        // A followed press that stayed near its key: a flick where the key has one, else a tap.
+        if (pointerId == gesturePointer && gestureKey != NO_KEY && gestureKey == pointerKey[pointerId] &&
+            alternativesKey == NO_KEY
+        ) {
+            val verdict = classifyPress(x, y, eventTime)
+            val key = gestureKey
+            disarmGesture()
+            if (verdict >= 0 && hasFlick(key, verdict)) {
+                pointerKey[pointerId] = NO_KEY
+                endPress(key)
+                cancelPendingCallbacks()
+                listener?.onFlick(key, verdict)
+                return
+            }
+        } else if (pointerId == gesturePointer) {
+            disarmGesture()
         }
         if (pointerId == spacePointer) {
             // The lift's position is the slide's last step.
@@ -1539,6 +1697,10 @@ class KeyboardCanvasView(
 
         /** A hint dot's radius, as a fraction of [ThemePaints.hint]'s text size. */
         private const val HINT_DOT_RADIUS_FRACTION = 0.09f
+
+        /** A flick label's baseline on the key's middle row and above its bottom edge, in hint text sizes. */
+        private const val FLICK_MIDDLE_BASELINE_FRACTION = 0.35f
+        private const val FLICK_BOTTOM_INSET_FRACTION = 0.3f
 
         /** The key preview's size, label size and gap, relative to the key it enlarges. */
         private const val KEY_PREVIEW_WIDTH_SCALE = 1.4f

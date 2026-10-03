@@ -114,5 +114,8 @@ object KeyFlags {
     /** Takes the width of an optional key the layout drops, instead of the space bar. */
     const val ABSORBS_FREED_WIDTH = 1 shl 6
 
+    /** Has a flick in at least one direction. */
+    const val HAS_FLICKS = 1 shl 7
+
     fun has(flags: Int, flag: Int): Boolean = (flags and flag) != 0
 }

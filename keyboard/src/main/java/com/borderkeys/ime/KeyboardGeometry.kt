@@ -31,6 +31,18 @@ class KeyboardGeometry {
     var altOffset = IntArray(0); private set
     var altLength = IntArray(0); private set
 
+    /** Every flick label's characters, end to end; eight slots per key, north first and clockwise. */
+    var flickChars = CharArray(0); private set
+    var flickOffset = IntArray(0); private set
+    var flickLength = IntArray(0); private set
+
+    /** The label of key [index]'s flick in [direction], or "" when none. */
+    fun flickLabel(index: Int, direction: Int): String {
+        val slot = index * KeyboardLayout.FLICK_DIRECTIONS + direction
+        val length = flickLength[slot]
+        return if (length == 0) "" else String(flickChars, flickOffset[slot], length)
+    }
+
     private var gridColumns = 0
     private var gridRows = 0
     private var gridCellWidth = 0f
@@ -61,12 +73,15 @@ class KeyboardGeometry {
             labelLength = IntArray(total)
             altOffset = IntArray(total)
             altLength = IntArray(total)
+            flickOffset = IntArray(total * KeyboardLayout.FLICK_DIRECTIONS)
+            flickLength = IntArray(total * KeyboardLayout.FLICK_DIRECTIONS)
         }
         viewWidth = width
         viewHeight = height
 
         val labelBuilder = StringBuilder()
         val altBuilder = StringBuilder()
+        val flickBuilder = StringBuilder()
         val heightUnit = height / layout.totalHeightScale
         val halfGap = gapPx / 2f
 
@@ -96,6 +111,14 @@ class KeyboardGeometry {
                 altLength[index] = key.alternatives.length
                 altBuilder.append(key.alternatives)
 
+                for (direction in 0 until KeyboardLayout.FLICK_DIRECTIONS) {
+                    val slot = index * KeyboardLayout.FLICK_DIRECTIONS + direction
+                    val text = key.flicks.getOrElse(direction) { "" }
+                    flickOffset[slot] = flickBuilder.length
+                    flickLength[slot] = text.length
+                    flickBuilder.append(text)
+                }
+
                 x += keyWidth
                 index++
             }
@@ -104,6 +127,7 @@ class KeyboardGeometry {
 
         labelChars = labelBuilder.toString().toCharArray()
         altChars = altBuilder.toString().toCharArray()
+        flickChars = flickBuilder.toString().toCharArray()
 
         buildHitGrid(layout, width, height)
     }

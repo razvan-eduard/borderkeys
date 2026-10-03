@@ -57,6 +57,13 @@ attestations and the full commit lists are on the
   600,000, its header is sealed together with its contents, and a file claiming more than
   5,000,000 rounds is refused as damaged before any work is done. Files already written still
   open, and the screen says so while the key is being derived.
+- Key flicks: a short drag off any key in one of eight directions writes a text of yours, runs a
+  quick action or presses another key, set per key and direction on the new Key flicks screen,
+  where you tap the key on a live keyboard and then the direction. The key shows a small label at
+  that edge, and a screen reader gets each flick as an action on the key. Two sliders set how far
+  a drag must go before it counts and how far it may go. Nine quick actions join for them: a word
+  left or right, selecting by the word or to either end of the line, deleting the word ahead,
+  Escape and Tab.
 - Other keyboards and Voice typing, as quick actions and as keys for the modifier row: the first
   opens the system's keyboard list, or, with its new setting on the Layout screen, goes straight
   back to the keyboard you used before; the second switches to a voice keyboard you have enabled,

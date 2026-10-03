@@ -117,6 +117,11 @@ ships.
   letters or below the keyboard — for terminals and editors. Ctrl and Alt apply to the next key,
   and with shift held the caret keys select.
 
+- **Key flicks.** A short drag off any key in one of eight directions writes a text of your own,
+  runs a quick action or presses another key, set per key and direction on the Key flicks screen,
+  where you tap the key on a live keyboard and then the direction; the key shows a small label at
+  that edge. How far a drag must go before it counts, and how far it may go, are two sliders.
+
 <p align="center">
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/16_symbols_pad.jpg" alt="The symbols page: the digit block at the right, the symbols beside it, backspace and enter down the right edge" width="30%">
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/14_modifier_row.jpg" alt="The modifier row below the keyboard: esc, tab, ctrl, alt and the arrows" width="30%">
@@ -236,8 +241,9 @@ ships.
 
 A row of buttons for what otherwise takes several gestures — copying a word, a line or
 everything, pasting, cutting, selecting a word or all of it, deleting a word, moving the cursor to
-either end or one character left or right, undo and redo, a new line, the date and time in a
-pattern you choose — plus two edits on the text itself: **Capital** flips the first letter of the
+either end or one character left or right, a word left or right, selecting by the word or to
+either end of the line, deleting the word ahead, Escape and Tab, undo and redo, a new line, the
+date and time in a pattern you choose — plus two edits on the text itself: **Capital** flips the first letter of the
 word at the cursor, **Normalise** capitalises the start of every sentence in the field. Built in, and extendable: a **custom quick action** is
 a macro of steps you define yourself, pinned onto the bar exactly like a built-in one. The bar
 can sit above the suggestions, below the keys, or down either side; it comes in four sizes, with

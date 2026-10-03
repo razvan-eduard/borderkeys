@@ -34,7 +34,19 @@ class KeyboardLayout(
         val alternatives: String,
         val widthUnits: Float,
         val flags: Int,
-    )
+        /**
+         * The text a flick in each of the eight directions writes, north first and clockwise,
+         * "" for none: the layout's own flicks, before the user's.
+         */
+        val flicks: Array<String> = NO_FLICKS,
+    ) {
+        /** The same key with [flicks], its [KeyFlags.HAS_FLICKS] following them. */
+        fun withFlicks(flicks: Array<String>): Key {
+            val any = flicks.any { it.isNotEmpty() }
+            val updated = if (any) flags or KeyFlags.HAS_FLICKS else flags and KeyFlags.HAS_FLICKS.inv()
+            return Key(code, label, alternatives, widthUnits, updated, if (any) flicks else NO_FLICKS)
+        }
+    }
 
     val keyCount: Int = rows.sumOf { it.keys.size }
 
@@ -72,7 +84,7 @@ class KeyboardLayout(
                     remaining.map { key ->
                         if (key === absorber) {
                             Key(key.code, key.label, key.alternatives,
-                                key.widthUnits + width, key.flags)
+                                key.widthUnits + width, key.flags, key.flicks)
                         } else {
                             key
                         }
@@ -155,7 +167,31 @@ class KeyboardLayout(
     }
 
     private fun Key.withAlternatives(alternatives: String): Key =
-        Key(code, label, alternatives, widthUnits, flags or KeyFlags.HAS_ALTERNATIVES)
+        Key(code, label, alternatives, widthUnits, flags or KeyFlags.HAS_ALTERNATIVES, flicks)
+
+    /**
+     * The same layout with the user's flick [labels] laid over the layout's own: for each key
+     * code, eight labels north first and clockwise, "" leaving the layout's. The id is kept: the
+     * keys do not move.
+     */
+    fun withFlickLabels(labels: Map<Int, Array<String>>): KeyboardLayout {
+        if (rows.isEmpty() || labels.isEmpty()) {
+            return this
+        }
+        val rewritten = rows.map { row ->
+            Row(
+                row.indent, row.heightScale,
+                row.keys.map { key ->
+                    val own = labels[key.code] ?: return@map key
+                    val merged = Array(FLICK_DIRECTIONS) { direction ->
+                        own[direction].ifEmpty { key.flicks.getOrElse(direction) { "" } }
+                    }
+                    key.withFlicks(merged)
+                },
+            )
+        }
+        return KeyboardLayout(id, languageTag, rewritten)
+    }
 
     /** The same layout with a shorter row of the ten digits above it. */
     fun withNumberRow(): KeyboardLayout {
@@ -260,6 +296,12 @@ class KeyboardLayout(
 
         /** The most keys the modifier row takes. */
         const val MAX_MODIFIER_KEYS = 12
+
+        /** Eight flick directions, north first and clockwise. */
+        const val FLICK_DIRECTIONS = 8
+
+        /** No flick in any direction; shared, never written. */
+        val NO_FLICKS: Array<String> = Array(FLICK_DIRECTIONS) { "" }
 
         /** The width the keys share: that of a ten-key letter row. */
         private const val LETTER_ROW_UNITS = 10f

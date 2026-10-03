@@ -58,6 +58,9 @@ interface TypingHost {
     /** Shows the catalogue text [key] on the strip for a moment. */
     fun showNotice(key: String)
 
+    /** Runs the quick action with [id], as a tap on its button would. */
+    fun runQuickAction(id: Int)
+
     /** Offers [replacements] on the language-revert panel. */
     fun offerLanguageReplacements(replacements: List<LanguageSwitchCorrector.Replacement>)
 

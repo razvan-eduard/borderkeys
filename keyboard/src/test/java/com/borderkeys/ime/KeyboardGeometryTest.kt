@@ -4,6 +4,7 @@
 package com.borderkeys.ime
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -200,6 +201,22 @@ class KeyboardGeometryTest {
         assertEquals(total, geometry.labelChars.size)
         val first = String(geometry.labelChars, geometry.labelOffset[0], geometry.labelLength[0])
         assertEquals("q", first)
+    }
+
+    @Test
+    fun `flick labels are packed eight slots a key, empty where there is none`() {
+        val base = KeyboardLayout.fallbackQwerty()
+        val q = base.rows.first().keys.first().code
+        val layout = base.withFlickLabels(mapOf(q to arrayOf("@", "", "", "", "1", "", "", "")))
+        val geometry = KeyboardGeometry().apply { compile(layout, width, height, 8f) }
+        assertEquals(geometry.keyCount * KeyboardLayout.FLICK_DIRECTIONS, geometry.flickLength.size)
+        assertEquals("@", geometry.flickLabel(0, 0))
+        assertEquals("", geometry.flickLabel(0, 1))
+        assertEquals("1", geometry.flickLabel(0, 4))
+        assertEquals("", geometry.flickLabel(1, 0))
+        assertEquals(2, geometry.flickChars.size)
+        assertTrue(KeyFlags.has(geometry.keyFlags[0], KeyFlags.HAS_FLICKS))
+        assertFalse(KeyFlags.has(geometry.keyFlags[1], KeyFlags.HAS_FLICKS))
     }
 
     @Test

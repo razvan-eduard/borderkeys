@@ -23,6 +23,9 @@ import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.QuickActionBar
 import com.borderkeys.data.theme.QuickActionBarItem
 import com.borderkeys.ime.KeyboardHostView
+import com.borderkeys.ime.KeyboardLayout
+import com.borderkeys.ime.KeyboardCanvasView
+import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.ime.LayoutLoader
 import com.borderkeys.ime.TouchGlows
 import com.borderkeys.theme.ThemeMode
@@ -43,6 +46,8 @@ fun PlacementPreview(
     isLandscape: Boolean = false,
     /** Where taps land on each letter key, drawn over the keys; null for none. */
     touchGlows: TouchGlows? = null,
+    /** Set, the keys take taps and report the tapped key's code; the preview is otherwise inert. */
+    onKeyPicked: ((Int) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val strings = LocalStrings.current
@@ -62,9 +67,13 @@ fun PlacementPreview(
                 FrameLayout(viewContext).apply {
                     addView(
                         KeyboardHostView(viewContext, paints, strings).apply {
-                            isEnabled = false
-                            keyboard.isEnabled = false
+                            isEnabled = onKeyPicked != null
+                            keyboard.isEnabled = onKeyPicked != null
                             keyboard.swipeEnabled = false
+                            keyboard.keyPopupEnabled = false
+                            if (onKeyPicked != null) {
+                                keyboard.listener = KeyPickingListener(onKeyPicked)
+                            }
                             quickActions.isEnabled = false
                         },
                         FrameLayout.LayoutParams(
@@ -94,6 +103,9 @@ fun PlacementPreview(
                 }
                 if (preferences.numberRow) {
                     composed = composed.withNumberRow()
+                }
+                if (preferences.keyFlicks.isNotEmpty()) {
+                    composed = composed.withFlickLabels(flickLabelsByKey(preferences.keyFlicks))
                 }
                 view.keyboard.setLayout(composed)
                 view.keyboard.touchGlows = touchGlows
@@ -137,3 +149,30 @@ fun PlacementPreview(
 
 /** The preview's height, as a fraction of a standard keyboard's. */
 private const val PREVIEW_HEIGHT_FRACTION = 0.75f
+
+/** The user's flick labels by key code, eight per key north first and clockwise, as the input method lays them. */
+internal fun flickLabelsByKey(flicks: List<KeyFlick>): Map<Int, Array<String>> {
+    val byKey = HashMap<Int, Array<String>>()
+    for (flick in flicks) {
+        val labels = byKey.getOrPut(flick.keyCode) { Array(KeyboardLayout.FLICK_DIRECTIONS) { "" } }
+        labels[flick.direction] = KeyFlick.shownLabel(flick).ifEmpty { "\u2022" }
+    }
+    return byKey
+}
+
+/** A keyboard listener that reports taps and does nothing else. */
+private class KeyPickingListener(private val onKeyPicked: (Int) -> Unit) : KeyboardCanvasView.Listener {
+    override fun onKey(code: Int, keyIndex: Int, x: Float, y: Float) = onKeyPicked(code)
+    override fun onKeyRepeat(code: Int) = Unit
+    override fun onText(text: CharSequence) = Unit
+    override fun onKeyDown(code: Int) = Unit
+    override fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) = Unit
+    override fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) = Unit
+    override fun onGestureSteered(x: Float, y: Float) = Unit
+    override fun onGestureRingResolved() = Unit
+    override fun onGestureRingCancelled() = Unit
+    override fun onKeyLongPress(code: Int, keyIndex: Int): Boolean = false
+    override fun onCursorNudge(steps: Int) = Unit
+    override fun onCursorNudgeLines(lines: Int) = Unit
+    override fun onFlick(keyIndex: Int, direction: Int) = Unit
+}

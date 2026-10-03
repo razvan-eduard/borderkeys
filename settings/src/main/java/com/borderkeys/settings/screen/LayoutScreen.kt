@@ -5,6 +5,7 @@ package com.borderkeys.settings.screen
 
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.Screen
 
 import android.content.Context
 import android.content.Intent
@@ -52,7 +53,7 @@ import com.borderkeys.settings.rememberPreferencesUpdater
  * takes, and, at the bottom, the input-method subtypes the platform owns.
  */
 @Composable
-fun LayoutScreen(modifier: Modifier = Modifier) {
+fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
     val strings = LocalStrings.current
     val context = LocalContext.current
     val themes = remember { DataGraph.themes }
@@ -149,6 +150,7 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.SIZE_LANGUAGE_KEY_NOTE],
                 checked = preferences.languageKey,
             ) { value -> update { it.copy(languageKey = value) } }
+            SettingRow(strings[Keys.LAYOUT_FLICKS], strings[Keys.LAYOUT_FLICKS_NOTE]) { open(Screen.KeyFlicks) }
             SwitchRow(
                 title = strings[Keys.LAYOUT_PICKER_KEY_SWITCHES_BACK],
                 subtitle = strings[Keys.LAYOUT_PICKER_KEY_SWITCHES_BACK_NOTE],

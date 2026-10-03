@@ -103,6 +103,33 @@ enum class QuickAction(val id: Int) {
 
     /** Switches to a voice keyboard among the enabled input methods. */
     VOICE_INPUT(25),
+
+    /** Moves the cursor one word left. */
+    WORD_LEFT(26),
+
+    /** Moves the cursor one word right. */
+    WORD_RIGHT(27),
+
+    /** Extends the selection one word left. */
+    SELECT_WORD_LEFT(28),
+
+    /** Extends the selection one word right. */
+    SELECT_WORD_RIGHT(29),
+
+    /** Extends the selection to the start of the line. */
+    SELECT_TO_LINE_START(30),
+
+    /** Extends the selection to the end of the line. */
+    SELECT_TO_LINE_END(31),
+
+    /** Deletes the word after the cursor. */
+    DELETE_WORD_FORWARD(32),
+
+    /** Sends the Escape key. */
+    ESCAPE(33),
+
+    /** Sends the Tab key. */
+    TAB(34),
     ;
 
     /**

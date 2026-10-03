@@ -124,6 +124,13 @@ internal class FakeTypingHost(private val clock: ManualClock) : TypingHost {
         notices += key
     }
 
+    /** The quick actions asked for, in order, by id. */
+    val quickActions = mutableListOf<Int>()
+
+    override fun runQuickAction(id: Int) {
+        quickActions += id
+    }
+
     override fun playEffect(event: EffectEvent, word: String) {
         effects += event to word
     }

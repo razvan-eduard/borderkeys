@@ -5,6 +5,7 @@ package com.borderkeys.typing
 
 import android.text.InputType
 import com.borderkeys.data.entity.KeyTouch
+import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardPreferences
 
 /**
@@ -101,6 +102,14 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
         clock.advance(KEY_INTERVAL_MILLIS)
         orchestrator.onKey(code, keyIndex, x, y)
         settle()
+    }
+
+    /** Flicks a key: [flick]'s effect through the orchestrator, and settles. */
+    fun flick(flick: KeyFlick): Boolean {
+        clock.advance(KEY_INTERVAL_MILLIS)
+        val taken = orchestrator.onFlick(flick)
+        settle()
+        return taken
     }
 
     /** Holds the key [code] down until its long press fires, and settles. */

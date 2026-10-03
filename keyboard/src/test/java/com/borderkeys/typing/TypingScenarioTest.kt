@@ -6,6 +6,8 @@ package com.borderkeys.typing
 import android.text.InputType
 import android.view.KeyEvent
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.data.theme.QuickAction
+import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.TextShortcut
 import com.borderkeys.i18n.Keys
 import com.borderkeys.ime.KeyCodes
@@ -499,6 +501,46 @@ class TypingScenarioTest {
         rig.editor.setSelection(0, 5)
         assertNull(rig.orchestrator.privateCopyText())
         assertTrue(rig.host.notices.isEmpty())
+    }
+
+    @Test
+    fun `a text flick writes its text mid-word and ends the composing word`() {
+        rig.startField()
+        rig.type("hel")
+        assertTrue(rig.flick(KeyFlick('l'.code, KeyFlick.NORTH, KeyFlick.TEXT, "@")))
+        assertEquals("hel@", rig.editor.text)
+        assertNull(rig.editor.composingText)
+        rig.type("lo")
+        assertEquals("hel@lo", rig.editor.text)
+    }
+
+    @Test
+    fun `a key flick presses the key it names, a caret flick while composing included`() {
+        rig.startField()
+        rig.type("abc")
+        assertTrue(rig.flick(KeyFlick('c'.code, KeyFlick.WEST, KeyFlick.KEY, "left")))
+        assertEquals(listOf(android.view.KeyEvent.KEYCODE_DPAD_LEFT), rig.host.physicalKeys.map { it.first })
+        assertTrue(rig.flick(KeyFlick('c'.code, KeyFlick.SOUTH, KeyFlick.KEY, "delete")))
+        assertEquals("ab", rig.editor.text)
+        assertFalse(rig.flick(KeyFlick('c'.code, KeyFlick.EAST, KeyFlick.KEY, "symbols")))
+    }
+
+    @Test
+    fun `a command flick asks the host for its quick action`() {
+        rig.startField()
+        rig.type("abc")
+        assertTrue(rig.flick(KeyFlick('c'.code, KeyFlick.WEST, KeyFlick.COMMAND, QuickAction.DELETE_WORD.id.toString())))
+        assertEquals(listOf(QuickAction.DELETE_WORD.id), rig.host.quickActions)
+    }
+
+    @Test
+    fun `the editing actions go out as hardware keys with their modifiers`() {
+        rig.startField("one two")
+        assertTrue(rig.orchestrator.runEditingAction(QuickAction.SELECT_WORD_LEFT))
+        val sent = rig.host.physicalKeys.single()
+        assertEquals(android.view.KeyEvent.KEYCODE_DPAD_LEFT, sent.first)
+        assertEquals(TypingOrchestrator.CTRL_META or TypingOrchestrator.SHIFT_META, sent.second)
+        assertFalse(rig.orchestrator.runEditingAction(QuickAction.PASTE))
     }
 
     @Test

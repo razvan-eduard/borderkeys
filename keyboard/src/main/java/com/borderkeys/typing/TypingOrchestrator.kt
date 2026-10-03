@@ -8,6 +8,8 @@ import android.view.inputmethod.EditorInfo
 import com.borderkeys.data.KeyboardStats
 import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.data.theme.QuickAction
+import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.ime.CaretNudge
 import com.borderkeys.ime.Composer
 import com.borderkeys.ime.Contractions
@@ -1214,6 +1216,58 @@ class TypingOrchestrator(
 
     // ---- picks ---------------------------------------------------------------------------------
 
+    // ---- flicks and editing actions ----------------------------------------------------------
+
+    /**
+     * A flick's effect: its text written as a typed string, its key pressed, or its quick action
+     * run by the host. False for a key left to the caller, as [onKey] leaves it.
+     */
+    fun onFlick(flick: KeyFlick): Boolean = when (flick.kind) {
+        KeyFlick.TEXT -> {
+            onText(flick.value)
+            true
+        }
+        KeyFlick.KEY -> onKey(KeyCodes.named(flick.value))
+        KeyFlick.COMMAND -> {
+            flick.value.toIntOrNull()?.let { host.runQuickAction(it) }
+            true
+        }
+        else -> true
+    }
+
+    /**
+     * The editing actions that are a hardware key with modifiers: a word left or right, the
+     * selection by a word or to the line's ends, the word after the caret deleted, escape and
+     * tab. False for any other action.
+     */
+    fun runEditingAction(action: QuickAction): Boolean {
+        val (keyCode, meta) = when (action) {
+            QuickAction.WORD_LEFT -> KeyEvent.KEYCODE_DPAD_LEFT to CTRL_META
+            QuickAction.WORD_RIGHT -> KeyEvent.KEYCODE_DPAD_RIGHT to CTRL_META
+            QuickAction.SELECT_WORD_LEFT -> KeyEvent.KEYCODE_DPAD_LEFT to (CTRL_META or SHIFT_META)
+            QuickAction.SELECT_WORD_RIGHT -> KeyEvent.KEYCODE_DPAD_RIGHT to (CTRL_META or SHIFT_META)
+            QuickAction.SELECT_TO_LINE_START -> KeyEvent.KEYCODE_MOVE_HOME to SHIFT_META
+            QuickAction.SELECT_TO_LINE_END -> KeyEvent.KEYCODE_MOVE_END to SHIFT_META
+            QuickAction.DELETE_WORD_FORWARD -> KeyEvent.KEYCODE_FORWARD_DEL to CTRL_META
+            QuickAction.ESCAPE -> KeyEvent.KEYCODE_ESCAPE to 0
+            QuickAction.TAB -> KeyEvent.KEYCODE_TAB to 0
+            else -> return false
+        }
+        val editor = currentEditor() ?: return true
+        confirmPendingCorrection()
+        dismissRing()
+        ownEditPending = composing.isNotEmpty()
+        editor.beginBatchEdit()
+        finishComposing(editor)
+        host.sendPhysicalKey(keyCode, meta)
+        editor.endBatchEdit()
+        checkpointField()
+        refreshContextFromEditor()
+        applyAutoShift()
+        requestSuggestions()
+        return true
+    }
+
     // ---- the clipboard -----------------------------------------------------------------------
 
     /** Writes [text] from the clipboard at the caret, the word in progress finished first. */
@@ -1702,6 +1756,10 @@ class TypingOrchestrator(
     private data class CaretSplit(val before: String, val tail: String, val splits: Boolean)
 
     companion object {
+        /** The modifier bits a hardware key goes out with. */
+        const val CTRL_META = KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+        const val SHIFT_META = KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
+
         const val CONTEXT_WINDOW_CHARS = 64
 
         /** How much of the field [checkpointField] and the field's history read. */

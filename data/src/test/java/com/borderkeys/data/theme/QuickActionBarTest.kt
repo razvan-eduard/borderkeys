@@ -134,6 +134,20 @@ class QuickActionBarTest {
     }
 
     @Test
+    fun `the editing actions keep their ids and may be macro steps`() {
+        assertEquals(QuickAction.WORD_LEFT, QuickAction.fromId(26))
+        assertEquals(QuickAction.TAB, QuickAction.fromId(34))
+        assertEquals(
+            listOf(QuickAction.WORD_LEFT.id, QuickAction.SELECT_TO_LINE_END.id, QuickAction.ESCAPE.id),
+            QuickActionBar.sanitisedSteps(
+                selfId = 1000,
+                steps = listOf(QuickAction.WORD_LEFT.id, QuickAction.SELECT_TO_LINE_END.id, QuickAction.ESCAPE.id),
+                customActions = emptyList(),
+            ),
+        )
+    }
+
+    @Test
     fun `resolve mixes builtin and custom ids in order and drops an unknown one`() {
         val custom = CustomQuickAction(id = 1000, name = "select and cut", steps = listOf(QuickAction.CUT.id))
         val resolved = QuickActionBar.resolve(

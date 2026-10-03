@@ -49,7 +49,8 @@ database and are excluded from system backup and from device-to-device transfer.
   Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek, Armenian and Georgian in their
   own scripts; Hebrew and Arabic read from the right, with the suggestions, the ring and the
   emoji and clipboard panels following. A number row, and a symbols page with the digits in a 3×3 block beside the
-  symbols, at the right or the left, on near-square keys.
+  symbols, at the right or the left, on near-square keys. Key flicks: a short drag off any key in
+  one of eight directions writes a text of yours, runs a quick action or presses another key.
 * An optional modifier row for terminals and editors: Esc, Tab, Ctrl, Alt and the arrows,
   with Home, End, Page up, Page down, forward Delete and Insert on offer, in the order you
   choose, above the letters or below the keyboard, each sent as the hardware key it names.

@@ -12,6 +12,16 @@ import org.junit.Test
 /** [GestureCapture] against batched move events. */
 class GestureCaptureTest {
 
+    @Test
+    fun `the path length sums the segments and is zero before a second point`() {
+        val gesture = GestureCapture(8)
+        gesture.begin(0f, 0f, 0L)
+        assertEquals(0f, gesture.pathLength())
+        gesture.append(3f, 4f, 1L)
+        gesture.append(3f, 0f, 2L)
+        assertEquals(9f, gesture.pathLength())
+    }
+
     /** A batched move event, its last sample the current one; counts its x reads. */
     private class Batch(
         private val xs: FloatArray,

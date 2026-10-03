@@ -591,6 +591,34 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `flicks keep one per key and direction, drop the invalid, and the thresholds are clamped`() {
+        val flicks = listOf(
+            KeyFlick('a'.code, KeyFlick.NORTH, KeyFlick.TEXT, "@"),
+            KeyFlick('a'.code, KeyFlick.NORTH, KeyFlick.TEXT, "#"),
+            KeyFlick('a'.code, 9, KeyFlick.TEXT, "x"),
+            KeyFlick('b'.code, KeyFlick.EAST, KeyFlick.COMMAND, "999999"),
+            KeyFlick('b'.code, KeyFlick.EAST, KeyFlick.COMMAND, QuickAction.DELETE_WORD.id.toString()),
+            KeyFlick('c'.code, KeyFlick.SOUTH, KeyFlick.KEY, "not a key name"),
+            KeyFlick('c'.code, KeyFlick.SOUTH, KeyFlick.KEY, "left", label = "toolong"),
+            KeyFlick('d'.code, KeyFlick.WEST, KeyFlick.TEXT, ""),
+            KeyFlick('e'.code, KeyFlick.WEST, 7, "x"),
+        )
+        val kept = KeyboardPreferences(keyFlicks = flicks, flickMinFraction = 0.01f, flickMaxFraction = 9f).sanitised()
+        assertEquals(
+            listOf(
+                KeyFlick('a'.code, KeyFlick.NORTH, KeyFlick.TEXT, "#"),
+                KeyFlick('b'.code, KeyFlick.EAST, KeyFlick.COMMAND, QuickAction.DELETE_WORD.id.toString()),
+            ),
+            kept.keyFlicks,
+        )
+        assertEquals(KeyboardPreferences.MIN_FLICK_MIN_FRACTION, kept.flickMinFraction)
+        assertEquals(KeyboardPreferences.MAX_FLICK_MAX_FRACTION, kept.flickMaxFraction)
+        assertEquals("@", KeyFlick.shownLabel(KeyFlick('a'.code, 0, KeyFlick.TEXT, "@")))
+        assertEquals("", KeyFlick.shownLabel(KeyFlick('a'.code, 0, KeyFlick.COMMAND, "9")))
+        assertEquals("bye", KeyFlick.shownLabel(KeyFlick('a'.code, 0, KeyFlick.TEXT, "goodbye", label = "bye")))
+    }
+
+    @Test
     fun `the remembered voice keyboard and its set are bounded`() {
         val long = KeyboardPreferences(voiceKeyboardId = "x".repeat(1_000), voiceKeyboardSet = "y".repeat(10_000)).sanitised()
         assertEquals(KeyboardPreferences.MAX_INPUT_METHOD_ID_CHARS, long.voiceKeyboardId.length)

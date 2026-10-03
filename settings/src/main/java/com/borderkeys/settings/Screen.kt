@@ -12,6 +12,7 @@ enum class Screen(val titleKey: String) {
     Features(Keys.FEATURES_TITLE),
     Languages(Keys.SCREEN_LANGUAGES),
     Layout(Keys.SCREEN_LAYOUT),
+    KeyFlicks(Keys.SCREEN_KEY_FLICKS),
     Theme(Keys.SCREEN_THEME),
     Size(Keys.SCREEN_SIZE_AND_POSITION),
     Effects(Keys.SCREEN_PARTICLE_EFFECTS),

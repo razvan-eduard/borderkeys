@@ -25,9 +25,11 @@ class KeyboardAccessibility(
     private val strings: LanguageManager,
 ) {
 
-    /** Called when a virtual key is activated by the reader. */
-    fun interface Listener {
+    /** Called when a virtual key, or one of its flicks, is activated by the reader. */
+    interface Listener {
         fun onAccessibilityKey(code: Int, keyIndex: Int)
+
+        fun onAccessibilityFlick(keyIndex: Int, direction: Int)
     }
 
     var listener: Listener? = null
@@ -70,6 +72,12 @@ class KeyboardAccessibility(
             return when (action) {
                 AccessibilityNodeInfo.ACTION_CLICK -> {
                     listener?.onAccessibilityKey(geometry.keyCode[virtualViewId], virtualViewId)
+                    sendEvent(virtualViewId, AccessibilityEvent.TYPE_VIEW_CLICKED)
+                    true
+                }
+
+                in FLICK_ACTION_FIRST until FLICK_ACTION_FIRST + KeyboardLayout.FLICK_DIRECTIONS -> {
+                    listener?.onAccessibilityFlick(virtualViewId, action - FLICK_ACTION_FIRST)
                     sendEvent(virtualViewId, AccessibilityEvent.TYPE_VIEW_CLICKED)
                     true
                 }
@@ -170,6 +178,19 @@ class KeyboardAccessibility(
         node.addAction(
             AccessibilityNodeInfo.AccessibilityAction.ACTION_CLEAR_ACCESSIBILITY_FOCUS,
         )
+        // One custom action per flick the key has, named by its direction and label.
+        for (direction in 0 until KeyboardLayout.FLICK_DIRECTIONS) {
+            val label = geometry.flickLabel(index, direction)
+            if (label.isEmpty()) {
+                continue
+            }
+            node.addAction(
+                AccessibilityNodeInfo.AccessibilityAction(
+                    FLICK_ACTION_FIRST + direction,
+                    strings.getString(Keys.KEY_FLICK_ACTION, strings[FLICK_DIRECTION_KEYS[direction]], label),
+                ),
+            )
+        }
         node.isAccessibilityFocused = focusedKey == index
 
         bounds.set(
@@ -247,6 +268,14 @@ class KeyboardAccessibility(
     }
 
     private companion object {
+        /** The first of eight custom action ids, one per flick direction, north first. */
+        const val FLICK_ACTION_FIRST = 0x3F000000
+
+        val FLICK_DIRECTION_KEYS = arrayOf(
+            Keys.FLICK_DIR_N, Keys.FLICK_DIR_NE, Keys.FLICK_DIR_E, Keys.FLICK_DIR_SE,
+            Keys.FLICK_DIR_S, Keys.FLICK_DIR_SW, Keys.FLICK_DIR_W, Keys.FLICK_DIR_NW,
+        )
+
         const val HOST_ID = AccessibilityNodeProvider.HOST_VIEW_ID
         const val NO_KEY = KeyboardCanvasView.NO_KEY
 

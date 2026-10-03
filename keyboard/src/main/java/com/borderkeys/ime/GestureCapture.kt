@@ -79,6 +79,17 @@ class GestureCapture(val capacity: Int = DEFAULT_CAPACITY) {
         return kotlin.math.sqrt(dx * dx + dy * dy)
     }
 
+    /** The length of the path through every point, in the units of [xs]; decimation shortens it a little. */
+    fun pathLength(): Float {
+        var length = 0f
+        for (index in 1 until count) {
+            val dx = xs[index] - xs[index - 1]
+            val dy = ys[index] - ys[index - 1]
+            length += kotlin.math.sqrt(dx * dx + dy * dy)
+        }
+        return length
+    }
+
     /** Appends one point, halving the buffer first if it is full. */
     fun append(x: Float, y: Float, time: Long) {
         if (count >= capacity) {
