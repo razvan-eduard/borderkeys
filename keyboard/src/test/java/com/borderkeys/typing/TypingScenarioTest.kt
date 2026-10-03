@@ -483,6 +483,21 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `before the first unlock nothing is learned, and the unlock opens learning in the same field`() {
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true))
+        rig.startField(userUnlocked = false)
+        rig.type("hello")
+        rig.press(KeyCodes.ENTER)
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertTrue(rig.store.batches.isEmpty())
+        rig.orchestrator.onUserUnlocked()
+        rig.type("world")
+        rig.press(KeyCodes.ENTER)
+        rig.pause(LearningBuffer.DEFAULT_DEBOUNCE_MILLIS)
+        assertEquals(listOf("world"), rig.store.batches.flatMap { batch -> batch.updates.map { it.word } })
+    }
+
+    @Test
     fun `a correction is learned only once the next key confirms it`() {
         rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(learningEnabled = true))
         rig.startField()

@@ -23,6 +23,8 @@ class ThemeRepository internal constructor(
     private val customThemeLibraryStore: DataStore<CustomThemeLibrary>,
     private val particleEffectsStore: DataStore<ParticleEffectsSettings>,
     private val customEffectsPresetLibraryStore: DataStore<CustomEffectsPresetLibrary>,
+    /** The device-protected copy of the appearance, kept in step; none in a test. */
+    private val lockedStore: DataStore<LockedAppearance>? = null,
 ) {
     val theme: Flow<KeyboardTheme> = themeStore.data
 
@@ -45,14 +47,17 @@ class ThemeRepository internal constructor(
 
     suspend fun updateTheme(transform: (KeyboardTheme) -> KeyboardTheme) {
         themeStore.updateData { current -> transform(current).sanitised() }
+        mirrorLocked()
     }
 
     suspend fun updateLightTheme(transform: (KeyboardTheme) -> KeyboardTheme) {
         lightThemeStore.updateData { current -> transform(current).sanitised() }
+        mirrorLocked()
     }
 
     suspend fun updatePreferences(transform: (KeyboardPreferences) -> KeyboardPreferences) {
         preferencesStore.updateData { current -> transform(current).sanitised() }
+        mirrorLocked()
     }
 
     suspend fun updateParticleEffects(transform: (ParticleEffectsSettings) -> ParticleEffectsSettings) {
@@ -61,6 +66,14 @@ class ThemeRepository internal constructor(
 
     suspend fun resetTheme() {
         themeStore.updateData { KeyboardTheme() }
+        mirrorLocked()
+    }
+
+    /** Writes the two themes and the appearance preferences to the device-protected copy. */
+    suspend fun mirrorLocked() {
+        val store = lockedStore ?: return
+        val mirrored = LockedAppearance.of(theme.first(), lightTheme.first(), preferences.first())
+        store.updateData { mirrored }
     }
 
     /**

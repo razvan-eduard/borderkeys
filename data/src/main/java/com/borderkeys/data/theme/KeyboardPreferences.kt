@@ -768,6 +768,31 @@ data class KeyboardPreferences(
         KeyboardPlacement(heightScale, widthScale, positionMode, bottomOffsetDp, horizontalOffsetDp)
     }
 
+    /**
+     * The appearance and layout fields, on the defaults for everything else: what the keyboard
+     * may read before the user's first unlock. See [LockedAppearance].
+     */
+    fun forLockedStart(): KeyboardPreferences = KeyboardPreferences(
+        themeMode = themeMode,
+        followSystemColors = followSystemColors,
+        heightScale = heightScale,
+        widthScale = widthScale,
+        positionMode = positionMode,
+        bottomOffsetDp = bottomOffsetDp,
+        horizontalOffsetDp = horizontalOffsetDp,
+        landscape = landscape,
+        numberRow = numberRow,
+        hapticFeedback = hapticFeedback,
+        hapticStrength = hapticStrength,
+        hapticKeys = hapticKeys,
+        hapticSuggestions = hapticSuggestions,
+        hapticRing = hapticRing,
+        keySound = keySound,
+        keyPopup = keyPopup,
+        longPressMillis = longPressMillis,
+        uiLanguage = uiLanguage,
+    )
+
     /** [transform] applied to whichever orientation's placement [isLandscape] selects, written
      *  back to portrait's flat fields or to [landscape] -- the other half of [placementFor]. */
     fun withPlacement(

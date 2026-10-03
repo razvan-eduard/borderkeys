@@ -12,14 +12,15 @@
         <!--
             Fully qualified: this manifest is merged into applications with other ids. Exported
             but bindable only by the holder of BIND_INPUT_METHOD, the system; the platform lists
-            an IME only with both attributes.
+            an IME only with both attributes. Direct-boot aware: the service runs before the
+            user's first unlock, from device-protected storage.
         -->
         <service
             android:name="com.borderkeys.ime.BorderKeysService"
             android:label="@string/ime_name"
             android:permission="android.permission.BIND_INPUT_METHOD"
             android:exported="true"
-            android:directBootAware="false">
+            android:directBootAware="true">
             <intent-filter>
                 <action android:name="android.view.InputMethod" />
             </intent-filter>

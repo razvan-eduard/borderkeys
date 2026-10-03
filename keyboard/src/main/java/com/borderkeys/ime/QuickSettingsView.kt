@@ -44,13 +44,19 @@ class QuickSettingsView(
     private var placement = Placement.DOCKED
     private var numberRow = false
 
+    /** Whether the footer that opens the settings application is shown. */
+    private var fullSettings = true
+
     /** The state to draw, pushed from the service whenever the preferences flow emits. */
-    fun setState(placement: Placement, numberRow: Boolean) {
-        if (this.placement == placement && this.numberRow == numberRow) {
+    fun setState(placement: Placement, numberRow: Boolean, fullSettings: Boolean = true) {
+        if (this.placement == placement && this.numberRow == numberRow &&
+            this.fullSettings == fullSettings
+        ) {
             return
         }
         this.placement = placement
         this.numberRow = numberRow
+        this.fullSettings = fullSettings
         invalidate()
     }
 
@@ -184,7 +190,9 @@ class QuickSettingsView(
             labelPaint,
         )
 
-        canvas.drawText(strings[Keys.PANEL_ALL_SETTINGS], padding, footerTop + rowHeight * 0.5f + labelBaseline, accentPaint)
+        if (fullSettings) {
+            canvas.drawText(strings[Keys.PANEL_ALL_SETTINGS], padding, footerTop + rowHeight * 0.5f + labelBaseline, accentPaint)
+        }
     }
 
     // ---- touch ---------------------------------------------------------------------------------
@@ -218,7 +226,7 @@ class QuickSettingsView(
                     listener?.onNumberRowChanged(!numberRow)
                     return true
                 }
-                if (y >= footerTop) {
+                if (y >= footerTop && fullSettings) {
                     listener?.onOpenFullSettings()
                     return true
                 }

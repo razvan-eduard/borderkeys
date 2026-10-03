@@ -51,6 +51,7 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
         terminalField: Boolean = false,
         passwordField: Boolean = false,
         privateField: Boolean = false,
+        userUnlocked: Boolean = true,
         settle: Boolean = true,
     ) {
         editor.reset(text)
@@ -62,6 +63,7 @@ internal class TypingRig(val engine: QueuedEngine, settings: KeyboardPreferences
                     privateField = privateField,
                     learningEnabled = orchestrator.preferences.learningEnabled,
                     heatmapEnabled = orchestrator.preferences.heatmapEnabled,
+                    userUnlocked = userUnlocked,
                 ),
                 addressField = addressField,
                 terminalField = terminalField,

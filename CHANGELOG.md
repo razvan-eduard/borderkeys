@@ -57,6 +57,10 @@ attestations and the full commit lists are on the
   600,000, its header is sealed together with its contents, and a file claiming more than
   5,000,000 rounds is refused as damaged before any work is done. Files already written still
   open, and the screen says so while the key is being derived.
+- The keyboard is there on the lock screen after a restart, before the first unlock: it draws
+  with your theme, size and layout settings, and types without dictionaries, learning, clipboard,
+  settings or composer until the device is unlocked, then carries on with all of them. The
+  clipboard panel stays closed while the lock screen shows.
 - Swiping reaches contractions: a swipe through d-o-n-t writes "don't", and a swipe through the
   letters of a bare spelling the keyboard already restores an apostrophe to, "didnt" or "im",
   writes it with the apostrophe. Those bare spellings are gone from the English list, so the

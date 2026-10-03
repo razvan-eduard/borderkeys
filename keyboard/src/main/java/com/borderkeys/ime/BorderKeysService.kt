@@ -27,6 +27,7 @@ import androidx.autofill.inline.common.TextViewStyle
 import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.DirectBoot
 import com.borderkeys.data.entity.KeyTouch
 import com.borderkeys.data.DictionaryRepository
 import com.borderkeys.data.KeyboardStats
@@ -109,6 +110,15 @@ class BorderKeysService :
     private var privateReveal = false
     private var preferences = KeyboardPreferences()
     private var particleEffects = ParticleEffectsSettings()
+
+    /** Whether the user has unlocked since boot; see [DirectBoot]. Set once, never back. */
+    private var unlocked = false
+
+    /** Unregisters the unlock receiver, while one waits. */
+    private var unlockRegistration: (() -> Unit)? = null
+
+    /** Draws the device-protected appearance before the first unlock; cancelled at it. */
+    private var lockedAppearanceJob: kotlinx.coroutines.Job? = null
 
     /** The interface language, resolved once when the service starts. */
     private lateinit var strings: LanguageManager
@@ -450,9 +460,16 @@ class BorderKeysService :
     override fun onCreate() {
         super.onCreate()
         DataGraph.install(applicationContext)
+        unlocked = DataGraph.isUserUnlocked()
         // Loaded before anything draws.
         strings = LanguageManager(this).apply {
-            loadResolved(DataGraph.themes.currentPreferences().uiLanguage)
+            loadResolved(
+                if (unlocked) {
+                    DataGraph.themes.currentPreferences().uiLanguage
+                } else {
+                    DataGraph.lockedAppearance.current().preferences.uiLanguage
+                },
+            )
         }
         engine.listener = this
         engine.start()
@@ -471,16 +488,60 @@ class BorderKeysService :
             symbolsNumpadRightLayout = LayoutLoader.load(assets, SYMBOLS_NUMPAD_RIGHT_LAYOUT)
             symbolsShiftLayout = LayoutLoader.load(assets, SYMBOLS_SHIFT_LAYOUT)
             numpadLayout = LayoutLoader.load(assets, NUMPAD_LAYOUT)
-            // A failed load leaves the keyboard typing without dictionaries.
-            runCatching { dictionaryLoader.load() }
-                .onSuccess { restoreLanguageEvidence() }
-                .onFailure { error -> degradeWithoutDictionaries(error) }
-            File(filesDir, LEGACY_USER_MODEL_SNAPSHOT).delete()
+            if (unlocked) {
+                loadDictionaries()
+            }
         }
         SwipeModelLoad.set(SwipeModelLoad.State.Off)
+        if (unlocked) {
+            startUnlocked()
+        } else {
+            observeLockedAppearance()
+            unlockRegistration = DirectBoot.whenUnlocked(this) { onUserUnlocked() }
+        }
+    }
+
+    /** The packs, the personal dictionary and the saved language evidence; off the main thread. */
+    private suspend fun loadDictionaries() {
+        // A failed load leaves the keyboard typing without dictionaries.
+        runCatching { dictionaryLoader.load() }
+            .onSuccess { restoreLanguageEvidence() }
+            .onFailure { error -> degradeWithoutDictionaries(error) }
+        File(filesDir, LEGACY_USER_MODEL_SNAPSHOT).delete()
+    }
+
+    /** What reads credential-encrypted storage: the settings, the packs and the dictionary edits. */
+    private fun startUnlocked() {
         observeSettings()
         observeLanguagePacks()
         observeDictionaryEdits()
+    }
+
+    /** The user unlocked while the keyboard ran from the device-protected copy. */
+    private fun onUserUnlocked() {
+        if (unlocked) {
+            return
+        }
+        unlocked = true
+        unlockRegistration = null
+        lockedAppearanceJob?.cancel()
+        lockedAppearanceJob = null
+        orchestrator.onUserUnlocked()
+        scope.launch(Dispatchers.IO) { loadDictionaries() }
+        startUnlocked()
+        paints.reloadImage(this)
+        host?.onThemeChanged()
+    }
+
+    /** Before the first unlock: the appearance from device-protected storage, default effects. */
+    private fun observeLockedAppearance() {
+        lockedAppearanceJob = scope.launch {
+            DataGraph.lockedAppearance.data
+                .catch { error ->
+                    android.util.Log.e("BorderKeys", "locked appearance unreadable, using defaults", error)
+                }
+                .collect { locked -> applyAppearance(locked.asAppearance()) }
+        }
     }
 
     /**
@@ -545,11 +606,7 @@ class BorderKeysService :
         )
         engine.setSwipeModelEnabled(false)
         SwipeModelLoad.set(SwipeModelLoad.State.Failed)
-        scope.launch {
-            DataGraph.themes.updatePreferences {
-                it.copy(swipeModelFailed = true, experimentalSwipeModelEnabled = false)
-            }
-        }
+        updatePreferences { it.copy(swipeModelFailed = true, experimentalSwipeModelEnabled = false) }
     }
 
     /** Carries on without dictionaries: no prediction, correction or learning. */
@@ -598,82 +655,86 @@ class BorderKeysService :
                 ::KeyboardAppearance,
             ).catch { error ->
                 android.util.Log.e("BorderKeys", "settings unavailable, using defaults", error)
-            }.collect { (newTheme, newLightTheme, newPreferences, newParticleEffects) ->
-                theme = newTheme
-                lightTheme = newLightTheme
-                val wasForcingDebugRing = preferences.debugForceRadialRing
-                val offensiveSwitchFlipped =
-                    preferences.blockOffensiveWords != newPreferences.blockOffensiveWords
-                val wordLimitChanged =
-                    preferences.learnedWordLimit != newPreferences.learnedWordLimit
-                val swipeModelFlipped =
-                    preferences.experimentalSwipeModelEnabled !=
-                        newPreferences.experimentalSwipeModelEnabled
-                preferences = newPreferences
-                orchestrator.applySettings(newPreferences)
-                if (swipeModelFlipped) {
-                    applySwipeModel(newPreferences.experimentalSwipeModelEnabled)
-                }
-                particleEffects = newParticleEffects
-                if (offensiveSwitchFlipped || wordLimitChanged) {
-                    scope.launch(Dispatchers.IO) {
-                        dictionaryLoader.reloadPersonal()
-                        withContext(Dispatchers.Main) { orchestrator.requestSuggestions() }
-                    }
-                }
-                val resolvedTheme = ThemeMode.resolve(
-                    newTheme, newLightTheme, newPreferences, this@BorderKeysService,
-                )
-                val effectiveTheme = if (newPreferences.followSystemColors) {
-                    DynamicColors.apply(resolvedTheme, this@BorderKeysService)
-                } else {
-                    resolvedTheme
-                }
-                val changed = paints.update(
-                    effectiveTheme, resources.displayMetrics,
-                    newPreferences.placementFor(isLandscape()).heightScale,
-                    this@BorderKeysService,
-                )
-                host?.let { view ->
-                    applyPlacement(view, newPreferences)
-                    applyParticleSettings(view, newParticleEffects)
-                    if (view.quickSettingsVisible) {
-                        pushQuickSettingsState(view)
-                    }
-                    applyHaptics(view, newPreferences)
-                    view.keyboard.soundEnabled = newPreferences.keySound
-                    view.keyboard.keyPopupEnabled = newPreferences.keyPopup
-                    view.keyboard.spaceCursorEnabled = newPreferences.spaceCursorControl
-                    view.keyboard.holdHintsEnabled = newPreferences.longPressHints
-                    view.keyboard.longPressDelayMillis = newPreferences.longPressMillis.toLong()
-                    view.keyboard.radialMenuEnabled = newPreferences.radialMenuEnabled
-                    view.keyboard.radialPauseDwellMillis =
-                        newPreferences.radialPauseDwellMillis.toLong()
-                    view.keyboard.radialMinPathLetters = newPreferences.radialMinPathLetters
-                    view.radialSuggestionMenu.sizeScale =
-                        KeyboardPreferences.radialSizeScale(newPreferences.radialMenuSize)
-                    view.radialBlurBackground = newPreferences.radialBlurBackground
-                    view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
-                    applyQuickActions(view)
-                    refreshClipboardChip()
-                    if (wasForcingDebugRing && !newPreferences.debugForceRadialRing) {
-                        closeDebugRing()
-                    }
-                    syncDebugRing()
-                    view.keyboard.swipeEnabled =
-                        newPreferences.swipeEnabled && orchestrator.session.policy.suggestionsAllowed
-                    view.suggestionStripEnabled = newPreferences.showSuggestionStrip
-                    showPage(page)
-                    view.fullWidthBackground = resolvedTheme.fullWidthBackground
-                    view.navigationBarBackground = resolvedTheme.navigationBarBackground
-                    view.opacity = resolvedTheme.opacity
-                    if (changed) {
-                        view.keyboard.onThemeChanged()
-                        view.quickSettings.onThemeChanged()
-                        view.onThemeChanged()
-                        view.relayoutForNewMetrics()
-                    }
-                }
+            }.collect { appearance -> applyAppearance(appearance) }
+        }
+    }
+
+    /** Applies [appearance]: the orchestrator, the engine, the paints and the views follow it. */
+    private fun applyAppearance(appearance: KeyboardAppearance) {
+        val (newTheme, newLightTheme, newPreferences, newParticleEffects) = appearance
+        theme = newTheme
+        lightTheme = newLightTheme
+        val wasForcingDebugRing = preferences.debugForceRadialRing
+        val offensiveSwitchFlipped =
+            preferences.blockOffensiveWords != newPreferences.blockOffensiveWords
+        val wordLimitChanged =
+            preferences.learnedWordLimit != newPreferences.learnedWordLimit
+        val swipeModelFlipped =
+            preferences.experimentalSwipeModelEnabled !=
+                newPreferences.experimentalSwipeModelEnabled
+        preferences = newPreferences
+        orchestrator.applySettings(newPreferences)
+        if (swipeModelFlipped) {
+            applySwipeModel(newPreferences.experimentalSwipeModelEnabled)
+        }
+        particleEffects = newParticleEffects
+        if (unlocked && (offensiveSwitchFlipped || wordLimitChanged)) {
+            scope.launch(Dispatchers.IO) {
+                dictionaryLoader.reloadPersonal()
+                withContext(Dispatchers.Main) { orchestrator.requestSuggestions() }
+            }
+        }
+        val resolvedTheme = ThemeMode.resolve(
+            newTheme, newLightTheme, newPreferences, this@BorderKeysService,
+        )
+        val effectiveTheme = if (newPreferences.followSystemColors) {
+            DynamicColors.apply(resolvedTheme, this@BorderKeysService)
+        } else {
+            resolvedTheme
+        }
+        val changed = paints.update(
+            effectiveTheme, resources.displayMetrics,
+            newPreferences.placementFor(isLandscape()).heightScale,
+            this@BorderKeysService,
+        )
+        host?.let { view ->
+            applyPlacement(view, newPreferences)
+            applyParticleSettings(view, newParticleEffects)
+            if (view.quickSettingsVisible) {
+                pushQuickSettingsState(view)
+            }
+            applyHaptics(view, newPreferences)
+            view.keyboard.soundEnabled = newPreferences.keySound
+            view.keyboard.keyPopupEnabled = newPreferences.keyPopup
+            view.keyboard.spaceCursorEnabled = newPreferences.spaceCursorControl
+            view.keyboard.holdHintsEnabled = newPreferences.longPressHints
+            view.keyboard.longPressDelayMillis = newPreferences.longPressMillis.toLong()
+            view.keyboard.radialMenuEnabled = newPreferences.radialMenuEnabled
+            view.keyboard.radialPauseDwellMillis =
+                newPreferences.radialPauseDwellMillis.toLong()
+            view.keyboard.radialMinPathLetters = newPreferences.radialMinPathLetters
+            view.radialSuggestionMenu.sizeScale =
+                KeyboardPreferences.radialSizeScale(newPreferences.radialMenuSize)
+            view.radialBlurBackground = newPreferences.radialBlurBackground
+            view.suggestionStrip.visibleLimit = newPreferences.suggestionCount
+            applyQuickActions(view)
+            refreshClipboardChip()
+            if (wasForcingDebugRing && !newPreferences.debugForceRadialRing) {
+                closeDebugRing()
+            }
+            syncDebugRing()
+            view.keyboard.swipeEnabled =
+                newPreferences.swipeEnabled && orchestrator.session.policy.suggestionsAllowed
+            view.suggestionStripEnabled = newPreferences.showSuggestionStrip
+            showPage(page)
+            view.fullWidthBackground = resolvedTheme.fullWidthBackground
+            view.navigationBarBackground = resolvedTheme.navigationBarBackground
+            view.opacity = resolvedTheme.opacity
+            if (changed) {
+                view.keyboard.onThemeChanged()
+                view.quickSettings.onThemeChanged()
+                view.onThemeChanged()
+                view.relayoutForNewMetrics()
             }
         }
     }
@@ -790,6 +851,7 @@ class BorderKeysService :
                 privateField = PrivateMode.isPrivate(info),
                 learningEnabled = preferences.learningEnabled,
                 heatmapEnabled = preferences.heatmapEnabled,
+                userUnlocked = unlocked,
             ),
             addressField = info != null && AddressField.isAddress(info.inputType),
             terminalField = TerminalField.isTerminal(info, preferences.terminalPackages),
@@ -854,6 +916,9 @@ class BorderKeysService :
 
     /** Writes the language evidence to [LANGUAGE_EVIDENCE_PREFS], or empties it when not kept. */
     private fun saveLanguageEvidence() {
+        if (!unlocked) {
+            return
+        }
         val store = getSharedPreferences(LANGUAGE_EVIDENCE_PREFS, MODE_PRIVATE)
         if (!remembersLanguage(preferences)) {
             store.edit().clear().apply()
@@ -893,6 +958,9 @@ class BorderKeysService :
     override fun onFinishInput() {
         super.onFinishInput()
         orchestrator.finishField()
+        if (!unlocked) {
+            return
+        }
         scope.launch(Dispatchers.IO) {
             if (preferences.clearClipboardOnClose) {
                 DataGraph.clipboard.deleteUnpinned()
@@ -935,6 +1003,7 @@ class BorderKeysService :
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(wallpaperChangedReceiver) }
+        unlockRegistration?.invoke()
         unregisterClipboardListener()
         // Runs while the engine is still alive.
         super.onDestroy()
@@ -1550,12 +1619,24 @@ class BorderKeysService :
                 else -> QuickSettingsView.Placement.DOCKED
             },
             numberRow = preferences.numberRow,
+            fullSettings = unlocked,
         )
     }
 
-    /** Writes the preferences to the store the settings application uses. */
+    /**
+     * Writes the preferences to the store the settings application uses; before the first
+     * unlock, their appearance fields to the device-protected copy, for this boot.
+     */
     private fun updatePreferences(transform: (KeyboardPreferences) -> KeyboardPreferences) {
-        scope.launch { DataGraph.themes.updatePreferences(transform) }
+        scope.launch {
+            if (unlocked) {
+                DataGraph.themes.updatePreferences(transform)
+            } else {
+                DataGraph.lockedAppearance.update {
+                    it.copy(preferences = transform(it.preferences).sanitised().forLockedStart())
+                }
+            }
+        }
     }
 
     override fun onStartResize() {
@@ -1603,6 +1684,9 @@ class BorderKeysService :
      * screen that edits a clipboard entry.
      */
     private fun openSettings(screen: String? = null, clipId: Long = -1L) {
+        if (!unlocked) {
+            return
+        }
         // By class name, with no compile-time dependency on :settings.
         val intent = Intent(Intent.ACTION_MAIN)
             .setClassName(packageName, SETTINGS_ACTIVITY)
@@ -1686,6 +1770,9 @@ class BorderKeysService :
      * dictionary does not hold is blocked in lower case instead, when [blockWhenNotPersonal].
      */
     private fun forgetWord(word: String, blockWhenNotPersonal: Boolean = true) {
+        if (!unlocked) {
+            return
+        }
         scope.launch {
             val dictionary = DataGraph.dictionary
             // Looked up ignoring case.
@@ -1757,7 +1844,7 @@ class BorderKeysService :
     // ---- clipboard --------------------------------------------------------------------------------------
 
     private fun registerClipboardListener() {
-        if (clipboardListenerRegistered || orchestrator.session.policy.privateField ||
+        if (clipboardListenerRegistered || !unlocked || orchestrator.session.policy.privateField ||
             !preferences.clipboardEnabled
         ) {
             return
@@ -1805,11 +1892,9 @@ class BorderKeysService :
         val height = draggedHeight
         val width = draggedWidth
         val landscape = isLandscape()
-        scope.launch {
-            DataGraph.themes.updatePreferences {
-                it.withPlacement(landscape) { placement ->
-                    placement.copy(heightScale = height, widthScale = width)
-                }
+        updatePreferences {
+            it.withPlacement(landscape) { placement ->
+                placement.copy(heightScale = height, widthScale = width)
             }
         }
     }
@@ -1898,7 +1983,7 @@ class BorderKeysService :
             QuickAction.SWITCH_LAYOUT -> switchLanguage()
             QuickAction.SETTINGS -> openSettings()
             QuickAction.COMPOSE -> {
-                if (orchestrator.session.policy.privateField || !preferences.composerEnabled) return
+                if (!unlocked || orchestrator.session.policy.privateField || !preferences.composerEnabled) return
                 // The draft box starts with the selection, or with the whole field.
                 val selection = currentInputConnection?.getSelectedText(0)?.toString().orEmpty()
                 val whole = selection.ifEmpty {
@@ -2040,7 +2125,7 @@ class BorderKeysService :
 
     /** Opens the clipboard history as a panel of cards, read and decoded off the main thread. */
     private fun offerClipboardHistory() {
-        if (orchestrator.session.policy.privateField) {
+        if (!unlocked || orchestrator.session.policy.privateField || DirectBoot.isKeyguardLocked(this)) {
             return
         }
         scope.launch {
@@ -2132,9 +2217,7 @@ class BorderKeysService :
         val updated = (listOf(emoji) + preferences.emojiRecents.filterNot { it == emoji })
             .take(KeyboardPreferences.MAX_EMOJI_RECENTS)
         host?.emojiPanel?.recents = updated
-        scope.launch {
-            DataGraph.themes.updatePreferences { it.copy(emojiRecents = updated) }
-        }
+        updatePreferences { it.copy(emojiRecents = updated) }
     }
 
     override fun onPrivateRevealToggled() {
@@ -2235,7 +2318,7 @@ class BorderKeysService :
      */
     private fun refreshClipboardChip(clip: ClipData? = clipboardManager?.primaryClip) {
         val strip = host?.suggestionStrip ?: return
-        if (orchestrator.session.policy.privateField || !preferences.clipboardSuggestion) {
+        if (!unlocked || orchestrator.session.policy.privateField || !preferences.clipboardSuggestion) {
             strip.clipboardChip = null
             clipOffers.shown(null, currentInputEditorInfo?.packageName)
             return

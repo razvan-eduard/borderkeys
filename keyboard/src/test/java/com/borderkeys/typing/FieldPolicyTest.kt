@@ -67,4 +67,33 @@ class FieldPolicyTest {
         val private = policy(private = true, learning = false)
         assertFalse(private.withSwitches(true, true).personalAllowed)
     }
+
+    @Test
+    fun `before the first unlock nothing personal is allowed, and the switches do not open it`() {
+        val locked = FieldPolicy.of(
+            passwordField = false, privateField = false, learningEnabled = true, heatmapEnabled = true,
+            userUnlocked = false,
+        )
+        assertTrue(locked.suggestionsAllowed)
+        assertFalse(locked.personalAllowed)
+        assertFalse(locked.heatmapAllowed)
+        assertFalse(locked.withSwitches(learning = true, heatmap = true).personalAllowed)
+    }
+
+    @Test
+    fun `the unlock opens what the switches allow, and no more`() {
+        val locked = FieldPolicy.of(
+            passwordField = false, privateField = false, learningEnabled = true, heatmapEnabled = true,
+            userUnlocked = false,
+        )
+        assertTrue(locked.unlocked(learning = true, heatmap = true).personalAllowed)
+        assertTrue(locked.unlocked(learning = true, heatmap = true).heatmapAllowed)
+        assertFalse(locked.unlocked(learning = false, heatmap = true).personalAllowed)
+        assertFalse(locked.unlocked(learning = true, heatmap = false).heatmapAllowed)
+        val private = FieldPolicy.of(
+            passwordField = false, privateField = true, learningEnabled = true, heatmapEnabled = true,
+            userUnlocked = false,
+        )
+        assertFalse(private.unlocked(learning = true, heatmap = true).personalAllowed)
+    }
 }
