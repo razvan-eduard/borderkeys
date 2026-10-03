@@ -97,6 +97,7 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 ) { update { it.copy(modifierRowPosition = KeyboardPreferences.MODIFIER_ROW_BELOW) } }
             }
             ModifierRowKeysEditor(preferences.modifierRowKeys, update)
+            Explanation(strings[Keys.LAYOUT_DEAD_KEYS_NOTE])
             SwitchRow(
                 title = strings[Keys.SIZE_NUMBER_PAD_IN_NUMERIC_FIELDS],
                 subtitle = strings[Keys.SIZE_A_PHONE_NUMBER_FIELD_GETS_A],
@@ -414,5 +415,18 @@ private fun modifierKeyLabel(name: String): String = when (name) {
     ModifierRowKeys.FORWARD_DELETE -> Keys.KEY_FORWARD_DELETE
     ModifierRowKeys.KEYBOARD_PICKER -> Keys.KEY_KEYBOARD_PICKER
     ModifierRowKeys.VOICE -> Keys.KEY_VOICE
+    ModifierRowKeys.COMPOSE -> Keys.KEY_COMPOSE
+    ModifierRowKeys.DEAD_ACUTE -> Keys.KEY_DEAD_ACUTE
+    ModifierRowKeys.DEAD_GRAVE -> Keys.KEY_DEAD_GRAVE
+    ModifierRowKeys.DEAD_CIRCUMFLEX -> Keys.KEY_DEAD_CIRCUMFLEX
+    ModifierRowKeys.DEAD_DIAERESIS -> Keys.KEY_DEAD_DIAERESIS
+    ModifierRowKeys.DEAD_TILDE -> Keys.KEY_DEAD_TILDE
+    ModifierRowKeys.DEAD_CARON -> Keys.KEY_DEAD_CARON
+    ModifierRowKeys.DEAD_BREVE -> Keys.KEY_DEAD_BREVE
+    ModifierRowKeys.DEAD_CEDILLA -> Keys.KEY_DEAD_CEDILLA
+    ModifierRowKeys.DEAD_OGONEK -> Keys.KEY_DEAD_OGONEK
+    ModifierRowKeys.DEAD_RING -> Keys.KEY_DEAD_RING
+    ModifierRowKeys.DEAD_MACRON -> Keys.KEY_DEAD_MACRON
+    ModifierRowKeys.DEAD_COMMA_BELOW -> Keys.KEY_DEAD_COMMA_BELOW
     else -> Keys.KEY_INSERT
 }

@@ -25,12 +25,30 @@ object ModifierRowKeys {
     const val INSERT = "insert"
     const val KEYBOARD_PICKER = "ime_picker"
     const val VOICE = "voice"
+    const val DEAD_ACUTE = "dead_acute"
+    const val DEAD_GRAVE = "dead_grave"
+    const val DEAD_CIRCUMFLEX = "dead_circumflex"
+    const val DEAD_DIAERESIS = "dead_diaeresis"
+    const val DEAD_TILDE = "dead_tilde"
+    const val DEAD_CARON = "dead_caron"
+    const val DEAD_BREVE = "dead_breve"
+    const val DEAD_CEDILLA = "dead_cedilla"
+    const val DEAD_OGONEK = "dead_ogonek"
+    const val DEAD_RING = "dead_ring"
+    const val DEAD_MACRON = "dead_macron"
+    const val DEAD_COMMA_BELOW = "dead_comma_below"
+    const val COMPOSE = "compose"
+
+    /** The dead keys, in the order the editor offers them. */
+    val DEAD_KEYS: List<String> = listOf(
+        DEAD_ACUTE, DEAD_GRAVE, DEAD_CIRCUMFLEX, DEAD_DIAERESIS, DEAD_TILDE, DEAD_CARON, DEAD_BREVE, DEAD_CEDILLA, DEAD_OGONEK, DEAD_RING, DEAD_MACRON, DEAD_COMMA_BELOW,
+    )
 
     /** Every key the row can carry, in the order the editor offers them. */
     val ALL: List<String> = listOf(
         ESCAPE, TAB, CONTROL, ALT, LEFT, DOWN, UP, RIGHT,
         HOME, END, PAGE_UP, PAGE_DOWN, FORWARD_DELETE, INSERT, KEYBOARD_PICKER, VOICE,
-    )
+    ) + DEAD_KEYS + COMPOSE
 
     /** The row as shipped. */
     val DEFAULT: List<String> = listOf(ESCAPE, TAB, CONTROL, ALT, LEFT, DOWN, UP, RIGHT)

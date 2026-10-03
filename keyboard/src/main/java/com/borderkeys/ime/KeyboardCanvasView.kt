@@ -947,7 +947,9 @@ class KeyboardCanvasView(
         val radius = paints.keyCornerRadiusPx
         for (index in 0 until geometry.keyCount) {
             val code = geometry.keyCode[index]
-            val fill = if ((code == KeyCodes.CONTROL && controlArmed) || (code == KeyCodes.ALT && altArmed)) {
+            val fill = if ((code == KeyCodes.CONTROL && controlArmed) || (code == KeyCodes.ALT && altArmed) ||
+                code == armedAccent
+            ) {
                 paints.keyPressedFill
             } else if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.MODIFIER) ||
                 KeyFlags.has(geometry.keyFlags[index], KeyFlags.SECONDARY_ROW)
@@ -997,6 +999,18 @@ class KeyboardCanvasView(
         }
         controlArmed = control
         altArmed = alt
+        backgroundValid = false
+        invalidate()
+    }
+
+    /** The dead key or compose key waiting, drawn pressed until it is spent; [KeyCodes.NONE] for none. */
+    private var armedAccent = KeyCodes.NONE
+
+    fun setArmedAccent(code: Int) {
+        if (armedAccent == code) {
+            return
+        }
+        armedAccent = code
         backgroundValid = false
         invalidate()
     }
@@ -1109,7 +1123,8 @@ class KeyboardCanvasView(
     /** The keys whose hold opens something rather than typing something. */
     private fun holdsAMenu(code: Int): Boolean =
         code == KeyCodes.ENTER || code == KeyCodes.LANGUAGE || code == KeyCodes.SETTINGS ||
-            code == KeyCodes.KEYBOARD_PICKER || code == KeyCodes.VOICE || code == ' '.code
+            code == KeyCodes.KEYBOARD_PICKER || code == KeyCodes.VOICE || code == ' '.code ||
+            DeadKeys.isDead(code)
 
     override fun onDraw(canvas: Canvas) {
         Trace.beginSection("KeyboardCanvasView.onDraw")

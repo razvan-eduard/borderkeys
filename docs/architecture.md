@@ -184,8 +184,8 @@ real flow:
 
 ### The flows
 
-The orchestrator drives seven flows, each a `TypingFlow`. The lifecycle is `final` in the base
-class — `startField`, `finishField`, `applySettings`, `shutdown` — so the field generation, the
+The orchestrator drives eight flows, each a `TypingFlow`. The lifecycle is `final` in the base
+class — `startField`, `finishField`, `applySettings`, `userUnlocked`, `shutdown` — so the field generation, the
 policy and flushing exactly once per field are written once. A flow supplies only what it does
 when a field starts (abstract: every flow states what it resets), ends, or the settings change,
 and when the keyboard goes.
@@ -199,6 +199,7 @@ and when the keyboard goes.
 | `CommitFlow` | The commit decision (`WordCommit`, its rules a first-claim-wins chain of `CommitRule`s), the pending correction and its revert, and the corrections a change of language leaves wrong |
 | `SuggestionFlow` | The requests, the word last asked about, the answer a delimiter applies, the strip's row |
 | `SwipeFlow` | A swipe between its decode and its word, and the words its ring offers |
+| `AccentFlow` | A dead key waiting for its letter, latched or locked, and a compose sequence being spelled against `ComposeSequences` |
 
 Flows never call each other: each talks only to the orchestrator, which hands a field, a
 settings change and each answer to them in a fixed order.

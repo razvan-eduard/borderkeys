@@ -15,6 +15,8 @@ import com.borderkeys.ime.Composer
 import com.borderkeys.ime.Contractions
 import com.borderkeys.ime.FieldRestore
 import com.borderkeys.ime.KeyCodes
+import com.borderkeys.ime.ComposeSequences
+import com.borderkeys.ime.DeadKeys
 import com.borderkeys.ime.LanguageSwitchCorrector
 import com.borderkeys.ime.PhysicalKeys
 import com.borderkeys.ime.RunningText
@@ -63,9 +65,13 @@ class TypingOrchestrator(
     /** A swipe between its decode and its word, and the words its ring offers. */
     private val swipeFlow = SwipeFlow()
 
+    /** A dead key waiting for its letter, or a compose sequence being spelled. */
+    private val accentFlow = AccentFlow(host)
+
     /** The flows, in the order each hears of a field and of the settings. */
     private val flows: List<TypingFlow> = listOf(
         terminalWriter, learningFlow, shiftFlow, spacingFlow, commitFlow, suggestionFlow, swipeFlow,
+        accentFlow,
     )
 
     var preferences = KeyboardPreferences()
@@ -80,6 +86,13 @@ class TypingOrchestrator(
         get() = spacingFlow.languageTags
         set(value) {
             spacingFlow.languageTags = value
+        }
+
+    /** The compose key's table; see [ComposeSequences]. */
+    var composeSequences: ComposeSequences
+        get() = accentFlow.sequences
+        set(value) {
+            accentFlow.sequences = value
         }
 
     /** Apostrophe spellings for the languages switched on; see [com.borderkeys.ime.Contractions]. */
@@ -243,8 +256,10 @@ class TypingOrchestrator(
                 ownEditPending = false
             } else if (session.terminalField) {
                 dismissRing()
+                accentFlow.clear()
             } else {
                 dismissRing()
+                accentFlow.clear()
                 adoptWordAtCaret()
             }
             applyAutoShift()
@@ -271,6 +286,17 @@ class TypingOrchestrator(
             confirmPendingCorrection()
             dismissRing()
         }
+        if (DeadKeys.isDead(code)) {
+            accentFlow.onDeadKey(code)
+            return true
+        }
+        if (code == KeyCodes.COMPOSE) {
+            accentFlow.onCompose()
+            return true
+        }
+        if (accentFlow.pending && onKeyWhileAccentPending(code, keyIndex, x, y)) {
+            return true
+        }
         when (code) {
             KeyCodes.SHIFT -> handleShift()
             KeyCodes.DELETE -> handleDelete()
@@ -286,6 +312,37 @@ class TypingOrchestrator(
                 handleCharacter(code, keyIndex, x, y)
             } else {
                 return false
+            }
+        }
+        return true
+    }
+
+    /**
+     * A key while a dead key or a compose sequence waits: a character resolves it, backspace
+     * steps it back, shift leaves it, any other key drops it. Returns whether the key is spent.
+     */
+    private fun onKeyWhileAccentPending(code: Int, keyIndex: Int, x: Float, y: Float): Boolean {
+        if (code == KeyCodes.DELETE) {
+            return accentFlow.onDelete()
+        }
+        if (code == KeyCodes.SHIFT) {
+            return false
+        }
+        if (!KeyCodes.isCharacter(code)) {
+            accentFlow.clear()
+            return false
+        }
+        val shifted = shiftFlow.shifted(code)
+        when (val resolution = accentFlow.resolve(shifted, code == KeyCodes.SPACE)) {
+            is AccentFlow.Resolution.Code -> handleCharacter(resolution.code, keyIndex, x, y)
+            is AccentFlow.Resolution.Text -> onText(resolution.text)
+            is AccentFlow.Resolution.TextThenCode -> {
+                onText(resolution.text)
+                handleCharacter(resolution.code, keyIndex, x, y)
+            }
+            AccentFlow.Resolution.Absorbed -> if (Character.isLetter(shifted)) {
+                shiftFlow.spendOneShot()
+                applyAutoShift()
             }
         }
         return true
@@ -309,6 +366,10 @@ class TypingOrchestrator(
     fun onKeyLongPress(code: Int): Boolean {
         if (code == KeyCodes.SHIFT) {
             lockShift()
+            return true
+        }
+        if (DeadKeys.isDead(code)) {
+            accentFlow.lockDeadKey(code)
             return true
         }
         if (code != KeyCodes.DELETE) {

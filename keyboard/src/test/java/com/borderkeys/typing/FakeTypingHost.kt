@@ -131,6 +131,13 @@ internal class FakeTypingHost(private val clock: ManualClock) : TypingHost {
         quickActions += id
     }
 
+    /** The accent states shown, in order, as `dead/locked/composing`. */
+    val accents = mutableListOf<String>()
+
+    override fun showAccent(deadCode: Int, locked: Boolean, composing: String?) {
+        accents += "$deadCode/$locked/${composing ?: "-"}"
+    }
+
     override fun playEffect(event: EffectEvent, word: String) {
         effects += event to word
     }

@@ -10,6 +10,7 @@ import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.TextShortcut
 import com.borderkeys.i18n.Keys
+import com.borderkeys.ime.ComposeSequences
 import com.borderkeys.ime.KeyCodes
 import com.borderkeys.ime.ShiftState
 import com.borderkeys.predict.Candidate
@@ -501,6 +502,89 @@ class TypingScenarioTest {
         rig.editor.setSelection(0, 5)
         assertNull(rig.orchestrator.privateCopyText())
         assertTrue(rig.host.notices.isEmpty())
+    }
+
+    @Test
+    fun `a dead acute puts its accent on the next letter, inside the composing word`() {
+        rig.startField()
+        rig.type("caf")
+        rig.press(KeyCodes.DEAD_ACUTE)
+        rig.type("e")
+        assertEquals("café", rig.editor.text)
+        assertEquals("café", rig.editor.composingText)
+        rig.type(" ")
+        assertEquals("café ", rig.editor.text)
+    }
+
+    @Test
+    fun `a dead key before space writes the bare accent, before a letter it cannot take writes both`() {
+        rig.startField()
+        rig.press(KeyCodes.DEAD_ACUTE)
+        rig.press(KeyCodes.SPACE)
+        assertEquals("\u00B4", rig.editor.text)
+        rig.startField()
+        rig.press(KeyCodes.DEAD_ACUTE)
+        rig.type("q")
+        assertEquals("\u00B4q", rig.editor.text)
+    }
+
+    @Test
+    fun `shift then a dead key then a letter gives the capital with its accent`() {
+        rig.startField()
+        rig.press(KeyCodes.SHIFT)
+        rig.press(KeyCodes.DEAD_ACUTE)
+        rig.type("a")
+        assertEquals("Á", rig.editor.text)
+    }
+
+    @Test
+    fun `backspace while a dead key waits drops it and deletes nothing, and a new field drops it too`() {
+        rig.startField("ab")
+        rig.press(KeyCodes.DEAD_ACUTE)
+        rig.press(KeyCodes.DELETE)
+        assertEquals("ab", rig.editor.text)
+        rig.type("e")
+        assertEquals("abe", rig.editor.text)
+        rig.press(KeyCodes.DEAD_GRAVE)
+        rig.startField()
+        rig.type("e")
+        assertEquals("e", rig.editor.text)
+        assertEquals("0/false/-", rig.host.accents.last())
+    }
+
+    @Test
+    fun `a dead key pressed twice stays until pressed again`() {
+        rig.startField()
+        rig.press(KeyCodes.DEAD_DIAERESIS)
+        rig.press(KeyCodes.DEAD_DIAERESIS)
+        rig.type("aou")
+        assertEquals("äöü", rig.editor.text)
+        rig.press(KeyCodes.DEAD_DIAERESIS)
+        rig.type("e")
+        assertEquals("äöüe", rig.editor.text)
+    }
+
+    @Test
+    fun `the compose key spells a character from the keys after it`() {
+        rig.orchestrator.composeSequences = ComposeSequences.parse(
+            java.io.File("src/main/assets/compose/latin.json").readText(),
+        )
+        rig.startField()
+        rig.press(KeyCodes.COMPOSE)
+        rig.type("'e")
+        assertEquals("é", rig.editor.text)
+        rig.press(KeyCodes.COMPOSE)
+        rig.type("oc")
+        assertEquals("é©", rig.editor.text)
+        assertEquals("0/false/o", rig.host.accents[rig.host.accents.size - 2])
+        rig.press(KeyCodes.COMPOSE)
+        rig.type("'q")
+        assertEquals("é©", rig.editor.text)
+        rig.press(KeyCodes.COMPOSE)
+        rig.type("-")
+        rig.press(KeyCodes.DELETE)
+        rig.type("12")
+        assertEquals("é©½", rig.editor.text)
     }
 
     @Test

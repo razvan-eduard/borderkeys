@@ -124,6 +124,10 @@ ships.
   you drag up, and lifting deletes it. Each has its switch on the Layout screen, the joystick a
   speed too.
 
+- **Dead keys and a compose key.** The modifier row can carry dead keys, twelve accents that go
+  on the next letter, held or tapped twice to stay on, and a compose key, after which a few keys
+  spell a character: ' then e is é, o then c is ©, three hyphens an em dash.
+
 - **Your own layouts.** Write a layout as the keyboard's own layout files are written, rows of
   keys with relative widths, starting from any built-in; the editor checks it as you type,
   previews it, and imports or exports a file. Any of the keyboard's layouts can then draw yours

@@ -312,6 +312,19 @@ class BorderKeysService :
             strip.postDelayed(clearNotice, NOTICE_MILLIS)
         }
 
+        override fun showAccent(deadCode: Int, locked: Boolean, composing: String?) {
+            val view = host ?: return
+            view.keyboard.setArmedAccent(
+                when {
+                    deadCode != 0 -> deadCode
+                    composing != null -> KeyCodes.COMPOSE
+                    else -> KeyCodes.NONE
+                },
+            )
+            view.suggestionStrip.removeCallbacks(clearNotice)
+            view.suggestionStrip.notice = composing?.let { strings.getString(Keys.COMPOSE_PENDING, it) }
+        }
+
         override fun runQuickAction(id: Int) {
             val action = QuickAction.fromId(id) ?: return
             onQuickAction(QuickActionBarItem.Builtin(action))
@@ -509,6 +522,8 @@ class BorderKeysService :
             symbolsNumpadRightLayout = LayoutLoader.load(assets, SYMBOLS_NUMPAD_RIGHT_LAYOUT)
             symbolsShiftLayout = LayoutLoader.load(assets, SYMBOLS_SHIFT_LAYOUT)
             numpadLayout = LayoutLoader.load(assets, NUMPAD_LAYOUT)
+            val sequences = ComposeSequences.load(assets)
+            withContext(Dispatchers.Main) { orchestrator.composeSequences = sequences }
             if (unlocked) {
                 loadDictionaries()
             }
