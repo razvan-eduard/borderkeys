@@ -1,0 +1,103 @@
+{
+ "bg-BG": [
+  "€"
+ ],
+ "cs-CZ": [
+  "accent_aigu:á:é:í:ó:ú:ý@d",
+  "accent_ring:ů@s",
+  "accent_caron:č:ě:ň:ř:š:ž:ď:ť@f"
+ ],
+ "da-DK": [
+  "€",
+  "æ",
+  "å",
+  "ø"
+ ],
+ "de-DE": [
+  "accent_trema:ä:ö:ü@u",
+  "ß",
+  "€"
+ ],
+ "el-GR": [
+  "£@l",
+  "€"
+ ],
+ "es-ES": [
+  "accent_aigu:á:é:í:ó:ú@d",
+  "accent_tilde:ñ@n",
+  "accent_grave@f",
+  "accent_trema@u",
+  "€"
+ ],
+ "fr-FR": [
+  "accent_grave:à:è:ù@d",
+  "accent_aigu:é@d",
+  "accent_circonflexe:â:ê:ô:û@o",
+  "accent_cedille:ç@c",
+  "accent_trema:ë:ï:ü@l",
+  "€"
+ ],
+ "he-IL": [
+  "₪@r"
+ ],
+ "hu-HU": [
+  "accent_aigu:á:é:í:ó:ú@d",
+  "accent_trema:ö:ü@u",
+  "accent_ogonek@s",
+  "accent_double_aigu:ő:ű@k",
+  "€"
+ ],
+ "mk-MK": [
+  "ѕ",
+  "ѓ",
+  "ќ",
+  "ѝ",
+  "ѐ",
+  "љ",
+  "њ",
+  "џ",
+  "„",
+  "“",
+  "€"
+ ],
+ "pt-PT": [
+  "accent_aigu:á:é:í:ó:ú@d",
+  "accent_cedille:ç@c",
+  "accent_circonflexe:â:ê:ô@f",
+  "accent_grave:à:ò@f",
+  "accent_tilde:ã:õ@n",
+  "€",
+  "ª",
+  "º"
+ ],
+ "ro-RO": [
+  "ă",
+  "â",
+  "î",
+  "ș",
+  "ț",
+  "€",
+  "$"
+ ],
+ "sv-SE": [
+  "accent_aigu:á@d",
+  "accent_trema:ä:ö@o",
+  "accent_ring:å@s",
+  "€"
+ ],
+ "tr-TR": [
+  "accent_cedille:ç:ş@c",
+  "accent_trema:ö:ü@u",
+  "accent_circonflexe:â:î:û@f",
+  "₺",
+  "ı",
+  "ğ"
+ ],
+ "uk-UA": [
+  "ґ",
+  "є",
+  "і",
+  "ї",
+  "₴"
+ ]
+}

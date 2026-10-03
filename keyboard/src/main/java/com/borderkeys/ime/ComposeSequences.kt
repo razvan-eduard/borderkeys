@@ -7,10 +7,11 @@ import android.content.res.AssetManager
 import org.json.JSONObject
 
 /**
- * The compose key's table: a sequence of typed characters to the text it spells, from
- * `assets/compose/<name>.json`. No sequence is the start of another, so a full match is final.
+ * The compose key's table: a trie of typed characters, by code point, to the text a sequence
+ * spells, from `assets/compose/<name>.json`. No sequence is the start of another; a full match
+ * is final.
  */
-class ComposeSequences(private val table: Map<String, String>) {
+class ComposeSequences private constructor(private val root: Node, val size: Int) {
 
     /** Where a sequence typed so far stands. */
     sealed interface Step {
@@ -21,30 +22,46 @@ class ComposeSequences(private val table: Map<String, String>) {
         object NoMatch : Step
     }
 
-    private val prefixes: Set<String> = buildSet {
-        for (sequence in table.keys) {
-            var end = sequence.offsetByCodePoints(0, 1)
-            while (end < sequence.length) {
-                add(sequence.substring(0, end))
-                end = sequence.offsetByCodePoints(end, 1)
-            }
-        }
+    private class Node {
+        val children = HashMap<Int, Node>()
+        var text: String? = null
     }
 
-    val size: Int get() = table.size
-
     fun step(typed: String): Step {
-        table[typed]?.let { return Step.Done(it) }
-        return if (typed in prefixes) Step.More else Step.NoMatch
+        var node = root
+        var index = 0
+        while (index < typed.length) {
+            val codePoint = typed.codePointAt(index)
+            node = node.children[codePoint] ?: return Step.NoMatch
+            index += Character.charCount(codePoint)
+        }
+        node.text?.let { return Step.Done(it) }
+        return if (node.children.isEmpty()) Step.NoMatch else Step.More
     }
 
     companion object {
         private const val DIRECTORY = "compose"
 
-        val EMPTY = ComposeSequences(emptyMap())
+        val EMPTY = build(emptyMap())
 
-        /** The table in [json]'s "sequences" object; malformed text gives none. */
-        fun parse(json: String): ComposeSequences = runCatching {
+        /** The trie of [table]'s sequences. */
+        private fun build(table: Map<String, String>): ComposeSequences {
+            val root = Node()
+            for ((sequence, text) in table) {
+                var node = root
+                var index = 0
+                while (index < sequence.length) {
+                    val codePoint = sequence.codePointAt(index)
+                    node = node.children.getOrPut(codePoint) { Node() }
+                    index += Character.charCount(codePoint)
+                }
+                node.text = text
+            }
+            return ComposeSequences(root, table.size)
+        }
+
+        /** The sequences in [json]'s "sequences" object; malformed text gives none. */
+        private fun entries(json: String): Map<String, String> = runCatching {
             val sequences = JSONObject(json).getJSONObject("sequences")
             val table = HashMap<String, String>()
             for (sequence in sequences.keys()) {
@@ -53,8 +70,11 @@ class ComposeSequences(private val table: Map<String, String>) {
                     table[sequence] = text
                 }
             }
-            ComposeSequences(table)
-        }.getOrElse { EMPTY }
+            table
+        }.getOrElse { emptyMap() }
+
+        /** The table in [json]'s "sequences" object; malformed text gives none. */
+        fun parse(json: String): ComposeSequences = build(entries(json))
 
         /** Every table under `assets/compose`, merged; none when the directory is missing. */
         fun load(assets: AssetManager): ComposeSequences {
@@ -63,9 +83,9 @@ class ComposeSequences(private val table: Map<String, String>) {
                 val text = runCatching {
                     assets.open("$DIRECTORY/$name").use { it.readBytes().decodeToString() }
                 }.getOrNull() ?: continue
-                merged.putAll(parse(text).table)
+                merged.putAll(entries(text))
             }
-            return ComposeSequences(merged)
+            return build(merged)
         }
     }
 }

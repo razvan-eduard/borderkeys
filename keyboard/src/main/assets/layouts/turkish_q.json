@@ -2,6 +2,7 @@
   "id": "turkish_q",
   "label": "Turkish Q",
   "languageTag": "und",
+  "modmap": { "shift": { "i": "İ" } },
   "rows": [
     {
       "keys": [

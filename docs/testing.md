@@ -123,7 +123,7 @@ and a clock the test moves. After each key the rig delivers what reaches the inp
 the next one — the field's selection reports, the engine's answers, the runnables that fell due —
 and checks that the word's taps are still in step with its text.
 
-**115 scenarios**, each a whole keystroke sequence asserting the field's text and caret and, where
+**117 scenarios**, each a whole keystroke sequence asserting the field's text and caret and, where
 it matters, what was learned: a word typed and ended by every kind of key, a correction and the
 backspace that takes it back, typing after a caret move into committed text, undo and redo,
 shift and caps lock, the spaces the keyboard adds and takes away, French spacing, a text

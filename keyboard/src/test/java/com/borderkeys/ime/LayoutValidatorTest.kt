@@ -8,6 +8,7 @@ import com.borderkeys.i18n.Keys
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -55,6 +56,33 @@ class LayoutValidatorTest {
     }
 
     @Test
+    fun `a modmap of shift and ctrl, one character to one, passes, and anything else is named`() {
+        fun withModmap(modmap: String) = qwerty().replaceFirst("{", "{\"modmap\": $modmap, ")
+        assertEquals(emptyList<String>(), LayoutValidator.validate(withModmap("""{"shift": {"i": "İ"}, "ctrl": {"с": "c"}}""")).map { it.messageKey })
+        for (bad in listOf("""{"fn": {"a": "b"}}""", """{"shift": {"i": "İİ"}}""", """{"shift": {"ab": "c"}}""", """{"shift": "i"}""", "\"x\"", """{"shift": {"i": 5}}""")) {
+            assertEquals(bad, listOf(Keys.LAYOUT_ERROR_MODMAP), LayoutValidator.validate(withModmap(bad)).map { it.messageKey })
+        }
+    }
+
+    @Test
+    fun `the modmap is parsed, kept by every transform, and the Turkish layouts carry shift on i`() {
+        val turkish = LayoutLoader.parse(File(assets, "turkish_q.json").readText())
+        assertEquals('İ'.code, turkish.modmap.shifted('i'.code))
+        assertEquals('I'.code, turkish.modmap.shifted('ı'.code))
+        assertEquals('A'.code, turkish.modmap.shifted('a'.code))
+        val composed = turkish.withNumberRow().withAccents(mapOf('a' to "â"), "tr-TR")
+            .withModifierRow(listOf(KeyCodes.ESCAPE), atBottom = false).withoutEmojiKey()
+        assertEquals('İ'.code, composed.modmap.shifted('i'.code))
+        val custom = LayoutChoice.resolve(
+            "qwerty", mapOf("qwerty" to "custom-1"),
+            listOf(CustomLayout("custom-1", "Mine", "und", qwerty().replaceFirst("{", "{\"modmap\": {\"ctrl\": {\"q\": \"w\"}}, "))),
+        ) { LayoutLoader.parse(File(assets, "$it.json").readText()) }
+        assertEquals('w'.code, custom.modmap.forControl('q'.code))
+        assertEquals('e'.code, custom.modmap.forControl('e'.code))
+        assertSame(Modmap.NONE, LayoutLoader.parse(qwerty()).modmap)
+    }
+
+    @Test
     fun `a Latin layout short of a letter, or a last row without space and enter, is refused`() {
         val missing = qwerty().replaceFirst("\"c\": \"z\"", "\"c\": \"ß\"")
         assertTrue(Keys.LAYOUT_ERROR_MISSING_LETTERS in LayoutValidator.validate(missing).map { it.messageKey })
@@ -81,6 +109,29 @@ class LayoutValidatorTest {
         assertEquals(listOf("azerty", "qwerty"), loads)
         LayoutChoice.resolve("qwerty", mapOf("qwerty" to "custom-9"), listOf(own), load)
         assertEquals(listOf("azerty", "qwerty", "qwerty"), loads)
+    }
+
+    @Test
+    fun `in landscape a subtype draws its landscape choice, else its upright one`() {
+        val upright = mapOf("qwerty" to "custom-1", "azerty" to "custom-2")
+        val landscape = mapOf("qwerty" to "qwerty")
+        assertEquals(upright, LayoutChoice.forOrientation(upright, landscape, landscape = false))
+        assertEquals(
+            mapOf("qwerty" to "qwerty", "azerty" to "custom-2"),
+            LayoutChoice.forOrientation(upright, landscape, landscape = true),
+        )
+        val loads = mutableListOf<String>()
+        LayoutChoice.resolve("qwerty", LayoutChoice.forOrientation(upright, landscape, landscape = true), emptyList()) {
+            loads += it
+            KeyboardLayout.fallbackQwerty()
+        }
+        assertEquals(listOf("qwerty"), loads)
+    }
+
+    @Test
+    fun `the layout switch walks subtypes in the list's order, the ones it does not name last`() {
+        assertEquals(listOf(2, 0, 1, 3), LayoutChoice.cycleOrder(listOf("qwerty", "custom-1", "russian", "greek"), listOf("russian", "qwerty", "custom-1")))
+        assertEquals(listOf(0, 1), LayoutChoice.cycleOrder(listOf("qwerty", "azerty"), emptyList()))
     }
 
     @Test

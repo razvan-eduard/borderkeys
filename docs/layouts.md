@@ -75,6 +75,16 @@ theme's row height, so one description serves every screen size and every theme.
 }
 ```
 
+### The modmap
+
+An optional `"modmap"` object at the root says what shift and control turn a character into
+where the usual rule does not hold (`Modmap`): `"shift"` maps a letter to the one shift types
+instead of its upper case, and `"ctrl"` maps a character to the one whose hardware key control
+sends. Each entry is one character to one character, and the layout editor refuses anything
+else. Both Turkish layouts carry `{"shift": {"i": "İ"}}`. `ShiftFlow.shifted`, the drawn labels
+and the long-press cells follow `"shift"`; the control path through `PhysicalKeys` follows
+`"ctrl"`. Every transform that composes a layout keeps it.
+
 ### Row fields
 
 | Field | Meaning |
@@ -153,7 +163,7 @@ character behind the caret, a mostly vertical drag selects by the line, and the 
 selection (`TypingOrchestrator.onBackspaceSelect`, through `CaretNudge` with the caret as anchor);
 the first step disarms the hold and the repeat. A terminal counts the characters and gets that
 many deletes at the lift. The space bar held still for 600 ms with *Hold the space bar to steer
-the cursor* on becomes a joystick (`Trackpoint`): each axis past a 15 dp dead zone moves the caret
+the cursor* on becomes a joystick (`Trackpoint`): each axis past a 15 px dead zone moves the caret
 one step per tick, the ticks quickening from 200 ms to 30 ms as the finger leans towards half the
 key's diagonal; with it off, the hold switches the layout as before.
 
@@ -201,7 +211,7 @@ nothing on the classpath.
 
 A key's long-press characters come from **two independent places**, and keeping them separate is
 what makes accents follow the user's languages rather than their layout. A short drag off the key
-is a third source of its own, the flicks below, and dead keys a fourth.
+is a third source of its own, the flicks below, and the accent modifiers a fourth.
 
 ### 1. The layout's own `alt`
 
@@ -227,6 +237,14 @@ That is the whole reason the split exists. The alternative — writing accents i
 means a Romanian speaker on a QWERTY layout gets nothing, and an English-only user on the same
 layout carries diacritics they never type.
 
+*Accents from other languages* (`extraAccents`, under *Accented characters* on the Layout
+screen) adds the overlays of the languages the user switches on below it
+(`extraAccentLanguages`), with or without their pack, after the enabled packs' own and without
+repeats (`AccentOverlays.withExtra`). The list holds only the languages whose overlay has an
+accent for a letter of the selected layout (`AccentOverlays.lendingTo`): the current subtype's
+while this keyboard is in use, else every enabled subtype's. A language whose pack is on shows
+on and greyed.
+
 `AccentOverlays.load` returns an **empty map** on any failure, never an exception: a missing or
 malformed overlay means a key without that accent, never a keyboard that will not draw.
 
@@ -237,34 +255,54 @@ malformed overlay means a key without that accent, never a keyboard that will no
 
 ### Flicks
 
-A press that travels off its key in one of eight directions, past *A flick starts after* and with
-a path shorter than *A flick ends before*, both fractions of the key's diagonal (28% and 141% by
-default, on the Key flicks screen), is a flick: it writes a text, runs a quick action or presses another key, as the user set for that
-key and direction (`KeyFlick`, in the preferences, so backups carry it), or as the layout's own
-`flicks` object says. `FlickClassifier` decides on the lift from the start point, the end point,
-the path length and the time: within the minimum it is a tap; with a path past the maximum it has
-left the key and is a word swipe once the press lasted over 150 ms or the path bent, a flick being
-one straight stroke, wherever it ends. The press
-is followed from its first point for every letter and every key with flicks, so a swipe loses no
-sample to the decision; past the tap distance the hold is off, and a key with flicks never slides
-onto its neighbour. The labels sit on the key's edges and corners; the hold hint keeps the
-top-right corner. A screen reader gets each flick as a custom action on the key.
+A press that moves in one of eight directions past *A flick starts after*, a fraction of the key's
+diagonal (28% by default, on the Key flicks screen), is a flick: it writes a text, runs a quick
+action or presses another key, as the user set for that key and direction (`KeyFlick`, in the
+preferences, so backups carry it), or as the layout's own `flicks` object says. `FlickClassifier`
+decides on the lift from the start point, the end point, the path length and the time. The finger
+has left the key once it has been further from where it went down than *A flick ends before*
+(141% of the diagonal by default); a press that left the key is a word swipe when its path is at
+least half a key width or it lasted over 150 ms. Otherwise it is a tap within the minimum and a
+flick past it, in the 45° sector it points into, else in the next one within 22.5° when only that
+one has a flick. A press on a letter key that passed over two letter keys is a word candidate: it
+takes a flick only in its exact sector, and without one it is a word swipe, as is a press over
+150 ms that came back to within half its path of where it began. While the finger moves, a press
+on a letter key becomes a swipe once it has left the key and passed over two letter keys. The press
+is followed from its first point for every letter and every key with flicks; past the tap
+distance the hold is off, and a key with flicks never slides onto its neighbour. The labels sit
+on the key's edges and corners; the hold hint keeps the top-right corner. A screen reader gets
+each flick as a custom action on the key.
 
-### Dead keys and the compose key
+### Extra keys
 
-The modifier row may carry twelve dead keys and a compose key (the Layout screen's row editor
-offers them; the base assets carry none, as accents follow the languages). A dead key latches
+The languages of the enabled subtypes may add keys a layout lacks (`ExtraKeys`, from
+`assets/extra_keys.json`, which `tools/make_extra_keys.py` writes from Unexpected Keyboard's
+subtype table and CI checks): German adds the diaeresis beside u, ß and €; Spanish ñ beside n.
+An entry reads `key[:alternative...][@next_to]`. An accent whose alternatives the composed layout
+already holds, on a key, a long press or a flick, is left out; one with a single alternative adds
+that letter instead; a letter in another script than the layout's is left out. Each goes on a
+free corner flick of the key it names, else of the second letter row (lower corners) or the
+third (upper corners), never on a direction the layout or the user already fills. An accent
+modifier there is pressed as its key would be; a character is typed. The Extra keys screen under
+Layout & keys switches each one off (`extraKeysOff`).
+
+### Accent modifiers and the compose key
+
+The modifier row may carry twelve accent modifiers (dead keys, `dead_*`) and a compose key: the
+*Accent modifiers* switch (`deadKeys`, off by default, under *Accents from other languages*)
+draws the ones the row holds and lets its editor offer them; the base assets carry none. An
+accent modifier latches
 until the next character: a letter takes its mark, composed under NFC to one code point
 (`DeadKeys`, with Latvian's comma-below letters as the one override); space writes the bare
 accent; a character that takes no mark is written after the bare accent. Pressed twice or held
-it locks, every letter taking the mark until it is pressed again. Backspace drops it without
-deleting, and so do a new field, a caret moved elsewhere and any key that is not a character or
-shift. The pending key is drawn pressed, the only sign of it. The compose key gathers the next
-characters until they spell an entry of `assets/compose/latin.json` (`tools/make_compose.py`
-writes it, CI checks it: every accent's ASCII mark with every letter it composes with, and the
-X11 symbol sequences people know), the sequence so far shown on the strip; backspace steps it
-back, and a sequence that can spell nothing is dropped. `AccentFlow` holds both, so the flow
-types the result as the key it stands for would be typed.
+it locks, every letter taking the mark until it is pressed again. An arrow writes its bare
+combining mark and moves nothing. Backspace drops it without deleting, and so do a new field, a
+caret moved elsewhere and any other key that is not a character or shift. The pending key is drawn pressed, the only sign of it. The compose key gathers the next
+characters until they spell an entry of `assets/compose/compose.json` (`tools/make_compose.py`
+writes it from `tools/compose`, CI checks it: X11's `en_US.UTF-8` Compose list and Unexpected
+Keyboard's extra, Arabic and Cyrillic sequences, 3,031 in all), the sequence so far shown on the strip; backspace steps it
+back, and a sequence that can spell nothing is dropped. `AccentFlow` holds both, and the result is
+typed as the key it stands for would be typed.
 
 ---
 
@@ -302,7 +340,9 @@ terminals and editors. Layout assets can place the same keys themselves with the
 `tab`, `control`, `alt`, `left`, `right`, `up` and `down`.
 
 `LANGUAGE` (−5) cycles enabled layouts — the same thing the globe key and the `SWITCH_LAYOUT`
-[quick action](architecture.md#quick-actions) do.
+[quick action](architecture.md#quick-actions) do. The globe is drawn while its setting
+(`languageKey`, on by default) is on and two or more of this keyboard's layouts are enabled by
+the user (`ChosenSubtypes`; the layouts the system enables for its own language do not count).
 
 ---
 
@@ -324,13 +364,20 @@ terminals and editors. Layout assets can place the same keys themselves with the
 
 A layout the user writes is a `CustomLayout` in the preferences: its `custom-<n>` id, a name, a
 language tag and the same JSON an asset holds, so a backup carries it. The Your layouts screen
-starts one from any built-in, validates it as it is typed with `LayoutValidator`, which holds it
-to the rules above as `tools/check_layouts.py` holds the assets, previews it while it is valid,
-and imports or exports a file, the export with the user's text flicks written into each key's
+lists every letter layout, built in or the user's, in an order the user sets (`layoutOrder`,
+`CustomLayout.ordered`), each badged Built in or Your own and with the enabled subtypes that draw
+it, upright and in landscape. The globe key, its hold and the space bar's hold walk the enabled
+subtypes in that order, each placed by the layout it draws (`LayoutChoice.cycleOrder`), and the
+per-subtype choices offer the user's layouts in it.
+Editing a built-in starts a copy of it. The editor validates a layout as it is typed with
+`LayoutValidator`, which holds it to the rules above as `tools/check_layouts.py` holds the
+assets, previews it while it is valid, and imports or exports a file, the export with the user's text flicks written into each key's
 `flicks`. On the Layout screen each subtype may draw one of them instead of its own
-(`subtypeLayouts`, by the subtype's layout id); `LayoutChoice` resolves the pair, keeping the
-custom id as the layout's id so the heatmap's totals follow it, and falls back to the subtype's
-asset when the chosen layout is gone or no longer parses.
+(`subtypeLayouts`, by the subtype's layout id), and another in landscape
+(`subtypeLayoutsLandscape`, which may name the subtype's own layout; `LayoutChoice.forOrientation`
+lays it over the upright choice, and a rotation resolves the layout again). `LayoutChoice`
+resolves the pair, keeping the custom id as the layout's id, which is the heatmap's bucket, and
+falls back to the subtype's asset when the chosen layout is gone or no longer parses.
 
 **Do not rely on the asset's top-level `label`.** The loader does not read it, and the comment
 says why: the value the files carry is an English word, not a catalogue key, so the one place it

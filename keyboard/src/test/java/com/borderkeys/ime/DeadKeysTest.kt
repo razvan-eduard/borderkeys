@@ -59,8 +59,11 @@ class DeadKeysTest {
 
     @Test
     fun `the compose table spells its entries and no entry starts another`() {
-        val table = ComposeSequences.parse(File("src/main/assets/compose/latin.json").readText())
-        assertTrue(table.size > 400)
+        val table = ComposeSequences.parse(File("src/main/assets/compose/compose.json").readText())
+        assertTrue(table.size > 3000)
+        assertEquals("ӻ", (table.step(",г") as ComposeSequences.Step.Done).text)
+        assertEquals("أ", (table.step("اع") as ComposeSequences.Step.Done).text)
+        assertEquals("\u00A0", (table.step("  ") as ComposeSequences.Step.Done).text)
         assertTrue(table.step("'e") is ComposeSequences.Step.Done)
         assertEquals("é", (table.step("'e") as ComposeSequences.Step.Done).text)
         assertEquals("©", (table.step("oc") as ComposeSequences.Step.Done).text)

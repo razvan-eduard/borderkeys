@@ -41,6 +41,15 @@ data class KeyboardPreferences(
     /** The layout each subtype draws, by the subtype's own layout id, where it is not its own. */
     val subtypeLayouts: Map<String, String> = emptyMap(),
 
+    /** The layout each subtype draws in landscape, where it is not the one [subtypeLayouts] gives. */
+    val subtypeLayoutsLandscape: Map<String, String> = emptyMap(),
+
+    /**
+     * The order of the Your layouts list, built-in and custom ids alike; the per-subtype choices
+     * offer the custom layouts in it. Ids not in it follow, custom first.
+     */
+    val layoutOrder: List<String> = emptyList(),
+
     /** Whether a drag along backspace selects, character by character, for the lift to delete. */
     val backspaceSlideSelects: Boolean = true,
 
@@ -205,8 +214,11 @@ data class KeyboardPreferences(
     /** Whether the emoji key sits beside the space bar; off gives its width to the space bar. */
     val emojiKey: Boolean = true,
 
-    /** Whether the globe key, which cycles the layouts, sits beside the space bar. */
-    val languageKey: Boolean = false,
+    /**
+     * Whether the globe key, which cycles the layouts, sits beside the space bar while two or
+     * more of this keyboard's layouts are enabled.
+     */
+    val languageKey: Boolean = true,
 
     // ---- size and position -------------------------------------------------------------
 
@@ -509,6 +521,27 @@ data class KeyboardPreferences(
      */
     val accentedCharacters: Boolean = true,
 
+    /**
+     * Whether the letter keys' long press also takes the accents of [extraAccentLanguages],
+     * whatever language packs are on. Applies only while [accentedCharacters] is on.
+     */
+    val extraAccents: Boolean = false,
+
+    /** The language tags whose accents [extraAccents] adds, in the order they are added. */
+    val extraAccentLanguages: List<String> = emptyList(),
+
+    /**
+     * Whether the modifier row draws the accent modifiers (the `dead_*` keys) and the compose
+     * key it holds; off, the row leaves them out and its editor does not offer them.
+     */
+    val deadKeys: Boolean = false,
+
+    /**
+     * The extra keys switched off on the Extra keys screen, each by the character it types or
+     * the accent modifier it presses; every other extra key the subtypes' languages add is drawn.
+     */
+    val extraKeysOff: List<String> = emptyList(),
+
     /** The small character drawn in a key's corner showing what its long press would type. */
     val longPressHints: Boolean = true,
 
@@ -668,6 +701,10 @@ data class KeyboardPreferences(
         keyFlicks = KeyFlick.sanitised(keyFlicks),
         customLayouts = CustomLayout.sanitised(customLayouts),
         subtypeLayouts = CustomLayout.sanitisedChoices(subtypeLayouts),
+        subtypeLayoutsLandscape = CustomLayout.sanitisedChoices(subtypeLayoutsLandscape, keepOwn = true),
+        layoutOrder = CustomLayout.sanitisedOrder(layoutOrder),
+        extraAccentLanguages = extraAccentLanguages.filter { LANGUAGE_TAG.matches(it) }.distinct().take(MAX_EXTRA_ACCENT_LANGUAGES),
+        extraKeysOff = extraKeysOff.filter { it.isNotEmpty() && it.length <= MAX_EXTRA_KEY_CHARS }.distinct().take(MAX_EXTRA_KEYS_OFF),
         trackpointSpeed = trackpointSpeed.coerceIn(MIN_TRACKPOINT_SPEED, MAX_TRACKPOINT_SPEED),
         flickMinFraction = flickMinFraction.coerceIn(MIN_FLICK_MIN_FRACTION, MAX_FLICK_MIN_FRACTION),
         flickMaxFraction = flickMaxFraction.coerceIn(MIN_FLICK_MAX_FRACTION, MAX_FLICK_MAX_FRACTION),
@@ -879,6 +916,13 @@ data class KeyboardPreferences(
         }
 
     companion object {
+        /** A language tag as the accents files are named: `fr-FR`, `ar`. */
+        private val LANGUAGE_TAG = Regex("^[a-z]{2,3}(-[A-Z]{2})?$")
+
+        const val MAX_EXTRA_ACCENT_LANGUAGES = 64
+        const val MAX_EXTRA_KEYS_OFF = 256
+        const val MAX_EXTRA_KEY_CHARS = 24
+
         /** Full width, flush with the bottom edge. */
         const val MODE_DOCKED = 0
 

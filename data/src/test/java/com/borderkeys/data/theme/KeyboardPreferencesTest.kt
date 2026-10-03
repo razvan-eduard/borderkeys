@@ -207,6 +207,11 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `the globe key defaults on`() {
+        assertTrue(KeyboardPreferences().languageKey)
+    }
+
+    @Test
     fun `quick action labels default off`() {
         assertFalse(KeyboardPreferences().quickActionsLabels)
     }
@@ -635,6 +640,60 @@ class KeyboardPreferencesTest {
         assertEquals(mapOf("qwerty" to "custom-1", "colemak" to "dvorak"), kept.subtypeLayouts)
         assertEquals("custom-2", CustomLayout.nextId(kept.customLayouts))
         assertEquals("custom-1", CustomLayout.nextId(emptyList()))
+    }
+
+    @Test
+    fun `accents from other languages and the accent modifiers default off, and the languages are tags once each`() {
+        val defaults = KeyboardPreferences()
+        assertFalse(defaults.extraAccents)
+        assertEquals(emptyList<String>(), defaults.extraAccentLanguages)
+        assertFalse(defaults.deadKeys)
+        val kept = KeyboardPreferences(
+            extraAccentLanguages = listOf("fr-FR", "ar", "fr-FR", "French", "../x", "ro-RO"),
+        ).sanitised()
+        assertEquals(listOf("fr-FR", "ar", "ro-RO"), kept.extraAccentLanguages)
+        val many = KeyboardPreferences(extraAccentLanguages = List(100) { "a${'a' + it % 26}" }).sanitised()
+        assertTrue(many.extraAccentLanguages.size <= KeyboardPreferences.MAX_EXTRA_ACCENT_LANGUAGES)
+    }
+
+    @Test
+    fun `custom layouts and the subtypes' choices survive a write and a read`() {
+        val original = KeyboardPreferences(
+            customLayouts = listOf(
+                CustomLayout("custom-1", "Mine", "ro-RO", "{\"rows\":[{\"keys\":[{\"c\":\"a\"}]}]}"),
+                CustomLayout("custom-2", "Other", "und", "{\"rows\":[]}"),
+            ),
+            subtypeLayouts = mapOf("qwerty" to "custom-2", "azerty" to "dvorak"),
+            subtypeLayoutsLandscape = mapOf("qwerty" to "qwerty", "azerty" to "custom-1"),
+        )
+        val bytes = java.io.ByteArrayOutputStream().also { output ->
+            kotlinx.coroutines.runBlocking { KeyboardPreferencesSerializer.writeTo(original, output) }
+        }.toByteArray()
+        val read = kotlinx.coroutines.runBlocking {
+            KeyboardPreferencesSerializer.readFrom(java.io.ByteArrayInputStream(bytes))
+        }
+        assertEquals(original.customLayouts, read.customLayouts)
+        assertEquals(original.subtypeLayouts, read.subtypeLayouts)
+        assertEquals(original.subtypeLayoutsLandscape, read.subtypeLayoutsLandscape)
+    }
+
+    @Test
+    fun `the layout list's order puts the named ids first and the rest after, custom ones first`() {
+        assertEquals(
+            listOf("azerty", "custom-2", "custom-1", "qwerty", "dvorak"),
+            CustomLayout.ordered(listOf("custom-1", "qwerty", "custom-2", "azerty", "dvorak"), listOf("azerty", "gone", "custom-2")),
+        )
+        assertEquals(listOf("qwerty", "custom-1"), KeyboardPreferences(layoutOrder = listOf("qwerty", "Bad Id", "custom-1", "qwerty")).sanitised().layoutOrder)
+    }
+
+    @Test
+    fun `a landscape choice may name the subtype's own layout, a portrait one may not`() {
+        val kept = KeyboardPreferences(
+            subtypeLayouts = mapOf("qwerty" to "qwerty", "azerty" to "custom-1"),
+            subtypeLayoutsLandscape = mapOf("qwerty" to "qwerty", "Bad Id" to "custom-1"),
+        ).sanitised()
+        assertEquals(mapOf("azerty" to "custom-1"), kept.subtypeLayouts)
+        assertEquals(mapOf("qwerty" to "qwerty"), kept.subtypeLayoutsLandscape)
     }
 
     @Test

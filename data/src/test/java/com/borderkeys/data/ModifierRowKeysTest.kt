@@ -32,6 +32,17 @@ class ModifierRowKeysTest {
     }
 
     @Test
+    fun `the accent modifiers and compose are drawn and offered only while their switch is on`() {
+        val row = listOf(ModifierRowKeys.ESCAPE, ModifierRowKeys.DEAD_ACUTE, ModifierRowKeys.COMPOSE, ModifierRowKeys.VOICE)
+        assertEquals(listOf(ModifierRowKeys.ESCAPE, ModifierRowKeys.VOICE), ModifierRowKeys.drawn(row, accentKeys = false, voice = true))
+        assertEquals(row, ModifierRowKeys.drawn(row, accentKeys = true, voice = true))
+        assertEquals(listOf(ModifierRowKeys.ESCAPE, ModifierRowKeys.DEAD_ACUTE, ModifierRowKeys.COMPOSE), ModifierRowKeys.drawn(row, accentKeys = true, voice = false))
+        assertEquals(false, ModifierRowKeys.addable(emptyList(), accentKeys = false).any { it in ModifierRowKeys.ACCENT_KEYS })
+        assertEquals(ModifierRowKeys.ACCENT_KEYS, ModifierRowKeys.addable(emptyList(), accentKeys = true).filter { it in ModifierRowKeys.ACCENT_KEYS })
+        assertEquals(false, ModifierRowKeys.ESCAPE in ModifierRowKeys.addable(listOf(ModifierRowKeys.ESCAPE), accentKeys = true))
+    }
+
+    @Test
     fun `the default is eight known keys`() {
         assertEquals(8, ModifierRowKeys.DEFAULT.size)
         assertEquals(ModifierRowKeys.DEFAULT, ModifierRowKeys.sanitised(ModifierRowKeys.DEFAULT))

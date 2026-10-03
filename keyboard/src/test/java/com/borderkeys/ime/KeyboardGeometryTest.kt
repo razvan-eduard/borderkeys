@@ -229,6 +229,41 @@ class KeyboardGeometryTest {
             )
         }
     }
+
+    @Test
+    fun `a parsed layout of the user's own lays out without gaps or overlaps`() {
+        val own = LayoutLoader.parse(
+            """
+            {"id": "custom-1", "languageTag": "und", "rows": [
+              {"keys": [{"c": "a", "w": 2}, {"c": "b"}, {"c": "c", "w": 0.5}]},
+              {"indent": 1.5, "height": 1.4, "keys": [{"c": "d"}, {"c": "e", "w": 3}]},
+              {"height": 0.6, "keys": [{"code": "shift", "w": 1.5}, {"c": " ", "w": 5}, {"code": "enter", "w": 1.5}]}
+            ]}
+            """.trimIndent(),
+        )
+        val geometry = KeyboardGeometry()
+        geometry.compile(own, width, height, 0f)
+        for (a in 0 until geometry.keyCount) {
+            assertTrue(geometry.keyRight[a] > geometry.keyLeft[a])
+            assertTrue(geometry.keyBottom[a] > geometry.keyTop[a])
+            for (b in a + 1 until geometry.keyCount) {
+                val separated = geometry.keyRight[a] <= geometry.keyLeft[b] ||
+                    geometry.keyRight[b] <= geometry.keyLeft[a] ||
+                    geometry.keyBottom[a] <= geometry.keyTop[b] ||
+                    geometry.keyBottom[b] <= geometry.keyTop[a]
+                assertTrue("keys $a and $b overlap", separated)
+            }
+        }
+        var x = 1f
+        while (x < width) {
+            var y = 1f
+            while (y < height) {
+                assertNotEquals(KeyboardGeometry.NO_KEY, geometry.findKeyAt(x, y))
+                y += 9f
+            }
+            x += 9f
+        }
+    }
 }
 
 class KeyboardLayoutTest {

@@ -51,6 +51,7 @@ object LayoutLoader {
             id = root.optString("id", "unnamed"),
             languageTag = root.optString("languageTag", "und"),
             rows = rows,
+            modmap = Modmap.parse(root),
         )
     }
 

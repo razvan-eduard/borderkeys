@@ -100,7 +100,9 @@ fun PlacementPreview(
                 if (!preferences.emojiKey) {
                     composed = composed.withoutEmojiKey()
                 }
-                if (!preferences.languageKey) {
+                if (!preferences.languageKey ||
+                    com.borderkeys.ime.ChosenSubtypes.count(context) < com.borderkeys.ime.ChosenSubtypes.GLOBE_FROM
+                ) {
                     composed = composed.withoutLanguageKey()
                 }
                 if (preferences.numberRow) {

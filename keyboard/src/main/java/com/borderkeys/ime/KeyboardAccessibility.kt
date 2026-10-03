@@ -178,12 +178,14 @@ class KeyboardAccessibility(
         node.addAction(
             AccessibilityNodeInfo.AccessibilityAction.ACTION_CLEAR_ACCESSIBILITY_FOCUS,
         )
-        // One custom action per flick the key has, named by its direction and label.
+        // One custom action per flick the key has, named by its direction and label, an accent
+        // modifier's cap by the modifier's name.
         for (direction in 0 until KeyboardLayout.FLICK_DIRECTIONS) {
-            val label = geometry.flickLabel(index, direction)
-            if (label.isEmpty()) {
+            val cap = geometry.flickLabel(index, direction)
+            if (cap.isEmpty()) {
                 continue
             }
+            val label = DeadKeys.CODES.firstOrNull { DeadKeys.cap(it) == cap }?.let(::nameOf) ?: cap
             node.addAction(
                 AccessibilityNodeInfo.AccessibilityAction(
                     FLICK_ACTION_FIRST + direction,
@@ -204,53 +206,55 @@ class KeyboardAccessibility(
         return node
     }
 
+    /** A function key's name out loud, by its code; null for a key that is its label. */
+    private fun nameOf(code: Int): String? = when (code) {
+        KeyCodes.SHIFT -> strings[Keys.KEY_SHIFT]
+        KeyCodes.DELETE -> strings[Keys.KEY_DELETE]
+        KeyCodes.ENTER -> strings[Keys.KEY_ENTER]
+        KeyCodes.SPACE -> strings[Keys.KEY_SPACE]
+        KeyCodes.SYMBOLS -> strings[Keys.KEY_SYMBOLS]
+        KeyCodes.SYMBOLS_SHIFT -> strings[Keys.KEY_MORE_SYMBOLS]
+        KeyCodes.LANGUAGE -> strings[Keys.KEY_LANGUAGE]
+        KeyCodes.KEYBOARD_PICKER -> strings[Keys.KEY_KEYBOARD_PICKER]
+        KeyCodes.VOICE -> strings[Keys.KEY_VOICE]
+        KeyCodes.COMPOSE -> strings[Keys.KEY_COMPOSE]
+        KeyCodes.DEAD_ACUTE -> strings[Keys.KEY_DEAD_ACUTE]
+        KeyCodes.DEAD_GRAVE -> strings[Keys.KEY_DEAD_GRAVE]
+        KeyCodes.DEAD_CIRCUMFLEX -> strings[Keys.KEY_DEAD_CIRCUMFLEX]
+        KeyCodes.DEAD_DIAERESIS -> strings[Keys.KEY_DEAD_DIAERESIS]
+        KeyCodes.DEAD_TILDE -> strings[Keys.KEY_DEAD_TILDE]
+        KeyCodes.DEAD_CARON -> strings[Keys.KEY_DEAD_CARON]
+        KeyCodes.DEAD_BREVE -> strings[Keys.KEY_DEAD_BREVE]
+        KeyCodes.DEAD_CEDILLA -> strings[Keys.KEY_DEAD_CEDILLA]
+        KeyCodes.DEAD_OGONEK -> strings[Keys.KEY_DEAD_OGONEK]
+        KeyCodes.DEAD_RING -> strings[Keys.KEY_DEAD_RING]
+        KeyCodes.DEAD_MACRON -> strings[Keys.KEY_DEAD_MACRON]
+        KeyCodes.DEAD_COMMA_BELOW -> strings[Keys.KEY_DEAD_COMMA_BELOW]
+        KeyCodes.SETTINGS -> strings[Keys.KEY_SETTINGS]
+        KeyCodes.EMOJI -> strings[Keys.KEY_EMOJI]
+        KeyCodes.ESCAPE -> strings[Keys.KEY_ESCAPE]
+        KeyCodes.TAB -> strings[Keys.KEY_TAB]
+        KeyCodes.CONTROL -> strings[Keys.KEY_CONTROL]
+        KeyCodes.ALT -> strings[Keys.KEY_ALT]
+        KeyCodes.ARROW_LEFT -> strings[Keys.KEY_ARROW_LEFT]
+        KeyCodes.ARROW_RIGHT -> strings[Keys.KEY_ARROW_RIGHT]
+        KeyCodes.ARROW_UP -> strings[Keys.KEY_ARROW_UP]
+        KeyCodes.ARROW_DOWN -> strings[Keys.KEY_ARROW_DOWN]
+        KeyCodes.HOME -> strings[Keys.KEY_HOME]
+        KeyCodes.END -> strings[Keys.KEY_END]
+        KeyCodes.PAGE_UP -> strings[Keys.KEY_PAGE_UP]
+        KeyCodes.PAGE_DOWN -> strings[Keys.KEY_PAGE_DOWN]
+        KeyCodes.FORWARD_DELETE -> strings[Keys.KEY_FORWARD_DELETE]
+        KeyCodes.INSERT -> strings[Keys.KEY_INSERT]
+        else -> null
+    }
+
     /**
      * What a key is called out loud: a name for a function key, the label for the rest, and a
      * mention of its alternates when it has any.
      */
     private fun describe(index: Int): CharSequence {
-        val code = geometry.keyCode[index]
-        val named = when (code) {
-            KeyCodes.SHIFT -> strings[Keys.KEY_SHIFT]
-            KeyCodes.DELETE -> strings[Keys.KEY_DELETE]
-            KeyCodes.ENTER -> strings[Keys.KEY_ENTER]
-            KeyCodes.SPACE -> strings[Keys.KEY_SPACE]
-            KeyCodes.SYMBOLS -> strings[Keys.KEY_SYMBOLS]
-            KeyCodes.SYMBOLS_SHIFT -> strings[Keys.KEY_MORE_SYMBOLS]
-            KeyCodes.LANGUAGE -> strings[Keys.KEY_LANGUAGE_HOLD_FOR_OTHER_KEYBOARDS]
-            KeyCodes.KEYBOARD_PICKER -> strings[Keys.KEY_KEYBOARD_PICKER]
-            KeyCodes.VOICE -> strings[Keys.KEY_VOICE]
-            KeyCodes.COMPOSE -> strings[Keys.KEY_COMPOSE]
-            KeyCodes.DEAD_ACUTE -> strings[Keys.KEY_DEAD_ACUTE]
-            KeyCodes.DEAD_GRAVE -> strings[Keys.KEY_DEAD_GRAVE]
-            KeyCodes.DEAD_CIRCUMFLEX -> strings[Keys.KEY_DEAD_CIRCUMFLEX]
-            KeyCodes.DEAD_DIAERESIS -> strings[Keys.KEY_DEAD_DIAERESIS]
-            KeyCodes.DEAD_TILDE -> strings[Keys.KEY_DEAD_TILDE]
-            KeyCodes.DEAD_CARON -> strings[Keys.KEY_DEAD_CARON]
-            KeyCodes.DEAD_BREVE -> strings[Keys.KEY_DEAD_BREVE]
-            KeyCodes.DEAD_CEDILLA -> strings[Keys.KEY_DEAD_CEDILLA]
-            KeyCodes.DEAD_OGONEK -> strings[Keys.KEY_DEAD_OGONEK]
-            KeyCodes.DEAD_RING -> strings[Keys.KEY_DEAD_RING]
-            KeyCodes.DEAD_MACRON -> strings[Keys.KEY_DEAD_MACRON]
-            KeyCodes.DEAD_COMMA_BELOW -> strings[Keys.KEY_DEAD_COMMA_BELOW]
-            KeyCodes.SETTINGS -> strings[Keys.KEY_SETTINGS]
-            KeyCodes.EMOJI -> strings[Keys.KEY_EMOJI]
-            KeyCodes.ESCAPE -> strings[Keys.KEY_ESCAPE]
-            KeyCodes.TAB -> strings[Keys.KEY_TAB]
-            KeyCodes.CONTROL -> strings[Keys.KEY_CONTROL]
-            KeyCodes.ALT -> strings[Keys.KEY_ALT]
-            KeyCodes.ARROW_LEFT -> strings[Keys.KEY_ARROW_LEFT]
-            KeyCodes.ARROW_RIGHT -> strings[Keys.KEY_ARROW_RIGHT]
-            KeyCodes.ARROW_UP -> strings[Keys.KEY_ARROW_UP]
-            KeyCodes.ARROW_DOWN -> strings[Keys.KEY_ARROW_DOWN]
-            KeyCodes.HOME -> strings[Keys.KEY_HOME]
-            KeyCodes.END -> strings[Keys.KEY_END]
-            KeyCodes.PAGE_UP -> strings[Keys.KEY_PAGE_UP]
-            KeyCodes.PAGE_DOWN -> strings[Keys.KEY_PAGE_DOWN]
-            KeyCodes.FORWARD_DELETE -> strings[Keys.KEY_FORWARD_DELETE]
-            KeyCodes.INSERT -> strings[Keys.KEY_INSERT]
-            else -> null
-        }
+        val named = nameOf(geometry.keyCode[index])
         if (named != null) {
             return named
         }

@@ -14,6 +14,19 @@ attestations and the full commit lists are on the
 
 ## Unreleased
 
+- BorderKeys +: swiping on the Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek,
+  Armenian, Georgian, Hebrew and Arabic layouts is decoded by a neural model of each layout's
+  own; until now those layouts were decoded geometrically.
+- Fixed: on both Turkish layouts shift turned i into I; it now gives İ.
+- Fixed: a swipe could not reach a word with a letter that sits only on another key's long
+  press, such as ъ on the Russian layout's ь key; the swipe now reaches it through that key.
+- Extra keys: the characters and accents your keyboard's languages use and the layout lacks
+  (the diaeresis, ß and € for German; ñ for Spanish; ґ, є, і, ї for Ukrainian on the Russian
+  layout) sit on a free flick of a nearby key, each with its switch on a new Extra keys screen.
+- The globe key now shows by default once two or more layouts are enabled, so a fresh install
+  can switch layouts from the keyboard; its switch still hides it.
+- Icons that follow the text's direction (undo, redo, return, tab, line start and end) turn round
+  in settings shown right to left and on the quick-actions bar of a right-to-left layout.
 - Every tapped letter is read by where the tap landed: a tap near the edge between two keys
   makes the neighbouring letter a likelier correction, for autocorrect and the strip alike, in
   every build and with nothing stored. On synthetic taps, autocorrect's right word rose from
@@ -57,14 +70,21 @@ attestations and the full commit lists are on the
   600,000, its header is sealed together with its contents, and a file claiming more than
   5,000,000 rounds is refused as damaged before any work is done. Files already written still
   open, and the screen says so while the key is being derived.
-- Dead keys and a compose key for the modifier row: twelve accents that go on the next letter,
-  tapped twice or held to stay on every letter until tapped again, and a compose key after which
-  a few keys spell a character, ' e for é, o c for ©, - - - for —. The pending key is drawn
-  pressed, and the compose sequence shows on the strip as you type it.
-- Your layouts, a new screen under Layout & keys: write a layout of your own as the keyboard's
-  own layout files are written, starting from any built-in one; the editor checks it as you type
+- Accents from other languages, under Accented characters: switch on any language whose accents
+  reach a letter of your layout, and holding that letter offers them too, dictionary or not.
+- Accent modifiers and a compose key for the modifier row, behind a switch of their own: twelve
+  accents that go on the next letter, tapped twice or held to stay on every letter until tapped
+  again, an arrow after one writing the bare mark; and a compose key after which a few keys spell
+  a character from X11's full Compose list and Cyrillic and Arabic sequences besides, ' e for é,
+  o c for ©, - - - for —. The pending key is drawn pressed, and the compose sequence shows on the
+  strip as you type it.
+- Your layouts, a new screen under Layout & keys: every layout, built in or your own, in the
+  order you set, which is the order the globe key steps through them, each marked with the
+  languages that draw it; write a layout of your own as the
+  keyboard's own layout files are written, starting from any built-in one; the editor checks it as you type
   with the same rules the built-in ones must meet, shows it, and imports or exports a file. Any
-  layout on the keyboard can then draw yours instead of its own.
+  layout on the keyboard can then draw yours instead of its own, and another one in landscape.
+  A layout may say what shift and control turn a letter into (a "modmap").
 - Hold the space bar still for a moment and it becomes a joystick: lean the finger in a direction
   and the cursor keeps moving that way, faster the further you lean, at a speed you set. With it
   on, holding the space bar no longer switches the layout; the globe key does. Drag left along
@@ -82,7 +102,8 @@ attestations and the full commit lists are on the
   opens the system's keyboard list, or, with its new setting on the Layout screen, goes straight
   back to the keyboard you used before; the second switches to a voice keyboard you have enabled,
   remembering your choice, and is offered only while there is one. Holding the globe key now
-  opens the keyboard list; the quick panel stays on the settings key and on holding enter.
+  switches the layout, as holding the space bar does with the joystick off; the quick panel
+  stays on the settings key and on holding enter.
 - Keep privately, a quick action and, once turned on, an entry in other apps' text-selection
   menu: the selection goes into the clipboard history as a private item that never touches the
   system clipboard and stays until you delete it, marked with the app it came from.

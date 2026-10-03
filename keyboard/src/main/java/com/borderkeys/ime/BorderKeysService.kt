@@ -146,13 +146,54 @@ class BorderKeysService :
 
     private var alphabeticLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
 
+    /** Each language tag's extra keys; see [ExtraKeys]. */
+    private var extraKeysByLanguage: Map<String, List<ExtraKeys.Entry>> = emptyMap()
+
+    /** The extra keys on the letter page now drawn. */
+    private var extraKeyPlacements: List<ExtraKeys.Placement> = emptyList()
+
+    /** The language tags of this keyboard's enabled subtypes, the current one first; read at each field. */
+    private var subtypeTags: List<String>? = null
+
+    /** [ChosenSubtypes.count], read at each field. */
+    private var chosenSubtypes: Int? = null
+
+    private fun chosenSubtypeCount(): Int =
+        chosenSubtypes ?: ChosenSubtypes.count(this).also { chosenSubtypes = it }
+
+    private fun enabledSubtypeTags(): List<String> {
+        subtypeTags?.let { return it }
+        val manager = getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+        val ours = manager?.enabledInputMethodList?.firstOrNull { it.packageName == packageName }
+        val enabled = ours?.let { manager.getEnabledInputMethodSubtypeList(it, true) }.orEmpty().map { it.languageTag }
+        val current = manager?.currentInputMethodSubtype?.languageTag
+        val tags = (listOfNotNull(current) + enabled).filter { it.isNotEmpty() }.distinct()
+        subtypeTags = tags
+        return tags
+    }
+
     /** The layout id the current subtype names, which the user's choice may stand in for. */
     private var subtypeLayoutId: String = DEFAULT_ALPHABETIC_LAYOUT
 
     /** The letter layout for [subtypeLayoutId]: the user's choice for it, else its asset. */
     private fun resolveLetterLayout(): KeyboardLayout = LayoutChoice.resolve(
-        subtypeLayoutId, preferences.subtypeLayouts, preferences.customLayouts,
+        subtypeLayoutId,
+        LayoutChoice.forOrientation(preferences.subtypeLayouts, preferences.subtypeLayoutsLandscape, isLandscape()),
+        preferences.customLayouts,
     ) { id -> LayoutLoader.load(assets, id) }
+
+    /** Resolves the letter layout again, off the main thread, and redraws the current page. */
+    private fun reloadLetterLayout() {
+        scope.launch(Dispatchers.IO) {
+            val layout = resolveLetterLayout()
+            withContext(Dispatchers.Main) {
+                alphabeticLayout = layout
+                useSwipeModelForLayout()
+                host?.let { showPage(page) }
+            }
+        }
+    }
+
     private var symbolsLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var symbolsNumpadLeftLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
     private var symbolsNumpadRightLayout: KeyboardLayout = KeyboardLayout.fallbackQwerty()
@@ -517,13 +558,19 @@ class BorderKeysService :
                 as? android.view.inputmethod.InputMethodManager
             subtypeLayoutId = layoutIdFromSubtype(manager?.currentInputMethodSubtype)
             alphabeticLayout = resolveLetterLayout()
+            withContext(Dispatchers.Main) { useSwipeModelForLayout() }
             symbolsLayout = LayoutLoader.load(assets, SYMBOLS_LAYOUT)
             symbolsNumpadLeftLayout = LayoutLoader.load(assets, SYMBOLS_NUMPAD_LEFT_LAYOUT)
             symbolsNumpadRightLayout = LayoutLoader.load(assets, SYMBOLS_NUMPAD_RIGHT_LAYOUT)
             symbolsShiftLayout = LayoutLoader.load(assets, SYMBOLS_SHIFT_LAYOUT)
             numpadLayout = LayoutLoader.load(assets, NUMPAD_LAYOUT)
             val sequences = ComposeSequences.load(assets)
-            withContext(Dispatchers.Main) { orchestrator.composeSequences = sequences }
+            val extra = ExtraKeys.load(assets)
+            withContext(Dispatchers.Main) {
+                orchestrator.composeSequences = sequences
+                extraKeysByLanguage = extra
+                host?.let { showPage(page) }
+            }
             if (unlocked) {
                 loadDictionaries()
             }
@@ -745,16 +792,11 @@ class BorderKeysService :
             preferences.experimentalSwipeModelEnabled !=
                 newPreferences.experimentalSwipeModelEnabled
         val layoutChoiceChanged = preferences.subtypeLayouts != newPreferences.subtypeLayouts ||
+            preferences.subtypeLayoutsLandscape != newPreferences.subtypeLayoutsLandscape ||
             preferences.customLayouts != newPreferences.customLayouts
         preferences = newPreferences
         if (layoutChoiceChanged) {
-            scope.launch(Dispatchers.IO) {
-                val layout = resolveLetterLayout()
-                withContext(Dispatchers.Main) {
-                    alphabeticLayout = layout
-                    host?.let { showPage(page) }
-                }
-            }
+            reloadLetterLayout()
         }
         orchestrator.applySettings(newPreferences)
         if (swipeModelFlipped) {
@@ -936,6 +978,8 @@ class BorderKeysService :
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        subtypeTags = null
+        chosenSubtypes = null
 
         val session = FieldSession(
             generation = orchestrator.session.generation + 1,
@@ -1093,6 +1137,9 @@ class BorderKeysService :
         val view = host ?: return
         applyPlacement(view, preferences)
         refreshTheme()
+        if (preferences.subtypeLayoutsLandscape.isNotEmpty()) {
+            reloadLetterLayout()
+        }
     }
 
     override fun onDestroy() {
@@ -1499,6 +1546,16 @@ class BorderKeysService :
             }
             return
         }
+        val extra = extraKeyPlacements.firstOrNull { it.keyCode == code && it.direction == direction }
+        if (extra != null) {
+            val name = extra.keyName
+            if (name != null) {
+                onKey(KeyCodes.named(name), keyIndex, Float.NaN, Float.NaN)
+            } else {
+                orchestrator.onText(extra.text)
+            }
+            return
+        }
         val text = view.keyboard.flickTextAt(keyIndex, direction)
         if (text.isNotEmpty()) {
             orchestrator.onText(text)
@@ -1577,9 +1634,9 @@ class BorderKeysService :
         )
 
     /**
-     * Holding a key that has no alternates: space switches the layout, shift locks, backspace
-     * deletes a word, the globe and the picker key open the system's keyboard picker, the voice
-     * key its chooser, and enter or the settings key open the quick panel.
+     * Holding a key that has no alternates: space and the globe switch the layout, shift locks,
+     * backspace deletes a word, the picker key opens the system's keyboard picker, the voice key
+     * its chooser, and enter or the settings key open the quick panel.
      */
     override fun onKeyLongPress(code: Int, keyIndex: Int): Boolean {
         if (code == ' '.code) {
@@ -1590,7 +1647,8 @@ class BorderKeysService :
             return true
         }
         when (code) {
-            KeyCodes.LANGUAGE, KeyCodes.KEYBOARD_PICKER -> pickKeyboard(hold = true)
+            KeyCodes.LANGUAGE -> switchLanguage()
+            KeyCodes.KEYBOARD_PICKER -> pickKeyboard(hold = true)
             KeyCodes.VOICE -> voiceInput(hold = true)
             KeyCodes.ENTER, KeyCodes.SETTINGS -> toggleQuickSettings()
             else -> return false
@@ -1617,9 +1675,16 @@ class BorderKeysService :
      */
     private fun composedLayout(layout: KeyboardLayout, allowNumberRow: Boolean = true): KeyboardLayout {
         var result = layout
-        val accents = dictionaryLoader.accentOverlays
+        val extra = if (preferences.extraAccents) {
+            preferences.extraAccentLanguages.filter { it !in dictionaryLoader.accentTags }
+        } else {
+            emptyList()
+        }
+        val accents = AccentOverlays.withExtra(
+            dictionaryLoader.accentOverlays, dictionaryLoader.accentTags, extra, dictionaryLoader.everyAccentOverlay,
+        )
         if (preferences.accentedCharacters && accents.isNotEmpty()) {
-            result = result.withAccents(accents, dictionaryLoader.accentSignature)
+            result = result.withAccents(accents, dictionaryLoader.accentSignature + extra.joinToString("") { ",$it" })
         }
         // The top letter row hints digits, or symbols once the number row holds the digits.
         result = if (preferences.numberRow && allowNumberRow) {
@@ -1631,12 +1696,11 @@ class BorderKeysService :
             result = result.withNumberRow()
         }
         if (preferences.modifierRow) {
-            // The voice key is shown only while an enabled keyboard offers voice typing.
-            val names = if (voiceKeyboards().isEmpty()) {
-                preferences.modifierRowKeys.filterNot { it == com.borderkeys.data.theme.ModifierRowKeys.VOICE }
-            } else {
-                preferences.modifierRowKeys
-            }
+            val names = com.borderkeys.data.theme.ModifierRowKeys.drawn(
+                preferences.modifierRowKeys,
+                accentKeys = preferences.deadKeys,
+                voice = voiceKeyboards().isNotEmpty(),
+            )
             result = result.withModifierRow(
                 keys = names.map { KeyCodes.named(it) },
                 atBottom = preferences.modifierRowPosition == KeyboardPreferences.MODIFIER_ROW_BELOW,
@@ -1645,11 +1709,28 @@ class BorderKeysService :
         if (!preferences.emojiKey) {
             result = result.withoutEmojiKey()
         }
-        if (!preferences.languageKey) {
+        if (!preferences.languageKey || chosenSubtypeCount() < ChosenSubtypes.GLOBE_FROM) {
             result = result.withoutLanguageKey()
         }
         if (preferences.keyFlicks.isNotEmpty()) {
             result = result.withFlickLabels(flickLabelsByKey(preferences.keyFlicks))
+        }
+        val owned = preferences.keyFlicks.mapTo(HashSet()) { (it.keyCode.toLong() shl 3) or it.direction.toLong() }
+        val placements = ExtraKeys.place(
+            enabledSubtypeTags().flatMap { extraKeysByLanguage[it].orEmpty() },
+            result,
+            preferences.extraKeysOff.toSet(),
+        ) { code, direction -> ((code.toLong() shl 3) or direction.toLong()) in owned }
+        if (placements.isNotEmpty()) {
+            val labels = HashMap<Int, Array<String>>()
+            for (placement in placements) {
+                labels.getOrPut(placement.keyCode) { Array(KeyboardLayout.FLICK_DIRECTIONS) { "" } }[placement.direction] =
+                    placement.text
+            }
+            result = result.withFlickLabels(labels)
+        }
+        if (layout === alphabeticLayout) {
+            extraKeyPlacements = placements
         }
         return result
     }
@@ -1684,6 +1765,7 @@ class BorderKeysService :
             else -> composedLayout(alphabeticLayout)
         }
         host?.keyboard?.setLayout(layout)
+        orchestrator.modmap = layout.modmap
         host?.let { applyWritingDirection(it) }
         pushKeyGeometry()
     }
@@ -1722,29 +1804,44 @@ class BorderKeysService :
      * The `layouts/<id>.json` asset [subtype]'s `layout=` extra value names, or
      * [DEFAULT_ALPHABETIC_LAYOUT] when it names none or a `*_qwerty` id.
      */
-    private fun layoutIdFromSubtype(subtype: android.view.inputmethod.InputMethodSubtype?): String {
-        val pair = subtype?.extraValue?.split(",")?.firstOrNull { it.startsWith("layout=") }
-            ?: return DEFAULT_ALPHABETIC_LAYOUT
-        val id = pair.removePrefix("layout=")
-        return if (id.isEmpty() || id.endsWith("_qwerty")) DEFAULT_ALPHABETIC_LAYOUT else id
-    }
+    private fun layoutIdFromSubtype(subtype: android.view.inputmethod.InputMethodSubtype?): String =
+        LayoutChoice.layoutIdOf(subtype?.extraValue)
 
     /** Loads the letter layout the new subtype names and redraws the current page. */
     override fun onCurrentInputMethodSubtypeChanged(subtype: android.view.inputmethod.InputMethodSubtype?) {
         super.onCurrentInputMethodSubtypeChanged(subtype)
         subtypeLayoutId = layoutIdFromSubtype(subtype)
+        subtypeTags = null
         scope.launch(Dispatchers.IO) {
             val layout = resolveLetterLayout()
             withContext(Dispatchers.Main) {
                 alphabeticLayout = layout
+                useSwipeModelForLayout()
                 host?.let { showPage(page) }
             }
         }
     }
 
     /** Switches to this input method's next subtype, that is its next layout. */
+    /**
+     * The next of this keyboard's enabled subtypes, in the order the Your layouts list puts the
+     * layouts they draw; the platform's own next when there are not two.
+     */
     private fun switchLanguage() {
-        switchToNextInputMethod(true)
+        val manager = inputMethodManager()
+        val ours = manager?.enabledInputMethodList?.firstOrNull { it.packageName == packageName }
+        val subtypes = ours?.let { manager.getEnabledInputMethodSubtypeList(it, true) }.orEmpty()
+        if (ours == null || subtypes.size < 2) {
+            switchToNextInputMethod(true)
+            return
+        }
+        val choices = LayoutChoice.forOrientation(preferences.subtypeLayouts, preferences.subtypeLayoutsLandscape, isLandscape())
+        val drawn = subtypes.map { subtype -> LayoutChoice.layoutIdOf(subtype.extraValue).let { choices[it] ?: it } }
+        val order = LayoutChoice.cycleOrder(drawn, preferences.layoutOrder)
+        val current = manager.currentInputMethodSubtype
+        val at = order.indexOfFirst { subtypes[it] == current }
+        val next = subtypes[order[(at + 1).mod(order.size)]]
+        switchInputMethod(ours.id, next)
     }
 
     private fun inputMethodManager(): android.view.inputmethod.InputMethodManager? =
@@ -2733,14 +2830,14 @@ class BorderKeysService :
     }
 
     private companion object {
-        const val DEFAULT_ALPHABETIC_LAYOUT = "qwerty"
+        const val DEFAULT_ALPHABETIC_LAYOUT = LayoutChoice.DEFAULT_LAYOUT
         const val SYMBOLS_LAYOUT = "symbols"
         const val SYMBOLS_NUMPAD_LEFT_LAYOUT = "symbols_numpad_left"
         const val SYMBOLS_NUMPAD_RIGHT_LAYOUT = "symbols_numpad_right"
         const val SYMBOLS_SHIFT_LAYOUT = "symbols_shift"
         const val NUMPAD_LAYOUT = "numpad"
         /** The `plus`-only tier B weights asset (keyboard/src/plus/assets/). */
-        const val SWIPE_MODEL_ASSET = "model.bkw"
+        const val SWIPE_MODEL_FAILURES_PREFS = "swipe_model_failures"
 
         const val PAGE_ALPHABETIC = 0
         const val PAGE_SYMBOLS = 1
@@ -2759,7 +2856,7 @@ class BorderKeysService :
         /** How long a notice stays on the strip. */
         const val NOTICE_MILLIS = 2_000L
 
-        /** Marks a flick with no label of its own on the key, so the slot shows and is reachable. */
+        /** The label drawn for a flick that has none of its own. */
         const val FLICK_PLACEHOLDER = "\u2022"
 
         /** How long the last learning flush, at shutdown, waits for the database. */

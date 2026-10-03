@@ -80,6 +80,9 @@ object LayoutValidator {
         if (!page && ("space" !in codes || "enter" !in codes)) {
             problems += Problem(rows.length() - 1, -1, Keys.LAYOUT_ERROR_NO_SPACE_ENTER)
         }
+        if (!modmapIsWellFormed(root)) {
+            problems += Problem(-1, -1, Keys.LAYOUT_ERROR_MODMAP)
+        }
         if (problems.isEmpty()) {
             try {
                 LayoutLoader.parse(text)
@@ -88,6 +91,30 @@ object LayoutValidator {
             }
         }
         return problems
+    }
+
+    /**
+     * Whether [root]'s `"modmap"`, when there is one, is an object of [Modmap.SECTIONS], each
+     * mapping one character to one character.
+     */
+    private fun modmapIsWellFormed(root: JSONObject): Boolean {
+        if (!root.has("modmap")) {
+            return true
+        }
+        val modmap = root.optJSONObject("modmap") ?: return false
+        for (section in modmap.keys()) {
+            if (section !in Modmap.SECTIONS) {
+                return false
+            }
+            val entries = modmap.optJSONObject(section) ?: return false
+            for (from in entries.keys()) {
+                val to = entries.opt(from) as? String ?: return false
+                if (from.codePointCount(0, from.length) != 1 || to.codePointCount(0, to.length) != 1) {
+                    return false
+                }
+            }
+        }
+        return true
     }
 
     /** The layout [text] describes, or null when [validate] finds a problem. */

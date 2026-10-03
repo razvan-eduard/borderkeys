@@ -68,6 +68,22 @@ class LayoutAbsorberTest {
     }
 
     @Test
+    fun `a parsed layout of the user's own gives the dropped key's width to its absorber`() {
+        val before = LayoutLoader.parse(
+            """
+            {"id": "custom-1", "languageTag": "und", "rows": [
+              {"keys": [{"code": "symbols", "w": 1.75}, {"code": "emoji", "w": 1.75},
+                        {"c": ",", "w": 1.75, "absorb": true}, {"c": "0"}, {"c": " ", "w": 3}]}
+            ]}
+            """.trimIndent(),
+        )
+        val after = before.withoutEmojiKey()
+        assertEquals(9.25f, after.rows[0].units, 0.001f)
+        assertEquals(leftEdgeOf('0'.code, before), leftEdgeOf('0'.code, after), 0.001f)
+        assertEquals(3.5f, after.rows[0].keys.first { it.code == ','.code }.widthUnits, 0.001f)
+    }
+
+    @Test
     fun `a row with no absorber and no space bar drops the width rather than crashing`() {
         val narrow = KeyboardLayout(
             "test", "und",

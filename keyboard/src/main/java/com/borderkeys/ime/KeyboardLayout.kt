@@ -11,6 +11,8 @@ class KeyboardLayout(
     val id: String,
     val languageTag: String,
     val rows: List<Row>,
+    /** What shift and control turn a character into where the usual rule does not hold. */
+    val modmap: Modmap = Modmap.NONE,
 ) {
     /** Whether the layout's language is written right to left; the strip and the ring follow it. */
     val rightToLeft: Boolean = languageTag.substringBefore('-').lowercase() in RIGHT_TO_LEFT_LANGUAGES
@@ -99,6 +101,7 @@ class KeyboardLayout(
             id = id + suffix,
             languageTag = languageTag,
             rows = rewritten,
+            modmap = modmap,
         )
     }
 
@@ -126,7 +129,7 @@ class KeyboardLayout(
                 },
             )
         }
-        return KeyboardLayout("$id$ACCENTS_SUFFIX$signature", languageTag, rewritten)
+        return KeyboardLayout("$id$ACCENTS_SUFFIX$signature", languageTag, rewritten, modmap)
     }
 
     /** The same layout with a digit first on each top-row letter's long press, q 1 to p 0. */
@@ -163,7 +166,7 @@ class KeyboardLayout(
                 },
             )
         }
-        return KeyboardLayout("$id$suffix", languageTag, rewritten)
+        return KeyboardLayout("$id$suffix", languageTag, rewritten, modmap)
     }
 
     private fun Key.withAlternatives(alternatives: String): Key =
@@ -190,7 +193,7 @@ class KeyboardLayout(
                 },
             )
         }
-        return KeyboardLayout(id, languageTag, rewritten)
+        return KeyboardLayout(id, languageTag, rewritten, modmap)
     }
 
     /** The same layout with a shorter row of the ten digits above it. */
@@ -212,6 +215,7 @@ class KeyboardLayout(
             id = id + NUMBER_ROW_SUFFIX,
             languageTag = languageTag,
             rows = listOf(Row(0f, NUMBER_ROW_HEIGHT, digits)) + rows,
+            modmap = modmap,
         )
     }
 
@@ -253,6 +257,7 @@ class KeyboardLayout(
             id = id + suffix,
             languageTag = languageTag,
             rows = if (atBottom) rows + row else listOf(row) + rows,
+            modmap = modmap,
         )
     }
 

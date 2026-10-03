@@ -131,6 +131,39 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# The compose key's table, written by tools/make_compose.py from the sources in tools/compose.
+[[annotations]]
+path = "keyboard/src/main/assets/compose/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = [
+    "1987, 1994, 1998 The Open Group",
+    "1987 Digital Equipment Corporation",
+    "Jules Aguillon and the Unexpected Keyboard contributors",
+]
+SPDX-License-Identifier = "MIT-open-group AND HPND AND GPL-3.0-only"
+
+# X11's en_US.UTF-8 compose sequences and key names, copied from libX11 and xorgproto.
+[[annotations]]
+path = ["tools/compose/2-en_US_UTF_8_Compose.pre", "tools/compose/keysymdef.h"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["1987, 1994, 1998 The Open Group", "1987 Digital Equipment Corporation"]
+SPDX-License-Identifier = "MIT-open-group AND HPND"
+
+# Each subtype language's extra keys, written by tools/make_extra_keys.py from Unexpected
+# Keyboard's subtype table, which tools/extra_keys holds as copied.
+[[annotations]]
+path = ["keyboard/src/main/assets/extra_keys.json", "tools/extra_keys/method.xml"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Jules Aguillon and the Unexpected Keyboard contributors"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+# The extra, Arabic and Cyrillic compose sequences, copied from Unexpected Keyboard.
+[[annotations]]
+path = "tools/compose/*.json"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Jules Aguillon and the Unexpected Keyboard contributors"
+SPDX-License-Identifier = "GPL-3.0-only"
+
 # Per-language accent overlays: the letters a long press reaches for each enabled language.
 # Plain data, authored here.
 [[annotations]]

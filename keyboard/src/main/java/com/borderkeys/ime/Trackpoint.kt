@@ -16,8 +16,8 @@ object Trackpoint {
     /** How long the space bar is held still before the joystick starts. */
     const val HOLD_MILLIS = 600L
 
-    /** How far the finger may drift during the hold, and must leave the centre to move, in dp. */
-    const val DEAD_ZONE_DP = 15f
+    /** How far the finger may drift during the hold, and must leave the centre to move, in px. */
+    const val DEAD_ZONE_PX = 15f
 
     const val MAX_DELAY_MILLIS = 200L
     const val MIN_DELAY_MILLIS = 30L
