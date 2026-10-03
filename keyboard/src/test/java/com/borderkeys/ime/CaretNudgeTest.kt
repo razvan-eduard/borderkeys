@@ -40,6 +40,14 @@ class CaretNudgeTest {
     }
 
     @Test
+    fun `a drag along backspace anchors at the caret and grows leftwards from it`() {
+        val first = CaretNudge.slide(start = 9, end = 9, previous = null, steps = -4, length = 13, selecting = true)
+        assertEquals(CaretNudge.Selection(anchor = 9, caret = 5), first)
+        val more = CaretNudge.slide(first.start, first.end, first, -5, 13, selecting = true)
+        assertEquals(CaretNudge.Selection(anchor = 9, caret = 0), more)
+    }
+
+    @Test
     fun `one drag keeps one anchor across its steps, in both directions`() {
         val first = CaretNudge.slide(3, 3, null, -2, 10, selecting = true)
         val second = CaretNudge.slide(first.start, first.end, first, -1, 10, selecting = true)

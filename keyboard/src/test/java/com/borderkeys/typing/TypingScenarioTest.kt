@@ -504,6 +504,51 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `a drag left on backspace selects two words and the lift deletes them`() {
+        rig.startField("one two three")
+        rig.backspaceSelect(-4)
+        rig.backspaceSelect(-5)
+        assertEquals(4, minOf(rig.editor.selectionStart, rig.editor.selectionEnd))
+        assertEquals(13, maxOf(rig.editor.selectionStart, rig.editor.selectionEnd))
+        rig.backspaceLift()
+        assertEquals("one ", rig.editor.text)
+        assertNull(rig.editor.composingText)
+    }
+
+    @Test
+    fun `a drag on backspace while composing finishes the word and selects into it`() {
+        rig.startField("one ")
+        rig.type("two")
+        rig.backspaceSelect(-2)
+        assertNull(rig.editor.composingText)
+        assertEquals(5, minOf(rig.editor.selectionStart, rig.editor.selectionEnd))
+        rig.backspaceLift()
+        assertEquals("one t", rig.editor.text)
+    }
+
+    @Test
+    fun `a drag up on backspace selects by the line, and a drag back shrinks it`() {
+        rig.startField("ab\ncd\nef")
+        rig.backspaceSelectLines(-1)
+        assertEquals(5, minOf(rig.editor.selectionStart, rig.editor.selectionEnd))
+        assertEquals(8, maxOf(rig.editor.selectionStart, rig.editor.selectionEnd))
+        rig.backspaceSelectLines(1)
+        assertEquals(8, minOf(rig.editor.selectionStart, rig.editor.selectionEnd))
+        rig.backspaceLift()
+        assertEquals("ab\ncd\nef", rig.editor.text)
+    }
+
+    @Test
+    fun `in a terminal the drag counts characters and the lift sends that many deletes`() {
+        rig.startField(terminalField = true)
+        rig.backspaceSelect(-3)
+        rig.backspaceSelect(-2)
+        assertTrue(rig.host.physicalKeys.isEmpty())
+        rig.backspaceLift()
+        assertEquals(List(5) { android.view.KeyEvent.KEYCODE_DEL }, rig.host.physicalKeys.map { it.first })
+    }
+
+    @Test
     fun `a text flick writes its text mid-word and ends the composing word`() {
         rig.startField()
         rig.type("hel")

@@ -175,4 +175,7 @@ private class KeyPickingListener(private val onKeyPicked: (Int) -> Unit) : Keybo
     override fun onCursorNudge(steps: Int) = Unit
     override fun onCursorNudgeLines(lines: Int) = Unit
     override fun onFlick(keyIndex: Int, direction: Int) = Unit
+    override fun onBackspaceSelect(steps: Int) = Unit
+    override fun onBackspaceSelectLines(lines: Int) = Unit
+    override fun onBackspaceSelectionLift() = Unit
 }

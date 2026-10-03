@@ -95,6 +95,15 @@ class KeyboardCanvasView(
 
         /** The key at [keyIndex] was flicked in [direction], 0 north and clockwise, where it has a flick. */
         fun onFlick(keyIndex: Int, direction: Int)
+
+        /** A drag along backspace moved [steps] characters, negative leftwards: the selection follows. */
+        fun onBackspaceSelect(steps: Int)
+
+        /** A drag along backspace moved [lines] lines, positive downwards: the selection follows. */
+        fun onBackspaceSelectLines(lines: Int)
+
+        /** The finger lifted after a drag along backspace: what it selected is deleted. */
+        fun onBackspaceSelectionLift()
     }
 
     var listener: Listener? = null
@@ -121,6 +130,13 @@ class KeyboardCanvasView(
     /** How far a press travels, in key diagonals, before it is a flick, and the most it may and still be one. */
     var flickMinFraction: Float = KeyboardPreferences.DEFAULT_FLICK_MIN_FRACTION
     var flickMaxFraction: Float = KeyboardPreferences.DEFAULT_FLICK_MAX_FRACTION
+
+    /** Whether a drag along backspace selects for the lift to delete. */
+    var backspaceSlideEnabled: Boolean = true
+
+    /** Whether the space bar held still steers the caret, and how fast, in percent. */
+    var spaceTrackpointEnabled: Boolean = true
+    var trackpointSpeedPercent: Int = KeyboardPreferences.DEFAULT_TRACKPOINT_SPEED
 
     /** Whether a pause mid-swipe is detected, for the ring. */
     var radialMenuEnabled: Boolean = false
@@ -494,6 +510,122 @@ class KeyboardCanvasView(
     private var spaceStartY = 0f
     private var spaceMovedBy = 0
     private var spaceMovedLines = 0
+
+    /** The pointer resting on backspace, and how far its drag has taken the selection. */
+    private var backspacePointer = -1
+    private var backspaceStartX = 0f
+    private var backspaceStartY = 0f
+    private var backspaceMovedBy = 0
+    private var backspaceMovedLines = 0
+
+    /** The space bar held as a joystick: armed on the press, live after [Trackpoint.HOLD_MILLIS]. */
+    private var trackpointArmed = false
+    private var trackpointActive = false
+    private var trackpointCentreX = 0f
+    private var trackpointCentreY = 0f
+    private var trackpointX = 0f
+    private var trackpointY = 0f
+    private var trackpointPointerId = -1
+
+    private val trackpointDeadZonePx: Float
+        get() = Trackpoint.DEAD_ZONE_DP * resources.displayMetrics.density
+
+    private val trackpointArmRunnable = Runnable { startTrackpoint() }
+    private val trackpointTickRunnable = object : Runnable {
+        override fun run() {
+            if (!trackpointActive) {
+                return
+            }
+            val halfDiagonal = if (geometry.keyCount > 0) {
+                kotlin.math.hypot(
+                    geometry.keyRight[0] - geometry.keyLeft[0], geometry.keyBottom[0] - geometry.keyTop[0],
+                ) / 2f
+            } else {
+                FALLBACK_KEY_WIDTH_PX
+            }
+            val tick = Trackpoint.tick(
+                trackpointX - trackpointCentreX, trackpointY - trackpointCentreY,
+                trackpointDeadZonePx, halfDiagonal, trackpointSpeedPercent,
+            )
+            if (tick.xSteps != 0) {
+                listener?.onCursorNudge(tick.xSteps)
+            }
+            if (tick.ySteps != 0) {
+                listener?.onCursorNudgeLines(tick.ySteps)
+            }
+            postDelayed(this, tick.delayMillis)
+        }
+    }
+
+    /** The hold on the space bar elapsed with the finger still: the joystick starts where it rests. */
+    private fun startTrackpoint() {
+        val pointerId = spacePointer
+        if (!trackpointArmed || pointerId < 0) {
+            return
+        }
+        trackpointArmed = false
+        trackpointActive = true
+        trackpointPointerId = pointerId
+        trackpointCentreX = trackpointX
+        trackpointCentreY = trackpointY
+        val key = pointerKey[pointerId]
+        if (key != NO_KEY) {
+            endPress(key)
+        }
+        // The lift types nothing, and the press is no longer a slide.
+        pointerKey[pointerId] = NO_KEY
+        spacePointer = -1
+        hidePreview()
+        if (hapticEnabled) {
+            performHapticFeedback(hapticConstant)
+        }
+        postDelayed(trackpointTickRunnable, Trackpoint.MAX_DELAY_MILLIS)
+    }
+
+    private fun stopTrackpoint() {
+        removeCallbacks(trackpointArmRunnable)
+        removeCallbacks(trackpointTickRunnable)
+        trackpointArmed = false
+        trackpointActive = false
+    }
+
+    /**
+     * Carries a drag along backspace to ([x], [y]): every character step and, when the finger
+     * moves mostly up or down, every line step crossed since the last call goes to the listener
+     * as a change of selection. The first step un-presses the key and disarms its hold and
+     * repeat. Returns whether the press is a drag.
+     */
+    private fun slideBackspace(pointerId: Int, x: Float, y: Float): Boolean {
+        val dx = x - backspaceStartX
+        val dy = y - backspaceStartY
+        val keyHeight = if (geometry.keyCount > 0) geometry.keyBottom[0] - geometry.keyTop[0] else DEFAULT_ROW_HEIGHT_PX
+        val vertical = kotlin.math.abs(dy) > kotlin.math.abs(dx) * BACKSPACE_VERTICAL_RATIO &&
+            kotlin.math.abs(dy) > keyHeight * BACKSPACE_VERTICAL_FRACTION
+        val wanted = if (vertical) backspaceMovedBy else (dx / spaceStepPx()).toInt()
+        val wantedLines = if (vertical) (dy / spaceLineStepPx()).toInt() else backspaceMovedLines
+        if (wanted != backspaceMovedBy || wantedLines != backspaceMovedLines) {
+            if (backspaceMovedBy == 0 && backspaceMovedLines == 0) {
+                removeCallbacks(longPressRunnable)
+                removeCallbacks(repeatRunnable)
+                repeatKey = NO_KEY
+                stopLongPressRepeat()
+                val pressed = pointerKey[pointerId]
+                pointerKey[pointerId] = NO_KEY
+                if (pressed != NO_KEY) {
+                    endPress(pressed)
+                }
+            }
+            if (wanted != backspaceMovedBy) {
+                listener?.onBackspaceSelect(wanted - backspaceMovedBy)
+                backspaceMovedBy = wanted
+            }
+            if (wantedLines != backspaceMovedLines) {
+                listener?.onBackspaceSelectLines(wantedLines - backspaceMovedLines)
+                backspaceMovedLines = wantedLines
+            }
+        }
+        return backspaceMovedBy != 0 || backspaceMovedLines != 0
+    }
 
     /** How far the finger travels for one character: [SPACE_STEP_FRACTION] of a key's width. */
     private fun spaceStepPx(): Float {
@@ -1219,8 +1351,9 @@ class KeyboardCanvasView(
             playSoundEffect(android.view.SoundEffectConstants.CLICK)
         }
         // A press on the space bar records where a caret slide would start.
-        if (spaceCursorEnabled && KeyFlags.has(geometry.keyFlags[index], KeyFlags.REPEATABLE).not() &&
-            geometry.keyCode[index] == ' '.code
+        val onSpace = geometry.keyCode[index] == ' '.code
+        if ((spaceCursorEnabled || spaceTrackpointEnabled) &&
+            KeyFlags.has(geometry.keyFlags[index], KeyFlags.REPEATABLE).not() && onSpace
         ) {
             spacePointer = pointerId
             spaceStartX = x
@@ -1228,15 +1361,34 @@ class KeyboardCanvasView(
             spaceMovedBy = 0
             spaceMovedLines = 0
         }
+        // A press on backspace records where a selecting drag would start.
+        if (backspaceSlideEnabled && geometry.keyCode[index] == KeyCodes.DELETE &&
+            !KeyFlags.has(geometry.keyFlags[index], KeyFlags.HAS_FLICKS)
+        ) {
+            backspacePointer = pointerId
+            backspaceStartX = x
+            backspaceStartY = y
+            backspaceMovedBy = 0
+            backspaceMovedLines = 0
+        }
         listener?.onKeyDown(geometry.keyCode[index])
 
         if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.REPEATABLE)) {
             repeatKey = index
             postDelayed(repeatRunnable, REPEAT_DELAY_MILLIS)
         }
-        // Armed for every key; one without alternatives offers the hold to the listener.
-        longPressPointer = pointerId
-        postDelayed(longPressRunnable, longPressDelayFor(index))
+        if (onSpace && spaceTrackpointEnabled) {
+            // The space bar's hold is the joystick; its listener hold is not armed.
+            trackpointArmed = true
+            trackpointActive = false
+            trackpointX = x
+            trackpointY = y
+            postDelayed(trackpointArmRunnable, Trackpoint.HOLD_MILLIS)
+        } else {
+            // Armed for every key; one without alternatives offers the hold to the listener.
+            longPressPointer = pointerId
+            postDelayed(longPressRunnable, longPressDelayFor(index))
+        }
     }
 
     private fun onPointerMove(
@@ -1253,9 +1405,31 @@ class KeyboardCanvasView(
             updateAlternativesSelection(x)
             return
         }
+        // The joystick follows the finger; a drag along backspace selects.
+        if (trackpointActive && pointerId == trackpointPointerId) {
+            trackpointX = x
+            trackpointY = y
+            return
+        }
+        if (pointerId == backspacePointer) {
+            slideBackspace(pointerId, x, y)
+            return
+        }
         // A press on the space bar is a space or a caret slide, never another key.
         if (pointerId == spacePointer) {
-            slideSpaceBar(pointerId, x, y)
+            trackpointX = x
+            trackpointY = y
+            if (trackpointArmed) {
+                val dx = x - spaceStartX
+                val dy = y - spaceStartY
+                if (dx * dx + dy * dy > trackpointDeadZonePx * trackpointDeadZonePx) {
+                    removeCallbacks(trackpointArmRunnable)
+                    trackpointArmed = false
+                }
+            }
+            if (spaceCursorEnabled) {
+                slideSpaceBar(pointerId, x, y)
+            }
             return
         }
 
@@ -1360,9 +1534,30 @@ class KeyboardCanvasView(
         } else if (pointerId == gesturePointer) {
             disarmGesture()
         }
+        if (trackpointActive && pointerId == trackpointPointerId) {
+            stopTrackpoint()
+            trackpointPointerId = -1
+            pointerKey[pointerId] = NO_KEY
+            return
+        }
+        if (pointerId == backspacePointer) {
+            val dragged = slideBackspace(pointerId, x, y)
+            backspacePointer = -1
+            backspaceMovedBy = 0
+            backspaceMovedLines = 0
+            if (dragged) {
+                pointerKey[pointerId] = NO_KEY
+                listener?.onBackspaceSelectionLift()
+                return
+            }
+        }
         if (pointerId == spacePointer) {
+            if (trackpointArmed) {
+                removeCallbacks(trackpointArmRunnable)
+                trackpointArmed = false
+            }
             // The lift's position is the slide's last step.
-            val dragged = slideSpaceBar(pointerId, x, y)
+            val dragged = spaceCursorEnabled && slideSpaceBar(pointerId, x, y)
             spacePointer = -1
             spaceMovedBy = 0
             spaceMovedLines = 0
@@ -1391,6 +1586,10 @@ class KeyboardCanvasView(
 
     private fun cancelAllPointers() {
         hidePreview()
+        stopTrackpoint()
+        trackpointPointerId = -1
+        backspacePointer = -1
+        spacePointer = -1
         if (gestureActive) {
             abandonGesture()
         }
@@ -1672,6 +1871,10 @@ class KeyboardCanvasView(
 
         /** One key width's fraction of finger travel per character of caret movement. */
         private const val SPACE_STEP_FRACTION = 0.55f
+
+        /** A drag along backspace is vertical once it rises more than this times its run, past this fraction of the key's height. */
+        private const val BACKSPACE_VERTICAL_RATIO = 0.4f
+        private const val BACKSPACE_VERTICAL_FRACTION = 0.4f
         private const val DEFAULT_SPACE_STEP_PX = 56f
         private const val SPACE_LINE_STEP_FRACTION = 0.9f
         private const val DEFAULT_SPACE_LINE_STEP_PX = 120f

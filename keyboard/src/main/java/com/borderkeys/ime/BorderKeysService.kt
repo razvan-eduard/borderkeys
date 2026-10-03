@@ -726,6 +726,9 @@ class BorderKeysService :
             view.keyboard.longPressDelayMillis = newPreferences.longPressMillis.toLong()
             view.keyboard.flickMinFraction = newPreferences.flickMinFraction
             view.keyboard.flickMaxFraction = newPreferences.flickMaxFraction
+            view.keyboard.backspaceSlideEnabled = newPreferences.backspaceSlideSelects
+            view.keyboard.spaceTrackpointEnabled = newPreferences.spaceTrackpoint
+            view.keyboard.trackpointSpeedPercent = newPreferences.trackpointSpeed
             view.keyboard.radialMenuEnabled = newPreferences.radialMenuEnabled
             view.keyboard.radialPauseDwellMillis =
                 newPreferences.radialPauseDwellMillis.toLong()
@@ -827,6 +830,9 @@ class BorderKeysService :
         view.keyboard.longPressDelayMillis = preferences.longPressMillis.toLong()
         view.keyboard.flickMinFraction = preferences.flickMinFraction
         view.keyboard.flickMaxFraction = preferences.flickMaxFraction
+        view.keyboard.backspaceSlideEnabled = preferences.backspaceSlideSelects
+        view.keyboard.spaceTrackpointEnabled = preferences.spaceTrackpoint
+        view.keyboard.trackpointSpeedPercent = preferences.trackpointSpeed
         view.keyboard.radialMenuEnabled = preferences.radialMenuEnabled
         view.keyboard.radialPauseDwellMillis = preferences.radialPauseDwellMillis.toLong()
         view.keyboard.radialMinPathLetters = preferences.radialMinPathLetters
@@ -1145,6 +1151,12 @@ class BorderKeysService :
     override fun onCursorNudge(steps: Int) = orchestrator.onCursorNudge(steps)
 
     override fun onCursorNudgeLines(lines: Int) = orchestrator.onCursorNudgeLines(lines)
+
+    override fun onBackspaceSelect(steps: Int) = orchestrator.onBackspaceSelect(steps)
+
+    override fun onBackspaceSelectLines(lines: Int) = orchestrator.onBackspaceSelectLines(lines)
+
+    override fun onBackspaceSelectionLift() = orchestrator.onBackspaceSelectionLift()
 
     /** A completed swipe; its last point anchors a ring that opens after the lift. */
     override fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {

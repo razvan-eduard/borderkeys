@@ -193,6 +193,21 @@ class ImeSmokeTest {
     }
 
     @Test
+    fun aDragLeftOnBackspaceSelectsAndTheLiftDeletes() {
+        type("abc")
+        tapKey(SPACE)
+        type("def")
+        settle()
+        val delete = waitForKey(DELETE_KEY).visibleBounds
+        val a = waitForKey("a").visibleBounds
+        // Four character steps left, each about half a key width.
+        val from = Point(delete.centerX(), delete.centerY())
+        val to = Point(delete.centerX() - (a.width() * 2.4f).toInt(), delete.centerY())
+        swipe(listOf(from, to))
+        assertField("abc")
+    }
+
+    @Test
     fun aShortDragOffAKeyWritesItsFlick() {
         runBlocking {
             DataGraph.themes.updatePreferences {
@@ -849,6 +864,9 @@ class ImeSmokeTest {
         /** What every mode's content description starts with; the mode's own name follows. */
         const val PROBE_PREFIX = "probe-"
         const val EDIT_TEXT = "android.widget.EditText"
+
+        /** The backspace key's spoken name, from the catalogue. */
+        const val DELETE_KEY = "Delete"
         const val QUICK_ACTIONS_VIEW = "com.borderkeys.ime.QuickActionsView"
 
         /** The name the system shows for this keyboard, from the manifest's ime_name. */

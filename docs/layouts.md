@@ -145,7 +145,15 @@ the long-press timer (380 ms) always elapses before the character-repeat delay (
 a held backspace goes straight to deleting a whole *word* rather than a character. Once that
 first word is gone, `KeyboardCanvasView`'s repeat runnable keeps it going one word at a time for
 as long as the finger stays down — and that mechanism **only arms itself when this flag is set**.
-Without it a held backspace stops after exactly one word.
+Without it a held backspace stops after exactly one word. A *drag* along backspace is something
+else: with *Slide on backspace to select* on, each half key width leftwards selects one more
+character behind the caret, a mostly vertical drag selects by the line, and the lift deletes the
+selection (`TypingOrchestrator.onBackspaceSelect`, through `CaretNudge` with the caret as anchor);
+the first step disarms the hold and the repeat. A terminal counts the characters and gets that
+many deletes at the lift. The space bar held still for 600 ms with *Hold the space bar to steer
+the cursor* on becomes a joystick (`Trackpoint`): each axis past a 15 dp dead zone moves the caret
+one step per tick, the ticks quickening from 200 ms to 30 ms as the finger leans towards half the
+key's diagonal; with it off, the hold switches the layout as before.
 
 ---
 
