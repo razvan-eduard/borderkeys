@@ -835,7 +835,13 @@ bare spelling the pack holds beside its marked twin keeps the lead on frequency 
 is written as the table has it (`TypingOrchestrator.caseSwipedWords`), one text once, so `didnt`
 and `im` swipe to `didn't` and `I'm` as they type to them. The bare spellings the English table
 rewrites that are not words themselves are not in the English list
-(`make_contractions.py --prune-bare`).
+(`make_contractions.py --prune-bare`). A bare spelling that is a word keeps its place, and its
+apostrophe twin from `assets/contractions/<tag>.pairs.txt` is spliced in beside it
+(`SwipeFlow.withTwins`): second, except in English when the twin is the commoner of the two and
+does not end in `'s` or `s'`, when it goes first (`I'll` before `ill`, `its` before `it's`,
+`peoples` before `people's`). A bare spelling under three letters is paired only with a
+first-person form other than `i's`. With the bundled lists English has 370 pairs, one of which,
+`ill`, puts its twin first; French 37, Italian 29, German 4, Spanish 1, Romanian none.
 
 ### Tier A — `Shark2Decoder`
 

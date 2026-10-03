@@ -99,6 +99,7 @@ internal class DictionaryLoader(
                 enabled.map { Contractions.load(assets, it.tag) },
                 enabled.map { it.tag },
             )
+            orchestrator.twins = Contractions.twinsOf(enabled.map { it.tag to Contractions.loadPairs(assets, it.tag) })
             withContext(Dispatchers.Main) { onPacksChosen() }
 
             // The set is sent before the packs load, to free the slots of packs no longer named,

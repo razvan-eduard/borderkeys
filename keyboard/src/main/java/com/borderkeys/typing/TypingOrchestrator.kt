@@ -109,6 +109,13 @@ class TypingOrchestrator(
             commitFlow.contractions = value
         }
 
+    /** Apostrophe twins of bare spellings for the languages switched on; see [SwipeFlow.twins]. */
+    var twins: Map<String, com.borderkeys.ime.Contractions.Twin>
+        get() = swipeFlow.twins
+        set(value) {
+            swipeFlow.twins = value
+        }
+
     /** The word being written. */
     private val composingWord = ComposingWord()
 
@@ -1075,11 +1082,12 @@ class TypingOrchestrator(
 
     /**
      * [candidates] with each bare spelling the contraction table rewrites written as the table
-     * has it, one text once, the first copy kept.
+     * has it, one text once, the first copy kept, then each paired bare spelling's twin beside
+     * it ([SwipeFlow.withTwins]).
      */
     private fun withContractions(candidates: List<Candidate>): List<Candidate> {
         if (contractions.isEmpty()) {
-            return candidates
+            return swipeFlow.withTwins(candidates)
         }
         val out = ArrayList<Candidate>(candidates.size)
         for (candidate in candidates) {
@@ -1088,7 +1096,7 @@ class TypingOrchestrator(
                 out.add(if (written == candidate.text) candidate else candidate.copy(text = written))
             }
         }
-        return out
+        return swipeFlow.withTwins(out)
     }
 
     /**
