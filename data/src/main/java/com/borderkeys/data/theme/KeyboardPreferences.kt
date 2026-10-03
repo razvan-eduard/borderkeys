@@ -609,6 +609,24 @@ data class KeyboardPreferences(
     val correctionStrictness: Float = DEFAULT_CORRECTION_STRICTNESS,
 
     /**
+     * How closely a correction must match what was typed, from 0.5 to 0.9: the share of its
+     * letters that match, a neighbouring key counting nearly whole.
+     */
+    val correctionThreshold: Float = DEFAULT_CORRECTION_THRESHOLD,
+
+    /** How many letters longer or shorter than what was typed a correction may be, 0 to 5. */
+    val correctionLengthDifference: Int = DEFAULT_CORRECTION_LENGTH_DIFFERENCE,
+
+    /** How many of the first letters typed a correction must keep, 0 to 4; 0 keeps none. */
+    val correctionPrefix: Int = 0,
+
+    /**
+     * How common a word must be to be a correction, from [MIN_CORRECTION_FREQUENCY], any word,
+     * to [MAX_CORRECTION_FREQUENCY], only the commonest. Words the keyboard learned are exempt.
+     */
+    val correctionMinFrequency: Int = MIN_CORRECTION_FREQUENCY,
+
+    /**
      * How far the text assistant's model may wander from the single most likely next word. `plus`
      * only, read by [com.borderkeys.assist.TextAssistService] for whichever model is loaded.
      */
@@ -686,6 +704,16 @@ data class KeyboardPreferences(
         } else {
             DEFAULT_CORRECTION_STRICTNESS
         },
+        correctionThreshold = if (correctionThreshold > 0f) {
+            correctionThreshold.coerceIn(MIN_CORRECTION_THRESHOLD, MAX_CORRECTION_THRESHOLD)
+        } else {
+            DEFAULT_CORRECTION_THRESHOLD
+        },
+        correctionLengthDifference =
+            correctionLengthDifference.coerceIn(0, MAX_CORRECTION_LENGTH_DIFFERENCE),
+        correctionPrefix = correctionPrefix.coerceIn(0, MAX_CORRECTION_PREFIX),
+        correctionMinFrequency =
+            correctionMinFrequency.coerceIn(MIN_CORRECTION_FREQUENCY, MAX_CORRECTION_FREQUENCY),
         assistTemperature = if (assistTemperature > 0f) {
             assistTemperature.coerceIn(MIN_ASSIST_TEMPERATURE, MAX_ASSIST_TEMPERATURE)
         } else {
@@ -1207,8 +1235,24 @@ data class KeyboardPreferences(
         const val RADIAL_TRUSTED_AUTO_APPLY = 1
 
         /** The range [minCorrectionLength] is clamped to. */
-        const val MIN_CORRECTION_LENGTH = 1
+        const val MIN_CORRECTION_LENGTH = 2
         const val MAX_CORRECTION_LENGTH = 5
+
+        /** The range [correctionThreshold] is clamped to, and the value "Reset" restores. */
+        const val MIN_CORRECTION_THRESHOLD = 0.5f
+        const val MAX_CORRECTION_THRESHOLD = 0.9f
+        const val DEFAULT_CORRECTION_THRESHOLD = 0.65f
+
+        /** The largest [correctionLengthDifference], and the value "Reset" restores. */
+        const val MAX_CORRECTION_LENGTH_DIFFERENCE = 5
+        const val DEFAULT_CORRECTION_LENGTH_DIFFERENCE = 2
+
+        /** The largest [correctionPrefix]. */
+        const val MAX_CORRECTION_PREFIX = 4
+
+        /** The range [correctionMinFrequency] is clamped to; the least sets no floor. */
+        const val MIN_CORRECTION_FREQUENCY = 100
+        const val MAX_CORRECTION_FREQUENCY = 2000
 
         /** The range [correctionStrictness] is clamped to, and the value "Reset" restores. */
         const val MIN_CORRECTION_STRICTNESS = 0.5f

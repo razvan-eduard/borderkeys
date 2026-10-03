@@ -271,6 +271,74 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 Explanation(
                     strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH_NOTE],
                 )
+                Text(
+                    strings[Keys.CORRECTIONS_THRESHOLD],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                DefaultableSlider(
+                    label = strings.getString(
+                        Keys.CORRECTIONS_THRESHOLD_VALUE,
+                        (preferences.correctionThreshold * PERCENT).roundToInt(),
+                    ),
+                    value = preferences.correctionThreshold,
+                    range = KeyboardPreferences.MIN_CORRECTION_THRESHOLD..
+                        KeyboardPreferences.MAX_CORRECTION_THRESHOLD,
+                    default = KeyboardPreferences.DEFAULT_CORRECTION_THRESHOLD,
+                    steps = THRESHOLD_STEPS,
+                ) { value -> update { it.copy(correctionThreshold = value) } }
+                Explanation(strings[Keys.CORRECTIONS_THRESHOLD_NOTE])
+                Text(
+                    strings[Keys.CORRECTIONS_LENGTH_DIFFERENCE],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                DefaultableSlider(
+                    label = strings.counted(
+                        Keys.CORRECTIONS_LENGTH_DIFFERENCE_VALUE,
+                        preferences.correctionLengthDifference,
+                    ),
+                    value = preferences.correctionLengthDifference.toFloat(),
+                    range = 0f..KeyboardPreferences.MAX_CORRECTION_LENGTH_DIFFERENCE.toFloat(),
+                    default = KeyboardPreferences.DEFAULT_CORRECTION_LENGTH_DIFFERENCE.toFloat(),
+                    steps = KeyboardPreferences.MAX_CORRECTION_LENGTH_DIFFERENCE - 1,
+                ) { value -> update { it.copy(correctionLengthDifference = value.roundToInt()) } }
+                Explanation(strings[Keys.CORRECTIONS_LENGTH_DIFFERENCE_NOTE])
+                Text(
+                    strings[Keys.CORRECTIONS_PREFIX],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                DefaultableSlider(
+                    label = if (preferences.correctionPrefix == 0) {
+                        strings[Keys.CORRECTIONS_PREFIX_NONE]
+                    } else {
+                        strings.counted(Keys.CORRECTIONS_PREFIX_VALUE, preferences.correctionPrefix)
+                    },
+                    value = preferences.correctionPrefix.toFloat(),
+                    range = 0f..KeyboardPreferences.MAX_CORRECTION_PREFIX.toFloat(),
+                    default = 0f,
+                    steps = KeyboardPreferences.MAX_CORRECTION_PREFIX - 1,
+                ) { value -> update { it.copy(correctionPrefix = value.roundToInt()) } }
+                Explanation(strings[Keys.CORRECTIONS_PREFIX_NOTE])
+                Text(
+                    strings[Keys.CORRECTIONS_MIN_FREQUENCY],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                DefaultableSlider(
+                    label = if (preferences.correctionMinFrequency <= KeyboardPreferences.MIN_CORRECTION_FREQUENCY) {
+                        strings[Keys.CORRECTIONS_MIN_FREQUENCY_ANY]
+                    } else {
+                        preferences.correctionMinFrequency.toString()
+                    },
+                    value = preferences.correctionMinFrequency.toFloat(),
+                    range = KeyboardPreferences.MIN_CORRECTION_FREQUENCY.toFloat()..
+                        KeyboardPreferences.MAX_CORRECTION_FREQUENCY.toFloat(),
+                    default = KeyboardPreferences.MIN_CORRECTION_FREQUENCY.toFloat(),
+                    steps = FREQUENCY_STEPS,
+                ) { value -> update { it.copy(correctionMinFrequency = value.roundToInt()) } }
+                Explanation(strings[Keys.CORRECTIONS_MIN_FREQUENCY_NOTE])
                 Button(
                     onClick = { update { resetCorrectionDefaults(it) } },
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
@@ -667,5 +735,18 @@ private fun resetCorrectionDefaults(preferences: KeyboardPreferences): KeyboardP
         correctionStrictness = defaults.correctionStrictness,
         revertCorrectionOnBackspace = defaults.revertCorrectionOnBackspace,
         minCorrectionLength = defaults.minCorrectionLength,
+        correctionThreshold = defaults.correctionThreshold,
+        correctionLengthDifference = defaults.correctionLengthDifference,
+        correctionPrefix = defaults.correctionPrefix,
+        correctionMinFrequency = defaults.correctionMinFrequency,
     )
 }
+
+/** [KeyboardPreferences.correctionThreshold] as a percentage. */
+private const val PERCENT = 100f
+
+/** The threshold slider's stops between its ends, 0.05 apart. */
+private const val THRESHOLD_STEPS = 7
+
+/** The frequency slider's stops between its ends, 100 apart. */
+private const val FREQUENCY_STEPS = 18
