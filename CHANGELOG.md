@@ -118,7 +118,9 @@ attestations and the full commit lists are on the
 - Swiping reaches contractions: a swipe through d-o-n-t writes "don't", and a swipe through the
   letters of a bare spelling the keyboard already restores an apostrophe to, "didnt" or "im",
   writes it with the apostrophe. Those bare spellings are gone from the English list, so the
-  strip no longer offers "cant" or "wont" beside the words they stand for.
+  strip no longer offers "cant" or "wont" beside the words they stand for. A swiped word that has
+  an apostrophe twin keeps its place with the twin offered next to it, "its" then "it's"; in
+  English the twin comes first when it is the commoner of the two, "I'll" before "ill".
 - A slip weighs less against how common a word is, for autocorrect and the strip alike: the word
   you meant leads the strip after a neighbouring-key slip 76% of the time instead of 72%, and
   a letter left out is put back more often.

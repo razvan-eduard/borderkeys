@@ -87,6 +87,34 @@ class ContractionsTest {
     }
 
     @Test
+    fun `a pair line carries both counts, and a malformed one is skipped`() {
+        val pairs = Contractions.parsePairs("# header\nill\tI'll\t1989\t2613\nwell\twe'll\tx\t3\nits\tit's\n")
+        assertEquals(listOf(Contractions.PairEntry("ill", "I'll", 1989, 2613)), pairs)
+    }
+
+    @Test
+    fun `an English twin goes ahead only when commoner and never as an 's form`() {
+        val english = listOf(
+            Contractions.PairEntry("ill", "I'll", 1989, 2613),
+            Contractions.PairEntry("its", "it's", 113572, 60120),
+            Contractions.PairEntry("peoples", "people's", 1608, 3592),
+        )
+        val twins = Contractions.twinsOf(listOf("en-US" to english))
+        assertEquals(Contractions.Twin("I'll", ahead = true), twins["ill"])
+        assertEquals(Contractions.Twin("it's", ahead = false), twins["its"])
+        assertEquals(Contractions.Twin("people's", ahead = false), twins["peoples"])
+    }
+
+    @Test
+    fun `outside English a twin stays second, and the first language that pairs a spelling keeps it`() {
+        val french = listOf(Contractions.PairEntry("lange", "l'ange", 76, 178))
+        val italian = listOf(Contractions.PairEntry("lange", "l'ange", 1, 9))
+        val twins = Contractions.twinsOf(listOf("fr-FR" to french, "it-IT" to italian))
+        assertEquals(Contractions.Twin("l'ange", ahead = false), twins["lange"])
+        assertEquals(twins["lange"], Contractions.twinOf("Lange", twins))
+    }
+
+    @Test
     fun `two languages merge into one table`() {
         val french = listOf(Contractions.Entry("cest", "c'est", emptyList()))
         val table = Contractions.of(listOf(english, french), listOf("en-US", "fr-FR"))

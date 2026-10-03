@@ -11,6 +11,7 @@ import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.TextShortcut
 import com.borderkeys.i18n.Keys
 import com.borderkeys.ime.ComposeSequences
+import com.borderkeys.ime.Contractions
 import com.borderkeys.ime.KeyCodes
 import com.borderkeys.ime.ShiftState
 import com.borderkeys.predict.Candidate
@@ -129,6 +130,20 @@ class TypingScenarioTest {
         rig.settle()
         rig.type(" ")
         assertEquals("the ", rig.editor.text)
+    }
+
+    @Test
+    fun `a swiped ill puts I'll first, a swiped its keeps its first, and a swiped is offers no it's`() {
+        rig.orchestrator.twins = Contractions.twinsOf(
+            listOf(
+                "en-US" to Contractions.parsePairs(
+                    java.io.File("src/main/assets/contractions/en-US.pairs.txt").readText(),
+                ),
+            ),
+        )
+        assertEquals(listOf("I'll", "ill", "all"), swiped("ill", "all").map { it.text })
+        assertEquals(listOf("its", "it's", "it"), swiped("its", "it").map { it.text })
+        assertEquals(listOf("is", "it", "its", "it's"), swiped("is", "it", "its").map { it.text })
     }
 
     @Test
