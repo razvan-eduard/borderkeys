@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Filipino translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">Mag-draft gamit ang BorderKeys</string>
+    <string name="process_text_label_correct">Itama gamit ang BorderKeys</string>
+    <string name="process_text_label_shorten">Paikliin gamit ang BorderKeys</string>
+    <string name="process_text_label_summarise">Ibuod gamit ang BorderKeys</string>
+    <string name="process_text_label_custom">Sariling aksyon gamit ang BorderKeys</string>
+    <string name="process_text_label_private_copy">Itago nang pribado gamit ang BorderKeys</string>
+
+</resources>

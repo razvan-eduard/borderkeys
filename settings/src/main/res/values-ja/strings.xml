@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Japanese translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">BorderKeys で下書き</string>
+    <string name="process_text_label_correct">BorderKeys で修正</string>
+    <string name="process_text_label_shorten">BorderKeys で短く</string>
+    <string name="process_text_label_summarise">BorderKeys で要約</string>
+    <string name="process_text_label_custom">BorderKeys でカスタム操作</string>
+    <string name="process_text_label_private_copy">BorderKeys にプライベートに保存</string>
+
+</resources>

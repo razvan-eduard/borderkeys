@@ -85,7 +85,7 @@ fun LearnedWordsScreen(modifier: Modifier = Modifier) {
         items(words, key = { it.word }) { word ->
             SettingRow(
                 title = word.word,
-                subtitle = strings.getString(Keys.DICTIONARY_CHOSEN_TIMES_TYPED_ON, word.count, word.locale),
+                subtitle = strings.counted(Keys.DICTIONARY_CHOSEN_TIMES_TYPED_ON, word.count, word.count, word.locale),
                 trailing = {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = { scope.launch { repository.block(word.word) } }) {

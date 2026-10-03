@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Polish translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">Szkic w BorderKeys</string>
+    <string name="process_text_label_correct">Popraw w BorderKeys</string>
+    <string name="process_text_label_shorten">Skróć w BorderKeys</string>
+    <string name="process_text_label_summarise">Streść w BorderKeys</string>
+    <string name="process_text_label_custom">Własna akcja w BorderKeys</string>
+    <string name="process_text_label_private_copy">Zachowaj prywatnie w BorderKeys</string>
+
+</resources>

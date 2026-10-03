@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Russian translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">Черновик в BorderKeys</string>
+    <string name="process_text_label_correct">Исправить в BorderKeys</string>
+    <string name="process_text_label_shorten">Сократить в BorderKeys</string>
+    <string name="process_text_label_summarise">Кратко изложить в BorderKeys</string>
+    <string name="process_text_label_custom">Своё действие в BorderKeys</string>
+    <string name="process_text_label_private_copy">Сохранить приватно в BorderKeys</string>
+
+</resources>

@@ -3,6 +3,9 @@
 
 package com.borderkeys.settings
 
+import java.text.Normalizer
+import java.util.Locale
+
 /**
  * The search box on the Home screen: which screens, cards and rows carry every word of a
  * query in their title, and where each one is.
@@ -29,7 +32,7 @@ object SettingsSearch {
         hidden: Set<Screen> = emptySet(),
         limit: Int = MAX_MATCHES,
     ): List<Match> {
-        val needle = query.trim().lowercase()
+        val needle = fold(query.trim())
         val words = needle.split(WHITESPACE).filter { it.isNotEmpty() }
         if (words.isEmpty()) {
             return emptyList()
@@ -37,7 +40,7 @@ object SettingsSearch {
         val leading = ArrayList<Match>()
         val other = ArrayList<Match>()
         fun consider(match: Match) {
-            val title = match.title.lowercase()
+            val title = fold(match.title)
             when {
                 title.startsWith(needle) -> leading += match
                 words.all { it in title } -> other += match
@@ -64,7 +67,29 @@ object SettingsSearch {
             .replace(REPEATED_SPACE, " ")
             .trim()
 
+    /**
+     * [text] as compared: compatibility forms and case folded, accents and other combining marks
+     * dropped, ß as ss, dotless ı as i, katakana as hiragana.
+     */
+    fun fold(text: String): String {
+        val lowered = Normalizer.normalize(text, Normalizer.Form.NFKC).lowercase(Locale.ROOT)
+        val decomposed = Normalizer.normalize(lowered, Normalizer.Form.NFD)
+        val out = StringBuilder(decomposed.length)
+        for (c in decomposed) {
+            when {
+                Character.getType(c) == Character.NON_SPACING_MARK.toInt() -> Unit
+                c == 'ß' -> out.append("ss")
+                c == 'ı' -> out.append('i')
+                c in KATAKANA -> out.append(c - KATAKANA_TO_HIRAGANA)
+                else -> out.append(c)
+            }
+        }
+        return Normalizer.normalize(out, Normalizer.Form.NFC)
+    }
+
     private const val MAX_MATCHES = 40
+    private val KATAKANA = '\u30A1'..'\u30F6'
+    private const val KATAKANA_TO_HIRAGANA = 0x60
     private const val PLACE_SEPARATOR = " › "
     private const val PLACEHOLDER = "%s"
     private val BRACKETED_PLACEHOLDER = Regex("""\s*\(%s\)""")

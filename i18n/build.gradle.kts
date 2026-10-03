@@ -33,9 +33,11 @@ android {
         unitTests {
             isReturnDefaultValues = true
             all {
-                // The catalogues the tests read from disk: a change to one reruns them.
+                // The catalogues and store listings the tests read from disk: a change to one reruns them.
                 it.inputs.dir("src/main/assets/translations")
                     .withPropertyName("catalogues").withPathSensitivity(PathSensitivity.RELATIVE)
+                it.inputs.files(rootProject.fileTree("fastlane") { include("**/*.txt") })
+                    .withPropertyName("storeListings").withPathSensitivity(PathSensitivity.RELATIVE)
             }
         }
     }

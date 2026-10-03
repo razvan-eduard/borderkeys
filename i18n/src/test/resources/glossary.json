@@ -1,0 +1,2127 @@
+{
+  "concepts": [
+    {
+      "name": "keyboard",
+      "english": "keyboard",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "klávesnic"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "tastatur"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "teclado"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "صفحه‌کلید"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "keyboard"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "clavier"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*billentyűzet"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "keyboard"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "tastier"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*キーボード"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*키보드"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "tastatūr"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*toetsenbord"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "klawiatur"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "teclado"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "tastatur"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "клавиатур"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "klavye"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "клавіатур"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "bàn phím"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*键盘"
+          ]
+        }
+      }
+    },
+    {
+      "name": "clipboard",
+      "english": "clipboard",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "schránk",
+            "schrán"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "zwischenablage"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "portapapeles"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "کلیپ‌بورد"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "clipboard"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "presse-papiers"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*vágólap"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "papan klip"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "appunti"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*クリップボード"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*클립보드"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "starpliktuv"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*klembord"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "schowk",
+            "schowek"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "área de transferência"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "clipboard"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "буфер"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "pano"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "буфер"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "bảng nhớ tạm"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*剪贴板"
+          ]
+        }
+      }
+    },
+    {
+      "name": "dictionary",
+      "english": "dictionar",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "slovník",
+            "slovníc"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "wörterbuch",
+            "wörterbüch"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "diccionario"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "واژه‌نامه"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "diksiyunaryo"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "dictionnaire"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*szótár"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "kamus"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "dizionari"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*辞書"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*사전"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "vārdnīc"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*woordenboek"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "słownik"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "dicionário"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "dicționar"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "словар"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "sözlü"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "словник"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "từ điển"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*词典"
+          ]
+        }
+      }
+    },
+    {
+      "name": "suggestion",
+      "english": "suggestion",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "návrh",
+            "návrz"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "vorschl"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "sugerencia"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "پیشنهاد"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "mungkahi"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "suggestion"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*javaslat"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "saran"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "suggeriment"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*候補"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*추천"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "ieteikum"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*suggestie"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "sugest"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "sugest"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "sugesti"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "подсказ"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "öneri"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "підказ"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "gợi ý"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*建议",
+            "*候选"
+          ]
+        }
+      }
+    },
+    {
+      "name": "layout",
+      "english": "layout",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "rozložení"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "layout",
+            "*layout"
+          ],
+          "forbidden": [
+            "belegung",
+            "*belegung"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "distribuci"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "چیدمان"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "layout"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "disposition"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*kiosztás"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "tata letak"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "layout"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*配列"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*레이아웃"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "izkārtojum"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*indeling"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "układ"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "layout"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "aspect"
+          ],
+          "forbidden": [
+            "aranjament"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "раскладк",
+            "раскладо"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "düzen"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "розкладк",
+            "розкладо",
+            "розкладц"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "bố cục"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*布局"
+          ]
+        }
+      },
+      "exceptKeys": [
+        "radial_close_on_editor_move_note"
+      ]
+    },
+    {
+      "name": "swipe",
+      "english": "swip",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "tah",
+            "tahem",
+            "tahu",
+            "tahy",
+            "tahů",
+            "tahům",
+            "taz"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "wisch",
+            "*wisch"
+          ],
+          "forbidden": [
+            "swipe",
+            "*swipe"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "desliz"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "*کشید",
+            "*بکش"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "swipe",
+            "mag-swipe",
+            "i-swipe"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "gliss"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*csúsztat"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "*geser"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "scorr"
+          ],
+          "forbidden": [
+            "swipe"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*スワイプ"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*스와이프"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "*vilk",
+            "*velk",
+            "*velc"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*veeg",
+            "vegen",
+            "vegend"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "gest",
+            "geś"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "desliz"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "glis"
+          ],
+          "forbidden": [
+            "swipe"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "свайп"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "kaydır"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "свайп"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "vuốt"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*滑行"
+          ]
+        }
+      },
+      "exceptKeys": [
+        "debug_stats_.*",
+        "composer_swipe_hint"
+      ]
+    },
+    {
+      "name": "theme",
+      "english": "theme",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "motiv"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "thema",
+            "themen",
+            "*thema",
+            "*themen"
+          ],
+          "forbidden": [
+            "design"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "tema"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "پوسته"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "tema"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "thème"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*témá",
+            "*téma"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "tema"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "tema",
+            "temi"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*テーマ"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*테마"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "motīv"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*thema"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "motyw"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "tema"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "tem"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "тем"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "tema"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "тем"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "chủ đề"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*主题"
+          ]
+        }
+      }
+    },
+    {
+      "name": "password",
+      "english": "password",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "hesl",
+            "hes"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "passw",
+            "*passw"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "contraseña"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "گذرواژه"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "password"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "mot de passe",
+            "mots de passe"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*jelszó",
+            "*jelszav"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "kata sandi"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "password"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*パスワード"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*비밀번호"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "parol",
+            "paroļ"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*wachtwoord"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "hasł",
+            "hasel",
+            "haseł"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "senha"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "parol"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "парол"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "şifre"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "парол"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "mật khẩu"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*密码"
+          ]
+        }
+      }
+    },
+    {
+      "name": "encryption",
+      "english": "encrypt",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "šifr",
+            "*šifr"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "verschlüssel"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "cifr"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "رمزگذاری"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "i-encrypt",
+            "naka-encrypt",
+            "encrypt",
+            "*encrypt"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "chiffr"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*titkosít"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "*enkripsi"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "cifr",
+            "crittograf"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*暗号化"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*암호화"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "šifr",
+            "*šifr"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*versleutel"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "szyfr",
+            "*szyfr"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "criptograf"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "cript"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "шифр",
+            "*шифр"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "şifrel"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "шифр",
+            "*шифр"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "mã hóa"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*加密"
+          ]
+        }
+      }
+    },
+    {
+      "name": "backspace",
+      "english": "backspace",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "rücktaste"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "retroceso"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "retour arrière"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*backspace"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*backspace"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "backspace"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*退格"
+          ]
+        }
+      }
+    },
+    {
+      "name": "space bar",
+      "english": "space bar",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "mezerník"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "leertaste"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "barra espaciadora"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "فاصله"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "space bar"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "barre d'espace",
+            "barre d’espace"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*szóköz"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "spasi"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "barra spaziatrice"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*スペースキー"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*스페이스바"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "atstarp"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*spatiebalk"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "spacj"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "barra de espaço"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "bara de spațiu",
+            "barei de spațiu"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "пробел"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "boşluk tuş"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "пробіл"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "phím cách"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*空格键"
+          ]
+        }
+      }
+    },
+    {
+      "name": "pinned",
+      "english": "pinned",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "připnut",
+            "připn"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "angeheft",
+            "anheft"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "fijad"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "سنجاق"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "naka-pin",
+            "i-pin",
+            "pin"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "épingl"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*rögzít"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "disematkan",
+            "sematkan"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "fissat"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*固定"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*고정"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "piesprau"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*vastgezet",
+            "*vastzet"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "przypię",
+            "przypin"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "fixad",
+            "fixar"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "fixat"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "закреп"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "sabitlen",
+            "sabitle"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "закріп"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "ghim"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*固定"
+          ]
+        }
+      }
+    },
+    {
+      "name": "accent modifier",
+      "english": "accent modifier",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "modifikátor diakritiky",
+            "modifikátory diakritiky"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "akzentmodifikator"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "modificador de acento",
+            "modificadores de acento"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "تغییردهندهٔ اعراب",
+            "تغییردهنده‌های اعراب"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "modifier ng tuldik"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "modificateur d'accent",
+            "modificateurs d'accent"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "ékezetmódosító"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "pengubah aksen"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "modificatore d'accento",
+            "modificatori d'accento"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*アクセント修飾キー"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*악센트 보조 키"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "diakritikas modifikator"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "accentmodificator"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "modyfikator akcentu",
+            "modyfikatory akcentu"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "modificador de acento",
+            "modificadores de acento"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "modificator de accent",
+            "modificatori de accent"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "модификатор диакритики",
+            "модификаторы диакритики"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "aksan değiştirici"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "модифікатор діакритики",
+            "модифікатори діакритики"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "phím bổ trợ dấu"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*重音修饰键"
+          ]
+        }
+      }
+    },
+    {
+      "name": "private",
+      "english": "private",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "soukrom"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "privat"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "privad"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "خصوصی"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "pribado",
+            "pribadong"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "privé"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*privát"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "pribadi"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "privat"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*プライベート"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*비공개"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "privāt"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*privé"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "prywat"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "privad"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "privat"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "приват"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "özel"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "приват"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "riêng tư"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*私密"
+          ]
+        }
+      }
+    },
+    {
+      "name": "language pack",
+      "english": "pack",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "balíč"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "paket",
+            "*paket"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "paquete"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "بسته"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "pack"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "pack"
+          ],
+          "forbidden": [
+            "paquet"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*csomag"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "paket"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "pacchett"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*パック"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*팩"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "pakotn",
+            "pakotņ"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*pakket"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "pakiet"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "pacote"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "pachet"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "пакет"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "paket"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "пакет"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "gói"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*包"
+          ]
+        }
+      },
+      "exceptKeys": [
+        ".*package.*"
+      ]
+    },
+    {
+      "name": "heatmap",
+      "english": "heatmap",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "tepeln"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "heatmap"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "mapa"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "نقشهٔ حرارتی",
+            "نقشه حرارتی"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "heatmap"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "carte"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*hőtérkép"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "peta panas"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "mappa"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*ヒートマップ"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*히트맵"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "siltuma kart"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*heatmap"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "map"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "mapa de calor"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "hart",
+            "hărț"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "теплов"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "ısı harita",
+            "isı harita"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "теплов"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "bản đồ nhiệt"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*热图"
+          ]
+        }
+      }
+    },
+    {
+      "name": "terminal",
+      "english": "terminal",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "termin"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "termin"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "termin"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "ترمینال"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "terminal"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "termin"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*termin"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "termin"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "termin"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*ターミナル"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*터미널"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "termin"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*termin"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "termin"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "termin"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "termin"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "термин"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "termin"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "термін"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "terminal"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*终端"
+          ]
+        }
+      },
+      "exceptKeys": [
+        "terminal_package"
+      ]
+    },
+    {
+      "name": "forget",
+      "english": "forget",
+      "locales": {
+        "cs": {
+          "allowed": [
+            "zapom"
+          ]
+        },
+        "de": {
+          "allowed": [
+            "vergess",
+            "vergiss"
+          ]
+        },
+        "es": {
+          "allowed": [
+            "olvid"
+          ]
+        },
+        "fa": {
+          "allowed": [
+            "فراموش"
+          ]
+        },
+        "fil": {
+          "allowed": [
+            "kalimutan",
+            "makalimutan",
+            "nakalimutan",
+            "makakalimutan",
+            "*limot",
+            "*limut"
+          ]
+        },
+        "fr": {
+          "allowed": [
+            "oubli"
+          ]
+        },
+        "hu": {
+          "allowed": [
+            "*elfelejt",
+            "*felejt"
+          ]
+        },
+        "id": {
+          "allowed": [
+            "lupa",
+            "*lupa"
+          ]
+        },
+        "it": {
+          "allowed": [
+            "diment"
+          ]
+        },
+        "ja": {
+          "allowed": [
+            "*忘れ"
+          ]
+        },
+        "ko": {
+          "allowed": [
+            "*잊"
+          ]
+        },
+        "lv": {
+          "allowed": [
+            "aizmirs",
+            "aizmir"
+          ]
+        },
+        "nl": {
+          "allowed": [
+            "*vergeet",
+            "*vergeten"
+          ]
+        },
+        "pl": {
+          "allowed": [
+            "zapom",
+            "zapomn"
+          ]
+        },
+        "pt": {
+          "allowed": [
+            "esquec"
+          ]
+        },
+        "ro": {
+          "allowed": [
+            "uit",
+            "uiț"
+          ]
+        },
+        "ru": {
+          "allowed": [
+            "забы",
+            "забуд",
+            "забв"
+          ]
+        },
+        "tr": {
+          "allowed": [
+            "unut"
+          ]
+        },
+        "uk": {
+          "allowed": [
+            "забу",
+            "забув"
+          ]
+        },
+        "vi": {
+          "allowed": [
+            "quên"
+          ]
+        },
+        "zh-cn": {
+          "allowed": [
+            "*忘记",
+            "*忘掉"
+          ]
+        }
+      }
+    }
+  ]
+}

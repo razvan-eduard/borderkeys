@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Indonesian translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">Buat draf dengan BorderKeys</string>
+    <string name="process_text_label_correct">Koreksi dengan BorderKeys</string>
+    <string name="process_text_label_shorten">Persingkat dengan BorderKeys</string>
+    <string name="process_text_label_summarise">Ringkas dengan BorderKeys</string>
+    <string name="process_text_label_custom">Tindakan khusus dengan BorderKeys</string>
+    <string name="process_text_label_private_copy">Simpan secara pribadi dengan BorderKeys</string>
+
+</resources>

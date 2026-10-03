@@ -163,9 +163,9 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# Corpus payloads read by the JVM tests: tab-separated cases with no header of their own.
+# Corpus payloads, fixtures and gate rules read by the JVM tests, with no header of their own.
 [[annotations]]
-path = "keyboard/src/test/resources/**"
+path = ["keyboard/src/test/resources/**", "data/src/test/resources/**", "i18n/src/test/resources/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"

@@ -275,7 +275,7 @@ private fun keyName(code: Int, strings: com.borderkeys.i18n.LanguageManager): St
         KeyCodes.ENTER -> strings[Keys.KEY_ENTER]
         KeyCodes.SYMBOLS -> strings[Keys.KEY_SYMBOLS]
         KeyCodes.SYMBOLS_SHIFT -> strings[Keys.KEY_MORE_SYMBOLS]
-        KeyCodes.LANGUAGE -> strings[Keys.KEY_LANGUAGE_HOLD_FOR_OTHER_KEYBOARDS]
+        KeyCodes.LANGUAGE -> strings[Keys.KEY_LANGUAGE]
         KeyCodes.EMOJI -> strings[Keys.KEY_EMOJI]
         KeyCodes.SETTINGS -> strings[Keys.KEY_SETTINGS]
         KeyCodes.ESCAPE -> strings[Keys.KEY_ESCAPE]

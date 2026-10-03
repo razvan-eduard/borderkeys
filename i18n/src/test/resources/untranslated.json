@@ -1,0 +1,14 @@
+{
+  "terms": [
+    "BorderKeys", "Vox", "Calendar", "Commander", "Expenses", "Hub", "Notes", "Vision", "Core", "Plus",
+    "Commit", "GPL", "or", "later", "QWERTY", "QWERTZ", "AZERTY", "Dvorak", "ISO", "SHA", "SSH", "SQLCipher",
+    "Wortschatz", "Leipzig", "Android", "Keystore", "JSON", "MB", "KB", "ms", "dp", "sp", "min",
+    "Alt", "Ctrl", "Tab", "Esc"
+  ],
+  "keys": [
+    "action_escape", "key_escape", "key_control", "key_emoji", "composer_action_show_original",
+    "feature_sample_emoji_word", "feature_sample_learned", "particle_effects_builtin_neon",
+    "theme_category_neon", "theme_neon", "theme_aurora", "theme_mono", "compose_pending", "key_compose",
+    "key_end", "key_enter", "key_home", "key_insert", "key_shift"
+  ]
+}

@@ -39,6 +39,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -69,6 +71,7 @@ import com.borderkeys.data.assist.AssistTask
 import com.borderkeys.data.draft.DraftProtocol
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.i18n.LanguageResolution
 import com.borderkeys.settings.screen.AboutScreen
 import com.borderkeys.settings.screen.AssistantScreen
 import com.borderkeys.data.backup.TransferProtocol
@@ -144,7 +147,11 @@ class SettingsActivity : ComponentActivity() {
             null
         }
         setContent {
-            CompositionLocalProvider(LocalStrings provides strings) {
+            CompositionLocalProvider(
+                LocalStrings provides strings,
+                LocalLayoutDirection provides
+                    if (LanguageResolution.isRightToLeft(strings.language)) LayoutDirection.Rtl else LayoutDirection.Ltr,
+            ) {
                 BorderKeysSettingsTheme {
                     if (selection != null) {
                         // Its own insets: it stands in for the Scaffold.

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Vietnamese translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">Soạn nháp với BorderKeys</string>
+    <string name="process_text_label_correct">Sửa lỗi với BorderKeys</string>
+    <string name="process_text_label_shorten">Rút gọn với BorderKeys</string>
+    <string name="process_text_label_summarise">Tóm tắt với BorderKeys</string>
+    <string name="process_text_label_custom">Thao tác tùy chỉnh với BorderKeys</string>
+    <string name="process_text_label_private_copy">Giữ riêng tư với BorderKeys</string>
+
+</resources>

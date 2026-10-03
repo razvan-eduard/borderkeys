@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Hungarian translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">Piszkozat a BorderKeysszel</string>
+    <string name="process_text_label_correct">Javítás a BorderKeysszel</string>
+    <string name="process_text_label_shorten">Rövidítés a BorderKeysszel</string>
+    <string name="process_text_label_summarise">Összefoglalás a BorderKeysszel</string>
+    <string name="process_text_label_custom">Egyéni művelet a BorderKeysszel</string>
+    <string name="process_text_label_private_copy">Megőrzés privátként a BorderKeysszel</string>
+
+</resources>

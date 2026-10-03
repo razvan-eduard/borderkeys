@@ -31,6 +31,25 @@ class CatalogueTest {
     }
 
     @Test
+    fun `every shipped language has a name in every catalogue`() {
+        for (language in languages()) {
+            val catalogue = catalogue(language)
+            for (named in languages()) {
+                assertTrue("$language has no language_name_$named", "language_name_$named" in catalogue)
+            }
+        }
+    }
+
+    @Test
+    fun `no entry doubles a percent sign`() {
+        for (language in languages()) {
+            for ((key, value) in catalogue(language)) {
+                assertTrue("$language:$key writes %% where % is shown as itself", "%%" !in value.replace("%%s", ""))
+            }
+        }
+    }
+
+    @Test
     fun `no entry is blank`() {
         for (language in languages()) {
             for ((key, value) in catalogue(language)) {
@@ -42,11 +61,14 @@ class CatalogueTest {
     @Test
     fun `placeholders match english`() {
         val english = catalogue(Strings.Languages.DEFAULT)
+        val counted = TranslationParity.countedKeys(english.keys)
         for (language in languages()) {
-            if (language == Strings.Languages.DEFAULT) continue
             for ((key, value) in catalogue(language)) {
-                val expected = english[key.removeSuffix("_many").removeSuffix("_one")]
-                    ?: english[key] ?: continue
+                val base = PluralRules.SUFFIXES.firstNotNullOfOrNull { suffix ->
+                    key.removeSuffix(suffix).takeIf { key.endsWith(suffix) && it in counted }
+                } ?: key
+                if (language == Strings.Languages.DEFAULT && base == key) continue
+                val expected = english[base] ?: continue
                 assertEquals(
                     "$language:$key has a different number of %s than English",
                     expected.split("%s").size,

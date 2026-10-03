@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+
+    Simplified Chinese translations of the OS-facing strings in values/strings.xml.
+-->
+<resources>
+
+    <string name="process_text_label">用 BorderKeys 起草</string>
+    <string name="process_text_label_correct">用 BorderKeys 更正</string>
+    <string name="process_text_label_shorten">用 BorderKeys 缩短</string>
+    <string name="process_text_label_summarise">用 BorderKeys 总结</string>
+    <string name="process_text_label_custom">用 BorderKeys 执行自定义操作</string>
+    <string name="process_text_label_private_copy">用 BorderKeys 私密保存</string>
+
+</resources>
