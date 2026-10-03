@@ -12,6 +12,4 @@ data class CorrectionOffer(
     val isName: Boolean,
     /** [WordStems.shields]'s answer for the typed word against [text]. */
     val inflection: Boolean,
-    /** How many edits the engine's walk took from the typed letters to [text]. */
-    val edits: Int = 0,
 )

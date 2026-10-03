@@ -60,9 +60,9 @@ internal object NativePredictor {
      * candidates, best first, and returns how many were written; an empty [composing] asks for
      * the next word. For a typed word, [outTexts] receives [TEXT_KNOWN_SPELLING] and
      * [TEXT_POSSESSIVE], a slot with none left as it is; [outCorrections] receives autocorrect's
-     * list, best first, up to [CORRECTION_SLOTS] entries, the rest left null, [outEdits] how many
-     * edits the walk took to each, and [outFlags] whether each entry is a name, then
-     * [FLAG_EXACT_SPELLING] and [FLAG_EXACT_SPELLING_NAME].
+     * list, best first, up to [CORRECTION_SLOTS] entries, the rest left null,
+     * [outCorrectionNames] whether each entry is a name, and [outSpellingFlags]
+     * [SPELLING_EXACT] and [SPELLING_NAME].
      */
     external fun nativeAnswer(
         handle: Long,
@@ -76,8 +76,8 @@ internal object NativePredictor {
         outProperNoun: BooleanArray,
         outTexts: Array<String?>,
         outCorrections: Array<String?>,
-        outEdits: IntArray,
-        outFlags: BooleanArray,
+        outCorrectionNames: BooleanArray,
+        outSpellingFlags: BooleanArray,
     ): Int
 
     /** [nativeAnswer]'s text slot: how the dictionaries spell the typed word. */
@@ -92,14 +92,14 @@ internal object NativePredictor {
     /** How many entries of autocorrect's list [nativeAnswer] writes at most. */
     const val CORRECTION_SLOTS = 5
 
-    /** [nativeAnswer]'s flag: a dictionary spells the typed letters exactly, case aside. */
-    const val FLAG_EXACT_SPELLING = CORRECTION_SLOTS
+    /** [nativeAnswer]'s spelling flag: a dictionary spells the typed letters exactly, case aside. */
+    const val SPELLING_EXACT = 0
 
-    /** [nativeAnswer]'s flag: that exact spelling is a name. */
-    const val FLAG_EXACT_SPELLING_NAME = CORRECTION_SLOTS + 1
+    /** [nativeAnswer]'s spelling flag: that exact spelling is a name. */
+    const val SPELLING_NAME = 1
 
-    /** How many flags [nativeAnswer] fills. */
-    const val FLAG_SLOTS = CORRECTION_SLOTS + 2
+    /** How many spelling flags [nativeAnswer] fills. */
+    const val SPELLING_FLAGS = 2
 
     /**
      * Records that the user committed [word] after [prev1] and [prev2]. [asserted] is whether it
