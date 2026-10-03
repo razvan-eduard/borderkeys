@@ -245,6 +245,8 @@ class KeyboardLayout(
             KeyCodes.PAGE_DOWN to "pgdn",
             KeyCodes.FORWARD_DELETE to "del",
             KeyCodes.INSERT to "ins",
+            KeyCodes.KEYBOARD_PICKER to "\u2328",
+            KeyCodes.VOICE to "\uD83C\uDF99",
         )
 
         /** The row as shipped, left to right. */

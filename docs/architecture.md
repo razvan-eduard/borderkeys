@@ -916,7 +916,7 @@ geometry — a ring of alternatives around the finger plus a separate centre Can
 
 ## Quick actions
 
-`QuickAction` (`:data`) is an enum of 23 actions, each with a stable `id` so that a bar
+`QuickAction` (`:data`) is an enum of 25 actions, each with a stable `id` so that a bar
 configured by a newer build **opens** rather than fails on an older one (`fromIds` drops unknown
 ids). `DEFAULT` is the five that answer *"I want that text somewhere"*:
 `COPY_PREVIOUS_WORD`, `COPY_ALL`, `PASTE`, `CLIPBOARD_HISTORY`, `SELECT_ALL`.
@@ -933,7 +933,13 @@ history limit and clearing on close. The selection is read through `FieldEditor.
 `TypingOrchestrator.privateCopyText`, which tells the strip when nothing is selected. The same
 entry is offered in other apps' text-selection menu by `PrivateCopyActivity` (`:settings`), off
 until the Clipboard screen turns it on, drawing nothing and returning nothing, rate-limited by
-`PrivateCopyRateLimit` to ten copies from one app and thirty in all per minute.
+`PrivateCopyRateLimit` to ten copies from one app and thirty in all per minute. `PICK_KEYBOARD`
+opens the system's keyboard picker, or with *Other-keyboards key switches back* goes straight back
+to the previous keyboard, its hold opening the picker; `VOICE_INPUT` switches to a voice keyboard
+among the enabled input methods, the one `VoiceInput` decides on (the remembered one while the set
+it was chosen from is unchanged, the only one when there is one, the picker otherwise or on a
+hold), and is offered only while one is enabled. The same two exist as keys for the modifier row
+(`ime_picker`, `voice`), and the globe's hold opens the picker.
 
 `NEWLINE` is worth a button because in a messaging app the return key sends the message, and the
 gesture for "new line without sending" is different in every one of them.
@@ -942,12 +948,12 @@ gesture for "new line without sending" is different in every one of them.
 
 `macroEligible` decides whether an action may be one step of a `CustomQuickAction`. A macro runs
 its steps back to back with nothing shown in between, so a step must be a plain edit that
-finishes within the tap that started it. Four are excluded:
+finishes within the tap that started it. Six are excluded:
 
 - `CLIPBOARD_HISTORY` opens a panel and only acts once something is picked, which a macro cannot
   wait for;
-- `SWITCH_LAYOUT`, `SETTINGS` and `COMPOSE` leave the field for another IME subtype or another
-  Activity.
+- `SWITCH_LAYOUT`, `SETTINGS`, `COMPOSE`, `PICK_KEYBOARD` and `VOICE_INPUT` leave the field for
+  another IME subtype, another Activity or another keyboard.
 
 Everything else reads or writes through `InputConnection` alone.
 

@@ -150,6 +150,11 @@ fun LayoutScreen(modifier: Modifier = Modifier) {
                 checked = preferences.languageKey,
             ) { value -> update { it.copy(languageKey = value) } }
             SwitchRow(
+                title = strings[Keys.LAYOUT_PICKER_KEY_SWITCHES_BACK],
+                subtitle = strings[Keys.LAYOUT_PICKER_KEY_SWITCHES_BACK_NOTE],
+                checked = preferences.pickerKeySwitchesBack,
+            ) { value -> update { it.copy(pickerKeySwitchesBack = value) } }
+            SwitchRow(
                 title = strings[Keys.SIZE_SPACE_CURSOR],
                 subtitle = strings[Keys.SIZE_SPACE_CURSOR_NOTE],
                 checked = preferences.spaceCursorControl,
@@ -363,5 +368,7 @@ private fun modifierKeyLabel(name: String): String = when (name) {
     ModifierRowKeys.PAGE_UP -> Keys.KEY_PAGE_UP
     ModifierRowKeys.PAGE_DOWN -> Keys.KEY_PAGE_DOWN
     ModifierRowKeys.FORWARD_DELETE -> Keys.KEY_FORWARD_DELETE
+    ModifierRowKeys.KEYBOARD_PICKER -> Keys.KEY_KEYBOARD_PICKER
+    ModifierRowKeys.VOICE -> Keys.KEY_VOICE
     else -> Keys.KEY_INSERT
 }

@@ -31,6 +31,18 @@ data class KeyboardPreferences(
 
     /** Whether other apps' text-selection menu offers Keep privately with BorderKeys. */
     val privateCopyInTextMenu: Boolean = false,
+
+    /**
+     * Whether the keyboard-picker key switches back to the previous keyboard at once, its hold
+     * opening the picker; off, a tap opens the picker.
+     */
+    val pickerKeySwitchesBack: Boolean = false,
+
+    /** The voice keyboard the voice key last switched to, by input method id. */
+    val voiceKeyboardId: String = "",
+
+    /** The voice keyboards that were enabled when [voiceKeyboardId] was chosen, as [VoiceInput.signature] has them. */
+    val voiceKeyboardSet: String = "",
     /** Hard cap on unpinned history, independent of the retention window. */
     val clipboardMaxEntries: Int = 60,
 
@@ -629,6 +641,8 @@ data class KeyboardPreferences(
         },
         assistTranslateModel = assistTranslateModel.take(MAX_MODEL_FILE_NAME_CHARS),
         assistWriteModel = assistWriteModel.take(MAX_MODEL_FILE_NAME_CHARS),
+        voiceKeyboardId = voiceKeyboardId.take(MAX_INPUT_METHOD_ID_CHARS),
+        voiceKeyboardSet = voiceKeyboardSet.take(MAX_INPUT_METHOD_SET_CHARS),
         themeMode = if (themeMode == THEME_MODE_AUTO_SYSTEM) THEME_MODE_AUTO_SYSTEM else THEME_MODE_MANUAL,
         clipboardRetentionMinutes = clipboardRetentionMinutes.coerceIn(1, 60 * 24 * 30),
         clipboardMaxEntries = clipboardMaxEntries.coerceIn(1, 1000),
@@ -936,6 +950,10 @@ data class KeyboardPreferences(
 
         /** A model file name longer than any real one; a stored value past it is truncated. */
         const val MAX_MODEL_FILE_NAME_CHARS = 255
+
+        /** An input method id is `package/class`; a set of them is a few joined. */
+        const val MAX_INPUT_METHOD_ID_CHARS = 300
+        const val MAX_INPUT_METHOD_SET_CHARS = 3_000
 
         const val COMPOSER_TEXT_SIZE_SMALL = 0
         const val COMPOSER_TEXT_SIZE_MEDIUM = 1

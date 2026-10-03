@@ -57,6 +57,11 @@ attestations and the full commit lists are on the
   600,000, its header is sealed together with its contents, and a file claiming more than
   5,000,000 rounds is refused as damaged before any work is done. Files already written still
   open, and the screen says so while the key is being derived.
+- Other keyboards and Voice typing, as quick actions and as keys for the modifier row: the first
+  opens the system's keyboard list, or, with its new setting on the Layout screen, goes straight
+  back to the keyboard you used before; the second switches to a voice keyboard you have enabled,
+  remembering your choice, and is offered only while there is one. Holding the globe key now
+  opens the keyboard list; the quick panel stays on the settings key and on holding enter.
 - Keep privately, a quick action and, once turned on, an entry in other apps' text-selection
   menu: the selection goes into the clipboard history as a private item that never touches the
   system clipboard and stays until you delete it, marked with the app it came from.

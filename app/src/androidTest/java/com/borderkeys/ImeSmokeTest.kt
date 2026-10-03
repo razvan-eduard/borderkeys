@@ -153,6 +153,45 @@ class ImeSmokeTest {
     }
 
     @Test
+    fun theOtherKeyboardsActionOpensTheSystemPicker() {
+        runBlocking {
+            DataGraph.themes.updatePreferences {
+                it.copy(
+                    quickActionsEnabled = true,
+                    quickActions = listOf(QuickAction.PICK_KEYBOARD.id),
+                    quickActionsMode = KeyboardPreferences.QUICK_ACTIONS_FULL,
+                    pickerKeySwitchesBack = false,
+                )
+            }
+        }
+        try {
+            val bar = device.wait(Until.findObject(By.clazz(QUICK_ACTIONS_VIEW)), KEY_TIMEOUT)
+            assertNotNull("the quick-action bar", bar)
+            val bounds = bar.visibleBounds
+            device.click(bounds.left + bounds.height() / 2, bounds.centerY())
+            // The system's picker lists this keyboard by name ("BorderKeys +" in the plus build),
+            // outside this package's windows.
+            val listed = device.wait(
+                Until.findObject(
+                    By.textStartsWith(IME_LABEL).pkg(Pattern.compile("^(?!${Pattern.quote(context.packageName)}$).*")),
+                ),
+                LAUNCH_TIMEOUT,
+            )
+            assertNotNull(
+                "the keyboard picker, listing $IME_LABEL; on screen: " +
+                    device.findObjects(By.clazz(Pattern.compile(".*"))).mapNotNull { node ->
+                        node.text?.let { "${node.applicationPackage}:$it" }
+                    },
+                listed,
+            )
+            device.pressBack()
+            settle()
+        } finally {
+            runBlocking { DataGraph.themes.updatePreferences { it.copy(quickActionsEnabled = false) } }
+        }
+    }
+
+    @Test
     fun backspacePutsTheTypedWordBack() {
         type("teh")
         settle()
@@ -790,6 +829,9 @@ class ImeSmokeTest {
         const val PROBE_PREFIX = "probe-"
         const val EDIT_TEXT = "android.widget.EditText"
         const val QUICK_ACTIONS_VIEW = "com.borderkeys.ime.QuickActionsView"
+
+        /** The name the system shows for this keyboard, from the manifest's ime_name. */
+        const val IME_LABEL = "BorderKeys"
         const val SPACE = "Space"
         const val SHIFT = "Shift"
         const val DELETE = "Delete"

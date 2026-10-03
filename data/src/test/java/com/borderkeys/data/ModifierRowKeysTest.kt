@@ -23,6 +23,15 @@ class ModifierRowKeysTest {
     }
 
     @Test
+    fun `the picker and voice keys are known to the row and not in the default`() {
+        assertEquals(
+            listOf(ModifierRowKeys.KEYBOARD_PICKER, ModifierRowKeys.VOICE),
+            ModifierRowKeys.sanitised(listOf("ime_picker", "voice")),
+        )
+        assertEquals(false, ModifierRowKeys.KEYBOARD_PICKER in ModifierRowKeys.DEFAULT)
+    }
+
+    @Test
     fun `the default is eight known keys`() {
         assertEquals(8, ModifierRowKeys.DEFAULT.size)
         assertEquals(ModifierRowKeys.DEFAULT, ModifierRowKeys.sanitised(ModifierRowKeys.DEFAULT))

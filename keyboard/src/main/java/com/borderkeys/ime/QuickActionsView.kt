@@ -280,6 +280,8 @@ class QuickActionsView(
         QuickAction.CURSOR_RIGHT -> Keys.ACTION_CURSOR_RIGHT
         QuickAction.TIMESTAMP -> Keys.ACTION_TIMESTAMP
         QuickAction.PRIVATE_COPY -> Keys.ACTION_PRIVATE_COPY
+        QuickAction.PICK_KEYBOARD -> Keys.ACTION_PICK_KEYBOARD
+        QuickAction.VOICE_INPUT -> Keys.ACTION_VOICE_INPUT
     }
 
     /** Whether labels are drawn: on, on a horizontal bar. */
@@ -309,6 +311,8 @@ class QuickActionsView(
         QuickAction.CURSOR_RIGHT -> R.drawable.bk_action_cursor_right
         QuickAction.TIMESTAMP -> R.drawable.bk_action_timestamp
         QuickAction.PRIVATE_COPY -> R.drawable.bk_action_copy_private
+        QuickAction.PICK_KEYBOARD -> R.drawable.bk_action_pick_keyboard
+        QuickAction.VOICE_INPUT -> R.drawable.bk_action_voice_input
     }
 
     override fun getAccessibilityClassName(): CharSequence = QuickActionsView::class.java.name

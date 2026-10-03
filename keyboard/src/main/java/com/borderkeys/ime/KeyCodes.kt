@@ -37,6 +37,10 @@ object KeyCodes {
     /** Deletes the character after the caret, as the hardware key does. */
     const val FORWARD_DELETE = -21
     const val INSERT = -22
+    /** Opens the system's keyboard picker, or switches back to the previous keyboard. */
+    const val KEYBOARD_PICKER = -23
+    /** Switches to a voice keyboard. */
+    const val VOICE = -24
     const val NONE = -100
 
     fun isCharacter(code: Int): Boolean = code > 0
@@ -79,6 +83,8 @@ object KeyCodes {
         "page_down" -> PAGE_DOWN
         "forward_delete" -> FORWARD_DELETE
         "insert" -> INSERT
+        "ime_picker" -> KEYBOARD_PICKER
+        "voice" -> VOICE
         else -> NONE
     }
 }

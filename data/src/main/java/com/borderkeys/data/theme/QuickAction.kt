@@ -97,6 +97,12 @@ enum class QuickAction(val id: Int) {
      * system clipboard and outlives the retention window and the history limit.
      */
     PRIVATE_COPY(23),
+
+    /** Opens the system's keyboard picker, or switches back to the previous keyboard when set to. */
+    PICK_KEYBOARD(24),
+
+    /** Switches to a voice keyboard among the enabled input methods. */
+    VOICE_INPUT(25),
     ;
 
     /**
@@ -104,7 +110,9 @@ enum class QuickAction(val id: Int) {
      * [android.view.inputmethod.InputConnection] alone that finishes within its tap.
      */
     val macroEligible: Boolean
-        get() = this !in setOf(CLIPBOARD_HISTORY, SWITCH_LAYOUT, SETTINGS, COMPOSE)
+        get() = this !in setOf(
+            CLIPBOARD_HISTORY, SWITCH_LAYOUT, SETTINGS, COMPOSE, PICK_KEYBOARD, VOICE_INPUT,
+        )
 
     companion object {
         /** What a new install starts with. */

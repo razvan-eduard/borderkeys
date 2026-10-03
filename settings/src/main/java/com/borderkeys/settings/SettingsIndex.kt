@@ -87,6 +87,7 @@ object SettingsIndex {
         Entry(Screen.Layout, Keys.LAYOUT_KEYS, Keys.LAYOUT_KEY_POPUP),
         Entry(Screen.Layout, Keys.LAYOUT_KEYS, Keys.SIZE_EMOJI_KEY),
         Entry(Screen.Layout, Keys.LAYOUT_KEYS, Keys.SIZE_LANGUAGE_KEY),
+        Entry(Screen.Layout, Keys.LAYOUT_KEYS, Keys.LAYOUT_PICKER_KEY_SWITCHES_BACK),
         Entry(Screen.Layout, Keys.LAYOUT_KEYS, Keys.SIZE_SPACE_CURSOR),
         Entry(Screen.Layout, Keys.LAYOUT_KEYS, Keys.SIZE_KEY_SOUND),
         Entry(Screen.Layout, Keys.LAYOUT_KEYS, Keys.SOUND_HAPTIC_FEEDBACK),

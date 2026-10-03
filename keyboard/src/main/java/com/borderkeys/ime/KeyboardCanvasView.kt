@@ -859,8 +859,8 @@ class KeyboardCanvasView(
 
     /** The keys whose hold opens something rather than typing something. */
     private fun holdsAMenu(code: Int): Boolean =
-        code == KeyCodes.ENTER || code == KeyCodes.LANGUAGE ||
-            code == KeyCodes.SETTINGS || code == ' '.code
+        code == KeyCodes.ENTER || code == KeyCodes.LANGUAGE || code == KeyCodes.SETTINGS ||
+            code == KeyCodes.KEYBOARD_PICKER || code == KeyCodes.VOICE || code == ' '.code
 
     override fun onDraw(canvas: Canvas) {
         Trace.beginSection("KeyboardCanvasView.onDraw")
