@@ -128,6 +128,14 @@ class ThemePaints {
     /** The name of the picture currently decoded. */
     private var loadedImage: String? = null
 
+    /** Decodes the theme's picture again, for a file that has become readable. */
+    fun reloadImage(context: android.content.Context) {
+        loadedImage = theme.backgroundImage
+        backgroundPainter.setImage(
+            com.borderkeys.data.theme.BackgroundImages.load(context, theme.backgroundImage),
+        )
+    }
+
     /** Recompiles if the theme, the density or the height scale changed; returns whether it did. */
     fun update(
         theme: KeyboardTheme,

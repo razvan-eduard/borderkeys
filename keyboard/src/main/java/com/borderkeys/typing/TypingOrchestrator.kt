@@ -186,6 +186,16 @@ class TypingOrchestrator(
         }
     }
 
+    /** The user unlocked since boot: the field's policy allows what it withheld, in every flow. */
+    fun onUserUnlocked() {
+        session = session.copy(
+            policy = session.policy.unlocked(preferences.learningEnabled, preferences.heatmapEnabled),
+        )
+        for (flow in flows) {
+            flow.userUnlocked()
+        }
+    }
+
     /** The last flush: writes what is left and waits, a bounded time, for the writes in flight. */
     fun shutdown() {
         for (flow in flows) {

@@ -47,6 +47,14 @@ abstract class TypingFlow {
         onSettingsChanged(settings)
     }
 
+    /** The user unlocked: the field's policy allows what it withheld, the switches still applying. */
+    fun userUnlocked() {
+        session = session.copy(
+            policy = session.policy.unlocked(settings.learningEnabled, settings.heatmapEnabled),
+        )
+        onUserUnlocked()
+    }
+
     /** The keyboard is going; the open field is finished first. */
     fun shutdown() {
         finishField()
@@ -61,6 +69,8 @@ abstract class TypingFlow {
     protected open fun onFieldFinished() {}
 
     protected open fun onSettingsChanged(settings: KeyboardPreferences) {}
+
+    protected open fun onUserUnlocked() {}
 
     protected open fun onShutdown() {}
 }

@@ -21,12 +21,21 @@ data class FieldPolicy(
      * Heatmap switch on.
      */
     val heatmapAllowed: Boolean,
+    /**
+     * The user has unlocked since boot, so the personal dictionary, the clipboard history and
+     * the settings can be read and written.
+     */
+    val userUnlocked: Boolean = true,
 ) {
     /** This policy with the Learning switch at [learning] and the Heatmap switch at [heatmap]. */
     fun withSwitches(learning: Boolean, heatmap: Boolean): FieldPolicy {
-        val personal = learning && !privateField
+        val personal = learning && !privateField && userUnlocked
         return copy(personalAllowed = personal, heatmapAllowed = personal && heatmap)
     }
+
+    /** This policy once the user has unlocked, the switches at [learning] and [heatmap]. */
+    fun unlocked(learning: Boolean, heatmap: Boolean): FieldPolicy =
+        copy(userUnlocked = true).withSwitches(learning, heatmap)
 
     companion object {
         /** Before any field has started. */
@@ -41,19 +50,22 @@ data class FieldPolicy(
         /**
          * The policy of a field: [passwordField] allows no dictionary words and takes the keys
          * verbatim, [privateField] allows nothing personal, the personal dictionary needs
-         * [learningEnabled] as well, and the heatmap needs [heatmapEnabled] on top.
+         * [learningEnabled] and [userUnlocked] as well, and the heatmap needs [heatmapEnabled] on
+         * top.
          */
         fun of(
             passwordField: Boolean,
             privateField: Boolean,
             learningEnabled: Boolean,
             heatmapEnabled: Boolean,
+            userUnlocked: Boolean = true,
         ) = FieldPolicy(
             suggestionsAllowed = !passwordField,
             privateField = privateField,
-            personalAllowed = learningEnabled && !privateField,
+            personalAllowed = learningEnabled && !privateField && userUnlocked,
             verbatim = passwordField,
-            heatmapAllowed = learningEnabled && !privateField && heatmapEnabled,
+            heatmapAllowed = learningEnabled && !privateField && userUnlocked && heatmapEnabled,
+            userUnlocked = userUnlocked,
         )
     }
 }

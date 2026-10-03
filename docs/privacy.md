@@ -259,11 +259,20 @@ useful.
 
 - **Code running as this app on an unlocked device.** It can use the Keystore key. See
   [above](#encryption-at-rest-and-its-limits).
-- **The lock screen after a reboot.** The keyboard is not direct-boot aware: its settings, the
-  wrapped database passphrase and the database itself live in credential-encrypted storage, which
-  Android does not mount before the first unlock, so an alphanumeric device password is typed on
-  the system's own keyboard until then. Below Android 13 the platform has
-  no sensitive-content flag, so a copied password is recorded there like any other clip.
+- **Below Android 13** the platform has no sensitive-content flag, so a copied password is
+  recorded there like any other clip.
+
+**The lock screen after a reboot.** The keyboard is direct-boot aware. Before the user's first
+unlock it runs from device-protected storage, which holds a copy of the appearance and layout
+settings only (`LockedAppearance`, mirrored after every settings write): the two themes, size and
+position, the number row, haptics, sound, key popup, long-press timing and the interface language.
+It types with no dictionaries, learns nothing, keeps no clipboard, and offers neither the clipboard
+panel, the settings nor the composer; the field's `FieldPolicy.userUnlocked` is what every flow
+reads. The settings, the wrapped database passphrase and the database itself live in
+credential-encrypted storage, which Android does not mount before the first unlock; the Keystore
+key is not what blocks them. At the unlock the keyboard loads the dictionaries and the settings
+and carries on in the same field. The clipboard panel also stays closed while the lock screen
+shows.
 - **A compromised or malicious Android build.** An IME is handed keystrokes by the platform; if
   the platform is hostile, nothing here helps.
 - **Screen capture, or another app with accessibility access.** Outside this app entirely.

@@ -168,6 +168,7 @@ and again on every settings change:
 | `personalAllowed` | Learning is on and the field is not private |
 | `verbatim` | a password field: the keys go in exactly as typed, no rewrite, no space added or removed |
 | `heatmapAllowed` | `personalAllowed`, and the Heatmap switch is on |
+| `userUnlocked` | the user has unlocked since boot; without it `personalAllowed` and `heatmapAllowed` are false whatever the switches, and `TypingOrchestrator.onUserUnlocked` opens them through `FieldPolicy.unlocked` and every flow's `onUserUnlocked` hook |
 
 Everything outside the word is an interface, which is what lets the JVM tests type through the
 real flow:
@@ -556,6 +557,20 @@ dictionary (`Engine::setBlockedWords`). It is never offered, on the strip, as a 
 from a swipe, and the next candidate takes its slot. It is never a correction, and it is not a
 known word, so autocorrect may replace it when typed: `maine` becomes `mâine`. `RefusedWords`
 keeps both lists out of learning.
+
+### Before the first unlock
+
+The service is direct-boot aware. `DataGraph` reads credential-encrypted storage through a
+context that checks `DirectBoot.isUserUnlocked` first, so a read before the unlock fails loudly
+rather than in the platform; `UnlockedPathsTest` scans the service and the dictionary loader and
+requires every `DataGraph` use to sit in a member listed as unlocked-only or behind an `unlocked`
+check. Before the unlock the service draws from `DataGraph.lockedAppearance`, a device-protected
+copy of the two themes and the appearance preferences (`KeyboardPreferences.forLockedStart`),
+which `ThemeRepository.mirrorLocked` rewrites after every settings write and at every unlocked
+start. The field starts with `FieldPolicy.userUnlocked` false; `DirectBoot.whenUnlocked` runs the
+unlocked start at the system's user-unlocked broadcast, and `TypingOrchestrator.onUserUnlocked`
+opens the policy in every flow. Quick-settings changes made before the unlock go to the copy, for
+that boot.
 
 ---
 

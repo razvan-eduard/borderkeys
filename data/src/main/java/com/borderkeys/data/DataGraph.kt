@@ -4,6 +4,7 @@
 package com.borderkeys.data
 
 import android.content.Context
+import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.dataStoreFile
@@ -15,6 +16,9 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardPreferencesSerializer
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.data.theme.KeyboardThemeSerializer
+import com.borderkeys.data.theme.LockedAppearance
+import com.borderkeys.data.theme.LockedAppearanceRepository
+import com.borderkeys.data.theme.LockedAppearanceSerializer
 import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.data.theme.ParticleEffectsSettingsSerializer
 import com.borderkeys.data.theme.ThemeRepository
@@ -49,12 +53,46 @@ object DataGraph {
             "DataGraph.install(context) must be called before anything reads from it"
         }
 
+    /**
+     * The context for credential-encrypted storage: the settings, the database and its
+     * passphrase, readable only after the user's first unlock since boot.
+     */
+    private val unlockedContext: Context
+        get() {
+            val installed = requireContext
+            check(DirectBoot.isUserUnlocked(installed)) {
+                "credential-encrypted storage read before the user's first unlock"
+            }
+            return installed
+        }
+
+    /** Whether the user has unlocked since boot; see [DirectBoot]. */
+    fun isUserUnlocked(): Boolean = DirectBoot.isUserUnlocked(requireContext)
+
     /** Scope for the stores' own bookkeeping, living as long as the process; never cancelled. */
     private val storeScope by lazy {
         CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 
-    val database: BorderKeysDatabase by lazy { BorderKeysDatabase.open(requireContext) }
+    val database: BorderKeysDatabase by lazy { BorderKeysDatabase.open(unlockedContext) }
+
+    /** The appearance the keyboard draws with before the first unlock, in device-protected storage. */
+    val lockedAppearance: LockedAppearanceRepository by lazy { LockedAppearanceRepository(lockedStore) }
+
+    private val lockedStore: DataStore<LockedAppearance> by lazy {
+        DataStoreFactory.create(
+            serializer = LockedAppearanceSerializer,
+            corruptionHandler = ReplaceFileCorruptionHandler { LockedAppearance() },
+            scope = storeScope,
+            // Not dataStoreFile, which resolves through applicationContext, credential storage.
+            produceFile = {
+                File(
+                    requireContext.createDeviceProtectedStorageContext().filesDir,
+                    "datastore/$LOCKED_APPEARANCE_FILE",
+                )
+            },
+        )
+    }
 
     private val themeStore by lazy {
         DataStoreFactory.create(
@@ -62,7 +100,7 @@ object DataGraph {
             // A file that cannot be parsed is replaced with the defaults.
             corruptionHandler = ReplaceFileCorruptionHandler { KeyboardTheme() },
             scope = storeScope,
-            produceFile = { requireContext.dataStoreFile("keyboard_theme.json") },
+            produceFile = { unlockedContext.dataStoreFile("keyboard_theme.json") },
         )
     }
 
@@ -71,7 +109,7 @@ object DataGraph {
             serializer = KeyboardPreferencesSerializer,
             corruptionHandler = ReplaceFileCorruptionHandler { KeyboardPreferences() },
             scope = storeScope,
-            produceFile = { requireContext.dataStoreFile("keyboard_preferences.json") },
+            produceFile = { unlockedContext.dataStoreFile("keyboard_preferences.json") },
         )
     }
 
@@ -84,7 +122,7 @@ object DataGraph {
             serializer = KeyboardThemeSerializer,
             corruptionHandler = ReplaceFileCorruptionHandler { KeyboardTheme() },
             scope = storeScope,
-            produceFile = { requireContext.dataStoreFile("keyboard_theme_light.json") },
+            produceFile = { unlockedContext.dataStoreFile("keyboard_theme_light.json") },
         )
     }
 
@@ -93,7 +131,7 @@ object DataGraph {
             serializer = CustomThemeLibrarySerializer,
             corruptionHandler = ReplaceFileCorruptionHandler { CustomThemeLibrary() },
             scope = storeScope,
-            produceFile = { requireContext.dataStoreFile("keyboard_custom_themes.json") },
+            produceFile = { unlockedContext.dataStoreFile("keyboard_custom_themes.json") },
         )
     }
 
@@ -103,7 +141,7 @@ object DataGraph {
             serializer = ParticleEffectsSettingsSerializer,
             corruptionHandler = ReplaceFileCorruptionHandler { ParticleEffectsSettings() },
             scope = storeScope,
-            produceFile = { requireContext.dataStoreFile("keyboard_particle_effects.json") },
+            produceFile = { unlockedContext.dataStoreFile("keyboard_particle_effects.json") },
         )
     }
 
@@ -113,7 +151,7 @@ object DataGraph {
             serializer = CustomEffectsPresetLibrarySerializer,
             corruptionHandler = ReplaceFileCorruptionHandler { CustomEffectsPresetLibrary() },
             scope = storeScope,
-            produceFile = { requireContext.dataStoreFile("keyboard_custom_effects_presets.json") },
+            produceFile = { unlockedContext.dataStoreFile("keyboard_custom_effects_presets.json") },
         )
     }
 
@@ -125,11 +163,15 @@ object DataGraph {
             customThemeLibraryStore,
             particleEffectsStore,
             customEffectsPresetLibraryStore,
+            lockedStore,
         ).also { repository ->
             // Presets an earlier build saved; see ThemeRepository.importLegacyOutlinePresets.
             // Read off the caller's thread.
-            val legacy = requireContext.dataStoreFile("keyboard_custom_outline_presets.json")
-            storeScope.launch { repository.importLegacyOutlinePresets(legacy) }
+            val legacy = unlockedContext.dataStoreFile("keyboard_custom_outline_presets.json")
+            storeScope.launch {
+                repository.importLegacyOutlinePresets(legacy)
+                repository.mirrorLocked()
+            }
         }
     }
 
@@ -151,7 +193,7 @@ object DataGraph {
     val languagePacks: LanguagePackRepository by lazy {
         LanguagePackRepository(
             database.languagePackDao(),
-            File(requireContext.filesDir, "packs"),
+            File(unlockedContext.filesDir, "packs"),
         )
     }
 
@@ -163,11 +205,14 @@ object DataGraph {
     val assistModels: AssistModelRepository by lazy {
         AssistModelRepository(
             database.assistModelDao(),
-            File(requireContext.filesDir, "models"),
+            File(unlockedContext.filesDir, "models"),
         )
     }
 
     /** The directory imported packs live in. Private storage, never a content:// URI. */
     val packsDirectory: File
-        get() = File(requireContext.filesDir, "packs")
+        get() = File(unlockedContext.filesDir, "packs")
+
+    /** The device-protected file [lockedAppearance] is kept in. */
+    const val LOCKED_APPEARANCE_FILE = "keyboard_locked_appearance.json"
 }

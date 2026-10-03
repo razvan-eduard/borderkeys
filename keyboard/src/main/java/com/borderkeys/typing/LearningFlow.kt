@@ -73,6 +73,14 @@ class LearningFlow(
         }
     }
 
+    /** The gate opens for what the unlock allows; the bucket's stored totals are read now. */
+    override fun onUserUnlocked() {
+        if (host.viewAttached) {
+            applyGate()
+        }
+        reloadTouches()
+    }
+
     /** Writes what is left and waits, a bounded time, for the writes in flight. */
     override fun onShutdown() = store.persistBeforeShutdown(drain())
 
@@ -135,6 +143,9 @@ class LearningFlow(
 
     /** Reads the current bucket's stored totals again, as after an edit on the settings screen. */
     fun reloadTouches() {
+        if (!session.policy.userUnlocked) {
+            return
+        }
         val bucket = geometry?.bucket?.key ?: return
         store.loadTouches(bucket) { rows ->
             if (geometry?.bucket?.key == bucket) {
