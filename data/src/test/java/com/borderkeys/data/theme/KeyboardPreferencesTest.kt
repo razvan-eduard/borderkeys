@@ -118,6 +118,39 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `the correction threshold, length difference, prefix and frequency default and stay on their sliders`() {
+        val defaults = KeyboardPreferences()
+        assertEquals(0.65f, defaults.correctionThreshold)
+        assertEquals(2, defaults.correctionLengthDifference)
+        assertEquals(0, defaults.correctionPrefix)
+        assertEquals(KeyboardPreferences.MIN_CORRECTION_FREQUENCY, defaults.correctionMinFrequency)
+        val low = KeyboardPreferences(
+            correctionThreshold = 0.1f,
+            correctionLengthDifference = -1,
+            correctionPrefix = -1,
+            correctionMinFrequency = 0,
+        ).sanitised()
+        assertEquals(KeyboardPreferences.MIN_CORRECTION_THRESHOLD, low.correctionThreshold)
+        assertEquals(0, low.correctionLengthDifference)
+        assertEquals(0, low.correctionPrefix)
+        assertEquals(KeyboardPreferences.MIN_CORRECTION_FREQUENCY, low.correctionMinFrequency)
+        val high = KeyboardPreferences(
+            correctionThreshold = 3f,
+            correctionLengthDifference = 9,
+            correctionPrefix = 9,
+            correctionMinFrequency = 9000,
+        ).sanitised()
+        assertEquals(KeyboardPreferences.MAX_CORRECTION_THRESHOLD, high.correctionThreshold)
+        assertEquals(KeyboardPreferences.MAX_CORRECTION_LENGTH_DIFFERENCE, high.correctionLengthDifference)
+        assertEquals(KeyboardPreferences.MAX_CORRECTION_PREFIX, high.correctionPrefix)
+        assertEquals(KeyboardPreferences.MAX_CORRECTION_FREQUENCY, high.correctionMinFrequency)
+        assertEquals(
+            KeyboardPreferences.DEFAULT_CORRECTION_THRESHOLD,
+            KeyboardPreferences(correctionThreshold = 0f).sanitised().correctionThreshold,
+        )
+    }
+
+    @Test
     fun `theme mode defaults to manual and rejects anything but the two real modes`() {
         assertEquals(KeyboardPreferences.THEME_MODE_MANUAL, KeyboardPreferences().themeMode)
         assertEquals(
