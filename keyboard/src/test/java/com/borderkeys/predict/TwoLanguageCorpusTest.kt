@@ -112,17 +112,17 @@ class TwoLanguageCorpusTest {
         const val PLAIN_RO_AFTER_ENGLISH = 200
         const val TWINS_RO_AFTER_ENGLISH = 178
         const val TYPO_EN_AFTER_ROMANIAN = 187
-        const val UNKNOWN_EN_AFTER_ROMANIAN = 190
+        const val UNKNOWN_EN_AFTER_ROMANIAN = 188
         const val DOUBLED_EN_AFTER_ROMANIAN = 191
-        const val FIRSTLETTER_EN_AFTER_ROMANIAN = 156
-        const val MARKS_EN_AFTER_ROMANIAN = 239
+        const val FIRSTLETTER_EN_AFTER_ROMANIAN = 163
+        const val MARKS_EN_AFTER_ROMANIAN = 265
         const val ACCENTS_RO_AFTER_ROMANIAN = 237
         const val PLAIN_RO_AFTER_ROMANIAN = 200
         const val TWINS_RO_AFTER_ROMANIAN = 186
         const val TYPO_EN_AFTER_ENGLISH = 198
-        const val UNKNOWN_EN_AFTER_ENGLISH = 183
+        const val UNKNOWN_EN_AFTER_ENGLISH = 182
         const val DOUBLED_EN_AFTER_ENGLISH = 194
-        const val FIRSTLETTER_EN_AFTER_ENGLISH = 168
-        const val MARKS_EN_AFTER_ENGLISH = 239
+        const val FIRSTLETTER_EN_AFTER_ENGLISH = 173
+        const val MARKS_EN_AFTER_ENGLISH = 265
     }
 }

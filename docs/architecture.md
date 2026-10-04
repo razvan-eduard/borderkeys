@@ -335,7 +335,7 @@ is answered by the evidence and dominance mechanism below, never by drifting a w
 | `kEditPenalty` | **25.0** | The multiplier on every edit, in nats per key width. One edit outweighs a frequency ratio of e^25; a second edit outweighs any first. Floored at 15 by a `static_assert`; `BORDERKEYS_EDIT_PENALTY` and `BORDERKEYS_CORRECTION_SURCHARGE` set it and the surcharge for a sweep build of `native-tests`. |
 | `kInsertCost` | 0.85 | A dropped letter is a commoner slip than a wrong key, so just under a full neighbour substitution. |
 | `kRunOnCost` | **0.5** | What a letter the word has past the last one typed costs in the correction heap; the strip keeps `kCompletionPenalty`. Below `kSlipScale`. |
-| `kSlipScale` | **0.8** | The factor on a neighbouring key's distance when the finger landed on it, floored at `kMinSubstitutionCost`; a straight neighbour then costs less than an insertion, a diagonal one more. The walk carries at most one edit up to four typed letters and two from five, the strip-only pass excepted. `BORDERKEYS_SLIP_SCALE`, `_DELETE_COST`, `_TRANSPOSE_COST`, `_RUN_ON_COST`, `_CEILING_3/4/5/8`, `_DEPTH_CAP_4/7` and `_NO_EDIT_CAP` set it, the other edit costs, the ceiling bands, two depth caps and the edit-count cap for a sweep build of `native-tests` (`docs/testing.md`, the slip sweep). |
+| `kSlipScale` | **0.8** | The factor on a neighbouring key's distance when the finger landed on it, floored at `kMinSubstitutionCost`; a straight neighbour then costs less than an insertion, a diagonal one more. The walk counts how many of a path's edits were such slips (`Candidate::slips`). `BORDERKEYS_SLIP_SCALE`, `_DELETE_COST`, `_TRANSPOSE_COST`, `_RUN_ON_COST`, `_CEILING_3/4/5/8` and `_DEPTH_CAP_4/7` set it, the other edit costs, the ceiling bands and two depth caps for a sweep build of `native-tests` (`docs/testing.md`, the slip sweep). |
 | `kDeleteCost` | **1.6** | Deliberately not the mirror of `kInsertCost`. Supplying a letter someone did not type is the ordinary lossiness of typing; discarding one they *did* type throws away the only direct evidence of intent. At 0.85, 79% of the correct words the pack lacked were overwritten by something *shorter* — `bisection` → `section`, `crewel` → `crew`. Swept 0.85 to 2.0: unknown words left alone 66.0% → 90.0%, the typo and mid-word corpora never move, and the strip holds at 71.9% up to 1.6 and drops from 1.7. |
 | `kRepeatDeleteCost` | **0.75** | Discarding a letter typed right after the same letter: a key struck twice. Priced as `kDeleteCost` it lost to any closer word, and with Romanian also on, `nationaal` became `națională` (a swap, 0.8) instead of `national`. Just under a swap because at 0.6 `aagin`, a swap of `again`, read as a doubled `a` plus a letter and became `aging`. Doubled corpus 187 → 191, unknown words left alone 188 → 191, every other corpus and the strip unchanged. |
 | `kTransposeCost` | 0.80 | One gesture out of order, not two errors. Deliberately only *slightly* cheaper: at the old 0.65 this priced two equally common slips as though one were a thousand times likelier, which let `acm` → `cam` crowd out `acum`. |
@@ -510,7 +510,12 @@ rather than a correction:
 - `typed != suggestionQuery` — a stale answer, see [the typing path](#the-typing-path);
 - `editDistance(stripDiacritics(typed), stripDiacritics(suggestion)) > maxEdits` — a ceiling on
   top of the engine's ranking, which only ever decides *which* candidate is first, never whether
-  it is close enough to be a correction at all. `snobul` was being replaced by `noul`;
+  it is close enough to be a correction at all. `snobul` was being replaced by `noul`. Under the
+  default distance setting the ceiling is one edit, two from eight letters; an entry the engine
+  reached by neighbouring keys in place of typed ones alone, with nothing added, dropped,
+  swapped or run on (`Candidate::slipsOnly`, `CorrectionOffer.slipsOnly`), may be two edits away
+  from four letters (`maxSlipEditsFor`), so `joyse` → `house`. A real word the packs lack is
+  rarely two neighbouring keys from another word, where a typed word with two slips always is;
 - **the proper-noun rule** — a name corrects only its own letters. `maria` may become `Maria` and
   `laurentiu` → `Laurențiu`, but `everyone` must never become `Everton` nor `thanks` `Hanks`.
 - **a regular inflection of a known stem** — `smooths`, `testings`, `spatting`: the stem is in

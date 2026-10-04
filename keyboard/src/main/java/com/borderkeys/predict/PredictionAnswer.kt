@@ -65,6 +65,7 @@ internal class AnswerScratch {
     val texts = arrayOfNulls<String>(NativePredictor.TEXT_SLOTS)
     val corrections = arrayOfNulls<String>(NativePredictor.CORRECTION_SLOTS)
     val correctionNames = BooleanArray(NativePredictor.CORRECTION_SLOTS)
+    val correctionSlips = BooleanArray(NativePredictor.CORRECTION_SLOTS)
     val spellingFlags = BooleanArray(NativePredictor.SPELLING_FLAGS)
 }
 
@@ -86,10 +87,12 @@ internal fun answerRequest(
     scratch.texts.fill(null)
     scratch.corrections.fill(null)
     scratch.correctionNames.fill(false)
+    scratch.correctionSlips.fill(false)
     scratch.spellingFlags.fill(false)
     val count = NativePredictor.nativeAnswer(
         handle, composing, previous1, previous2, tapXs, tapYs, scratch.words, scratch.scores,
-        scratch.properNoun, scratch.texts, scratch.corrections, scratch.correctionNames, scratch.spellingFlags,
+        scratch.properNoun, scratch.texts, scratch.corrections, scratch.correctionNames,
+        scratch.correctionSlips, scratch.spellingFlags,
     )
     val spelling = scratch.texts[NativePredictor.TEXT_KNOWN_SPELLING]
     val knownStems = if (composing.isNotEmpty()) knownStemsOf(handle, composing, languages) else emptySet()
@@ -98,7 +101,9 @@ internal fun answerRequest(
         val text = scratch.corrections[index] ?: break
         val inflection =
             knownStems.isNotEmpty() && WordStems.shields(composing, text, knownStems, languages)
-        corrections.add(CorrectionOffer(text, scratch.correctionNames[index], inflection))
+        corrections.add(
+            CorrectionOffer(text, scratch.correctionNames[index], inflection, scratch.correctionSlips[index]),
+        )
     }
     return PredictionAnswer(
         query = composing,

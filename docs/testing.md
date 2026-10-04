@@ -568,13 +568,25 @@ strong successor that is itself a rare word reaches the strip: after `ice`, `cre
 `beings`. `PipelineTest` pins four such pairs. What a prose corpus never wrote often enough
 stays out -- `happy birthday` is not among the pairs the packs hold.
 
-### The touch model — `touch_eval`, not gated
+### The touch model — `touch_eval` alone, and `TapCorpusTest` through the whole keyboard
 
 ```
 python3 tools/make_tap_corpus.py --profile thumbs --taps 60000 --seed 1 > thumbs.tsv
 native-tests/build/touch_eval <dict dir> en-US native-tests/data/qwerty_1080.layout thumbs.tsv \
-    --train-taps 20000 --test-from-taps 40000 --test-words 4000
+    --train-taps 20000 --test-from-taps 40000 --test-words 4000 [--floor P]
+./gradlew :keyboard:testCoreDebugUnitTest --tests '*TapCorpusTest' -Pborderkeys.taps=<dir of the six .tsv>
 ```
+
+Both are gated in CI on the six profiles, from corpora CI writes with the command above
+(`.github/workflows/ci.yml`: the harness step writes them, the touch-model step runs
+`touch_eval --floor`, and the unit-test step hands them to `TapCorpusTest`). The generator's
+output is the same on Python 3.9 and 3.14.
+
+`touch_eval` reads the engine alone: what `bestCorrection()` would commit. CI holds its "default
+pattern" column, the taps priced with nothing learned, which is what a keyboard with the
+Heatmap switch off reads. `TapCorpusTest` types the same test words through the whole keyboard
+(`Pipeline.commitTapped`, `TypingRig.tap`), with Learning off, once at their taps and once with
+no positions, and holds autocorrect's right word with the taps per profile.
 
 `make_tap_corpus.py` types words drawn by frequency from `dictionaries/en_US.tsv` on a 1080-pixel
 QWERTY, one tap per letter: the key's centre moved by a profile's offset for that key, plus
@@ -587,16 +599,34 @@ right thumb (falling short towards the thumb, wider with the reach), precise (0.
 neighbour of it is a sample, dropped beyond one key unit, weighed down by the half-life — then
 types the test words that hold a slip into a non-word of three letters or more, and reports what
 autocorrect commits and where the strip ranks the word meant. Autocorrect's right word, after
-20,000 taps, the weight at 1.0 and the minimum at 30:
+20,000 taps, the weight at 1.0 and the minimum at 30, engine alone; the default pattern column is
+CI's floor:
 
 | Profile | Geometry only | Default pattern | Learned |
 |---|---|---|---|
-| centred | 83.1% | 91.2% | 91.4% |
-| low | 76.6% | 90.4% | 90.3% |
-| two thumbs | 77.4% | 89.3% | 89.9% |
-| right thumb | 73.4% | 89.3% | 90.4% |
-| precise | 85.4% | 92.7% | 92.7% |
-| sloppy | 70.8% | 88.7% | 88.9% |
+| centred | 89.2% | 92.0% | 91.8% |
+| low | 84.4% | 90.9% | 91.0% |
+| two thumbs | 86.1% | 91.6% | 91.6% |
+| right thumb | 83.2% | 90.9% | 91.5% |
+| precise | 88.0% | 94.0% | 94.0% |
+| sloppy | 81.3% | 90.9% | 90.8% |
+
+The same words through the whole keyboard (`TapCorpusTest`): right word / wrong word / left
+alone, with the taps and with no positions; the right word with the taps is CI's floor:
+
+| Profile | Slipped | With the taps | No positions |
+|---|---|---|---|
+| centred | 557 | 88.0 / 3.1 / 9.0% | 85.8 / 5.4 / 8.8% |
+| low | 993 | 85.3 / 2.0 / 12.7% | 81.5 / 5.6 / 12.9% |
+| two thumbs | 1,038 | 85.2 / 2.8 / 12.0% | 82.3 / 5.6 / 12.1% |
+| right thumb | 1,446 | 80.8 / 3.7 / 15.6% | 77.5 / 6.4 / 16.1% |
+| precise | 98 | 88.8 / 4.1 / 7.1% | 83.7 / 9.2 / 7.1% |
+| sloppy | 1,573 | 79.1 / 3.3 / 17.6% | 75.0 / 7.4 / 17.7% |
+
+Most of what is left alone is a slip into a word the keyboard's own ceiling refuses: two edits
+under eight letters that are not both neighbouring keys. Before the second slip was let through
+(`AutoCorrection.maxSlipEditsFor`), sloppy read 66.1% right and 30.1% left alone, right thumb
+67.4% and 28.8%.
 
 The learned patterns' mean gain over the default pattern, in points, by taps learned — the
 reason a key needs 30 taps before its own pattern counts:
@@ -838,7 +868,7 @@ slip / first letter / omitted / mid-word / rare prefix / strip first place: 1.0 
 costs with our budgets 176 / 170 / 162 / 177 / 110 / 65.6%.
 
 Re-swept at 0.6, 0.7, 0.8, 0.9 and 1.0 with `kRunOnCost` 0.5 and `kEditPenalty` 25, with the
-cap and without it (`-DBORDERKEYS_NO_EDIT_CAP=1`). Whole path, unknown left alone / omitted /
+cap and without it (a build switch, removed with the cap). Whole path, unknown left alone / omitted /
 rare prefix / first letter / slip / strip `suggest_slip_en` first, with the cap: 0.6 reads 182 /
 171 / 119 / 172 / 180 / 162; 0.7 182 / 172 / 120 / 172 / 181 / 165; 0.8 182 / 180 / 126 / 173 /
 181 / 167; 0.9 183 / 186 / 131 / 172 / 181 / 163; 1.0 185 / 186 / 132 / 172 / 181 / 152. Without
@@ -847,10 +877,16 @@ it: 0.6 184 / 169 / 118 / 161 / 177 / 154; 0.7 184 / 170 / 119 / 162 / 177 / 160
 152. The strip's `suggest_en` reads 71.9% at 0.6 and 75.0% above. No value reaches 188 unknown
 rows left alone; `badder`, `dobbed`, `piddle`, `stunk` and `tattle` are corrected at every value.
 
-The slip scale is 0.8 with the cap, `kRunOnCost` 0.5 and `kEditPenalty` 25. Whole path at those
-values: typo 198, mid-word 192, unknown left alone 182, doubled 191, first letter 173, slip 181,
-omitted 180, extra 192, rare prefix 126, known 193; the floors are these counts. The strip's
-`suggest_en` reads 75.0%.
+The slip scale is 0.8, `kRunOnCost` 0.5 and `kEditPenalty` 25, with no cap on a path's edit
+count: through the whole keyboard the cap changed nothing but one unknown row and a few wrong
+corrections of tapped words, since the keyboard's own ceiling refuses what it let through.
+Under eight letters a second edit is let through when both are neighbouring keys, from four
+letters (`AutoCorrection.maxSlipEditsFor`). Whole path at those values: typo 198, mid-word 192,
+unknown left alone 181, doubled 191, first letter 172, slip 181, omitted 180, extra 192, rare
+prefix 126, known 193; the floors are these counts. The two slips cost `badder` → `harder`,
+`tutted` → `fitted` and `farned` → `farmer`; moving the second edit to every word of five
+letters instead cost 21 unknown rows. The strip's `suggest_en` reads 75.0% and
+`suggest_slip_en` 83.0%.
 
 The slip corpus loses most of its rows to the edit ceiling or the name rule, not to ranking,
 and the rare-prefix corpus is where completions of a rare word outrank the frequent correction

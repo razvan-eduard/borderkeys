@@ -423,6 +423,7 @@ private:
         int32_t node;
         float cost;
         uint8_t edits;
+        uint8_t slips;
     };
 
     int packIndexForTag(const char* tag) const;
@@ -479,7 +480,7 @@ private:
     // boost cannot reach the heap's floor.
     void offerScoredWord(TopK<Candidate>& heap, const PackedTrie& trie, int packIndex,
                          uint32_t wordIndex, float score, float editCost, int edits,
-                         int runOn) const;
+                         int runOn, int slips = 0) const;
     // Which language is being written, decided from the words already committed. dominantPack_
     // is -1 until the evidence is one-sided enough to be worth acting on.
     void observeContextLanguage(const uint32_t* folded, int length);

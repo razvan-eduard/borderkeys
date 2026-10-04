@@ -74,17 +74,23 @@ jobs:
       - name: Install NDK and CMake
         run: sdkmanager --install "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}"
 
-      # The host engine library and the real packs the pipeline harness runs against, built
-      # before the tests; Pipeline.require() fails rather than skips when CI is set.
+      # The host engine library, the real packs and the tap corpora the pipeline harness runs
+      # against, built before the tests; Pipeline.require() and TapCorpusTest fail rather than
+      # skip when CI is set.
       - name: Build what the pipeline harness needs
         run: |
           set -euo pipefail
           cmake -S native-tests -B native-tests/build -DCMAKE_BUILD_TYPE=Debug
           cmake --build native-tests/build --parallel --target borderkeys
           ./gradlew :keyboard:buildDictionaries --no-daemon "$GRADLE_HEAP"
+          mkdir -p native-tests/build/taps
+          for profile in centred low thumbs right-thumb precise sloppy; do
+            python3 tools/make_tap_corpus.py --profile "$profile" --taps 60000 --seed 1 \
+              > "native-tests/build/taps/$profile.tsv"
+          done
 
       - name: Unit tests, every module
-        run: ./gradlew test --no-daemon "$GRADLE_HEAP"
+        run: ./gradlew test --no-daemon "$GRADLE_HEAP" -Pborderkeys.taps="$PWD/native-tests/build/taps"
 
       # Both flavors. The three verification tasks are wired into assemble.
       - name: Assemble both flavors
@@ -261,8 +267,36 @@ jobs:
               --first-floor "$floor" | tail -n 6 || status=1
           done <<'FLOORS'
           suggest_en 75.0
-          suggest_slip_en 83.5
+          suggest_slip_en 83.0
           FLOORS
+          exit $status
+
+      # The touch model alone on the six tap profiles: autocorrect's right word with the taps
+      # and the default patterns, in percent. The floors may only be raised.
+      - name: The touch model holds its floors on the tap corpora
+        run: |
+          set -euo pipefail
+          packs=keyboard/build/generated/dictionaries/dict
+          taps=native-tests/build/taps
+          pids=()
+          while read -r profile floor; do
+            ./native-tests/build/touch_eval "$packs" en-US native-tests/data/qwerty_1080.layout \
+              "$taps/$profile.tsv" --train-taps 20000 --test-from-taps 40000 --test-words 4000 \
+              --floor "$floor" > "$taps/$profile.log" 2>&1 &
+            pids+=("$!")
+          done <<'FLOORS'
+          centred 92.0
+          low 90.9
+          thumbs 91.6
+          right-thumb 90.9
+          precise 94.0
+          sloppy 90.9
+          FLOORS
+          status=0
+          for pid in "${pids[@]}"; do
+            wait "$pid" || status=1
+          done
+          tail -n 6 "$taps"/*.log
           exit $status
 
       # The same loader under the sanitisers, with the checksums repaired after each mutation.

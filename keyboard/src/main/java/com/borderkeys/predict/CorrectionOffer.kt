@@ -12,4 +12,9 @@ data class CorrectionOffer(
     val isName: Boolean,
     /** [WordStems.shields]'s answer for the typed word against [text]. */
     val inflection: Boolean,
+    /**
+     * Whether the engine reached [text] by neighbouring keys in place of typed ones alone: no
+     * letter added, dropped, swapped or run on.
+     */
+    val slipsOnly: Boolean = false,
 )

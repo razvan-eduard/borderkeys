@@ -17,6 +17,10 @@ attestations and the full commit lists are on the
 - BorderKeys +: swiping on the Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek,
   Armenian, Georgian, Hebrew and Arabic layouts is decoded by a neural model of each layout's
   own; until now those layouts were decoded geometrically.
+- Fixed: autocorrect left a word of four to seven letters as typed when two of its letters
+  were neighbouring keys hit by mistake, such as `joyse` for `house`; it now corrects it. Other
+  two-letter differences in those words are still left alone, which keeps real words the
+  dictionaries lack from being replaced.
 - Fixed: on both Turkish layouts shift turned i into I; it now gives İ.
 - Fixed: a swipe could not reach a word with a letter that sits only on another key's long
   press, such as ъ on the Russian layout's ь key; the swipe now reaches it through that key.

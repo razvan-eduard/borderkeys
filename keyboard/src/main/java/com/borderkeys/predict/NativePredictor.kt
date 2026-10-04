@@ -66,7 +66,8 @@ internal object NativePredictor {
      * the next word. For a typed word, [outTexts] receives [TEXT_KNOWN_SPELLING] and
      * [TEXT_POSSESSIVE], a slot with none left as it is; [outCorrections] receives autocorrect's
      * list, best first, up to [CORRECTION_SLOTS] entries, the rest left null,
-     * [outCorrectionNames] whether each entry is a name, and [outSpellingFlags]
+     * [outCorrectionNames] whether each entry is a name, [outCorrectionSlips] whether each was
+     * reached by neighbouring keys in place of the typed ones alone, and [outSpellingFlags]
      * [SPELLING_EXACT] and [SPELLING_NAME].
      */
     external fun nativeAnswer(
@@ -82,6 +83,7 @@ internal object NativePredictor {
         outTexts: Array<String?>,
         outCorrections: Array<String?>,
         outCorrectionNames: BooleanArray,
+        outCorrectionSlips: BooleanArray,
         outSpellingFlags: BooleanArray,
     ): Int
 
