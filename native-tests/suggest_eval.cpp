@@ -5,7 +5,8 @@
  * What the strip would offer, measured against a corpus. It asserts only when asked to:
  * `--reachable`'s budget, `--context`'s floors and `--first-floor` set the exit status.
  *
- * Corpus format, one case per line, `#` comments and blank lines ignored:
+ * Corpus format, one case per line, `#` comments and blank lines ignored, any column after the
+ * second ignored:
  *
  *     typed<TAB>expected
  *
@@ -212,7 +213,9 @@ std::vector<Case> readCorpus(const char* path) {
         if (tab == std::string::npos || tab == 0 || tab + 1 >= text.size()) {
             continue;
         }
-        cases.push_back(Case{text.substr(0, tab), text.substr(tab + 1)});
+        const size_t end = text.find('\t', tab + 1);
+        cases.push_back(Case{text.substr(0, tab),
+                             text.substr(tab + 1, end == std::string::npos ? end : end - tab - 1)});
     }
     std::fclose(file);
     return cases;

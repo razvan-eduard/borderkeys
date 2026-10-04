@@ -210,6 +210,14 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# Real typos sampled by tools/make_real_corpus.py from the ITE Typing dataset (Aalto University,
+# 2024, doi:10.5281/zenodo.12528162); docs/licensing.md, the test data table.
+[[annotations]]
+path = "native-tests/data/autocorrect_real_en.tsv"
+precedence = "override"
+SPDX-FileCopyrightText = "2024 Katri Leino, Markku Laine, Mikko Kurimo, Antti Oulasvirta, Aalto University"
+SPDX-License-Identifier = "CC-BY-4.0"
+
 # The neural swipe decoder's trained weights, plus-only (keyboard/build.gradle.kts,
 # BORDERKEYS_NEURAL_SWIPE). Trained from scratch by tools/swipe_model/train.py on the MIT-licensed
 # futo-org/swipe.futo.org corpus (docs/licensing.md section 2.5); no other model's weights or

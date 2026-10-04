@@ -369,11 +369,13 @@ lets `Engine::create` construct the TCN decoder in `plus` and only the geometric
 
 ### 2.6 Non-code files in the repository that are not shipped
 
-Redistributed with the source, so they need terms even though no APK contains them. All are
-produced by this project's own tooling; none is a third-party dataset.
+Redistributed with the source, so they need terms even though no APK contains them. Most are
+produced by this project's own tooling; a file drawn from a third-party dataset names it and its
+licence below.
 
 | File | Origin | Licence |
 |---|---|---|
+| `native-tests/data/autocorrect_real_en.tsv` | 1,000 typos sampled by `tools/make_real_corpus.py` from the **ITE Typing dataset** (Katri Leino, Markku Laine, Mikko Kurimo and Antti Oulasvirta, Aalto University, 2024, doi:10.5281/zenodo.12528162): words participants typed on their own phones, the word the sentence held, and what their phone's autocorrect wrote. The dataset itself is not in this repository | **CC BY 4.0**, the dataset's licence on Zenodo; the attribution is the file's header, this row and the entry in `REUSE.toml` |
 | `native-tests/data/corpus/*.bkd`, 18 blobs | Deliberately damaged copies of the pack `tools/build_dict.py --selftest` produces: truncated headers, wrong magic, sizes that lie, section offsets past the end of the file, a capacity that is not a power of two, an unterminated language tag | GPL-3.0-or-later |
 | `native-tests/data/gestures.csv` | Synthesised by `tools/gesture_replay.py --synthesise`; no recorded human gesture is in this repository | GPL-3.0-or-later |
 | `native-tests/data/qwerty_1080.layout` | The QWERTY geometry at 1080 px, written out for the replay harness | GPL-3.0-or-later |

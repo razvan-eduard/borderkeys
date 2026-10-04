@@ -39,6 +39,7 @@ class PipelineCorpusTest {
             Corpus("en-US", "autocorrect_extra_en.tsv", EXTRA_FLOOR),
             Corpus("en-US", "autocorrect_rareprefix_en.tsv", RAREPREFIX_FLOOR),
             Corpus("en-US", "autocorrect_known_en.tsv", KNOWN_FLOOR),
+            Corpus("en-US", "autocorrect_real_en.tsv", REAL_FLOOR),
             Corpus("ro-RO", "autocorrect_accents_ro.tsv", ACCENTS_FLOOR),
             Corpus("ro-RO", "autocorrect_twins_ro.tsv", TWINS_RO_FLOOR),
             Corpus("ro-RO", "autocorrect_plain_ro.tsv", PLAIN_RO_FLOOR),
@@ -130,6 +131,7 @@ class PipelineCorpusTest {
         const val EXTRA_FLOOR = 192
         const val RAREPREFIX_FLOOR = 126
         const val KNOWN_FLOOR = 193
+        const val REAL_FLOOR = 434
         const val ACCENTS_FLOOR = 237
 
         /** Out of 200, 190 for the Spanish twins and 57 for the Italian ones. */
