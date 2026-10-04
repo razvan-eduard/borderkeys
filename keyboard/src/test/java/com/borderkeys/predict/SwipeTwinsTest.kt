@@ -15,8 +15,8 @@ import java.io.File
  * partner right after it (`I'll` then `ill`, else the bare spelling then its twin), a spelling
  * with no twin has none spliced after it, and, when the decoder's top word is the bare spelling or
  * its twin, the rule's word is the one written. Every row must be checked by at least one decoder,
- * and at least [GEOMETRIC_ROWS] by the geometric one. How well the decoders read the swipes is not
- * gated here.
+ * at least [GEOMETRIC_ROWS] by the geometric one and at least [LATIN_ROWS] by the Latin model,
+ * which must load under CI. How well the decoders read the swipes is not gated here.
  */
 class SwipeTwinsTest {
 
@@ -35,9 +35,13 @@ class SwipeTwinsTest {
             val wrong = ArrayList<String>()
             val checkedBy = HashMap<String, Int>()
             var geometricRows = 0
+            var latinRows = -1
             var checks = 0
             for (neural in listOf(false, true)) {
                 if (neural && !pipeline.useLatinModel()) {
+                    if (System.getenv("CI") != null) {
+                        throw AssertionError("the Latin model did not load, and CI is expected to have it")
+                    }
                     report.append("the Latin model did not load; geometric decoder only\n")
                     continue
                 }
@@ -76,7 +80,9 @@ class SwipeTwinsTest {
                         }
                     }
                 }
-                if (!neural) {
+                if (neural) {
+                    latinRows = checked
+                } else {
                     geometricRows = checked
                 }
                 report.append("$tier: $checked of ${words.size} rows checked")
@@ -91,6 +97,12 @@ class SwipeTwinsTest {
                 "$report\nthe geometric decoder checked $geometricRows rows, fewer than $GEOMETRIC_ROWS",
                 geometricRows >= GEOMETRIC_ROWS,
             )
+            if (latinRows >= 0) {
+                assertTrue(
+                    "$report\nthe Latin model checked $latinRows rows, fewer than $LATIN_ROWS",
+                    latinRows >= LATIN_ROWS,
+                )
+            }
         } finally {
             pipeline.close()
         }
@@ -100,6 +112,7 @@ class SwipeTwinsTest {
         const val PAIRS = "src/main/assets/contractions/en-US.pairs.txt"
         const val SWIPES = 100
         const val GEOMETRIC_ROWS = 100
+        const val LATIN_ROWS = 93
         const val SHOWN = 3
     }
 }

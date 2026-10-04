@@ -96,9 +96,12 @@ android {
                 ).withPropertyName("hostLibrary").withPathSensitivity(PathSensitivity.NONE)
                 it.inputs.files(tasks.named("buildDictionaries"))
                     .withPropertyName("packs").withPathSensitivity(PathSensitivity.RELATIVE)
-                // The assets, drawables and corpora the tests read from disk: a change to one reruns them.
+                // The assets, the plus flavour's swipe models, drawables and corpora the tests read
+                // from disk: a change to one reruns them.
                 it.inputs.dir("src/main/assets")
                     .withPropertyName("assets").withPathSensitivity(PathSensitivity.RELATIVE)
+                it.inputs.dir("src/plus/assets")
+                    .withPropertyName("plusAssets").withPathSensitivity(PathSensitivity.RELATIVE)
                 it.inputs.dir("src/main/res/drawable")
                     .withPropertyName("drawables").withPathSensitivity(PathSensitivity.RELATIVE)
                 it.inputs.dir(rootProject.layout.projectDirectory.dir("native-tests/data"))
