@@ -543,17 +543,18 @@ below it.
 
 Requires torch and the FUTO dataset, which is why it is a manual run rather than a gate.
 
-### Suggestion quality — a measurement in one mode, a gate in two others
+### Suggestion quality — gated by its floors
 
 ```
-native-tests/build/suggest_eval <dict dir> native-tests/data/suggest_en.tsv en-US
+native-tests/build/suggest_eval <dict dir> native-tests/data/suggest_en.tsv en-US [--first-floor P]
 ```
 
-Prints rank-1 accuracy, top-3 and mean rank over a corpus of `typed<TAB>expected` cases. In this
-mode it **does not assert and is not a test**, deliberately — same contract as `gesture_replay`: a
-corpus in, a measurement out, no verdict. Its `--reachable` and `--context` modes are different:
-both take floors and exit non-zero below them, and CI runs them on every bundled pack
-(`.github/workflows/ci.yml`, the swipe-reachability and context steps).
+Prints rank-1 accuracy, top-3 and mean rank over a corpus of `typed<TAB>expected` cases. With
+`--first-floor P` it exits non-zero when the rank-1 share falls below P percent; CI holds
+`suggest_en` at 75.0% and `suggest_slip_en` at 83.5% (`.github/workflows/ci.yml`, the strip's
+first-place step). Without it, it prints and asserts nothing. Its `--reachable` and `--context`
+modes take floors as well and exit non-zero below them, and CI runs them on every bundled pack
+(the reachability and context steps).
 
 A case whose right answer is *"leave the word alone"* is written with the typed word as its own
 expectation (`snobul` → `snobul`), because "offers nothing better than what I wrote" is a result

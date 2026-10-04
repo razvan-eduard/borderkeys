@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
 /**
- * The touch model measured on a corpus from tools/make_tap_corpus.py. A measurement, not a
- * test: it does not assert.
+ * The touch model measured on a corpus from tools/make_tap_corpus.py. With `--floor P` it is
+ * also a gate: the exit status is non-zero when autocorrect's right word, with the taps and the
+ * default patterns alone, falls below P percent.
  *
  * The words typed within the first `--train-taps` taps train the key patterns the way the
  * keyboard learns them: each letter that hit its own key or a ring neighbour gives the key it
@@ -18,7 +19,7 @@
  * Usage:
  *     touch_eval <dict dir> <tag> <layout> <taps.tsv> [--train-taps N] [--test-words N]
  *                [--test-from-taps N] [--half-life-taps N] [--weights a,b,...]
- *                [--min-taps a,b,...]
+ *                [--min-taps a,b,...] [--floor P]
  */
 
 #include <cmath>
@@ -195,17 +196,20 @@ int main(int argc, char** argv) {
     if (argc < 5) {
         std::printf("usage: touch_eval <dict dir> <tag> <layout> <taps.tsv> [--train-taps N] "
                     "[--test-words N] [--test-from-taps N] [--half-life-taps N] "
-                    "[--weights a,b] [--min-taps a,b]\n");
+                    "[--weights a,b] [--min-taps a,b] [--floor P]\n");
         return 2;
     }
     long trainTaps = 20000;
     size_t testWords = 4000;
     long testFromTaps = 0;
     double halfLifeTaps = 0.0;
+    double floor = -1.0;
     std::vector<float> weights = {1.0f};
     std::vector<float> minimums = {30.0f};
     for (int i = 5; i + 1 < argc; i += 2) {
-        if (std::strcmp(argv[i], "--train-taps") == 0) {
+        if (std::strcmp(argv[i], "--floor") == 0) {
+            floor = std::strtod(argv[i + 1], nullptr);
+        } else if (std::strcmp(argv[i], "--train-taps") == 0) {
             trainTaps = std::strtol(argv[i + 1], nullptr, 10);
         } else if (std::strcmp(argv[i], "--test-words") == 0) {
             testWords = std::strtoul(argv[i + 1], nullptr, 10);
@@ -401,6 +405,10 @@ int main(int argc, char** argv) {
     std::printf("tested %d words: %d slipped into no word, %d into another word\n", tested,
                 slipped, realWords);
     if (slipped == 0) {
+        if (floor >= 0.0) {
+            std::printf("no slipped words to hold the floor of %.1f%% against\n", floor);
+            return 1;
+        }
         return 0;
     }
     const double all = static_cast<double>(slipped);
@@ -418,6 +426,14 @@ int main(int argc, char** argv) {
         std::printf("  %6.1f%% %6.1f%% %6.1f%%  %6.1f%% %6.1f%%\n", 100.0 * tally.fixed / all,
                     100.0 * tally.kept / all, 100.0 * tally.other / all,
                     100.0 * tally.first / all, 100.0 * tally.topThree / all);
+    }
+    if (floor >= 0.0) {
+        // settings[1] is the taps with the default patterns alone.
+        const double fixedShare = 100.0 * tallies[1].fixed / all;
+        const bool held = fixedShare + 1e-9 >= floor;
+        std::printf("default patterns: right word %.1f%%, floor %.1f%%: %s\n", fixedShare, floor,
+                    held ? "held" : "BELOW THE FLOOR");
+        return held ? 0 : 1;
     }
     return 0;
 }
