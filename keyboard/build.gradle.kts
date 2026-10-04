@@ -110,6 +110,12 @@ android {
                 providers.gradleProperty("borderkeys.readings").orNull?.let { directory ->
                     it.systemProperty("borderkeys.readings", directory)
                 }
+                // The tap corpora TapCorpusTest types, one per profile; unset, it skips itself.
+                providers.gradleProperty("borderkeys.taps").orNull?.let { directory ->
+                    it.systemProperty("borderkeys.taps", directory)
+                    it.inputs.dir(directory).withPropertyName("taps")
+                        .withPathSensitivity(PathSensitivity.RELATIVE)
+                }
             }
         }
     }

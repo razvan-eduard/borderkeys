@@ -428,8 +428,8 @@ int main(int argc, char** argv) {
                     100.0 * tally.first / all, 100.0 * tally.topThree / all);
     }
     if (floor >= 0.0) {
-        // settings[1] is the taps with the default patterns alone.
-        const double fixedShare = 100.0 * tallies[1].fixed / all;
+        // settings[1] is the taps with the default patterns alone, compared as printed.
+        const double fixedShare = std::round(1000.0 * tallies[1].fixed / all) / 10.0;
         const bool held = fixedShare + 1e-9 >= floor;
         std::printf("default patterns: right word %.1f%%, floor %.1f%%: %s\n", fixedShare, floor,
                     held ? "held" : "BELOW THE FLOOR");

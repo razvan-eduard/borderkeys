@@ -15,11 +15,15 @@ struct Candidate {
     // Word index inside that pack, or entry index inside the user model.
     int32_t wordIndex;
     float score;
-    // The walk's edit cost in key widths, its edit count, and the characters past the last one
-    // typed.
+    // The walk's edit cost in key widths, its edit count, the characters past the last one typed,
+    // and how many of the edits were a neighbouring key in place of the typed one.
     float editCost = 0.0f;
     uint8_t edits = 0;
     uint8_t runOn = 0;
+    uint8_t slips = 0;
+
+    /** Whether every edit was a neighbouring key in place of the typed one, with nothing run on. */
+    bool slipsOnly() const { return edits > 0 && slips == edits && runOn == 0; }
 
     static constexpr int32_t kUserPack = -1;
 

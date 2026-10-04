@@ -58,7 +58,8 @@ internal object AutoCorrection {
      * [knownWordIsName] whether that spelling is a name. The word itself is judged first
      * ([typedSituation]); then each offer in turn ([candidateSituation]), the first that is
      * [Situation.Correctable] winning, a [Situation.TooShort] offer stopping the walk, and the
-     * first offer's situation standing when none wins.
+     * first offer's situation standing when none wins. An offer may be [maxEdits] edits away, or
+     * [maxSlipEdits] when it is [CorrectionOffer.slipsOnly].
      */
     fun pick(
         typed: String,
@@ -70,6 +71,7 @@ internal object AutoCorrection {
         minimumLength: Int,
         maxEdits: Int = Int.MAX_VALUE,
         capitaliseNames: Boolean = true,
+        maxSlipEdits: Int = maxEdits,
     ): Pick {
         typedSituation(
             typed, corrections, suggestionQuery, knownWord, knownWordExact, knownWordIsName,
@@ -80,7 +82,8 @@ internal object AutoCorrection {
             // [capitaliseNames] gates only a name's capital, not [Situation.NameMismatch].
             val cased = matchCase(typed, offer.text, offer.isName && capitaliseNames)
             val situation = candidateSituation(
-                typed, offer, cased, minimumLength, maxEdits,
+                typed, offer, cased, minimumLength,
+                if (offer.slipsOnly) maxOf(maxEdits, maxSlipEdits) else maxEdits,
             )
             if (first == null) {
                 first = situation
@@ -195,6 +198,16 @@ internal object AutoCorrection {
     }
 
     /**
+     * The edit ceiling for an offer reached by neighbouring keys alone
+     * ([CorrectionOffer.slipsOnly]): by default two from [MIN_SLIP_PAIR_LETTERS] letters on, else
+     * as [maxEditsFor].
+     */
+    fun maxSlipEditsFor(typedLength: Int, distanceSetting: Int): Int = when (distanceSetting) {
+        DISTANCE_STRICT, DISTANCE_LOOSE -> maxEditsFor(typedLength, distanceSetting)
+        else -> if (typedLength >= MIN_SLIP_PAIR_LETTERS) 2 else maxEditsFor(typedLength, distanceSetting)
+    }
+
+    /**
      * Optimal string alignment distance: Levenshtein, with a swap of two adjacent letters as one
      * edit.
      */
@@ -231,6 +244,12 @@ internal object AutoCorrection {
 
     /** From this many letters on, the default setting allows a second edit. */
     const val LONG_WORD_LETTERS = 8
+
+    /**
+     * From this many letters on, the default setting allows a second edit when both are
+     * neighbouring keys in place of typed ones: half the letters still in place.
+     */
+    const val MIN_SLIP_PAIR_LETTERS = 4
 
     /** The marks a word may end in while still being written: the apostrophes and the hyphen. */
     private const val TRAILING_MARKS = "'’‘ʼ-"

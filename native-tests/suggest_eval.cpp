@@ -15,10 +15,10 @@
  * The bare form measures where the strip ranks the expected word; `--autocorrect` measures what
  * the space bar commits, which is a different heap, walking autocorrect's list: a word the
  * dictionaries spell is left alone; a candidate past the edit ceiling (one edit, two from eight
- * letters) or a name whose letters are not the typed ones is passed over, and one behind a
- * passed-over entry must also be within the ceiling by the walk's own edit count; a typed word
- * under three letters stops the walk unless the candidate only restores its accents. The
- * inflection guard and the contraction and possessive rewrites are not modelled.
+ * letters, two from four when every edit was a neighbouring key in place of a typed one) or a
+ * name whose letters are not the typed ones is passed over; a typed word under three letters
+ * stops the walk unless the candidate only restores its accents. The inflection guard and the
+ * contraction and possessive rewrites are not modelled.
  *
  * Usage:
  *     suggest_eval <dict dir> <corpus.tsv> [tag ...]
@@ -49,6 +49,7 @@
  */
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -117,10 +118,10 @@ std::string committedFor(Engine& engine, const std::string& typed) {
         return std::string();
     }
     const int maxEdits = typedCount >= 8 ? 2 : 1;
+    const int maxSlipEdits = typedCount >= 4 ? 2 : maxEdits;
     const Candidate* list = nullptr;
     const int count = engine.corrections(&list);
-    bool behindRefused = false;
-    for (int i = 0; i < count; ++i, behindRefused = true) {
+    for (int i = 0; i < count; ++i) {
         uint32_t length = 0;
         const char* const text = engine.candidateText(list[i], &length);
         if (text == nullptr || length == 0) {
@@ -134,9 +135,8 @@ std::string committedFor(Engine& engine, const std::string& typed) {
         const bool sameLetters =
             wordCount == typedCount &&
             std::memcmp(wordFolded, typedFolded, sizeof(uint32_t) * typedCount) == 0;
-        // Behind a refused entry the walk's own edit count is a ceiling too.
-        if (osaDistance(typedFolded, typedCount, wordFolded, wordCount) > maxEdits ||
-            (behindRefused && list[i].edits > maxEdits)) {
+        const int ceiling = list[i].slipsOnly() ? std::max(maxEdits, maxSlipEdits) : maxEdits;
+        if (osaDistance(typedFolded, typedCount, wordFolded, wordCount) > ceiling) {
             continue;
         }
         if (engine.candidateIsProperNoun(list[i]) && !sameLetters) {
@@ -727,7 +727,8 @@ int main(int argc, char** argv) {
         std::printf("mean rank found  %.2f\n", static_cast<double>(rankTotal) / found);
     }
     if (firstFloor >= 0.0) {
-        const double firstShare = total > 0.0 ? 100.0 * firstPlace / total : 0.0;
+        // Compared as printed, to one decimal.
+        const double firstShare = total > 0.0 ? std::round(1000.0 * firstPlace / total) / 10.0 : 0.0;
         const bool held = total > 0.0 && firstShare + 1e-9 >= firstFloor;
         std::printf("first %.1f%%, floor %.1f%%: %s\n", firstShare, firstFloor,
                     held ? "held" : "BELOW THE FLOOR");

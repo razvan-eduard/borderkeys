@@ -204,6 +204,7 @@ internal object WordCommit {
             word.knownWordExact, word.knownWordIsName, settings.minimumLength,
             AutoCorrection.maxEditsFor(word.typed.length, settings.correctionDistance),
             settings.capitaliseNames,
+            AutoCorrection.maxSlipEditsFor(word.typed.length, settings.correctionDistance),
         )
         return if (pick.situation == AutoCorrection.Situation.Correctable) {
             Outcome(pick.text, Kind.CORRECTION, pick.situation, pick.situation.name)

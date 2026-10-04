@@ -163,6 +163,24 @@ struct LoadedEngine {
         return text;
     }
 
+    /** Whether autocorrect's list for `composing` holds `word` reached by slips alone. */
+    bool slipsOnly(const char* composing, const char* word) {
+        Candidate out[Engine::kMaxCandidates];
+        engine.suggest(composing, std::strlen(composing), nullptr, 0, nullptr, 0, out,
+                       Engine::kMaxCandidates);
+        const Candidate* list = nullptr;
+        const int count = engine.corrections(&list);
+        for (int i = 0; i < count; ++i) {
+            uint32_t length = 0;
+            const char* const text = engine.candidateText(list[i], &length);
+            if (text != nullptr && length == std::strlen(word) &&
+                std::memcmp(text, word, length) == 0) {
+                return list[i].slipsOnly();
+            }
+        }
+        return false;
+    }
+
     /** The rank of `expected` among the suggestions for `composing`, or -1. */
     int rankOf(const char* composing, const char* expected, const char* previous = nullptr) {
         Candidate out[Engine::kMaxCandidates];
@@ -921,6 +939,11 @@ void runEngineTests() {
               "a one-letter completion carries no edit and one run-on letter");
         check(loaded.corrections("keybosr").find("keyboard/1/1 ") != std::string::npos,
               "an edit plus a run-on letter carries one of each");
+        check(loaded.slipsOnly("keubosrd", "keyboard"),
+              "two neighbouring keys in place of typed ones are slips only");
+        check(!loaded.slipsOnly("keybosr", "keyboard"),
+              "a run-on letter is not a slip");
+        check(!loaded.slipsOnly("thexx", "thex"), "a discarded letter is not a slip");
 
         // A run-on letter is priced below a deletion.
         const std::string ther = loaded.corrections("ther");

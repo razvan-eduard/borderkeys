@@ -1343,7 +1343,7 @@ void Engine::offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, c
 
 void Engine::offerScoredWord(TopK<Candidate>& heap, const PackedTrie& trie, int packIndex,
                              uint32_t wordIndex, float score, float editCost, int edits,
-                             int runOn) const {
+                             int runOn, int slips) const {
     // Skipped when even the largest boost cannot reach the heap's floor.
     if (score + kMaxUserBoost <= heap.worstScore()) {
         return;
@@ -1356,6 +1356,7 @@ void Engine::offerScoredWord(TopK<Candidate>& heap, const PackedTrie& trie, int 
         candidate.editCost = editCost;
         candidate.edits = static_cast<uint8_t>(edits);
         candidate.runOn = static_cast<uint8_t>(runOn);
+        candidate.slips = static_cast<uint8_t>(slips);
         offerCandidate(heap, candidate, text, textLength);
     }
 }
@@ -1368,6 +1369,8 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
         int16_t runAhead;
         float cost;
         int8_t edits;
+        // Of `edits`, the substitutions: a neighbouring key in place of the typed one.
+        int8_t slips;
     };
 
     Frame* const stack = arena_.allocateArray<Frame>(512);
@@ -1377,17 +1380,10 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
     int stackSize = 0;
     int written = 0;
 
-    stack[stackSize++] = Frame{pack.trie().root(), 0, 0, 0.0f, 0};
+    stack[stackSize++] = Frame{pack.trie().root(), 0, 0, 0.0f, 0, 0};
 
     const PackedTrie& trie = pack.trie();
     const bool fuzzy = maxCost > 0.0f && geometry_.isSet();
-    // Edits a path may carry: one up to four typed letters, two from five; the strip-only pass
-    // is not capped, nor any pass when the build sets BORDERKEYS_NO_EDIT_CAP.
-#ifdef BORDERKEYS_NO_EDIT_CAP
-    const int maxEdits = INT8_MAX;
-#else
-    const int maxEdits = currentPass_ == Pass::Wide ? INT8_MAX : (foldedLength <= 4 ? 1 : 2);
-#endif
 
     while (stackSize > 0) {
         if (visitBudget_ <= 0) {
@@ -1397,7 +1393,8 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
         --visitBudget_;
 
         if (frame.inputPos >= foldedLength) {
-            const Endpoint reached{frame.node, frame.cost, static_cast<uint8_t>(frame.edits)};
+            const Endpoint reached{frame.node, frame.cost, static_cast<uint8_t>(frame.edits),
+                                   static_cast<uint8_t>(frame.slips)};
             if (written < maxOut) {
                 out[written++] = reached;
             } else {
@@ -1423,11 +1420,11 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
             const int32_t child = trie.walk(frame.node, exactSymbol);
             if (child >= 0 && stackSize < 512) {
                 stack[stackSize++] = Frame{child, static_cast<int16_t>(frame.inputPos + 1), 0,
-                                           frame.cost, frame.edits};
+                                           frame.cost, frame.edits, frame.slips};
             }
         }
 
-        if (!fuzzy || frame.edits >= maxEdits) {
+        if (!fuzzy) {
             continue;
         }
         const float maxCostHere = depthCeilingFor(frame.inputPos, maxCost);
@@ -1459,7 +1456,8 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
             const int32_t child = trie.walk(frame.node, symbol);
             if (child >= 0 && stackSize < 512) {
                 stack[stackSize++] = Frame{child, static_cast<int16_t>(frame.inputPos + 1), 0,
-                                           cost, static_cast<int8_t>(frame.edits + 1)};
+                                           cost, static_cast<int8_t>(frame.edits + 1),
+                                           static_cast<int8_t>(frame.slips + 1)};
             }
         }
 
@@ -1474,7 +1472,7 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
                                                                 : kDeleteCost;
         if (frame.cost + deleteCost <= maxCostHere && stackSize < 512) {
             stack[stackSize++] = Frame{frame.node, static_cast<int16_t>(frame.inputPos + 1), 0,
-                                       frame.cost + deleteCost, edited};
+                                       frame.cost + deleteCost, edited, frame.slips};
         }
 
         // Insertion: a character of the word was missed. Every alphabet symbol the trie has from
@@ -1493,7 +1491,7 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
                 if (child >= 0) {
                     stack[stackSize++] = Frame{child, frame.inputPos,
                                                static_cast<int16_t>(frame.runAhead + 1),
-                                               frame.cost + kInsertCost, edited};
+                                               frame.cost + kInsertCost, edited, frame.slips};
                 }
             }
             // Marks are pushed last, so they are explored first.
@@ -1505,7 +1503,7 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
                 if (child >= 0) {
                     stack[stackSize++] = Frame{child, frame.inputPos,
                                                static_cast<int16_t>(frame.runAhead + 1),
-                                               frame.cost + kMarkInsertCost, edited};
+                                               frame.cost + kMarkInsertCost, edited, frame.slips};
                 }
             }
         }
@@ -1521,7 +1519,8 @@ int Engine::collectEndpoints(const LanguagePack& pack, const uint32_t* folded, i
                     if (child >= 0 && stackSize < 512) {
                         stack[stackSize++] = Frame{child,
                                                    static_cast<int16_t>(frame.inputPos + 2), 0,
-                                                   frame.cost + kTransposeCost, edited};
+                                                   frame.cost + kTransposeCost, edited,
+                                                   frame.slips};
                     }
                 }
             }
@@ -1603,7 +1602,7 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
                 const float languageModel = weightLog + contextLogProb(packIndex, wordIndex);
                 const float score = languageModel + editComponent - lengthPenalty;
                 offerScoredWord(heap, trie, packIndex, wordIndex, score, endpoint.cost,
-                                endpoint.edits, frame.depth);
+                                endpoint.edits, frame.depth, endpoint.slips);
 
                 // Everything reaches the strip; only a committing pass reaches the respelling
                 // tier and the correction heap.
@@ -1635,7 +1634,7 @@ void Engine::collectWords(int packIndex, const LanguagePack& pack, const Endpoin
                                             correctionStrictness_ * kEditPenalty * endpoint.cost -
                                             surcharge - runOnPenalty;
                     offerScoredWord(correctionHeap_, trie, packIndex, wordIndex, heapScore,
-                                    endpoint.cost, endpoint.edits, frame.depth);
+                                    endpoint.cost, endpoint.edits, frame.depth, endpoint.slips);
                 }
             }
         }

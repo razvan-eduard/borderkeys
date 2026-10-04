@@ -63,6 +63,30 @@ internal class Pipeline private constructor(
     }
 
     /**
+     * Types [typed] letter by letter at ([xs], [ys]) on the harness's layout, in an empty field,
+     * then a space, and reads back what the field kept. A letter with no key, or a NaN position,
+     * is pressed without a position.
+     */
+    fun commitTapped(typed: String, xs: FloatArray, ys: FloatArray): Outcome {
+        rig.orchestrator.applySettings(settings())
+        rig.startField("")
+        val start = rig.editor.selectionEnd
+        for ((index, letter) in typed.withIndex()) {
+            val key = keyIndex(letter)
+            if (key < 0 || index >= xs.size || xs[index].isNaN()) {
+                rig.press(letter.code)
+            } else {
+                rig.tap(letter.code, key, xs[index], ys[index])
+            }
+        }
+        val word = rig.orchestrator.composingText
+        val reason = if (word.isNotEmpty()) rig.orchestrator.commitOutcome(word, ' '.code).reason else ""
+        rig.press(' '.code)
+        val written = rig.editor.text.substring(start, rig.editor.selectionEnd).removeSuffix(" ")
+        return Outcome(typed, written.takeIf { it != typed }, reason)
+    }
+
+    /**
      * Types [typed] and a space where the caret is. [Outcome.committed] is null when the field
      * kept what was typed; [Outcome.reason] is the decision of the key that ended the last word.
      */
@@ -118,6 +142,10 @@ internal class Pipeline private constructor(
         val offered = rig.orchestrator.caseSwipedWords(decoded).map { it.text }
         return Swiped(written, decoded.map { it.text }, offered)
     }
+
+    /** Whether an active pack spells [word] exactly, case aside. */
+    fun spells(word: String): Boolean =
+        NativePredictor.nativeKnownSpelling(handle, word)?.equals(word, ignoreCase = true) == true
 
     /** The apostrophe twin [word] has on this pipeline's languages, or null. */
     fun twinOf(word: String): String? = Contractions.twinOf(word, twins)?.written
@@ -343,6 +371,19 @@ internal class Pipeline private constructor(
                 handle, codes.toIntArray(), xs.toFloatArray(), ys.toFloatArray(),
                 KEY_WIDTH, KEY_HEIGHT, IntArray(0), IntArray(0),
             )
+        }
+
+        /** [letter]'s key in the order [qwerty] hands the engine its geometry, or -1. */
+        fun keyIndex(letter: Char): Int {
+            var index = 0
+            for (letters in QWERTY_ROWS) {
+                val column = letters.indexOf(letter)
+                if (column >= 0) {
+                    return index + column
+                }
+                index += letters.length
+            }
+            return -1
         }
 
         /** The centre of [letter]'s key on the harness's layout, in its pixels. */

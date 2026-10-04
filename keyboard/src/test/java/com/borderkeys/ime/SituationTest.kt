@@ -3,6 +3,7 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.AutoCorrection.Situation
 import com.borderkeys.predict.CorrectionOffer
 import org.junit.Assert.assertEquals
@@ -19,7 +20,8 @@ class SituationTest {
         text: String,
         isName: Boolean = false,
         inflection: Boolean = false,
-    ) = CorrectionOffer(text, isName, inflection)
+        slipsOnly: Boolean = false,
+    ) = CorrectionOffer(text, isName, inflection, slipsOnly)
 
     private fun pick(
         typed: String,
@@ -31,9 +33,10 @@ class SituationTest {
         minimumLength: Int = 3,
         maxEdits: Int = Int.MAX_VALUE,
         capitaliseNames: Boolean = true,
+        maxSlipEdits: Int = maxEdits,
     ): AutoCorrection.Pick = AutoCorrection.pick(
         typed, offers.toList(), suggestionQuery, knownWord, knownWordExact, knownWordIsName,
-        minimumLength, maxEdits, capitaliseNames,
+        minimumLength, maxEdits, capitaliseNames, maxSlipEdits,
     )
 
     private fun situation(
@@ -161,5 +164,24 @@ class SituationTest {
         val picked = pick("snobul", offer("noul"), offer("snob", isName = true), maxEdits = 1)
         assertEquals(Situation.TooFar, picked.situation)
         assertNull(picked.text)
+    }
+
+    @Test
+    fun `two slips onto neighbouring keys pass where two other edits are too far`() {
+        val slips = pick("joyse", offer("house", slipsOnly = true), maxEdits = 1, maxSlipEdits = 2)
+        assertEquals(Situation.Correctable, slips.situation)
+        assertEquals("house", slips.text)
+        val other = pick("piffle", offer("pile"), maxEdits = 1, maxSlipEdits = 2)
+        assertEquals(Situation.TooFar, other.situation)
+    }
+
+    @Test
+    fun `the slip ceiling follows the distance setting and the word's length`() {
+        val normal = KeyboardPreferences.CORRECTION_DISTANCE_NORMAL
+        assertEquals(2, AutoCorrection.maxSlipEditsFor(4, normal))
+        assertEquals(1, AutoCorrection.maxSlipEditsFor(3, normal))
+        assertEquals(1, AutoCorrection.maxSlipEditsFor(5, AutoCorrection.DISTANCE_STRICT))
+        assertEquals(2, AutoCorrection.maxSlipEditsFor(3, AutoCorrection.DISTANCE_LOOSE))
+        assertEquals(1, AutoCorrection.maxEditsFor(5, normal))
     }
 }

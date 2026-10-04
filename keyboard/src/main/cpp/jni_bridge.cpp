@@ -34,9 +34,10 @@ constexpr jsize kTextKnownSpelling = 0;
 constexpr jsize kTextPossessive = 1;
 constexpr jsize kTextSlots = 2;
 
-// nativeAnswer's `outCorrections` holds autocorrect's list and `outCorrectionNames` whether each
-// entry is a name; `outSpellingFlags` holds two flags about the typed word. The same as
-// NativePredictor's CORRECTION_SLOTS and SPELLING_ constants.
+// nativeAnswer's `outCorrections` holds autocorrect's list, `outCorrectionNames` whether each
+// entry is a name and `outCorrectionSlips` whether each was reached by neighbouring keys alone;
+// `outSpellingFlags` holds two flags about the typed word. The same as NativePredictor's
+// CORRECTION_SLOTS and SPELLING_ constants.
 constexpr jsize kCorrectionSlots = 5;
 constexpr jsize kSpellingExact = 0;
 constexpr jsize kSpellingName = 1;
@@ -291,13 +292,14 @@ void setText(JNIEnv* env, jobjectArray array, jsize slot, const char* text) {
 /**
  * Fills `outTexts` for the typed [word]: how the dictionaries spell it and its possessive; a slot
  * with none is left as it is. `outCorrections` receives autocorrect's list for the request just
- * served, best first, one spelling once, `outCorrectionNames` whether each entry is a name, and
- * `outSpellingFlags` whether a dictionary spells the typed letters exactly and whether that
+ * served, best first, one spelling once, `outCorrectionNames` whether each entry is a name,
+ * `outCorrectionSlips` whether each was reached by neighbouring keys alone (Candidate::slipsOnly),
+ * and `outSpellingFlags` whether a dictionary spells the typed letters exactly and whether that
  * spelling is a name.
  */
 void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t length,
                 jobjectArray outTexts, jobjectArray outCorrections, jbooleanArray outCorrectionNames,
-                jbooleanArray outSpellingFlags) {
+                jbooleanArray outCorrectionSlips, jbooleanArray outSpellingFlags) {
     if (outTexts == nullptr || env->GetArrayLength(outTexts) < kTextSlots) {
         return;
     }
@@ -312,13 +314,16 @@ void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t leng
         text[possessive] = '\0';
         setText(env, outTexts, kTextPossessive, text);
     }
-    if (outCorrections == nullptr || outCorrectionNames == nullptr || outSpellingFlags == nullptr ||
+    if (outCorrections == nullptr || outCorrectionNames == nullptr ||
+        outCorrectionSlips == nullptr || outSpellingFlags == nullptr ||
         env->GetArrayLength(outCorrections) < kCorrectionSlots ||
         env->GetArrayLength(outCorrectionNames) < kCorrectionSlots ||
+        env->GetArrayLength(outCorrectionSlips) < kCorrectionSlots ||
         env->GetArrayLength(outSpellingFlags) < kSpellingFlagSlots) {
         return;
     }
     jboolean names[kCorrectionSlots] = {};
+    jboolean slips[kCorrectionSlots] = {};
     jboolean spelling[kSpellingFlagSlots] = {};
     const Candidate* list = nullptr;
     const int count = engine.corrections(&list);
@@ -343,6 +348,7 @@ void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t leng
         text[sourceLength] = '\0';
         setText(env, outCorrections, slot, text);
         names[slot] = engine.candidateIsProperNoun(list[i]) ? JNI_TRUE : JNI_FALSE;
+        slips[slot] = list[i].slipsOnly() ? JNI_TRUE : JNI_FALSE;
         written[slot] = source;
         writtenLength[slot] = sourceLength;
         ++slot;
@@ -355,6 +361,7 @@ void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t leng
         spelling[kSpellingName] = engine.candidateIsProperNoun(exact) ? JNI_TRUE : JNI_FALSE;
     }
     env->SetBooleanArrayRegion(outCorrectionNames, 0, kCorrectionSlots, names);
+    env->SetBooleanArrayRegion(outCorrectionSlips, 0, kCorrectionSlots, slips);
     env->SetBooleanArrayRegion(outSpellingFlags, 0, kSpellingFlagSlots, spelling);
     if (env->ExceptionCheck() == JNI_TRUE) {
         env->ExceptionClear();
@@ -388,7 +395,7 @@ jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing
                   jstring prev2, jfloatArray tapXs, jfloatArray tapYs, jobjectArray outWords,
                   jfloatArray outScores, jbooleanArray outProperNoun, jobjectArray outTexts,
                   jobjectArray outCorrections, jbooleanArray outCorrectionNames,
-                  jbooleanArray outSpellingFlags) {
+                  jbooleanArray outCorrectionSlips, jbooleanArray outSpellingFlags) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || outWords == nullptr || outScores == nullptr ||
         outProperNoun == nullptr) {
@@ -443,7 +450,7 @@ jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing
     // For a typed word: how the dictionaries spell it, its possessive, and autocorrect's list.
     if (composingLength > 0) {
         writeTexts(env, *engine, composingBuffer, static_cast<size_t>(composingLength), outTexts,
-                   outCorrections, outCorrectionNames, outSpellingFlags);
+                   outCorrections, outCorrectionNames, outCorrectionSlips, outSpellingFlags);
     }
     if (found <= 0) {
         return 0;
@@ -1219,7 +1226,7 @@ const JNINativeMethod kMethods[] = {
     {"nativeSetKeyGeometry", "(J[I[F[FFF[I[I)V", reinterpret_cast<void*>(nativeSetKeyGeometry)},
     {"nativeAnswer",
      "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[F[F[Ljava/lang/String;[F[Z"
-     "[Ljava/lang/String;[Ljava/lang/String;[Z[Z)I",
+     "[Ljava/lang/String;[Ljava/lang/String;[Z[Z[Z)I",
      reinterpret_cast<void*>(nativeAnswer)},
     {"nativeSetTouchModel", "(JZFI)V", reinterpret_cast<void*>(nativeSetTouchModel)},
     {"nativeSetTouchPatterns", "(J[I[F[F[F[F[F[F)V",
