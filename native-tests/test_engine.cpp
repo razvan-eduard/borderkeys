@@ -324,6 +324,21 @@ void runEngineTests() {
                   geometryCost,
               "a tap with no point is priced by the geometry");
 
+        const float onG = defaults.tapLogLikelihood(geometry, 'g', gx, gy);
+        const float hFromG = defaults.tapLogLikelihood(geometry, 'h', gx, gy);
+        checkNear(onG - hFromG,
+                  0.5f / (TouchModel::kReferenceSpread * TouchModel::kReferenceSpread), 0.01f,
+                  "a tap on a key's centre is one key width, squared over the spread, less "
+                  "likely for its neighbour");
+        checkNear(defaults.tapLogLikelihood(geometry, 'g', (gx + hx) / 2.f, gy),
+                  defaults.tapLogLikelihood(geometry, 'h', (gx + hx) / 2.f, gy), 0.001f,
+                  "a tap halfway between two keys is as likely for either");
+        check(defaults.tapLogLikelihood(geometry, 'p', gx, gy) < hFromG,
+              "a far key is less likely than a neighbour");
+        check(defaults.tapLogLikelihood(geometry, 'g', none, none) ==
+                  TouchModel::kOffKeyLogLikelihood,
+              "a tap with no point gives the off-key likelihood");
+
         // One learned pattern with fifty taps: h's taps land 0.2 key widths left of its centre,
         // towards g.
         const int32_t hCode = 'h';
@@ -340,6 +355,9 @@ void runEngineTests() {
               "a key whose taps lean towards the typed one is cheaper to reach from that side");
         check(leaningCost >= KeyGeometry::kMinSubstitutionCost,
               "and never cheaper than the least a substitution may cost");
+        check(leaning.tapLogLikelihood(geometry, 'h', towardsH, gy) >
+                  defaults.tapLogLikelihood(geometry, 'h', towardsH, gy),
+              "a tap where a key's taps lean is more likely for that key once learned");
 
         TouchModel half;
         half.set(&hCode, &fifty, &leftOfCentre, &zero, &variance, &variance, &zero, 1);

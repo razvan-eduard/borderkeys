@@ -49,6 +49,17 @@ public:
     float substitutionCost(const KeyGeometry& geometry, uint32_t typed, uint32_t intended,
                            float x, float y, float geometryCost) const;
 
+    // The log-likelihood of a tap at (`x`, `y`), in the keyboard view's pixels, being meant for
+    // `key`, a folded letter: the default pattern's density at the tap's offset from the key's
+    // centre in key units, moved by the weight towards the learned pattern's when that counts;
+    // without the 2π term, so comparable across keys. A long-press letter is read at the key that
+    // holds it. kOffKeyLogLikelihood when the tap has no point or the letter is not on the
+    // geometry.
+    float tapLogLikelihood(const KeyGeometry& geometry, uint32_t key, float x, float y) const;
+
+    // What tapLogLikelihood gives a letter the geometry does not hold.
+    static constexpr float kOffKeyLogLikelihood = -30.0f;
+
 private:
     struct Pattern {
         uint32_t code;
