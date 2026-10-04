@@ -248,6 +248,23 @@ jobs:
           cat "$out"/*.log
           exit $status
 
+      # The strip's first-place share on the strip corpora, English pack alone. The floors are
+      # percentages and may only be raised.
+      - name: The strip holds its first-place floors
+        run: |
+          set -euo pipefail
+          packs=keyboard/build/generated/dictionaries/dict
+          status=0
+          while read -r corpus floor; do
+            echo "== $corpus"
+            ./native-tests/build/suggest_eval "$packs" "native-tests/data/$corpus.tsv" en-US \
+              --first-floor "$floor" | tail -n 6 || status=1
+          done <<'FLOORS'
+          suggest_en 75.0
+          suggest_slip_en 83.5
+          FLOORS
+          exit $status
+
       # The same loader under the sanitisers, with the checksums repaired after each mutation.
       # A crash fails the build.
       - name: Language-pack loader under ASan and UBSan

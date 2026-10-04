@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
 /**
- * What the strip would offer, measured against a corpus. A measurement, not a test: it does not
- * assert.
+ * What the strip would offer, measured against a corpus. It asserts only when asked to:
+ * `--reachable`'s budget, `--context`'s floors and `--first-floor` set the exit status.
  *
  * Corpus format, one case per line, `#` comments and blank lines ignored:
  *
@@ -27,8 +27,9 @@
  *     suggest_eval <dict dir> --reachable <dictionary.tsv> <tag> [budget]
  *
  * Packs are named by tag (default en-US). The corpus form prints per-case ranks, then rank-1
- * accuracy, top-3 accuracy, and the mean rank of the cases it found at all. The explain form
- * prints where one candidate's score came from.
+ * accuracy, top-3 accuracy, and the mean rank of the cases it found at all; with
+ * `--first-floor P`, anywhere after the dict dir, its exit status is non-zero when the rank-1
+ * share falls below P percent. The explain form prints where one candidate's score came from.
  *
  * `--reachable` checks that every word compiled into a shipped pack is retrievable from that
  * pack as itself: it reads the source `.tsv` and queries the pack built from it. `budget` is the
@@ -420,6 +421,18 @@ int main(int argc, char** argv) {
     if (centreTapped) {
         arguments.erase(tapsFlag);
     }
+    double firstFloor = -1.0;
+    const auto floorFlag = std::find_if(arguments.begin(), arguments.end(), [](const char* each) {
+        return std::strcmp(each, "--first-floor") == 0;
+    });
+    if (floorFlag != arguments.end()) {
+        if (floorFlag + 1 == arguments.end()) {
+            std::printf("--first-floor needs a percentage\n");
+            return 2;
+        }
+        firstFloor = std::strtod(*(floorFlag + 1), nullptr);
+        arguments.erase(floorFlag, floorFlag + 2);
+    }
     argc = static_cast<int>(arguments.size());
     argv = arguments.data();
 
@@ -712,6 +725,13 @@ int main(int argc, char** argv) {
     std::printf("absent           %zu\n", cases.size() - static_cast<size_t>(found));
     if (found > 0) {
         std::printf("mean rank found  %.2f\n", static_cast<double>(rankTotal) / found);
+    }
+    if (firstFloor >= 0.0) {
+        const double firstShare = total > 0.0 ? 100.0 * firstPlace / total : 0.0;
+        const bool held = total > 0.0 && firstShare + 1e-9 >= firstFloor;
+        std::printf("first %.1f%%, floor %.1f%%: %s\n", firstShare, firstFloor,
+                    held ? "held" : "BELOW THE FLOOR");
+        return held ? 0 : 1;
     }
     return 0;
 }
