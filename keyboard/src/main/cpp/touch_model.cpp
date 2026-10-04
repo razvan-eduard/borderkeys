@@ -115,4 +115,21 @@ float TouchModel::substitutionCost(const KeyGeometry& geometry, uint32_t typed, 
     return std::max(cost, KeyGeometry::kMinSubstitutionCost);
 }
 
+float TouchModel::tapLogLikelihood(const KeyGeometry& geometry, uint32_t key, float x,
+                                   float y) const {
+    float centreX = 0.0f;
+    float centreY = 0.0f;
+    if (std::isnan(x) || std::isnan(y) || !geometry.centreOfLetter(key, &centreX, &centreY)) {
+        return kOffKeyLogLikelihood;
+    }
+    const float offsetX = (x - centreX) / geometry.keyWidth();
+    const float offsetY = (y - centreY) / geometry.keyHeight();
+    const float base = logDensity(kDefault, offsetX, offsetY);
+    const Pattern* const pattern = learned(key);
+    if (pattern == nullptr) {
+        return base;
+    }
+    return base + weight_ * (logDensity(*pattern, offsetX, offsetY) - base);
+}
+
 }  // namespace borderkeys
