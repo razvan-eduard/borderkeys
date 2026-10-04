@@ -6,6 +6,7 @@ package com.borderkeys.predict
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.Contractions
 import com.borderkeys.typing.QueuedEngine
+import com.borderkeys.typing.SwipePath
 import com.borderkeys.typing.TypingOrchestrator
 import com.borderkeys.typing.TypingRig
 import org.junit.AssumptionViolatedException
@@ -24,6 +25,7 @@ import java.util.Locale
 internal class Pipeline private constructor(
     private val handle: Long,
     private val contractions: Map<String, String>,
+    private val twins: Map<String, Contractions.Twin>,
     private val languages: List<String>,
 ) {
 
@@ -39,6 +41,7 @@ internal class Pipeline private constructor(
     fun typingRig(settings: KeyboardPreferences): TypingRig =
         TypingRig(QueuedEngine(handle, languages), settings).also {
             it.orchestrator.contractions = contractions
+            it.orchestrator.twins = twins
             it.orchestrator.languageTags = languages
         }
 
@@ -83,6 +86,58 @@ internal class Pipeline private constructor(
             written.takeIf { it != typed },
             reason ?: rig.orchestrator.commitOutcome("", ' '.code).reason,
         )
+    }
+
+    /**
+     * What a swipe wrote, the space after it left off; the decoder's own words, best first; and
+     * the list the keyboard made of them, twins spliced in, as a swipe's ring and strip get it.
+     */
+    internal data class Swiped(val written: String, val decoded: List<String>, val offered: List<String>)
+
+    /**
+     * Swipes [word] through its keys' centres on the harness's layout ([TypingRig.swipe]), in a
+     * field holding [previous] and a space, or nothing, ends it with a space, and reads back what
+     * the field kept; the decoder's words come from the same path.
+     */
+    fun swipe(word: String, previous: String? = null): Swiped {
+        rig.orchestrator.applySettings(settings())
+        rig.startField(if (previous != null) "$previous " else "")
+        val start = rig.editor.selectionEnd
+        val path = SwipePath.through(word, rig.clock)
+        val words = arrayOfNulls<String>(PredictionEngine.MAX_RESULTS)
+        val properNoun = BooleanArray(PredictionEngine.MAX_RESULTS)
+        val found = NativePredictor.nativeDecodeGesture(
+            handle, path.xs, path.ys, path.timestamps, path.count, previous, null,
+            words, FloatArray(PredictionEngine.MAX_RESULTS), properNoun,
+        )
+        val decoded = (0 until found).mapNotNull { index -> words[index]?.let { Candidate(it, properNoun[index]) } }
+        rig.swipe(word)
+        rig.press(' '.code)
+        rig.settle()
+        val written = rig.editor.text.substring(start, rig.editor.selectionEnd).removeSuffix(" ")
+        val offered = rig.orchestrator.caseSwipedWords(decoded).map { it.text }
+        return Swiped(written, decoded.map { it.text }, offered)
+    }
+
+    /** The apostrophe twin [word] has on this pipeline's languages, or null. */
+    fun twinOf(word: String): String? = Contractions.twinOf(word, twins)?.written
+
+    /**
+     * Decodes swipes with the Latin model from the `plus` assets as well as the geometric
+     * decoder; false, changing nothing, when the model is missing or the host library was built
+     * without it.
+     */
+    fun useLatinModel(): Boolean {
+        val file = File(LATIN_MODEL)
+        if (!file.isFile) {
+            return false
+        }
+        if (!NativePredictor.nativeLoadSwipeWeights(handle, com.borderkeys.ime.SwipeModels.LATIN.script, file.readBytes())) {
+            return false
+        }
+        NativePredictor.nativeSelectSwipeScript(handle, com.borderkeys.ime.SwipeModels.LATIN.script)
+        NativePredictor.nativeSetSwipeModelEnabled(handle, true)
+        return true
     }
 
     /** The settings the keyboard runs with, the three the corpora vary given. */
@@ -256,7 +311,14 @@ internal class Pipeline private constructor(
                 },
                 tags.toList(),
             )
-            return Pipeline(handle, contractions, tags.toList())
+            // And their pairs, as DictionaryLoader reads them.
+            val twins = Contractions.twinsOf(
+                tags.map { tag ->
+                    val file = File(CONTRACTIONS_DIRECTORY, "$tag.pairs.txt")
+                    tag to (if (file.isFile) Contractions.parsePairs(file.readText()) else emptyList())
+                },
+            )
+            return Pipeline(handle, contractions, twins, tags.toList())
         }
 
         /** The raw descriptor behind [descriptor], through `--add-opens java.base/java.io`. */
@@ -295,5 +357,8 @@ internal class Pipeline private constructor(
         private val ROW_INDENTS = listOf(0f, 0.5f, 1.5f)
         private const val KEY_WIDTH = 108f
         private const val KEY_HEIGHT = 160f
+
+        /** The Latin swipe model, relative to the module the tests run in. */
+        private const val LATIN_MODEL = "src/plus/assets/model.bkw"
     }
 }
