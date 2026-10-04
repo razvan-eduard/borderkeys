@@ -894,6 +894,38 @@ and the rare-prefix corpus is where completions of a rare word outrank the frequ
 holds in lower case and the keyboard recases (`broadway` → `Broadway`).
 `scripts/corpus_readings.sh` lists every corpus and summarises them in its `SUMMARY.txt`.
 
+### Real typos — `autocorrect_real_en`
+
+```
+python3 tools/make_real_corpus.py <dir> dictionaries/en_US.tsv > native-tests/data/autocorrect_real_en.tsv
+```
+
+Every other autocorrect corpus is generated: a word and a slip of a chosen kind. This one is 1,000
+typos people made on their own phones, from the ITE Typing dataset (Aalto University, 2024,
+CC BY 4.0; `docs/licensing.md`). Its table of autocorrected words gives each word as typed, the
+word the sentence held, and what the participant's phone wrote; `make_real_corpus.py` keeps
+mobile participants, typed words of three letters or more that no pack word spells, and words
+meant that the English pack holds, and samples 1,000 of the 91,782 distinct pairs. The raw
+dataset stays out of the repository: its four files come out of the 7.3 GB archive on Zenodo
+by range requests, `ITE_words/ac_words_en.csv` and `processed2020/english/` participants, test
+sections and sentences.
+
+`PipelineCorpusTest` holds it at 434 right, typed one word at a time with no taps and no words
+before it. The phones wrote the word meant for 803 of the 1,000, with the taps and the sentence
+they had; the table holds only words the phones changed, so it leans towards typos a phone
+notices. By the typo's edit distance from the word meant:
+
+| Distance | Rows | Right / wrong word / left alone | Phones right |
+|---|---|---|---|
+| 1 | 402 | 306 / 37 / 59 | 358 |
+| 2 | 297 | 128 / 89 / 80 | 222 |
+| 3 | 121 | 0 / 36 / 85 | 91 |
+| 4 or more | 180 | 0 / 48 / 132 | 132 |
+
+Of the 566 misses, 304 never had the word meant in the engine's ranking: the search's edit-cost
+ceilings do not reach it. A third of real phone typos are three or more edits from their word;
+the generated corpora hold none.
+
 ### Accent restoration — the one that was missing
 
 ```
