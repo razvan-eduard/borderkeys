@@ -6,8 +6,11 @@ package com.borderkeys.ime
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.AutoCorrection.Situation
 import com.borderkeys.predict.CorrectionOffer
+import com.borderkeys.predict.DecodedCorrection
+import com.borderkeys.predict.ListedCorrection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -21,7 +24,10 @@ class SituationTest {
         isName: Boolean = false,
         inflection: Boolean = false,
         slipsOnly: Boolean = false,
-    ) = CorrectionOffer(text, isName, inflection, slipsOnly)
+        confident: Boolean = true,
+    ) = ListedCorrection(text, isName, inflection, slipsOnly, confident)
+
+    private fun decoded(text: String, inflection: Boolean = false) = DecodedCorrection(text, inflection)
 
     private fun pick(
         typed: String,
@@ -34,9 +40,10 @@ class SituationTest {
         maxEdits: Int = Int.MAX_VALUE,
         capitaliseNames: Boolean = true,
         maxSlipEdits: Int = maxEdits,
+        decoderAllowed: Boolean = true,
     ): AutoCorrection.Pick = AutoCorrection.pick(
         typed, offers.toList(), suggestionQuery, knownWord, knownWordExact, knownWordIsName,
-        minimumLength, maxEdits, capitaliseNames, maxSlipEdits,
+        minimumLength, maxEdits, capitaliseNames, maxSlipEdits, decoderAllowed,
     )
 
     private fun situation(
@@ -173,6 +180,59 @@ class SituationTest {
         assertEquals("house", slips.text)
         val other = pick("piffle", offer("pile"), maxEdits = 1, maxSlipEdits = 2)
         assertEquals(Situation.TooFar, other.situation)
+    }
+
+    @Test
+    fun `the decoder's word is applied only once every listed offer is passed over`() {
+        val listed = pick("adterqwrds", offer("adters"), decoded("afterwards"))
+        assertEquals(Situation.Correctable, listed.situation)
+        assertEquals("adters", listed.text)
+        val fallback = pick("Adterqwrds", offer("adters"), decoded("afterwards"), maxEdits = 1)
+        assertEquals(Situation.Decoded, fallback.situation)
+        assertEquals("Afterwards", fallback.text)
+        assertEquals(Situation.Decoded, pick("adterqwrds", decoded("afterwards"), maxEdits = 1).situation)
+    }
+
+    @Test
+    fun `the decoder's word is left out under the strict distance setting`() {
+        val strict = AutoCorrection.decoderAllowedFor(AutoCorrection.DISTANCE_STRICT)
+        val picked = pick("adterqwrds", offer("adters"), decoded("afterwards"), maxEdits = 1,
+                          decoderAllowed = strict)
+        assertEquals(Situation.TooFar, picked.situation)
+        assertEquals(Situation.NothingOffered,
+            pick("adterqwrds", decoded("afterwards"), decoderAllowed = strict).situation)
+        assertTrue(AutoCorrection.decoderAllowedFor(KeyboardPreferences.CORRECTION_DISTANCE_NORMAL))
+    }
+
+    @Test
+    fun `the decoder's word stands behind the length and inflection checks`() {
+        assertEquals(Situation.TooShort, pick("ab", decoded("abc"), minimumLength = 3).situation)
+        assertEquals(Situation.Inflection,
+            pick("smooths", decoded("smoother", inflection = true)).situation)
+    }
+
+    @Test
+    fun `an offer the taps leave uncertain is passed over for a confident one`() {
+        val uncertain = pick("formsl", offer("formal", confident = false), offer("forms"))
+        assertEquals(Situation.Correctable, uncertain.situation)
+        assertEquals("forms", uncertain.text)
+        val alone = pick("formsl", offer("formal", confident = false))
+        assertEquals(Situation.Uncertain, alone.situation)
+        assertNull(alone.text)
+    }
+
+    @Test
+    fun `an accent restored needs no confidence check to pass the hard rules first`() {
+        assertEquals(Situation.TooShort,
+            pick("ab", offer("abc", confident = false), minimumLength = 3).situation)
+        assertEquals(Situation.TooFar,
+            pick("snobul", offer("noul", confident = false), maxEdits = 1).situation)
+    }
+
+    @Test
+    fun `a known word is never decoded`() {
+        assertEquals(Situation.NoChange,
+            pick("form", decoded("from"), knownWord = "form", knownWordExact = true).situation)
     }
 
     @Test

@@ -20,7 +20,12 @@ object LanguagePackInspector {
         val tag: String,
         val formatVersion: Int,
         val wordCount: Int,
-    )
+        /** Of [wordCount], the words the pack only knows and never offers. */
+        val knownWordCount: Int = 0,
+    ) {
+        /** The words the pack offers, for its label. */
+        val offeredWordCount: Int get() = wordCount - knownWordCount
+    }
 
     sealed interface Result {
         data class Valid(val info: PackInfo) : Result
@@ -37,7 +42,7 @@ object LanguagePackInspector {
     }
 
     fun inspect(file: File): Result {
-        val out = IntArray(3)
+        val out = IntArray(INSPECT_SLOTS)
         val tag = try {
             ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
                 NativePredictor.nativeInspectPack(
@@ -56,7 +61,9 @@ object LanguagePackInspector {
         }
 
         return if (tag != null) {
-            Result.Valid(PackInfo(tag = tag, formatVersion = out[1], wordCount = out[2]))
+            Result.Valid(
+                PackInfo(tag = tag, formatVersion = out[1], wordCount = out[2], knownWordCount = out[3]),
+            )
         } else {
             Result.Refused(out[0], reasonFor(out[0]), out[0].toString())
         }
@@ -82,4 +89,7 @@ object LanguagePackInspector {
     }
 
     private const val STATUS_UNREADABLE = -1000
+
+    /** How many numbers `nativeInspectPack` fills. */
+    const val INSPECT_SLOTS = 4
 }

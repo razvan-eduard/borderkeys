@@ -4,6 +4,7 @@
 #include "engine.hpp"
 #include "marks.hpp"
 #include "reading.hpp"
+#include "tap_decode.hpp"
 
 #include "gesture/shark2_decoder.hpp"
 #ifdef BORDERKEYS_NEURAL_SWIPE
@@ -93,7 +94,6 @@ constexpr float kStemFrequencyFloor = 10.5f;
 
 // How many continuations of what was typed may hold strip slots at once.
 constexpr int kMaxShownCompletions = 4;
-
 // Stupid backoff's factor.
 constexpr float kBackoffLogFactor = -0.9162907f;  // ln(0.4)
 
@@ -334,6 +334,14 @@ int32_t bkdInspectPack(int fd, int64_t offset, int64_t length, PackInfo* out) {
         out->formatVersion = header.formatVersion;
         out->wordCount = header.wordCount;
         out->fileBytes = header.fileBytes;
+        out->knownOnlyCount = 0;
+        const BkdSection& flags = header.sections[kSectionWordFlags];
+        if (flags.length >= header.wordCount) {
+            const uint8_t* const word = base + flags.offset;
+            for (uint32_t i = 0; i < header.wordCount; ++i) {
+                out->knownOnlyCount += (word[i] & kWordFlagKnownOnly) != 0u ? 1u : 0u;
+            }
+        }
     }
 
     munmap(mapping, mapBytes);
@@ -410,7 +418,9 @@ int32_t LanguagePack::open(const char* tag, int fd, int64_t offset, int64_t leng
     std::memset(tag_, 0, sizeof(tag_));
     std::strncpy(tag_, tag, sizeof(tag_) - 1);
 
+    trie_.hideKnownOnly();
     buildFrequentList();
+    letters_.build(trie_);
     return kBkdOk;
 }
 
@@ -426,6 +436,7 @@ void LanguagePack::close() {
     posTransitions_ = nullptr;
     posTagCount_ = 0;
     frequentCount_ = 0;
+    letters_.clear();
     active = false;
     tag_[0] = '\0';
 }
@@ -437,7 +448,7 @@ void LanguagePack::buildFrequentList() {
     const uint32_t words = trie_.wordCount();
     for (uint32_t i = 0; i < words; ++i) {
         const uint8_t quantised = trie_.wordFreqQuantised(i);
-        if (frequentCount_ == kFrequentCount && quantised >= worst) {
+        if (trie_.isKnownOnly(i) || (frequentCount_ == kFrequentCount && quantised >= worst)) {
             continue;
         }
         int position = frequentCount_;
@@ -1981,6 +1992,11 @@ bool Engine::personalWordEstablished(uint32_t entryIndex) const {
            kMinPersonalEvidence;
 }
 
+int32_t Engine::establishedPersonalEntry(const char* word, size_t length) const {
+    const int32_t entry = personalModelEnabled_ ? userModel_.entryIndexFor(word, length) : -1;
+    return (entry >= 0 && personalWordEstablished(static_cast<uint32_t>(entry))) ? entry : -1;
+}
+
 bool Engine::anyPackKnows(const char* text, uint32_t length) const {
     uint32_t folded[kMaxComposing];
     const int foldedLength = foldUtf8(text, length, folded, kMaxComposing);
@@ -1990,7 +2006,7 @@ bool Engine::anyPackKnows(const char* text, uint32_t length) const {
     for (int i = 0; i < kMaxPacks; ++i) {
         if (packs_[i].isOpen() && packs_[i].active &&
             firstUnblockedSpelling(packs_[i].trie(),
-                                   packs_[i].trie().lookupFolded(folded, foldedLength)) >= 0) {
+                                   knownIn(packs_[i].trie(), folded, foldedLength)) >= 0) {
             return true;
         }
     }
@@ -2171,7 +2187,7 @@ bool Engine::exactSpelling(const char* word, size_t length, int* packOut,
 int32_t Engine::readingIn(int index, const char* word, size_t length, const uint32_t* folded,
                           int foldedLength) const {
     const PackedTrie& trie = packs_[index].trie();
-    const int32_t firstIndex = trie.lookupFolded(folded, foldedLength);
+    const int32_t firstIndex = knownIn(trie, folded, foldedLength);
     if (firstIndex < 0) {
         return -1;
     }
@@ -2192,7 +2208,7 @@ int32_t Engine::readingIn(int index, const char* word, size_t length, const uint
 bool Engine::exactSpellingIn(int index, const char* word, size_t length, const uint32_t* folded,
                              int foldedLength, uint32_t* wordOut) const {
     const LanguagePack& pack = packs_[index];
-    const int32_t firstIndex = pack.trie().lookupFolded(folded, foldedLength);
+    const int32_t firstIndex = knownIn(pack.trie(), folded, foldedLength);
     if (firstIndex < 0) {
         return false;
     }
@@ -2257,7 +2273,7 @@ int Engine::knownSpelling(const char* word, size_t length, char* out, int outByt
                 (round == 0)
                     ? readingIn(index, word, length, folded, foldedLength)
                     : firstUnblockedSpelling(pack.trie(),
-                                             pack.trie().lookupFolded(folded, foldedLength));
+                                             knownIn(pack.trie(), folded, foldedLength));
             if (spelling < 0) {
                 continue;
             }
@@ -2273,8 +2289,8 @@ int Engine::knownSpelling(const char* word, size_t length, char* out, int outByt
         }
     }
     // Then an established personal word, while the personal model is on.
-    const int32_t entry = personalModelEnabled_ ? userModel_.entryIndexFor(word, length) : -1;
-    if (entry >= 0 && personalWordEstablished(static_cast<uint32_t>(entry))) {
+    const int32_t entry = establishedPersonalEntry(word, length);
+    if (entry >= 0) {
         uint32_t textLength = 0;
         const char* const text = userModel_.entryText(static_cast<uint32_t>(entry), &textLength);
         if (text != nullptr && textLength > 0 && textLength <= static_cast<uint32_t>(outBytes) &&
@@ -2373,8 +2389,9 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
         return 0;
     }
     arena_.reset();
-    // The phrase slots belong to this request.
+    // The phrase slots and the decoder's word belong to this request.
     phraseCount_ = 0;
+    forgetDecoded();
 
     uint32_t folded[kMaxComposing];
     int source[kMaxComposing];
@@ -2437,7 +2454,9 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     typedTextLength_ = 0;
 
     settleCorrection(composing, composingLength);
-    return writeStrip(folded, foldedLength, heap, out, maxOut);
+    decodeTaps(folded, foldedLength, restrictTo);
+    return placeDecodedSuggestion(out, writeStrip(folded, foldedLength, heap, out, maxOut),
+                                  maxOut);
 }
 
 void Engine::runPass(const PassSpec& spec, const uint32_t* folded, int foldedLength,
@@ -2501,11 +2520,13 @@ void Engine::settleCorrection(const char* composing, size_t composingLength) {
     // Overridden in turn by a dictionary spelling that matches the typed letters exactly.
     int typedPack = -1;
     uint32_t typedWord = 0;
-    if (composing != nullptr && composingLength > 0 &&
-        exactSpelling(composing, composingLength, &typedPack, &typedWord)) {
+    const bool typed = composing != nullptr && composingLength > 0;
+    const bool spelled = typed && exactSpelling(composing, composingLength, &typedPack, &typedWord);
+    if (spelled) {
         bestCorrection_ = Candidate{typedPack, static_cast<int32_t>(typedWord), 0.0f};
         hasBestCorrection_ = true;
     }
+    typedKnown_ = spelled || (typed && establishedPersonalEntry(composing, composingLength) >= 0);
 }
 
 int Engine::writeStrip(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap,
@@ -2523,6 +2544,23 @@ int Engine::writeStrip(const uint32_t* folded, int foldedLength, TopK<Candidate>
         out[written++] = drainBuffer_[i];
     }
     return written;
+}
+
+int Engine::placeDecodedSuggestion(Candidate* out, int written, int maxOut) const {
+    const Candidate* const offered = decodedSuggestion();
+    if (offered == nullptr) {
+        return written;
+    }
+    return placeOffered(out, written, maxOut, *offered,
+                        [this](const Candidate& listed, const Candidate& word) {
+                            uint32_t listedLength = 0;
+                            uint32_t wordLength = 0;
+                            const char* const listedText = candidateText(listed, &listedLength);
+                            const char* const wordText = candidateText(word, &wordLength);
+                            return listedText != nullptr && wordText != nullptr &&
+                                   sameSpellingIgnoringCase(listedText, listedLength, wordText,
+                                                            wordLength);
+                        });
 }
 
 bool Engine::continuesTyped(const Candidate& candidate, const uint32_t* folded,

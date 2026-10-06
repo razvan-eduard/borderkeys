@@ -205,8 +205,9 @@ internal object WordCommit {
             AutoCorrection.maxEditsFor(word.typed.length, settings.correctionDistance),
             settings.capitaliseNames,
             AutoCorrection.maxSlipEditsFor(word.typed.length, settings.correctionDistance),
+            AutoCorrection.decoderAllowedFor(settings.correctionDistance),
         )
-        return if (pick.situation == AutoCorrection.Situation.Correctable) {
+        return if (pick.situation.replaces) {
             Outcome(pick.text, Kind.CORRECTION, pick.situation, pick.situation.name)
         } else {
             Outcome(null, Kind.NONE, pick.situation, pick.situation.name)

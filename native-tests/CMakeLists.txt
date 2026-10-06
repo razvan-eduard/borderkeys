@@ -19,6 +19,8 @@ set(ASSIST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../assist/src/main/cpp)
 # BORDERKEYS_NEURAL_SWIPE-gated list.
 set(ENGINE_SOURCES
     ${ENGINE_DIR}/engine.cpp
+    ${ENGINE_DIR}/engine_decode.cpp
+    ${ENGINE_DIR}/letter_model.cpp
     ${ENGINE_DIR}/packed_trie.cpp
     ${ENGINE_DIR}/ngram_model.cpp
     ${ENGINE_DIR}/user_model.cpp

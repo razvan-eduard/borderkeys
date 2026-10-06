@@ -7,7 +7,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The list `nativeAnswer` hands over is autocorrect's own: in order, one spelling once, whole. */
+/**
+ * The list `nativeAnswer` hands over is autocorrect's own: in order, one spelling once, whole,
+ * with at most the tap decoder's word after it.
+ */
 class CorrectionIdentityTest {
 
     @Test
@@ -19,10 +22,12 @@ class CorrectionIdentityTest {
             var committedFromList = 0
             for (typed in WORDS) {
                 val offers = pipeline.corrections(typed)
-                assertTrue("$typed: more than five entries", offers.size <= 5)
+                val listedOffers = offers.filterIsInstance<ListedCorrection>()
+                assertTrue("$typed: more than five entries", listedOffers.size <= 5)
+                assertTrue("$typed: more than one decoded word", offers.count { it is DecodedCorrection } <= 1)
                 assertEquals(
-                    "$typed: a spelling listed twice: ${offers.map { it.text }}",
-                    offers.map { it.text.lowercase() }.distinct().size, offers.size,
+                    "$typed: a spelling listed twice: ${listedOffers.map { it.text }}",
+                    listedOffers.map { it.text.lowercase() }.distinct().size, listedOffers.size,
                 )
                 assertTrue("$typed: an empty entry", offers.none { it.text.isEmpty() })
                 if (offers.isNotEmpty()) {

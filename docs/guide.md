@@ -46,9 +46,16 @@ ships.
 
 - **Autocorrect you can bound.** Off by default, and when on: the shortest word it may touch,
   how strict the engine's own ranking has to be, and how different a correction may be from what
-  you typed — one letter, two only in long words, or two — are each a setting. A correct word the
-  dictionaries simply do not know is left alone rather than replaced by something far away, and
-  the backspace straight after a correction puts back exactly what you typed.
+  you typed — one letter, two only in long words, or two — are each a setting. A word typed
+  further off than that, several letters on the wrong keys, is read from where each tap landed:
+  it is corrected only when one word is a hundred times likelier than every other reading put
+  together, the typed letters as a word of their own included, and otherwise that word is
+  offered on the strip; the strictest distance leaves such words alone. A correct word the
+  dictionaries simply do not know is left alone rather than replaced by something far away.
+  Rare words, among the advanced settings, counts rarer words from the same corpora as real
+  words too, so they stay as typed; each step keeps more of them and leaves more typos that
+  happen to spell one, and the setting names the dictionaries it changes. The backspace
+  straight after a correction puts back exactly what you typed.
 - **Offensive words, blocked on request.** One switch keeps a per-language list of profanity
   and slurs out of suggestions, corrections and learning. What you type yourself is never
   touched, and the lists are plain text in the repository, one per bundled language.

@@ -67,6 +67,8 @@ FLAG_CONTENT_CRC = 1 << 1
 # Bits in a word's own S_WORD_FLAGS byte, a different flag space from FLAG_* above, which are
 # BkdHeader::flags, one per pack. Mirrors kWordFlagProperNoun in bkd_format.hpp.
 WORD_FLAG_PROPER_NOUN = 1 << 0
+# A spelling the pack knows and never offers. Mirrors kWordFlagKnownOnly in bkd_format.hpp.
+WORD_FLAG_KNOWN_ONLY = 1 << 1
 
 SECTION_COUNT = 16
 (
@@ -475,17 +477,26 @@ class Grammar:
 
 def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
                grammar: "Grammar | None" = None,
-               proper_nouns: frozenset[str] = frozenset()) -> bytes:
+               proper_nouns: frozenset[str] = frozenset(),
+               known: list[tuple[str, float]] = ()) -> bytes:
+    """`known` holds spellings the pack only knows, each with its probability as a word of the
+    language; one whose folded key a listed word already has is left out."""
     if not words:
         raise SystemExit("the word list is empty")
-    if len(words) > MAX_WORDS:
-        raise SystemExit(f"{len(words)} words exceeds the format cap of {MAX_WORDS}")
+    if len(words) + len(known) > MAX_WORDS:
+        raise SystemExit(f"{len(words) + len(known)} words exceeds the format cap of {MAX_WORDS}")
     if len(tag.encode("utf-8")) > 15:
         raise SystemExit("the language tag must fit in 15 bytes plus a terminator")
 
+    # A known spelling's weight is its probability; a listed word's, its frequency. No folded key
+    # holds both kinds.
+    listed_keys = {fold_word(word) for word, _ in words}
     # Sorted by folded key, so the same sources rebuild byte-identically.
     prepared = sorted(
-        ((fold_word(word), word, frequency, word in proper_nouns) for word, frequency in words),
+        [(fold_word(word), word, frequency, word in proper_nouns, False)
+         for word, frequency in words] +
+        [(fold_word(word), word, probability, False, True)
+         for word, probability in known if fold_word(word) not in listed_keys],
         key=lambda item: (item[0], item[1]),
     )
 
@@ -496,15 +507,15 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
     # summed and the proper-noun bit OR'd: "Ana" and "ana" are one word written twice, and the
     # keyboard decides case for itself from the flag and the shift state.
     grouped: dict[tuple[int, ...], dict[str, list]] = {}
-    for folded, word, frequency, is_proper_noun in prepared:
+    for folded, word, weight, is_proper_noun, known_only in prepared:
         members = grouped.setdefault(folded, {})
         existing = members.get(word.casefold())
         if existing is None:
-            members[word.casefold()] = [word, frequency, is_proper_noun]
+            members[word.casefold()] = [word, weight, is_proper_noun, known_only]
         else:
-            if frequency > existing[1]:
+            if weight > existing[1]:
                 existing[0] = word
-            existing[1] += frequency
+            existing[1] += weight
             existing[2] = existing[2] or is_proper_noun
     keys = sorted(grouped.keys())
 
@@ -512,8 +523,9 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
     # per-word arrays hold every spelling, most frequent first.
     words_folded = keys
     display: list[str] = []
-    frequencies: list[int] = []
+    weights: list[float] = []
     proper_noun_flags: list[bool] = []
+    known_only_flags: list[bool] = []
     runs: list[int] = []
     first_of_key: list[int] = []
     for key in keys:
@@ -522,10 +534,12 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
         # Spellings remaining from each index onwards, so a run is walkable from any member and
         # not only from its start.
         runs.extend(range(len(members), 0, -1))
-        for word, frequency, is_proper_noun in members:
+        for word, weight, is_proper_noun, known_only in members:
             display.append(word)
-            frequencies.append(frequency)
+            weights.append(weight)
             proper_noun_flags.append(is_proper_noun)
+            known_only_flags.append(known_only)
+    frequencies = [0 if known_only else weight for weight, known_only in zip(weights, known_only_flags)]
     word_index_of = {word: index for index, word in enumerate(display)}
 
     alphabet = sorted({code_point for folded in words_folded for code_point in folded})
@@ -540,9 +554,13 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
         raise SystemExit(f"{len(base)} nodes exceeds the format cap of {MAX_NODES}")
 
     total_frequency = float(sum(frequencies)) or 1.0
-    word_freq = bytes(quantise_log_prob(frequency / total_frequency) for frequency in frequencies)
+    word_freq = bytes(
+        quantise_log_prob(weight if known_only else weight / total_frequency)
+        for weight, known_only in zip(weights, known_only_flags)
+    )
     word_flags = bytes(
-        WORD_FLAG_PROPER_NOUN if flagged else 0 for flagged in proper_noun_flags
+        (WORD_FLAG_PROPER_NOUN if proper else 0) | (WORD_FLAG_KNOWN_ONLY if known_only else 0)
+        for proper, known_only in zip(proper_noun_flags, known_only_flags)
     )
 
     text_blob = bytearray()
@@ -561,9 +579,10 @@ def build_pack(tag: str, words: list[tuple[str, int]], ngrams: dict,
         if len(parts) == 2 and parts[0] == SENTENCE_START
     )) or 1.0
 
+    listed = {word for word, known_only in zip(display, known_only_flags) if not known_only}
     for parts, count in ngrams.items():
         starts = len(parts) == 2 and parts[0] == SENTENCE_START
-        if any(part not in word_index_of for part in parts if part != SENTENCE_START):
+        if any(part not in listed for part in parts if part != SENTENCE_START):
             continue
         if starts:
             quantised = quantise_log_prob(count / max(sentence_total, float(count)))
@@ -734,6 +753,9 @@ class PackReader:
     def is_proper_noun(self, word_index: int) -> bool:
         return (self.word_flags[word_index] & WORD_FLAG_PROPER_NOUN) != 0
 
+    def is_known_only(self, word_index: int) -> bool:
+        return (self.word_flags[word_index] & WORD_FLAG_KNOWN_ONLY) != 0
+
     def walk(self, node: int, symbol: int) -> int:
         if node < 0 or node >= self.node_count:
             return -1
@@ -835,12 +857,35 @@ class PackReader:
 
 
 def round_trip(words: list[tuple[str, int]], ngrams: dict, tag: str, samples: int = 100,
-              proper_nouns: frozenset[str] = frozenset()) -> None:
-    blob = build_pack(tag, words, ngrams, proper_nouns=proper_nouns)
+              proper_nouns: frozenset[str] = frozenset(),
+              known: list[tuple[str, float]] = ()) -> None:
+    blob = build_pack(tag, words, ngrams, proper_nouns=proper_nouns, known=known)
     reader = PackReader(blob)
 
     if reader.tag != tag:
         raise SystemExit(f"tag round-trip failed: wrote {tag!r}, read {reader.tag!r}")
+
+    # A known spelling is flagged and keeps its own probability; one whose folded key a listed
+    # word has is left out, and leaves the listed word as it was.
+    listed_keys = {fold_word(word) for word, _ in words}
+    if build_pack(tag, words, ngrams, proper_nouns=proper_nouns) != build_pack(
+            tag, words, ngrams, proper_nouns=proper_nouns,
+            known=[(word, p) for word, p in known if fold_word(word) in listed_keys]):
+        raise SystemExit("a known spelling a listed word already has changed the pack")
+    for word, probability in known:
+        index = reader.lookup(word)
+        if fold_word(word) in listed_keys:
+            if index >= 0 and reader.is_known_only(index):
+                raise SystemExit(f"{word!r} is listed but came back known only")
+            continue
+        if index < 0 or not reader.is_known_only(index):
+            raise SystemExit(f"{word!r} was written known only but did not come back so")
+        if reader.word_freq[index] != quantise_log_prob(probability):
+            raise SystemExit(f"{word!r}'s probability did not round-trip")
+    for word, _ in words:
+        index = reader.lookup(word)
+        if index >= 0 and reader.is_known_only(index):
+            raise SystemExit(f"listed {word!r} came back known only")
 
     for name in proper_nouns:
         index = reader.lookup(name)
@@ -947,6 +992,10 @@ SAMPLE_WORDS = [
     ("bars", 500), ("board", 500),
 ]
 
+# Spellings the test pack only knows, with their probabilities: two new words, and "keys" again,
+# which the list already has and so stays as listed.
+SAMPLE_KNOWN = [("keyboardist", 3e-7), ("timepiece", 3e-6), ("keys", 1e-4)]
+
 SAMPLE_NGRAMS = {
     ("nu", "am"): 500,
     ("am", "timp"): 300,
@@ -994,6 +1043,27 @@ def load_words(path: Path) -> tuple[list[tuple[str, int]], frozenset[str]]:
     return words, frozenset(proper_nouns)
 
 
+def load_known(path: Path) -> list[tuple[str, float]]:
+    """Reads a '# tokens<TAB>N' line and 'word<TAB>count' rows into (word, count / N) pairs."""
+    tokens = 0
+    counts: list[tuple[str, int]] = []
+    with path.open(encoding="utf-8") as handle:
+        for number, line in enumerate(handle, start=1):
+            line = line.rstrip("\n")
+            if line.startswith("# tokens\t"):
+                tokens = int(line.split("\t")[1])
+                continue
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) != 2 or not parts[1].isdigit():
+                raise SystemExit(f"{path}:{number}: expected 'word<TAB>count'")
+            counts.append((parts[0], int(parts[1])))
+    if tokens <= 0:
+        raise SystemExit(f"{path}: no '# tokens<TAB>N' line")
+    return [(word, count / tokens) for word, count in counts if count > 0]
+
+
 def load_ngrams(path: Path) -> dict:
     ngrams: dict = {}
     with path.open(encoding="utf-8") as handle:
@@ -1022,6 +1092,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--grammar", type=Path,
                         help="tags and transition matrix from tools/build_pos.py; without it "
                              "the pack carries no grammar and scores exactly as before")
+    parser.add_argument("--known", type=Path,
+                        help="spellings the pack only knows, never offers: a '# tokens<TAB>N' "
+                             "line, then 'word<TAB>count', each word's probability count / N")
     parser.add_argument("--tag", default="und")
     parser.add_argument("--out", type=Path)
     parser.add_argument("--selftest", action="store_true",
@@ -1048,10 +1121,11 @@ def main(argv: list[str]) -> int:
     if arguments.selftest:
         # "border", already in SAMPLE_WORDS, flagged as a proper noun.
         sample_proper_nouns = frozenset({"border"})
-        round_trip(SAMPLE_WORDS, SAMPLE_NGRAMS, "ro-RO", proper_nouns=sample_proper_nouns)
+        round_trip(SAMPLE_WORDS, SAMPLE_NGRAMS, "ro-RO", proper_nouns=sample_proper_nouns,
+                   known=SAMPLE_KNOWN)
         if arguments.out:
             blob = build_pack(arguments.tag, SAMPLE_WORDS, SAMPLE_NGRAMS,
-                              proper_nouns=sample_proper_nouns)
+                              proper_nouns=sample_proper_nouns, known=SAMPLE_KNOWN)
             arguments.out.parent.mkdir(parents=True, exist_ok=True)
             arguments.out.write_bytes(blob)
             print(f"wrote {arguments.out} ({len(blob)} bytes)")
@@ -1063,7 +1137,9 @@ def main(argv: list[str]) -> int:
     words, proper_nouns = load_words(arguments.words)
     ngrams = load_ngrams(arguments.ngrams) if arguments.ngrams else {}
     grammar = Grammar.load(arguments.grammar) if arguments.grammar else None
-    blob = build_pack(arguments.tag, words, ngrams, grammar, proper_nouns=proper_nouns)
+    known = load_known(arguments.known) if arguments.known else []
+    blob = build_pack(arguments.tag, words, ngrams, grammar, proper_nouns=proper_nouns,
+                      known=known)
 
     # Written to a temporary file in the destination directory and renamed, so that an
     # interrupted build never leaves a half-written pack where the app would map it.

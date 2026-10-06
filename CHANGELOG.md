@@ -14,9 +14,22 @@ attestations and the full commit lists are on the
 
 ## Unreleased
 
-- BorderKeys +: swiping on the Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek,
-  Armenian, Georgian, Hebrew and Arabic layouts is decoded by a neural model of each layout's
-  own; until now those layouts were decoded geometrically.
+- A word typed with several letters on the wrong keys is read from where each tap landed, and
+  autocorrect can now fix it; until now anything more than one or two letters off was left as
+  typed. The word is applied only when it is a hundred times likelier than every other reading
+  of the taps put together, the letters as typed included, and otherwise it is offered second
+  on the strip; a correction that another word fits far better is now offered there instead of
+  applied. Tried on a thousand real typing mistakes collected from people's phones, it now
+  fixes about five more in every hundred, turns fewer of them into the wrong word, and leaves
+  real words the dictionaries don't know alone as often as before. The strictest correction
+  distance leaves such words alone.
+- Rare words, among autocorrect's advanced settings: how many words beyond the dictionary's own
+  list count as real words and stay as typed. Listed words only, the default, is how the
+  keyboard behaved until now; each step up adds rarer words that the same corpora write and a
+  spelling dictionary accepts, and leaves more typos that happen to spell one uncorrected. Such
+  words are never suggested, and the setting names the dictionaries it changes.
+- Swiping works on the Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek, Armenian,
+  Georgian, Hebrew and Arabic layouts, read by the geometric decoder.
 - Fixed: autocorrect left a word of four to seven letters as typed when two of its letters
   were neighbouring keys hit by mistake, such as `joyse` for `house`; it now corrects it. Other
   two-letter differences in those words are still left alone, which keeps real words the

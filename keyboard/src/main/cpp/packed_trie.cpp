@@ -11,6 +11,7 @@ namespace borderkeys {
 bool PackedTrie::bind(const uint8_t* base, uint64_t mappedBytes, const BkdHeader& header) {
     baseArray_ = nullptr;
     checkArray_ = nullptr;
+    offered_.clear();
     if (base == nullptr || bkdValidateHeader(header, mappedBytes) != kBkdOk) {
         return false;
     }
@@ -120,7 +121,45 @@ const char* PackedTrie::wordText(uint32_t wordIndex, uint32_t* lengthOut) const 
     return wordText_ + begin;
 }
 
-int32_t PackedTrie::lookupFolded(const uint32_t* folded, int count) const {
+void PackedTrie::hideKnownOnly() {
+    offered_.clear();
+    bool knowsOnly = false;
+    for (uint32_t i = 0; i < wordCount_ && !knowsOnly; ++i) {
+        knowsOnly = isKnownOnly(i);
+    }
+    if (!knowsOnly || baseArray_ == nullptr) {
+        return;
+    }
+    offered_.assign((nodeCount_ + 63u) / 64u, 0u);
+    const auto mark = [this](uint32_t node) { offered_[node >> 6] |= uint64_t{1} << (node & 63u); };
+    mark(static_cast<uint32_t>(root()));
+    // A terminal slot sits at its node's base and holds a word index; each offered word marks its
+    // slot and every node above it, through the check array's parent links.
+    for (uint32_t slot = 1; slot < nodeCount_; ++slot) {
+        const int32_t parent = checkArray_[slot];
+        if (parent < 0 || static_cast<uint32_t>(parent) >= nodeCount_ ||
+            static_cast<int64_t>(baseArray_[parent]) + kTerminalSymbol != slot) {
+            continue;
+        }
+        const int32_t encoded = baseArray_[slot];
+        const int64_t index = -static_cast<int64_t>(encoded) - 1;
+        if (encoded >= 0 || index >= static_cast<int64_t>(wordCount_) ||
+            isKnownOnly(static_cast<uint32_t>(index))) {
+            continue;
+        }
+        mark(slot);
+        int32_t node = parent;
+        for (int depth = 0; depth < kMaxPathDepth && !leadsToOffered(node); ++depth) {
+            mark(static_cast<uint32_t>(node));
+            node = checkArray_[node];
+            if (node < 0 || static_cast<uint32_t>(node) >= nodeCount_) {
+                break;
+            }
+        }
+    }
+}
+
+int32_t PackedTrie::nodeOfFolded(const uint32_t* folded, int count) const {
     if (baseArray_ == nullptr || folded == nullptr || count < 0) {
         return -1;
     }
@@ -130,12 +169,27 @@ int32_t PackedTrie::lookupFolded(const uint32_t* folded, int count) const {
         if (symbol <= 0) {
             return -1;
         }
-        node = walk(node, symbol);
+        node = rawWalk(node, symbol);
         if (node < 0) {
             return -1;
         }
     }
-    return terminalWordIndex(node);
+    return node;
+}
+
+int32_t PackedTrie::lookupFolded(const uint32_t* folded, int count) const {
+    const int32_t node = nodeOfFolded(folded, count);
+    return node < 0 ? -1 : terminalWordIndex(node);
+}
+
+int32_t PackedTrie::lookupKnown(const uint32_t* folded, int count,
+                                float minimumKnownLogProb) const {
+    const int32_t node = nodeOfFolded(folded, count);
+    const int32_t index = node < 0 ? -1 : anyTerminalWordIndex(node);
+    if (index < 0 || !isKnownOnly(static_cast<uint32_t>(index))) {
+        return index;
+    }
+    return unigramLogProb(static_cast<uint32_t>(index)) >= minimumKnownLogProb ? index : -1;
 }
 
 }  // namespace borderkeys

@@ -18,6 +18,8 @@ option(BORDERKEYS_NEURAL_SWIPE "Build the trained (tier B) swipe decoder, plus f
 set(BORDERKEYS_SOURCES
     jni_bridge.cpp
     engine.cpp
+    engine_decode.cpp
+    letter_model.cpp
     packed_trie.cpp
     ngram_model.cpp
     user_model.cpp

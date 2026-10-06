@@ -118,6 +118,29 @@ class KeyboardPreferencesTest {
     }
 
     @Test
+    fun `rare words default to the listed ones and stay on the slider`() {
+        assertEquals(KeyboardPreferences.RARE_WORDS_LISTED, KeyboardPreferences().rareWords)
+        assertEquals(
+            KeyboardPreferences.RARE_WORDS_LISTED,
+            KeyboardPreferences(rareWords = -2).sanitised().rareWords,
+        )
+        assertEquals(
+            KeyboardPreferences.RARE_WORDS_ALL,
+            KeyboardPreferences(rareWords = 9).sanitised().rareWords,
+        )
+    }
+
+    @Test
+    fun `each rare-words step counts more words than the one before`() {
+        val reach = (KeyboardPreferences.RARE_WORDS_LISTED..KeyboardPreferences.RARE_WORDS_ALL)
+            .map { KeyboardPreferences.rareWordsMinLogProb(it) }
+        assertEquals(Float.POSITIVE_INFINITY, reach.first())
+        assertEquals(Float.NEGATIVE_INFINITY, reach.last())
+        assertEquals(reach.sortedDescending(), reach)
+        assertEquals(reach.size, reach.distinct().size)
+    }
+
+    @Test
     fun `theme mode defaults to manual and rejects anything but the two real modes`() {
         assertEquals(KeyboardPreferences.THEME_MODE_MANUAL, KeyboardPreferences().themeMode)
         assertEquals(

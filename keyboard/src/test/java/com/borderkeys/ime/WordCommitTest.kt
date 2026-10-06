@@ -5,7 +5,7 @@ package com.borderkeys.ime
 
 import com.borderkeys.data.theme.TextShortcut
 import com.borderkeys.ime.WordCommit.Kind
-import com.borderkeys.predict.CorrectionOffer
+import com.borderkeys.predict.ListedCorrection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -51,7 +51,7 @@ class WordCommitTest {
         shortcuts = shortcuts,
         contractions = contractions,
         possessive = possessive,
-        corrections = listOfNotNull(suggestion?.let { CorrectionOffer(it, isName = false, inflection) }),
+        corrections = listOfNotNull(suggestion?.let { ListedCorrection(it, isName = false, inflection) }),
         suggestionQuery = typed,
         knownWord = knownWord,
         knownWordExact = knownWordExact,

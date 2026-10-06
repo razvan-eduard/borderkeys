@@ -5,6 +5,7 @@
 #define BORDERKEYS_PACKED_TRIE_HPP
 
 #include <cstdint>
+#include <vector>
 
 #include "bkd_format.hpp"
 
@@ -19,6 +20,9 @@ class PackedTrie {
 public:
     // Symbol 0 is the end-of-word marker; alphabet symbols are 1..alphabetCount.
     static constexpr int kTerminalSymbol = 0;
+
+    // The deepest a node may sit below the root while hideKnownOnly() follows parent links.
+    static constexpr int kMaxPathDepth = 4096;
 
     // Binds to an already validated mapping. `base` points at the start of the pack, and the
     // header must have passed bkdValidateHeader against `mappedBytes` before this is called.
@@ -41,8 +45,15 @@ public:
         return (index >= 0 && index < static_cast<int>(alphabetCount_)) ? alphabet_[index] : 0u;
     }
 
-    // Follows one transition. Returns -1 when there is no such child.
+    // Follows one transition towards a word the pack offers. Returns -1 when there is no such
+    // child, or when every word below it is one the pack only knows.
     int32_t walk(int32_t node, int symbol) const {
+        const int32_t next = rawWalk(node, symbol);
+        return (next >= 0 && !leadsToOffered(next)) ? -1 : next;
+    }
+
+    // Follows one transition, towards any word. Returns -1 when there is no such child.
+    int32_t rawWalk(int32_t node, int symbol) const {
         if (node < 0 || static_cast<uint32_t>(node) >= nodeCount_) {
             return -1;
         }
@@ -60,9 +71,16 @@ public:
         return static_cast<int32_t>(next);
     }
 
-    // The word index if `node` ends a word, otherwise -1.
+    // The word index if `node` ends a word the pack offers, otherwise -1.
     int32_t terminalWordIndex(int32_t node) const {
-        const int32_t terminal = walk(node, kTerminalSymbol);
+        const int32_t index = anyTerminalWordIndex(node);
+        return (index >= 0 && isKnownOnly(static_cast<uint32_t>(index))) ? -1 : index;
+    }
+
+    // The word index if `node` ends any word the pack holds, one it only knows included,
+    // otherwise -1.
+    int32_t anyTerminalWordIndex(int32_t node) const {
+        const int32_t terminal = rawWalk(node, kTerminalSymbol);
         if (terminal < 0) {
             return -1;
         }
@@ -106,15 +124,39 @@ public:
     }
 
     // Whether this word is a name, always capitalised; false for an index out of bounds.
-    bool isProperNoun(uint32_t wordIndex) const {
-        return wordIndex < wordCount_ && wordFlags_ != nullptr &&
-               (wordFlags_[wordIndex] & kWordFlagProperNoun) != 0u;
-    }
+    bool isProperNoun(uint32_t wordIndex) const { return hasFlag(wordIndex, kWordFlagProperNoun); }
 
-    // Exact lookup of an already folded word. Returns the word index or -1.
+    // Whether the pack only knows this word: it counts as spelled, and is never offered.
+    bool isKnownOnly(uint32_t wordIndex) const { return hasFlag(wordIndex, kWordFlagKnownOnly); }
+
+    // Exact lookup of an already folded word the pack offers. Returns the word index or -1.
     int32_t lookupFolded(const uint32_t* folded, int count) const;
 
+    // Exact lookup of an already folded word the pack offers, or only knows with a unigram
+    // log-probability of at least `minimumKnownLogProb`. Returns the word index or -1.
+    int32_t lookupKnown(const uint32_t* folded, int count, float minimumKnownLogProb) const;
+
+    // Marks the nodes that lead to a word the pack offers, so walk() leaves out the rest. Does
+    // nothing for a pack holding no word it only knows.
+    void hideKnownOnly();
+
 private:
+    bool hasFlag(uint32_t wordIndex, uint8_t flag) const {
+        return wordIndex < wordCount_ && wordFlags_ != nullptr && (wordFlags_[wordIndex] & flag) != 0u;
+    }
+
+    bool leadsToOffered(int32_t node) const {
+        return offered_.empty() ||
+               (offered_[static_cast<uint32_t>(node) >> 6] >> (static_cast<uint32_t>(node) & 63u) & 1u) != 0u;
+    }
+
+    // One bit per node, set when a word the pack offers ends at or below it; empty when the pack
+    // offers every word it holds.
+    std::vector<uint64_t> offered_;
+
+    // The node an already folded word's spelling ends at, or -1.
+    int32_t nodeOfFolded(const uint32_t* folded, int count) const;
+
     const int32_t* baseArray_ = nullptr;
     const int32_t* checkArray_ = nullptr;
     uint32_t nodeCount_ = 0;

@@ -224,6 +224,10 @@ internal class Pipeline private constructor(
     fun languageLock(minimumEvidence: Float, strict: Boolean = false) =
         NativePredictor.nativeSetLanguageLock(handle, minimumEvidence, strict)
 
+    /** The "Rare words" step, as the keyboard sets it from KeyboardPreferences.rareWords. */
+    fun rareWords(step: Int) =
+        NativePredictor.nativeSetKnownWordReach(handle, KeyboardPreferences.rareWordsMinLogProb(step))
+
     /** The language searched first while none has been recognised; null clears it. */
     fun preferredLanguage(tag: String?) = NativePredictor.nativeSetPreferredLanguage(handle, tag)
 
@@ -347,6 +351,18 @@ internal class Pipeline private constructor(
                 },
             )
             return Pipeline(handle, contractions, twins, tags.toList())
+        }
+
+        /**
+         * What the engine's validator says of the pack at [file]: `nativeInspectPack`'s numbers,
+         * or null when it refused the pack.
+         */
+        fun inspect(file: File): IntArray? {
+            val out = IntArray(LanguagePackInspector.INSPECT_SLOTS)
+            val tag = FileInputStream(file).use { stream ->
+                NativePredictor.nativeInspectPack(rawDescriptor(stream.fd), 0L, file.length(), out)
+            }
+            return if (tag != null) out else null
         }
 
         /** The raw descriptor behind [descriptor], through `--add-opens java.base/java.io`. */

@@ -160,7 +160,9 @@ fun LanguagesScreen(modifier: Modifier = Modifier) {
                 for (candidate in installable) {
                     SettingRow(
                         title = candidate.displayName,
-                        subtitle = strings.counted(Keys.LANGUAGES_WORDS_WRITTEN_IN_THIS_REPOSITORY_A, candidate.wordCount),
+                        subtitle = strings.counted(
+                            Keys.LANGUAGES_WORDS_WRITTEN_IN_THIS_REPOSITORY_A, candidate.offeredWordCount,
+                        ),
                         trailing = {
                             TextButton(
                                 enabled = !importing,
@@ -261,7 +263,7 @@ private suspend fun importPack(
                     displayName = displayNameFor(info.tag),
                     fileName = pack.file.name,
                     formatVersion = info.formatVersion,
-                    wordCount = info.wordCount,
+                    wordCount = info.offeredWordCount,
                     sizeBytes = pack.sizeBytes,
                     sha256 = pack.sha256,
                     importedAt = System.currentTimeMillis(),
@@ -273,8 +275,8 @@ private suspend fun importPack(
             )
             val added = strings.counted(
                 Keys.LANGUAGES_ADDED_WORDS_FOR_2,
-                info.wordCount,
-                info.wordCount,
+                info.offeredWordCount,
+                info.offeredWordCount,
                 info.tag,
                 pack.sha256.take(16),
             )
@@ -330,7 +332,7 @@ private suspend fun installBundled(
                     displayName = displayNameFor(info.tag),
                     fileName = pack.file.name,
                     formatVersion = info.formatVersion,
-                    wordCount = info.wordCount,
+                    wordCount = info.offeredWordCount,
                     sizeBytes = pack.sizeBytes,
                     sha256 = pack.sha256,
                     importedAt = System.currentTimeMillis(),
@@ -341,7 +343,9 @@ private suspend fun installBundled(
                     licenseNote = strings[Keys.LANGUAGES_CC_BY_LEIPZIG],
                 ),
             )
-            val added = strings.counted(Keys.LANGUAGES_ADDED_WORDS_FOR, info.wordCount, info.wordCount, info.tag)
+            val added = strings.counted(
+                Keys.LANGUAGES_ADDED_WORDS_FOR, info.offeredWordCount, info.offeredWordCount, info.tag,
+            )
             if (room) added else added + " " + switchedOffNote(strings)
         }
     }

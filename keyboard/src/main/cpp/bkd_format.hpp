@@ -56,6 +56,8 @@ enum BkdSectionIndex : uint32_t {
 // Bits in a kSectionWordFlags byte.
 inline constexpr uint8_t kWordFlagProperNoun = 1u << 0;  // always capitalise, regardless of
                                                           // typed case or shift state
+inline constexpr uint8_t kWordFlagKnownOnly = 1u << 1;   // a spelling the pack knows and never
+                                                          // offers
 
 struct BkdSection {
     uint64_t offset;

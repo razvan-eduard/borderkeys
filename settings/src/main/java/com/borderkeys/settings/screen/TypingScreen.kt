@@ -61,6 +61,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
     val appearance by repository.appearance
         .collectAsStateWithLifecycle(initialValue = remember { repository.currentAppearance() })
     val (theme, _, preferences) = appearance
+    val rareWordsReach = rememberRareWordsReach()
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         // What the strip offers: on or off, how many slots, the clipboard, two-word phrases, and
@@ -204,8 +205,8 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.CORRECTIONS_A_CORRECTION_IS_ONLY_LEARNED_ONCE],
             )
-            // The space typed after an automatic one, the space before punctuation, and the two
-            // finer autocorrect dials.
+            // The space typed after an automatic one, the space before punctuation, and the finer
+            // autocorrect dials.
             AdvancedSection(strings[Keys.CORRECTIONS_ADVANCED_NOTE]) {
                 Text(
                     strings[Keys.CORRECTIONS_AUTO_SPACE_HABIT],
@@ -271,6 +272,23 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 Explanation(
                     strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH_NOTE],
                 )
+                Text(
+                    strings[Keys.CORRECTIONS_RARE_WORDS],
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                DefaultableSlider(
+                    label = strings[RARE_WORDS_STEP_KEYS[preferences.rareWords]],
+                    value = preferences.rareWords.toFloat(),
+                    range = KeyboardPreferences.RARE_WORDS_LISTED.toFloat()..
+                        KeyboardPreferences.RARE_WORDS_ALL.toFloat(),
+                    default = KeyboardPreferences.RARE_WORDS_LISTED.toFloat(),
+                    steps = KeyboardPreferences.RARE_WORDS_ALL - KeyboardPreferences.RARE_WORDS_LISTED - 1,
+                ) { value -> update { it.copy(rareWords = value.roundToInt()) } }
+                Explanation(strings[Keys.CORRECTIONS_RARE_WORDS_NOTE])
+                rareWordsReach?.forEach { line ->
+                    Explanation(line.names?.let { strings.getString(line.key, it) } ?: strings[line.key])
+                }
                 Button(
                     onClick = { update { resetCorrectionDefaults(it) } },
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
@@ -667,5 +685,6 @@ private fun resetCorrectionDefaults(preferences: KeyboardPreferences): KeyboardP
         correctionStrictness = defaults.correctionStrictness,
         revertCorrectionOnBackspace = defaults.revertCorrectionOnBackspace,
         minCorrectionLength = defaults.minCorrectionLength,
+        rareWords = defaults.rareWords,
     )
 }

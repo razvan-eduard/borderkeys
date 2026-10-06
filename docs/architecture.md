@@ -131,9 +131,13 @@ one from the other, and it never was the answer to that question.
    pairs and scoring those in full, then the 512-word frequent shortlist.
 4. The answer tiers, each overriding the one before: the corrections heap, then the respelling,
    then the exact spelling. Then the main heap drains and the completion cap applies.
+5. The [tap decoder](#heavy-typos-read-from-the-taps--engine_decodecpp) reads the typed word
+   from its taps: its word, applied or offered on the strip, and which entries of
+   autocorrect's list another reading of the taps outweighs.
 
-One native call, `nativeAnswer`, returns the whole answer — the ranking, the correction's index,
-text and name flag, the known spelling and the possessive — and `PredictionAnswer` assembles it on
+One native call, `nativeAnswer`, returns the whole answer — the ranking, autocorrect's list with
+each entry's name flag and whether it stands against the taps, the decoder's word, the known
+spelling and the possessive — and `PredictionAnswer` assembles it on
 the Kotlin side, for the prediction thread and the tests alike. Nothing is left in the engine for
 a later call to read.
 
@@ -410,6 +414,74 @@ at 1.0 on every profile, and the half-life barely moves the score (7 to 180 days
 points after a change of grip) — 30 days keeps the rarest letters above the minimum for someone
 typing 500 taps a day.
 
+### Heavy typos, read from the taps — `engine_decode.cpp`
+
+The search above reaches a word by edits under a cost ceiling, and `AutoCorrection.pick` admits
+it under an edit count. A word typed with three or four letters on the wrong keys is beyond both,
+however close each tap sat to the key meant, and a count cannot tell such a word from a real
+word the packs lack. The tap decoder reads the word another way: it scores each word of the
+packs by how well every tap fits that word's keys, and the evidence decides, not an edit count.
+
+It runs in `suggest` once the strip's passes are done, for a typed word of four letters or more
+that no active pack spells (exactly, or as an established personal word), that neither starts
+nor ends with a mark, with a key layout set. In each active pack, or the one the request is
+restricted to, a beam search walks the trie tap by tap (`runBeam`, `tap_decode.hpp`). A tap is
+read
+
+- as a key, at the touch model's log-likelihood of the tap under that key's pattern (the default
+  pattern, or the heatmap's where it counts), against the tap's likeliest key; a key further
+  than a neighbour is never dearer than the typed key's own fit plus `kFarKeyLogProb`, and a
+  letter typed without a position is read as its own key only;
+- as a tap that belongs to no letter of the word, at `kExtraTapLogProb` plus the chance of
+  landing where it did when aimed at no key, one key's share of the layout as a density;
+- swapped with the next tap, at `kSwapLogProb`, each read among its three likeliest keys;
+
+and between taps a letter of the word may have no tap, at `kMissedLetterLogProb` (a mark at
+`kMarkLogProb`), two in a row at most. A typed mark is read only as itself. The 128 best
+hypotheses survive each tap, with every one tied with the 128th, so which survive depends on the
+scores alone and not on how the trie numbers its nodes; one at the same node with as many letters
+missed and a lower score is dropped. The paths that end in one word are summed (`DecodedWords`), since it is the word being
+estimated, not the path; the word then takes its pack's weight and its context, as on the
+strip. Names, blocked words and words below the correction frequency floor are never decoded to.
+
+The typed letters are read as a word of their own too: the taps on their own keys, plus
+`kUnknownWordLogProb`, plus how likely the letters are as a spelling of the active languages,
+from the packs' letter models (`letter_model.cpp`) mixed by pack weight. A pack's letter model is
+counted when the pack opens, over every folded spelling it offers: each letter after the four
+before it, each order interpolated with the one below by Witten-Bell smoothing, down to the
+letter's own share. It holds 2.7 to 4.3 MB a pack.
+
+Each word is then weighed against everything else the taps could be:
+
+- the decoder's best word is applied when it is `kEvidenceRatio`, ln 100, likelier than the
+  typed letters and every other decoded word put together: a wrong correction counts as a
+  hundred times worse than a missed one;
+- short of that, it takes the strip's second slot when it is likelier than the typed letters
+  alone (`placeOffered`);
+- each entry of autocorrect's list is scored the same way, by a beam held to that word's path
+  (`listedTotal`), and is held back (`correctionConfident`, `Situation.Uncertain`) when the
+  typed letters or any one other word is more than `kEvidenceRatio` likelier. A respelling, the
+  same letters with their diacritics, is never held back.
+
+| Constant | Value | Measured as |
+|---|---|---|
+| `kUnknownWordLogProb` | −4.77 | words meant that the English pack lacks, per word typed |
+| `kExtraTapLogProb` | −5.67 | taps of no letter, per tap |
+| `kMissedLetterLogProb` | −5.00 | letters with no tap, per letter |
+| `kMarkLogProb` | −0.67 | marks with no tap, per mark |
+| `kSwapLogProb` | −7.07 | adjacent letters swapped, per pair |
+| `kFarKeyLogProb` | −8.91 | a letter typed as one given key further than a neighbour |
+| `kEvidenceRatio` | ln 100 | not measured: the cost of a wrong correction against a missed one |
+
+`tools/estimate_typing_channel.py` measures the rates on the ITE Typing dataset's mobile
+sessions, with the real-typo test corpus's pairs left out, by aligning each word as typed with
+the word meant. The same alignment puts a neighbouring key at −5.66 per key, which is what the
+touch model's default pattern gives; it carries no constant of its own.
+
+In `AutoCorrection.pick` the decoder's word is the last offer (`DecodedCorrection`), applied as
+`Situation.Decoded` when no entry of the list is, never a name, held to no edit ceiling, and
+left out under the strict distance setting.
+
 ### Personal model terms
 
 | Constant | Value | Meaning |
@@ -489,9 +561,11 @@ first: nothing offered and nothing known, an answer about another word, a traili
 word the dictionaries spell, which is never corrected (`NoChange` when a dictionary spells it
 exactly, `KnownWord` when only in another case, `Correctable` only when it is a name to
 capitalise). Then the entries in turn: one too far, a name whose letters are not the typed ones,
-one that changes nothing once cased, or an inflection of a known stem is passed over for the
-next; a typed word shorter than the minimum stops the walk; the first entry left standing is
-applied, and when none is, the first entry's reason stands. `pipeline_cases.tsv` pins `loke` →
+one that changes nothing once cased, an inflection of a known stem, or one another reading of
+the taps outweighs (`Uncertain`) is passed over for the next; a typed word shorter than the
+minimum stops the walk; the first entry left standing is applied, and when none is, the tap
+decoder's word, last in the list, is applied as `Decoded` if the engine accepted it; otherwise
+the first entry's reason stands. `pipeline_cases.tsv` pins `loke` →
 `like` and `writet` → `writer`.
 
 What is typed stays as typed in every case where applying a correction would be an argument
@@ -989,8 +1063,9 @@ Gradle task (`BuildDictionaries` in `keyboard/build.gradle.kts`) runs the same `
 the tests use, so a pack in an APK is always exactly what the committed list compiles to.
 
 ```
-corpus ──make_pack.py──▶ dictionaries/<tag>.tsv  ──build_dict.py──▶ assets/dict/<tag>.bkd
-                         dictionaries/<tag>.ngrams
+corpus  ──make_pack.py──────────▶ dictionaries/<tag>.tsv     ──build_dict.py──▶ assets/dict/<tag>.bkd
+                                  dictionaries/<tag>.ngrams
+corpora ──make_known_words.py───▶ dictionaries/<tag>.known
 ```
 
 `dictionaries/<tag>.tsv` is `word<TAB>frequency[<TAB>name]`. The third column is the proper-noun
@@ -1004,6 +1079,37 @@ log-probability, five bytes a pair -- and the triples as a **continuation index*
 pairs the same way: for every pair, by its position in the successor index, the words that
 followed it, five bytes a triple. A pair lookup is a binary search in one list, a triple lookup
 is that search and one more inside the pair's own list; the next-word search walks the list.
+
+### Words a pack knows and never offers
+
+`dictionaries/<tag>.known` holds the words the language's newest Leipzig wikipedia, news and
+newscrawl corpora write at least twice that the list lacks, which one of the language's Hunspell
+dictionaries accepts as written (or capitalised, for German, whose dictionaries accept nouns only
+so): not in its misspelling, exclusion or offensive lists, three letters or more, and no listed
+word's folded key, even with apostrophes and hyphens set aside and ß written ss.
+`tools/make_known_words.py` writes them as `word<TAB>count` under a `# tokens<TAB>N` line; `build_dict.py --known` compiles each into the
+same trie with `kWordFlagKnownOnly` and its own probability, count over tokens, kept out of the
+listed words' normalisation and out of the pairs and triples, so a list's words read as they did
+without it.
+
+A known-only word is never offered. `PackedTrie::hideKnownOnly` marks, when a pack opens, every
+node that leads to a word the pack offers, and `walk` steps only onto those, so the strip, the
+correction search, the tap decoder and the letter model never meet one; `lookupKnown` and
+`anyTerminalWordIndex` reach them on purpose. What a known-only word does is count as spelled
+(`Engine::knownIn`, behind every known-word check), so a delimiter leaves it as typed, once it
+is as common as the Rare words setting reaches (`setKnownWordReach`):
+
+| Step | Counts as spelled | Log-probability at least |
+|---|---|---|
+| Listed words only (default) | none of them | +∞ |
+| Some rare words | one in 5 million words or commoner | ln(1/5,000,000) |
+| Many rare words | one in 20 million or commoner | ln(1/20,000,000) |
+| Every rare word | all of them | −∞ |
+
+Each step up keeps more real words the list lacks and leaves more typos that happen to spell one
+uncorrected; the default reads exactly as a pack without the list. The setting's note names the
+enabled dictionaries that carry such words, read from each pack's header (`nativeInspectPack`'s
+fourth slot).
 
 ### The tools
 
@@ -1019,6 +1125,9 @@ is that search and one more inside the pair's own list; the next-word search wal
 | `make_context_corpus.py` | Fetches each bundled language's Universal Dependencies test split at a pinned release and writes it as the runs of words the keyboard reads as context, for `suggest_eval --context`. |
 | `classify_wordlist.py` | Keeps a bundled word list to the rows its language's own evidence supports: spelling dictionaries in three case forms, the stock keyboard's word lists, subtitle frequencies, how a news corpus writes the word, the treebank, the name flag, corpus pairs; against twins missing their diacritics, typos, other languages' words and short noise, in two tiers by rank. Applied to all six lists (`docs/dictionaries.md`, "Which rows a list keeps"). |
 | `make_twin_corpus.py` | Writes the twin and plain autocorrect corpora from `classify_wordlist.py`'s review files. |
+| `make_known_words.py` | The words a bundled pack knows and never offers, `dictionaries/<tag>.known`: words the language's corpora write that the list lacks, with its Hunspell dictionaries as the witness. |
+| `estimate_typing_channel.py` | The tap decoder's channel log-probabilities, measured on the ITE Typing dataset's phone typing. |
+| `make_unlisted_corpus.py` | Real words from the stock keyboard's list that neither the pack nor a spelling dictionary lists, to be left alone. |
 | `make_doubled_corpus.py`, `make_firstletter_corpus.py`, `make_midtypo_corpus.py`, `make_unknown_corpus.py`, `make_accent_corpus.py` | The generated autocorrect corpora under `native-tests/data`, each from a seed. |
 | `drop_foreign.py` | Removes another language's vocabulary that a crawled corpus quoted. |
 | `drop_misspellings.py` | Review-only, multi-oracle. Review-only because a rare surname and a misspelling are the same shape in this data. |
