@@ -29,6 +29,12 @@ data class FieldSession(
             (accepted.endsWith("/*") && mimeType.startsWith(accepted.dropLast(1), ignoreCase = true))
     }
 
+    /**
+     * Whether a photo of [mimeType], copied or a screenshot, may be offered and pasted here: the
+     * field is not private and takes that type.
+     */
+    fun takesPhoto(mimeType: String): Boolean = !policy.privateField && acceptsContent(mimeType)
+
     companion object {
         /** Before any field has started. */
         val NONE = FieldSession(
