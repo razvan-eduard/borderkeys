@@ -46,7 +46,16 @@ attestations and the full commit lists are on the
   app underneath stays tappable throughout, and the animation is skipped when Android's
   animations are off. Off by default.
 - A key's long-press strip opens straight away, with no preview of the key first, drawn in the
-  held key's own colours; sliding off either end of it closes it with nothing typed.
+  held key's own colours. Sliding past either end fades it out over a short margin, where the
+  end character stays chosen and lifting types it; further out it closes with nothing typed.
+- Set up your keyboard: after setup, a few pages offer the choices worth making first, each with
+  what it does and, where it helps, a small preview: languages and layouts, autocorrect,
+  capitals and spacing; swipe, the ring and names; learning, the heatmap, the clipboard and the
+  newest screenshot; theme, height, number row, key popup, vibration, animations and the
+  quick-action bar, over a live keyboard. The last page is the feature tour, now holding only
+  what the pages before it do not set, with key flicks, extra keys, your own layouts, accent
+  modifiers, the space-bar joystick, the backspace slide, Rare words, Keep privately and the
+  particle effects added. Both open again from the About card.
 - Fixed: a word picked from the strip got a space before a following comma or full stop.
 - Fixed: reopening the keyboard with the caret at the end of a word left the strip unaware of
   that word until the caret moved or a key was typed.

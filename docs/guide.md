@@ -209,7 +209,8 @@ ships.
 
 - **Keys that answer back.** The pressed key shows itself enlarged above your finger while it is
   held; a key with long-press characters skips that and opens them as a strip on the hold, drawn
-  in the held key's own colours, and sliding past either end of the strip closes it with nothing
+  in the held key's own colours. Sliding past either end fades the strip out over a short margin,
+  where the end character stays chosen and lifting types it; further out it closes with nothing
   typed. The keypress vibration follows
   the phone's own setting or one of three strengths — its own feedback classes, so still without
   a vibration permission — with a switch each for the keys, for picks on the strip and in the
@@ -256,10 +257,15 @@ ships.
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/17_clipboard_search.jpg" alt="The clipboard panel opened over the word invoice: three clips with it, first" width="30%">
 </p>
 
-- **A tour after setup.** Once the keyboard is selected, a screen lists what it can do, each
-  feature with a small preview, its default and the screen it is switched on from, which a tap
-  on the card opens; it can be dismissed for good and reopened from the About card on the
-  settings home.
+- **Set up your keyboard.** Once the keyboard is selected, a few pages offer the choices worth
+  making first, each with its explanation, a small preview where one helps, and its control:
+  languages, layouts, autocorrect, capitals and spacing; swipe, the ring of alternatives, names
+  and offensive words; learning, the heatmap, the clipboard and the newest screenshot; and the
+  theme, height, number row, key popup, vibration, animations and quick-action bar over a live
+  keyboard. The last page is the feature tour: everything else the keyboard does, each with a
+  preview, its default and the screen it is switched on from, which a tap on the card opens.
+  Skip all leaves everything as it is, and both open again from the About card on the settings
+  home.
 
 <p align="center">
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/19_feature_tour.jpg" alt="The feature tour: autocorrect, swipe typing and the strip, each with a preview, its default and where it is switched on" width="30%">

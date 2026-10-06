@@ -22,7 +22,7 @@ EXTRA_SOURCES = {"EventEffectsSection.kt": "Animations"}
 # Sources named like a screen whose rows are not indexed: no entry in the Screen enum (opened by
 # an intent), rows that only open other screens, or no fixed row beyond a card titled like the
 # screen itself.
-SKIPPED_SCREENS = {"Home", "Features", "ProcessText", "Transfer", "LearnedWords", "LearnedPhrases"}
+SKIPPED_SCREENS = {"Home", "Features", "Onboarding", "ProcessText", "Transfer", "LearnedWords", "LearnedPhrases"}
 
 TITLE = r"\(\s*(?:title\s*=\s*)?strings(?:\[|\.getString\()Keys\.([A-Z0-9_]+)"
 CARD = re.compile(r"SettingsSectionCard" + TITLE)

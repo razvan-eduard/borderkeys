@@ -519,8 +519,8 @@ data class KeyboardPreferences(
      */
     val modifierRowKeys: List<String> = ModifierRowKeys.DEFAULT,
 
-    /** Whether the feature tour shown after setup has been dismissed for good. */
-    val featuresTourSeen: Boolean = false,
+    /** Whether the settings onboarding shown after setup has been finished or skipped. */
+    val onboardingSeen: Boolean = false,
 
     /**
      * Where the digits sit on the number-and-symbols page: [SYMBOLS_NUMBER_RIGHT] and

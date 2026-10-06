@@ -296,7 +296,7 @@ internal fun displayNameFor(tag: String): String {
 /**
  * Installs a dictionary shipped inside the application, through the same path as a chosen file.
  */
-private suspend fun installBundled(
+internal suspend fun installBundled(
     strings: LanguageManager,
     context: android.content.Context,
     repository: com.borderkeys.data.LanguagePackRepository,
