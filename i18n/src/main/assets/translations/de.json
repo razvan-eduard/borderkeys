@@ -1115,7 +1115,7 @@
   "size_key_sound_note": "Ein kurzes Klicken bei jedem Tastendruck, in der Lautstärke der Berührungstöne deines Telefons. Erfordert außerdem, dass die Berührungstöne des Systems an sind.",
   "size_landscape": "Querformat",
   "size_language_key": "Globustaste",
-  "size_language_key_note": "Eine Taste neben der Leertaste, die die Layouts dieser Tastatur durchschaltet, getippt oder gehalten. Sie erscheint, solange zwei oder mehr Layouts aktiviert sind. Aus entfernt sie und verbreitert die Leertaste.",
+  "size_language_key_note": "Eine Taste neben der Leertaste, die die Layouts dieser Tastatur durchschaltet, getippt oder gehalten. Sie erscheint, solange zwei oder mehr Layouts aktiviert sind. Ausgeschaltet wird sie entfernt und die Leertaste breiter.",
   "size_left": "Links",
   "size_lifts_the_keyboard_off_the_bottom": "Hebt die Tastatur vom unteren Bildschirmrand ab — nützlich neben einer Gestenleiste oder wenn die App etwas darunter setzt.",
   "size_number_pad_in_numeric_fields": "Ziffernblock in Zahlenfeldern",

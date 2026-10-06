@@ -1115,7 +1115,7 @@
   "size_key_sound_note": "Een korte klik bij elke toetsaanslag, op het volume van de aanraakgeluiden van de telefoon. De systeemaanraakgeluiden moeten ook aan staan.",
   "size_landscape": "Liggend",
   "size_language_key": "Wereldboltoets",
-  "size_language_key_note": "Een toets naast de spatiebalk die tussen de indelingen van dit toetsenbord wisselt, getikt of ingedrukt gehouden. Hij verschijnt zolang er twee of meer indelingen aan staan. Uitzetten verwijdert hem en maakt de spatiebalk breder.",
+  "size_language_key_note": "Een toets naast de spatiebalk die tussen de indelingen van dit toetsenbord wisselt, met een tik of door hem ingedrukt te houden. Hij verschijnt zolang er twee of meer indelingen aan staan. Uitzetten verwijdert hem en maakt de spatiebalk breder.",
   "size_left": "Links",
   "size_lifts_the_keyboard_off_the_bottom": "Tilt het toetsenbord van de onderkant van het scherm — handig naast een gebarenbalk of als de app er iets onder plaatst.",
   "size_number_pad_in_numeric_fields": "Cijferblok in getalvelden",
