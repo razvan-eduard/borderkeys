@@ -524,6 +524,7 @@ class KeyboardCanvasView(
     private var alternativesTop = 0f
     private var alternativesCellWidth = 0f
     private var alternativesHeight = 0f
+    private var alternativesFade = 1f
     private var longPressPointer = -1
 
     /**
@@ -1240,6 +1241,9 @@ class KeyboardCanvasView(
     val alternativesCellWidthPx: Float get() = alternativesCellWidth
     val alternativesRowHeightPx: Float get() = alternativesHeight
 
+    /** How visible the alternatives popup is, from 1 down to 0 across the fade margin past its ends. */
+    val alternativesAlpha: Float get() = alternativesFade
+
     /** The held key's label size. 0 when [alternativesVisible] is false. */
     val alternativesTextSizePx: Float get() = if (alternativesKey == NO_KEY) 0f else labelTextSize[alternativesKey]
 
@@ -1470,9 +1474,12 @@ class KeyboardCanvasView(
             return
         }
         if (alternativesKey != NO_KEY && pointerId == longPressPointer) {
-            if (outsideAlternatives(x)) {
+            val margin = width * ALTERNATIVES_FADE_MARGIN_FRACTION
+            val overhang = alternativesOverhang(x)
+            if (overhang >= margin) {
                 abandonAlternatives(pointerId)
             } else {
+                setAlternativesFade(1f - overhang / margin)
                 updateAlternativesSelection(x)
             }
             return
@@ -1741,6 +1748,7 @@ class KeyboardCanvasView(
         hidePreview()
         alternativesKey = index
         alternativesSelection = 0
+        alternativesFade = 1f
 
         val count = geometry.altLength[index]
         alternativesCellWidth = max(geometry.keyRight[index] - geometry.keyLeft[index], MIN_ALTERNATIVE_WIDTH_PX)
@@ -1776,14 +1784,21 @@ class KeyboardCanvasView(
         }
     }
 
-    /** Whether [x] lies left of the alternatives popup's first cell or right of its last. */
-    private fun outsideAlternatives(x: Float): Boolean {
+    /** How far [x] lies left of the alternatives popup's first cell or right of its last; 0 inside it. */
+    private fun alternativesOverhang(x: Float): Float {
         val index = alternativesKey
         if (index == NO_KEY) {
-            return false
+            return 0f
         }
-        return x < alternativesLeft ||
-            x > alternativesLeft + alternativesCellWidth * geometry.altLength[index]
+        val right = alternativesLeft + alternativesCellWidth * geometry.altLength[index]
+        return max(0f, max(alternativesLeft - x, x - right))
+    }
+
+    private fun setAlternativesFade(fade: Float) {
+        if (fade != alternativesFade) {
+            alternativesFade = fade
+            invalidateAlternatives()
+        }
     }
 
     /** Closes the alternatives popup with nothing typed; the lift of [pointerId] types nothing. */
@@ -1967,6 +1982,9 @@ class KeyboardCanvasView(
         /** The least radius a glow is drawn with. */
         private const val MIN_GLOW_RADIUS_PX = 2f
         private const val PRESS_POOL = 10
+
+        /** The margin past each end of the alternatives popup across which it fades out, as a share of the keyboard's width. */
+        private const val ALTERNATIVES_FADE_MARGIN_FRACTION = 0.08f
 
         /** The most fill particles alive at once. */
         private const val FILL_PARTICLE_POOL_CAPACITY = 40

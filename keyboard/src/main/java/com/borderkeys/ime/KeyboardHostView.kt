@@ -958,6 +958,12 @@ class KeyboardHostView(
         val cellWidth = keyboard.alternativesCellWidthPx
         val rowHeight = keyboard.alternativesRowHeightPx
         val radius = paints.keyCornerRadiusPx
+        val alpha = keyboard.alternativesAlpha
+        val layer = if (alpha < 1f) {
+            canvas.saveLayerAlpha(left, top, left + cellWidth * count, top + rowHeight, (alpha * 255f).toInt())
+        } else {
+            -1
+        }
         canvas.drawRoundRect(
             left, top, left + cellWidth * count, top + rowHeight, radius, radius,
             if (keyboard.alternativesModifierStyled) paints.modifierKeyFill else paints.keyFill,
@@ -993,6 +999,9 @@ class KeyboardHostView(
             )
         }
         paints.label.textSize = base
+        if (layer >= 0) {
+            canvas.restoreToCount(layer)
+        }
     }
 
     /** A reused buffer for the key preview's label. */
