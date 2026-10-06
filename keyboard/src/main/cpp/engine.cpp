@@ -1368,6 +1368,7 @@ void Engine::offerScoredWord(TopK<Candidate>& heap, const PackedTrie& trie, int 
         candidate.edits = static_cast<uint8_t>(edits);
         candidate.runOn = static_cast<uint8_t>(runOn);
         candidate.slips = static_cast<uint8_t>(slips);
+        candidate.unigram = trie.unigramLogProb(wordIndex);
         offerCandidate(heap, candidate, text, textLength);
     }
 }
@@ -2454,9 +2455,14 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     typedTextLength_ = 0;
 
     settleCorrection(composing, composingLength);
+    if (strictLanguage_ && restrictTo >= 0 && typedSpelling_.packIndex != restrictTo) {
+        hasTypedSpelling_ = false;
+    }
     decodeTaps(folded, foldedLength, restrictTo);
-    return placeDecodedSuggestion(out, writeStrip(folded, foldedLength, heap, out, maxOut),
-                                  maxOut);
+    return keepTypedSpelling(
+        out,
+        placeDecodedSuggestion(out, writeStrip(folded, foldedLength, heap, out, maxOut), maxOut),
+        maxOut);
 }
 
 void Engine::runPass(const PassSpec& spec, const uint32_t* folded, int foldedLength,
@@ -2526,6 +2532,10 @@ void Engine::settleCorrection(const char* composing, size_t composingLength) {
         bestCorrection_ = Candidate{typedPack, static_cast<int32_t>(typedWord), 0.0f};
         hasBestCorrection_ = true;
     }
+    hasTypedSpelling_ = spelled && !packs_[typedPack].trie().isKnownOnly(typedWord);
+    if (hasTypedSpelling_) {
+        typedSpelling_ = Candidate{typedPack, static_cast<int32_t>(typedWord), 0.0f};
+    }
     typedKnown_ = spelled || (typed && establishedPersonalEntry(composing, composingLength) >= 0);
 }
 
@@ -2561,6 +2571,34 @@ int Engine::placeDecodedSuggestion(Candidate* out, int written, int maxOut) cons
                                    sameSpellingIgnoringCase(listedText, listedLength, wordText,
                                                             wordLength);
                         });
+}
+
+int Engine::keepTypedSpelling(Candidate* out, int written, int maxOut) const {
+    if (!hasTypedSpelling_ || maxOut <= 0) {
+        return written;
+    }
+    uint32_t typedLength = 0;
+    const char* const typedText = candidateText(typedSpelling_, &typedLength);
+    if (typedText == nullptr) {
+        return written;
+    }
+    for (int i = 0; i < written; ++i) {
+        uint32_t length = 0;
+        const char* const text = candidateText(out[i], &length);
+        if (text != nullptr && sameSpellingIgnoringCase(text, length, typedText, typedLength)) {
+            return written;
+        }
+    }
+    if (written < maxOut) {
+        Candidate kept = typedSpelling_;
+        kept.score = written > 0 ? out[written - 1].score : 0.0f;
+        out[written] = kept;
+        return written + 1;
+    }
+    Candidate kept = typedSpelling_;
+    kept.score = out[written - 1].score;
+    out[written - 1] = kept;
+    return written;
 }
 
 bool Engine::continuesTyped(const Candidate& candidate, const uint32_t* folded,

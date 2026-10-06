@@ -245,6 +245,7 @@ void runEngineTests() {
     {
         struct Item {
             float score;
+            bool ranksBelow(const Item& other) const { return score < other.score; }
         };
         Item storage[4];
         TopK<Item> heap;
