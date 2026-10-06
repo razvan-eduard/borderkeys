@@ -1138,7 +1138,7 @@ fourth slot).
 | `make_contractions.py` | The apostrophe maps. |
 | `merge_apostrophes.py` | One row per word whatever apostrophe the corpus wrote: every apostrophe becomes the plain one, and the rows that then agree add up, in the word list, the n-grams, the grammar and the hand lists. |
 | `fold_diacritic_noise.py` | Romanian has three ways to write the same accented letter. |
-| `build_emoji.py`, `gen_keys.py`, `gen_settings_index.py`, `extract_strings.py`, `inject_strings.py` | Emoji palette, key codes, the settings search index, i18n catalogue round-trip. |
+| `build_emoji.py`, `gen_keys.py`, `extract_strings.py`, `inject_strings.py` | Emoji palette, key codes, i18n catalogue round-trip. The settings search index is generated at build time by the `generateSettingsIndex` task in `settings/build.gradle.kts`. |
 | `gesture_replay.py`, `tcn_replay.py`, `swipe_model/` | Swipe measurement and training. |
 
 Every tool is **standard library only**, deliberately: they run in CI, on a laptop, and one day

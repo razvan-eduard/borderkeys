@@ -11,15 +11,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The generated index against the screen sources it was generated from, and the search over
- * it against every catalogue.
- *
- * The first test is the same scan tools/gen_settings_index.py runs; a stale index fails it, with
- * the regeneration command in the message.
+ * The index the build generates from the screen sources, and the search over it, against every
+ * catalogue.
  */
 class SettingsIndexTest {
-
-    private val screens = File("src/main/java/com/borderkeys/settings/screen")
 
     private val translations = File("../i18n/src/main/assets/translations")
 
@@ -32,18 +27,12 @@ class SettingsIndexTest {
     private fun text(key: String): String = english.getValue(key)
 
     @Test
-    fun `the index matches the screen sources`() {
-        val expected = scanSources()
-        val actual = SettingsIndex.entries.map { Triple(it.screen, it.cardKey, it.key) }
-        assertEquals("run python3 tools/gen_settings_index.py", expected, actual)
-    }
-
-    @Test
     fun `every indexed title is in every catalogue`() {
         for ((language, catalogue) in catalogues) {
             for (entry in SettingsIndex.entries) {
                 assertTrue("${entry.key} is not in $language.json", entry.key in catalogue)
                 entry.cardKey?.let { assertTrue("$it is not in $language.json", it in catalogue) }
+                entry.noteKey?.let { assertTrue("$it is not in $language.json", it in catalogue) }
             }
         }
     }
@@ -87,14 +76,16 @@ class SettingsIndexTest {
 
     @Test
     fun `a word finds the card that carries it, under its screen`() {
-        val match = SettingsSearch.find("learned", ::text).single { it.screen == Screen.Dictionary }
+        val match = SettingsSearch.find("learned", ::text).first { it.screen == Screen.Dictionary }
         assertEquals("Learned", match.title)
         assertEquals(text(Keys.SCREEN_DICTIONARY_AND_HEATMAP), match.place)
     }
 
     @Test
     fun `a list page is found once, by its own title`() {
-        val match = SettingsSearch.find("learned words", ::text).single()
+        val matches = SettingsSearch.find("learned words", ::text)
+        assertEquals(1, matches.count { it.screen == Screen.LearnedWords })
+        val match = matches.first()
         assertEquals(Screen.LearnedWords, match.screen)
         assertEquals(null, match.place)
     }
@@ -136,60 +127,57 @@ class SettingsIndexTest {
     }
 
     @Test
+    fun `the start of a word finds a setting drawn under a heading`() {
+        val matches = SettingsSearch.find("scr", ::text)
+        assertTrue(matches.any { it.screen == Screen.Clipboard && it.title == text(Keys.CLIPBOARD_SCREENSHOT_SUGGESTION) })
+    }
+
+    @Test
+    fun `a picker titled above its chips is found`() {
+        assertTrue(SettingsSearch.find("capitalise for me", ::text).any { it.screen == Screen.Typing })
+        assertTrue(SettingsSearch.find("rare words", ::text).any { it.screen == Screen.Typing })
+    }
+
+    @Test
+    fun `a word with a typo finds the title`() {
+        assertTrue(SettingsSearch.find("screnshot", ::text).any { it.title == text(Keys.CLIPBOARD_SCREENSHOT_SUGGESTION) })
+        assertTrue(SettingsSearch.find("scrnshot", ::text).any { it.title == text(Keys.CLIPBOARD_SCREENSHOT_SUGGESTION) })
+        assertTrue(SettingsSearch.find("vibraton", ::text).any { it.screen == Screen.Layout })
+    }
+
+    @Test
+    fun `an exact title ranks above one found through a typo or a note`() {
+        val matches = SettingsSearch.find("swipe typing", ::text)
+        assertEquals(text(Keys.SWIPE_SWIPE_TYPING), matches.first().title)
+    }
+
+    @Test
+    fun `a word only in a note finds the row, after every title match`() {
+        val matches = SettingsSearch.find("uncorrected", ::text)
+        assertTrue(matches.any { it.title == text(Keys.CORRECTIONS_RARE_WORDS) })
+        assertTrue(matches.none { "uncorrected" in SettingsSearch.fold(it.title) })
+    }
+
+    @Test
+    fun `a short query is matched exactly`() {
+        assertEquals(0, SettingsSearch.allowedEdits(3))
+        assertEquals(1, SettingsSearch.allowedEdits(4))
+        assertEquals(2, SettingsSearch.allowedEdits(8))
+        assertTrue(SettingsSearch.find("qzx", ::text).isEmpty())
+    }
+
+    @Test
+    fun `the prefix distance counts edits against the closest start of the word`() {
+        assertEquals(0, SettingsSearch.prefixDistance("scr", "screenshot"))
+        assertEquals(1, SettingsSearch.prefixDistance("screnshot", "screenshot"))
+        assertEquals(1, SettingsSearch.prefixDistance("scrn", "screenshot"))
+        assertEquals(1, SettingsSearch.prefixDistance("teh", "the"))
+        assertEquals(2, SettingsSearch.prefixDistance("ab", "xy"))
+    }
+
+    @Test
     fun `a title formatted with a count is shown without it`() {
         assertEquals("Learned phrases", SettingsSearch.plain("Learned phrases (%s)"))
         assertEquals("Forget", SettingsSearch.plain("Forget %s"))
-    }
-
-    /**
-     * What tools/gen_settings_index.py writes, derived the same way from the same files: the
-     * constant names it finds, lower-cased, are the catalogue keys the constants hold.
-     */
-    private fun scanSources(): List<Triple<Screen, String?, String>> {
-        val out = ArrayList<Triple<Screen, String?, String>>()
-        for (file in screens.listFiles()!!.filter { it.extension == "kt" }.sortedBy { it.name }) {
-            val screen = screenOf(file.name) ?: continue
-            val text = file.readLines().joinToString("\n") { line ->
-                val trimmed = line.trim()
-                if (trimmed.startsWith("//") || trimmed.startsWith("*")) "" else line
-            }
-            val seen = HashSet<Pair<Screen, String>>()
-            var card: String? = null
-            val events = ANY_CARD.findAll(text).map { it.range.first to it } +
-                ROW.findAll(text).map { it.range.first to it }
-            for ((position, match) in events.sortedBy { it.first }) {
-                if (match.value.startsWith(CARD_NAME)) {
-                    card = CARD.matchAt(text, position)?.groupValues?.get(1)?.lowercase()
-                    if (card != null && seen.add(screen to card)) {
-                        out += Triple(screen, null, card)
-                    }
-                } else {
-                    val key = match.groupValues[1].lowercase()
-                    if (seen.add(screen to key)) {
-                        out += Triple(screen, card, key)
-                    }
-                }
-            }
-        }
-        return out
-    }
-
-    private fun screenOf(name: String): Screen? {
-        val screenName = EXTRA_SOURCES[name]
-            ?: name.takeIf { it.endsWith(SCREEN_SUFFIX) }?.removeSuffix(SCREEN_SUFFIX)
-            ?: return null
-        if (screenName in SKIPPED_SCREENS) return null
-        return Screen.entries.first { it.name == screenName }
-    }
-
-    private companion object {
-        const val SCREEN_SUFFIX = "Screen.kt"
-        const val CARD_NAME = "SettingsSectionCard"
-        val EXTRA_SOURCES = mapOf("EventEffectsSection.kt" to "Animations")
-        val SKIPPED_SCREENS = setOf("Home", "Features", "Onboarding", "ProcessText", "Transfer", "LearnedWords", "LearnedPhrases")
-        const val TITLE = """\(\s*(?:title\s*=\s*)?strings(?:\[|\.getString\()Keys\.([A-Z0-9_]+)"""
-        val CARD = Regex(CARD_NAME + TITLE)
-        val ANY_CARD = Regex("""SettingsSectionCard\(""")
-        val ROW = Regex("(?:SettingRow|SwitchRow)$TITLE")
     }
 }
