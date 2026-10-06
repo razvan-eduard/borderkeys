@@ -627,7 +627,7 @@ private val PATTERN_LABELS = arrayOf(
 
 /** One preset, drawn as three dots: its background, its keys and its accent. */
 @Composable
-private fun PresetCard(
+internal fun PresetCard(
     name: String,
     preset: KeyboardTheme,
     selected: Boolean,

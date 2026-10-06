@@ -307,7 +307,7 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
     }
 }
 
-private fun formatRetention(strings: LanguageManager, minutes: Int): String {
+internal fun formatRetention(strings: LanguageManager, minutes: Int): String {
     val day = 24 * 60
     return when {
         minutes < 60 -> strings.counted(Keys.CLIPBOARD_MINUTES, minutes)
@@ -327,7 +327,7 @@ private fun formatRetention(strings: LanguageManager, minutes: Int): String {
 
 /** A slider that moves between named values rather than across a range. */
 @Composable
-private fun StepSlider(
+internal fun StepSlider(
     label: String,
     steps: List<Int>,
     current: Int,

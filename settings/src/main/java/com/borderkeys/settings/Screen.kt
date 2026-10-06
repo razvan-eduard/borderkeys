@@ -10,6 +10,7 @@ enum class Screen(val titleKey: String) {
     Home(Keys.SCREEN_BORDERKEYS),
     Setup(Keys.SCREEN_SET_UP),
     Features(Keys.FEATURES_TITLE),
+    Onboarding(Keys.ONBOARDING_TITLE),
     Languages(Keys.SCREEN_LANGUAGES),
     Layout(Keys.SCREEN_LAYOUT),
     KeyFlicks(Keys.SCREEN_KEY_FLICKS),

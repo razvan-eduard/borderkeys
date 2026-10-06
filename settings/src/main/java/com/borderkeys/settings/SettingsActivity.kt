@@ -85,6 +85,7 @@ import com.borderkeys.settings.screen.HomeScreen
 import com.borderkeys.settings.screen.LanguagesScreen
 import com.borderkeys.settings.screen.CustomLayoutsScreen
 import com.borderkeys.settings.screen.KeyFlicksScreen
+import com.borderkeys.settings.screen.OnboardingScreen
 import com.borderkeys.settings.screen.AnimationsScreen
 import com.borderkeys.settings.screen.ExtraKeysScreen
 import com.borderkeys.settings.screen.LayoutScreen
@@ -261,9 +262,9 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
             stack.forEach { screenStates.removeState(it.name) }
             stack.clear()
             stack.add(Screen.Home)
-            // Setup finished: the features tour, until it is dismissed for good.
-            if (!DataGraph.themes.currentPreferences().featuresTourSeen) {
-                stack.add(Screen.Features)
+            // Setup finished: the onboarding, until it is done or skipped.
+            if (!DataGraph.themes.currentPreferences().onboardingSeen) {
+                stack.add(Screen.Onboarding)
             }
         }
     }
@@ -277,8 +278,8 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
 
     Scaffold(
         bottomBar = {
-            // Not under a screen that draws the keyboard live, nor under Features.
-            if (current in SCREENS_WITH_KEYBOARD_PREVIEW || current == Screen.Features) {
+            // Not under a screen that draws the keyboard live, nor under Features or Onboarding.
+            if (current in SCREENS_WITH_KEYBOARD_PREVIEW || current == Screen.Features || current == Screen.Onboarding) {
                 return@Scaffold
             }
             // A one-line card, padded clear of the navigation bar (navigationBarsPadding) and
@@ -395,7 +396,8 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
             when (current) {
                 Screen.Home -> HomeScreen(searchQuery, modifier, open)
                 Screen.Setup -> SetupScreen(modifier, open)
-                Screen.Features -> FeaturesScreen(modifier, hasAssistant, open, onDone = pop)
+                Screen.Features -> FeaturesScreen(modifier, hasAssistant, open)
+                Screen.Onboarding -> OnboardingScreen(modifier, hasAssistant, open, onDone = pop)
                 Screen.Languages -> LanguagesScreen(modifier)
                 Screen.Layout -> LayoutScreen(modifier, open)
                 Screen.KeyFlicks -> KeyFlicksScreen(modifier)

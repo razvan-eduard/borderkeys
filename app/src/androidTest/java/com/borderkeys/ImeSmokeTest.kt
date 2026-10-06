@@ -86,7 +86,7 @@ class ImeSmokeTest {
                     modifierRow = false,
                     languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_OFF,
                     rememberDetectedLanguage = false,
-                    featuresTourSeen = true,
+                    onboardingSeen = true,
                 )
             }
         }

@@ -23,17 +23,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,71 +47,51 @@ import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.Screen
-import com.borderkeys.settings.rememberPreferencesUpdater
 
 /**
- * The tour of what the keyboard can do, shown once setup has finished and reachable again
- * from Home: every feature as a card with a small drawn preview, a line on what it does, its
- * default, and the screen it is switched on from, grouped under four lightly coloured
- * headings. A card with a screen of its own opens that screen when tapped. The checkbox at
- * the bottom keeps the tour from coming back after setup.
+ * The tour of what the keyboard can do beyond the onboarding's settings, opened from Home:
+ * [FeatureTour] on a page of its own.
  */
 @Composable
-fun FeaturesScreen(
-    modifier: Modifier = Modifier,
-    hasAssistant: Boolean,
-    open: (Screen) -> Unit,
-    onDone: () -> Unit,
-) {
+fun FeaturesScreen(modifier: Modifier = Modifier, hasAssistant: Boolean, open: (Screen) -> Unit) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+    ) {
+        FeatureTour(hasAssistant, open)
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+/**
+ * Every feature the onboarding does not set, as a card with a small drawn preview, a line on
+ * what it does, its default, and the screen it is switched on from, grouped under four lightly
+ * coloured headings. A card with a screen of its own opens that screen when tapped.
+ */
+@Composable
+internal fun FeatureTour(hasAssistant: Boolean, open: (Screen) -> Unit) {
     val strings = LocalStrings.current
-    val update = rememberPreferencesUpdater()
-    var dontShow by remember { mutableStateOf(true) }
     val defaults = remember { KeyboardPreferences() }
     val groups = remember(strings, hasAssistant) { featureGroups(strings, defaults, hasAssistant) }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-        ) {
-            Text(
-                strings[Keys.FEATURES_INTRO],
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-            )
-            for (group in groups) {
-                val accent = group.accent()
-                Text(
-                    group.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = accent,
-                    modifier = Modifier.padding(top = 20.dp, bottom = 6.dp),
-                )
-                for (feature in group.features) {
-                    FeatureCard(feature, accent, open)
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-        Surface(tonalElevation = 3.dp) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = dontShow, onCheckedChange = { dontShow = it })
-                Text(
-                    strings[Keys.FEATURES_DONT_SHOW],
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                Button(onClick = {
-                    update { it.copy(featuresTourSeen = dontShow) }
-                    onDone()
-                }) { Text(strings[Keys.FEATURES_CONTINUE]) }
-            }
+    Text(
+        strings[Keys.FEATURES_INTRO],
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+    )
+    for (group in groups) {
+        val accent = group.accent()
+        Text(
+            group.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = accent,
+            modifier = Modifier.padding(top = 20.dp, bottom = 6.dp),
+        )
+        for (feature in group.features) {
+            FeatureCard(feature, accent, open)
         }
     }
 }
@@ -152,35 +126,27 @@ private fun featureGroups(
 
     val typingGroup = FeatureGroup(strings[Keys.FEATURES_GROUP_TYPING], { MaterialTheme.colorScheme.primary }, listOf(
         Feature(
-            strings[Keys.FEATURE_AUTOCORRECT_TITLE], strings[Keys.FEATURE_AUTOCORRECT_TEXT],
-            onOff(defaults.autoCorrectOnSpace),
-            strings.getString(Keys.FEATURES_WHERE, typing, strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE]),
-            Screen.Typing,
-        ) { accent -> CorrectionPreview(strings[Keys.FEATURE_SAMPLE_TYPO], strings[Keys.FEATURE_SAMPLE_TYPO_FIXED], accent) },
-        Feature(
-            strings[Keys.SWIPE_SWIPE_TYPING], strings[Keys.FEATURE_SWIPE_TEXT],
-            onOff(defaults.swipeEnabled),
-            strings.getString(Keys.FEATURES_WHERE, typing, strings[Keys.SWIPE_SWIPE_TYPING]),
-            Screen.Typing,
-        ) { accent -> SwipePreview(accent) },
-        Feature(
             strings[Keys.FEATURE_STRIP_TITLE], strings[Keys.FEATURE_STRIP_TEXT],
             onOff(defaults.showSuggestionStrip),
             strings.getString(Keys.FEATURES_WHERE, typing, strings[Keys.CORRECTIONS_SHOW_THE_SUGGESTION_STRIP]),
             Screen.Typing,
         ) { accent -> ChipsPreview(strings[Keys.FEATURE_SAMPLE_STRIP].split(SAMPLE_SEPARATOR), accent, outlined = 0) },
         Feature(
-            strings[Keys.FEATURE_LEARNING_TITLE], strings[Keys.FEATURE_LEARNING_TEXT],
-            onOff(defaults.learningEnabled),
-            where(dictionary, strings[Keys.DICTIONARY_LEARNING]),
-            Screen.Dictionary,
-        ) { accent -> ChipsPreview(strings[Keys.FEATURE_SAMPLE_LEARNED].split(SAMPLE_SEPARATOR), accent) },
-        Feature(
-            strings[Keys.FEATURE_HEATMAP_TITLE], strings[Keys.FEATURE_HEATMAP_TEXT],
-            onOff(defaults.heatmapEnabled),
-            where(dictionary, strings[Keys.DICTIONARY_HEATMAP]),
-            Screen.Dictionary,
-        ) { accent -> KeyCapsPreview(listOf("q", "w", "e", "r", "t", "y"), accent, highlighted = setOf(2)) },
+            strings[Keys.CORRECTIONS_RARE_WORDS], strings[Keys.CORRECTIONS_RARE_WORDS_NOTE],
+            strings[Keys.CORRECTIONS_RARE_WORDS_LISTED],
+            strings.getString(Keys.FEATURES_WHERE, typing, strings[Keys.CORRECTIONS_RARE_WORDS]),
+            Screen.Typing,
+        ) { accent ->
+            ChipsPreview(
+                listOf(
+                    strings[Keys.CORRECTIONS_RARE_WORDS_LISTED],
+                    strings[Keys.CORRECTIONS_RARE_WORDS_SOME],
+                    strings[Keys.CORRECTIONS_RARE_WORDS_MANY],
+                ),
+                accent,
+                outlined = 0,
+            )
+        },
         Feature(
             strings[Keys.DICTIONARY_SHORTCUTS], strings[Keys.FEATURE_SHORTCUTS_TEXT],
             strings[Keys.FEATURES_DEFAULT_NONE],
@@ -191,23 +157,23 @@ private fun featureGroups(
 
     val layoutGroup = FeatureGroup(strings[Keys.FEATURES_GROUP_LAYOUT], { MaterialTheme.colorScheme.tertiary }, listOf(
         Feature(
-            strings[Keys.SIZE_NUMBER_ROW], strings[Keys.FEATURE_NUMBER_ROW_TEXT],
-            onOff(defaults.numberRow),
-            where(layout, strings[Keys.SIZE_NUMBER_ROW]),
-            Screen.Layout,
-        ) { accent -> KeyCapsPreview("1234567890".map { it.toString() }, accent) },
+            strings[Keys.LAYOUT_FLICKS], strings[Keys.LAYOUT_FLICKS_NOTE],
+            strings[Keys.FEATURES_DEFAULT_NONE],
+            where(layout, strings[Keys.LAYOUT_FLICKS]),
+            Screen.KeyFlicks,
+        ) { accent -> ArrowPreview(FLICK_SAMPLE, EURO_SAMPLE, accent) },
         Feature(
-            strings[Keys.LAYOUT_MODIFIER_ROW], strings[Keys.FEATURE_MODIFIER_ROW_TEXT],
-            onOff(defaults.modifierRow),
-            where(layout, strings[Keys.LAYOUT_MODIFIER_ROW]),
-            Screen.Layout,
-        ) { accent -> KeyCapsPreview(listOf("esc", "tab", "ctrl", "alt", "\u2190", "\u2193", "\u2191", "\u2192"), accent) },
+            strings[Keys.LAYOUT_EXTRA_KEYS], strings[Keys.LAYOUT_EXTRA_KEYS_NOTE],
+            strings[Keys.FEATURES_DEFAULT_ON],
+            where(layout, strings[Keys.LAYOUT_EXTRA_KEYS]),
+            Screen.ExtraKeys,
+        ) { accent -> KeyCapsPreview(EXTRA_KEYS_SAMPLE, accent) },
         Feature(
-            strings[Keys.FEATURE_LAYOUTS_TITLE], strings[Keys.FEATURE_LAYOUTS_TEXT],
-            strings[Keys.FEATURES_DEFAULT_QWERTY],
-            where(layout, strings[Keys.LAYOUT_LAYOUTS_ON_THIS_KEYBOARD]),
-            Screen.Layout,
-        ) { accent -> ChipsPreview(listOf("QWERTY", "AZERTY", "Dvorak", "QWERTZ"), accent, outlined = 0) },
+            strings[Keys.LAYOUT_OWN_LAYOUTS], strings[Keys.LAYOUT_OWN_LAYOUTS_NOTE],
+            strings[Keys.FEATURES_DEFAULT_NONE],
+            where(layout, strings[Keys.LAYOUT_OWN_LAYOUTS]),
+            Screen.CustomLayouts,
+        ) { accent -> MonoPreview(LAYOUT_SOURCE_SAMPLE, accent) },
         Feature(
             strings[Keys.LAYOUT_ACCENTED_CHARACTERS], strings[Keys.FEATURE_ACCENTS_TEXT],
             onOff(defaults.accentedCharacters),
@@ -215,20 +181,34 @@ private fun featureGroups(
             Screen.Layout,
         ) { accent -> PopupPreview("a", listOf("\u00e0", "\u00e1", "\u00e2", "\u00e4", "\u0103"), accent) },
         Feature(
-            strings[Keys.LAYOUT_KEY_POPUP], strings[Keys.FEATURE_POPUP_TEXT],
-            onOff(defaults.keyPopup),
-            where(layout, strings[Keys.LAYOUT_KEY_POPUP]),
+            strings[Keys.LAYOUT_DEAD_KEYS], strings[Keys.LAYOUT_DEAD_KEYS_NOTE],
+            onOff(defaults.deadKeys),
+            where(layout, strings[Keys.LAYOUT_DEAD_KEYS]),
             Screen.Layout,
-        ) { accent -> PopupPreview("g", listOf("g"), accent) },
+        ) { accent -> ArrowPreview(DEAD_KEY_SAMPLE, DEAD_KEY_RESULT, accent) },
+        Feature(
+            strings[Keys.LAYOUT_MODIFIER_ROW], strings[Keys.FEATURE_MODIFIER_ROW_TEXT],
+            onOff(defaults.modifierRow),
+            where(layout, strings[Keys.LAYOUT_MODIFIER_ROW]),
+            Screen.Layout,
+        ) { accent -> KeyCapsPreview(listOf("esc", "tab", "ctrl", "alt", "\u2190", "\u2193", "\u2191", "\u2192"), accent) },
+        Feature(
+            strings[Keys.LAYOUT_SPACE_TRACKPOINT], strings[Keys.LAYOUT_SPACE_TRACKPOINT_NOTE],
+            onOff(defaults.spaceTrackpoint),
+            where(layout, strings[Keys.LAYOUT_SPACE_TRACKPOINT]),
+            Screen.Layout,
+        ) { accent -> KeyCapsPreview(JOYSTICK_SAMPLE, accent, highlighted = setOf(1)) },
+        Feature(
+            strings[Keys.LAYOUT_BACKSPACE_SLIDE], strings[Keys.LAYOUT_BACKSPACE_SLIDE_NOTE],
+            onOff(defaults.backspaceSlideSelects),
+            where(layout, strings[Keys.LAYOUT_BACKSPACE_SLIDE]),
+            Screen.Layout,
+        ) { accent ->
+            KeyCapsPreview(strings[Keys.FEATURE_SAMPLE_TYPO_FIXED].map { it.toString() } + BACKSPACE_GLYPH, accent, highlighted = setOf(0, 1, 2))
+        },
     ))
 
     val panels = mutableListOf(
-        Feature(
-            strings[Keys.SCREEN_QUICK_ACTIONS], strings[Keys.FEATURE_QUICK_ACTIONS_TEXT],
-            strings[if (defaults.quickActionsMode == KeyboardPreferences.QUICK_ACTIONS_COLLAPSED) Keys.QUICK_MODE_COLLAPSED else Keys.QUICK_MODE_FULL],
-            where(Keys.SCREEN_QUICK_ACTIONS, strings[Keys.QUICK_MODE]),
-            Screen.QuickActions,
-        ) { accent -> IconRowPreview(accent) },
         Feature(
             strings[Keys.FEATURE_EMOJI_TITLE], strings[Keys.FEATURE_EMOJI_TEXT],
             strings[Keys.FEATURES_DEFAULT_ALWAYS],
@@ -236,22 +216,16 @@ private fun featureGroups(
             null,
         ) { accent -> ArrowPreview(strings[Keys.FEATURE_SAMPLE_EMOJI_WORD], EMOJI_SAMPLE, accent) },
         Feature(
-            strings[Keys.SCREEN_CLIPBOARD], strings[Keys.FEATURE_CLIPBOARD_TEXT],
-            onOff(defaults.clipboardEnabled),
-            where(Keys.SCREEN_CLIPBOARD, strings[Keys.CLIPBOARD_REMEMBER_WHAT_YOU_COPY]),
-            Screen.Clipboard,
-        ) { accent -> CardsPreview(accent) },
-        Feature(
             strings[Keys.SCREEN_DRAFT_BOX], strings[Keys.FEATURE_DRAFT_BOX_TEXT],
             onOff(defaults.composerEnabled),
             strings[Keys.SCREEN_DRAFT_BOX],
             Screen.Composer,
         ) { accent -> TextBoxPreview(accent) },
         Feature(
-            strings[Keys.FEATURE_THEMES_TITLE], strings[Keys.FEATURE_THEMES_TEXT],
-            strings[Keys.FEATURES_DEFAULT_THEME],
-            strings.getString(Keys.FEATURES_WHERE, strings[Keys.SCREEN_THEME], strings[Keys.EFFECTS_TITLE]),
-            Screen.Theme,
+            strings[Keys.PARTICLE_EFFECTS_ENABLE], strings[Keys.HOME_EFFECTS_NOTE],
+            onOff(false),
+            strings[Keys.EFFECTS_TITLE],
+            Screen.Effects,
         ) { accent -> SwatchesPreview(accent) },
         Feature(
             strings[Keys.DEBUG_STATS], strings[Keys.FEATURE_STATS_TEXT],
@@ -269,6 +243,12 @@ private fun featureGroups(
             strings[Keys.SCREEN_PRIVACY],
             Screen.Privacy,
         ) { accent -> DotsPreview(strings[Keys.STRIP_SHOW_TYPED], accent) },
+        Feature(
+            strings[Keys.ACTION_PRIVATE_COPY], strings[Keys.CLIPBOARD_PRIVATE_NOTE],
+            strings[Keys.FEATURES_DEFAULT_MANUAL],
+            where(Keys.SCREEN_QUICK_ACTIONS, strings[Keys.ACTION_PRIVATE_COPY]),
+            Screen.QuickActions,
+        ) { accent -> ArrowPreview(strings[Keys.FEATURE_SAMPLE_SHORTCUT_TEXT], LOCK_GLYPH, accent) },
         Feature(
             strings[Keys.SCREEN_BACKUP], strings[Keys.FEATURE_BACKUP_TEXT],
             strings[Keys.FEATURES_DEFAULT_MANUAL],
@@ -343,9 +323,17 @@ private const val SPACE_GLYPH = "\u2423"
 private const val DOTS_GLYPHS = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
 private const val EMOJI_SAMPLE = "\ud83c\udf82 \ud83c\udf70 \ud83e\uddc1"
 private const val STATS_SAMPLE = "1.5 \u00b7 60 ms"
+private const val FLICK_SAMPLE = "e \u2197"
+private const val EURO_SAMPLE = "\u20ac"
+private val EXTRA_KEYS_SAMPLE = listOf("\u00df", "\u20ac", "\u00f1", "\u0491")
+private const val LAYOUT_SOURCE_SAMPLE = "{ \"c\": \"q\" }"
+private const val DEAD_KEY_SAMPLE = "\u00b4 e"
+private const val DEAD_KEY_RESULT = "\u00e9"
+private val JOYSTICK_SAMPLE = listOf("\u2190", SPACE_GLYPH, "\u2192")
+private const val BACKSPACE_GLYPH = "\u232b"
 
 /** The catalogue lists a preview's several words in one string, split on this. */
-private const val SAMPLE_SEPARATOR = "|"
+internal const val SAMPLE_SEPARATOR = "|"
 
 // ---- previews -----------------------------------------------------------------------------
 
@@ -363,7 +351,7 @@ private fun KeyCap(label: String, accent: Color, highlighted: Boolean = false, m
 }
 
 @Composable
-private fun KeyCapsPreview(caps: List<String>, accent: Color, highlighted: Set<Int> = emptySet()) {
+internal fun KeyCapsPreview(caps: List<String>, accent: Color, highlighted: Set<Int> = emptySet()) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
         caps.forEachIndexed { index, cap ->
             KeyCap(cap, accent, index in highlighted, Modifier.weight(1f))
@@ -372,7 +360,7 @@ private fun KeyCapsPreview(caps: List<String>, accent: Color, highlighted: Set<I
 }
 
 @Composable
-private fun SwipePreview(accent: Color) {
+internal fun SwipePreview(accent: Color) {
     val caps = "qwertyuiop".map { it.toString() }
     Box(
         modifier = Modifier.fillMaxWidth().drawWithContent {
@@ -405,14 +393,14 @@ private fun Chip(label: String, accent: Color, outlined: Boolean = false) {
 }
 
 @Composable
-private fun ChipsPreview(labels: List<String>, accent: Color, outlined: Int = -1) {
+internal fun ChipsPreview(labels: List<String>, accent: Color, outlined: Int = -1) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         labels.forEachIndexed { index, label -> Chip(label, accent, outlined = index == outlined) }
     }
 }
 
 @Composable
-private fun CorrectionPreview(typo: String, fixed: String, accent: Color) {
+internal fun CorrectionPreview(typo: String, fixed: String, accent: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(typo, style = MaterialTheme.typography.bodyMedium, textDecoration = TextDecoration.LineThrough)
         Text(ARROW_GLYPH, style = MaterialTheme.typography.bodyMedium, color = accent)
@@ -422,7 +410,7 @@ private fun CorrectionPreview(typo: String, fixed: String, accent: Color) {
 }
 
 @Composable
-private fun ArrowPreview(from: String, to: String, accent: Color) {
+internal fun ArrowPreview(from: String, to: String, accent: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Chip(from, accent)
         Text(ARROW_GLYPH, style = MaterialTheme.typography.bodyMedium, color = accent)
