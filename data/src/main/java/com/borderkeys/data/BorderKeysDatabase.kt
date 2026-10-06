@@ -40,7 +40,7 @@ import java.util.Arrays
         UserTrigram::class,
         KeyTouch::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 abstract class BorderKeysDatabase : RoomDatabase() {
@@ -208,6 +208,13 @@ abstract class BorderKeysDatabase : RoomDatabase() {
             }
         }
 
+        /** Version 9 to 10: whether a kept image is a screenshot rather than a copied image. */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `clip_entries` ADD COLUMN `fromScreenshot` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun open(context: Context): BorderKeysDatabase {
             // sqlcipher-android 4.x does not load its own library.
             System.loadLibrary("sqlcipher")
@@ -225,7 +232,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
                 .openHelperFactory(factory)
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-                    MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                    MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
                 )
                 // The ":assist" process opens this database too.
                 .enableMultiInstanceInvalidation()

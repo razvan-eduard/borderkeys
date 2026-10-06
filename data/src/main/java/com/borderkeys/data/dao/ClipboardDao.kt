@@ -38,17 +38,18 @@ interface ClipboardDao {
 
     /**
      * Inserts, or, when something with this [contentHash] is already there, sets its `createdAt`,
-     * keeps it private if either is, and fills a missing source, in one statement. `pinnedAt` and
-     * the row's `id` are kept.
+     * keeps it private if either is, fills a missing source, and counts it as copied if either
+     * was, in one statement. `pinnedAt` and the row's `id` are kept.
      */
     @Query(
         """
-        INSERT INTO clip_entries (content, createdAt, contentHash, uri, mimeType, mediaFile, sizeBytes, thumbnail, isPrivate, sourcePackage)
-        VALUES (:content, :createdAt, :contentHash, :uri, :mimeType, :mediaFile, :sizeBytes, :thumbnail, :isPrivate, :sourcePackage)
+        INSERT INTO clip_entries (content, createdAt, contentHash, uri, mimeType, mediaFile, sizeBytes, thumbnail, isPrivate, sourcePackage, fromScreenshot)
+        VALUES (:content, :createdAt, :contentHash, :uri, :mimeType, :mediaFile, :sizeBytes, :thumbnail, :isPrivate, :sourcePackage, :fromScreenshot)
         ON CONFLICT(contentHash) DO UPDATE SET
             createdAt = :createdAt,
             isPrivate = MAX(isPrivate, :isPrivate),
-            sourcePackage = COALESCE(sourcePackage, :sourcePackage)
+            sourcePackage = COALESCE(sourcePackage, :sourcePackage),
+            fromScreenshot = MIN(fromScreenshot, :fromScreenshot)
         """,
     )
     suspend fun upsert(
@@ -62,6 +63,7 @@ interface ClipboardDao {
         thumbnail: ByteArray? = null,
         isPrivate: Boolean = false,
         sourcePackage: String? = null,
+        fromScreenshot: Boolean = false,
     )
 
     /** The stored images' names, for the sweep. */
@@ -102,9 +104,13 @@ interface ClipboardDao {
     @Query("DELETE FROM clip_entries")
     suspend fun deleteAll()
 
-    /** Drops every remembered image, pinned or not: switching the feature off means off. */
-    @Query("DELETE FROM clip_entries WHERE uri IS NOT NULL OR mediaFile IS NOT NULL")
-    suspend fun deleteImages(): Int
+    /** Drops every remembered copied image, pinned or not: switching the feature off means off. */
+    @Query("DELETE FROM clip_entries WHERE (uri IS NOT NULL OR mediaFile IS NOT NULL) AND fromScreenshot = 0")
+    suspend fun deleteCopiedImages(): Int
+
+    /** Drops every kept screenshot, pinned or not. */
+    @Query("DELETE FROM clip_entries WHERE (uri IS NOT NULL OR mediaFile IS NOT NULL) AND fromScreenshot = 1")
+    suspend fun deleteScreenshots(): Int
 
     /** Everything neither pinned nor private, whatever its age. Used when the keyboard closes. */
     @Query("DELETE FROM clip_entries WHERE pinnedAt IS NULL AND isPrivate = 0")

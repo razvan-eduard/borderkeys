@@ -243,16 +243,17 @@ ships.
   settings screen has a search box and an editor of its own; the box takes plain text, wildcards
   or a regular expression. A copy made in a password manager or one-time-code app the keyboard
   knows, or in an app you name, is never kept.
-- **Photos and screenshots on the strip.** A copied image is kept as a picture, encrypted on the
-  phone, and offered on the strip like copied text; the same picture copied twice is kept once,
-  and Largest image kept on the Clipboard screen sets the limit. Offer the newest screenshot, on
-  the same screen, offers a screenshot from the last five minutes too, as a chip of its own beside
-  the clipboard chip or in one chip with it, whichever is newer: choosing it asks once for your
-  screenshots folder in Android's own folder picker, and the keyboard reads that folder alone,
-  still with no permission. Show a preview in the chip puts a small picture of the image in front
-  of the chip's icon, within the strip's own height. Both are off by default. A photo or
-  screenshot chip appears only in a field that takes that kind of image, and never in a password
-  or private field.
+- **Photos and screenshots.** Two switches on the Clipboard screen, side by side. Remember photos
+  keeps the photos you copy, encrypted on the phone, in the clipboard history and offers the
+  newest on the strip; the same picture copied twice is kept once, and Largest image kept sets the
+  limit. Remember screenshots does the same for each new screenshot, offered on the strip for five
+  minutes, beside the clipboard chip or in its place when newer, as chosen under it; turning it on
+  asks once for your screenshots folder in Android's own folder picker, and the keyboard reads that
+  folder alone, still with no permission. Turning either off deletes what it kept. Show a preview
+  in the chip puts a small picture of the image in front of the chip's icon, within the strip's
+  own height. All three are off by default. A photo or screenshot chip appears only in a field
+  that takes that kind of image, and never in a password or private field; in the clipboard panel
+  such a photo is shown faded.
 
 <p align="center">
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/18_emoji_search.jpg" alt="The emoji panel opened over the word cake: the cakes come first" width="30%">

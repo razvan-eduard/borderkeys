@@ -19,22 +19,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
-import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PickerChip
-import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.SettingRow
 
 /**
- * Whether the strip offers the newest screenshot: off, beside the clipboard chip, or in one chip
- * with it, the newer. Choosing either of the last two with no folder yet opens the system's
- * folder picker, started at [likelyScreenshotFolder]; the folder's grant is kept across restarts.
+ * Remember screenshots: a switch that keeps each new screenshot in the clipboard history and
+ * offers the newest on the strip, then how it sits beside the clipboard chip, beside it or in its
+ * place when newer, disabled while the switch is off. Turning it on with no folder yet opens the
+ * system's folder picker, started at [likelyScreenshotFolder]; the folder's grant is kept across
+ * restarts. Turning it off deletes the screenshots kept.
  */
 @Composable
 fun ScreenshotSuggestionSetting(
@@ -43,8 +48,9 @@ fun ScreenshotSuggestionSetting(
 ) {
     val strings = LocalStrings.current
     val context = LocalContext.current
-    // The option chosen while the picker is open, applied once a folder comes back.
-    var pending by remember { mutableIntStateOf(KeyboardPreferences.SCREENSHOT_SUGGESTION_OFF) }
+    val scope = rememberCoroutineScope()
+    // The arrangement chosen while the picker is open, applied once a folder comes back.
+    var pending by remember { mutableIntStateOf(KeyboardPreferences.SCREENSHOT_SUGGESTION_BESIDE) }
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
         if (tree == null) {
             return@rememberLauncherForActivityResult
@@ -52,9 +58,8 @@ fun ScreenshotSuggestionSetting(
         runCatching {
             context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }.onSuccess {
-            val mode = pending.takeIf { it != KeyboardPreferences.SCREENSHOT_SUGGESTION_OFF }
-                ?: preferences.screenshotSuggestion.takeIf { it != KeyboardPreferences.SCREENSHOT_SUGGESTION_OFF }
-                ?: KeyboardPreferences.SCREENSHOT_SUGGESTION_BESIDE
+            val mode = preferences.screenshotSuggestion.takeIf { it != KeyboardPreferences.SCREENSHOT_SUGGESTION_OFF }
+                ?: pending
             val previous = preferences.screenshotFolder
             if (previous.isNotEmpty() && previous != tree.toString()) {
                 releaseFolder(context, previous)
@@ -64,9 +69,7 @@ fun ScreenshotSuggestionSetting(
     }
 
     fun choose(mode: Int) {
-        if (mode == KeyboardPreferences.SCREENSHOT_SUGGESTION_OFF) {
-            update { it.copy(screenshotSuggestion = mode) }
-        } else if (preferences.screenshotFolder.isEmpty()) {
+        if (preferences.screenshotFolder.isEmpty()) {
             pending = mode
             pickFolder.launch(likelyScreenshotFolder())
         } else {
@@ -74,26 +77,34 @@ fun ScreenshotSuggestionSetting(
         }
     }
 
-    SectionHeader(strings[Keys.CLIPBOARD_SCREENSHOT_SUGGESTION])
-    FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        PickerChip(
-            strings[Keys.CLIPBOARD_SCREENSHOT_OFF],
-            preferences.screenshotSuggestion == KeyboardPreferences.SCREENSHOT_SUGGESTION_OFF,
-        ) { choose(KeyboardPreferences.SCREENSHOT_SUGGESTION_OFF) }
-        PickerChip(
-            strings[Keys.CLIPBOARD_SCREENSHOT_BESIDE],
-            preferences.screenshotSuggestion == KeyboardPreferences.SCREENSHOT_SUGGESTION_BESIDE,
-        ) { choose(KeyboardPreferences.SCREENSHOT_SUGGESTION_BESIDE) }
-        PickerChip(
-            strings[Keys.CLIPBOARD_SCREENSHOT_NEWER],
-            preferences.screenshotSuggestion == KeyboardPreferences.SCREENSHOT_SUGGESTION_NEWER,
-        ) { choose(KeyboardPreferences.SCREENSHOT_SUGGESTION_NEWER) }
+    SwitchRow(
+        title = strings[Keys.CLIPBOARD_SCREENSHOT_SUGGESTION],
+        subtitle = strings[Keys.CLIPBOARD_SCREENSHOT_NOTE],
+        checked = preferences.screenshotsRemembered,
+    ) { on ->
+        if (on) {
+            choose(KeyboardPreferences.SCREENSHOT_SUGGESTION_BESIDE)
+        } else {
+            update { it.copy(screenshotSuggestion = KeyboardPreferences.SCREENSHOT_SUGGESTION_OFF) }
+            scope.launch { DataGraph.clipboard.deleteScreenshots() }
+        }
     }
-    Explanation(strings[Keys.CLIPBOARD_SCREENSHOT_NOTE])
+    Disableable(disabled = !preferences.screenshotsRemembered) {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            PickerChip(
+                strings[Keys.CLIPBOARD_SCREENSHOT_BESIDE],
+                preferences.screenshotSuggestion == KeyboardPreferences.SCREENSHOT_SUGGESTION_BESIDE,
+            ) { choose(KeyboardPreferences.SCREENSHOT_SUGGESTION_BESIDE) }
+            PickerChip(
+                strings[Keys.CLIPBOARD_SCREENSHOT_NEWER],
+                preferences.screenshotSuggestion == KeyboardPreferences.SCREENSHOT_SUGGESTION_NEWER,
+            ) { choose(KeyboardPreferences.SCREENSHOT_SUGGESTION_NEWER) }
+        }
+    }
     if (preferences.screenshotFolder.isNotEmpty()) {
         SettingRow(
             title = strings.getString(Keys.CLIPBOARD_SCREENSHOT_FOLDER, folderName(preferences.screenshotFolder)),

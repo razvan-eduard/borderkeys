@@ -2477,6 +2477,7 @@ class BorderKeysService :
                 recent to view.clipboardPanel.decodeThumbnails(recent)
             }
             view.clipboardPanel.query = searchWordAtCaret()
+            view.clipboardPanel.takesPhoto = { mimeType -> orchestrator.session.takesPhoto(mimeType) }
             view.clipboardPanel.setEntries(entries, thumbnails)
             view.setClipboardPanelVisible(true)
         }
@@ -2731,7 +2732,9 @@ class BorderKeysService :
         }
         val text = when {
             description.hasMimeType("image/*") ->
-                strings[Keys.CLIP_PHOTO].takeIf { orchestrator.session.takesPhoto(description.getMimeType(0) ?: "image/*") }
+                strings[Keys.CLIP_PHOTO].takeIf {
+                    preferences.photosRemembered && orchestrator.session.takesPhoto(description.getMimeType(0) ?: "image/*")
+                }
             else -> {
                 val plain = clip.getItemAt(0).coerceToText(this)?.toString()?.trim().orEmpty()
                 if (plain.isEmpty()) {
@@ -2764,7 +2767,7 @@ class BorderKeysService :
         val uri = item.uri
         val description = clip.description
         if (uri != null && description != null && description.hasMimeType("image/*")) {
-            if (!orchestrator.session.takesPhoto(description.getMimeType(0) ?: "image/*")) {
+            if (!preferences.photosRemembered || !orchestrator.session.takesPhoto(description.getMimeType(0) ?: "image/*")) {
                 return
             }
             val chip = chipBoundsBeforePaste(screenshot = false)
@@ -2794,9 +2797,7 @@ class BorderKeysService :
 
     /** Whether the strip offers screenshots in this field. */
     private fun screenshotsOffered(): Boolean =
-        unlocked && !orchestrator.session.policy.privateField &&
-            preferences.screenshotSuggestion != KeyboardPreferences.SCREENSHOT_SUGGESTION_OFF &&
-            preferences.screenshotFolder.isNotEmpty()
+        unlocked && !orchestrator.session.policy.privateField && preferences.screenshotsRemembered
 
     /**
      * Reads the newest image of the screenshot folder off the main thread and places its chip; an
@@ -2811,11 +2812,30 @@ class BorderKeysService :
         val tree = android.net.Uri.parse(preferences.screenshotFolder)
         scope.launch {
             val shot = withContext(Dispatchers.IO) { screenshotFolder.newest(tree) }
-            newestScreenshot = shot?.takeIf {
-                it.uri != pastedScreenshot &&
-                    System.currentTimeMillis() - it.modifiedMillis <= SCREENSHOT_RECENT_MILLIS
-            }
+            val recent = shot?.takeIf { System.currentTimeMillis() - it.modifiedMillis <= SCREENSHOT_RECENT_MILLIS }
+            recent?.let(::rememberScreenshot)
+            newestScreenshot = recent?.takeIf { it.uri != pastedScreenshot }
             refreshClipboardChip()
+        }
+    }
+
+    /** The screenshot last put in the clipboard history, so a refresh does not read it again. */
+    private var rememberedScreenshot: android.net.Uri? = null
+
+    /**
+     * Keeps [shot] in the clipboard history as a picture marked as a screenshot, with history and
+     * Remember screenshots on; the same picture already there is kept once.
+     */
+    private fun rememberScreenshot(shot: ScreenshotFolder.Shot) {
+        if (!unlocked || !preferences.clipboardEnabled || !preferences.screenshotsRemembered ||
+            shot.uri == rememberedScreenshot
+        ) {
+            return
+        }
+        rememberedScreenshot = shot.uri
+        scope.launch(Dispatchers.IO) {
+            val bytes = readClipBytes(shot.uri, DataGraph.clipboard.imageCapBytes()) ?: return@launch
+            DataGraph.clipboard.rememberImageBytes(bytes, shot.mimeType, fromScreenshot = true)
         }
     }
 

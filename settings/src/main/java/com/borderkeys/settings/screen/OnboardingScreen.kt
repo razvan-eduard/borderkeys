@@ -330,6 +330,11 @@ private fun PrivacyPage(
             default = KeyboardPreferences().clipboardRetentionMinutes,
         ) { value -> update { it.copy(clipboardRetentionMinutes = value) } }
     }
+    SwitchItem(
+        title = strings[Keys.CLIPBOARD_REMEMBER_IMAGES],
+        note = strings[Keys.CLIPBOARD_REMEMBER_IMAGES_NOTE],
+        checked = preferences.clipboardImages,
+    ) { value -> scope.launch { setRememberPhotos(value) } }
     ItemCard(active = true) {
         ScreenshotSuggestionSetting(preferences, update)
     }

@@ -99,7 +99,12 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
             checked = preferences.clipboardSuggestion,
         ) { value -> update { it.copy(clipboardSuggestion = value) } }
 
-        // The newest screenshot, beside the clipboard chip or in its place.
+        // Copied photos and screenshots, each kept in the history and offered on the strip.
+        SwitchRow(
+            title = strings[Keys.CLIPBOARD_REMEMBER_IMAGES],
+            subtitle = strings[Keys.CLIPBOARD_REMEMBER_IMAGES_NOTE],
+            checked = preferences.clipboardImages,
+        ) { value -> scope.launch { setRememberPhotos(value) } }
         ScreenshotSuggestionSetting(preferences, update)
 
         // A small preview of the image on the photo and screenshot chips.
@@ -117,19 +122,6 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
                 subtitle = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE_NOTE],
                 checked = preferences.clipboardSuggestionOnce,
             ) { value -> update { it.copy(clipboardSuggestionOnce = value) } }
-            SwitchRow(
-                title = strings[Keys.CLIPBOARD_REMEMBER_IMAGES],
-                subtitle = strings[Keys.CLIPBOARD_REMEMBER_IMAGES_NOTE],
-                checked = preferences.clipboardImages,
-            ) { value ->
-                scope.launch {
-                    themes.updatePreferences { it.copy(clipboardImages = value) }
-                    // Turning it off forgets what it collected.
-                    if (!value) {
-                        DataGraph.clipboard.deleteImages()
-                    }
-                }
-            }
             SwitchRow(
                 title = strings[Keys.CLIPBOARD_PRIVATE_MENU],
                 subtitle = strings[Keys.CLIPBOARD_PRIVATE_NOTE],
@@ -304,6 +296,14 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
                 TextButton(onClick = { confirmingDeleteAll = false }) { Text(strings[Keys.THEME_CANCEL]) }
             },
         )
+    }
+}
+
+/** Remember photos: on or off, and turned off, the copied photos kept are deleted. */
+internal suspend fun setRememberPhotos(value: Boolean) {
+    DataGraph.themes.updatePreferences { it.copy(clipboardImages = value) }
+    if (!value) {
+        DataGraph.clipboard.deleteCopiedImages()
     }
 }
 

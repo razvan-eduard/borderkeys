@@ -70,4 +70,23 @@ class DatabaseMigrationTest {
     private companion object {
         const val DATABASE = "migration-test.db"
     }
+
+    @Test
+    fun version9Gains10sScreenshotMarkAndKeepsItsImages() {
+        helper.createDatabase(DATABASE, 9).use { db ->
+            db.execSQL(
+                "INSERT INTO clip_entries (content, createdAt, pinnedAt, contentHash, uri, mimeType, mediaFile, " +
+                    "sizeBytes, thumbnail, isPrivate, sourcePackage) " +
+                    "VALUES ('', 1000, NULL, 42, NULL, 'image/png', 'ab/cd.png', 10, NULL, 0, NULL)",
+            )
+        }
+        helper.runMigrationsAndValidate(DATABASE, 10, true, BorderKeysDatabase.MIGRATION_9_10)
+            .use { db ->
+                db.query("SELECT mediaFile, fromScreenshot FROM clip_entries").use {
+                    it.moveToFirst()
+                    assertEquals("ab/cd.png", it.getString(0))
+                    assertEquals(0, it.getInt(1))
+                }
+            }
+    }
 }

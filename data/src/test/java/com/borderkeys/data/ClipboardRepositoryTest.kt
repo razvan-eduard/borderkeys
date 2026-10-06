@@ -47,6 +47,7 @@ class ClipboardRepositoryTest {
             thumbnail: ByteArray?,
             isPrivate: Boolean,
             sourcePackage: String?,
+            fromScreenshot: Boolean,
         ) {
             val existing = findByHash(contentHash)
             rows.value = if (existing != null) {
@@ -56,6 +57,7 @@ class ClipboardRepositoryTest {
                             createdAt = createdAt,
                             isPrivate = it.isPrivate || isPrivate,
                             sourcePackage = it.sourcePackage ?: sourcePackage,
+                            fromScreenshot = it.fromScreenshot && fromScreenshot,
                         )
                     } else {
                         it
@@ -66,6 +68,7 @@ class ClipboardRepositoryTest {
                     id = nextId++, content = content, createdAt = createdAt, contentHash = contentHash,
                     uri = uri, mimeType = mimeType, mediaFile = mediaFile, sizeBytes = sizeBytes,
                     thumbnail = thumbnail, isPrivate = isPrivate, sourcePackage = sourcePackage,
+                    fromScreenshot = fromScreenshot,
                 )
             }
         }
@@ -102,7 +105,9 @@ class ClipboardRepositoryTest {
             rows.value = emptyList()
         }
 
-        override suspend fun deleteImages(): Int = remove { it.uri != null || it.mediaFile != null }
+        override suspend fun deleteCopiedImages(): Int = remove { (it.uri != null || it.mediaFile != null) && !it.fromScreenshot }
+
+        override suspend fun deleteScreenshots(): Int = remove { (it.uri != null || it.mediaFile != null) && it.fromScreenshot }
 
         override suspend fun deleteUnpinned(): Int = remove { it.pinnedAt == null && !it.isPrivate }
 
@@ -196,9 +201,41 @@ class ClipboardRepositoryTest {
         assertEquals(1, media.files.size)
         assertTrue(media.sweeps.last().single().endsWith(".png"))
 
-        repository.deleteImages()
+        repository.deleteCopiedImages()
         assertTrue(media.files.isEmpty())
         assertEquals(emptySet<String>(), media.sweeps.last())
+    }
+
+    @Test
+    fun `a screenshot is kept under Remember screenshots alone, and marked`() = runTest {
+        settings.value = KeyboardPreferences(clipboardImages = true)
+        assertEquals(ClipboardRepository.ImageRefusal.OFF, repository.rememberImageBytes(picture, "image/png", fromScreenshot = true))
+        settings.value = SCREENSHOTS_ON
+        assertNull(repository.rememberImageBytes(picture, "image/png", fromScreenshot = true))
+        assertTrue(dao.rows.value.single().fromScreenshot)
+        assertEquals(ClipboardRepository.ImageRefusal.OFF, repository.rememberImageBytes(ByteArray(100) { 7 }, "image/jpeg"))
+    }
+
+    @Test
+    fun `each switch deletes only its own pictures`() = runTest {
+        settings.value = SCREENSHOTS_ON.copy(clipboardImages = true)
+        repository.rememberImageBytes(picture, "image/png", fromScreenshot = true)
+        repository.rememberImageBytes(ByteArray(100) { 7 }, "image/jpeg")
+        repository.deleteScreenshots()
+        assertEquals(listOf(false), dao.rows.value.map { it.fromScreenshot })
+        repository.rememberImageBytes(picture, "image/png", fromScreenshot = true)
+        repository.deleteCopiedImages()
+        assertEquals(listOf(true), dao.rows.value.map { it.fromScreenshot })
+    }
+
+    @Test
+    fun `a screenshot also copied counts as copied`() = runTest {
+        settings.value = SCREENSHOTS_ON.copy(clipboardImages = true)
+        repository.rememberImageBytes(picture, "image/png", fromScreenshot = true)
+        repository.rememberImageBytes(picture, "image/png")
+        assertEquals(listOf(false), dao.rows.value.map { it.fromScreenshot })
+        repository.deleteScreenshots()
+        assertEquals(1, dao.rows.value.size)
     }
 
     @Test
@@ -262,5 +299,13 @@ class ClipboardRepositoryTest {
         assertEquals("hello", row.content)
         assertTrue(!row.isImage)
         assertEquals(ClipboardRepository.contentHash("hello"), row.contentHash)
+    }
+
+    private companion object {
+        val SCREENSHOTS_ON = KeyboardPreferences(
+            clipboardImages = false,
+            screenshotSuggestion = KeyboardPreferences.SCREENSHOT_SUGGESTION_BESIDE,
+            screenshotFolder = "content://tree/screenshots",
+        )
     }
 }

@@ -98,6 +98,12 @@ class ClipboardPanelView(
     /** Thumbnails by entry id, decoded to the card's height and held while the list is shown. */
     private val thumbnails = HashMap<Long, Bitmap?>()
 
+    /**
+     * Whether the field being typed in takes a photo of the given type; a photo card it does not
+     * take is drawn faded and pastes nothing, its pin and delete still offered.
+     */
+    var takesPhoto: (String) -> Boolean = { true }
+
     private val scroller = OverScroller(context)
     private var velocity: VelocityTracker? = null
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
@@ -300,6 +306,23 @@ class ClipboardPanelView(
     }
 
     private fun drawCard(canvas: Canvas, index: Int, top: Float) {
+        val faded = index != actionCard && refusedPhoto(entries[index])
+        val layer = if (faded) {
+            canvas.saveLayerAlpha(paddingPx, top, width - paddingPx, top + cardHeightPx, REFUSED_ALPHA)
+        } else {
+            -1
+        }
+        drawCardContent(canvas, index, top)
+        if (layer >= 0) {
+            canvas.restoreToCount(layer)
+        }
+    }
+
+    /** Whether [entry] is a photo the field does not take. */
+    private fun refusedPhoto(entry: ClipEntry): Boolean =
+        entry.isImage && !takesPhoto(entry.mimeType ?: ANY_IMAGE)
+
+    private fun drawCardContent(canvas: Canvas, index: Int, top: Float) {
         val entry = entries[index]
         cardRect.set(paddingPx, top, width - paddingPx, top + cardHeightPx)
         val fill = if (index == pressedCard || index == actionCard) paints.keyPressedFill else paints.keyFill
@@ -518,7 +541,7 @@ class ClipboardPanelView(
                     listener?.onClipboardPanelClosed()
                 } else {
                     val index = pressedCard
-                    if (index >= 0) {
+                    if (index >= 0 && !refusedPhoto(entries[index])) {
                         listener?.onClipPicked(entries[index])
                     }
                 }
@@ -562,6 +585,10 @@ class ClipboardPanelView(
     }
 
     private companion object {
+        /** A refused photo card's opacity, out of 255: Material's disabled-content alpha. */
+        const val REFUSED_ALPHA = 97
+
+        const val ANY_IMAGE = "image/*"
         /** Marks a private entry's card. */
         const val PRIVATE_GLYPH = "\uD83D\uDD12"
 
