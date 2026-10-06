@@ -38,8 +38,8 @@ attestations and the full commit lists are on the
 - Show a preview in the chip, on the Clipboard screen: the copied-photo and screenshot chips show
   a small picture of the image in front of their icon, within the strip's own height. Off by
   default.
-- Effects, the home screen's entry that was Particle effects, opens Animations, a page of its
-  own: one switch stops every animation, and each has its own beneath it: the key press
+- Particle effects is now Effects, and Animations, beside it on the settings home's Appearance
+  card, is a page of its own: one switch stops every animation, and each has its own beneath it: the key press
   highlight, the photo paste animation, the moving colours around the draft box and on the plus
   build's title, the draft box's motion, and the short animations when a word is learned or
   corrected. All of them also stop when Android's animations are off.

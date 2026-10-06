@@ -143,6 +143,9 @@ fun HomeScreen(query: String, modifier: Modifier = Modifier, open: (Screen) -> U
                 strings[Keys.HOME_SIZE_AND_POSITION],
                 strings[Keys.HOME_HEIGHT_ONE_HANDED_MODE_FLOATING_AND],
             ) { open(Screen.Size) }
+            SettingRow(strings[Keys.SCREEN_ANIMATIONS], strings[Keys.EFFECTS_ANIMATIONS_NOTE]) {
+                open(Screen.Animations)
+            }
             SettingRow(
                 strings[Keys.EFFECTS_TITLE],
                 strings[Keys.HOME_EFFECTS_NOTE],

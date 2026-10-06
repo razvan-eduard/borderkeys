@@ -60,8 +60,6 @@ import com.borderkeys.settings.ColourRow
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.ParticleChipPreview
 import com.borderkeys.settings.PickerChip
-import com.borderkeys.settings.Screen
-import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SuggestionStripPreview
@@ -72,12 +70,11 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
- * Effects: a row opening the Animations screen, then the particles: [MyPresetsCard], whose
- * presets apply to every region at once, and one card per surface with its own switch and its
- * Outline and Fill layers.
+ * Effects, the particles: [MyPresetsCard], whose presets apply to every region at once, then one
+ * card per surface with its own switch and its Outline and Fill layers.
  */
 @Composable
-fun EffectsScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
+fun EffectsScreen(modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val repository = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
@@ -124,11 +121,6 @@ fun EffectsScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
     )
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SettingsSectionCard(strings[Keys.EFFECTS_TITLE]) {
-            SettingRow(strings[Keys.SCREEN_ANIMATIONS], strings[Keys.EFFECTS_ANIMATIONS_NOTE]) {
-                open(Screen.Animations)
-            }
-        }
         MyPresetsCard(
             particleEffects = particleEffects,
             baseline = baseline,

@@ -318,7 +318,7 @@ frames the whole keyboard.
 
 ## Effects and animations
 
-The Effects screen opens with **Animations**, a page of its own: one switch stops every animation
+**Animations**, on the settings home between Size and position and Effects, is a page of its own: one switch stops every animation
 in the app, and each has its own switch beneath it, the key press highlight, the photo paste
 animation (a pasted photo rising out of its chip like a genie from a lamp, off by default), the
 moving colours around the draft box and on the plus build's title, the draft box's motion, and a
@@ -326,7 +326,7 @@ card for each moment the keyboard has something to say, a word learned, a correc
 undone, a swipe accepted, a suggestion tapped, with its animation, colour and how often it plays.
 All of them stop as well when Android's own animations are off.
 
-Below it, the particles: five surfaces — the keys, the suggestion ring, the suggestion strip, the language-correction
+The Effects screen holds the particles: five surfaces — the keys, the suggestion ring, the suggestion strip, the language-correction
 panel and the quick-action bar — each with two independent layers: a **fill** that bursts inside
 the element (Fire, Glow, Waves, Rainbow, Neon pulse) and an **outline** that traces the element's
 own edge and radiates outward (Comet, Pulse, Sparkle, Fire, Wind), with their own colours, speed,
