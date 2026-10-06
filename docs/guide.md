@@ -250,7 +250,9 @@ ships.
   the clipboard chip or in one chip with it, whichever is newer: choosing it asks once for your
   screenshots folder in Android's own folder picker, and the keyboard reads that folder alone,
   still with no permission. Show a preview in the chip puts a small picture of the image in front
-  of the chip's icon, within the strip's own height. Both are off by default.
+  of the chip's icon, within the strip's own height. Both are off by default. A photo or
+  screenshot chip appears only in a field that takes that kind of image, and never in a password
+  or private field.
 
 <p align="center">
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/18_emoji_search.jpg" alt="The emoji panel opened over the word cake: the cakes come first" width="30%">

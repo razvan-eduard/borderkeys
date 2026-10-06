@@ -2730,7 +2730,8 @@ class BorderKeysService :
             return
         }
         val text = when {
-            description.hasMimeType("image/*") -> strings[Keys.CLIP_PHOTO]
+            description.hasMimeType("image/*") ->
+                strings[Keys.CLIP_PHOTO].takeIf { orchestrator.session.takesPhoto(description.getMimeType(0) ?: "image/*") }
             else -> {
                 val plain = clip.getItemAt(0).coerceToText(this)?.toString()?.trim().orEmpty()
                 if (plain.isEmpty()) {
@@ -2756,13 +2757,16 @@ class BorderKeysService :
 
     override fun onClipboardPicked() {
         val clip = clipboardManager?.primaryClip ?: return
-        if (clip.itemCount == 0 || orchestrator.session.policy.privateField) {
+        if (!unlocked || clip.itemCount == 0 || orchestrator.session.policy.privateField) {
             return
         }
         val item = clip.getItemAt(0)
         val uri = item.uri
         val description = clip.description
         if (uri != null && description != null && description.hasMimeType("image/*")) {
+            if (!orchestrator.session.takesPhoto(description.getMimeType(0) ?: "image/*")) {
+                return
+            }
             val chip = chipBoundsBeforePaste(screenshot = false)
             if (orchestrator.pasteImage(uri.toString(), description.getMimeType(0) ?: "image/*")) {
                 playPhotoLamp(uri, chip)
@@ -2821,7 +2825,7 @@ class BorderKeysService :
      */
     private fun placeScreenshotChip(clip: ClipData?) {
         val strip = host?.suggestionStrip ?: return
-        val shot = newestScreenshot?.takeIf { screenshotsOffered() }
+        val shot = newestScreenshot?.takeIf { screenshotsOffered() && orchestrator.session.takesPhoto(it.mimeType) }
         if (shot == null) {
             strip.screenshotChip = null
             return
@@ -2843,7 +2847,7 @@ class BorderKeysService :
 
     override fun onScreenshotPicked() {
         val shot = newestScreenshot ?: return
-        if (orchestrator.session.policy.privateField) {
+        if (!unlocked || !orchestrator.session.takesPhoto(shot.mimeType)) {
             return
         }
         val chip = chipBoundsBeforePaste(screenshot = true)

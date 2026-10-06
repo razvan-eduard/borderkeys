@@ -48,6 +48,9 @@ attestations and the full commit lists are on the
 - A key's long-press strip opens straight away, with no preview of the key first, drawn in the
   held key's own colours. Sliding past either end fades it out over a short margin, where the
   end character stays chosen and lifting types it; further out it closes with nothing typed.
+- The copied-photo and screenshot chips are offered only in a field that takes that kind of
+  image, and never in a password or private field; both chips and both pastes follow the same
+  rule.
 - Settings search finds every setting, including those titled above a picker or slider and the
   newest-screenshot option it used to miss, matches the words of each setting's explanation
   after its title, and finds a title through a typo ("screnshot", "vibraton"). The list it
