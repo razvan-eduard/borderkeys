@@ -33,9 +33,9 @@ import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 
 /**
- * The effects that answer an event (a word learned, a correction applied), one card per event:
- * which animation, what colour, how often. A card whose animation is Off dims and stops taking
- * input.
+ * Every animation's switch under the one that stops them all, then the effects that answer an
+ * event (a word learned, a correction applied), one card per event: which animation, what
+ * colour, how often. A card whose animation is Off dims and stops taking input.
  */
 @Composable
 fun EventEffectsSection(
@@ -46,18 +46,36 @@ fun EventEffectsSection(
 ) {
     val strings = LocalStrings.current
 
-    SettingsSectionCard(strings[Keys.EFFECTS_TITLE]) {
+    SettingsSectionCard(strings[Keys.SCREEN_ANIMATIONS]) {
         SwitchRow(
-            title = strings[Keys.EFFECTS_ENABLE],
-            subtitle = strings[Keys.EFFECTS_ENABLE_NOTE],
+            title = strings[Keys.ANIMATIONS_ENABLE],
+            subtitle = strings[Keys.ANIMATIONS_ENABLE_NOTE],
             checked = effects.enabled,
         ) { value -> onChange { it.copy(enabled = value) } }
+        SwitchRow(
+            title = strings[Keys.ANIMATIONS_KEY_PRESS],
+            subtitle = strings[Keys.ANIMATIONS_KEY_PRESS_NOTE],
+            checked = effects.keyPress,
+            enabled = effects.enabled,
+        ) { value -> onChange { it.copy(keyPress = value) } }
         SwitchRow(
             title = strings[Keys.EFFECTS_PHOTO_LAMP],
             subtitle = strings[Keys.EFFECTS_PHOTO_LAMP_NOTE],
             checked = effects.photoLamp,
             enabled = effects.enabled,
         ) { value -> onChange { it.copy(photoLamp = value) } }
+        SwitchRow(
+            title = strings[Keys.ANIMATIONS_RING],
+            subtitle = strings[Keys.ANIMATIONS_RING_NOTE],
+            checked = effects.assistantColours,
+            enabled = effects.enabled,
+        ) { value -> onChange { it.copy(assistantColours = value) } }
+        SwitchRow(
+            title = strings[Keys.ANIMATIONS_DRAFT_BOX],
+            subtitle = strings[Keys.ANIMATIONS_DRAFT_BOX_NOTE],
+            checked = effects.draftBoxMotion,
+            enabled = effects.enabled,
+        ) { value -> onChange { it.copy(draftBoxMotion = value) } }
     }
 
     for (event in EffectEvent.entries) {

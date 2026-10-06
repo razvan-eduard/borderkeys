@@ -844,6 +844,7 @@ class BorderKeysService :
             applyHaptics(view, newPreferences)
             view.keyboard.soundEnabled = newPreferences.keySound
             view.keyboard.keyPopupEnabled = newPreferences.keyPopup
+            view.keyboard.pressAnimated = newPreferences.effects.keyPressAnimated
             view.keyboard.spaceCursorEnabled = newPreferences.spaceCursorControl
             view.keyboard.holdHintsEnabled = newPreferences.longPressHints
             view.keyboard.longPressDelayMillis = newPreferences.longPressMillis.toLong()
@@ -949,6 +950,7 @@ class BorderKeysService :
         view.keyboard.swipeEnabled = preferences.swipeEnabled
         view.keyboard.soundEnabled = preferences.keySound
         view.keyboard.keyPopupEnabled = preferences.keyPopup
+        view.keyboard.pressAnimated = preferences.effects.keyPressAnimated
         view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
         view.keyboard.holdHintsEnabled = preferences.longPressHints
         view.keyboard.longPressDelayMillis = preferences.longPressMillis.toLong()
@@ -2125,7 +2127,7 @@ class BorderKeysService :
     /** Plays [event]'s effect for [word], per its style, frequency and colour settings. */
     private fun playEffect(event: EffectEvent, word: String) {
         val settings = preferences.effects
-        if (!settings.enabled || word.isEmpty()) {
+        if (!settings.enabled || word.isEmpty() || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
             return
         }
         val setting = settings.forEvent(event)
@@ -2860,13 +2862,12 @@ class BorderKeysService :
     }
 
     /**
-     * Lets the image at [uri] rise out of [chip] in a lamp's shape, with the event effects and
-     * [com.borderkeys.data.theme.EffectsSettings.photoLamp] on and animations not turned off.
+     * Lets the image at [uri] rise out of [chip] in a lamp's shape, with
+     * [com.borderkeys.data.theme.EffectsSettings.photoLampAnimated] and Android's animations on.
      */
     private fun playPhotoLamp(uri: android.net.Uri, chip: android.graphics.RectF?) {
         val view = host ?: return
-        val effects = preferences.effects
-        if (chip == null || !effects.enabled || !effects.photoLamp ||
+        if (chip == null || !preferences.effects.photoLampAnimated ||
             !android.animation.ValueAnimator.areAnimatorsEnabled()
         ) {
             return

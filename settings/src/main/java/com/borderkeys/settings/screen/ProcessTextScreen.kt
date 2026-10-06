@@ -74,6 +74,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -135,6 +136,7 @@ import com.borderkeys.settings.openKeyboardPicker
 import com.borderkeys.settings.rememberBorderKeysDefaultState
 import com.borderkeys.settings.RingBackground
 import com.borderkeys.settings.rememberRingShift
+import com.borderkeys.settings.rememberDraftBoxMotion
 import com.borderkeys.settings.ringBackground
 import com.borderkeys.settings.ringBorder
 import com.borderkeys.settings.ringBrush
@@ -458,6 +460,7 @@ fun ProcessTextScreen(
     // keyboard rises.
     val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     val ringShift = rememberRingShift()
+    val motion = rememberDraftBoxMotion()
 
     if (!isDefaultKeyboard) {
         Column(modifier = modifier.fillMaxSize()) {
@@ -487,6 +490,7 @@ fun ProcessTextScreen(
     // SWIPE_THRESHOLD, and settling from FOCUS_SETTLE_SCALE on every focus change.
     val focusSettle = remember { Animatable(1f) }
     LaunchedEffect(isFocused) {
+        if (!motion) return@LaunchedEffect
         focusSettle.snapTo(FOCUS_SETTLE_SCALE)
         focusSettle.animateTo(1f, tween(FOCUS_SETTLE_MILLIS, easing = FastOutSlowInEasing))
     }
@@ -530,7 +534,7 @@ fun ProcessTextScreen(
                         hideKeyboardAndUnfocus()
                     } else {
                         // Released short of the threshold: eased back to rest.
-                        focusSettle.animateTo(1f, tween(FOCUS_SETTLE_MILLIS, easing = FastOutSlowInEasing))
+                        focusSettle.animateTo(1f, tween(motionMillis(motion, FOCUS_SETTLE_MILLIS), easing = FastOutSlowInEasing))
                     }
                 },
         ) {
@@ -559,6 +563,7 @@ fun ProcessTextScreen(
                     SwipeUpHint(
                         ringShift = ringShift,
                         focused = isFocused,
+                        motion = motion,
                         modifier = Modifier.align(Alignment.Center),
                     )
                 }
@@ -597,7 +602,7 @@ fun ProcessTextScreen(
                     ) {
                         val versionSlide = remember { Animatable(0f) }
                         LaunchedEffect(rail.index) {
-                            if (versionDirection == 0) return@LaunchedEffect
+                            if (versionDirection == 0 || !motion) return@LaunchedEffect
                             versionSlide.snapTo(versionDirection.toFloat())
                             versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
                         }
@@ -740,7 +745,7 @@ fun ProcessTextScreen(
                                                 goTo { composer.back() }
                                             } else {
                                                 // Released short of the threshold: eased back.
-                                                versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
+                                                versionSlide.animateTo(0f, tween(motionMillis(motion, VERSION_TRANSITION_MILLIS), easing = FastOutSlowInEasing))
                                             }
                                         },
                                 )
@@ -757,6 +762,7 @@ fun ProcessTextScreen(
                             VerticalScrollbar(
                                 scrollState = scrollState,
                                 isFocused = isFocused,
+                                motion = motion,
                                 modifier = Modifier
                                     .align(Alignment.CenterEnd)
                                     .width(SCROLLBAR_WIDTH)
@@ -766,15 +772,19 @@ fun ProcessTextScreen(
 
                         // While a model runs, the field is covered, cut to its own outline.
                         if (busy) {
-                            val pulse = rememberInfiniteTransition()
-                            val workingAlpha = pulse.animateFloat(
-                                initialValue = 1f,
-                                targetValue = 0.35f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(WORKING_PULSE_MILLIS, easing = LinearEasing),
-                                    repeatMode = RepeatMode.Reverse,
-                                ),
-                            )
+                            val workingAlpha = if (motion) {
+                                val pulse = rememberInfiniteTransition()
+                                pulse.animateFloat(
+                                    initialValue = 1f,
+                                    targetValue = 0.35f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(WORKING_PULSE_MILLIS, easing = LinearEasing),
+                                        repeatMode = RepeatMode.Reverse,
+                                    ),
+                                )
+                            } else {
+                                remember { mutableFloatStateOf(1f) }
+                            }
                             Box(
                                 modifier = Modifier
                                     .matchParentSize()
@@ -1323,6 +1333,7 @@ private fun FormatToggle(
 private fun VerticalScrollbar(
     scrollState: ScrollState,
     isFocused: Boolean,
+    motion: Boolean,
     modifier: Modifier = Modifier,
 ) {
     // Matching the field's border logic: primary when focused, outline otherwise.
@@ -1333,7 +1344,7 @@ private fun VerticalScrollbar(
         snapshotFlow { scrollState.value }.drop(1).collectLatest {
             visibility.snapTo(1f)
             delay(SCROLLBAR_FADE_DELAY_MILLIS)
-            visibility.animateTo(0f, tween(SCROLLBAR_FADE_MILLIS))
+            visibility.animateTo(0f, tween(motionMillis(motion, SCROLLBAR_FADE_MILLIS)))
         }
     }
     Canvas(modifier = modifier) {
@@ -1363,9 +1374,10 @@ private fun VerticalScrollbar(
  * "Swipe up for keyboard", rising and fading [SWIPE_HINT_REPEAT_COUNT] times, once per process
  * ([swipeHintShown]), painted in [ringShift]'s gradient. One [progress] drives the rise and the
  * alpha, a half sine of it, so each cycle starts and ends transparent. [focused] stops it.
+ * Without [motion] it stands still at its full alpha until focus arrives.
  */
 @Composable
-private fun SwipeUpHint(ringShift: State<Float>, focused: Boolean, modifier: Modifier = Modifier) {
+private fun SwipeUpHint(ringShift: State<Float>, focused: Boolean, motion: Boolean, modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val progress = remember { Animatable(0f) }
     // Hides the text once focus arrives, multiplied with the rise's alpha.
@@ -1377,6 +1389,10 @@ private fun SwipeUpHint(ringShift: State<Float>, focused: Boolean, modifier: Mod
         }
         // Marked at the start, so an interrupted run counts.
         swipeHintShown = true
+        if (!motion) {
+            progress.snapTo(SWIPE_HINT_STILL_PROGRESS)
+            return@LaunchedEffect
+        }
         repeat(SWIPE_HINT_REPEAT_COUNT) {
             if (latestFocused.value) {
                 return@LaunchedEffect
@@ -1388,7 +1404,7 @@ private fun SwipeUpHint(ringShift: State<Float>, focused: Boolean, modifier: Mod
     // Fades out at once when focus arrives mid-cycle.
     LaunchedEffect(focused) {
         if (focused) {
-            focusFade.animateTo(0f, tween(SWIPE_HINT_FOCUS_FADE_MILLIS))
+            focusFade.animateTo(0f, tween(motionMillis(motion, SWIPE_HINT_FOCUS_FADE_MILLIS)))
         }
     }
     val baseStyle = MaterialTheme.typography.labelLarge
@@ -1412,6 +1428,12 @@ private fun SwipeUpHint(ringShift: State<Float>, focused: Boolean, modifier: Mod
             },
     )
 }
+
+/** Where the swipe hint stands without motion: half its rise, at full alpha. */
+private const val SWIPE_HINT_STILL_PROGRESS = 0.5f
+
+/** [millis], or no time at all without motion. */
+private fun motionMillis(motion: Boolean, millis: Int): Int = if (motion) millis else 0
 
 /** The field's side gap inside the card. */
 private val FIELD_SIDE_GAP = 12.dp

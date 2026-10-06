@@ -6,6 +6,7 @@ package com.borderkeys.ime
 import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardPreferences
 
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
@@ -112,6 +113,9 @@ class KeyboardCanvasView(
 
     /** Which [HapticFeedbackConstants] class a press plays -- see [HapticStrength]. */
     var hapticConstant: Int = HapticFeedbackConstants.KEYBOARD_TAP
+
+    /** Whether a pressed key's highlight fades in and out; off, it switches at once. */
+    var pressAnimated: Boolean = true
 
     /**
      * [com.borderkeys.data.theme.KeyboardPreferences.keyPopup]: the pressed key shown enlarged
@@ -1870,6 +1874,7 @@ class KeyboardCanvasView(
             ((frameTimeNanos - lastFrameNanos) / 1_000_000_000.0).toFloat()
         }
         lastFrameNanos = frameTimeNanos
+        val pressFades = pressAnimated && ValueAnimator.areAnimatorsEnabled()
 
         var stillAnimating = false
         for (slot in 0 until PRESS_POOL) {
@@ -1880,7 +1885,9 @@ class KeyboardCanvasView(
             val target = if (pressReleasing[slot]) 0f else 1f
             val rate = if (pressReleasing[slot]) RELEASE_RATE else PRESS_RATE
             val progress = pressProgress[slot]
-            val next = if (target > progress) {
+            val next = if (!pressFades) {
+                target
+            } else if (target > progress) {
                 min(target, progress + rate * deltaSeconds)
             } else {
                 max(target, progress - rate * deltaSeconds)

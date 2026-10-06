@@ -250,7 +250,7 @@ private fun featureGroups(
         Feature(
             strings[Keys.FEATURE_THEMES_TITLE], strings[Keys.FEATURE_THEMES_TEXT],
             strings[Keys.FEATURES_DEFAULT_THEME],
-            strings.getString(Keys.FEATURES_WHERE, strings[Keys.SCREEN_THEME], strings[Keys.SCREEN_PARTICLE_EFFECTS]),
+            strings.getString(Keys.FEATURES_WHERE, strings[Keys.SCREEN_THEME], strings[Keys.EFFECTS_TITLE]),
             Screen.Theme,
         ) { accent -> SwatchesPreview(accent) },
         Feature(

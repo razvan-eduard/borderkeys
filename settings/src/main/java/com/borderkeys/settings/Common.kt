@@ -49,6 +49,11 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import com.borderkeys.data.DataGraph
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import com.borderkeys.data.theme.EffectsSettings
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.State
 import com.borderkeys.data.backup.BackupRepository
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
@@ -196,6 +201,14 @@ fun Disableable(disabled: Boolean, content: @Composable () -> Unit) {
 @Composable
 fun PickerChip(label: String, selected: Boolean, shape: Shape = FilterChipDefaults.shape, onClick: () -> Unit) {
     FilterChip(selected = selected, onClick = onClick, label = { Text(label) }, shape = shape)
+}
+
+/** The animation switches, as stored now and on every change. */
+@Composable
+fun rememberEffects(): State<EffectsSettings> {
+    val themes = remember { DataGraph.themes }
+    val effects = remember { themes.preferences.map { it.effects }.distinctUntilChanged() }
+    return effects.collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences().effects })
 }
 
 /** Writes a change to [KeyboardPreferences]. */

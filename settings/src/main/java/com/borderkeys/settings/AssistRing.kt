@@ -3,6 +3,7 @@
 
 package com.borderkeys.settings
 
+import android.animation.ValueAnimator
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -12,6 +13,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -32,11 +35,15 @@ import kotlin.math.floor
 const val RING_PERIOD_MILLIS = 5000
 
 /**
- * Where the ring's gradient is along its loop, from 0 to 1, repeating, in [RING_STEPS] steps.
- * Read it in the draw phase only.
+ * Where the ring's gradient is along its loop, from 0 to 1, repeating, in [RING_STEPS] steps;
+ * held at [RING_REST] while the assistant's colours stand still. Read it in the draw phase only.
  */
 @Composable
 fun rememberRingShift(): State<Float> {
+    val effects by rememberEffects()
+    if (!effects.assistantColoursAnimated || !ValueAnimator.areAnimatorsEnabled()) {
+        return remember { mutableFloatStateOf(RING_REST) }
+    }
     // No `label` argument: NoHardcodedTextTest reads every `label = "..."` as user-facing text.
     val ring = rememberInfiniteTransition()
     val shift = ring.animateFloat(
@@ -99,5 +106,15 @@ private val AI_RING_COLOURS = listOf(
 /** The gradient's span around the draft box. */
 private const val DRAFT_BOX_SPAN = 900f
 
+/** Where the gradient stands while the assistant's colours do not move. */
+private const val RING_REST = 0.5f
+
 /** How many positions the gradient takes along one loop. */
 private const val RING_STEPS = 75f
+
+/** Whether the draft box moves: its switch and Android's animations both on. */
+@Composable
+fun rememberDraftBoxMotion(): Boolean {
+    val effects by rememberEffects()
+    return effects.draftBoxAnimated && ValueAnimator.areAnimatorsEnabled()
+}

@@ -185,7 +185,7 @@ class SettingsIndexTest {
     private companion object {
         const val SCREEN_SUFFIX = "Screen.kt"
         const val CARD_NAME = "SettingsSectionCard"
-        val EXTRA_SOURCES = mapOf("EventEffectsSection.kt" to "Effects")
+        val EXTRA_SOURCES = mapOf("EventEffectsSection.kt" to "Animations")
         val SKIPPED_SCREENS = setOf("Home", "Features", "ProcessText", "Transfer", "LearnedWords", "LearnedPhrases")
         const val TITLE = """\(\s*(?:title\s*=\s*)?strings(?:\[|\.getString\()Keys\.([A-Z0-9_]+)"""
         val CARD = Regex(CARD_NAME + TITLE)
