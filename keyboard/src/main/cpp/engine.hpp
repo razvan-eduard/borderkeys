@@ -641,6 +641,11 @@ private:
     // spelling is already among the `written`; returns how many `out` holds.
     int placeDecodedSuggestion(Candidate* out, int written, int maxOut) const;
 
+    // Puts the dictionaries' exact spelling of the typed letters into `out` last, in place of
+    // the last entry when `out` is full, unless its spelling is already among the `written`;
+    // returns how many `out` holds.
+    int keepTypedSpelling(Candidate* out, int written, int maxOut) const;
+
     // The edit-cost ceiling of the pass running now.
     float editCostCeiling_ = 0.0f;
 
@@ -746,6 +751,10 @@ private:
      * established personal word.
      */
     bool typedKnown_ = false;
+
+    /** The dictionaries' exact spelling of the letters of the last request, when one offers it. */
+    Candidate typedSpelling_{};
+    bool hasTypedSpelling_ = false;
 
     // The tap decoder, engine_decode.cpp: runs for a typed word no dictionary spells that neither
     // starts nor ends with a mark, over the packs the request searches.

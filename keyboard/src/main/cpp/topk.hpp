@@ -8,9 +8,9 @@
 
 namespace borderkeys {
 
-// A fixed-capacity min-heap keeping the K highest-scoring items seen, in storage the caller
+// A fixed-capacity min-heap keeping the K highest-ranking items seen, in storage the caller
 // supplies; the root is the worst item kept. T must expose a `float score` member, larger being
-// better.
+// better, and `bool ranksBelow(const T&) const`, which orders equal scores.
 template <typename T>
 class TopK {
 public:
@@ -38,7 +38,7 @@ public:
             ++size_;
             return;
         }
-        if (item.score <= items_[0].score) {
+        if (!items_[0].ranksBelow(item)) {
             return;
         }
         items_[0] = item;
@@ -54,9 +54,9 @@ public:
         if (index < 0 || index >= size_) {
             return;
         }
-        const float previous = items_[index].score;
+        const T previous = items_[index];
         items_[index] = item;
-        if (item.score < previous) {
+        if (item.ranksBelow(previous)) {
             siftUp(index);
         } else {
             siftDown(index);
@@ -87,7 +87,7 @@ private:
     void siftUp(int index) {
         while (index > 0) {
             const int parent = (index - 1) / 2;
-            if (items_[parent].score <= items_[index].score) {
+            if (!items_[index].ranksBelow(items_[parent])) {
                 return;
             }
             const T tmp = items_[parent];
@@ -105,10 +105,10 @@ private:
             }
             const int right = left + 1;
             int smallest = left;
-            if (right < size_ && items_[right].score < items_[left].score) {
+            if (right < size_ && items_[right].ranksBelow(items_[left])) {
                 smallest = right;
             }
-            if (items_[index].score <= items_[smallest].score) {
+            if (!items_[smallest].ranksBelow(items_[index])) {
                 return;
             }
             const T tmp = items_[smallest];
