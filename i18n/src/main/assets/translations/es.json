@@ -1115,7 +1115,7 @@
   "size_key_sound_note": "Un clic breve en cada pulsación de tecla, al volumen de sonido táctil del teléfono. También necesita los sonidos táctiles del sistema activados.",
   "size_landscape": "Horizontal",
   "size_language_key": "Tecla del globo",
-  "size_language_key_note": "Una tecla junto a la barra espaciadora que recorre las distribuciones de este teclado, pulsada o mantenida. Aparece mientras haya dos o más distribuciones activadas. Desactivada, desaparece y ensancha la barra.",
+  "size_language_key_note": "Una tecla junto a la barra espaciadora que recorre las distribuciones de este teclado, pulsada o mantenida. Aparece mientras haya dos o más distribuciones activadas. Si se desactiva, la tecla desaparece y la barra espaciadora se ensancha.",
   "size_left": "Izquierda",
   "size_lifts_the_keyboard_off_the_bottom": "Levanta el teclado del borde inferior de la pantalla: útil junto a una barra de gestos, o cuando la aplicación pone algo debajo.",
   "size_number_pad_in_numeric_fields": "Teclado numérico en campos numéricos",

@@ -1134,7 +1134,7 @@
   "size_key_sound_note": "Un clic scurt la fiecare apăsare de tastă, la volumul propriu de sunete tactile al telefonului. Necesită și sunetele tactile ale sistemului activate.",
   "size_landscape": "Peisaj",
   "size_language_key": "Tasta glob",
-  "size_language_key_note": "O tastă lângă bara de spațiu care parcurge aspectele acestei tastaturi, atinsă sau ținută apăsat. Apare cât timp sunt activate două sau mai multe aspecte. Dezactivată, dispare și lărgește bara de spațiu.",
+  "size_language_key_note": "O tastă lângă bara de spațiu care parcurge aspectele acestei tastaturi, atinsă sau ținută apăsat. Apare cât timp sunt activate două sau mai multe aspecte. Dezactivată, tasta dispare, iar bara de spațiu se lărgește.",
   "size_left": "Stânga",
   "size_lifts_the_keyboard_off_the_bottom": "Ridică tastatura de pe marginea de jos a ecranului — util lângă o bară de gesturi sau când aplicația pune ceva sub ea.",
   "size_number_pad_in_numeric_fields": "Pad numeric în câmpurile numerice",
