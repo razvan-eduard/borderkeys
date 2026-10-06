@@ -130,7 +130,11 @@ one from the other, and it never was the answer to that question.
    for the context word -- or the sentence-start list -- keeping the `kSuccessorWalk` strongest
    pairs and scoring those in full, then the 512-word frequent shortlist.
 4. The answer tiers, each overriding the one before: the corrections heap, then the respelling,
-   then the exact spelling. Then the main heap drains and the completion cap applies.
+   then the exact spelling. Then the main heap drains and the completion cap applies. Both heaps
+   order equal scores by the word's unigram log-probability, then by pack and word index
+   (`Candidate::ranksBelow`), so a tie never depends on the order the walk met the words. A word
+   the packs spell exactly as typed keeps the strip's last place when the drain leaves it out
+   (`keepTypedSpelling`); under a strict language lock only the decided language's spelling does.
 5. The [tap decoder](#heavy-typos-read-from-the-taps--engine_decodecpp) reads the typed word
    from its taps: its word, applied or offered on the strip, and which entries of
    autocorrect's list another reading of the taps outweighs.

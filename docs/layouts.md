@@ -141,7 +141,7 @@ cannot forget one:
 | Flag | Set when | Used for |
 |---|---|---|
 | `LETTER` | a character key that is not space | swipe decoding |
-| `PREVIEW` | as above | the pop-up bubble |
+| `PREVIEW` | as above | the pop-up bubble, on a key with no `alt`: a key with long-press characters opens them on the hold, with no bubble first |
 | `MODIFIER` | not a character | styling, and exclusion from swipe |
 | `HAS_ALTERNATIVES` | `alt` is non-empty | the long-press hint |
 | `REPEATABLE` | code is `DELETE`, or a modifier-row key that repeats | held-backspace repeat |

@@ -6,7 +6,7 @@ SPDX-FileCopyrightText: 2026 BorderKeys contributors
 # The BorderKeys guide
 
 What the keyboard does, part by part, with the screenshots from the store listing: typing and
-its settings, the quick-action bar, themes, particle effects, the assistant of the `plus`
+its settings, the quick-action bar, themes, effects and animations, the assistant of the `plus`
 build, and backup. Every switch named here is on the settings screen the paragraph says, and
 the search box at the top of the settings home finds it by name. The [README](../README.md)
 holds the promises the project makes and how to verify them; this page is how to use what it
@@ -63,7 +63,7 @@ ships.
   only; two quick taps or a hold lock it. Capitals are off, on when the field asks for them, or
   on everywhere — one choice, since some apps forget to ask. Two spaces make a full stop, a
   space is added after punctuation and a picked suggestion (never in an e-mail or web-address
-  field), and the space you type out of habit right after can be ignored once, always, or
+  field, nor before a comma or full stop that follows), and the space you type out of habit right after can be ignored once, always, or
   kept. The capital after a full stop is decided
   from what the keyboard just wrote, so it comes even in apps whose editor answers late.
 
@@ -208,7 +208,9 @@ ships.
 </p>
 
 - **Keys that answer back.** The pressed key shows itself enlarged above your finger while it is
-  held, the held key's alternates pop up in the same place, and the keypress vibration follows
+  held; a key with long-press characters skips that and opens them as a strip on the hold, drawn
+  in the held key's own colours, and sliding past either end of the strip closes it with nothing
+  typed. The keypress vibration follows
   the phone's own setting or one of three strengths — its own feedback classes, so still without
   a vibration permission — with a switch each for the keys, for picks on the strip and in the
   panels, and for the swipe ring. Long-press hints, the hold duration and what the enter key does are
@@ -240,6 +242,14 @@ ships.
   settings screen has a search box and an editor of its own; the box takes plain text, wildcards
   or a regular expression. A copy made in a password manager or one-time-code app the keyboard
   knows, or in an app you name, is never kept.
+- **Photos and screenshots on the strip.** A copied image is kept as a picture, encrypted on the
+  phone, and offered on the strip like copied text; the same picture copied twice is kept once,
+  and Largest image kept on the Clipboard screen sets the limit. Offer the newest screenshot, on
+  the same screen, offers a screenshot from the last five minutes too, as a chip of its own beside
+  the clipboard chip or in one chip with it, whichever is newer: choosing it asks once for your
+  screenshots folder in Android's own folder picker, and the keyboard reads that folder alone,
+  still with no permission. Show a preview in the chip puts a small picture of the image in front
+  of the chip's icon, within the strip's own height. Both are off by default.
 
 <p align="center">
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/18_emoji_search.jpg" alt="The emoji panel opened over the word cake: the cakes come first" width="30%">
@@ -297,9 +307,17 @@ frames the whole keyboard.
 |---|---|
 | ![](images/custom_theme.png) | ![](../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/3_theme.jpg) |
 
-## Particle effects
+## Effects and animations
 
-Five surfaces — the keys, the suggestion ring, the suggestion strip, the language-correction
+The Effects screen opens with **Animations**, a page of its own: one switch stops every animation
+in the app, and each has its own switch beneath it, the key press highlight, the photo paste
+animation (a pasted photo rising out of its chip like a genie from a lamp, off by default), the
+moving colours around the draft box and on the plus build's title, the draft box's motion, and a
+card for each moment the keyboard has something to say, a word learned, a correction applied or
+undone, a swipe accepted, a suggestion tapped, with its animation, colour and how often it plays.
+All of them stop as well when Android's own animations are off.
+
+Below it, the particles: five surfaces — the keys, the suggestion ring, the suggestion strip, the language-correction
 panel and the quick-action bar — each with two independent layers: a **fill** that bursts inside
 the element (Fire, Glow, Waves, Rainbow, Neon pulse) and an **outline** that traces the element's
 own edge and radiates outward (Comet, Pulse, Sparkle, Fire, Wind), with their own colours, speed,

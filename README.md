@@ -50,11 +50,13 @@ The whole walk-through, screen by screen, is [`docs/guide.md`](docs/guide.md). I
   phrase by phrase, on pages of its own, that learns the words you open sentences with and
   offers them first, all behind one learning switch that forgets everything when turned off;
   every tapped letter read by where the tap landed, so a slip towards a neighbouring key is
-  caught, and a heatmap that learns where your own taps land on each key and draws it on the
+  caught and a word with several letters on the wrong keys is decoded from its taps, and a heatmap that learns where your own taps land on each key and draws it on the
   keyboard preview; "Why?" on any suggestion; text shortcuts; terminals typed into as
   terminals.
 - **Around the keys.** A quick-action bar for what takes several gestures, extendable with
-  macros of your own; themes and a theme library; particle effects on five surfaces; panels
+  macros of your own; themes and a theme library; particle effects on five surfaces, and an
+  Animations page with one switch for every animation; a copied photo or the newest screenshot
+  offered on the strip, with no permission; panels
   that search by the word under the caret; a slide on the space bar that moves the caret, by
   character or by line, and selects with shift held, a hold on it that steers the caret like a
   joystick, and a drag along backspace that selects for the lift to delete; a tile in the quick settings; settings
@@ -200,7 +202,7 @@ unzip -l app/build/outputs/apk/core/release/app-core-release.apk
 Release APKs published from CI carry a build provenance attestation:
 
 ```bash
-gh attestation verify BorderKeys-v0.10.1-core.apk --repo razvan-eduard/borderkeys
+gh attestation verify BorderKeys-v0.11.0-core.apk --repo razvan-eduard/borderkeys
 ```
 
 ## Documentation
