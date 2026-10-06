@@ -54,8 +54,9 @@ ships.
   dictionaries simply do not know is left alone rather than replaced by something far away.
   Rare words, among the advanced settings, counts rarer words from the same corpora as real
   words too, so they stay as typed; each step keeps more of them and leaves more typos that
-  happen to spell one, and the setting names the dictionaries it changes. The backspace
-  straight after a correction puts back exactly what you typed.
+  happen to spell one, and the setting names the dictionaries it changes. Space, Enter and
+  punctuation all apply it, Enter before its new line or before it sends; the backspace straight
+  after a correction puts back exactly what you typed.
 - **Offensive words, blocked on request.** One switch keeps a per-language list of profanity
   and slurs out of suggestions, corrections and learning. What you type yourself is never
   touched, and the lists are plain text in the repository, one per bundled language.
@@ -103,6 +104,9 @@ ships.
   That last rule asks every language rather than only the one being built, because words travel
   and a borrowed one rarely becomes a headword where it landed: "google" keeps its small g
   because British English has it as a verb, even though American English lists only the company.
+  And the text itself has the last word: a name the dictionary's own corpus writes mostly in lower
+  case inside a sentence loses the flag at every build, so "gates" and "mark" stay lower-case
+  while "John" and "March" do not.
   Which words earn the flag is judgement rather than fact, so the capital is a switch: turn
   "Capitalise names" off and a flagged word is cased like any other, while still never being
   allowed to correct an ordinary word.
@@ -224,8 +228,11 @@ ships.
 - **Settings that stay out of the way.** Every card leads with what changes how typing feels;
   the calibration values, the workarounds for particular apps and the choices made once fold
   under an "Advanced settings" line, closed until you open it. A search box at the top of the
-  home screen finds any screen, card or row by its title, in the language the app is shown in,
-  and opens the screen it is on.
+  home screen finds any screen, card, row, heading or picker by its title, then by the words of
+  its explanation, and a word with a typo still finds it ("screnshot", "vibraton"), in the
+  language the app is shown in; a tap opens the screen it is on. The list it searches is built
+  from the screens every time the app is built, so a new setting is found without anyone adding
+  it.
 - **A tile in the quick settings.** It is lit while BorderKeys is the keyboard in use and says
   what is still to do while it is not; a tap opens the keyboard picker until it is, and the
   settings once it is. The system binds the tile as it binds the keyboard itself, so the app

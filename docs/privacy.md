@@ -218,7 +218,7 @@ app named on the Clipboard screen, is not recorded either, flagged or not; the k
 way to learn which app made a copy beyond the field it is attached to, so this is the extent of
 that check.
 
-A copied image, with *Remember copied images* on, is kept as its bytes, not as a reference the
+A copied image, with *Remember photos* on, is kept as its bytes, not as a reference the
 copying app can revoke: the bytes are read while the clip's grant holds, capped at the *Largest
 image kept* setting (10 MB by default, 1 to 50), encrypted with AES-256-GCM under a key the Android
 Keystore holds, and written under the keyboard's own files directory named by their SHA-256, so the
@@ -235,14 +235,17 @@ item limit and *Forget everything when the keyboard closes* leave it alone until
 A backup carries the flag. The menu entry takes at most ten copies from one app and thirty in all
 per minute.
 
-*Offer the newest screenshot*, off by default, reads one folder the user picks in Android's own
-folder picker, usually their Screenshots folder, through the document tree grant that pick
-gives; it is not a permission, and the manifest still declares none. The keyboard lists that
-folder when it opens, and watches it only while it is showing, for an image from the last five
-minutes; nothing else in the storage is read. Nothing is copied or kept: pasting hands the field
-the image's own document URI with a read grant for that insertion only. Never offered in a
-private field. Turning the option off, or choosing another folder, leaves the grant to Android's
-settings, where it can be revoked.
+*Remember screenshots*, off by default, reads one folder the user picks in Android's own folder
+picker, usually their Screenshots folder, through the document tree grant that pick gives; it is
+not a permission, and the manifest still declares none. The keyboard lists that folder when it
+opens, and watches it only while it is showing, for an image from the last five minutes; nothing
+else in the storage is read. Such a screenshot is kept in the history exactly as a copied image
+is, encrypted, capped and named by its hash, and marked as a screenshot, and offered on the strip;
+pasting it from the strip hands the field the image's own document URI with a read grant for that
+insertion only. Never offered or kept in a private field. Turning *Remember photos* or *Remember
+screenshots* off deletes the pictures that switch kept, and only those; a picture both copied and
+captured counts as copied. Turning screenshots off, or choosing another folder, leaves the
+folder's grant to Android's settings, where it can be revoked.
 
 The keyboard holds no clipboard listener that runs when it is not the active input method — it
 has no permission that would let it, and on modern Android an IME cannot read the clipboard while

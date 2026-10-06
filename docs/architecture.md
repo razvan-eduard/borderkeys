@@ -683,7 +683,7 @@ is offered: the dictionaries alone answer, exactly as in a private field. Switch
 first, then forgets everything learned, the heatmap included.
 
 ```
-user commits a word  (types a delimiter after it, swipes it, or picks it from the strip)
+user commits a word  (types a delimiter or Enter after it, swipes it, or picks it from the strip)
   └─ LearningFlow              the gate; the word, its pair and triple, and its taps
       └─ LearningBuffer        in-memory, debounced; carries count, deliberate capital, assertion
           └─ Room (:data)      the one durable copy, SQLCipher
