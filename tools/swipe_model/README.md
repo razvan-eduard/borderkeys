@@ -51,6 +51,8 @@ row reports it ready.
   `nohup python -u train.py --device mps > train.log 2>&1 &`, or equivalent). `train.log`'s own
   `=== restart (detached, no harness task tracking) ...` markers reflect this: training is meant
   to survive the invoking shell/session closing, and `--resume` is how it picks back up.
+- `train_combined.log` is the training log of the weights the `plus` build ships
+  (`keyboard/src/plus/assets/model.bkw`), kept for provenance.
 - To check on a run in progress: `ps aux | grep train.py` and `tail -f train.log` (progress is one
   `epoch N/120: loss X.XXXX` line per epoch, nothing more granular).
 

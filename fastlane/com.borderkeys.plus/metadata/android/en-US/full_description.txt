@@ -68,9 +68,10 @@ database and are excluded from system backup and from device-to-device transfer.
   cakes come first, over "pumpkin" the lantern, in the languages switched on; open the clipboard
   over "invoice" and the clips containing it come first.
   A long press on a clip pins, edits or deletes it.
-* Photos and screenshots on the strip: a copied image is kept as a picture, encrypted on the
-  phone, and the newest screenshot can be offered beside it, read from the one folder you pick,
-  still with no permission. A small preview in the chip, if you want one.
+* Remember photos and Remember screenshots, a switch each: copied photos and new screenshots
+  kept in the clipboard history, encrypted on the phone, and the newest offered on the strip;
+  screenshots are read from the one folder you pick, still with no permission. A small preview
+  in the chip, if you want one.
 * A personal dictionary you can see and edit: the learned words and the learned phrases each
   on a page of their own, searchable, every entry with a Delete and every word with a Block,
   and what a search finds deletable at once. The words you open sentences with are learned
@@ -82,7 +83,7 @@ database and are excluded from system backup and from device-to-device transfer.
   is caught; with the heatmap on, the keyboard learns where your own taps land on each key and
   reads a key your way once it has enough taps. Only a summary per key is kept, never the
   taps themselves, and nothing is learned in a private field.
-* Settings you can search, a tile in the quick settings, a date-and-time quick action in a
+* Settings you can search, even with a typo, a tile in the quick settings, a date-and-time quick action in a
   pattern of your own, clipboard search with wildcards and regular expressions, keyboard
   opacity, and a vibration switch per kind of touch.
 * Terminals typed into as terminals: in Termux and its kin the keys arrive as key events the
@@ -94,8 +95,9 @@ database and are excluded from system backup and from device-to-device transfer.
   your own macros; above the suggestions, below the keys or down a side, in four sizes, with
   optional labels and outlines.
 * Every settings card leads with what changes how typing feels; the calibration values and
-  the choices made once fold under an "Advanced settings" line. A tour after setup shows
-  every feature with a preview, its default and where to switch it on.
+  the choices made once fold under an "Advanced settings" line. After setup, a few pages offer
+  the choices worth making first, each with a small preview, then show everything else the
+  keyboard does and where to switch it on.
 * Debug stats, one line above the settings' own typing box: the keyboard's latency, swipe
   and memory figures, rated against a baseline and shareable as text.
 * Built-in themes, full manual colour control, and a library to save, import and share

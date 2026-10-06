@@ -55,12 +55,13 @@ The whole walk-through, screen by screen, is [`docs/guide.md`](docs/guide.md). I
   terminals.
 - **Around the keys.** A quick-action bar for what takes several gestures, extendable with
   macros of your own; themes and a theme library; particle effects on five surfaces, and an
-  Animations page with one switch for every animation; a copied photo or the newest screenshot
-  offered on the strip, with no permission; panels
+  Animations page with one switch for every animation; copied photos and new screenshots kept
+  and offered on the strip, each behind its own switch, with no permission; panels
   that search by the word under the caret; a slide on the space bar that moves the caret, by
   character or by line, and selects with shift held, a hold on it that steers the caret like a
   joystick, and a drag along backspace that selects for the lift to delete; a tile in the quick settings; settings
-  with a search box and everything seldom needed folded away.
+  with a search box that forgives a typo and everything seldom needed folded away, and a short
+  setup that offers the choices worth making first, then shows everything else.
 - **Privacy.** No permission, no socket, no telemetry. Private mode is automatic in password
   fields and wherever an app asks for no personalised learning; the clipboard history never
   keeps a copy the app marked sensitive, one made in a password manager or code app the
@@ -143,10 +144,22 @@ NDK 27.1.12297006. The keyboard runs on Android 11 (API 30) and later: inline au
 suggestions, which are how password managers reach the strip, need that level, and the floor is
 recorded in `gradle/libs.versions.toml`.
 
+Python 3 is needed too: the bundled dictionaries are compiled by `tools/build_dict.py` at every
+build.
+
 ```bash
 ./gradlew :app:assembleCoreRelease      # the free build
 ./gradlew :app:assemblePlusRelease      # with the optional model-backed features
 ./gradlew test                          # JVM tests, every module
+```
+
+The JVM tests that type through the real engine load a host build of the native library; build
+it first, or they skip themselves:
+
+```bash
+cmake -S native-tests -B native-tests/build -DCMAKE_BUILD_TYPE=Debug
+cmake --build native-tests/build --parallel
+ctest --test-dir native-tests/build     # the native tests
 ```
 
 Three checks run as part of `assemble` and fail the build rather than warn:
@@ -162,6 +175,11 @@ Three checks run as part of `assemble` and fail the build rather than warn:
 The bundled dictionaries are compiled from the word lists in [`dictionaries/`](dictionaries) on
 every build; no binary pack is committed. The native engine also builds and tests on the host
 (`native-tests/`, a CMake project) in CI, against packs produced by the same compiler.
+
+[`docs/building.md`](docs/building.md) is the full reference: the toolchain, every Gradle task and
+what it generates, the native library and its host build, the checks that fail a build, the
+tests, signing and the release path, CI, the word lists and language packs, and every tool and
+script by purpose.
 
 ## Installing on a device
 
@@ -207,6 +225,9 @@ gh attestation verify BorderKeys-v0.11.0-core.apk --repo razvan-eduard/borderkey
 
 ## Documentation
 
+- [`docs/building.md`](docs/building.md) — building the repository: the toolchain, the Gradle
+  tasks and what they generate, the native library, the checks, the tests, releases, CI, the
+  language packs, and every tool and script.
 - [`docs/architecture.md`](docs/architecture.md) — what each module is and what happens between a
   finger and a word: the typing orchestrator and the flows it drives, the suggestion and learning
   paths, why autocorrect and the suggestion strip rank separately, every scoring constant with the
