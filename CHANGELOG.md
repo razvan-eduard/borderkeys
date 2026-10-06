@@ -28,11 +28,13 @@ attestations and the full commit lists are on the
   keyboard behaved until now; each step up adds rarer words that the same corpora write and a
   spelling dictionary accepts, and leaves more typos that happen to spell one uncorrected. Such
   words are never suggested, and the setting names the dictionaries it changes.
-- Offer the newest screenshot, on the Clipboard screen: a screenshot from the last five minutes
-  is offered on the strip like a copied photo, either as a chip of its own beside the clipboard
-  chip or in one chip with it, whichever is newer. Choosing it asks once for your screenshots
-  folder, in Android's own folder picker opened where this phone keeps them; the keyboard reads
-  that folder alone and still declares no permission. Off by default.
+- Remember photos and Remember screenshots, two switches side by side on the Clipboard screen
+  and in Set up your keyboard. Each keeps its kind in the clipboard history, encrypted, offers
+  the newest on the strip, and deletes what it kept when turned off. A screenshot from the last
+  five minutes sits beside the clipboard chip or in its place, whichever is newer, as chosen
+  under its switch. Turning screenshots on asks once for your screenshots folder, in Android's
+  own folder picker opened where this phone keeps them; the keyboard reads that folder alone and
+  still declares no permission. Both off by default.
 - Show a preview in the chip, on the Clipboard screen: the copied-photo and screenshot chips show
   a small picture of the image in front of their icon, within the strip's own height. Off by
   default.
@@ -50,7 +52,8 @@ attestations and the full commit lists are on the
   end character stays chosen and lifting types it; further out it closes with nothing typed.
 - The copied-photo and screenshot chips are offered only in a field that takes that kind of
   image, and never in a password or private field; both chips and both pastes follow the same
-  rule.
+  rule. In the clipboard panel, a photo the field cannot take is shown faded and pastes nothing;
+  pin and delete still work.
 - Settings search finds every setting, including those titled above a picker or slider and the
   newest-screenshot option it used to miss, matches the words of each setting's explanation
   after its title, and finds a title through a typo ("screnshot", "vibraton"). The list it

@@ -876,6 +876,13 @@ data class KeyboardPreferences(
     val isOneHanded: Boolean
         get() = positionMode == MODE_ONE_HANDED_LEFT || positionMode == MODE_ONE_HANDED_RIGHT
 
+    /** Whether copied photos are kept in the history and offered on the strip: Remember photos. */
+    val photosRemembered: Boolean get() = clipboardImages
+
+    /** Whether screenshots are kept in the history and offered on the strip: Remember screenshots, with its folder. */
+    val screenshotsRemembered: Boolean
+        get() = screenshotSuggestion != SCREENSHOT_SUGGESTION_OFF && screenshotFolder.isNotEmpty()
+
     /**
      * The size/position values [isLandscape] selects: portrait's flat fields packed into a
      * [KeyboardPlacement], or [landscape].

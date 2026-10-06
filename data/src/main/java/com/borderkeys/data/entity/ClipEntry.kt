@@ -50,6 +50,9 @@ data class ClipEntry(
 
     /** The package the private copy was made in, or null. */
     val sourcePackage: String? = null,
+
+    /** A screenshot the keyboard kept, not a copied image; one also copied counts as copied. */
+    val fromScreenshot: Boolean = false,
 ) {
     val isPinned: Boolean get() = pinnedAt != null
 

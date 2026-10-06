@@ -31,12 +31,14 @@ class ClipboardRepository internal constructor(
     suspend fun imageCapBytes(): Long = ClipMedia.capBytes(preferences.first().clipboardImageMaxMb)
 
     /**
-     * Remembers a copied image by its bytes, deduplicated by their hash: the same picture copied
-     * twice is one entry moved to the top. Null when remembered, else why not.
+     * Remembers a copied image, or a screenshot when [fromScreenshot], by its bytes, deduplicated
+     * by their hash: the same picture twice is one entry moved to the top. Null when remembered,
+     * else why not.
      */
-    suspend fun rememberImageBytes(bytes: ByteArray, mimeType: String): ImageRefusal? {
+    suspend fun rememberImageBytes(bytes: ByteArray, mimeType: String, fromScreenshot: Boolean = false): ImageRefusal? {
         val settings = preferences.first()
-        if (!settings.clipboardEnabled || !settings.clipboardImages) {
+        val kept = if (fromScreenshot) settings.screenshotsRemembered else settings.photosRemembered
+        if (!settings.clipboardEnabled || !kept) {
             return ImageRefusal.OFF
         }
         if (bytes.isEmpty() || bytes.size.toLong() > ClipMedia.capBytes(settings.clipboardImageMaxMb)) {
@@ -52,6 +54,7 @@ class ClipboardRepository internal constructor(
             mediaFile = stored.name,
             sizeBytes = stored.sizeBytes,
             thumbnail = stored.thumbnail,
+            fromScreenshot = fromScreenshot,
         )
         dao.trimUnpinnedTo(settings.clipboardMaxEntries)
         sweepMedia()
@@ -158,9 +161,16 @@ class ClipboardRepository internal constructor(
         sweepMedia()
     }
 
-    /** Forgets every remembered image. Called when the images switch is turned off. */
-    suspend fun deleteImages(): Int {
-        val deleted = dao.deleteImages()
+    /** Forgets every remembered copied image. Called when Remember photos is turned off. */
+    suspend fun deleteCopiedImages(): Int {
+        val deleted = dao.deleteCopiedImages()
+        sweepMedia()
+        return deleted
+    }
+
+    /** Forgets every kept screenshot. Called when Remember screenshots is turned off. */
+    suspend fun deleteScreenshots(): Int {
+        val deleted = dao.deleteScreenshots()
         sweepMedia()
         return deleted
     }
