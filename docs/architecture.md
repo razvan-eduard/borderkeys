@@ -1123,6 +1123,7 @@ fourth slot).
 | `make_pack.py` | Counts a corpus into a word list; merges names; holds the name guards (`name_allowed`, `NAME_EVIDENCE_TIERS`, `NAME_ADD_MIN_USES`, `UNTAGGED_FREQUENT_RANK`). |
 | `make_names.py` | Asks Wikidata for names. `--kind persons` (given/family, counted by people) and `--kind entities` (companies, countries, islands, counted by Wikipedia sitelinks). |
 | `merge_names.py` | Merges a name list into a built `.tsv` in place, reusing `make_pack.py`'s guards **by import**. |
+| `make_case_evidence.py` | Counts, for every flagged name, how often the Leipzig sentences write it capitalised and in lower case inside a sentence; `build_dict.py --case` drops the flag of a name written mostly in lower case. |
 | `flag_names.py` | Flags proper nouns already in a pack's ordinary rows, by case asymmetry. |
 | `make_ordinary.py` | Which corpus words are lower-case headwords of the spelling dictionary. |
 | `build_pos.py` | Treebank tags and transition matrices → `dictionaries/<tag>.pos`. |

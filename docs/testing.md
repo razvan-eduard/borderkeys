@@ -719,7 +719,7 @@ is the number a user gets.
 | `autocorrect_extra_en` | 200 | 96.5% | 192 |
 | `autocorrect_rareprefix_en` | 193 | 71.0% | 130 |
 | `autocorrect_known_en` | 200 | 97.5% left alone | 193 |
-| `autocorrect_real_en` | 1,000 | 47.1% | 468; 493 in context |
+| `autocorrect_real_en` | 1,000 | 47.1% | 467; 493 in context |
 | `autocorrect_accents_ro` | 248 | 95.6% | 237 |
 | `autocorrect_twins_ro` | 200 | 93.0% | 186 |
 | `autocorrect_plain_ro` | 200 | 100.0% | 200 |
@@ -729,6 +729,22 @@ is the number a user gets.
 | `autocorrect_plain_es` | 200 | 100.0% | 200 |
 | `autocorrect_twins_it` | 57 | 100.0% | 57 |
 | `autocorrect_plain_it` | 200 | 100.0% | 200 |
+| `autocorrect_case_en` | 300 | — | 297 |
+| `autocorrect_case_de` | 300 | — | 291 |
+| `autocorrect_case_fr` | 300 | — | 292 |
+| `autocorrect_case_es` | 300 | — | 284 |
+| `autocorrect_case_it` | 300 | — | 294 |
+| `autocorrect_case_ro` | 300 | — | 289 |
+
+The case corpora are read case-sensitively: a row is right only when the word comes out
+written exactly as expected. Each holds 300 words a pack list has flagged as a name, typed in
+lower case after the word before them in a held-out sentence: the 150 most frequent that the
+held-out Leipzig 2020 news writes capitalised inside a sentence, and the 150 it writes in lower
+case, each with 95% confidence (`tools/make_case_corpus.py`). Those sentences are not the ones
+`dictionaries/<tag>.case` was counted from. No corpus before them could see a capital: the
+known-words corpus leaves names out, and every other comparison ignores case. The real-typo
+reading a word at a time fell from 468 to 467 when the case evidence took 539 English name flags
+away: "shojlswe" ("shoulder") lost the decoder's margin to a word no longer flagged as a name.
 
 `autocorrect_unlisted_en` holds real words the pack and both English spelling dictionaries lack,
 sampled from the stock keyboard's English lists by `tools/make_unlisted_corpus.py`, each to be
@@ -934,19 +950,19 @@ the word meant, right / wrong word / left alone:
 
 | Distance | Rows | A word at a time | In context | Phones right |
 |---|---|---|---|---|
-| 1 | 402 | 307 / 35 / 60 | 312 / 27 / 63 | 358 |
+| 1 | 402 | 307 / 36 / 59 | 312 / 28 / 62 | 358 |
 | 2 | 297 | 139 / 89 / 69 | 151 / 79 / 67 | 222 |
 | 3 | 121 | 20 / 37 / 64 | 25 / 33 / 63 | 91 |
-| 4 or more | 180 | 2 / 58 / 120 | 5 / 55 / 120 | 132 |
-| all | 1,000 | 468 / 219 / 313 | 493 / 194 / 313 | 803 |
+| 4 or more | 180 | 1 / 58 / 121 | 5 / 55 / 120 | 132 |
+| all | 1,000 | 467 / 220 / 313 | 493 / 195 / 312 | 803 |
 
 Before the tap decoder the same corpus read 434 right a word at a time, none of them three or
 more edits away, and 440 / 204 / 356 in context. The decoder's word is the right one applied in
-35 of the rows read a word at a time and 52 in context, close to the whole gain; the entries of
+34 of the rows read a word at a time and 52 in context, close to the whole gain; the entries of
 autocorrect's list it holds back, where another reading is far likelier, account for the wrong
 words that fell. With no taps the decoder reads each letter at its key's
 centre, so a typo three or more keys away is rarely a hundred times likelier than the rest;
-on a phone, with the taps, it is more often. Of the 532 misses a word at a time, 277 never have
+on a phone, with the taps, it is more often. Of the 533 misses a word at a time, 277 never have
 the word meant in the engine's ranking. A third of real phone typos are three or more edits from
 their word; the generated corpora hold none.
 

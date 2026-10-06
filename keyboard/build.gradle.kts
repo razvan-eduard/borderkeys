@@ -171,6 +171,7 @@ abstract class BuildDictionaries : DefaultTask() {
             val ngrams = list.parentFile.resolve("$name.ngrams")
             val grammar = list.parentFile.resolve("$name.pos")
             val known = list.parentFile.resolve("$name.known")
+            val case = list.parentFile.resolve("$name.case")
             val arguments = mutableListOf(
                 "python3", compiler.get().asFile.absolutePath,
                 "--words", list.absolutePath,
@@ -187,6 +188,9 @@ abstract class BuildDictionaries : DefaultTask() {
             }
             if (known.isFile) {
                 arguments += listOf("--known", known.absolutePath)
+            }
+            if (case.isFile) {
+                arguments += listOf("--case", case.absolutePath)
             }
             execOperations.exec { commandLine(arguments) }
         }

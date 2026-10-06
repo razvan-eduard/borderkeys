@@ -272,6 +272,28 @@ whether the flag may be applied, from four things it knows:
   "truc", "borsa", "wild" and a couple of hundred more across the six languages are listed by
   hand for that reason, each after reading the full list of words both sources claim.
 
+Every one of those guards can still let an ordinary word through: the treebank keeps one tag
+per word, so news text full of Bill Gates tags "gates" as a name and overrules a spelling
+dictionary that lists only "gate". The last check therefore asks the text itself, at every
+build. `tools/make_case_evidence.py` reads the language's Leipzig sentences and counts, for each
+flagged name, how often it is written capitalised and how often in lower case inside a sentence
+(not first, not after a sentence mark, not in a line of capitals), into
+`dictionaries/<tag>.case`. `build_dict.py --case` drops the flag of every name whose
+capitalised share stays below a half even at the upper end of its 95% Wilson interval, and
+leaves a name the sentences never show inside a sentence as it is. A name added to the list by
+any later merge meets the same test the next time the pack is built:
+
+```
+python3 tools/make_case_evidence.py --words dictionaries/en_US.tsv \
+    --corpus eng_news_2024_1M-sentences.txt eng_wikipedia_2016_1M-sentences.txt \
+    --out dictionaries/en_US.case
+```
+
+On the cached English news, newscrawl and Wikipedia sentences "gates" is written capitalised
+526 times and in lower case 987, "mark" 4,045 and 4,819, so both lose the flag; "john" (12,855
+and 9) and "march" (17,639 and 1,346) keep it. The six bundled lists lose 539 (English), 191
+(German), 238 (French), 298 (Spanish), 658 (Italian) and 425 (Romanian) flags this way.
+
 A name the corpus never wrote down is added at the flat frequency only with fifty people behind
 it (`NAME_ADD_MIN_USES`), which keeps the additions to roughly a tenth of the corpus's own size;
 the given-name tail alone is over a hundred thousand labels a language, most of them a handful

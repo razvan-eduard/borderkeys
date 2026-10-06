@@ -218,6 +218,14 @@ precedence = "override"
 SPDX-FileCopyrightText = "2024 Katri Leino, Markku Laine, Mikko Kurimo, Antti Oulasvirta, Aalto University"
 SPDX-License-Identifier = "CC-BY-4.0"
 
+# Words and the word before each, sampled by tools/make_case_corpus.py from the Wortschatz Leipzig
+# 2020 news sentences; docs/licensing.md, the test data table.
+[[annotations]]
+path = "native-tests/data/autocorrect_case_*.tsv"
+precedence = "override"
+SPDX-FileCopyrightText = "Wortschatz Leipzig, Universität Leipzig"
+SPDX-License-Identifier = "CC-BY-4.0"
+
 # Words sampled by tools/make_unlisted_corpus.py from Android's stock keyboard word lists
 # (LineageOS's copy of LatinIME); docs/licensing.md, the test data table.
 [[annotations]]

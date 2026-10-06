@@ -14,7 +14,14 @@ import java.io.File
  */
 class PipelineCorpusTest {
 
-    private class Corpus(val tag: String, val file: String, val floor: Int, val inContext: Boolean = false) {
+    private class Corpus(
+        val tag: String,
+        val file: String,
+        val floor: Int,
+        val inContext: Boolean = false,
+        /** Right only when the word comes out exactly as expected, capitals included. */
+        val caseSensitive: Boolean = false,
+    ) {
         /** How the report and the readings name this run. */
         val label: String get() = if (inContext) file.replace(".tsv", "_in_context.tsv") else file
 
@@ -57,6 +64,12 @@ class PipelineCorpusTest {
             Corpus("fr-FR", "autocorrect_plain_fr.tsv", PLAIN_FR_FLOOR),
             Corpus("es-ES", "autocorrect_twins_es.tsv", TWINS_ES_FLOOR),
             Corpus("es-ES", "autocorrect_plain_es.tsv", PLAIN_ES_FLOOR),
+            Corpus("en-US", "autocorrect_case_en.tsv", CASE_EN_FLOOR, inContext = true, caseSensitive = true),
+            Corpus("de-DE", "autocorrect_case_de.tsv", CASE_DE_FLOOR, inContext = true, caseSensitive = true),
+            Corpus("fr-FR", "autocorrect_case_fr.tsv", CASE_FR_FLOOR, inContext = true, caseSensitive = true),
+            Corpus("es-ES", "autocorrect_case_es.tsv", CASE_ES_FLOOR, inContext = true, caseSensitive = true),
+            Corpus("it-IT", "autocorrect_case_it.tsv", CASE_IT_FLOOR, inContext = true, caseSensitive = true),
+            Corpus("ro-RO", "autocorrect_case_ro.tsv", CASE_RO_FLOOR, inContext = true, caseSensitive = true),
             Corpus("it-IT", "autocorrect_twins_it.tsv", TWINS_IT_FLOOR),
             Corpus("it-IT", "autocorrect_plain_it.tsv", PLAIN_IT_FLOOR),
         )
@@ -83,10 +96,10 @@ class PipelineCorpusTest {
                     val committed = outcome.committed
                     tally.cases++
                     // Compared ignoring case.
-                    val right = if (expected == typed) {
-                        committed == null
-                    } else {
-                        committed.equals(expected, ignoreCase = true)
+                    val right = when {
+                        corpus.caseSensitive -> (committed ?: typed) == expected
+                        expected == typed -> committed == null
+                        else -> committed.equals(expected, ignoreCase = true)
                     }
                     when {
                         right -> tally.right++
@@ -142,7 +155,7 @@ class PipelineCorpusTest {
         const val EXTRA_FLOOR = 192
         const val RAREPREFIX_FLOOR = 129
         const val KNOWN_FLOOR = 193
-        const val REAL_FLOOR = 468
+        const val REAL_FLOOR = 467
         const val REAL_IN_CONTEXT_FLOOR = 493
         const val ACCENTS_FLOOR = 237
 
@@ -155,5 +168,11 @@ class PipelineCorpusTest {
         const val PLAIN_ES_FLOOR = 200
         const val TWINS_IT_FLOOR = 57
         const val PLAIN_IT_FLOOR = 200
+        const val CASE_EN_FLOOR = 297
+        const val CASE_DE_FLOOR = 291
+        const val CASE_FR_FLOOR = 292
+        const val CASE_ES_FLOOR = 284
+        const val CASE_IT_FLOOR = 294
+        const val CASE_RO_FLOOR = 289
     }
 }
