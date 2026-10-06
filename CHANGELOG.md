@@ -28,6 +28,11 @@ attestations and the full commit lists are on the
   keyboard behaved until now; each step up adds rarer words that the same corpora write and a
   spelling dictionary accepts, and leaves more typos that happen to spell one uncorrected. Such
   words are never suggested, and the setting names the dictionaries it changes.
+- A key's long-press strip opens straight away, with no preview of the key first, drawn in the
+  held key's own colours; sliding off either end of it closes it with nothing typed.
+- Fixed: a word picked from the strip got a space before a following comma or full stop.
+- Fixed: reopening the keyboard with the caret at the end of a word left the strip unaware of
+  that word until the caret moved or a key was typed.
 - Swiping works on the Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek, Armenian,
   Georgian, Hebrew and Arabic layouts, read by the geometric decoder.
 - Fixed: autocorrect left a word of four to seven letters as typed when two of its letters

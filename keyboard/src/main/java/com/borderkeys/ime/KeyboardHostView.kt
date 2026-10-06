@@ -904,7 +904,7 @@ class KeyboardHostView(
         val radius = paints.keyCornerRadiusPx
         canvas.drawRoundRect(
             left, top, left + cellWidth * count, top + rowHeight, radius, radius,
-            paints.modifierKeyFill,
+            if (keyboard.alternativesModifierStyled) paints.modifierKeyFill else paints.keyFill,
         )
         val selected = keyboard.alternativesSelectedIndex
         if (selected in 0 until count) {
@@ -953,7 +953,10 @@ class KeyboardHostView(
         val right = left + keyboard.keyPreviewWidthPx
         val bottom = top + keyboard.keyPreviewHeightPx
         val radius = paints.keyCornerRadiusPx
-        canvas.drawRoundRect(left, top, right, bottom, radius, radius, paints.keyFill)
+        canvas.drawRoundRect(
+            left, top, right, bottom, radius, radius,
+            if (keyboard.keyPreviewModifierStyled) paints.modifierKeyFill else paints.keyFill,
+        )
         if (paints.showKeyBorders) {
             canvas.drawRoundRect(left, top, right, bottom, radius, radius, paints.keyStroke)
         }
