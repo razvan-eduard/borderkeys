@@ -64,6 +64,10 @@ attestations and the full commit lists are on the
   modifiers, the space-bar joystick, the backspace slide, Rare words, Keep privately and the
   particle effects added. Both open again from the About card.
 - Fixed: a word picked from the strip got a space before a following comma or full stop.
+- Fixed: ordinary words the name lists had flagged were capitalised in the middle of a sentence:
+  "gates" came out as "Gates", "mark" as "Mark". Each list now drops the flag of every name its
+  corpus writes mostly in lower case inside sentences, checked at every build: 539 English names
+  and between 191 and 658 in each other bundled language.
 - Fixed: Enter left the word it ended as typed: no correction, no restored apostrophe, no text
   shortcut, and an Enter that sends sent the word uncorrected. Enter now applies what space
   would, before the new line or the send, and the backspace straight after takes it back; the

@@ -167,6 +167,9 @@ jobs:
       - name: Dictionary compiler round trip
         run: python3 tools/build_dict.py --selftest
 
+      - name: Case evidence counting
+        run: python3 tools/make_case_evidence.py --selftest
+
       # The letters with no unaccented twin ("ß", "æ", "œ") are still on their overlays.
       - name: Language alphabets are what the dictionaries were built against
         run: python3 tools/drop_unreachable.py --selftest

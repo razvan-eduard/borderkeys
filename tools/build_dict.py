@@ -1043,6 +1043,35 @@ def load_words(path: Path) -> tuple[list[tuple[str, int]], frozenset[str]]:
     return words, frozenset(proper_nouns)
 
 
+def load_case(path: Path) -> dict[str, tuple[int, int]]:
+    """`make_case_evidence.py`'s counts: each name's case-folded spelling, how often it is written
+    capitalised inside a sentence, and how often in lower case."""
+    counts = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#"):
+            continue
+        word, capitalised, lower = line.split("\t")
+        counts[word] = (int(capitalised), int(lower))
+    return counts
+
+
+# The normal quantile of the confidence the case evidence must reach, 95% two-sided.
+CASE_CONFIDENCE_Z = 1.96
+
+
+def written_mostly_lower(capitalised: int, lower: int) -> bool:
+    """Whether a word is written in lower case inside most sentences, with 95% confidence: the
+    Wilson interval's upper bound on its capitalised share stays below a half."""
+    total = capitalised + lower
+    if total == 0:
+        return False
+    share = capitalised / total
+    z2 = CASE_CONFIDENCE_Z * CASE_CONFIDENCE_Z
+    centre = share + z2 / (2 * total)
+    spread = CASE_CONFIDENCE_Z * math.sqrt(share * (1 - share) / total + z2 / (4 * total * total))
+    return (centre + spread) / (1 + z2 / total) < 0.5
+
+
 def load_known(path: Path) -> list[tuple[str, float]]:
     """Reads a '# tokens<TAB>N' line and 'word<TAB>count' rows into (word, count / N) pairs."""
     tokens = 0
@@ -1095,6 +1124,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--known", type=Path,
                         help="spellings the pack only knows, never offers: a '# tokens<TAB>N' "
                              "line, then 'word<TAB>count', each word's probability count / N")
+    parser.add_argument("--case", type=Path,
+                        help="tools/make_case_evidence.py's counts; a name its corpus writes "
+                             "mostly in lower case inside sentences loses the name flag")
     parser.add_argument("--tag", default="und")
     parser.add_argument("--out", type=Path)
     parser.add_argument("--selftest", action="store_true",
@@ -1119,6 +1151,10 @@ def main(argv: list[str]) -> int:
         return 0
 
     if arguments.selftest:
+        assert written_mostly_lower(526, 987)
+        assert not written_mostly_lower(12_855, 9)
+        assert not written_mostly_lower(1, 2)
+        assert not written_mostly_lower(0, 0)
         # "border", already in SAMPLE_WORDS, flagged as a proper noun.
         sample_proper_nouns = frozenset({"border"})
         round_trip(SAMPLE_WORDS, SAMPLE_NGRAMS, "ro-RO", proper_nouns=sample_proper_nouns,
@@ -1135,6 +1171,17 @@ def main(argv: list[str]) -> int:
         parser.error("--words and --out are required unless --selftest is given")
 
     words, proper_nouns = load_words(arguments.words)
+    if arguments.case:
+        case = load_case(arguments.case)
+        unmeasured = sorted({word.casefold() for word in proper_nouns} - case.keys())
+        if unmeasured:
+            raise SystemExit(
+                f"{arguments.words.name}: {len(unmeasured):,} names have no case evidence "
+                f"({', '.join(unmeasured[:10])}); rerun tools/make_case_evidence.py for "
+                f"{arguments.case.name}")
+        dropped = {word for word in proper_nouns if written_mostly_lower(*case.get(word.casefold(), (0, 0)))}
+        proper_nouns = proper_nouns - dropped
+        print(f"{arguments.words.name}: {len(dropped):,} names written mostly in lower case lose the flag")
     ngrams = load_ngrams(arguments.ngrams) if arguments.ngrams else {}
     grammar = Grammar.load(arguments.grammar) if arguments.grammar else None
     known = load_known(arguments.known) if arguments.known else []
