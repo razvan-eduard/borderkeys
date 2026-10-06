@@ -60,28 +60,29 @@ import com.borderkeys.settings.ColourRow
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.ParticleChipPreview
 import com.borderkeys.settings.PickerChip
+import com.borderkeys.settings.Screen
+import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SuggestionStripPreview
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberParticleEffectsUpdater
-import com.borderkeys.settings.rememberPreferencesUpdater
 import com.borderkeys.settings.rememberThemeUpdater
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
- * Particle effects: [MyPresetsCard], whose presets apply to every region at once, then one card
- * per surface with its own switch and its Outline and Fill layers.
+ * Effects: a row opening the Animations screen, then the particles: [MyPresetsCard], whose
+ * presets apply to every region at once, and one card per surface with its own switch and its
+ * Outline and Fill layers.
  */
 @Composable
-fun EffectsScreen(modifier: Modifier = Modifier) {
+fun EffectsScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
     val strings = LocalStrings.current
     val repository = remember { DataGraph.themes }
     val scope = rememberCoroutineScope()
     val updateTheme = rememberThemeUpdater()
     val updateParticleEffects = rememberParticleEffectsUpdater()
-    val updatePreferences = rememberPreferencesUpdater()
     val appearance by repository.appearance
         .collectAsStateWithLifecycle(initialValue = remember { repository.currentAppearance() })
     val (theme, _, _, particleEffects) = appearance
@@ -123,15 +124,11 @@ fun EffectsScreen(modifier: Modifier = Modifier) {
     )
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        // Event effects, above the particle cards.
-        EventEffectsSection(
-            effects = appearance.preferences.effects,
-            customColours = theme.customColours,
-            onCustomColoursChange = onCustomColoursChange,
-            onChange = { change ->
-                updatePreferences { it.copy(effects = change(it.effects)) }
-            },
-        )
+        SettingsSectionCard(strings[Keys.EFFECTS_TITLE]) {
+            SettingRow(strings[Keys.SCREEN_ANIMATIONS], strings[Keys.EFFECTS_ANIMATIONS_NOTE]) {
+                open(Screen.Animations)
+            }
+        }
         MyPresetsCard(
             particleEffects = particleEffects,
             baseline = baseline,

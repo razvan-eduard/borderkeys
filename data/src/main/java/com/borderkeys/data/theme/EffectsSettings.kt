@@ -59,8 +59,8 @@ data class EffectSetting(
 }
 
 /**
- * Every event effect the keyboard can play, and the one switch that silences all of them. Only
- * [swipeAccepted] is on by default.
+ * Every animation the app plays, and [enabled], the one switch that stops all of them. Of the
+ * event effects only [swipeAccepted] is on by default.
  */
 @Serializable
 data class EffectsSettings(
@@ -72,7 +72,25 @@ data class EffectsSettings(
     val suggestionPicked: EffectSetting = EffectSetting(),
     /** Whether a photo pasted from a strip chip rises out of it in a lamp's shape, fading. */
     val photoLamp: Boolean = false,
+    /** Whether a pressed key's highlight fades in and out rather than switching at once. */
+    val keyPress: Boolean = true,
+    /** Whether the assistant's colours move, on the home title and around the draft box. */
+    val assistantColours: Boolean = true,
+    /** Whether the draft box moves: version slides, the working pulse, hints and scrollbar fades. */
+    val draftBoxMotion: Boolean = true,
 ) {
+    /** Whether a pressed key's highlight fades. */
+    val keyPressAnimated: Boolean get() = enabled && keyPress
+
+    /** Whether the assistant's colours move. */
+    val assistantColoursAnimated: Boolean get() = enabled && assistantColours
+
+    /** Whether the draft box moves. */
+    val draftBoxAnimated: Boolean get() = enabled && draftBoxMotion
+
+    /** Whether a pasted photo rises out of its chip. */
+    val photoLampAnimated: Boolean get() = enabled && photoLamp
+
     /** The setting for [event]. */
     fun forEvent(event: EffectEvent): EffectSetting = when (event) {
         EffectEvent.SwipeAccepted -> swipeAccepted

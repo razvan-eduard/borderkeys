@@ -144,8 +144,8 @@ fun HomeScreen(query: String, modifier: Modifier = Modifier, open: (Screen) -> U
                 strings[Keys.HOME_HEIGHT_ONE_HANDED_MODE_FLOATING_AND],
             ) { open(Screen.Size) }
             SettingRow(
-                strings[Keys.HOME_PARTICLE_EFFECTS],
-                strings[Keys.HOME_PARTICLE_EFFECTS_NOTE],
+                strings[Keys.EFFECTS_TITLE],
+                strings[Keys.HOME_EFFECTS_NOTE],
             ) { open(Screen.Effects) }
         }
         SettingsSectionCard(strings[Keys.SHORTCUTS_TITLE]) {

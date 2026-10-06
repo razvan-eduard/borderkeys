@@ -17,7 +17,7 @@ SCREENS = pathlib.Path("settings/src/main/java/com/borderkeys/settings/screen")
 OUT = pathlib.Path("settings/src/main/java/com/borderkeys/settings/SettingsIndex.kt")
 
 # Sources that hold rows of a screen without being named after it.
-EXTRA_SOURCES = {"EventEffectsSection.kt": "Effects"}
+EXTRA_SOURCES = {"EventEffectsSection.kt": "Animations"}
 
 # Sources named like a screen whose rows are not indexed: no entry in the Screen enum (opened by
 # an intent), rows that only open other screens, or no fixed row beyond a card titled like the
