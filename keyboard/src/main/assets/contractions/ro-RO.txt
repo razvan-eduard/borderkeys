@@ -12,4 +12,4 @@ mcdonalds	mcdonald's	de-DE,es-ES
 moodys	moody's	
 obrien	o'brien	
 poors	poor's	
-valentines	valentine's	en-US
+valentines	valentine's	
