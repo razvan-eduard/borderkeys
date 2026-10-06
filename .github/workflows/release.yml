@@ -84,16 +84,21 @@ jobs:
           fi
           echo "Release tag: $TAG"
 
-      # The same two prerequisites as in ci.yml.
+      # The same prerequisites as in ci.yml.
       - name: Build what the pipeline harness needs
         run: |
           set -euo pipefail
           cmake -S native-tests -B native-tests/build -DCMAKE_BUILD_TYPE=Debug
           cmake --build native-tests/build --parallel --target borderkeys
           ./gradlew :keyboard:buildDictionaries --no-daemon "$GRADLE_HEAP"
+          mkdir -p native-tests/build/taps
+          for profile in centred low thumbs right-thumb precise sloppy; do
+            python3 tools/make_tap_corpus.py --profile "$profile" --taps 60000 --seed 1 \
+              > "native-tests/build/taps/$profile.tsv"
+          done
 
       - name: Unit tests
-        run: ./gradlew test --no-daemon "$GRADLE_HEAP"
+        run: ./gradlew test --no-daemon "$GRADLE_HEAP" -Pborderkeys.taps="$PWD/native-tests/build/taps"
 
       - name: Decode signing keystore
         run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
