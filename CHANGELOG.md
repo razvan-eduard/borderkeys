@@ -12,7 +12,7 @@ listed under *Unreleased* and moves under its version when it is tagged. The APK
 attestations and the full commit lists are on the
 [releases page](https://github.com/razvan-eduard/borderkeys/releases).
 
-## Unreleased
+## v0.11.0 — 2026-10-06
 
 - A word typed with several letters on the wrong keys is read from where each tap landed, and
   autocorrect can now fix it; until now anything more than one or two letters off was left as
