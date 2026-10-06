@@ -170,6 +170,7 @@ abstract class BuildDictionaries : DefaultTask() {
             val name = list.name.removeSuffix(".tsv")
             val ngrams = list.parentFile.resolve("$name.ngrams")
             val grammar = list.parentFile.resolve("$name.pos")
+            val known = list.parentFile.resolve("$name.known")
             val arguments = mutableListOf(
                 "python3", compiler.get().asFile.absolutePath,
                 "--words", list.absolutePath,
@@ -183,6 +184,9 @@ abstract class BuildDictionaries : DefaultTask() {
             // Optional per language.
             if (grammar.isFile) {
                 arguments += listOf("--grammar", grammar.absolutePath)
+            }
+            if (known.isFile) {
+                arguments += listOf("--known", known.absolutePath)
             }
             execOperations.exec { commandLine(arguments) }
         }

@@ -129,12 +129,12 @@ class TapCorpusTest {
 
         /** Autocorrect's right word with the taps, in percent, per profile. */
         val FLOORS = linkedMapOf(
-            "centred" to 88.0,
-            "low" to 85.3,
-            "thumbs" to 85.2,
-            "right-thumb" to 80.8,
+            "centred" to 88.5,
+            "low" to 87.0,
+            "thumbs" to 86.6,
+            "right-thumb" to 84.2,
             "precise" to 88.8,
-            "sloppy" to 79.1,
+            "sloppy" to 84.1,
         )
     }
 }

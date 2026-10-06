@@ -132,6 +132,16 @@ class PipelineTest {
         )
     }
 
+    /** A word the taps fit no better than a rival is left on the strip, one tap away. */
+    @Test
+    fun `a close call is offered on the strip rather than applied`() {
+        Pipeline.require()
+        val outcome = pipeline.commit("beleiv")
+        assertNull("beleiv was applied as ${outcome.committed}", outcome.committed)
+        val strip = pipeline.strip("beleiv").take(STRIP_SLOTS)
+        assertTrue("believe is not among $strip", "believe" in strip)
+    }
+
     private fun describe(text: String?) = text ?: "nothing"
 
     /** At a minimum length of five, words the default corrects are refused as TooShort. */
@@ -207,6 +217,9 @@ class PipelineTest {
         }
 
     companion object {
+        /** The words the strip shows beside the typed one. */
+        private const val STRIP_SLOTS = 3
+
         private lateinit var pipeline: Pipeline
 
         @BeforeClass

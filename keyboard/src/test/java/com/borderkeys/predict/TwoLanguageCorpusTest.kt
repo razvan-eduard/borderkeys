@@ -24,6 +24,7 @@ class TwoLanguageCorpusTest {
             Run("autocorrect_twins_ro.tsv", ENGLISH, TWINS_RO_AFTER_ENGLISH),
             Run("autocorrect_typo_en.tsv", ROMANIAN, TYPO_EN_AFTER_ROMANIAN),
             Run("autocorrect_unknown_en.tsv", ROMANIAN, UNKNOWN_EN_AFTER_ROMANIAN),
+            Run("autocorrect_unlisted_en.tsv", ROMANIAN, UNLISTED_EN_AFTER_ROMANIAN),
             Run("autocorrect_doubled_en.tsv", ROMANIAN, DOUBLED_EN_AFTER_ROMANIAN),
             Run("autocorrect_firstletter_en.tsv", ROMANIAN, FIRSTLETTER_EN_AFTER_ROMANIAN),
             Run("autocorrect_marks_en.tsv", ROMANIAN, MARKS_EN_AFTER_ROMANIAN),
@@ -32,6 +33,7 @@ class TwoLanguageCorpusTest {
             Run("autocorrect_twins_ro.tsv", ROMANIAN, TWINS_RO_AFTER_ROMANIAN),
             Run("autocorrect_typo_en.tsv", ENGLISH, TYPO_EN_AFTER_ENGLISH),
             Run("autocorrect_unknown_en.tsv", ENGLISH, UNKNOWN_EN_AFTER_ENGLISH),
+            Run("autocorrect_unlisted_en.tsv", ENGLISH, UNLISTED_EN_AFTER_ENGLISH),
             Run("autocorrect_doubled_en.tsv", ENGLISH, DOUBLED_EN_AFTER_ENGLISH),
             Run("autocorrect_firstletter_en.tsv", ENGLISH, FIRSTLETTER_EN_AFTER_ENGLISH),
             Run("autocorrect_marks_en.tsv", ENGLISH, MARKS_EN_AFTER_ENGLISH),
@@ -112,7 +114,8 @@ class TwoLanguageCorpusTest {
         const val PLAIN_RO_AFTER_ENGLISH = 200
         const val TWINS_RO_AFTER_ENGLISH = 178
         const val TYPO_EN_AFTER_ROMANIAN = 187
-        const val UNKNOWN_EN_AFTER_ROMANIAN = 188
+        const val UNKNOWN_EN_AFTER_ROMANIAN = 191
+        const val UNLISTED_EN_AFTER_ROMANIAN = 176
         const val DOUBLED_EN_AFTER_ROMANIAN = 191
         const val FIRSTLETTER_EN_AFTER_ROMANIAN = 163
         const val MARKS_EN_AFTER_ROMANIAN = 265
@@ -120,9 +123,10 @@ class TwoLanguageCorpusTest {
         const val PLAIN_RO_AFTER_ROMANIAN = 200
         const val TWINS_RO_AFTER_ROMANIAN = 186
         const val TYPO_EN_AFTER_ENGLISH = 198
-        const val UNKNOWN_EN_AFTER_ENGLISH = 182
+        const val UNKNOWN_EN_AFTER_ENGLISH = 185
+        const val UNLISTED_EN_AFTER_ENGLISH = 175
         const val DOUBLED_EN_AFTER_ENGLISH = 194
-        const val FIRSTLETTER_EN_AFTER_ENGLISH = 173
+        const val FIRSTLETTER_EN_AFTER_ENGLISH = 174
         const val MARKS_EN_AFTER_ENGLISH = 265
     }
 }

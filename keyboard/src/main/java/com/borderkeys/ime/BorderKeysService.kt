@@ -1002,6 +1002,7 @@ class BorderKeysService :
             KeyboardPreferences.learningSpeedFactor(preferences.learningSpeed),
         )
         engine.setCorrectionStrictness(preferences.correctionStrictness)
+        engine.setKnownWordReach(KeyboardPreferences.rareWordsMinLogProb(preferences.rareWords))
         engine.setLanguageLock(
             KeyboardPreferences.languageLockEvidence(preferences.languageLock),
             KeyboardPreferences.languageLockStrict(preferences.languageLock),
@@ -1410,7 +1411,12 @@ class BorderKeysService :
         if (view.reserveScreenAbove) {
             outInsets.contentTopInsets += view.keyboardAreaTop
             outInsets.visibleTopInsets += view.keyboardAreaTop
-            outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_FRAME
+            // The ring takes the whole window; a rising photo leaves the screen above to the app.
+            outInsets.touchableInsets = if (ringOwnsWholeScreen()) {
+                Insets.TOUCHABLE_INSETS_FRAME
+            } else {
+                Insets.TOUCHABLE_INSETS_CONTENT
+            }
         }
     }
 

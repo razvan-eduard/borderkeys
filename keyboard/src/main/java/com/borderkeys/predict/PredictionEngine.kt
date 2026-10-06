@@ -307,6 +307,18 @@ class PredictionEngine(
         }
     }
 
+    /**
+     * Sets how common a word a pack knows but never offers must be to count as spelled: its
+     * unigram log-probability at least [minimumLogProb]. Positive infinity counts none.
+     */
+    fun setKnownWordReach(minimumLogProb: Float) {
+        worker.post {
+            withHandle(Unit) { current ->
+                NativePredictor.nativeSetKnownWordReach(current, minimumLogProb)
+            }
+        }
+    }
+
     /** Sets how much evidence an edit needs before it outranks a word spelled as typed. */
     fun setCorrectionStrictness(scale: Float) {
         worker.post {

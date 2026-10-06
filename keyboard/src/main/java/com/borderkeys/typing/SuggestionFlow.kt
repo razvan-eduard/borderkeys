@@ -7,6 +7,7 @@ import com.borderkeys.data.KeyboardStats
 import com.borderkeys.ime.SuggestionRow
 import com.borderkeys.predict.Candidate
 import com.borderkeys.predict.CorrectionOffer
+import com.borderkeys.predict.ListedCorrection
 
 /**
  * What the strip asks the engine and what it is told: the word last asked about, the engine's
@@ -123,7 +124,7 @@ class SuggestionFlow(
             knownWord = word,
             knownWordExact = true,
             knownWordIsName = isName,
-            corrections = listOf(CorrectionOffer(word, isName, inflection = false)),
+            corrections = listOf(ListedCorrection(word, isName, inflection = false)),
         )
     }
 

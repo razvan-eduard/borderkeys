@@ -12,6 +12,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import java.io.InputStream
 import java.io.OutputStream
+import kotlin.math.ln
 
 /** Behaviour the user can change, as opposed to appearance, which is [KeyboardTheme]. */
 @Serializable
@@ -618,6 +619,13 @@ data class KeyboardPreferences(
     val assistTopP: Float = DEFAULT_ASSIST_TOP_P,
 
     /**
+     * How rare a word the dictionaries know but never offer may be and still count as spelled,
+     * so a delimiter leaves it as typed: [RARE_WORDS_LISTED] (default) counts none, each step up
+     * counts rarer ones, [RARE_WORDS_ALL] every one a dictionary carries. Clamped on read.
+     */
+    val rareWords: Int = RARE_WORDS_LISTED,
+
+    /**
      * The imported model, by file name, that translation runs on -- empty to run it on the
      * active model like everything else. Only has an effect with more than one model imported;
      * a name that no longer matches an imported model is ignored. See
@@ -681,6 +689,7 @@ data class KeyboardPreferences(
             clipboardExcludedPackages = PackageNames.sanitised(clipboardExcludedPackages),
             terminalPackages = PackageNames.sanitised(terminalPackages),
         minCorrectionLength = minCorrectionLength.coerceIn(MIN_CORRECTION_LENGTH, MAX_CORRECTION_LENGTH),
+        rareWords = rareWords.coerceIn(RARE_WORDS_LISTED, RARE_WORDS_ALL),
         correctionStrictness = if (correctionStrictness > 0f) {
             correctionStrictness.coerceIn(MIN_CORRECTION_STRICTNESS, MAX_CORRECTION_STRICTNESS)
         } else {
@@ -1135,6 +1144,16 @@ data class KeyboardPreferences(
             else -> 1f
         }
 
+        /**
+         * The unigram log-probability a word the dictionaries only know needs at [step] of
+         * [rareWords] to count as spelled: positive infinity counts none, negative infinity all.
+         */
+        fun rareWordsMinLogProb(step: Int): Float = when {
+            step <= RARE_WORDS_LISTED -> Float.POSITIVE_INFINITY
+            step >= RARE_WORDS_ALL -> Float.NEGATIVE_INFINITY
+            else -> ln(RARE_WORDS_STEP_SHARES[step - 1]).toFloat()
+        }
+
         /** How much [radialMenuSize] scales the ring's base radius. */
         fun radialSizeScale(size: Int): Float = when (size) {
             RADIAL_SIZE_SMALL -> 0.75f
@@ -1197,6 +1216,16 @@ data class KeyboardPreferences(
         const val CORRECTION_DISTANCE_STRICT = 0
         const val CORRECTION_DISTANCE_NORMAL = 1
         const val CORRECTION_DISTANCE_LOOSE = 2
+
+        /** [rareWords]'s first and last steps. */
+        const val RARE_WORDS_LISTED = 0
+        const val RARE_WORDS_ALL = 3
+
+        /**
+         * The share of written words a known word needs at each step between them: once in five
+         * million, once in twenty million.
+         */
+        private val RARE_WORDS_STEP_SHARES = doubleArrayOf(1.0 / 5_000_000, 1.0 / 20_000_000)
 
         /** [radialTimeoutDefault] values. */
         const val RADIAL_TIMEOUT_APPLY_TOP = 0

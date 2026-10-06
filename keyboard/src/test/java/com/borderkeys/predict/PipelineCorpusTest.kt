@@ -9,11 +9,19 @@ import java.io.File
 
 /**
  * Every autocorrect corpus through [Pipeline], with a floor per corpus. A corpus row is
- * `typed<TAB>expected`; `expected` equal to `typed` means the word is left alone.
+ * `typed<TAB>expected`; `expected` equal to `typed` means the word is left alone. A corpus read
+ * in context types each row into a field holding its fourth column, the sentence before it.
  */
 class PipelineCorpusTest {
 
-    private class Corpus(val tag: String, val file: String, val floor: Int)
+    private class Corpus(val tag: String, val file: String, val floor: Int, val inContext: Boolean = false) {
+        /** How the report and the readings name this run. */
+        val label: String get() = if (inContext) file.replace(".tsv", "_in_context.tsv") else file
+
+        /** The sentence a row is typed after: its fourth column when read in context, else none. */
+        fun before(line: String): String? =
+            if (inContext) line.split('\t').getOrNull(3)?.takeIf { it.isNotBlank() } else null
+    }
 
     private class Tally {
         var cases = 0
@@ -31,6 +39,7 @@ class PipelineCorpusTest {
             Corpus("en-US", "autocorrect_midword_en.tsv", MIDWORD_FLOOR),
             Corpus("en-US", "autocorrect_midtypo_en.tsv", MIDTYPO_FLOOR),
             Corpus("en-US", "autocorrect_unknown_en.tsv", UNKNOWN_FLOOR),
+            Corpus("en-US", "autocorrect_unlisted_en.tsv", UNLISTED_FLOOR),
             Corpus("en-US", "autocorrect_doubled_en.tsv", DOUBLED_FLOOR),
             Corpus("en-US", "autocorrect_firstletter_en.tsv", FIRSTLETTER_FLOOR),
             Corpus("en-US", "autocorrect_marks_en.tsv", MARKS_FLOOR),
@@ -40,6 +49,7 @@ class PipelineCorpusTest {
             Corpus("en-US", "autocorrect_rareprefix_en.tsv", RAREPREFIX_FLOOR),
             Corpus("en-US", "autocorrect_known_en.tsv", KNOWN_FLOOR),
             Corpus("en-US", "autocorrect_real_en.tsv", REAL_FLOOR),
+            Corpus("en-US", "autocorrect_real_en.tsv", REAL_IN_CONTEXT_FLOOR, inContext = true),
             Corpus("ro-RO", "autocorrect_accents_ro.tsv", ACCENTS_FLOOR),
             Corpus("ro-RO", "autocorrect_twins_ro.tsv", TWINS_RO_FLOOR),
             Corpus("ro-RO", "autocorrect_plain_ro.tsv", PLAIN_RO_FLOOR),
@@ -60,7 +70,7 @@ class PipelineCorpusTest {
             }
             val tally = Tally()
             val pipeline = Pipeline.open(corpus.tag)
-            val readings = Pipeline.readings(corpus.file)
+            val readings = Pipeline.readings(corpus.label)
             try {
                 for (line in file.readLines()) {
                     if (line.isBlank() || line.startsWith("#")) {
@@ -68,7 +78,7 @@ class PipelineCorpusTest {
                     }
                     val typed = line.substringBefore('\t')
                     val expected = line.substringAfter('\t').substringBefore('\t')
-                    val outcome = pipeline.commit(typed)
+                    val outcome = pipeline.commit(typed, corpus.before(line))
                     readings?.println(pipeline.readingLine(outcome))
                     val committed = outcome.committed
                     tally.cases++
@@ -93,14 +103,14 @@ class PipelineCorpusTest {
             }
             report.append(
                 "  %-28s right %3d  wrong word %3d  left alone %3d  of %3d\n".format(
-                    corpus.file, tally.right, tally.wrongWord, tally.leftAlone, tally.cases,
+                    corpus.label, tally.right, tally.wrongWord, tally.leftAlone, tally.cases,
                 ),
             )
             for (miss in tally.misses.take(MISSES_LISTED)) {
                 report.append("      $miss\n")
             }
             if (tally.right < corpus.floor) {
-                failures += "  ${corpus.file}: ${tally.right} right, floor ${corpus.floor}"
+                failures += "  ${corpus.label}: ${tally.right} right, floor ${corpus.floor}"
             }
         }
         val summary = "autocorrect corpora through the whole path:\n$report"
@@ -121,17 +131,19 @@ class PipelineCorpusTest {
          *  the accents corpus and 193 for the rare-prefix corpus. */
         const val TYPO_FLOOR = 198
         const val MIDWORD_FLOOR = 192
-        const val MIDTYPO_FLOOR = 44
-        const val UNKNOWN_FLOOR = 181
+        const val MIDTYPO_FLOOR = 72
+        const val UNKNOWN_FLOOR = 184
+        const val UNLISTED_FLOOR = 176
         const val DOUBLED_FLOOR = 191
-        const val FIRSTLETTER_FLOOR = 172
+        const val FIRSTLETTER_FLOOR = 173
         const val MARKS_FLOOR = 268
-        const val SLIP_FLOOR = 181
-        const val OMITTED_FLOOR = 180
+        const val SLIP_FLOOR = 182
+        const val OMITTED_FLOOR = 181
         const val EXTRA_FLOOR = 192
-        const val RAREPREFIX_FLOOR = 126
+        const val RAREPREFIX_FLOOR = 129
         const val KNOWN_FLOOR = 193
-        const val REAL_FLOOR = 434
+        const val REAL_FLOOR = 468
+        const val REAL_IN_CONTEXT_FLOOR = 493
         const val ACCENTS_FLOOR = 237
 
         /** Out of 200, 190 for the Spanish twins and 57 for the Italian ones. */

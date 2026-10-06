@@ -32,6 +32,17 @@ def load_fold():
     return module.fold_word
 
 
+def packed_keys(dictionary, fold):
+    """The folded keys of a word list's rows, which is what the compiled pack is keyed by."""
+    keys = set()
+    with open(dictionary, encoding="utf-8") as handle:
+        for line in handle:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) >= 2:
+                keys.add(fold(parts[0]))
+    return keys
+
+
 def headwords(path):
     """The dictionary's own entries, without their affix flags."""
     words = []
@@ -54,12 +65,7 @@ def main():
     args = parser.parse_args()
 
     fold = load_fold()
-    packed = set()
-    with open(args.dictionary, encoding="utf-8") as handle:
-        for line in handle:
-            parts = line.rstrip("\n").split("\t")
-            if len(parts) >= 2:
-                packed.add(fold(parts[0]))
+    packed = packed_keys(args.dictionary, fold)
 
     eligible = sorted({
         word.lower()

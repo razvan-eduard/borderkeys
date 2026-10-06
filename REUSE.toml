@@ -218,6 +218,14 @@ precedence = "override"
 SPDX-FileCopyrightText = "2024 Katri Leino, Markku Laine, Mikko Kurimo, Antti Oulasvirta, Aalto University"
 SPDX-License-Identifier = "CC-BY-4.0"
 
+# Words sampled by tools/make_unlisted_corpus.py from Android's stock keyboard word lists
+# (LineageOS's copy of LatinIME); docs/licensing.md, the test data table.
+[[annotations]]
+path = "native-tests/data/autocorrect_unlisted_en.tsv"
+precedence = "override"
+SPDX-FileCopyrightText = "The Android Open Source Project"
+SPDX-License-Identifier = "Apache-2.0"
+
 # The neural swipe decoder's trained weights, plus-only (keyboard/build.gradle.kts,
 # BORDERKEYS_NEURAL_SWIPE). Trained from scratch by tools/swipe_model/train.py on the MIT-licensed
 # futo-org/swipe.futo.org corpus (docs/licensing.md section 2.5); no other model's weights or

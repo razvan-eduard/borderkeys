@@ -18,8 +18,11 @@
  * dictionaries spell is left alone; a candidate past the edit ceiling (one edit, two from eight
  * letters, two from four when every edit was a neighbouring key in place of a typed one) or a
  * name whose letters are not the typed ones is passed over; a typed word under three letters
- * stops the walk unless the candidate only restores its accents. The inflection guard and the
- * contraction and possessive rewrites are not modelled.
+ * stops the walk unless the candidate only restores its accents; an entry the tap decoder's
+ * weighing leaves uncertain is passed over. When every entry is passed over, the tap decoder's
+ * word is taken if the engine accepted it. The inflection guard, the
+ * distance setting and the contraction and possessive rewrites are not modelled. The explain
+ * form also prints the tap decoder's word, its margin, and what autocorrect would commit.
  *
  * Usage:
  *     suggest_eval <dict dir> <corpus.tsv> [tag ...]
@@ -103,6 +106,13 @@ int osaDistance(const uint32_t* a, int aLength, const uint32_t* b, int bLength) 
     return previous[bLength];
 }
 
+/** `candidate`'s text, or empty when it has none. */
+std::string textOf(const Engine& engine, const Candidate& candidate) {
+    uint32_t length = 0;
+    const char* const text = engine.candidateText(candidate, &length);
+    return text != nullptr ? std::string(text, length) : std::string();
+}
+
 /** What the keyboard commits for `typed` from autocorrect's list, or empty for nothing. */
 std::string committedFor(Engine& engine, const std::string& typed) {
     // A word the dictionaries already spell is never replaced.
@@ -149,9 +159,14 @@ std::string committedFor(Engine& engine, const std::string& typed) {
         if (typedCount < 3 && !(typedCount >= 2 && sameLetters)) {
             break;
         }
+        if (!engine.correctionConfident(i)) {
+            continue;
+        }
         return std::string(text, length);
     }
-    return std::string();
+    // When no entry is admissible, the tap decoder's word if the engine accepted it.
+    const Candidate* const decoded = engine.decodedCorrection();
+    return decoded != nullptr && typedCount >= 3 ? textOf(engine, *decoded) : std::string();
 }
 
 }  // namespace
@@ -581,9 +596,28 @@ int main(int argc, char** argv) {
     if (explaining) {
         const char* const typed = argv[3];
         const char* const wanted = argv[4];
+        // The tap decoder's word and what autocorrect would commit, for the request just made.
+        const auto reportDecision = [&engine, typed]() {
+            const std::string committed = committedFor(engine, typed);
+            Candidate decoded{};
+            float margin = 0.0f;
+            if (engine.decoderBest(&decoded, &margin)) {
+                std::printf("  tap decoder: '%s', %+.2f nats over the letters as typed, %s\n",
+                            textOf(engine, decoded).c_str(), margin,
+                            engine.decodedCorrection() != nullptr ? "accepted" : "not accepted");
+            } else {
+                std::printf("  tap decoder: no word\n");
+            }
+            if (!committed.empty()) {
+                std::printf("  autocorrect would take '%s'\n", committed.c_str());
+            } else {
+                std::printf("  autocorrect would leave it\n");
+            }
+        };
         Engine::ScoreParts parts;
         if (!engine.explainScore(typed, std::strlen(typed), wanted, std::strlen(wanted), &parts)) {
             std::printf("\n'%s' is not offered for '%s' at all.\n", wanted, typed);
+            reportDecision();
             return 0;
         }
         std::printf("\n'%s' -> '%s'\n", typed, wanted);
@@ -611,9 +645,8 @@ int main(int argc, char** argv) {
         std::vector<Candidate> list(settled, settled + count);
         std::vector<std::string> words;
         for (const Candidate& entry : list) {
-            uint32_t length = 0;
-            const char* const text = engine.candidateText(entry, &length);
-            words.emplace_back(text != nullptr ? text : "?", text != nullptr ? length : 1u);
+            const std::string text = textOf(engine, entry);
+            words.push_back(text.empty() ? std::string("?") : text);
         }
         std::printf("\n  autocorrect's list, best first (%d):\n", count);
         std::printf("  %-16s %5s %6s %5s %9s %10s %9s\n", "word", "edits", "run-on", "cost",
@@ -630,12 +663,7 @@ int main(int argc, char** argv) {
         }
         // The request made once more for the walk below.
         engine.explainScore(typed, std::strlen(typed), wanted, std::strlen(wanted), &parts);
-        const std::string committed = committedFor(engine, typed);
-        if (!committed.empty()) {
-            std::printf("  autocorrect would take '%s'\n", committed.c_str());
-        } else {
-            std::printf("  autocorrect would leave it\n");
-        }
+        reportDecision();
         return 0;
     }
 

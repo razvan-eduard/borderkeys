@@ -18,6 +18,7 @@
 #include "proximity.hpp"
 #include "test_support.hpp"
 #include "topk.hpp"
+#include "tap_decode.hpp"
 #include "touch_model.hpp"
 
 using namespace borderkeys;
@@ -179,6 +180,44 @@ struct LoadedEngine {
             }
         }
         return false;
+    }
+
+    /**
+     * The tap decoder's word for the ASCII `composing`, letter i tapped at `xs[i]`, `ys[i]`, or
+     * untapped when they are null; empty when it found none. `accepted` receives whether the
+     * engine accepted it, `margin` its margin over the typed letters.
+     */
+    std::string decoded(const char* composing, const float* xs, const float* ys,
+                        bool* accepted = nullptr, float* margin = nullptr) {
+        Candidate out[Engine::kMaxCandidates];
+        const size_t length = std::strlen(composing);
+        engine.suggest(composing, length, nullptr, 0, nullptr, 0, xs, ys,
+                       xs != nullptr ? static_cast<int>(length) : 0, out, Engine::kMaxCandidates);
+        if (accepted != nullptr) {
+            *accepted = engine.decodedCorrection() != nullptr;
+        }
+        Candidate best{};
+        if (!engine.decoderBest(&best, margin)) {
+            return std::string();
+        }
+        uint32_t wordLength = 0;
+        const char* const word = engine.candidateText(best, &wordLength);
+        return word != nullptr ? std::string(word, wordLength) : std::string();
+    }
+
+    /**
+     * Taps for the ASCII `typed` into `xs` and `ys`: each at its key's centre, moved `share` of
+     * the way towards the key of the same letter of `meant`.
+     */
+    void leanTaps(const char* typed, const char* meant, float share, float* xs, float* ys) const {
+        for (size_t i = 0; typed[i] != '\0'; ++i) {
+            float meantX = 0.f;
+            float meantY = 0.f;
+            layout.centreOf(typed[i], &xs[i], &ys[i]);
+            layout.centreOf(meant[i], &meantX, &meantY);
+            xs[i] += share * (meantX - xs[i]);
+            ys[i] += share * (meantY - ys[i]);
+        }
     }
 
     /** The rank of `expected` among the suggestions for `composing`, or -1. */
@@ -475,6 +514,180 @@ void runEngineTests() {
         loaded.engine.setTouchModel(true, 1.f, 100);
         check(loaded.scoreOf(word, "there", xs, ys) == unlearned,
               "with fewer taps than the minimum, the default patterns price it");
+    }
+
+    section("a word the pack only knows is never offered, and counts as spelled within reach");
+    {
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads the test pack");
+        char out[64];
+        check(loaded.engine.knownSpelling("timepiece", 9, out, sizeof(out)) == 0,
+              "by default it is not a word the dictionaries spell");
+        loaded.engine.setKnownWordReach(-std::numeric_limits<float>::infinity());
+        check(loaded.engine.knownSpelling("timepiece", 9, out, sizeof(out)) == 9,
+              "within reach it is");
+        loaded.engine.setKnownWordReach(std::log(3e-6f) + 0.5f);
+        check(loaded.engine.knownSpelling("timepiece", 9, out, sizeof(out)) == 0,
+              "and out of reach once the reach asks for commoner words");
+        loaded.engine.setKnownWordReach(-std::numeric_limits<float>::infinity());
+        check(loaded.rankOf("keyboardi", "keyboardist") < 0 && loaded.rankOf("timepie", "timepiece") < 0,
+              "it is never completed");
+        check(loaded.rankOf("keyboardjst", "keyboardist") < 0, "nor corrected to");
+        check(loaded.decoded("tumepiecr", nullptr, nullptr) != "timepiece", "nor decoded to");
+        check(loaded.rankOf("keyboarf", "keyboard") >= 0, "and the words the pack offers are as before");
+    }
+
+    section("the tap decoder weighs each word against all the others");
+    {
+        DecodedWords words;
+        check(!words.found(), "nothing reached, nothing found");
+        words.offer(Candidate{0, 7, 0.f}, -10.0f);
+        words.offer(Candidate{0, 9, 0.f}, -10.2f);
+        words.offer(Candidate{0, 7, 0.f}, -12.0f);
+        checkNear(words.bestTotal(), logAddExp(-10.0f, -12.0f), 0.0001f,
+                  "a word reached by two paths holds both paths' probability");
+        check(words.best().wordIndex == 7, "the likeliest word is the best");
+        checkNear(words.othersTotal(), -10.2f, 0.0001f, "the rest is every other word together");
+        checkNear(logAddExp(kDecodeNegativeInfinity, -3.0f), -3.0f, 0.0f,
+                  "adding nothing changes nothing");
+    }
+
+    section("the beam's cut depends on the scores alone");
+    {
+        Arena arena;
+        check(arena.init(64 * 1024), "the arena opens");
+        DecoderLevel ascending;
+        DecoderLevel descending;
+        check(ascending.allocate(arena, 64, 8) && descending.allocate(arena, 64, 8),
+              "two levels of 64, kept to 8");
+        const float scores[] = {-1.f, -1.f, -1.f, -1.f, -2.f, -2.f, -2.f, -2.f, -2.f, -2.f,
+                                -2.f, -2.f, -2.f, -2.f, -3.f, -3.f, -3.f, -3.f, -3.f, -3.f};
+        const int count = static_cast<int>(sizeof(scores) / sizeof(scores[0]));
+        for (int i = 0; i < count; ++i) {
+            ascending.push(DecoderState{i, scores[i], 0});
+            descending.push(DecoderState{count - i, scores[i], 0});
+        }
+        ascending.prune();
+        descending.prune();
+        const auto worst = [](const DecoderLevel& level) {
+            float low = 0.f;
+            for (int i = 0; i < level.count(); ++i) {
+                low = std::min(low, level[i].score);
+            }
+            return low;
+        };
+        check(ascending.count() == 14 && descending.count() == 14,
+              "every hypothesis tied with the eighth best is kept");
+        check(worst(ascending) == -2.f && worst(descending) == -2.f,
+              "and none below it, whatever the nodes are numbered");
+
+        DecoderLevel small;
+        check(small.allocate(arena, 16, 4), "a level of 16, kept to 4");
+        for (int i = 0; i < 40; ++i) {
+            small.push(DecoderState{i, -1.f, 0});
+        }
+        check(small.count() <= 16, "ties past the capacity still leave room for the next push");
+    }
+
+    section("a word the decoder only offers goes second on the strip");
+    {
+        const auto sameWord = [](const Candidate& a, const Candidate& b) {
+            return a.wordIndex == b.wordIndex;
+        };
+        const Candidate offered{0, 99, -40.f};
+        Candidate out[4] = {{0, 1, 5.f}, {0, 2, 4.f}, {0, 3, 3.f}, {}};
+        const int written = placeOffered(out, 3, 4, offered, sameWord);
+        check(written == 4 && out[0].wordIndex == 1 && out[1].wordIndex == 99 &&
+                  out[2].wordIndex == 2 && out[3].wordIndex == 3,
+              "after the engine's best, the rest moved down");
+        check(out[1].score == out[0].score, "taking the score of the word before it");
+        Candidate full[3] = {{0, 1, 5.f}, {0, 2, 4.f}, {0, 3, 3.f}};
+        check(placeOffered(full, 3, 3, offered, sameWord) == 3 && full[1].wordIndex == 99 &&
+                  full[2].wordIndex == 2,
+              "a full strip drops its last word");
+        Candidate empty[2] = {};
+        check(placeOffered(empty, 0, 2, offered, sameWord) == 1 && empty[0].wordIndex == 99,
+              "an empty strip takes it first");
+        Candidate listed[2] = {{0, 99, 5.f}, {}};
+        check(placeOffered(listed, 1, 2, offered, sameWord) == 1,
+              "a word already listed is not listed twice");
+    }
+
+    section("the letter model reads spellings like the pack's own");
+    {
+        struct stat info {};
+        LanguagePack pack;
+        const int fd = ::open(BORDERKEYS_TEST_PACK, O_RDONLY);
+        const bool opened = fd >= 0 && stat(BORDERKEYS_TEST_PACK, &info) == 0 &&
+                            pack.open("ro-RO", fd, 0, info.st_size) == kBkdOk;
+        if (fd >= 0) {
+            ::close(fd);
+        }
+        check(opened && pack.letters().isBuilt(), "a pack builds its letter model as it opens");
+        const auto spelling = [&pack](const char* text) {
+            uint32_t folded[16];
+            const int count = foldUtf8(text, std::strlen(text), folded, 16);
+            return pack.letters().spellingLogProb(pack.trie(), folded, count);
+        };
+        check(spelling("theme") > spelling("emhet"),
+              "a pack's spelling outscores its own letters in an order no spelling holds");
+        check(spelling("theme") > spelling("them\xD0\xB6"),
+              "a letter outside the pack's alphabet is the least likely of all");
+        pack.close();
+        check(!pack.letters().isBuilt(), "closing the pack drops its letter model");
+    }
+
+    section("the tap decoder reads where each tap landed");
+    {
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads the test pack");
+        // Three of eight letters on a neighbouring key: past the walk's ceiling.
+        const char typed[] = "jeubpard";
+        const char meant[] = "keyboard";
+        float xs[8];
+        float ys[8];
+        bool accepted = false;
+        float leaning = 0.f;
+        loaded.leanTaps(typed, meant, 0.45f, xs, ys);
+        check(loaded.decoded(typed, xs, ys, &accepted, &leaning) == meant && accepted,
+              "taps at the edge of the keys meant decode to the word, and it is accepted");
+
+        float centred = 0.f;
+        loaded.leanTaps(typed, meant, 0.f, xs, ys);
+        loaded.decoded(typed, xs, ys, &accepted, &centred);
+        check(centred < leaning, "the same letters tapped at their own centres fit the word less");
+
+        check(loaded.decoded("there", nullptr, nullptr).empty(),
+              "a word a dictionary spells is not decoded");
+        check(loaded.decoded("thr", nullptr, nullptr).empty(), "nor a word under four letters");
+        check(loaded.decoded("jeubpard'", nullptr, nullptr).empty() &&
+                  loaded.decoded("'jeubpard", nullptr, nullptr).empty(),
+              "nor a word that starts or ends with a mark");
+        check(loaded.decoded(typed, nullptr, nullptr) == meant &&
+                  loaded.decoded("jeub'pard", nullptr, nullptr) != meant,
+              "a typed mark is read as itself, never dropped as a stray tap");
+
+        const char nameTyped[] = "bprder";
+        const char nameMeant[] = "border";
+        loaded.leanTaps(nameTyped, nameMeant, 0.45f, xs, ys);
+        const std::string pastName = loaded.decoded(nameTyped, xs, ys);
+        check(!pastName.empty() && pastName != nameMeant,
+              "a name is never decoded to; the decoder reads past it to another word");
+
+        const char* const personal[1] = {typed};
+        const size_t personalLength[1] = {sizeof(typed) - 1};
+        const int32_t once[1] = {1};
+        loaded.engine.loadUserWords(personal, personalLength, once, 1, nullptr, once);
+        loaded.leanTaps(typed, meant, 0.45f, xs, ys);
+        check(loaded.decoded(typed, xs, ys).empty(),
+              "the letters as typed are not decoded once chosen on purpose as a word of the user's");
+        loaded.engine.loadUserWords(nullptr, nullptr, nullptr, 0);
+
+        const char* const blocked[1] = {meant};
+        const size_t blockedLength[1] = {sizeof(meant) - 1};
+        loaded.engine.setBlockedWords(blocked, blockedLength, 1);
+        loaded.leanTaps(typed, meant, 0.45f, xs, ys);
+        check(loaded.decoded(typed, xs, ys) != meant, "nor a blocked word");
     }
 
     section("suggestions");

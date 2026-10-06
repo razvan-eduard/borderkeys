@@ -37,8 +37,8 @@ internal object NativePredictor {
 
     /**
      * Validates a `.bkd` without loading it. Fills [out] with `{ status, formatVersion,
-     * wordCount }` and returns the pack's language tag, or null when the pack was refused.
-     * Not for the UI thread.
+     * wordCount, knownWordCount }`, the last the words the pack only knows and never offers, and
+     * returns the pack's language tag, or null when the pack was refused. Not for the UI thread.
      */
     external fun nativeInspectPack(fd: Int, offset: Long, length: Long, out: IntArray): String?
 
@@ -63,12 +63,13 @@ internal object NativePredictor {
     /**
      * Answers one request. Fills [outWords], [outScores] and [outProperNoun] with the best
      * candidates, best first, and returns how many were written; an empty [composing] asks for
-     * the next word. For a typed word, [outTexts] receives [TEXT_KNOWN_SPELLING] and
-     * [TEXT_POSSESSIVE], a slot with none left as it is; [outCorrections] receives autocorrect's
-     * list, best first, up to [CORRECTION_SLOTS] entries, the rest left null,
+     * the next word. For a typed word, [outTexts] receives [TEXT_KNOWN_SPELLING],
+     * [TEXT_POSSESSIVE] and [TEXT_DECODED], a slot with none left as it is; [outCorrections]
+     * receives autocorrect's list, best first, up to [CORRECTION_SLOTS] entries, the rest null,
      * [outCorrectionNames] whether each entry is a name, [outCorrectionSlips] whether each was
-     * reached by neighbouring keys in place of the typed ones alone, and [outSpellingFlags]
-     * [SPELLING_EXACT] and [SPELLING_NAME].
+     * reached by neighbouring keys in place of the typed ones alone, [outCorrectionConfident]
+     * whether each stands against the other readings of the taps, and
+     * [outSpellingFlags] [SPELLING_EXACT] and [SPELLING_NAME].
      */
     external fun nativeAnswer(
         handle: Long,
@@ -84,6 +85,7 @@ internal object NativePredictor {
         outCorrections: Array<String?>,
         outCorrectionNames: BooleanArray,
         outCorrectionSlips: BooleanArray,
+        outCorrectionConfident: BooleanArray,
         outSpellingFlags: BooleanArray,
     ): Int
 
@@ -93,8 +95,11 @@ internal object NativePredictor {
     /** [nativeAnswer]'s text slot: the possessive of a name missing its apostrophe. */
     const val TEXT_POSSESSIVE = 1
 
+    /** [nativeAnswer]'s text slot: the tap decoder's word, when the engine accepted it. */
+    const val TEXT_DECODED = 2
+
     /** How many text slots [nativeAnswer] fills. */
-    const val TEXT_SLOTS = 2
+    const val TEXT_SLOTS = 3
 
     /** How many entries of autocorrect's list [nativeAnswer] writes at most. */
     const val CORRECTION_SLOTS = 5
@@ -156,6 +161,12 @@ internal object NativePredictor {
 
     /** How readily the user's words outrank the dictionaries. A multiplier; 1 is the default. */
     external fun nativeSetLearningSpeed(handle: Long, speed: Float)
+
+    /**
+     * How common a word a pack knows but never offers must be to count as spelled: its unigram
+     * log-probability at least [minimumLogProb]. Positive infinity counts none.
+     */
+    external fun nativeSetKnownWordReach(handle: Long, minimumLogProb: Float)
 
     /**
      * How much evidence an edit needs before it outranks a word spelled as typed. A multiplier;

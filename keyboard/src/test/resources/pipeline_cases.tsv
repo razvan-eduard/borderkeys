@@ -21,7 +21,8 @@ accordni	according	Correctable
 absoultel	absolutely	Correctable
 sevrice	service	Correctable
 chnage	change	Correctable
-# Two edits only from eight letters (CORRECTION_DISTANCE_NORMAL).
+# Past the edit ceiling, and the taps fit believe and belief alike: left as typed, believe
+# offered on the strip (PipelineTest).
 beleiv	-	TooFar
 
 # --- a finished word with a slip in it is corrected -------------------------------------------

@@ -16,8 +16,8 @@ import java.nio.ByteOrder
 object BundledDictionaries {
 
     /**
-     * One dictionary in the APK. [wordCount] and [sizeBytes] are the compiled pack's, for its
-     * label; [contentCrc] tells an installed copy apart from it.
+     * One dictionary in the APK. [wordCount], [knownWordCount] and [sizeBytes] are the compiled
+     * pack's; [contentCrc] tells an installed copy apart from it.
      */
     data class Entry(
         val tag: String,
@@ -26,16 +26,21 @@ object BundledDictionaries {
         val fileName: String,
         val wordCount: Int,
         val sizeBytes: Long,
-    )
+        /** Of [wordCount], the words the pack only knows and never offers. */
+        val knownWordCount: Int = 0,
+    ) {
+        /** The words the pack offers, for its label. */
+        val offeredWordCount: Int get() = wordCount - knownWordCount
+    }
 
     val ALL: List<Entry> = listOf(
-        // Read from the compiled headers; BundledPackMetadataTest checks them.
-        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 108_246, 8_250_812),
-        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 118_970, 9_740_504),
-        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 97_406, 8_016_384),
-        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 93_966, 7_897_344),
-        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 100_737, 9_184_772),
-        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 95_592, 8_219_260),
+        // Read from the compiled packs; BundledPackMetadataTest checks them.
+        Entry("ro-RO", "Romanian", "dict/ro_RO.bkd", "ro_RO.bkd", 192_140, 12_446_468, 83_894),
+        Entry("en-US", "English", "dict/en_US.bkd", "en_US.bkd", 168_302, 12_840_276, 49_332),
+        Entry("es-ES", "Spanish", "dict/es_ES.bkd", "es_ES.bkd", 157_267, 10_833_076, 59_861),
+        Entry("fr-FR", "French", "dict/fr_FR.bkd", "fr_FR.bkd", 161_883, 11_530_216, 67_917),
+        Entry("de-DE", "German", "dict/de_DE.bkd", "de_DE.bkd", 355_251, 25_337_928, 254_514),
+        Entry("it-IT", "Italian", "dict/it_IT.bkd", "it_IT.bkd", 193_565, 13_422_196, 97_973),
     )
 
     /** Opens one for reading. The caller closes it; the install path copies and validates. */

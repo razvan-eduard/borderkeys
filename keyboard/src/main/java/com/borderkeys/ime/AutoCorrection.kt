@@ -4,16 +4,18 @@
 package com.borderkeys.ime
 
 import com.borderkeys.predict.CorrectionOffer
+import com.borderkeys.predict.DecodedCorrection
+import com.borderkeys.predict.ListedCorrection
 import java.text.Normalizer
 
 /** Whether a delimiter should replace what was typed, and with what. */
 internal object AutoCorrection {
 
     /**
-     * What a word and the answer offered for it amount to. Exactly one holds, and only
-     * [Correctable] replaces anything.
+     * What a word and the answer offered for it amount to. Exactly one holds, and only one that
+     * [replaces] replaces anything.
      */
-    enum class Situation {
+    enum class Situation(val replaces: Boolean = false) {
         /** Nothing was offered at all. */
         NothingOffered,
 
@@ -44,11 +46,20 @@ internal object AutoCorrection {
          */
         Inflection,
 
-        /** None of the above. */
-        Correctable,
+        /**
+         * Otherwise correctable, but another reading of the taps is clearly likelier
+         * ([CorrectionOffer.confident]).
+         */
+        Uncertain,
+
+        /** None of the above, for an entry of the engine's correction list. */
+        Correctable(replaces = true),
+
+        /** None of the above, for the tap decoder's word ([DecodedCorrection]). */
+        Decoded(replaces = true),
     }
 
-    /** [pick]'s answer: the [Situation] and, when it is [Situation.Correctable], the cased text. */
+    /** [pick]'s answer: the [Situation] and, when it [Situation.replaces], the cased text. */
     class Pick(val situation: Situation, val text: String?)
 
     /**
@@ -57,9 +68,11 @@ internal object AutoCorrection {
      * they spell it, [knownWordExact] whether one spells it exactly, case aside, and
      * [knownWordIsName] whether that spelling is a name. The word itself is judged first
      * ([typedSituation]); then each offer in turn ([candidateSituation]), the first that is
-     * [Situation.Correctable] winning, a [Situation.TooShort] offer stopping the walk, and the
-     * first offer's situation standing when none wins. An offer may be [maxEdits] edits away, or
-     * [maxSlipEdits] when it is [CorrectionOffer.slipsOnly].
+     * admissible winning as its [CorrectionOffer.appliedAs], a [Situation.TooShort] offer stopping
+     * the walk, and the first offer's situation standing when none wins. An offer may be as many
+     * edits away as its [CorrectionOffer.editCeiling] allows under [maxEdits] and [maxSlipEdits],
+     * and is passed over when not [CorrectionOffer.confident]. The tap decoder's word, last in the
+     * list, is left out unless [decoderAllowed].
      */
     fun pick(
         typed: String,
@@ -72,30 +85,35 @@ internal object AutoCorrection {
         maxEdits: Int = Int.MAX_VALUE,
         capitaliseNames: Boolean = true,
         maxSlipEdits: Int = maxEdits,
+        decoderAllowed: Boolean = true,
     ): Pick {
+        val offers = admitted(corrections, decoderAllowed)
         typedSituation(
-            typed, corrections, suggestionQuery, knownWord, knownWordExact, knownWordIsName,
+            typed, offers, suggestionQuery, knownWord, knownWordExact, knownWordIsName,
             capitaliseNames,
         )?.let { return it }
         var first: Situation? = null
-        for (offer in corrections) {
+        for (offer in offers) {
             // [capitaliseNames] gates only a name's capital, not [Situation.NameMismatch].
             val cased = matchCase(typed, offer.text, offer.isName && capitaliseNames)
             val situation = candidateSituation(
-                typed, offer, cased, minimumLength,
-                if (offer.slipsOnly) maxOf(maxEdits, maxSlipEdits) else maxEdits,
+                typed, offer, cased, minimumLength, offer.editCeiling(maxEdits, maxSlipEdits),
             )
             if (first == null) {
                 first = situation
             }
             when (situation) {
-                Situation.Correctable -> return Pick(situation, cased)
+                Situation.Correctable -> return Pick(offer.appliedAs, cased)
                 Situation.TooShort -> return Pick(situation, null)
                 else -> Unit
             }
         }
         return Pick(first ?: Situation.NothingOffered, null)
     }
+
+    /** [corrections] without the tap decoder's word unless [decoderAllowed]. */
+    private fun admitted(corrections: List<CorrectionOffer>, decoderAllowed: Boolean): List<CorrectionOffer> =
+        if (decoderAllowed) corrections else corrections.filterNot { it is DecodedCorrection }
 
     /**
      * The verdict the typed word settles on its own, or null when the offers decide: nothing
@@ -148,6 +166,7 @@ internal object AutoCorrection {
             !(typed.length >= MIN_DIACRITIC_LENGTH && isDiacriticOnlyDifference(typed, offer.text)) ->
             Situation.TooShort
         offer.inflection && !isSameLetters(typed, offer.text) -> Situation.Inflection
+        !offer.confident -> Situation.Uncertain
         else -> Situation.Correctable
     }
 
@@ -167,7 +186,7 @@ internal object AutoCorrection {
         inflection: Boolean = false,
     ): String? = pick(
         typed,
-        if (suggestion.isNullOrEmpty()) emptyList() else listOf(CorrectionOffer(suggestion, isProperNoun, inflection)),
+        if (suggestion.isNullOrEmpty()) emptyList() else listOf(ListedCorrection(suggestion, isProperNoun, inflection)),
         suggestionQuery,
         knownWord,
         knownWordExact = knownWord.isNotEmpty(),
@@ -199,13 +218,16 @@ internal object AutoCorrection {
 
     /**
      * The edit ceiling for an offer reached by neighbouring keys alone
-     * ([CorrectionOffer.slipsOnly]): by default two from [MIN_SLIP_PAIR_LETTERS] letters on, else
+     * ([ListedCorrection.slipsOnly]): by default two from [MIN_SLIP_PAIR_LETTERS] letters on, else
      * as [maxEditsFor].
      */
     fun maxSlipEditsFor(typedLength: Int, distanceSetting: Int): Int = when (distanceSetting) {
         DISTANCE_STRICT, DISTANCE_LOOSE -> maxEditsFor(typedLength, distanceSetting)
         else -> if (typedLength >= MIN_SLIP_PAIR_LETTERS) 2 else maxEditsFor(typedLength, distanceSetting)
     }
+
+    /** Whether the tap decoder's word may be applied under the `correctionDistance` setting. */
+    fun decoderAllowedFor(distanceSetting: Int): Boolean = distanceSetting != DISTANCE_STRICT
 
     /**
      * Optimal string alignment distance: Levenshtein, with a swap of two adjacent letters as one

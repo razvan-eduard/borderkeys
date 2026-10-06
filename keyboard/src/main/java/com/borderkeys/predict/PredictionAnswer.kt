@@ -66,6 +66,7 @@ internal class AnswerScratch {
     val corrections = arrayOfNulls<String>(NativePredictor.CORRECTION_SLOTS)
     val correctionNames = BooleanArray(NativePredictor.CORRECTION_SLOTS)
     val correctionSlips = BooleanArray(NativePredictor.CORRECTION_SLOTS)
+    val correctionConfident = BooleanArray(NativePredictor.CORRECTION_SLOTS)
     val spellingFlags = BooleanArray(NativePredictor.SPELLING_FLAGS)
 }
 
@@ -88,22 +89,29 @@ internal fun answerRequest(
     scratch.corrections.fill(null)
     scratch.correctionNames.fill(false)
     scratch.correctionSlips.fill(false)
+    scratch.correctionConfident.fill(true)
     scratch.spellingFlags.fill(false)
     val count = NativePredictor.nativeAnswer(
         handle, composing, previous1, previous2, tapXs, tapYs, scratch.words, scratch.scores,
         scratch.properNoun, scratch.texts, scratch.corrections, scratch.correctionNames,
-        scratch.correctionSlips, scratch.spellingFlags,
+        scratch.correctionSlips, scratch.correctionConfident, scratch.spellingFlags,
     )
     val spelling = scratch.texts[NativePredictor.TEXT_KNOWN_SPELLING]
     val knownStems = if (composing.isNotEmpty()) knownStemsOf(handle, composing, languages) else emptySet()
-    val corrections = ArrayList<CorrectionOffer>(NativePredictor.CORRECTION_SLOTS)
+    fun shielded(text: String) =
+        knownStems.isNotEmpty() && WordStems.shields(composing, text, knownStems, languages)
+    val corrections = ArrayList<CorrectionOffer>(NativePredictor.CORRECTION_SLOTS + 1)
     for (index in 0 until NativePredictor.CORRECTION_SLOTS) {
         val text = scratch.corrections[index] ?: break
-        val inflection =
-            knownStems.isNotEmpty() && WordStems.shields(composing, text, knownStems, languages)
         corrections.add(
-            CorrectionOffer(text, scratch.correctionNames[index], inflection, scratch.correctionSlips[index]),
+            ListedCorrection(
+                text, scratch.correctionNames[index], shielded(text), scratch.correctionSlips[index],
+                scratch.correctionConfident[index],
+            ),
         )
+    }
+    scratch.texts[NativePredictor.TEXT_DECODED]?.let { decoded ->
+        corrections.add(DecodedCorrection(decoded, shielded(decoded)))
     }
     return PredictionAnswer(
         query = composing,

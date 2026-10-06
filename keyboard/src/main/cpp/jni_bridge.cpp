@@ -32,11 +32,13 @@ constexpr jsize kMaxGesturePoints = 512;
 // The slots of nativeAnswer's `outTexts`, the same as NativePredictor's TEXT_ constants.
 constexpr jsize kTextKnownSpelling = 0;
 constexpr jsize kTextPossessive = 1;
-constexpr jsize kTextSlots = 2;
+constexpr jsize kTextDecoded = 2;
+constexpr jsize kTextSlots = 3;
 
 // nativeAnswer's `outCorrections` holds autocorrect's list, `outCorrectionNames` whether each
-// entry is a name and `outCorrectionSlips` whether each was reached by neighbouring keys alone;
-// `outSpellingFlags` holds two flags about the typed word. The same as NativePredictor's
+// entry is a name, `outCorrectionSlips` whether each was reached by neighbouring keys alone and
+// `outCorrectionConfident` whether each clears the tap decoder's weighing; `outSpellingFlags`
+// holds two flags about the typed word. The same as NativePredictor's
 // CORRECTION_SLOTS and SPELLING_ constants.
 constexpr jsize kCorrectionSlots = 5;
 constexpr jsize kSpellingExact = 0;
@@ -107,25 +109,27 @@ jint nativeLoadLanguage(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring tag
 }
 
 /**
- * Describes a `.bkd` without loading it: fills `out` with { status, formatVersion, wordCount }
- * and returns the language tag, or null when the pack was refused, `out[0]` then holding the
- * BkdStatus.
+ * Describes a `.bkd` without loading it: fills `out` with { status, formatVersion, wordCount,
+ * knownOnlyCount } and returns the language tag, or null when the pack was refused, `out[0]`
+ * then holding the BkdStatus.
  */
 jstring nativeInspectPack(JNIEnv* env, jobject /*thiz*/, jint fd, jlong offset, jlong length,
                           jintArray out) {
-    if (out == nullptr || env->GetArrayLength(out) < 3) {
+    constexpr jsize kInspectSlots = 4;
+    if (out == nullptr || env->GetArrayLength(out) < kInspectSlots) {
         return nullptr;
     }
     borderkeys::PackInfo info = {};
     const int32_t status = borderkeys::bkdInspectPack(
         static_cast<int>(fd), static_cast<int64_t>(offset), static_cast<int64_t>(length), &info);
 
-    jint values[3] = {static_cast<jint>(status), 0, 0};
+    jint values[kInspectSlots] = {static_cast<jint>(status), 0, 0, 0};
     if (status == borderkeys::kBkdOk) {
         values[1] = static_cast<jint>(info.formatVersion);
         values[2] = static_cast<jint>(info.wordCount);
+        values[3] = static_cast<jint>(info.knownOnlyCount);
     }
-    env->SetIntArrayRegion(out, 0, 3, values);
+    env->SetIntArrayRegion(out, 0, kInspectSlots, values);
     if (status != borderkeys::kBkdOk) {
         return nullptr;
     }
@@ -290,16 +294,82 @@ void setText(JNIEnv* env, jobjectArray array, jsize slot, const char* text) {
 }
 
 /**
- * Fills `outTexts` for the typed [word]: how the dictionaries spell it and its possessive; a slot
- * with none is left as it is. `outCorrections` receives autocorrect's list for the request just
+ * Copies [candidate]'s text into `text`, which holds kStringBufferBytes, ending it with a NUL;
+ * returns its length, 0 when it has none or does not fit. `source`, when given, receives the
+ * engine's own copy.
+ */
+uint32_t copyCandidateText(const Engine& engine, const Candidate& candidate, char* text,
+                           const char** source = nullptr) {
+    uint32_t length = 0;
+    const char* const own = engine.candidateText(candidate, &length);
+    if (own == nullptr || length == 0 || length >= static_cast<uint32_t>(kStringBufferBytes)) {
+        return 0;
+    }
+    std::memcpy(text, own, length);
+    text[length] = '\0';
+    if (source != nullptr) {
+        *source = own;
+    }
+    return length;
+}
+
+/**
+ * Writes the first [found] of [candidates] into `outWords`, `outScores` and `outProperNoun`, best
+ * first, skipping any without text, and returns how many were written; 0 on a failed write.
+ */
+int writeRanking(JNIEnv* env, const Engine& engine, const Candidate* candidates, int found,
+                 jobjectArray outWords, jfloatArray outScores, jbooleanArray outProperNoun) {
+    float scores[Engine::kMaxCandidates];
+    jboolean properNoun[Engine::kMaxCandidates];
+    int written = 0;
+    char text[kStringBufferBytes];
+    for (int i = 0; i < found && i < Engine::kMaxCandidates; ++i) {
+        if (copyCandidateText(engine, candidates[i], text) == 0) {
+            continue;
+        }
+        // The one allocation per word, into the caller's reused array.
+        jstring value = env->NewStringUTF(text);
+        if (value == nullptr) {
+            env->ExceptionClear();
+            break;
+        }
+        env->SetObjectArrayElement(outWords, written, value);
+        env->DeleteLocalRef(value);
+        if (env->ExceptionCheck() == JNI_TRUE) {
+            env->ExceptionClear();
+            break;
+        }
+        scores[written] = candidates[i].score;
+        properNoun[written] = engine.candidateIsProperNoun(candidates[i]) ? JNI_TRUE : JNI_FALSE;
+        ++written;
+    }
+    if (written > 0) {
+        env->SetFloatArrayRegion(outScores, 0, written, scores);
+        if (outProperNoun != nullptr && env->GetArrayLength(outProperNoun) >= written) {
+            env->SetBooleanArrayRegion(outProperNoun, 0, written, properNoun);
+        }
+        if (env->ExceptionCheck() == JNI_TRUE) {
+            env->ExceptionClear();
+            return 0;
+        }
+    }
+    return written;
+}
+
+/**
+ * Fills `outTexts` for the typed [word]: how the dictionaries spell it, its possessive and the tap
+ * decoder's word when the engine accepted it; a slot with none is left as it is.
+ * `outCorrections` receives autocorrect's list for the request just
  * served, best first, one spelling once, `outCorrectionNames` whether each entry is a name,
  * `outCorrectionSlips` whether each was reached by neighbouring keys alone (Candidate::slipsOnly),
- * and `outSpellingFlags` whether a dictionary spells the typed letters exactly and whether that
- * spelling is a name.
+ * `outCorrectionConfident` whether each clears the tap decoder's weighing
+ * (Engine::correctionConfident), and `outSpellingFlags` whether a dictionary spells the typed
+ * letters exactly and whether that spelling is a name.
  */
 void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t length,
                 jobjectArray outTexts, jobjectArray outCorrections, jbooleanArray outCorrectionNames,
-                jbooleanArray outCorrectionSlips, jbooleanArray outSpellingFlags) {
+                jbooleanArray outCorrectionSlips, jbooleanArray outCorrectionConfident,
+                jbooleanArray outSpellingFlags) {
     if (outTexts == nullptr || env->GetArrayLength(outTexts) < kTextSlots) {
         return;
     }
@@ -314,16 +384,23 @@ void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t leng
         text[possessive] = '\0';
         setText(env, outTexts, kTextPossessive, text);
     }
+    const Candidate* const decoded = engine.decodedCorrection();
+    if (decoded != nullptr && copyCandidateText(engine, *decoded, text) > 0) {
+        setText(env, outTexts, kTextDecoded, text);
+    }
     if (outCorrections == nullptr || outCorrectionNames == nullptr ||
-        outCorrectionSlips == nullptr || outSpellingFlags == nullptr ||
+        outCorrectionSlips == nullptr || outCorrectionConfident == nullptr ||
+        outSpellingFlags == nullptr ||
         env->GetArrayLength(outCorrections) < kCorrectionSlots ||
         env->GetArrayLength(outCorrectionNames) < kCorrectionSlots ||
         env->GetArrayLength(outCorrectionSlips) < kCorrectionSlots ||
+        env->GetArrayLength(outCorrectionConfident) < kCorrectionSlots ||
         env->GetArrayLength(outSpellingFlags) < kSpellingFlagSlots) {
         return;
     }
     jboolean names[kCorrectionSlots] = {};
     jboolean slips[kCorrectionSlots] = {};
+    jboolean confident[kCorrectionSlots] = {};
     jboolean spelling[kSpellingFlagSlots] = {};
     const Candidate* list = nullptr;
     const int count = engine.corrections(&list);
@@ -331,9 +408,9 @@ void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t leng
     uint32_t writtenLength[kCorrectionSlots];
     int slot = 0;
     for (int i = 0; i < count && slot < kCorrectionSlots; ++i) {
-        uint32_t sourceLength = 0;
-        const char* const source = engine.candidateText(list[i], &sourceLength);
-        if (source == nullptr || sourceLength == 0 || sourceLength >= kStringBufferBytes) {
+        const char* source = nullptr;
+        const uint32_t sourceLength = copyCandidateText(engine, list[i], text, &source);
+        if (sourceLength == 0) {
             continue;
         }
         bool doubled = false;
@@ -344,11 +421,10 @@ void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t leng
         if (doubled) {
             continue;
         }
-        std::memcpy(text, source, sourceLength);
-        text[sourceLength] = '\0';
         setText(env, outCorrections, slot, text);
         names[slot] = engine.candidateIsProperNoun(list[i]) ? JNI_TRUE : JNI_FALSE;
         slips[slot] = list[i].slipsOnly() ? JNI_TRUE : JNI_FALSE;
+        confident[slot] = engine.correctionConfident(i) ? JNI_TRUE : JNI_FALSE;
         written[slot] = source;
         writtenLength[slot] = sourceLength;
         ++slot;
@@ -362,6 +438,7 @@ void writeTexts(JNIEnv* env, const Engine& engine, const char* word, size_t leng
     }
     env->SetBooleanArrayRegion(outCorrectionNames, 0, kCorrectionSlots, names);
     env->SetBooleanArrayRegion(outCorrectionSlips, 0, kCorrectionSlots, slips);
+    env->SetBooleanArrayRegion(outCorrectionConfident, 0, kCorrectionSlots, confident);
     env->SetBooleanArrayRegion(outSpellingFlags, 0, kSpellingFlagSlots, spelling);
     if (env->ExceptionCheck() == JNI_TRUE) {
         env->ExceptionClear();
@@ -395,7 +472,8 @@ jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing
                   jstring prev2, jfloatArray tapXs, jfloatArray tapYs, jobjectArray outWords,
                   jfloatArray outScores, jbooleanArray outProperNoun, jobjectArray outTexts,
                   jobjectArray outCorrections, jbooleanArray outCorrectionNames,
-                  jbooleanArray outCorrectionSlips, jbooleanArray outSpellingFlags) {
+                  jbooleanArray outCorrectionSlips, jbooleanArray outCorrectionConfident,
+                  jbooleanArray outSpellingFlags) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr || outWords == nullptr || outScores == nullptr ||
         outProperNoun == nullptr) {
@@ -450,55 +528,10 @@ jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing
     // For a typed word: how the dictionaries spell it, its possessive, and autocorrect's list.
     if (composingLength > 0) {
         writeTexts(env, *engine, composingBuffer, static_cast<size_t>(composingLength), outTexts,
-                   outCorrections, outCorrectionNames, outCorrectionSlips, outSpellingFlags);
+                   outCorrections, outCorrectionNames, outCorrectionSlips, outCorrectionConfident,
+                   outSpellingFlags);
     }
-    if (found <= 0) {
-        return 0;
-    }
-
-    float scores[Engine::kMaxCandidates];
-    jboolean properNoun[Engine::kMaxCandidates];
-    int written = 0;
-    char text[kStringBufferBytes];
-    for (int i = 0; i < found; ++i) {
-        uint32_t length = 0;
-        const char* const source = engine->candidateText(candidates[i], &length);
-        if (source == nullptr || length == 0 || length >= sizeof(text)) {
-            continue;
-        }
-        std::memcpy(text, source, length);
-        text[length] = '\0';
-
-        // The one allocation on this path, into the caller's reused array.
-        jstring value = env->NewStringUTF(text);
-        if (value == nullptr) {
-            env->ExceptionClear();
-            break;
-        }
-        env->SetObjectArrayElement(outWords, written, value);
-        env->DeleteLocalRef(value);
-        if (env->ExceptionCheck() == JNI_TRUE) {
-            env->ExceptionClear();
-            break;
-        }
-        scores[written] = candidates[i].score;
-        properNoun[written] = engine->candidateIsProperNoun(candidates[i]) ? JNI_TRUE : JNI_FALSE;
-        ++written;
-    }
-
-    if (written > 0) {
-        env->SetFloatArrayRegion(outScores, 0, written, scores);
-        if (env->ExceptionCheck() == JNI_TRUE) {
-            env->ExceptionClear();
-            return 0;
-        }
-        env->SetBooleanArrayRegion(outProperNoun, 0, written, properNoun);
-        if (env->ExceptionCheck() == JNI_TRUE) {
-            env->ExceptionClear();
-            return 0;
-        }
-    }
-    return written;
+    return writeRanking(env, *engine, candidates, found, outWords, outScores, outProperNoun);
 }
 
 void nativeLearn(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word, jstring prev1,
@@ -900,6 +933,15 @@ void nativeSetLearningSpeed(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jfl
     engine->setLearningSpeed(static_cast<float>(speed));
 }
 
+void nativeSetKnownWordReach(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
+                             jfloat minimumLogProb) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr) {
+        return;
+    }
+    engine->setKnownWordReach(static_cast<float>(minimumLogProb));
+}
+
 void nativeSetCorrectionStrictness(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
                                    jfloat scale) {
     Engine* const engine = engineFrom(handle);
@@ -1168,50 +1210,8 @@ jint nativeDecodeGesture(JNIEnv* env, jobject /*thiz*/, jlong handle, jfloatArra
         pointsX, pointsY, reinterpret_cast<const int64_t*>(timestamps), static_cast<int>(points),
         prev1Buffer, static_cast<size_t>(prev1Length), prev2Buffer,
         static_cast<size_t>(prev2Length), candidates, static_cast<int>(slots));
-    if (found <= 0) {
-        return 0;
-    }
-
-    float scores[Engine::kMaxCandidates];
-    jboolean properNoun[Engine::kMaxCandidates];
-    int written = 0;
-    char text[kStringBufferBytes];
-    for (int i = 0; i < found; ++i) {
-        uint32_t length = 0;
-        const char* const source = engine->candidateText(candidates[i], &length);
-        if (source == nullptr || length == 0 || length >= sizeof(text)) {
-            continue;
-        }
-        std::memcpy(text, source, length);
-        text[length] = '\0';
-        jstring value = env->NewStringUTF(text);
-        if (value == nullptr) {
-            env->ExceptionClear();
-            break;
-        }
-        env->SetObjectArrayElement(outWords, written, value);
-        env->DeleteLocalRef(value);
-        if (env->ExceptionCheck() == JNI_TRUE) {
-            env->ExceptionClear();
-            break;
-        }
-        // Already in [0, 1000].
-        scores[written] = candidates[i].score;
-        // The same name flag nativeAnswer reports.
-        properNoun[written] = engine->candidateIsProperNoun(candidates[i]) ? JNI_TRUE : JNI_FALSE;
-        ++written;
-    }
-    if (written > 0) {
-        env->SetFloatArrayRegion(outScores, 0, written, scores);
-        if (outProperNoun != nullptr && env->GetArrayLength(outProperNoun) >= written) {
-            env->SetBooleanArrayRegion(outProperNoun, 0, written, properNoun);
-        }
-        if (env->ExceptionCheck() == JNI_TRUE) {
-            env->ExceptionClear();
-            return 0;
-        }
-    }
-    return written;
+    // Scores already in [0, 1000].
+    return writeRanking(env, *engine, candidates, found, outWords, outScores, outProperNoun);
 }
 
 const JNINativeMethod kMethods[] = {
@@ -1226,7 +1226,7 @@ const JNINativeMethod kMethods[] = {
     {"nativeSetKeyGeometry", "(J[I[F[FFF[I[I)V", reinterpret_cast<void*>(nativeSetKeyGeometry)},
     {"nativeAnswer",
      "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;[F[F[Ljava/lang/String;[F[Z"
-     "[Ljava/lang/String;[Ljava/lang/String;[Z[Z[Z)I",
+     "[Ljava/lang/String;[Ljava/lang/String;[Z[Z[Z[Z)I",
      reinterpret_cast<void*>(nativeAnswer)},
     {"nativeSetTouchModel", "(JZFI)V", reinterpret_cast<void*>(nativeSetTouchModel)},
     {"nativeSetTouchPatterns", "(J[I[F[F[F[F[F[F)V",
@@ -1243,6 +1243,7 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeSetLearningSpeed)},
     {"nativeSetCorrectionStrictness", "(JF)V",
      reinterpret_cast<void*>(nativeSetCorrectionStrictness)},
+    {"nativeSetKnownWordReach", "(JF)V", reinterpret_cast<void*>(nativeSetKnownWordReach)},
     {"nativeSetLanguageLock", "(JFZ)V",
      reinterpret_cast<void*>(nativeSetLanguageLock)},
     {"nativeSetPreferredLanguage", "(JLjava/lang/String;)V",

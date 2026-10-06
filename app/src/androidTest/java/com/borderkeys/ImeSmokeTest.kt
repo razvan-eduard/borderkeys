@@ -1064,7 +1064,7 @@ class ImeSmokeTest {
                 displayName = entry.displayName,
                 fileName = staged.file.name,
                 formatVersion = verdict.info.formatVersion,
-                wordCount = verdict.info.wordCount,
+                wordCount = verdict.info.offeredWordCount,
                 sizeBytes = staged.sizeBytes,
                 sha256 = staged.sha256,
                 importedAt = System.currentTimeMillis(),

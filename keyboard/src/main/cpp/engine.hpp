@@ -5,6 +5,7 @@
 #define BORDERKEYS_ENGINE_HPP
 
 #include <cstdint>
+#include <limits>
 
 #include <memory>
 #include <string>
@@ -14,6 +15,7 @@
 #include "bkd_format.hpp"
 #include "candidate.hpp"
 #include "gesture/gesture_decoder.hpp"
+#include "letter_model.hpp"
 #include "ngram_model.hpp"
 #include "packed_trie.hpp"
 #include "proximity.hpp"
@@ -28,12 +30,20 @@
 
 namespace borderkeys {
 
+// The tap decoder's building blocks, tap_decode.hpp.
+struct DecoderTaps;
+class DecoderLevel;
+class DecodedWords;
+struct WordPath;
+
 /** What a pack's validated header says about itself, filled by [bkdInspectPack]. */
 struct PackInfo {
     char tag[16];
     uint32_t formatVersion;
     uint32_t wordCount;
     uint64_t fileBytes;
+    // Of wordCount, the words the pack only knows and never offers.
+    uint32_t knownOnlyCount;
 };
 
 /**
@@ -59,11 +69,13 @@ public:
     const PackedTrie& trie() const { return trie_; }
     const NgramModel& ngrams() const { return ngrams_; }
 
+    // How likely a run of letters is as a spelling of this language, built once at load.
+    const LetterModel& letters() const { return letters_; }
+
     // The most frequent words in this language, computed once at load; searched when nothing is
     // typed and for short prefixes.
     static constexpr int kFrequentCount = 512;
     const int32_t* frequentWords() const { return frequent_; }
-
     /** The tag for a word, or kNoPosTag when this pack carries no grammar or does not know it. */
     uint32_t posTag(int32_t wordIndex) const {
         if (wordTags_ == nullptr || wordIndex < 0) {
@@ -86,7 +98,6 @@ public:
     /** No tag: the pack has no grammar, or the treebank never contained this word. */
     static constexpr uint32_t kNoPosTag = 0xFFFFFFFFu;
     int frequentWordCount() const { return frequentCount_; }
-
     bool active = false;
     // The weight configured for this language.
     float configuredWeight = 1.0f;
@@ -106,6 +117,7 @@ private:
     char tag_[16] = {};
     PackedTrie trie_;
     NgramModel ngrams_;
+    LetterModel letters_;
 
     int32_t frequent_[kFrequentCount] = {};
     int frequentCount_ = 0;
@@ -290,6 +302,12 @@ public:
     void setLearningSpeed(float speed);
 
     /**
+     * How common a word a pack only knows must be to count as spelled: its unigram
+     * log-probability at least `minimumLogProb`. Positive infinity, the default, counts none.
+     */
+    void setKnownWordReach(float minimumLogProb) { knownWordMinLogProb_ = minimumLogProb; }
+
+    /**
      * How much evidence an edit needs to outrank a word spelled as typed: a multiplier on
      * kEditPenalty and kCorrectionSurcharge, 1.0 by default, clamped to
      * [kMinCorrectionStrictness, kMaxCorrectionStrictness].
@@ -393,8 +411,42 @@ public:
         return settledCount_;
     }
 
+    /**
+     * Whether entry [index] of [corrections] stands: no single other reading of the taps, the
+     * typed letters as an unknown word included, is likelier by more than kEvidenceRatio
+     * (engine_decode.cpp). A respelling of the letters typed always stands, and every entry does
+     * when the tap decoder did not run.
+     */
+    bool correctionConfident(int index) const {
+        return index < 0 || index >= settledCount_ || settledConfident_[index];
+    }
+
     /** The multiplier on kEditPenalty and kCorrectionSurcharge in force. */
     float correctionStrictness() const { return correctionStrictness_; }
+
+    /**
+     * The tap decoder's word from the last [suggest] request when it was accepted, or null: the
+     * word the taps fit best with the language model, beating by kEvidenceRatio the typed
+     * letters read as an unknown word and every other word the taps reach, together
+     * (engine_decode.cpp). Valid until the next request.
+     */
+    const Candidate* decodedCorrection() const {
+        return (hasDecoded_ && decodedAccepted_) ? &decoded_ : nullptr;
+    }
+
+    /**
+     * The tap decoder's word from the last [suggest] request when it beat the typed letters but
+     * not the other words together, or null: offered on the strip rather than applied.
+     */
+    const Candidate* decodedSuggestion() const {
+        return (hasDecoded_ && decodedOffered_) ? &decoded_ : nullptr;
+    }
+
+    /**
+     * The tap decoder's best word from the last [suggest] request, accepted or not, and its
+     * margin in nats over the typed letters read as an unknown word; false when it found none.
+     */
+    bool decoderBest(Candidate* out, float* margin) const;
 
     // Whether the candidate is a name: a pack word flagged by every active pack that knows it, or
     // a personal word the user capitalised on purpose or the active packs agree is a name.
@@ -441,8 +493,22 @@ private:
      */
     bool personalWordEstablished(uint32_t entryIndex) const;
 
+    /** The established personal entry spelled `word`, or -1; -1 while the personal model is off. */
+    int32_t establishedPersonalEntry(const char* word, size_t length) const;
+
     /** Whether any active pack holds this text, folded, in a spelling that is not blocked. */
     bool anyPackKnows(const char* text, uint32_t length) const;
+
+    /**
+     * Exact lookup of an already folded word in `trie` that the pack offers, or only knows at
+     * the reach setKnownWordReach set. Returns the word index or -1.
+     */
+    int32_t knownIn(const PackedTrie& trie, const uint32_t* folded, int count) const {
+        return trie.lookupKnown(folded, count, knownWordMinLogProb_);
+    }
+
+    /** setKnownWordReach's minimum. */
+    float knownWordMinLogProb_ = std::numeric_limits<float>::infinity();
 
     /** The first spelling of [trie]'s run at [firstIndex] that is not blocked, or -1. */
     int32_t firstUnblockedSpelling(const PackedTrie& trie, int32_t firstIndex) const;
@@ -571,6 +637,10 @@ private:
     int writeStrip(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap,
                    Candidate* out, int maxOut);
 
+    // Puts decodedSuggestion() into `out` second, or first when nothing is there, unless its
+    // spelling is already among the `written`; returns how many `out` holds.
+    int placeDecodedSuggestion(Candidate* out, int written, int maxOut) const;
+
     // The edit-cost ceiling of the pass running now.
     float editCostCeiling_ = 0.0f;
 
@@ -670,6 +740,59 @@ private:
     /** The dictionary's spelling of exactly the letters typed, which outranks the heap above. */
     Candidate bestRespelling_{};
     bool hasBestRespelling_ = false;
+
+    /**
+     * Whether a dictionary spells the letters of the last request exactly, or they are an
+     * established personal word.
+     */
+    bool typedKnown_ = false;
+
+    // The tap decoder, engine_decode.cpp: runs for a typed word no dictionary spells that neither
+    // starts nor ends with a mark, over the packs the request searches.
+    void decodeTaps(const uint32_t* folded, int foldedLength, int restrictTo);
+    // Clears the decoder's word.
+    void forgetDecoded();
+    // The touch model's log-likelihood of a tap at (x, y) for the key of `code`.
+    float tapFit(uint32_t code, float x, float y) const;
+    // The highest tapFit of any key for a tap at (x, y).
+    float likeliestTapFit(float x, float y) const;
+    // Where letter `index` of the request was tapped, or the centre of `typed`'s key when it has
+    // no position; false when neither is known.
+    bool tapPoint(int index, uint32_t typed, float* x, float* y) const;
+    // Fills each tap's point and likeliest fit; returns how well the taps fit the typed keys.
+    float readTaps(DecoderTaps* taps) const;
+    // Whether the decoder searches pack `packIndex` for a request restricted to `restrictTo`.
+    bool decodes(int packIndex, int restrictTo) const;
+    // The log-probability of the typed letters as a word no pack holds: kUnknownWordLogProb and
+    // the chance of the letters as a spelling of each active pack, by the pack's weight.
+    float unknownWordLogProb(const DecoderTaps& taps) const;
+    void decodePack(int packIndex, const DecoderTaps& taps, DecodedWords* words);
+    // Runs the beam over pack `packIndex`, held to `path` unless it is null, and hands `finish`
+    // the last level.
+    template <typename Finish>
+    void runBeam(int packIndex, const DecoderTaps& taps, const WordPath* path, Finish finish);
+    // The trie nodes word `wordIndex` of pack `packIndex` is spelled through; false when its
+    // spelling leaves the trie.
+    bool wordPathOf(int packIndex, uint32_t wordIndex, WordPath* path) const;
+    // How likely the taps spell `word`, the language model included, over every path the beam
+    // keeps along its spelling.
+    float listedTotal(const Candidate& word, const DecoderTaps& taps);
+    // Whether `word` has the typed letters exactly, accents and case aside.
+    bool respells(const Candidate& word, const DecoderTaps& taps) const;
+    // Adds autocorrect's entries to `words` as rivals and sets each entry's confidence.
+    void weighListedCorrections(const DecoderTaps& taps, float literal, DecodedWords* words);
+    bool settledConfident_[1 + kMaxCorrections] = {};
+    // Whether the decoder may correct `taps` to the word: not blocked, not the typed letters
+    // themselves, not a name, and a plausible correction target.
+    bool decodable(int packIndex, uint32_t wordIndex, const DecoderTaps& taps) const;
+    // Offers `words` every word `finals` reaches, scored with the language model.
+    void offerDecodedWords(int packIndex, const DecoderTaps& taps, const DecoderLevel& finals,
+                           DecodedWords* words) const;
+    Candidate decoded_{};
+    bool hasDecoded_ = false;
+    bool decodedAccepted_ = false;
+    bool decodedOffered_ = false;
+    float decodedMargin_ = 0.0f;
 
     /** Multiplier on how fast the personal model gains ground. 1.0 is the default. */
     float learningSpeed_ = 1.0f;

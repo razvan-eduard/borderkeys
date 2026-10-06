@@ -143,7 +143,7 @@ class SuggestionStripView(
             }
         }
 
-    /** A chip offering what is on the clipboard, in the first slot, or null. */
+    /** A chip offering what is on the clipboard, in the first slots, or null. */
     var clipboardChip: String? = null
         set(value) {
             if (field != value) {
@@ -458,7 +458,7 @@ class SuggestionStripView(
                     icon.setBounds(iconLeft, top, iconLeft + side, top + side)
                     icon.setTint(paint.color)
                     icon.draw(canvas)
-                    textLeft = chipLeft + CHIP_GAP_PX * 2f + side
+                    textLeft = chipLeft + CHIP_GAP_PX * 2f + side + previewWidth
                 }
                 // The lines are centred vertically on the strip.
                 val lineHeight = chipTextSize * CHIP_LINE_SPACING
@@ -472,7 +472,7 @@ class SuggestionStripView(
                 }
                 paint.textSize = previous
                 paint.textAlign = previousAlign
-                if (shown > 1) {
+                if (shown > chip + 1) {
                     val edge = if (rightToLeft) chipLeft else chipLeft + slotWidth
                     canvas.drawLine(edge, height * 0.25f, edge, height * 0.75f, paints.keyStroke)
                 }
