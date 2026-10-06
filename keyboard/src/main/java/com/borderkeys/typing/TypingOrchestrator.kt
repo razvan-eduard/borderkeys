@@ -804,9 +804,26 @@ class TypingOrchestrator(
         }
         val contextWord = wordContext.previous1
         val grandContextWord = wordContext.previous2
+        val typed = composing.toString()
         val typedTaps = TypedTaps.of(composing, composingWord.taps)
+        val capitalisedByUser = composingWord.capitalisedByUser
+        // The word Enter ends gets the decision a space would make.
+        val outcome = commitOutcome(typed, NEWLINE)
+        val correction = outcome.text
+        val rewrite = outcome.isRewrite
         editor.beginBatchEdit()
-        val finished = finishComposing(editor)
+        val finished = if (correction != null) {
+            // commitText replaces the composing region with the correction.
+            composingWord.clear()
+            composingWord.fromGesture = false
+            composingWord.autoSpaceBefore = false
+            editor.commitText(correction, 1)
+            host.playEffect(EffectEvent.AutocorrectApplied, correction)
+            wordContext = wordContext.then(if (rewrite) correction.substringAfterLast(' ') else correction)
+            null
+        } else {
+            finishComposing(editor)
+        }
         val imeOptions = session.imeOptions
         val action = imeOptions and EditorInfo.IME_MASK_ACTION
         val hasAction = action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED
@@ -822,13 +839,33 @@ class TypingOrchestrator(
             editor.endBatchEdit()
             editor.performEditorAction(action)
         } else {
-            editor.commitText("\n", 1)
+            editor.commitText(NEWLINE_TEXT, 1)
             editor.endBatchEdit()
             afterNewlineCommitted()
         }
-        if (finished != null) {
-            learningFlow.record(
-                finished, contextWord, grandContextWord, composingWord.capitalisedByUser,
+        when {
+            correction != null && performAction -> {
+                // The field acted on the corrected word; nothing is left to take back.
+                if (!rewrite) {
+                    learningFlow.record(correction, contextWord, grandContextWord, capitalisedByUser, taps = typedTaps)
+                }
+                commitFlow.dropPending()
+            }
+            correction != null -> {
+                // Learned once the correction survives the next keystroke, as after a space.
+                commitFlow.setPending(
+                    PendingCorrection(
+                        typed, correction, NEWLINE_TEXT, contextWord, grandContextWord,
+                        capitalisedByUser, learn = !rewrite, taps = typedTaps,
+                    ),
+                )
+                if (!rewrite) {
+                    commitFlow.recordLanguageSwitchFlag(editor, typed, correction, NEWLINE_TEXT)
+                }
+                commitFlow.checkLanguageSwitch(::onLanguageSwitchReplacements)
+            }
+            finished != null -> learningFlow.record(
+                finished, contextWord, grandContextWord, capitalisedByUser,
                 taps = typedTaps,
             )
         }
@@ -1916,6 +1953,10 @@ class TypingOrchestrator(
         const val SHIFT_META = KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
 
         const val CONTEXT_WINDOW_CHARS = 64
+
+        /** The key Enter is to the commit decision, and the text it writes. */
+        const val NEWLINE = '\n'.code
+        const val NEWLINE_TEXT = "\n"
 
         /** How much of the field [checkpointField] and the field's history read. */
         const val FIELD_HISTORY_CHARS = 20_000

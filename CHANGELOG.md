@@ -64,6 +64,10 @@ attestations and the full commit lists are on the
   modifiers, the space-bar joystick, the backspace slide, Rare words, Keep privately and the
   particle effects added. Both open again from the About card.
 - Fixed: a word picked from the strip got a space before a following comma or full stop.
+- Fixed: Enter left the word it ended as typed: no correction, no restored apostrophe, no text
+  shortcut, and an Enter that sends sent the word uncorrected. Enter now applies what space
+  would, before the new line or the send, and the backspace straight after takes it back; the
+  setting and its notes say space or Enter.
 - Fixed: reopening the keyboard with the caret at the end of a word left the strip unaware of
   that word until the caret moved or a key was typed.
 - Swiping works on the Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek, Armenian,
