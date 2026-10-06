@@ -134,7 +134,7 @@ def main():
     kept = sorted((word for word in candidates if word in accepted), key=lambda w: (-counts[w], w))
 
     spelling = ", ".join(path.split("/")[-1] for path in sources.spelling)
-    print("# SPDX-License-Identifier: CC-BY-4.0")
+    print("# SPDX-" "License-Identifier: CC-BY-4.0")
     print("#")
     print(f"# Words the {args.list} pack knows but never offers: written in the Wortschatz Leipzig")
     print(f"# corpora {', '.join(corpora)} (CC BY 4.0), missing from {args.list}.tsv, and accepted")
