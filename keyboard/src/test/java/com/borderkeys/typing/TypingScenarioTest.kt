@@ -5,6 +5,7 @@ package com.borderkeys.typing
 
 import android.text.InputType
 import android.view.KeyEvent
+import android.view.inputmethod.EditorInfo
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.KeyFlick
@@ -56,6 +57,51 @@ class TypingScenarioTest {
     fun `a mistyped word is corrected by space`() {
         rig.type("teh ")
         assertEquals("the ", rig.editor.text)
+    }
+
+    @Test
+    fun `enter corrects the word it ends, as space does`() {
+        rig.type("teh")
+        rig.press(KeyCodes.ENTER)
+        assertEquals("the\n", rig.editor.text)
+    }
+
+    @Test
+    fun `backspace right after enter puts the typed word back`() {
+        rig.type("teh")
+        rig.press(KeyCodes.ENTER)
+        rig.press(KeyCodes.DELETE)
+        assertEquals("teh\n", rig.editor.text)
+        assertEquals(listOf("the" to false), rig.host.forgotten)
+    }
+
+    @Test
+    fun `enter restores a missing apostrophe and expands a text shortcut`() {
+        rig.orchestrator.applySettings(
+            SMOKE_SETTINGS.copy(textShortcuts = listOf(TextShortcut(trigger = "omw", expansion = "on my way"))),
+        )
+        rig.type("dont")
+        rig.press(KeyCodes.ENTER)
+        rig.type("omw")
+        rig.press(KeyCodes.ENTER)
+        assertEquals("don't\non my way\n", rig.editor.text)
+    }
+
+    @Test
+    fun `enter that sends acts on the corrected word`() {
+        rig.startField(imeOptions = EditorInfo.IME_ACTION_SEND)
+        rig.type("teh")
+        rig.press(KeyCodes.ENTER)
+        assertEquals("the", rig.editor.text)
+        assertEquals(listOf(EditorInfo.IME_ACTION_SEND), rig.editor.actions)
+    }
+
+    @Test
+    fun `enter in a password field writes the keys as typed`() {
+        rig.startField(passwordField = true, privateField = true)
+        rig.type("teh")
+        rig.press(KeyCodes.ENTER)
+        assertEquals("teh\n", rig.editor.text)
     }
 
     @Test

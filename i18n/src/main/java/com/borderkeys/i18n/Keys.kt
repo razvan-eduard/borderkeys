@@ -607,8 +607,6 @@ object Keys {
     const val FEATURE_ASSISTANT_SUMMARISE = "feature_assistant_summarise"
     const val FEATURE_ASSISTANT_TEXT = "feature_assistant_text"
     const val FEATURE_ASSISTANT_TRANSLATE = "feature_assistant_translate"
-    const val FEATURE_AUTOCORRECT_TEXT = "feature_autocorrect_text"
-    const val FEATURE_AUTOCORRECT_TITLE = "feature_autocorrect_title"
     const val FEATURE_BACKUP_TEXT = "feature_backup_text"
     const val FEATURE_CLIPBOARD_TEXT = "feature_clipboard_text"
     const val FEATURE_DRAFT_BOX_TEXT = "feature_draft_box_text"
