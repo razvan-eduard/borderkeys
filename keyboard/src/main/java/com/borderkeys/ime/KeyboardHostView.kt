@@ -179,6 +179,61 @@ class KeyboardHostView(
             }
         }
 
+    /** The photo rising from a strip chip ([playPhotoLamp]), or null. */
+    private var photoLamp: PhotoLampRun? = null
+
+    /** A lamp in progress: the image, the chip it left in the strip's pixels, and its start. */
+    private class PhotoLampRun(val bitmap: android.graphics.Bitmap, val chip: android.graphics.RectF, val startedAt: Long)
+
+    /** Whether a photo is rising; the window keeps the room above the keys meanwhile. */
+    val photoLampRunning: Boolean get() = photoLamp != null
+
+    /** Told when [photoLampRunning] changes, to grow or shrink the window. */
+    var onPhotoLampChanged: (() -> Unit)? = null
+
+    private val photoLampVertices = FloatArray(PhotoLamp.VERTEX_FLOATS)
+    private val photoLampPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+    private val photoLampFrom = android.graphics.RectF()
+    private val photoLampArea = android.graphics.RectF()
+    private val photoLampTarget = android.graphics.RectF()
+    private val stripOrigin = IntArray(2)
+    private val hostOrigin = IntArray(2)
+
+    /** Starts [bitmap] rising out of [chip], the chip's bounds in the strip's pixels. */
+    fun playPhotoLamp(bitmap: android.graphics.Bitmap, chip: android.graphics.RectF) {
+        val wasRunning = photoLamp != null
+        photoLamp = PhotoLampRun(bitmap, android.graphics.RectF(chip), android.os.SystemClock.uptimeMillis())
+        if (!wasRunning) {
+            onPhotoLampChanged?.invoke()
+        }
+        postInvalidateOnAnimation()
+    }
+
+    /** Draws the rising photo over everything, until its time is up. */
+    private fun drawPhotoLamp(canvas: android.graphics.Canvas) {
+        val run = photoLamp ?: return
+        val progress = (android.os.SystemClock.uptimeMillis() - run.startedAt).toFloat() / PhotoLamp.DURATION_MILLIS
+        if (progress >= 1f) {
+            photoLamp = null
+            onPhotoLampChanged?.invoke()
+            return
+        }
+        if (keyboardAreaTop > 0) {
+            suggestionStrip.getLocationInWindow(stripOrigin)
+            getLocationInWindow(hostOrigin)
+            photoLampFrom.set(run.chip)
+            photoLampFrom.offset((stripOrigin[0] - hostOrigin[0]).toFloat(), (stripOrigin[1] - hostOrigin[1]).toFloat())
+            photoLampArea.set(0f, 0f, width.toFloat(), photoLampFrom.top)
+            PhotoLamp.fit(run.bitmap.width, run.bitmap.height, photoLampArea, density() * PHOTO_LAMP_MARGIN_DP, photoLampTarget)
+            PhotoLamp.mesh(progress, photoLampFrom, photoLampTarget, photoLampVertices)
+            photoLampPaint.alpha = PhotoLamp.alpha(progress)
+            canvas.drawBitmapMesh(
+                run.bitmap, PhotoLamp.COLUMNS, PhotoLamp.ROWS, photoLampVertices, 0, null, 0, photoLampPaint,
+            )
+        }
+        postInvalidateOnAnimation()
+    }
+
     /** How far down the window the keyboard starts: the room above it when [reserveScreenAbove],
      *  else zero. */
     var keyboardAreaTop: Int = 0
@@ -854,6 +909,7 @@ class KeyboardHostView(
         } else if (keyboard.keyPreviewVisible) {
             drawKeyPreview(canvas)
         }
+        drawPhotoLamp(canvas)
         if (!resizing) {
             return
         }
@@ -1101,6 +1157,9 @@ class KeyboardHostView(
         /** The overlay's label size and the padding inside the pill behind it, in dp. */
         const val LABEL_TEXT_DP = 14f
         const val PILL_PADDING_DP = 8f
+
+        /** The space kept around the risen photo, in dp. */
+        const val PHOTO_LAMP_MARGIN_DP = 16f
 
         /** How much of the keys the resize wash covers, out of 255. */
         const val RESIZE_SCRIM_ALPHA = 96

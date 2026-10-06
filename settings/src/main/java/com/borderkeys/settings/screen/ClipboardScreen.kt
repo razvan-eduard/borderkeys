@@ -99,6 +99,16 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
             checked = preferences.clipboardSuggestion,
         ) { value -> update { it.copy(clipboardSuggestion = value) } }
 
+        // The newest screenshot, beside the clipboard chip or in its place.
+        ScreenshotSuggestionSetting(preferences, update)
+
+        // A small preview of the image on the photo and screenshot chips.
+        SwitchRow(
+            title = strings[Keys.CLIPBOARD_CHIP_PREVIEW],
+            subtitle = strings[Keys.CLIPBOARD_CHIP_PREVIEW_NOTE],
+            checked = preferences.chipImagePreview,
+        ) { value -> update { it.copy(chipImagePreview = value) } }
+
         // The hygiene policies, each independent: one withdraws the chip's offer, one empties
         // the system clipboard, one removes the history row, one empties the history on close.
         AdvancedSection(strings[Keys.CLIPBOARD_ADVANCED_NOTE]) {

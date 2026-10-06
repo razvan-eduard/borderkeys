@@ -235,6 +235,15 @@ item limit and *Forget everything when the keyboard closes* leave it alone until
 A backup carries the flag. The menu entry takes at most ten copies from one app and thirty in all
 per minute.
 
+*Offer the newest screenshot*, off by default, reads one folder the user picks in Android's own
+folder picker, usually their Screenshots folder, through the document tree grant that pick
+gives; it is not a permission, and the manifest still declares none. The keyboard lists that
+folder when it opens, and watches it only while it is showing, for an image from the last five
+minutes; nothing else in the storage is read. Nothing is copied or kept: pasting hands the field
+the image's own document URI with a read grant for that insertion only. Never offered in a
+private field. Turning the option off, or choosing another folder, leaves the grant to Android's
+settings, where it can be revoked.
+
 The keyboard holds no clipboard listener that runs when it is not the active input method — it
 has no permission that would let it, and on modern Android an IME cannot read the clipboard while
 not focused anyway.

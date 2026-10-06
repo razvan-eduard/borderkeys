@@ -63,6 +63,9 @@ class SuggestionStripView(
 
         /** The clipboard chip was tapped. */
         fun onClipboardPicked()
+
+        /** The screenshot chip was tapped. */
+        fun onScreenshotPicked()
     }
 
     /** True while the strip is showing action chips rather than word suggestions. */
@@ -148,25 +151,99 @@ class SuggestionStripView(
         set(value) {
             if (field != value) {
                 field = value
-                layoutChipText()
-                measureSlots()
-                invalidate()
+                arrangeChips()
             }
         }
 
-    /** The chip's text, laid out over [CHIP_LINES] lines. */
-    private val chipLines = Array(CHIP_LINES) { CharArray(MAX_WORD_CHARS) }
-    private val chipLineLength = IntArray(CHIP_LINES)
-    private var chipLineCount = 0
+    /** A chip offering the newest screenshot, in the first slots, or null. */
+    var screenshotChip: String? = null
+        set(value) {
+            if (field != value) {
+                field = value
+                arrangeChips()
+            }
+        }
+
+    /** Whether the screenshot chip comes before the clipboard chip when both show. */
+    var screenshotFirst: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                arrangeChips()
+            }
+        }
+
+    /** A small preview drawn in front of the clipboard chip's icon, or null. */
+    var clipboardThumbnail: android.graphics.Bitmap? = null
+        set(value) {
+            if (field !== value) {
+                field = value
+                arrangeChips()
+            }
+        }
+
+    /** A small preview drawn in front of the screenshot chip's icon, or null. */
+    var screenshotThumbnail: android.graphics.Bitmap? = null
+        set(value) {
+            if (field !== value) {
+                field = value
+                arrangeChips()
+            }
+        }
+
+    /** The chips showing, in slot order, whether each is the screenshot chip, and its preview. */
+    private val chipTexts = arrayOfNulls<String>(MAX_CHIPS)
+    private val chipIsScreenshot = BooleanArray(MAX_CHIPS)
+    private val chipThumbnails = arrayOfNulls<android.graphics.Bitmap>(MAX_CHIPS)
+    private var chipCount = 0
+
+    /** The preview's source and destination rectangles, reused. */
+    private val thumbnailSource = android.graphics.Rect()
+    private val thumbnailTarget = android.graphics.RectF()
+    private val thumbnailPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+
+    /** Each chip's text, laid out over [CHIP_LINES] lines. */
+    private val chipLines = Array(MAX_CHIPS) { Array(CHIP_LINES) { CharArray(MAX_WORD_CHARS) } }
+    private val chipLineLength = Array(MAX_CHIPS) { IntArray(CHIP_LINES) }
+    private val chipLineCount = IntArray(MAX_CHIPS)
     private var chipTextSize = 0f
 
-    /** The paste mark, drawn before the chip's text. */
+    /** The paste mark, drawn before a chip's text. */
     private val pasteIcon: android.graphics.drawable.Drawable? =
         androidx.core.content.ContextCompat.getDrawable(context, com.borderkeys.keyboard.R.drawable.bk_action_paste)
 
-    /** One when the clipboard chip is showing, and it always takes the first slot. */
+    /** How many chips are showing; they always take the first slots. */
     private val chipOffset: Int
-        get() = if (clipboardChip != null) 1 else 0
+        get() = chipCount
+
+    /** Orders the chips showing, the screenshot first when [screenshotFirst], and lays them out. */
+    private fun arrangeChips() {
+        chipCount = 0
+        val screenshot = screenshotChip
+        val clipboard = clipboardChip
+        if (screenshot != null && screenshotFirst) {
+            chipTexts[chipCount] = screenshot
+            chipThumbnails[chipCount] = screenshotThumbnail
+            chipIsScreenshot[chipCount++] = true
+        }
+        if (clipboard != null) {
+            chipTexts[chipCount] = clipboard
+            chipThumbnails[chipCount] = clipboardThumbnail
+            chipIsScreenshot[chipCount++] = false
+        }
+        if (screenshot != null && !screenshotFirst) {
+            chipTexts[chipCount] = screenshot
+            chipThumbnails[chipCount] = screenshotThumbnail
+            chipIsScreenshot[chipCount++] = true
+        }
+        for (chip in chipCount until MAX_CHIPS) {
+            chipTexts[chip] = null
+            chipThumbnails[chip] = null
+        }
+        layoutChipText()
+        measureSlots()
+        invalidate()
+    }
 
     /** The slot holding exactly what was typed, drawn in italic, or -1. */
     var typedIndex: Int = -1
@@ -293,27 +370,59 @@ class SuggestionStripView(
     }
 
     /**
-     * Breaks the chip's text into at most [CHIP_LINES] lines beside the icon, word by word, with a
-     * hard break for a word longer than a line and an ellipsis when text is left over.
+     * Writes into [out] the bounds of the screenshot chip, or of the clipboard chip, in this
+     * view's pixels; false when that chip is not showing.
      */
+    fun chipBounds(screenshot: Boolean, out: android.graphics.RectF): Boolean {
+        val shown = shownCount()
+        if (shown <= 0) {
+            return false
+        }
+        val slotWidth = width.toFloat() / shown
+        for (chip in 0 until chipCount) {
+            if (chipIsScreenshot[chip] == screenshot) {
+                val left = slotLeft(chip, slotWidth)
+                out.set(left, 0f, left + slotWidth, height.toFloat())
+                return true
+            }
+        }
+        return false
+    }
+
+    /** Lays out every chip's text; see [layoutChipText]. */
     private fun layoutChipText() {
-        chipLineCount = 0
-        val text = clipboardChip ?: return
+        for (chip in 0 until MAX_CHIPS) {
+            chipLineCount[chip] = 0
+        }
+        for (chip in 0 until chipCount) {
+            layoutChipText(chip)
+        }
+    }
+
+    /**
+     * Breaks chip [chip]'s text into at most [CHIP_LINES] lines beside the icon, word by word, with
+     * a hard break for a word longer than a line and an ellipsis when text is left over.
+     */
+    private fun layoutChipText(chip: Int) {
+        val text = chipTexts[chip] ?: return
         val shown = shownCount()
         if (shown <= 0 || width == 0) {
             return
         }
         val slotWidth = width.toFloat() / shown
-        val available = slotWidth - iconSizePx() - CHIP_GAP_PX * 2f
+        val available = slotWidth - iconSizePx() - CHIP_GAP_PX * 2f - thumbnailWidth(chip)
         if (available <= 0f) {
             return
         }
         val paint = paints.label
         val previous = paint.textSize
         paint.textSize = if (chipTextSize > 0f) chipTextSize else previous
+        val lines = chipLines[chip]
+        val lineLength = chipLineLength[chip]
+        var lineCount = 0
 
         var start = 0
-        while (chipLineCount < CHIP_LINES && start < text.length) {
+        while (lineCount < CHIP_LINES && start < text.length) {
             var end = start
             var lastBreak = -1
             while (end < text.length) {
@@ -334,16 +443,33 @@ class SuggestionStripView(
                 end = start + 1
             }
             var line = text.substring(start, end)
-            if (chipLineCount == CHIP_LINES - 1 && end < text.length) {
+            if (lineCount == CHIP_LINES - 1 && end < text.length) {
                 line = line.dropLast(1) + "\u2026"
             }
             val length = line.length.coerceAtMost(MAX_WORD_CHARS)
-            line.toCharArray(chipLines[chipLineCount], 0, 0, length)
-            chipLineLength[chipLineCount] = length
-            chipLineCount++
+            line.toCharArray(lines[lineCount], 0, 0, length)
+            lineLength[lineCount] = length
+            lineCount++
             start = if (end < text.length && text.getOrNull(end) == ' ') end + 1 else end
         }
+        chipLineCount[chip] = lineCount
         paint.textSize = previous
+    }
+
+    /** The room chip [chip]'s preview takes before its icon, gap included; zero without one. */
+    private fun thumbnailWidth(chip: Int): Float =
+        if (chipThumbnails[chip] != null) height * CHIP_THUMBNAIL_FRACTION + CHIP_GAP_PX else 0f
+
+    /** Draws [bitmap] centre-cropped into a square of the strip's height, from [left]. */
+    private fun drawThumbnail(canvas: Canvas, bitmap: android.graphics.Bitmap, left: Float) {
+        val side = height * CHIP_THUMBNAIL_FRACTION
+        val top = (height - side) / 2f
+        val crop = minOf(bitmap.width, bitmap.height)
+        val x = (bitmap.width - crop) / 2
+        val y = (bitmap.height - crop) / 2
+        thumbnailSource.set(x, y, x + crop, y + crop)
+        thumbnailTarget.set(left, top, left + side, top + side)
+        canvas.drawBitmap(bitmap, thumbnailSource, thumbnailTarget, thumbnailPaint)
     }
 
     /** The paste mark's side, from the strip's height. */
@@ -437,9 +563,9 @@ class SuggestionStripView(
             val slotWidth = width.toFloat() / shown
             var appliedRectDrawnThisFrame = false
 
-            if (chipOffset == 1) {
-                val chipLeft = slotLeft(0, slotWidth)
-                if (pressedIndex == 0) {
+            for (chip in 0 until chipOffset) {
+                val chipLeft = slotLeft(chip, slotWidth)
+                if (pressedIndex == chip) {
                     canvas.drawRect(chipLeft, 0f, chipLeft + slotWidth, height.toFloat(), paints.keyPressedFill)
                 }
                 // The chip is drawn in the accent colour.
@@ -449,12 +575,15 @@ class SuggestionStripView(
                 paint.textSize = chipTextSize
                 paint.textAlign = android.graphics.Paint.Align.LEFT
 
+                // The preview, when there is one, comes first, inside the strip's height.
+                val previewWidth = thumbnailWidth(chip)
+                chipThumbnails[chip]?.let { drawThumbnail(canvas, it, chipLeft + CHIP_GAP_PX) }
                 val icon = pasteIcon
                 val side = iconSizePx().toInt()
-                var textLeft = chipLeft + CHIP_GAP_PX
+                var textLeft = chipLeft + CHIP_GAP_PX + previewWidth
                 if (icon != null) {
                     val top = ((height - side) / 2f).toInt()
-                    val iconLeft = (chipLeft + CHIP_GAP_PX).toInt()
+                    val iconLeft = (chipLeft + CHIP_GAP_PX + previewWidth).toInt()
                     icon.setBounds(iconLeft, top, iconLeft + side, top + side)
                     icon.setTint(paint.color)
                     icon.draw(canvas)
@@ -462,11 +591,12 @@ class SuggestionStripView(
                 }
                 // The lines are centred vertically on the strip.
                 val lineHeight = chipTextSize * CHIP_LINE_SPACING
+                val lineCount = chipLineCount[chip]
                 val first = height / 2f + paints.labelBaselineOffsetPx -
-                    lineHeight * (chipLineCount - 1) / 2f
-                for (line in 0 until chipLineCount) {
+                    lineHeight * (lineCount - 1) / 2f
+                for (line in 0 until lineCount) {
                     canvas.drawText(
-                        chipLines[line], 0, chipLineLength[line],
+                        chipLines[chip][line], 0, chipLineLength[chip][line],
                         textLeft, first + lineHeight * line, paint,
                     )
                 }
@@ -655,9 +785,13 @@ class SuggestionStripView(
                     tappedSlot.set(left, 0f, left + slotWidth, height.toFloat())
                     particles.press(tappedSlot)
                 }
-                if (slot == 0 && chipOffset == 1) {
+                if (slot in 0 until chipOffset) {
                     tapHaptic()
-                    listener?.onClipboardPicked()
+                    if (chipIsScreenshot[slot]) {
+                        listener?.onScreenshotPicked()
+                    } else {
+                        listener?.onClipboardPicked()
+                    }
                     return true
                 }
                 val index = slot - chipOffset
@@ -763,6 +897,9 @@ class SuggestionStripView(
 
         /** How many lines the clipboard chip wraps to, and how far apart they sit. */
         const val CHIP_LINES = 2
+
+        // The chips the strip shows at most: the clipboard's and the newest screenshot's.
+        const val MAX_CHIPS = 2
         const val CHIP_LINE_SPACING = 1.05f
 
         /** The chip's text size, relative to the theme's key label size. */
@@ -770,6 +907,9 @@ class SuggestionStripView(
 
         /** The paste mark's share of the strip's height, and the gap around it. */
         const val CHIP_ICON_FRACTION = 0.42f
+
+        // A chip's preview's side, as a share of the strip's height.
+        const val CHIP_THUMBNAIL_FRACTION = 0.72f
         const val CHIP_GAP_PX = 10f
         private const val MAX_WORD_CHARS = 48
 

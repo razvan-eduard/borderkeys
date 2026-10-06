@@ -395,6 +395,20 @@ data class KeyboardPreferences(
      */
     val clipboardSuggestion: Boolean = false,
 
+    /**
+     * Whether the strip offers the newest screenshot of [screenshotFolder]:
+     * [SCREENSHOT_SUGGESTION_OFF] (default), [SCREENSHOT_SUGGESTION_BESIDE] as a chip of its own
+     * beside the clipboard chip, or [SCREENSHOT_SUGGESTION_NEWER] in one chip with the clipboard,
+     * whichever is newer. Clamped to a valid value on read.
+     */
+    val screenshotSuggestion: Int = SCREENSHOT_SUGGESTION_OFF,
+
+    /** The folder the screenshots are read from, a document tree URI the user granted, or "". */
+    val screenshotFolder: String = "",
+
+    /** Whether a photo or screenshot chip shows a small preview of the image in front of its icon. */
+    val chipImagePreview: Boolean = false,
+
     /** Whether the system clipboard is emptied after its content is inserted from the chip. */
     val clearClipboardAfterInsert: Boolean = false,
 
@@ -603,6 +617,13 @@ data class KeyboardPreferences(
     val minCorrectionLength: Int = 3,
 
     /**
+     * How rare a word the dictionaries know but never offer may be and still count as spelled,
+     * so a delimiter leaves it as typed: [RARE_WORDS_LISTED] (default) counts none, each step up
+     * counts rarer ones, [RARE_WORDS_ALL] every one a dictionary carries. Clamped on read.
+     */
+    val rareWords: Int = RARE_WORDS_LISTED,
+
+    /**
      * How much evidence an edit needs before it outranks a word spelled exactly as typed. 1.0 is
      * the engine's calibrated default; below it a smaller frequency gap wins, above it a bigger
      * one is needed.
@@ -617,13 +638,6 @@ data class KeyboardPreferences(
 
     /** The nucleus (top-p) the same model samples from. See [assistTemperature]. */
     val assistTopP: Float = DEFAULT_ASSIST_TOP_P,
-
-    /**
-     * How rare a word the dictionaries know but never offer may be and still count as spelled,
-     * so a delimiter leaves it as typed: [RARE_WORDS_LISTED] (default) counts none, each step up
-     * counts rarer ones, [RARE_WORDS_ALL] every one a dictionary carries. Clamped on read.
-     */
-    val rareWords: Int = RARE_WORDS_LISTED,
 
     /**
      * The imported model, by file name, that translation runs on -- empty to run it on the
@@ -760,6 +774,13 @@ data class KeyboardPreferences(
             radialMenuSize
         } else {
             RADIAL_SIZE_MEDIUM
+        },
+        screenshotSuggestion = if (screenshotSuggestion in SCREENSHOT_SUGGESTION_OFF..SCREENSHOT_SUGGESTION_NEWER &&
+            screenshotFolder.isNotEmpty()
+        ) {
+            screenshotSuggestion
+        } else {
+            SCREENSHOT_SUGGESTION_OFF
         },
         autoSpaceHabit = if (autoSpaceHabit in AUTO_SPACE_SWALLOW_FIRST..AUTO_SPACE_KEEP) {
             autoSpaceHabit
@@ -1206,6 +1227,11 @@ data class KeyboardPreferences(
         const val RADIAL_SIZE_SMALL = 0
         const val RADIAL_SIZE_MEDIUM = 1
         const val RADIAL_SIZE_LARGE = 2
+
+        /** [screenshotSuggestion] values. */
+        const val SCREENSHOT_SUGGESTION_OFF = 0
+        const val SCREENSHOT_SUGGESTION_BESIDE = 1
+        const val SCREENSHOT_SUGGESTION_NEWER = 2
 
         /** [autoSpaceHabit] values. */
         const val AUTO_SPACE_SWALLOW_FIRST = 0
