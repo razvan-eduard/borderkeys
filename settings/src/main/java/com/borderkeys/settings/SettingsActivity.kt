@@ -405,7 +405,7 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                 Screen.CustomLayouts -> CustomLayoutsScreen(modifier)
                 Screen.Theme -> ThemeScreen(modifier)
                 Screen.Size -> SizeScreen(modifier)
-                Screen.Effects -> EffectsScreen(modifier, open)
+                Screen.Effects -> EffectsScreen(modifier)
                 Screen.Animations -> AnimationsScreen(modifier)
                 Screen.Typing -> TypingScreen(modifier)
                 Screen.Dictionary -> DictionaryScreen(modifier, open)
