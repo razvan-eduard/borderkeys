@@ -191,6 +191,27 @@ class TypingOrchestrator(
         resetFieldHistory()
         applyAutoShift()
         updateEditorEmpty(currentEditor()?.textBeforeCursor(1)?.isNotEmpty() == true)
+        adoptWordAtFieldStart()
+    }
+
+    /**
+     * Reads the caret the field starts with and, when nothing is selected, makes the word it sits
+     * in the one the strip is about, as a caret move would.
+     */
+    private fun adoptWordAtFieldStart() {
+        if (session.terminalField || !host.viewAttached) {
+            return
+        }
+        val field = currentEditor()?.extractedText(CONTEXT_WINDOW_CHARS) ?: return
+        if (field.selectionStart < 0 || field.selectionEnd < 0) {
+            return
+        }
+        selectionStart = field.startOffset + minOf(field.selectionStart, field.selectionEnd)
+        selectionEnd = field.startOffset + maxOf(field.selectionStart, field.selectionEnd)
+        if (selectionEnd > selectionStart) {
+            return
+        }
+        adoptWordAtCaret()
     }
 
     /** The field closed: what was learned is written, and the pending requests and the word go. */
@@ -1506,11 +1527,12 @@ class TypingOrchestrator(
         if (tail > 0 && !keepsTail) {
             editor.deleteSurroundingText(0, tail)
         }
-        // A space follows the pick unless one is already next, the setting is off, the field
-        // holds an address, or the pick leaves the text as it stands.
+        // A space follows the pick unless one is already next, or a mark written against the
+        // word is, the setting is off, the field holds an address, or the pick leaves the text
+        // as it stands.
         val nextChar = after?.getOrNull(if (keepsTail) 0 else tail)
         val space = if (unchanged || !preferences.spaceAfterSuggestion || session.addressField ||
-            nextChar == ' '
+            nextChar == ' ' || (nextChar != null && spacingFlow.attachesToWordBefore(nextChar.code))
         ) {
             ""
         } else {

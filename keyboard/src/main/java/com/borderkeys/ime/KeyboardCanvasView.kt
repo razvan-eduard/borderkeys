@@ -976,6 +976,17 @@ class KeyboardCanvasView(
         backgroundValid = true
     }
 
+    /** Whether key [index] is drawn with the modifier keys' fill rather than the letter keys'. */
+    private fun modifierStyled(index: Int): Boolean =
+        index != NO_KEY && (KeyFlags.has(geometry.keyFlags[index], KeyFlags.MODIFIER) ||
+            KeyFlags.has(geometry.keyFlags[index], KeyFlags.SECONDARY_ROW))
+
+    /** Whether the held key's alternatives popup takes the modifier keys' fill, as its key does. */
+    val alternativesModifierStyled: Boolean get() = modifierStyled(alternativesKey)
+
+    /** Whether the key preview takes the modifier keys' fill, as its key does. */
+    val keyPreviewModifierStyled: Boolean get() = modifierStyled(previewKey)
+
     private fun drawStatic(canvas: Canvas, viewWidth: Float, viewHeight: Float) {
         if (drawsBackground) {
             paints.backgroundPainter.draw(canvas, viewWidth, viewHeight)
@@ -987,9 +998,7 @@ class KeyboardCanvasView(
                 code == armedAccent
             ) {
                 paints.keyPressedFill
-            } else if (KeyFlags.has(geometry.keyFlags[index], KeyFlags.MODIFIER) ||
-                KeyFlags.has(geometry.keyFlags[index], KeyFlags.SECONDARY_ROW)
-            ) {
+            } else if (modifierStyled(index)) {
                 paints.modifierKeyFill
             } else {
                 paints.keyFill
@@ -1308,11 +1317,15 @@ class KeyboardCanvasView(
         return length
     }
 
-    /** Whether a key is previewed: any labelled key but a modifier, repeatable, space or enter. */
+    /**
+     * Whether a key is previewed: any labelled key but a modifier, repeatable, space or enter, and
+     * not one whose long press opens alternatives.
+     */
     private fun previewable(index: Int): Boolean {
         val flags = geometry.keyFlags[index]
         val code = geometry.keyCode[index]
         return geometry.labelLength[index] > 0 &&
+            geometry.altLength[index] == 0 &&
             !KeyFlags.has(flags, KeyFlags.MODIFIER) &&
             !KeyFlags.has(flags, KeyFlags.REPEATABLE) &&
             code != KeyCodes.SPACE && code != KeyCodes.ENTER
@@ -1453,7 +1466,11 @@ class KeyboardCanvasView(
             return
         }
         if (alternativesKey != NO_KEY && pointerId == longPressPointer) {
-            updateAlternativesSelection(x)
+            if (outsideAlternatives(x)) {
+                abandonAlternatives(pointerId)
+            } else {
+                updateAlternativesSelection(x)
+            }
             return
         }
         // The joystick follows the finger; a drag along backspace selects.
@@ -1753,6 +1770,27 @@ class KeyboardCanvasView(
             alternativesSelection = clamped
             invalidateAlternatives()
         }
+    }
+
+    /** Whether [x] lies left of the alternatives popup's first cell or right of its last. */
+    private fun outsideAlternatives(x: Float): Boolean {
+        val index = alternativesKey
+        if (index == NO_KEY) {
+            return false
+        }
+        return x < alternativesLeft ||
+            x > alternativesLeft + alternativesCellWidth * geometry.altLength[index]
+    }
+
+    /** Closes the alternatives popup with nothing typed; the lift of [pointerId] types nothing. */
+    private fun abandonAlternatives(pointerId: Int) {
+        val index = pointerKey[pointerId]
+        if (index != NO_KEY) {
+            endPress(index)
+            pointerKey[pointerId] = NO_KEY
+        }
+        dismissAlternatives()
+        cancelPendingCallbacks()
     }
 
     private fun commitAlternative(x: Float) {

@@ -96,6 +96,10 @@ class SpacingFlow(private val clock: TypingClock) : TypingFlow() {
         }
     }
 
+    /** Whether the mark [code] is written against the word before it, with no space between. */
+    fun attachesToWordBefore(code: Int): Boolean =
+        isTightPunctuation(code) && !isFrenchSpacedPunctuation(code)
+
     /** The space that follows the mark [code], or nothing at all; see [PunctuationSpace]. */
     fun spaceAfterMark(code: Int, editor: FieldEditor): String {
         val follows = PunctuationSpace.follows(
