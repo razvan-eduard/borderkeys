@@ -218,6 +218,19 @@ class BorderKeysService :
     /** Which clip the clipboard chip may show. */
     private val clipOffers = ClipChipOffers()
 
+    /** The screenshot folder's reader, the newest image it offers, and the last one pasted. */
+    private val screenshotFolder by lazy { ScreenshotFolder(contentResolver) }
+    private var newestScreenshot: ScreenshotFolder.Shot? = null
+    private var pastedScreenshot: android.net.Uri? = null
+
+    /** Re-reads the screenshot folder when it changes while the keyboard shows. */
+    private val screenshotObserver = object : android.database.ContentObserver(
+        android.os.Handler(android.os.Looper.getMainLooper()),
+    ) {
+        override fun onChange(selfChange: Boolean) = refreshScreenshot()
+    }
+    private var screenshotObserverRegistered = false
+
     /** Shows "decoding" on the strip when a swipe's answer is late. */
     private val gestureDecodingRunnable = Runnable { host?.suggestionStrip?.decoding = true }
 
@@ -931,6 +944,7 @@ class BorderKeysService :
         applyPlacement(view, preferences)
         applyParticleSettings(view, particleEffects)
         view.keyboard.listener = this
+        view.onPhotoLampChanged = { refreshTouchableArea() }
         applyHaptics(view, preferences)
         view.keyboard.swipeEnabled = preferences.swipeEnabled
         view.keyboard.soundEnabled = preferences.keySound
@@ -1035,6 +1049,8 @@ class BorderKeysService :
         host?.setEmojiPanelVisible(false)
         registerClipboardListener()
         refreshClipboardChip()
+        watchScreenshots()
+        refreshScreenshot()
         pushKeyGeometry()
     }
 
@@ -1046,6 +1062,7 @@ class BorderKeysService :
             currentInputEditorInfo?.packageName,
         )
         unregisterClipboardListener()
+        unwatchScreenshots()
         saveLanguageEvidence()
     }
 
@@ -1424,9 +1441,13 @@ class BorderKeysService :
     private fun ringOwnsWholeScreen(): Boolean =
         swipeRadialController.state == SwipeRadialController.State.OPEN && !debugRingOpen
 
-    /** Grows the window to the top of the screen while a ring is open, and back when it closes. */
+    /**
+     * Grows the window to the top of the screen while a ring is open or a pasted photo rises, and
+     * back when both are over.
+     */
     private fun refreshTouchableArea() {
-        host?.reserveScreenAbove = ringOwnsWholeScreen()
+        val view = host ?: return
+        view.reserveScreenAbove = ringOwnsWholeScreen() || view.photoLampRunning
     }
 
     /** Starts or stops the editor's cursor-anchor reports for [onUpdateCursorAnchorInfo]. */
@@ -2628,11 +2649,70 @@ class BorderKeysService :
             ?.getBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, false) == true
     }
 
+    /** Rebuilds the strip's clipboard chip for [clip] and places the screenshot chip beside it. */
+    private fun refreshClipboardChip(clip: ClipData? = clipboardManager?.primaryClip) {
+        refreshClipChip(clip)
+        placeScreenshotChip(clip)
+        showChipPreviews(clip)
+    }
+
+    /** An image's preview for a chip: the image it was loaded for, and the preview. */
+    private class ChipPreview(var uri: android.net.Uri? = null, var bitmap: android.graphics.Bitmap? = null)
+
+    private val clipPreview = ChipPreview()
+    private val screenshotPreview = ChipPreview()
+
+    /**
+     * Gives the photo and screenshot chips their previews, with [KeyboardPreferences.chipImagePreview]
+     * on; each is loaded off the main thread once per image.
+     */
+    private fun showChipPreviews(clip: ClipData?) {
+        val strip = host?.suggestionStrip ?: return
+        if (!preferences.chipImagePreview) {
+            strip.clipboardThumbnail = null
+            strip.screenshotThumbnail = null
+            return
+        }
+        val clipUri = clip?.takeIf {
+            strip.clipboardChip != null && it.itemCount > 0 && it.description?.hasMimeType("image/*") == true
+        }?.getItemAt(0)?.uri
+        loadChipPreview(clipUri, clipPreview) { strip.clipboardThumbnail = it }
+        val shotUri = newestScreenshot?.uri?.takeIf { strip.screenshotChip != null }
+        loadChipPreview(shotUri, screenshotPreview) { strip.screenshotThumbnail = it }
+    }
+
+    /** Hands [apply] the preview of [uri], from [held] when it is that image's, else loaded. */
+    private fun loadChipPreview(
+        uri: android.net.Uri?,
+        held: ChipPreview,
+        apply: (android.graphics.Bitmap?) -> Unit,
+    ) {
+        if (uri == null) {
+            apply(null)
+            return
+        }
+        if (uri == held.uri) {
+            apply(held.bitmap)
+            return
+        }
+        val side = (host?.suggestionStrip?.height ?: 0).coerceAtLeast(1)
+        scope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                runCatching {
+                    contentResolver.loadThumbnail(uri, android.util.Size(side, side), null)
+                }.getOrNull()
+            }
+            held.uri = uri
+            held.bitmap = bitmap
+            apply(bitmap)
+        }
+    }
+
     /**
      * Rebuilds the strip's chip for the clip on the clipboard, with its label; none in private
      * mode, for a withheld or sensitive clip, or with the setting off.
      */
-    private fun refreshClipboardChip(clip: ClipData? = clipboardManager?.primaryClip) {
+    private fun refreshClipChip(clip: ClipData?) {
         val strip = host?.suggestionStrip ?: return
         if (!unlocked || orchestrator.session.policy.privateField || !preferences.clipboardSuggestion) {
             strip.clipboardChip = null
@@ -2681,7 +2761,10 @@ class BorderKeysService :
         val uri = item.uri
         val description = clip.description
         if (uri != null && description != null && description.hasMimeType("image/*")) {
-            orchestrator.pasteImage(uri.toString(), description.getMimeType(0) ?: "image/*")
+            val chip = chipBoundsBeforePaste(screenshot = false)
+            if (orchestrator.pasteImage(uri.toString(), description.getMimeType(0) ?: "image/*")) {
+                playPhotoLamp(uri, chip)
+            }
             return
         }
         val text = item.coerceToText(this)?.toString() ?: return
@@ -2698,6 +2781,123 @@ class BorderKeysService :
         if (preferences.clipboardDeleteAfterUse) {
             // Deletes the history entry with this text, unless it is pinned.
             scope.launch(Dispatchers.IO) { DataGraph.clipboard.deleteIfUnpinned(text) }
+        }
+    }
+
+    // ---- the screenshot chip --------------------------------------------------------------
+
+    /** Whether the strip offers screenshots in this field. */
+    private fun screenshotsOffered(): Boolean =
+        unlocked && !orchestrator.session.policy.privateField &&
+            preferences.screenshotSuggestion != KeyboardPreferences.SCREENSHOT_SUGGESTION_OFF &&
+            preferences.screenshotFolder.isNotEmpty()
+
+    /**
+     * Reads the newest image of the screenshot folder off the main thread and places its chip; an
+     * image older than [SCREENSHOT_RECENT_MILLIS] or already pasted is not offered.
+     */
+    private fun refreshScreenshot() {
+        if (!screenshotsOffered()) {
+            newestScreenshot = null
+            refreshClipboardChip()
+            return
+        }
+        val tree = android.net.Uri.parse(preferences.screenshotFolder)
+        scope.launch {
+            val shot = withContext(Dispatchers.IO) { screenshotFolder.newest(tree) }
+            newestScreenshot = shot?.takeIf {
+                it.uri != pastedScreenshot &&
+                    System.currentTimeMillis() - it.modifiedMillis <= SCREENSHOT_RECENT_MILLIS
+            }
+            refreshClipboardChip()
+        }
+    }
+
+    /**
+     * Puts the screenshot chip on the strip as the setting says: a chip of its own beside the
+     * clipboard chip, the newer first, or the one chip, whichever of the two is newer.
+     */
+    private fun placeScreenshotChip(clip: ClipData?) {
+        val strip = host?.suggestionStrip ?: return
+        val shot = newestScreenshot?.takeIf { screenshotsOffered() }
+        if (shot == null) {
+            strip.screenshotChip = null
+            return
+        }
+        val clipMillis = clip?.description?.timestamp ?: 0L
+        val newer = strip.clipboardChip == null || shot.modifiedMillis >= clipMillis
+        if (preferences.screenshotSuggestion == KeyboardPreferences.SCREENSHOT_SUGGESTION_NEWER) {
+            if (newer) {
+                strip.clipboardChip = null
+                strip.screenshotChip = strings[Keys.CLIP_SCREENSHOT]
+            } else {
+                strip.screenshotChip = null
+            }
+        } else {
+            strip.screenshotFirst = newer
+            strip.screenshotChip = strings[Keys.CLIP_SCREENSHOT]
+        }
+    }
+
+    override fun onScreenshotPicked() {
+        val shot = newestScreenshot ?: return
+        if (orchestrator.session.policy.privateField) {
+            return
+        }
+        val chip = chipBoundsBeforePaste(screenshot = true)
+        if (orchestrator.pasteImage(shot.uri.toString(), shot.mimeType)) {
+            playPhotoLamp(shot.uri, chip)
+            pastedScreenshot = shot.uri
+            newestScreenshot = null
+            refreshClipboardChip()
+        }
+    }
+
+    /** Where the screenshot chip, or the clipboard chip, sits on the strip now; null when not showing. */
+    private fun chipBoundsBeforePaste(screenshot: Boolean): android.graphics.RectF? {
+        val bounds = android.graphics.RectF()
+        return bounds.takeIf { host?.suggestionStrip?.chipBounds(screenshot, it) == true }
+    }
+
+    /**
+     * Lets the image at [uri] rise out of [chip] in a lamp's shape, with the event effects and
+     * [com.borderkeys.data.theme.EffectsSettings.photoLamp] on and animations not turned off.
+     */
+    private fun playPhotoLamp(uri: android.net.Uri, chip: android.graphics.RectF?) {
+        val view = host ?: return
+        val effects = preferences.effects
+        if (chip == null || !effects.enabled || !effects.photoLamp ||
+            !android.animation.ValueAnimator.areAnimatorsEnabled()
+        ) {
+            return
+        }
+        val metrics = resources.displayMetrics
+        val size = android.util.Size(metrics.widthPixels / 2, metrics.heightPixels / 2)
+        scope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                runCatching { contentResolver.loadThumbnail(uri, size, null) }.getOrNull()
+            } ?: return@launch
+            view.playPhotoLamp(bitmap, chip)
+        }
+    }
+
+    /** Watches the screenshot folder while the keyboard shows, so a new screenshot is offered. */
+    private fun watchScreenshots() {
+        unwatchScreenshots()
+        if (!screenshotsOffered()) {
+            return
+        }
+        val children = screenshotFolder.childrenUri(android.net.Uri.parse(preferences.screenshotFolder)) ?: return
+        runCatching {
+            contentResolver.registerContentObserver(children, true, screenshotObserver)
+            screenshotObserverRegistered = true
+        }
+    }
+
+    private fun unwatchScreenshots() {
+        if (screenshotObserverRegistered) {
+            contentResolver.unregisterContentObserver(screenshotObserver)
+            screenshotObserverRegistered = false
         }
     }
 
@@ -2900,6 +3100,9 @@ class BorderKeysService :
 
         /** How much of a copied text the chip shows. */
         const val CHIP_PREVIEW_CHARS = 24
+
+        /** How old a screenshot may be and still be offered, in milliseconds. */
+        const val SCREENSHOT_RECENT_MILLIS = 5L * 60L * 1000L
 
         /** How many cards the history panel holds. */
         const val MAX_CLIPBOARD_CARDS = 40

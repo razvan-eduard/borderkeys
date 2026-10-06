@@ -28,6 +28,18 @@ attestations and the full commit lists are on the
   keyboard behaved until now; each step up adds rarer words that the same corpora write and a
   spelling dictionary accepts, and leaves more typos that happen to spell one uncorrected. Such
   words are never suggested, and the setting names the dictionaries it changes.
+- Offer the newest screenshot, on the Clipboard screen: a screenshot from the last five minutes
+  is offered on the strip like a copied photo, either as a chip of its own beside the clipboard
+  chip or in one chip with it, whichever is newer. Choosing it asks once for your screenshots
+  folder, in Android's own folder picker opened where this phone keeps them; the keyboard reads
+  that folder alone and still declares no permission. Off by default.
+- Show a preview in the chip, on the Clipboard screen: the copied-photo and screenshot chips show
+  a small picture of the image in front of their icon, within the strip's own height. Off by
+  default.
+- Photo paste animation, among the effects: a photo or screenshot pasted from the strip rises
+  out of its chip in a lamp's shape, fading as it grows to fill the screen above the keys. The
+  app underneath stays tappable throughout, and the animation is skipped when Android's
+  animations are off. Off by default.
 - A key's long-press strip opens straight away, with no preview of the key first, drawn in the
   held key's own colours; sliding off either end of it closes it with nothing typed.
 - Fixed: a word picked from the strip got a space before a following comma or full stop.

@@ -52,6 +52,12 @@ fun EventEffectsSection(
             subtitle = strings[Keys.EFFECTS_ENABLE_NOTE],
             checked = effects.enabled,
         ) { value -> onChange { it.copy(enabled = value) } }
+        SwitchRow(
+            title = strings[Keys.EFFECTS_PHOTO_LAMP],
+            subtitle = strings[Keys.EFFECTS_PHOTO_LAMP_NOTE],
+            checked = effects.photoLamp,
+            enabled = effects.enabled,
+        ) { value -> onChange { it.copy(photoLamp = value) } }
     }
 
     for (event in EffectEvent.entries) {

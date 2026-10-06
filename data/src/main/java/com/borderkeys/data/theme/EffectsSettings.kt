@@ -70,6 +70,8 @@ data class EffectsSettings(
     val autocorrectApplied: EffectSetting = EffectSetting(),
     val correctionReverted: EffectSetting = EffectSetting(),
     val suggestionPicked: EffectSetting = EffectSetting(),
+    /** Whether a photo pasted from a strip chip rises out of it in a lamp's shape, fading. */
+    val photoLamp: Boolean = false,
 ) {
     /** The setting for [event]. */
     fun forEvent(event: EffectEvent): EffectSetting = when (event) {
