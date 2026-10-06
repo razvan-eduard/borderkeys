@@ -25,16 +25,20 @@ database and are excluded from system backup and from device-to-device transfer.
   Cancel in the centre, all in one continuous stroke — or keep the ring open and tap. A tap
   anywhere outside it closes it and keeps the swiped word. Off by default.
 * Autocorrect you can bound: off by default, and when on, the shortest word it may touch and
-  how different a correction may be from what you typed are settings. A correct word the
-  dictionaries do not know is left alone, a regular form of a word they do know is never
-  corrected away, and backspace or a tap on the strip puts back exactly what you typed.
+  how different a correction may be from what you typed are settings. A word typed with
+  several letters on the wrong keys is read from where each tap landed, and corrected only when
+  one word is far likelier than every other reading. A correct word the dictionaries do not know
+  is left alone, Rare words lets more of them count as real, a regular form of a word they do
+  know is never corrected away, and backspace or a tap on the strip puts back exactly what you
+  typed.
 * Block offensive words, if you want to: one switch keeps a per-language list of profanity
   and slurs out of suggestions, corrections and learning. What you type yourself is never
   touched.
 * Shift the way every keyboard does it — spent by the next letter, locked by a hold or two
   taps. Capitals off, on when the field asks, or on everywhere: one choice, since some apps
   forget to ask.
-* The pressed key shows itself enlarged above your finger while it is held, and the keypress
+* The pressed key shows itself enlarged above your finger while it is held; a key with
+  long-press characters opens them at once, in its own colours. The keypress
   vibration follows the phone's own setting or one of three strengths, from its own feedback
   classes — still with no vibration permission.
 * Text shortcuts: a word that stands for a longer text expands when a space or a punctuation
@@ -64,6 +68,9 @@ database and are excluded from system backup and from device-to-device transfer.
   cakes come first, over "pumpkin" the lantern, in the languages switched on; open the clipboard
   over "invoice" and the clips containing it come first.
   A long press on a clip pins, edits or deletes it.
+* Photos and screenshots on the strip: a copied image is kept as a picture, encrypted on the
+  phone, and the newest screenshot can be offered beside it, read from the one folder you pick,
+  still with no permission. A small preview in the chip, if you want one.
 * A personal dictionary you can see and edit: the learned words and the learned phrases each
   on a page of their own, searchable, every entry with a Delete and every word with a Block,
   and what a search finds deletable at once. The words you open sentences with are learned
@@ -95,7 +102,8 @@ database and are excluded from system backup and from device-to-device transfer.
   your own.
 * Particle effects on the keys, the ring, the strip and the bars: an outline layer that
   traces each element's edge and a fill layer inside it, six built-in looks and your own
-  saved presets. Off by default.
+  saved presets. Off by default. An Animations page beside them: one switch stops every
+  animation, and each has its own, from the key press to a pasted photo rising out of its chip.
 * Backup and restore everything this keyboard has learned and configured to a single file
   you control, with a checklist of what a file contains before any of it is applied.
   Nothing syncs anywhere on its own.
@@ -116,8 +124,8 @@ yourself, and every version is kept so you can walk back to what you started wit
 This build also carries a neural swipe decoder — a small network hand-written in C++ with
 no machine-learning runtime, its weights trained on a free corpus — and uses it by default:
 on 500 recorded swipes it reads 91 in 100 correctly where the geometric decoder reads 77.
-Layouts in other alphabets get a model of their own, trained on swipes synthesised from each
-language's words. A switch turns it off, and its weights are freed the moment it goes off,
+It is trained on Latin layouts; layouts in other alphabets swipe with the geometric decoder.
+A switch turns it off, and its weights are freed the moment it goes off,
 so with the switch off this build costs no more memory than the free one.
 
 * No model is bundled and none can be downloaded automatically — there is still no

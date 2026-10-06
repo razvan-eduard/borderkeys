@@ -717,9 +717,9 @@ is the number a user gets.
 | `autocorrect_slip_en` | 200 | 91.5% | 182 |
 | `autocorrect_omitted_en` | 200 | 92.5% | 181 |
 | `autocorrect_extra_en` | 200 | 96.5% | 192 |
-| `autocorrect_rareprefix_en` | 193 | 71.0% | 129 |
+| `autocorrect_rareprefix_en` | 193 | 71.0% | 130 |
 | `autocorrect_known_en` | 200 | 97.5% left alone | 193 |
-| `autocorrect_real_en` | 1,000 | 47.1% | 469; 494 in context |
+| `autocorrect_real_en` | 1,000 | 47.1% | 468; 493 in context |
 | `autocorrect_accents_ro` | 248 | 95.6% | 237 |
 | `autocorrect_twins_ro` | 200 | 93.0% | 186 |
 | `autocorrect_plain_ro` | 200 | 100.0% | 200 |
@@ -935,18 +935,18 @@ the word meant, right / wrong word / left alone:
 | Distance | Rows | A word at a time | In context | Phones right |
 |---|---|---|---|---|
 | 1 | 402 | 307 / 35 / 60 | 312 / 27 / 63 | 358 |
-| 2 | 297 | 139 / 89 / 69 | 152 / 79 / 66 | 222 |
-| 3 | 121 | 21 / 38 / 62 | 25 / 34 / 62 | 91 |
-| 4 or more | 180 | 2 / 58 / 120 | 5 / 56 / 119 | 132 |
-| all | 1,000 | 469 / 220 / 311 | 494 / 196 / 310 | 803 |
+| 2 | 297 | 139 / 89 / 69 | 151 / 79 / 67 | 222 |
+| 3 | 121 | 20 / 37 / 64 | 25 / 33 / 63 | 91 |
+| 4 or more | 180 | 2 / 58 / 120 | 5 / 55 / 120 | 132 |
+| all | 1,000 | 468 / 219 / 313 | 493 / 194 / 313 | 803 |
 
 Before the tap decoder the same corpus read 434 right a word at a time, none of them three or
 more edits away, and 440 / 204 / 356 in context. The decoder's word is the right one applied in
-36 of the rows read a word at a time and 53 in context, close to the whole gain; the entries of
+35 of the rows read a word at a time and 52 in context, close to the whole gain; the entries of
 autocorrect's list it holds back, where another reading is far likelier, account for the wrong
 words that fell. With no taps the decoder reads each letter at its key's
 centre, so a typo three or more keys away is rarely a hundred times likelier than the rest;
-on a phone, with the taps, it is more often. Of the 531 misses a word at a time, 276 never have
+on a phone, with the taps, it is more often. Of the 532 misses a word at a time, 277 never have
 the word meant in the engine's ranking. A third of real phone typos are three or more edits from
 their word; the generated corpora hold none.
 
