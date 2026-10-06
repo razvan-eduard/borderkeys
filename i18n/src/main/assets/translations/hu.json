@@ -1348,7 +1348,7 @@
   "effects_enable": "Effektusok megjelenítése",
   "effects_enable_note": "Rövid animáció a billentyűk fölött, amikor a billentyűzetnek van mit mondania — egy megtanult szó, egy elvégzett javítás. Kikapcsolva mind egyszerre elhallgat.",
   "effects_photo_lamp": "Animáció fotó beillesztésekor",
-  "effects_photo_lamp_note": "A sávról beillesztett fotó vagy képernyőkép szellemként emelkedik ki a chipjéből, növekedés közben elhalványul, és sosem akadályozza, hogy az alkalmazásodra koppints. Kimarad, ha az Android animációi ki vannak kapcsolva.",
+  "effects_photo_lamp_note": "A sávról beillesztett fotó vagy képernyőkép szellemként emelkedik ki a chipjéből, növekedés közben elhalványul, és sosem akadályozza, hogy az alkalmazására koppintson. Kimarad, ha az Android animációi ki vannak kapcsolva.",
   "effects_style": "Animáció",
   "effects_style_off": "Ki",
   "effects_style_rise_fade": "Emelkedés és elhalványulás",

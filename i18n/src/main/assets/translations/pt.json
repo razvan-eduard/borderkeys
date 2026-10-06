@@ -186,7 +186,7 @@
   "clipboard_screenshot_off": "Desligado",
   "clipboard_screenshot_beside": "Ao lado do item copiado",
   "clipboard_screenshot_newer": "Só a mais recente",
-  "clipboard_screenshot_note": "Uma captura de ecrã dos últimos cinco minutos é oferecida na barra como uma foto copiada e só é colada quando lhe toca; nunca num campo de palavra-passe. Ao escolher uma opção, é pedida uma vez a pasta onde as suas capturas são guardadas. O BorderKeys lê apenas essa pasta e não precisa de nenhuma permissão para isso.",
+  "clipboard_screenshot_note": "Uma captura de ecrã dos últimos cinco minutos é oferecida na barra como uma foto copiada e só é colada quando lhe toca; nunca num campo de senha. Ao escolher uma opção, é pedida uma vez a pasta onde as suas capturas são guardadas. O BorderKeys lê apenas essa pasta e não precisa de nenhuma permissão para isso.",
   "clipboard_screenshot_folder": "Pasta das capturas: %s",
   "clipboard_screenshot_change_folder": "Mudar de pasta",
   "clip_private": "Guardado em privado",
