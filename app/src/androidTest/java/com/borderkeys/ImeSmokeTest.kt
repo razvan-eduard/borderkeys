@@ -300,6 +300,7 @@ class ImeSmokeTest {
         }
         try {
             selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
+            reopenKeyboard()
             tapKey(LANGUAGE_KEY)
             waitForKey("й", LAUNCH_TIMEOUT)
         } finally {
@@ -661,6 +662,7 @@ class ImeSmokeTest {
         runBlocking { DataGraph.themes.updatePreferences { it.copy(languageKey = true) } }
         try {
             selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
+            reopenKeyboard()
             waitForKey(LANGUAGE_KEY).longClick()
             waitForKey("й", LAUNCH_TIMEOUT)
         } finally {
@@ -756,6 +758,14 @@ class ImeSmokeTest {
         val field = device.wait(Until.findObject(By.descStartsWith(mode.description)), KEY_TIMEOUT)
         assertNotNull("the probe field in its ${mode.name} mode", field)
         field.clear()
+        focusProbeField()
+    }
+
+    /** Hides the keyboard and focuses the probe field again, so the keyboard reads its layouts anew. */
+    private fun reopenKeyboard() {
+        device.pressBack()
+        assertTrue("the keyboard down", device.wait(Until.gone(keyMatcher("q")), KEY_TIMEOUT))
+        settle()
         focusProbeField()
     }
 
