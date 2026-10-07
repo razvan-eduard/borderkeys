@@ -299,6 +299,7 @@ class ImeSmokeTest {
             }
         }
         try {
+            waitForEnabledSubtypes(3)
             selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
             reopenKeyboard()
             tapKey(LANGUAGE_KEY)
@@ -661,6 +662,7 @@ class ImeSmokeTest {
         device.executeShellCommand("settings put secure enabled_input_methods ${both.joinToString(":")}")
         runBlocking { DataGraph.themes.updatePreferences { it.copy(languageKey = true) } }
         try {
+            waitForEnabledSubtypes(2)
             selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
             reopenKeyboard()
             waitForKey(LANGUAGE_KEY).longClick()
@@ -759,6 +761,20 @@ class ImeSmokeTest {
         assertNotNull("the probe field in its ${mode.name} mode", field)
         field.clear()
         focusProbeField()
+    }
+
+    /** Waits until the system's InputMethodManager sees at least [expectedCount] subtypes for our keyboard. */
+    private fun waitForEnabledSubtypes(expectedCount: Int) {
+        val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        val deadline = System.currentTimeMillis() + 5000
+        while (System.currentTimeMillis() < deadline) {
+            val ours = manager.enabledInputMethodList.firstOrNull { it.packageName == context.packageName }
+            if (ours != null && manager.getEnabledInputMethodSubtypeList(ours, false).size >= expectedCount) {
+                return
+            }
+            Thread.sleep(200)
+        }
+        fail("Timed out waiting for $expectedCount subtypes to be enabled")
     }
 
     /** Hides the keyboard and focuses the probe field again, so the keyboard reads its layouts anew. */
