@@ -198,7 +198,7 @@ private fun TypingPage(
         note = strings[Keys.CORRECTIONS_OFF_BY_DEFAULT_WITH_IT_OFF],
         checked = preferences.autoCorrectOnSpace,
         preview = { accent -> CorrectionPreview(strings[Keys.FEATURE_SAMPLE_TYPO], sample, accent) },
-    ) { value -> update { it.copy(autoCorrectOnSpace = value) } }
+    ) { value -> update { it.copy(autoCorrectOnSpace = value, autoCorrectOnEnter = value) } }
     OnboardingItem(
         title = strings[Keys.CORRECTIONS_CAPITALISE],
         note = strings[Keys.CORRECTIONS_CAPITALISE_MODE_NOTE],

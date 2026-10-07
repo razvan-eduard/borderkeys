@@ -75,6 +75,7 @@ class ImeSmokeTest {
                 it.copy(
                     learningEnabled = false,
                     autoCorrectOnSpace = true,
+                    autoCorrectOnEnter = true,
                     revertCorrectionOnBackspace = true,
                     autoCapitalise = false,
                     spaceAfterSuggestion = true,

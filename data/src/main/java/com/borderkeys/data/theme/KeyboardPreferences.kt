@@ -596,6 +596,8 @@ data class KeyboardPreferences(
 
     /** Whether a delimiter applies the leading suggestion instead of committing what was typed. */
     val autoCorrectOnSpace: Boolean = false,
+    /** Whether the enter key applies the leading suggestion instead of committing what was typed. */
+    val autoCorrectOnEnter: Boolean = false,
 
     /**
      * Whether the backspace immediately after an applied correction restores what was typed. Only

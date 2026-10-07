@@ -68,6 +68,7 @@ class CommitFlow(
         knownWordIsName = answer.knownWordIsName,
         settings = WordCommit.Settings(
             autoCorrectOnSpace = settings.autoCorrectOnSpace,
+            autoCorrectOnEnter = settings.autoCorrectOnEnter,
             autoCapitalise = settings.autoCapitalise,
             minimumLength = settings.minCorrectionLength,
             correctionDistance = settings.correctionDistance,

@@ -1528,6 +1528,7 @@ class TypingScenarioTest {
         val SMOKE_SETTINGS = KeyboardPreferences(
             learningEnabled = false,
             autoCorrectOnSpace = true,
+            autoCorrectOnEnter = true,
             revertCorrectionOnBackspace = true,
             autoCapitalise = false,
             spaceAfterSuggestion = true,
