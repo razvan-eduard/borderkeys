@@ -248,7 +248,9 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
     // Each screen's saved state, its scroll included, kept while it is on the stack and dropped
     // when it is popped.
     val screenStates = rememberSaveableStateHolder()
+    var scrollTarget by remember { mutableStateOf<ScrollTarget?>(null) }
     val pop = {
+        scrollTarget = null
         val popped = stack.removeAt(stack.size - 1)
         screenStates.removeState(popped.name)
     }
@@ -385,12 +387,11 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
             )
         },
     ) { insets ->
-        var scrollTarget by remember { mutableStateOf<String?>(null) }
         val open: (Screen) -> Unit = { 
             scrollTarget = null
             stack.add(it) 
         }
-        val openMatch: (Screen, String) -> Unit = { screen, target ->
+        val openMatch: (Screen, ScrollTarget) -> Unit = { screen, target ->
             scrollTarget = target
             stack.add(screen)
         }
