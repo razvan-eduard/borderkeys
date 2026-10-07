@@ -82,7 +82,7 @@ fun HomeScreen(query: String, modifier: Modifier = Modifier, open: (Screen) -> U
                     Explanation(strings[Keys.HOME_SEARCH_NOTHING])
                 }
                 for (match in matches) {
-                    SettingRow(title = match.title, subtitle = match.place, onClick = { openMatch(match.screen, ScrollTarget(match.title, match.cardSummary)) })
+                    SettingRow(title = match.title, subtitle = match.place, onClick = { openMatch(match.screen, ScrollTarget(match.title, match.advancedSummary)) })
                 }
             }
             return@Column
