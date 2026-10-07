@@ -84,6 +84,7 @@ abstract class GenerateSettingsIndex : DefaultTask() {
                     .append(entry[1]?.let { "Keys.$it" } ?: "null")
                     .append(", Keys.${entry[2]}")
                     .append(entry[3]?.let { ", Keys.$it" } ?: "")
+                    .append(entry[4]?.let { ", advancedKey = Keys.$it" } ?: "")
                     .append("),\n")
             }
         }
@@ -103,21 +104,25 @@ abstract class GenerateSettingsIndex : DefaultTask() {
         if (trimmed.startsWith("//") || trimmed.startsWith("*")) "" else line
     }
 
-    /** (screen, card key, key, note key) for every card and row in source order, each key once. */
+    /** (screen, card key, key, note key, advanced key) for every card and row in source order, each key once. */
     private fun scan(text: String, screen: String): List<List<String?>> {
         val out = ArrayList<List<String?>>()
         val seen = HashSet<String>()
         var card: String? = null
-        val events = (ANY_CARD.findAll(text) + ROW.findAll(text) + LABEL.findAll(text))
+        var advanced: String? = null
+        val events = (ANY_CARD.findAll(text) + ADVANCED.findAll(text) + ROW.findAll(text) + LABEL.findAll(text))
             .sortedBy { it.range.first }.toList()
         for ((number, match) in events.withIndex()) {
             val end = if (number + 1 < events.size) events[number + 1].range.first else text.length
             if (match.value.startsWith("SettingsSectionCard")) {
+                advanced = null
                 card = CARD.matchAt(text, match.range.first)?.groupValues?.get(1)
-                if (card != null && seen.add(card)) out += listOf(screen, null, card, null)
+                if (card != null && seen.add(card)) out += listOf(screen, null, card, null, null)
+            } else if (match.value.startsWith("AdvancedSection")) {
+                advanced = ADVANCED.matchAt(text, match.range.first)?.groupValues?.get(1)
             } else {
                 val key = match.groupValues[1]
-                if (seen.add(key)) out += listOf(screen, card, key, noteOf(text, match, end))
+                if (seen.add(key)) out += listOf(screen, card, key, noteOf(text, match, end), advanced)
             }
         }
         return out
@@ -162,6 +167,7 @@ abstract class GenerateSettingsIndex : DefaultTask() {
         const val KEY = """strings(?:\[|\.getString\()Keys\.([A-Z0-9_]+)"""
         val CARD = Regex("SettingsSectionCard$TITLE")
         val ANY_CARD = Regex("""SettingsSectionCard\(""")
+        val ADVANCED = Regex("""AdvancedSection\(\s*(?:summary\s*=\s*)?strings(?:\[|\.getString\()Keys\.([A-Z0-9_]+)""")
         val ROW = Regex("(?:SettingRow|SwitchRow|SectionHeader)$TITLE")
         val LABEL = Regex("""Text\(\s*strings\[Keys\.([A-Z0-9_]+)],\s*style\s*=\s*MaterialTheme\.typography\.bodyLarge""")
         val NAMED_NOTE = Regex("""subtitle\s*=\s*(?:if\s*\([^)]*\)\s*)?$KEY""")
@@ -187,7 +193,7 @@ abstract class GenerateSettingsIndex : DefaultTask() {
                  * One indexed row or card: where it is, the key its title is drawn from, and the key of the
                  * note under it, if any.
                  */
-                class Entry(val screen: Screen, val cardKey: String?, val key: String, val noteKey: String? = null)
+                class Entry(val screen: Screen, val cardKey: String?, val key: String, val noteKey: String? = null, val advancedKey: String? = null)
 
                 val entries: List<Entry> = listOf(
 
