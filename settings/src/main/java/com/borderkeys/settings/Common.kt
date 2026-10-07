@@ -65,6 +65,10 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.keyboard.R
+import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.height
 import kotlinx.coroutines.launch
 
 /** The shapes every settings screen is built from. */
@@ -83,6 +87,8 @@ data class ScrollTarget(val title: String, val cardSummary: String? = null)
 
 val LocalScrollTarget = compositionLocalOf<ScrollTarget?> { null }
 
+val LocalExpandAdvanced = compositionLocalOf<(() -> Unit)?> { null }
+
 /**
  * A row with a title, an explanation and something on the right. `onClick` is the last parameter,
  * after the composable `trailing` and `content` slots, so a trailing lambda is the click; pass
@@ -100,9 +106,12 @@ fun SettingRow(
     val requester = remember { BringIntoViewRequester() }
     val isTarget = scrollTarget != null && title == scrollTarget.title
     var isHighlighted by remember { mutableStateOf(false) }
+    val expandAdvanced = LocalExpandAdvanced.current
 
     LaunchedEffect(scrollTarget, title) {
         if (isTarget) {
+            expandAdvanced?.invoke()
+            kotlinx.coroutines.delay(100)
             requester.bringIntoView()
             isHighlighted = true
             kotlinx.coroutines.delay(4000)
@@ -152,12 +161,6 @@ fun SettingRow(
 fun AdvancedSection(summary: String? = null, content: @Composable ColumnScope.() -> Unit) {
     val strings = LocalStrings.current
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val scrollTarget = LocalScrollTarget.current
-    val shouldExpand = scrollTarget?.cardSummary != null && summary == scrollTarget.cardSummary
-    
-    LaunchedEffect(shouldExpand) {
-        if (shouldExpand) expanded = true
-    }
 
     Row(
         modifier = Modifier
@@ -190,8 +193,19 @@ fun AdvancedSection(summary: String? = null, content: @Composable ColumnScope.()
             tint = MaterialTheme.colorScheme.primary,
         )
     }
-    AnimatedVisibility(visible = expanded) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { content() }
+    CompositionLocalProvider(LocalExpandAdvanced provides { expanded = true }) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize()
+                .then(
+                    if (expanded) Modifier
+                    else Modifier.height(0.dp).clipToBounds()
+                ),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            content()
+        }
     }
 }
 
