@@ -55,8 +55,8 @@ android {
         applicationId = "com.borderkeys"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 23
-        versionName = "0.11.0"
+        versionCode = 24
+        versionName = "0.11.1"
 
         ndk {
             // The packaging-level filter, which also applies to a third-party AAR's .so files.

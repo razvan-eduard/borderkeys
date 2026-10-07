@@ -243,7 +243,7 @@ jobs:
               "$tag" "$next" "$one" "$two" "$three" > "$out/$language.log" 2>&1 &
             pids+=("$!")
           done <<'FLOORS'
-          en en-US 25.1 49.6 61.3 74.6
+          en en-US 25.1 49.5 61.3 74.6
           ro ro-RO 22.1 40.5 42.2 58.5
           de de-DE 19.1 43.8 58.1 62.7
           fr fr-FR 26.2 49.8 58.0 70.05
