@@ -79,7 +79,9 @@ fun SectionHeader(text: String) {
     )
 }
 
-val LocalScrollTarget = compositionLocalOf<String?> { null }
+data class ScrollTarget(val title: String, val cardSummary: String? = null)
+
+val LocalScrollTarget = compositionLocalOf<ScrollTarget?> { null }
 
 /**
  * A row with a title, an explanation and something on the right. `onClick` is the last parameter,
@@ -96,7 +98,7 @@ fun SettingRow(
 ) {
     val scrollTarget = LocalScrollTarget.current
     val requester = remember { BringIntoViewRequester() }
-    val isTarget = scrollTarget != null && title == scrollTarget
+    val isTarget = scrollTarget != null && title == scrollTarget.title
     var isHighlighted by remember { mutableStateOf(false) }
 
     LaunchedEffect(scrollTarget, title) {
@@ -150,6 +152,13 @@ fun SettingRow(
 fun AdvancedSection(summary: String? = null, content: @Composable ColumnScope.() -> Unit) {
     val strings = LocalStrings.current
     var expanded by rememberSaveable { mutableStateOf(false) }
+    val scrollTarget = LocalScrollTarget.current
+    val shouldExpand = scrollTarget?.cardSummary != null && summary == scrollTarget.cardSummary
+    
+    LaunchedEffect(shouldExpand) {
+        if (shouldExpand) expanded = true
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
