@@ -7,12 +7,15 @@ import com.borderkeys.i18n.Keys
 
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,6 +33,8 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
@@ -73,6 +79,8 @@ fun SectionHeader(text: String) {
     )
 }
 
+val LocalScrollTarget = compositionLocalOf<String?> { null }
+
 /**
  * A row with a title, an explanation and something on the right. `onClick` is the last parameter,
  * after the composable `trailing` and `content` slots, so a trailing lambda is the click; pass
@@ -86,8 +94,25 @@ fun SettingRow(
     content: @Composable (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
+    val scrollTarget = LocalScrollTarget.current
+    val requester = remember { BringIntoViewRequester() }
+    val isTarget = scrollTarget != null && title == scrollTarget
+
+    LaunchedEffect(scrollTarget, title) {
+        if (isTarget) {
+            requester.bringIntoView()
+        }
+    }
+
+    val highlightColor = MaterialTheme.colorScheme.primaryContainer
+    val color by animateColorAsState(
+        if (isTarget) highlightColor else Color.Transparent
+    )
+
     Row(
         modifier = Modifier
+            .bringIntoViewRequester(requester)
+            .background(color)
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 20.dp, vertical = 14.dp),
