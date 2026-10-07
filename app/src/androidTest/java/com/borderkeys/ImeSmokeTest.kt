@@ -289,12 +289,7 @@ class ImeSmokeTest {
     @Test
     fun theGlobeStepsThroughTheLayoutsInTheListsOrder() {
         val before = device.executeShellCommand("settings get secure enabled_input_methods").trim()
-        val ime = "${context.packageName}/com.borderkeys.ime.BorderKeysService"
-        val three = before.split(':').filterNot { it.startsWith(ime) } +
-            "$ime;$ENGLISH_SUBTYPE;$GERMAN_QWERTZ_SUBTYPE;$RUSSIAN_SUBTYPE"
-        device.executeShellCommand("ime disable $ime")
-        device.executeShellCommand("settings put secure enabled_input_methods ${three.joinToString(":")}")
-        selectKeyboard()
+        setEnabledSubtypes(ENGLISH_SUBTYPE, GERMAN_QWERTZ_SUBTYPE, RUSSIAN_SUBTYPE)
         runBlocking {
             DataGraph.themes.updatePreferences {
                 it.copy(languageKey = true, layoutOrder = listOf("qwerty", "russian", "qwertz"))
@@ -658,11 +653,7 @@ class ImeSmokeTest {
     @Test
     fun aHoldOnTheGlobeSwitchesTheLayout() {
         val before = device.executeShellCommand("settings get secure enabled_input_methods").trim()
-        val ime = "${context.packageName}/com.borderkeys.ime.BorderKeysService"
-        val both = before.split(':').filterNot { it.startsWith(ime) } + "$ime;$ENGLISH_SUBTYPE;$RUSSIAN_SUBTYPE"
-        device.executeShellCommand("ime disable $ime")
-        device.executeShellCommand("settings put secure enabled_input_methods ${both.joinToString(":")}")
-        selectKeyboard()
+        setEnabledSubtypes(ENGLISH_SUBTYPE, RUSSIAN_SUBTYPE)
         runBlocking { DataGraph.themes.updatePreferences { it.copy(languageKey = true) } }
         try {
             selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
@@ -763,6 +754,38 @@ class ImeSmokeTest {
         assertNotNull("the probe field in its ${mode.name} mode", field)
         field.clear()
         focusProbeField()
+    }
+
+    /** Sets the enabled subtypes, bypassing an OS bug where IMMS ignores subtype-only changes. */
+    private fun setEnabledSubtypes(vararg subtypes: Int) {
+        val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        val before = device.executeShellCommand("settings get secure enabled_input_methods").trim()
+        val withoutUs = before.split(':').filter { it.isNotEmpty() && !it.startsWith(imeId) }.joinToString(":")
+        
+        if (withoutUs.isEmpty()) {
+            device.executeShellCommand("settings delete secure enabled_input_methods")
+        } else {
+            device.executeShellCommand("settings put secure enabled_input_methods $withoutUs")
+        }
+        var deadline = System.currentTimeMillis() + 5000
+        while (System.currentTimeMillis() < deadline) {
+            val ours = manager.enabledInputMethodList.firstOrNull { it.packageName == context.packageName }
+            if (ours == null) break
+            Thread.sleep(200)
+        }
+        
+        val target = if (withoutUs.isEmpty()) imeId else "$withoutUs:$imeId"
+        val withSubtypes = target + subtypes.joinToString("") { ";$it" }
+        device.executeShellCommand("settings put secure enabled_input_methods $withSubtypes")
+        deadline = System.currentTimeMillis() + 5000
+        while (System.currentTimeMillis() < deadline) {
+            val ours = manager.enabledInputMethodList.firstOrNull { it.packageName == context.packageName }
+            if (ours != null && manager.getEnabledInputMethodSubtypeList(ours, false).size >= subtypes.size) {
+                break
+            }
+            Thread.sleep(200)
+        }
+        selectKeyboard()
     }
 
     /** Hides the keyboard and focuses the probe field again, so the keyboard reads its layouts anew. */
