@@ -385,17 +385,26 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
             )
         },
     ) { insets ->
-        val open: (Screen) -> Unit = { stack.add(it) }
+        var scrollTarget by remember { mutableStateOf<String?>(null) }
+        val open: (Screen) -> Unit = { 
+            scrollTarget = null
+            stack.add(it) 
+        }
+        val openMatch: (Screen, String) -> Unit = { screen, target ->
+            scrollTarget = target
+            stack.add(screen)
+        }
         val modifier = Modifier.padding(insets)
         // Opened, the panel covers the content with an opaque surface.
         if (statsExpanded) {
             DebugStatsPanel(modifier)
             return@Scaffold
         }
-        screenStates.SaveableStateProvider(current.name) {
-            when (current) {
-                Screen.Home -> HomeScreen(searchQuery, modifier, open)
-                Screen.Setup -> SetupScreen(modifier, open)
+        androidx.compose.runtime.CompositionLocalProvider(com.borderkeys.settings.LocalScrollTarget provides scrollTarget) {
+            screenStates.SaveableStateProvider(current.name) {
+                when (current) {
+                    Screen.Home -> HomeScreen(searchQuery, modifier, open, openMatch)
+                    Screen.Setup -> SetupScreen(modifier, open)
                 Screen.Features -> FeaturesScreen(modifier, hasAssistant, open)
                 Screen.Onboarding -> OnboardingScreen(modifier, hasAssistant, open, onDone = pop)
                 Screen.Languages -> LanguagesScreen(modifier)
@@ -419,6 +428,7 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                 Screen.Privacy -> PrivacyScreen(modifier)
                 Screen.About -> AboutScreen(modifier)
             }
+        }
         }
     }
 }

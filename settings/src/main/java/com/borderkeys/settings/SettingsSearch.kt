@@ -19,7 +19,7 @@ object SettingsSearch {
      * One result: the title as shown on its screen, where it is (the screen, then the card
      * under which it sits, or null for a screen itself) and the screen a tap opens.
      */
-    class Match(val title: String, val place: String?, val screen: Screen)
+    class Match(val title: String, val place: String?, val screen: Screen, val key: String? = null)
 
     /**
      * The screens and indexed rows that match [query], at most [limit] of them, in four tiers,
@@ -62,9 +62,9 @@ object SettingsSearch {
             val screenTitle = plain(text(entry.screen.titleKey))
             val card = entry.cardKey?.let { plain(text(it)) }
             val place = if (card == null) screenTitle else screenTitle + PLACE_SEPARATOR + card
-            consider(Match(plain(text(entry.key)), place, entry.screen), entry.noteKey)
+            consider(Match(plain(text(entry.key)), place, entry.screen, entry.key), entry.noteKey)
         }
-        return tiers.flatten().take(limit)
+        return tiers.flatMap { it.sortedBy { match -> match.title } }.take(limit)
     }
 
     /** Whether [word] is within [allowedEdits] of the start of one of [title]'s words. */
