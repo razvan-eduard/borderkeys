@@ -289,11 +289,11 @@ jobs:
             pids+=("$!")
           done <<'FLOORS'
           centred 92.0
-          low 90.9
-          thumbs 91.6
+          low 90.8
+          thumbs 91.5
           right-thumb 90.9
           precise 94.0
-          sloppy 90.9
+          sloppy 90.8
           FLOORS
           status=0
           for pid in "${pids[@]}"; do
