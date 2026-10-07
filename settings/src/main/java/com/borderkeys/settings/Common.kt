@@ -97,16 +97,23 @@ fun SettingRow(
     val scrollTarget = LocalScrollTarget.current
     val requester = remember { BringIntoViewRequester() }
     val isTarget = scrollTarget != null && title == scrollTarget
+    var isHighlighted by remember { mutableStateOf(false) }
 
     LaunchedEffect(scrollTarget, title) {
         if (isTarget) {
             requester.bringIntoView()
+            isHighlighted = true
+            kotlinx.coroutines.delay(4000)
+            isHighlighted = false
+        } else {
+            isHighlighted = false
         }
     }
 
     val highlightColor = MaterialTheme.colorScheme.primaryContainer
     val color by animateColorAsState(
-        if (isTarget) highlightColor else Color.Transparent
+        targetValue = if (isHighlighted) highlightColor else Color.Transparent,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 1000)
     )
 
     Row(
