@@ -292,14 +292,15 @@ class ImeSmokeTest {
         val ime = "${context.packageName}/com.borderkeys.ime.BorderKeysService"
         val three = before.split(':').filterNot { it.startsWith(ime) } +
             "$ime;$ENGLISH_SUBTYPE;$GERMAN_QWERTZ_SUBTYPE;$RUSSIAN_SUBTYPE"
+        device.executeShellCommand("ime disable $ime")
         device.executeShellCommand("settings put secure enabled_input_methods ${three.joinToString(":")}")
+        selectKeyboard()
         runBlocking {
             DataGraph.themes.updatePreferences {
                 it.copy(languageKey = true, layoutOrder = listOf("qwerty", "russian", "qwertz"))
             }
         }
         try {
-            waitForEnabledSubtypes(3)
             selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
             reopenKeyboard()
             tapKey(LANGUAGE_KEY)
@@ -659,10 +660,11 @@ class ImeSmokeTest {
         val before = device.executeShellCommand("settings get secure enabled_input_methods").trim()
         val ime = "${context.packageName}/com.borderkeys.ime.BorderKeysService"
         val both = before.split(':').filterNot { it.startsWith(ime) } + "$ime;$ENGLISH_SUBTYPE;$RUSSIAN_SUBTYPE"
+        device.executeShellCommand("ime disable $ime")
         device.executeShellCommand("settings put secure enabled_input_methods ${both.joinToString(":")}")
+        selectKeyboard()
         runBlocking { DataGraph.themes.updatePreferences { it.copy(languageKey = true) } }
         try {
-            waitForEnabledSubtypes(2)
             selectSubtype(ENGLISH_SUBTYPE, firstKey = "q")
             reopenKeyboard()
             waitForKey(LANGUAGE_KEY).longClick()
@@ -761,20 +763,6 @@ class ImeSmokeTest {
         assertNotNull("the probe field in its ${mode.name} mode", field)
         field.clear()
         focusProbeField()
-    }
-
-    /** Waits until the system's InputMethodManager sees at least [expectedCount] subtypes for our keyboard. */
-    private fun waitForEnabledSubtypes(expectedCount: Int) {
-        val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-        val deadline = System.currentTimeMillis() + 5000
-        while (System.currentTimeMillis() < deadline) {
-            val ours = manager.enabledInputMethodList.firstOrNull { it.packageName == context.packageName }
-            if (ours != null && manager.getEnabledInputMethodSubtypeList(ours, false).size >= expectedCount) {
-                return
-            }
-            Thread.sleep(200)
-        }
-        fail("Timed out waiting for $expectedCount subtypes to be enabled")
     }
 
     /** Hides the keyboard and focuses the probe field again, so the keyboard reads its layouts anew. */
