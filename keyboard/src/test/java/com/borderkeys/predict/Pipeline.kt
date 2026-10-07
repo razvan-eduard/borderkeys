@@ -176,6 +176,7 @@ internal class Pipeline private constructor(
     ) = KeyboardPreferences(
         learningEnabled = learning,
         autoCorrectOnSpace = true,
+        autoCorrectOnEnter = true,
         autoCapitalise = true,
         minCorrectionLength = minimumLength,
         correctionDistance = correctionDistance,

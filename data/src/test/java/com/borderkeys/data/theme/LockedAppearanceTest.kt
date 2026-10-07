@@ -55,6 +55,7 @@ class LockedAppearanceTest {
             composerEnabled = false,
             assistWriteModel = "model.gguf",
             autoCorrectOnSpace = true,
+            autoCorrectOnEnter = true,
         )
         assertEquals(appearance, everything.forLockedStart())
     }

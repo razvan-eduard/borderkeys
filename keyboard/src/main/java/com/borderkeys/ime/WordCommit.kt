@@ -49,6 +49,7 @@ internal object WordCommit {
     /** The settings the decision reads. */
     class Settings(
         val autoCorrectOnSpace: Boolean,
+        val autoCorrectOnEnter: Boolean,
         val autoCapitalise: Boolean,
         val minimumLength: Int,
         val correctionDistance: Int,
@@ -117,6 +118,9 @@ internal object WordCommit {
         val knownWordIsName: Boolean,
         val settings: Settings,
     ) {
+        val isEnter: Boolean = endedBy == '\n'.code
+        val autoCorrectAllowed: Boolean = if (isEnter) settings.autoCorrectOnEnter else settings.autoCorrectOnSpace
+
         /** Part of a sentence, as it began, and holding no digit. */
         val prose: Boolean = runningText && RunningText.admits(typed) { null }
     }
@@ -166,7 +170,7 @@ internal object WordCommit {
             } else {
                 null
             }
-            word.settings.autoCorrectOnSpace && word.prose ->
+            word.autoCorrectAllowed && word.prose ->
                 Outcome(written, Kind.CONTRACTION, null, Kind.CONTRACTION.reason)
             else -> null
         }
@@ -175,7 +179,7 @@ internal object WordCommit {
     /** A name's possessive (Engine::possessiveFor), gated like the map, cased as a name. */
     private val possessive = CommitRule { word ->
         val answer = word.possessive
-        if (word.fromGesture || !word.settings.autoCorrectOnSpace || !word.prose ||
+        if (word.fromGesture || !word.autoCorrectAllowed || !word.prose ||
             answer == null || word.typed.isEmpty() || word.suggestionQuery != word.typed
         ) {
             return@CommitRule null
@@ -185,7 +189,7 @@ internal object WordCommit {
     }
 
     private val correctionsOff = CommitRule { word ->
-        if (!word.settings.autoCorrectOnSpace) Outcome(null, Kind.NONE, null, REASON_OFF) else null
+        if (!word.autoCorrectAllowed) Outcome(null, Kind.NONE, null, REASON_OFF) else null
     }
 
     private val notProse = CommitRule { word ->

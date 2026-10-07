@@ -170,6 +170,12 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 subtitle = strings[Keys.CORRECTIONS_OFF_BY_DEFAULT_WITH_IT_OFF],
                 checked = preferences.autoCorrectOnSpace,
             ) { value -> update { it.copy(autoCorrectOnSpace = value) } }
+            SwitchRow(
+                title = strings[Keys.CORRECTIONS_APPLY_THE_FIRST_SUGGESTION_ON_ENTER],
+                subtitle = strings[Keys.CORRECTIONS_OFF_BY_DEFAULT_WITH_IT_OFF],
+                checked = preferences.autoCorrectOnEnter,
+            ) { value -> update { it.copy(autoCorrectOnEnter = value) } }
+
             Explanation(
                 strings[Keys.CORRECTIONS_THE_USUAL_OBJECTION_TO_AUTOCORRECT_IS],
             )
@@ -682,6 +688,7 @@ private fun resetCorrectionDefaults(preferences: KeyboardPreferences): KeyboardP
         spaceInsideNumbers = defaults.spaceInsideNumbers,
         removeSpaceBeforePunctuation = defaults.removeSpaceBeforePunctuation,
         autoCorrectOnSpace = defaults.autoCorrectOnSpace,
+        autoCorrectOnEnter = defaults.autoCorrectOnEnter,
         correctionStrictness = defaults.correctionStrictness,
         revertCorrectionOnBackspace = defaults.revertCorrectionOnBackspace,
         minCorrectionLength = defaults.minCorrectionLength,

@@ -20,9 +20,11 @@ class WordCommitTest {
 
     private fun settings(
         autoCorrectOnSpace: Boolean = true,
+        autoCorrectOnEnter: Boolean = true,
         autoCapitalise: Boolean = true,
     ) = WordCommit.Settings(
         autoCorrectOnSpace = autoCorrectOnSpace,
+        autoCorrectOnEnter = autoCorrectOnEnter,
         autoCapitalise = autoCapitalise,
         minimumLength = 3,
         correctionDistance = 1,
@@ -151,7 +153,7 @@ class WordCommitTest {
         val plain = decide(
             "marias", suggestion = "maria", possessive = "maria's",
             settings = WordCommit.Settings(
-                autoCorrectOnSpace = true, autoCapitalise = true, minimumLength = 3,
+                autoCorrectOnSpace = true, autoCorrectOnEnter = true, autoCapitalise = true, minimumLength = 3,
                 correctionDistance = 1, capitaliseNames = false,
             ),
         )

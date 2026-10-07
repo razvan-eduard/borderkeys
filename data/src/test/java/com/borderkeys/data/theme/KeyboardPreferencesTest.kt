@@ -99,6 +99,7 @@ class KeyboardPreferencesTest {
     fun autoCorrectIsOffByDefaultAndItsUndoIsOn() {
         val defaults = KeyboardPreferences()
         assertFalse(defaults.autoCorrectOnSpace)
+        assertFalse(defaults.autoCorrectOnEnter)
         assertTrue(defaults.revertCorrectionOnBackspace)
         assertTrue(defaults.showSuggestionStrip)
     }

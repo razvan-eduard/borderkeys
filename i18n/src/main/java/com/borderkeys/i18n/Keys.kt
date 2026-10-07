@@ -364,6 +364,7 @@ object Keys {
     const val CORRECTIONS_A_CORRECTION_IS_ONLY_LEARNED_ONCE = "corrections_a_correction_is_only_learned_once"
     const val CORRECTIONS_ADVANCED_NOTE = "corrections_advanced_note"
     const val CORRECTIONS_APPLY_THE_FIRST_SUGGESTION_WHEN_YOU = "corrections_apply_the_first_suggestion_when_you"
+    const val CORRECTIONS_APPLY_THE_FIRST_SUGGESTION_ON_ENTER = "corrections_apply_the_first_suggestion_on_enter"
     const val CORRECTIONS_AT_A_TIME = "corrections_at_a_time"
     const val CORRECTIONS_AUTO_SPACE_HABIT = "corrections_auto_space_habit"
     const val CORRECTIONS_AUTO_SPACE_HABIT_NOTE = "corrections_auto_space_habit_note"
