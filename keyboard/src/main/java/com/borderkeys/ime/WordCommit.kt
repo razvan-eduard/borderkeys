@@ -46,6 +46,9 @@ internal object WordCommit {
             get() = kind != Kind.NONE && kind != Kind.CORRECTION
     }
 
+    /** The key Enter is to the decision: the word it ends follows the Enter switch, not space's. */
+    const val ENTER = '\n'.code
+
     /** The settings the decision reads. */
     class Settings(
         val autoCorrectOnSpace: Boolean,
@@ -118,7 +121,7 @@ internal object WordCommit {
         val knownWordIsName: Boolean,
         val settings: Settings,
     ) {
-        val isEnter: Boolean = endedBy == '\n'.code
+        val isEnter: Boolean = endedBy == ENTER
         val autoCorrectAllowed: Boolean = if (isEnter) settings.autoCorrectOnEnter else settings.autoCorrectOnSpace
 
         /** Part of a sentence, as it began, and holding no digit. */

@@ -28,6 +28,9 @@ attestations and the full commit lists are on the
   keyboard behaved until now; each step up adds rarer words that the same corpora write and a
   spelling dictionary accepts, and leaves more typos that happen to spell one uncorrected. Such
   words are never suggested, and the setting names the dictionaries it changes.
+- Apply the first suggestion when you press Enter: a switch of its own beside the space one, on
+  the Typing and Suggestions screen and in Set up your keyboard, off by default like it. The
+  space switch now says it covers punctuation too.
 - Remember photos and Remember screenshots, two switches side by side on the Clipboard screen
   and in Set up your keyboard. Each keeps its kind in the clipboard history, encrypted, offers
   the newest on the strip, and deletes what it kept when turned off. A screenshot from the last
@@ -72,9 +75,9 @@ attestations and the full commit lists are on the
   corpus writes mostly in lower case inside sentences, checked at every build: 539 English names
   and between 191 and 658 in each other bundled language.
 - Fixed: Enter left the word it ended as typed: no correction, no restored apostrophe, no text
-  shortcut, and an Enter that sends sent the word uncorrected. Enter now applies what space
-  would, before the new line or the send, and the backspace straight after takes it back; the
-  setting and its notes say space or Enter.
+  shortcut, and an Enter that sends sent the word uncorrected. With its own switch on, Enter now
+  applies what space would, before the new line or the send, and the backspace straight after
+  takes it back.
 - Fixed: reopening the keyboard with the caret at the end of a word left the strip unaware of
   that word until the caret moved or a key was typed.
 - Swiping works on the Russian, Ukrainian, Bulgarian, Serbian, Macedonian, Greek, Armenian,

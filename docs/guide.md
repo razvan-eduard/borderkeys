@@ -54,9 +54,9 @@ ships.
   dictionaries simply do not know is left alone rather than replaced by something far away.
   Rare words, among the advanced settings, counts rarer words from the same corpora as real
   words too, so they stay as typed; each step keeps more of them and leaves more typos that
-  happen to spell one, and the setting names the dictionaries it changes. Space, Enter and
-  punctuation all apply it, Enter before its new line or before it sends; the backspace straight
-  after a correction puts back exactly what you typed.
+  happen to spell one, and the setting names the dictionaries it changes. Space and
+  punctuation apply it, and Enter too with its own switch on, before its new line or before it
+  sends; the backspace straight after a correction puts back exactly what you typed.
 - **Offensive words, blocked on request.** One switch keeps a per-language list of profanity
   and slurs out of suggestions, corrections and learning. What you type yourself is never
   touched, and the lists are plain text in the repository, one per bundled language.

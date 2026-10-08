@@ -67,6 +67,16 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `with its switch off, enter writes the word as typed while space still corrects`() {
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(autoCorrectOnEnter = false))
+        rig.startField()
+        rig.type("teh")
+        rig.press(KeyCodes.ENTER)
+        rig.type("teh ")
+        assertEquals("teh\nthe ", rig.editor.text)
+    }
+
+    @Test
     fun `backspace right after enter puts the typed word back`() {
         rig.type("teh")
         rig.press(KeyCodes.ENTER)

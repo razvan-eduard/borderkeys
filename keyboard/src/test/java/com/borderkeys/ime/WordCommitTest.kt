@@ -134,6 +134,16 @@ class WordCommitTest {
     }
 
     @Test
+    fun `enter follows its own switch and space its own`() {
+        val enterOff = decide("dont", endedBy = WordCommit.ENTER, settings = settings(autoCorrectOnEnter = false))
+        assertEquals(WordCommit.REASON_OFF, enterOff.reason)
+        assertEquals(null, enterOff.text)
+        val spaceOff = decide("dont", endedBy = WordCommit.ENTER, settings = settings(autoCorrectOnSpace = false))
+        assertEquals("don't", spaceOff.text)
+        assertEquals(WordCommit.REASON_OFF, decide("dont", settings = settings(autoCorrectOnSpace = false)).reason)
+    }
+
+    @Test
     fun `a shortcut applies with corrections off, a swiped word takes none of them`() {
         val shortcuts = listOf(TextShortcut(trigger = "omw", expansion = "on my way"))
         assertEquals(
