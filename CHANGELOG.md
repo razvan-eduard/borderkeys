@@ -60,7 +60,9 @@ attestations and the full commit lists are on the
 - Settings search finds every setting, including those titled above a picker or slider and the
   newest-screenshot option it used to miss, matches the words of each setting's explanation
   after its title, and finds a title through a typo ("screnshot", "vibraton"). The list it
-  searches is built from the screens themselves every time the app is built.
+  searches is built from the screens themselves every time the app is built. The results come in
+  alphabetical order, and a tap opens the screen scrolled to that setting, which glows for a
+  moment, with the Advanced fold it sits under already open.
 - Set up your keyboard: after setup, a few pages offer the choices worth making first, each with
   what it does and, where it helps, a small preview: languages and layouts, autocorrect,
   capitals and spacing; swipe, the ring and names; learning, the heatmap, the clipboard and the
