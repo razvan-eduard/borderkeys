@@ -387,7 +387,7 @@
   "corrections_letters_or_more_one": "%s letter or more",
   "corrections_min_correction_length": "Shortest word to correct",
   "corrections_min_correction_length_note": "Words shorter than this are left alone, even with correcting turned on.",
-  "corrections_off_by_default_with_it_off": "With it off, space and Enter commit exactly the letters you typed and a correction is applied only when you tap it.",
+  "corrections_off_by_default_with_it_off": "With it off, that key commits exactly the letters you typed, and a correction is applied only when you tap it.",
   "corrections_offer_the_clipboard": "Offer what you copied",
   "corrections_offer_the_clipboard_note": "Puts what is on the clipboard in the first slot of the strip, as a photo or as the first few words of the text. It takes one of the suggestion slots rather than adding one, and it is only ever offered — nothing is pasted until you tap it. Never in a password field.",
   "corrections_offers_vreau_s_where_it_would": "Offers a two-word phrase where it would otherwise offer only the first of them, for the phrases you write over and over.",

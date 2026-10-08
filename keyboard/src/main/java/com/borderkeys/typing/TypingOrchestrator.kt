@@ -808,7 +808,7 @@ class TypingOrchestrator(
         val typedTaps = TypedTaps.of(composing, composingWord.taps)
         val capitalisedByUser = composingWord.capitalisedByUser
         // The word Enter ends gets the decision a space would make.
-        val outcome = commitOutcome(typed, NEWLINE)
+        val outcome = commitOutcome(typed, WordCommit.ENTER)
         val correction = outcome.text
         val rewrite = outcome.isRewrite
         editor.beginBatchEdit()
@@ -1954,8 +1954,7 @@ class TypingOrchestrator(
 
         const val CONTEXT_WINDOW_CHARS = 64
 
-        /** The key Enter is to the commit decision, and the text it writes. */
-        const val NEWLINE = '\n'.code
+        /** The text Enter writes. */
         const val NEWLINE_TEXT = "\n"
 
         /** How much of the field [checkpointField] and the field's history read. */
