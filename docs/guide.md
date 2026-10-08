@@ -230,9 +230,10 @@ ships.
   under an "Advanced settings" line, closed until you open it. A search box at the top of the
   home screen finds any screen, card, row, heading or picker by its title, then by the words of
   its explanation, and a word with a typo still finds it ("screnshot", "vibraton"), in the
-  language the app is shown in; a tap opens the screen it is on. The list it searches is built
-  from the screens every time the app is built, so a new setting is found without anyone adding
-  it.
+  language the app is shown in. The results come in alphabetical order, and a tap opens the
+  screen scrolled to that setting, which glows for a moment, with the Advanced fold it sits under
+  already open. The list it searches is built from the screens every time the app is built, so a
+  new setting is found without anyone adding it.
 - **A tile in the quick settings.** It is lit while BorderKeys is the keyboard in use and says
   what is still to do while it is not; a tap opens the keyboard picker until it is, and the
   settings once it is. The system binds the tile as it binds the keyboard itself, so the app
