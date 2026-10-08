@@ -17,13 +17,28 @@ object SettingsSearch {
 
     /**
      * One result: the title as shown on its screen, where it is (the screen, then the card
-     * under which it sits, or null for a screen itself) and the screen a tap opens.
+     * under which it sits, or null for a screen itself), the screen a tap opens, the title as
+     * the catalogue holds it, placeholders included, and the summary of the Advanced fold the
+     * row sits under, as the fold shows it, or null.
      */
-    class Match(val title: String, val place: String?, val screen: Screen, val key: String? = null, val advancedSummary: String? = null)
+    class Match(
+        val title: String,
+        val place: String?,
+        val screen: Screen,
+        val titleTemplate: String = title,
+        val advancedSummary: String? = null,
+    ) {
+        private val titlePattern: Regex by lazy {
+            Regex(titleTemplate.split(PLACEHOLDER).joinToString(".*") { Regex.escape(it) })
+        }
+
+        /** Whether [displayed], a title as its screen draws it, is this match's title with its placeholders filled. */
+        fun matchesTitle(displayed: String): Boolean = titlePattern.matches(displayed)
+    }
 
     /**
      * The screens and indexed rows that match [query], at most [limit] of them, in four tiers,
-     * each in index order: titles that begin with the whole query; titles that hold every word
+     * each in alphabetical order: titles that begin with the whole query; titles that hold every word
      * of it; titles where each word is held or is within [allowedEdits] of the start of one of
      * the title's words; then rows whose title and note together hold every word. [text]
      * resolves a catalogue key to the words on screen; [hidden] screens are left out.
@@ -61,11 +76,14 @@ object SettingsSearch {
             if (entry.screen in hidden) continue
             val screenTitle = plain(text(entry.screen.titleKey))
             val card = entry.cardKey?.let { plain(text(it)) }
-            val advanced = entry.advancedKey?.let { plain(text(it)) }
             val place = if (card == null) screenTitle else screenTitle + PLACE_SEPARATOR + card
-            consider(Match(plain(text(entry.key)), place, entry.screen, entry.key, advanced), entry.noteKey)
+            val title = text(entry.key)
+            consider(
+                Match(plain(title), place, entry.screen, title, entry.advancedKey?.let(text)),
+                entry.noteKey,
+            )
         }
-        return tiers.flatMap { it.sortedBy { match -> match.title } }.take(limit)
+        return tiers.flatMap { tier -> tier.sortedBy { fold(it.title) } }.take(limit)
     }
 
     /** Whether [word] is within [allowedEdits] of the start of one of [title]'s words. */

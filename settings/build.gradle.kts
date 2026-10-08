@@ -50,12 +50,11 @@ android {
 
 /**
  * Writes SettingsIndex.kt, the list of every titled row and card on every settings screen, from
- * the screen sources: a `SettingRow`, `SwitchRow` or `SectionHeader` whose title is a catalogue
- * key is one entry, and so is a `Text` of a catalogue key in the bodyLarge style, the title a
- * picker or slider is drawn under. Each is placed under the last `SettingsSectionCard` whose
- * title is a catalogue key. A row's note is its subtitle's key; a heading's or a label's is the
- * first `Explanation` before the next card or row. A row or a card titled from data is not
- * indexed.
+ * the screen sources: a `SettingRow`, `SwitchRow`, `SectionHeader` or `SettingLabel` whose title
+ * is a catalogue key is one entry. Each is placed under the last `SettingsSectionCard` whose
+ * title is a catalogue key, and carries the summary of the `AdvancedSection` it sits inside, if
+ * any. A row's note is its subtitle's key; a heading's or a label's is the first `Explanation`
+ * before the next card or row. A row or a card titled from data is not indexed.
  */
 abstract class GenerateSettingsIndex : DefaultTask() {
 
@@ -104,22 +103,30 @@ abstract class GenerateSettingsIndex : DefaultTask() {
         if (trimmed.startsWith("//") || trimmed.startsWith("*")) "" else line
     }
 
-    /** (screen, card key, key, note key, advanced key) for every card and row in source order, each key once. */
+    /**
+     * (screen, card key, key, note key, advanced key) for every card and row in source order,
+     * each key once; the advanced key is the summary of the `AdvancedSection` whose braces the
+     * row sits inside.
+     */
     private fun scan(text: String, screen: String): List<List<String?>> {
         val out = ArrayList<List<String?>>()
         val seen = HashSet<String>()
         var card: String? = null
         var advanced: String? = null
+        var advancedEnd = 0
         val events = (ANY_CARD.findAll(text) + ADVANCED.findAll(text) + ROW.findAll(text) + LABEL.findAll(text))
             .sortedBy { it.range.first }.toList()
         for ((number, match) in events.withIndex()) {
             val end = if (number + 1 < events.size) events[number + 1].range.first else text.length
-            if (match.value.startsWith("SettingsSectionCard")) {
+            if (match.range.first >= advancedEnd) {
                 advanced = null
+            }
+            if (match.value.startsWith("SettingsSectionCard")) {
                 card = CARD.matchAt(text, match.range.first)?.groupValues?.get(1)
                 if (card != null && seen.add(card)) out += listOf(screen, null, card, null, null)
             } else if (match.value.startsWith("AdvancedSection")) {
                 advanced = ADVANCED.matchAt(text, match.range.first)?.groupValues?.get(1)
+                advancedEnd = blockEnd(text, match.range.first)
             } else {
                 val key = match.groupValues[1]
                 if (seen.add(key)) out += listOf(screen, card, key, noteOf(text, match, end), advanced)
@@ -141,15 +148,25 @@ abstract class GenerateSettingsIndex : DefaultTask() {
     }
 
     /** The text between the parenthesis at [open] and the one that closes it. */
-    private fun arguments(text: String, open: Int): String {
+    private fun arguments(text: String, open: Int): String =
+        text.substring(open + 1, closing(text, open, '(', ')'))
+
+    /** Where the block a call at [call] opens with its trailing lambda ends, past its closing brace. */
+    private fun blockEnd(text: String, call: Int): Int {
+        val open = text.indexOf('{', closing(text, text.indexOf('(', call), '(', ')'))
+        return if (open < 0) text.length else closing(text, open, '{', '}') + 1
+    }
+
+    /** The index of the [closeChar] matching the [openChar] at [open], or the text's end. */
+    private fun closing(text: String, open: Int, openChar: Char, closeChar: Char): Int {
         var depth = 0
         for (index in open until text.length) {
             when (text[index]) {
-                '(' -> depth++
-                ')' -> if (--depth == 0) return text.substring(open + 1, index)
+                openChar -> depth++
+                closeChar -> if (--depth == 0) return index
             }
         }
-        return text.substring(open + 1)
+        return text.length
     }
 
     private companion object {
@@ -169,7 +186,7 @@ abstract class GenerateSettingsIndex : DefaultTask() {
         val ANY_CARD = Regex("""SettingsSectionCard\(""")
         val ADVANCED = Regex("""AdvancedSection\(\s*(?:summary\s*=\s*)?strings(?:\[|\.getString\()Keys\.([A-Z0-9_]+)""")
         val ROW = Regex("(?:SettingRow|SwitchRow|SectionHeader)$TITLE")
-        val LABEL = Regex("""Text\(\s*strings\[Keys\.([A-Z0-9_]+)],\s*style\s*=\s*MaterialTheme\.typography\.bodyLarge""")
+        val LABEL = Regex("SettingLabel$TITLE")
         val NAMED_NOTE = Regex("""subtitle\s*=\s*(?:if\s*\([^)]*\)\s*)?$KEY""")
         val POSITIONAL_NOTE = Regex("""[^,]*,\s*$KEY""")
         val EXPLANATION = Regex("""Explanation\(\s*$KEY""")
@@ -190,8 +207,8 @@ abstract class GenerateSettingsIndex : DefaultTask() {
             object SettingsIndex {
 
                 /**
-                 * One indexed row or card: where it is, the key its title is drawn from, and the key of the
-                 * note under it, if any.
+                 * One indexed row or card: where it is, the key its title is drawn from, the key of the
+                 * note under it, and the key of the Advanced fold's summary it sits inside, each if any.
                  */
                 class Entry(val screen: Screen, val cardKey: String?, val key: String, val noteKey: String? = null, val advancedKey: String? = null)
 

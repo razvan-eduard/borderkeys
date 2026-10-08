@@ -248,9 +248,10 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
     // Each screen's saved state, its scroll included, kept while it is on the stack and dropped
     // when it is popped.
     val screenStates = rememberSaveableStateHolder()
-    var scrollTarget by remember { mutableStateOf<ScrollTarget?>(null) }
+    // The search result the screen on top was opened for, if any; see LocalSearchTarget.
+    var searchTarget by remember { mutableStateOf<SettingsSearch.Match?>(null) }
     val pop = {
-        scrollTarget = null
+        searchTarget = null
         val popped = stack.removeAt(stack.size - 1)
         screenStates.removeState(popped.name)
     }
@@ -387,13 +388,13 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
             )
         },
     ) { insets ->
-        val open: (Screen) -> Unit = { 
-            scrollTarget = null
-            stack.add(it) 
+        val open: (Screen) -> Unit = {
+            searchTarget = null
+            stack.add(it)
         }
-        val openMatch: (Screen, ScrollTarget) -> Unit = { screen, target ->
-            scrollTarget = target
-            stack.add(screen)
+        val openMatch: (SettingsSearch.Match) -> Unit = {
+            searchTarget = it
+            stack.add(it.screen)
         }
         val modifier = Modifier.padding(insets)
         // Opened, the panel covers the content with an opaque surface.
@@ -401,7 +402,7 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
             DebugStatsPanel(modifier)
             return@Scaffold
         }
-        androidx.compose.runtime.CompositionLocalProvider(com.borderkeys.settings.LocalScrollTarget provides scrollTarget) {
+        CompositionLocalProvider(LocalSearchTarget provides searchTarget) {
             screenStates.SaveableStateProvider(current.name) {
                 when (current) {
                     Screen.Home -> HomeScreen(searchQuery, modifier, open, openMatch)

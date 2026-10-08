@@ -7,6 +7,7 @@ import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -33,6 +34,7 @@ class SettingsIndexTest {
                 assertTrue("${entry.key} is not in $language.json", entry.key in catalogue)
                 entry.cardKey?.let { assertTrue("$it is not in $language.json", it in catalogue) }
                 entry.noteKey?.let { assertTrue("$it is not in $language.json", it in catalogue) }
+                entry.advancedKey?.let { assertTrue("$it is not in $language.json", it in catalogue) }
             }
         }
     }
@@ -173,6 +175,35 @@ class SettingsIndexTest {
         assertEquals(1, SettingsSearch.prefixDistance("scrn", "screenshot"))
         assertEquals(1, SettingsSearch.prefixDistance("teh", "the"))
         assertEquals(2, SettingsSearch.prefixDistance("ab", "xy"))
+    }
+
+    @Test
+    fun `a row inside an Advanced fold carries the fold's summary, one outside it none`() {
+        val inside = SettingsSearch.find(text(Keys.CORRECTIONS_CLIPBOARD_ONCE), ::text).first { it.screen == Screen.Clipboard }
+        assertEquals(text(Keys.CLIPBOARD_ADVANCED_NOTE), inside.advancedSummary)
+        val outside = SettingsSearch.find(text(Keys.CLIPBOARD_REMEMBER_IMAGES), ::text).first { it.screen == Screen.Clipboard }
+        assertEquals(null, outside.advancedSummary)
+        val label = SettingsSearch.find(text(Keys.CORRECTIONS_RARE_WORDS), ::text).first { it.screen == Screen.Typing }
+        assertEquals(text(Keys.CORRECTIONS_ADVANCED_NOTE), label.advancedSummary)
+    }
+
+    @Test
+    fun `a match knows its title as drawn, a count filled in`() {
+        val counted = SettingsSearch.Match("Learned words", null, Screen.LearnedWords, titleTemplate = "Learned words (%s)")
+        assertTrue(counted.matchesTitle("Learned words (12)"))
+        assertFalse(counted.matchesTitle("Learned words"))
+        assertFalse(counted.matchesTitle("Learned phrases (12)"))
+        val plain = SettingsSearch.Match("Heatmap", null, Screen.Dictionary)
+        assertTrue(plain.matchesTitle("Heatmap"))
+        assertFalse(plain.matchesTitle("Heatmap weight"))
+    }
+
+    @Test
+    fun `the matches of a tier are in alphabetical order`() {
+        val leading = SettingsSearch.find("learned", ::text).map { it.title }
+            .takeWhile { SettingsSearch.fold(it).startsWith("learned") }
+        assertTrue(leading.size > 1)
+        assertEquals(leading.sortedBy { SettingsSearch.fold(it) }, leading)
     }
 
     @Test

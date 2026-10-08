@@ -5,6 +5,7 @@ package com.borderkeys.settings.screen
 
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SettingLabel
 
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -217,11 +218,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
         }
         SettingsSectionCard(strings[Keys.ASSISTANT_HOW_IT_CHOOSES_WORDS]) {
           AdvancedSection(strings[Keys.ASSISTANT_ADVANCED_NOTE]) {
-            Text(
-                strings[Keys.ASSISTANT_TEMPERATURE],
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
+            SettingLabel(strings[Keys.ASSISTANT_TEMPERATURE])
             DefaultableSlider(
                 label = strings.getString(Keys.COMMON_NUMBER, "%.2f".format(preferences.assistTemperature)),
                 value = preferences.assistTemperature,
@@ -230,11 +227,7 @@ fun AssistantScreen(modifier: Modifier = Modifier) {
                 default = KeyboardPreferences.DEFAULT_ASSIST_TEMPERATURE,
             ) { value -> updatePreferences { it.copy(assistTemperature = value) } }
             Explanation(strings[Keys.ASSISTANT_TEMPERATURE_NOTE])
-            Text(
-                strings[Keys.ASSISTANT_TOP_P],
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
+            SettingLabel(strings[Keys.ASSISTANT_TOP_P])
             DefaultableSlider(
                 label = strings.getString(Keys.COMMON_NUMBER, "%.2f".format(preferences.assistTopP)),
                 value = preferences.assistTopP,

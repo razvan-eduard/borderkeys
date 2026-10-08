@@ -5,6 +5,7 @@ package com.borderkeys.settings.screen
 
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.Screen
 
 import android.content.Context
@@ -206,12 +207,7 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
             ) { value -> update { it.copy(hapticFeedback = value) } }
             // Nothing to choose while it is off.
             if (preferences.hapticFeedback) {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
-                    Text(
-                        strings[Keys.LAYOUT_HAPTIC_STRENGTH],
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                }
+                SettingLabel(strings[Keys.LAYOUT_HAPTIC_STRENGTH])
                 FlowRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -254,12 +250,7 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
 
             // How long a hold is, and what the enter key does in a field that has its own action.
             AdvancedSection(strings[Keys.LAYOUT_ADVANCED_KEYS_NOTE]) {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
-                    Text(
-                        strings[Keys.LAYOUT_LONG_PRESS_DURATION],
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                }
+                SettingLabel(strings[Keys.LAYOUT_LONG_PRESS_DURATION])
                 DefaultableSlider(
                     label = strings.getString(Keys.LAYOUT_LONG_PRESS_MS, preferences.longPressMillis),
                     value = preferences.longPressMillis.toFloat(),
@@ -268,12 +259,7 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                     default = KeyboardPreferences.DEFAULT_LONG_PRESS_MILLIS.toFloat(),
                     steps = 10,
                 ) { value -> update { it.copy(longPressMillis = value.toInt()) } }
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
-                    Text(
-                        strings[Keys.LAYOUT_ENTER_KEY],
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                }
+                SettingLabel(strings[Keys.LAYOUT_ENTER_KEY])
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -407,13 +393,9 @@ private fun ModifierRowKeysEditor(
         Row(
             modifier = Modifier.fillMaxWidth()
                 .clickable { picking = !picking }
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(vertical = 8.dp),
         ) {
-            Text(
-                strings[Keys.LAYOUT_MODIFIER_ROW_ADD],
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            SettingLabel(strings[Keys.LAYOUT_MODIFIER_ROW_ADD], color = MaterialTheme.colorScheme.primary)
         }
         if (picking) {
             for (name in addable) {

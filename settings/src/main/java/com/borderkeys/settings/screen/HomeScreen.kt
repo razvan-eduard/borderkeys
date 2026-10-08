@@ -40,11 +40,15 @@ import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.isBorderKeysDefault
 import com.borderkeys.settings.isBorderKeysEnabled
 import com.borderkeys.settings.rememberResumedCount
-import com.borderkeys.settings.ScrollTarget
 import com.borderkeys.settings.siblingPackage
 
 @Composable
-fun HomeScreen(query: String, modifier: Modifier = Modifier, open: (Screen) -> Unit, openMatch: (Screen, ScrollTarget) -> Unit) {
+fun HomeScreen(
+    query: String,
+    modifier: Modifier = Modifier,
+    open: (Screen) -> Unit,
+    openMatch: (SettingsSearch.Match) -> Unit,
+) {
     val strings = LocalStrings.current
     val context = LocalContext.current
     // Re-read whenever this screen comes back to the front.
@@ -82,7 +86,7 @@ fun HomeScreen(query: String, modifier: Modifier = Modifier, open: (Screen) -> U
                     Explanation(strings[Keys.HOME_SEARCH_NOTHING])
                 }
                 for (match in matches) {
-                    SettingRow(title = match.title, subtitle = match.place, onClick = { openMatch(match.screen, ScrollTarget(match.title, match.advancedSummary)) })
+                    SettingRow(title = match.title, subtitle = match.place) { openMatch(match) }
                 }
             }
             return@Column

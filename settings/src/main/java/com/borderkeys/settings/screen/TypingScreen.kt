@@ -5,6 +5,7 @@ package com.borderkeys.settings.screen
 
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SettingLabel
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.platform.LocalContext
@@ -101,18 +102,10 @@ fun TypingScreen(modifier: Modifier = Modifier) {
 
         // Spacing and capitals, then autocorrect under its own sub-heading.
         SettingsSectionCard(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE]) {
-            Text(
-                strings[Keys.CORRECTIONS_PUNCTUATION_AND_CAPITALS],
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
+            SettingLabel(strings[Keys.CORRECTIONS_PUNCTUATION_AND_CAPITALS])
             // One choice of three, over the two stored switches autoCapitalise and
             // forceCapitaliseSentences.
-            Text(
-                strings[Keys.CORRECTIONS_CAPITALISE],
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
+            SettingLabel(strings[Keys.CORRECTIONS_CAPITALISE])
             FlowRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -160,11 +153,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 checked = preferences.spaceAfterSuggestion,
             ) { value -> update { it.copy(spaceAfterSuggestion = value) } }
 
-            Text(
-                strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE],
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
+            SettingLabel(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE])
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_APPLY_THE_FIRST_SUGGESTION_WHEN_YOU],
                 subtitle = strings[Keys.CORRECTIONS_OFF_BY_DEFAULT_WITH_IT_OFF],
@@ -179,11 +168,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             Explanation(
                 strings[Keys.CORRECTIONS_THE_USUAL_OBJECTION_TO_AUTOCORRECT_IS],
             )
-            Text(
-                strings[Keys.CORRECTIONS_DISTANCE],
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
+            SettingLabel(strings[Keys.CORRECTIONS_DISTANCE])
             FlowRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -214,11 +199,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
             // The space typed after an automatic one, the space before punctuation, and the finer
             // autocorrect dials.
             AdvancedSection(strings[Keys.CORRECTIONS_ADVANCED_NOTE]) {
-                Text(
-                    strings[Keys.CORRECTIONS_AUTO_SPACE_HABIT],
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
+                SettingLabel(strings[Keys.CORRECTIONS_AUTO_SPACE_HABIT])
                 FlowRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -243,11 +224,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     subtitle = strings[Keys.CORRECTIONS_SPACE_BEFORE_NOTE],
                     checked = preferences.removeSpaceBeforePunctuation,
                 ) { value -> update { it.copy(removeSpaceBeforePunctuation = value) } }
-                Text(
-                    strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS],
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
+                SettingLabel(strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS])
                 DefaultableSlider(
                     label = strings.getString(
                         Keys.CORRECTIONS_TIMES_THE_DEFAULT,
@@ -261,11 +238,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 Explanation(
                     strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS_NOTE],
                 )
-                Text(
-                    strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH],
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
+                SettingLabel(strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH])
                 DefaultableSlider(
                     label = strings.counted(Keys.CORRECTIONS_LETTERS_OR_MORE, preferences.minCorrectionLength),
                     value = preferences.minCorrectionLength.toFloat(),
@@ -278,11 +251,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 Explanation(
                     strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH_NOTE],
                 )
-                Text(
-                    strings[Keys.CORRECTIONS_RARE_WORDS],
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
+                SettingLabel(strings[Keys.CORRECTIONS_RARE_WORDS])
                 DefaultableSlider(
                     label = strings[RARE_WORDS_STEP_KEYS[preferences.rareWords]],
                     value = preferences.rareWords.toFloat(),
@@ -355,11 +324,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     },
                 ],
             ) {
-                Text(
-                    strings[Keys.SWIPE_HOW_IT_DECODES],
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
+                SettingLabel(strings[Keys.SWIPE_HOW_IT_DECODES])
                 Explanation(
                     strings[Keys.SWIPE_YOUR_GESTURE_IS_SMOOTHED_REDUCED_TO],
                 )
@@ -372,11 +337,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
 
                 // `plus` only.
                 if (SwipeModelAvailability.neuralSwipeModelSupported) {
-                    Text(
-                        strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL],
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                    )
+                    SettingLabel(strings[Keys.SWIPE_EXPERIMENTAL_SWIPE_MODEL])
                     CautionNote(strings[Keys.SWIPE_A_PREVIEW_OF_WORK_STILL_IN_PROGRESS])
                     // Loading or freeing the weights, shown on the row while it runs.
                     val loadState by SwipeModelLoad.state.collectAsStateWithLifecycle()
@@ -430,11 +391,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 checked = preferences.radialMenuEnabled,
             ) { value -> update { it.copy(radialMenuEnabled = value) } }
             if (preferences.radialMenuEnabled) {
-                Text(
-                    strings[Keys.RADIAL_TIMEOUT_DEFAULT],
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
+                SettingLabel(strings[Keys.RADIAL_TIMEOUT_DEFAULT])
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -487,11 +444,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 ) { value -> update { it.copy(radialLiftKeepsOpen = value) } }
                 // Under the switch above; together they decide whether a swipe without a pause
                 // shows a ring, and what is in it.
-                Text(
-                    strings[Keys.RADIAL_TRUSTED_WORD],
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
+                SettingLabel(strings[Keys.RADIAL_TRUSTED_WORD])
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -517,11 +470,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 )
-                Text(
-                    strings[Keys.RADIAL_POSITION],
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
+                SettingLabel(strings[Keys.RADIAL_POSITION])
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -552,11 +501,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                         update { it.copy(radialMenuAnchor = KeyboardPreferences.RADIAL_ANCHOR_TANGENT_RIGHT) }
                     }
                 }
-                Text(
-                    strings[Keys.RADIAL_SIZE],
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
+                SettingLabel(strings[Keys.RADIAL_SIZE])
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -619,11 +564,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                         subtitle = strings[Keys.RADIAL_BLUR_BACKGROUND_NOTE],
                         checked = preferences.radialBlurBackground,
                     ) { value -> update { it.copy(radialBlurBackground = value) } }
-                    Text(
-                        strings[Keys.RADIAL_OUTSIDE_TAP],
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                    )
+                    SettingLabel(strings[Keys.RADIAL_OUTSIDE_TAP])
                     FlowRow(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
