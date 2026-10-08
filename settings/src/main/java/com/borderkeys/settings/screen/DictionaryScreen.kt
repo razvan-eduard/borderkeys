@@ -5,6 +5,7 @@ package com.borderkeys.settings.screen
 
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SettingLabel
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -188,11 +189,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                     Explanation(strings[Keys.DICTIONARY_HEATMAP_PREVIEW_NOTE])
                 }
                 AdvancedSection(strings[Keys.DICTIONARY_HEATMAP_ADVANCED_NOTE]) {
-                    Text(
-                        strings[Keys.DICTIONARY_HEATMAP_WEIGHT],
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                    )
+                    SettingLabel(strings[Keys.DICTIONARY_HEATMAP_WEIGHT])
                     DefaultableSlider(
                         label = strings.getString(
                             Keys.CORRECTIONS_TIMES_THE_DEFAULT,
@@ -205,11 +202,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                         enabled = heatmapOn,
                     ) { value -> update { it.copy(heatmapWeight = value) } }
                     Explanation(strings[Keys.DICTIONARY_HEATMAP_WEIGHT_NOTE])
-                    Text(
-                        strings[Keys.DICTIONARY_HEATMAP_MIN_TAPS],
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                    )
+                    SettingLabel(strings[Keys.DICTIONARY_HEATMAP_MIN_TAPS])
                     DefaultableSlider(
                         label = strings.counted(
                             Keys.DICTIONARY_HEATMAP_TAPS_COUNT,
@@ -225,11 +218,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                         enabled = heatmapOn,
                     ) { value -> update { it.copy(heatmapMinTaps = value.roundToInt()) } }
                     Explanation(strings[Keys.DICTIONARY_HEATMAP_MIN_TAPS_NOTE])
-                    Text(
-                        strings[Keys.DICTIONARY_HEATMAP_HALF_LIFE],
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                    )
+                    SettingLabel(strings[Keys.DICTIONARY_HEATMAP_HALF_LIFE])
                     DefaultableSlider(
                         label = strings.counted(
                             Keys.DICTIONARY_HEATMAP_DAYS,

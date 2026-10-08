@@ -47,6 +47,7 @@ import com.borderkeys.keyboard.R
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.VoiceKeyboards
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.PlacementPreview
@@ -200,13 +201,9 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .clickable { picking = !picking }
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                            .padding(vertical = 8.dp),
                     ) {
-                        Text(
-                            strings[Keys.QUICK_ADD],
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        SettingLabel(strings[Keys.QUICK_ADD], color = MaterialTheme.colorScheme.primary)
                     }
                     if (picking) {
                         for (builtin in addableBuiltins) {
@@ -343,13 +340,9 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .clickable { creatingCustomAction = true }
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                            .padding(vertical = 8.dp),
                     ) {
-                        Text(
-                            strings[Keys.QUICK_CUSTOM_ADD],
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        SettingLabel(strings[Keys.QUICK_CUSTOM_ADD], color = MaterialTheme.colorScheme.primary)
                     }
                 }
                 if (creatingCustomAction) {

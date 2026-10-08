@@ -41,6 +41,7 @@ import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
@@ -149,13 +150,9 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .clickable { picking = !picking }
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                        .padding(vertical = 8.dp),
                 ) {
-                    Text(
-                        strings[Keys.COMPOSER_SETTINGS_ADD],
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                    SettingLabel(strings[Keys.COMPOSER_SETTINGS_ADD], color = MaterialTheme.colorScheme.primary)
                 }
                 if (picking) {
                     for (builtin in addableBuiltins) {
@@ -242,13 +239,9 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
             Row(
                 modifier = Modifier.fillMaxWidth()
                     .clickable { creatingCustomAction = true }
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(vertical = 8.dp),
             ) {
-                Text(
-                    strings[Keys.COMPOSER_SETTINGS_CREATE_CUSTOM],
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                SettingLabel(strings[Keys.COMPOSER_SETTINGS_CREATE_CUSTOM], color = MaterialTheme.colorScheme.primary)
             }
             if (creatingCustomAction) {
                 CreateCustomActionDialog(

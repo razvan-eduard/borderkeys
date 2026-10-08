@@ -8,6 +8,7 @@ import com.borderkeys.i18n.Keys
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -41,11 +42,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -65,6 +68,8 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.keyboard.R
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** The shapes every settings screen is built from. */
@@ -75,13 +80,61 @@ fun SectionHeader(text: String) {
         text = text,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp),
+        modifier = Modifier.searchTarget(text).padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp),
     )
 }
 
-data class ScrollTarget(val title: String, val advancedSummary: String? = null)
+/**
+ * The search result the screen on top was opened for, or null: the row, label or heading whose
+ * title it names scrolls into view and glows for a moment, and the Advanced fold it sits under
+ * starts open.
+ */
+val LocalSearchTarget = compositionLocalOf<SettingsSearch.Match?> { null }
 
-val LocalScrollTarget = compositionLocalOf<ScrollTarget?> { null }
+/**
+ * Makes the element titled [title] the search target's landing place: once placed, it scrolls
+ * into view and its background glows for [HIGHLIGHT_MILLIS]. Unchanged when it is not the target.
+ */
+@Composable
+fun Modifier.searchTarget(title: String): Modifier {
+    val target = LocalSearchTarget.current
+    if (target == null || !target.matchesTitle(title)) {
+        return this
+    }
+    val requester = remember { BringIntoViewRequester() }
+    var placed by remember { mutableStateOf(false) }
+    var highlighted by remember { mutableStateOf(false) }
+    LaunchedEffect(target) {
+        snapshotFlow { placed }.first { it }
+        requester.bringIntoView()
+        highlighted = true
+        delay(HIGHLIGHT_MILLIS)
+        highlighted = false
+    }
+    val colour by animateColorAsState(
+        targetValue = if (highlighted) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        animationSpec = tween(HIGHLIGHT_FADE_MILLIS),
+    )
+    return this
+        .bringIntoViewRequester(requester)
+        .onPlaced { placed = true }
+        .background(colour)
+}
+
+/** How long a search target glows, and how long the glow takes to come and go. */
+private const val HIGHLIGHT_MILLIS = 4_000L
+private const val HIGHLIGHT_FADE_MILLIS = 1_000
+
+/** A setting's title above a control that has no row of its own: a picker's chips or a slider. */
+@Composable
+fun SettingLabel(text: String, color: Color = Color.Unspecified) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyLarge,
+        color = color,
+        modifier = Modifier.searchTarget(text).padding(horizontal = 20.dp, vertical = 4.dp),
+    )
+}
 
 /**
  * A row with a title, an explanation and something on the right. `onClick` is the last parameter,
@@ -96,32 +149,9 @@ fun SettingRow(
     content: @Composable (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
-    val scrollTarget = LocalScrollTarget.current
-    val requester = remember { BringIntoViewRequester() }
-    val isTarget = scrollTarget != null && title == scrollTarget.title
-    var isHighlighted by remember { mutableStateOf(false) }
-
-    LaunchedEffect(scrollTarget, title) {
-        if (isTarget) {
-            requester.bringIntoView()
-            isHighlighted = true
-            kotlinx.coroutines.delay(4000)
-            isHighlighted = false
-        } else {
-            isHighlighted = false
-        }
-    }
-
-    val highlightColor = MaterialTheme.colorScheme.primaryContainer
-    val color by animateColorAsState(
-        targetValue = if (isHighlighted) highlightColor else Color.Transparent,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 1000)
-    )
-
     Row(
         modifier = Modifier
-            .bringIntoViewRequester(requester)
-            .background(color)
+            .searchTarget(title)
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 20.dp, vertical = 14.dp),
@@ -146,18 +176,14 @@ fun SettingRow(
 
 /**
  * A card's seldom-needed rows, folded under one "Advanced settings" line that starts closed on
- * every visit and stays as set across rotation. [summary] names what the fold holds.
+ * every visit, open when the search target sits inside it, and stays as set across rotation.
+ * [summary] names what the fold holds.
  */
 @Composable
 fun AdvancedSection(summary: String? = null, content: @Composable ColumnScope.() -> Unit) {
     val strings = LocalStrings.current
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    val scrollTarget = LocalScrollTarget.current
-    val shouldExpand = scrollTarget?.advancedSummary != null && summary == scrollTarget.advancedSummary
-    
-    LaunchedEffect(shouldExpand) {
-        if (shouldExpand) expanded = true
-    }
+    val holdsTarget = summary != null && summary == LocalSearchTarget.current?.advancedSummary
+    var expanded by rememberSaveable { mutableStateOf(holdsTarget) }
 
     Row(
         modifier = Modifier
