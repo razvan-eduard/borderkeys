@@ -109,10 +109,12 @@ class SettingsIndexTest {
     }
 
     @Test
-    fun `every word of the query has to be in the title`() {
-        assertEquals(1, SettingsSearch.find("learned phrases", ::text).size)
-        assertEquals(1, SettingsSearch.find("PHRASES learned", ::text).size)
-        assertEquals(3, SettingsSearch.find("phrases", ::text).size)
+    fun `every word of the query has to be in the title, or in the note under it`() {
+        val matches = SettingsSearch.find("learned phrases", ::text)
+        assertEquals(listOf(Screen.LearnedPhrases, Screen.Dictionary), matches.map { it.screen })
+        assertEquals(text(Keys.DICTIONARY_LEARNING), matches.last().title)
+        assertEquals(matches.map { it.title }, SettingsSearch.find("PHRASES learned", ::text).map { it.title })
+        assertEquals(4, SettingsSearch.find("phrases", ::text).size)
         assertTrue(SettingsSearch.find("learned zebra", ::text).isEmpty())
     }
 

@@ -217,6 +217,14 @@ attestations and the full commit lists are on the
   as Sha256, Covid19 and I7.
 - Fixed: a space typed before the answer about the previous word arrived, with no word typed,
   wrote that word's possessive.
+- Fixed: the notes under the settings described the Off state ("Off means nothing is
+  recorded…"), pointed at the row ("The row above the keys.") or argued for the setting instead
+  of saying what it does. Forty-two of them now lead with what the setting does, with Off second
+  where it matters: Learning, the two Apply the first suggestion switches, Number row, Remember
+  what you copy, Show the suggestion strip, the heatmap and Space inside numbers among them. The
+  hedges and second example lists elsewhere are gone, the pointer under the Apply switches is
+  removed, and the onboarding no longer says more languages are "available to download". In
+  all 22 languages.
 - The typing code is reorganised around one owner of each word, `TypingOrchestrator`, and the
   flows it drives; every case of the test corpora reads the same, to the digit, and 93 typing
   scenarios run the real flow on the JVM.
