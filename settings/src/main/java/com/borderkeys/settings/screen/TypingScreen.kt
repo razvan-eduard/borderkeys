@@ -165,9 +165,6 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 checked = preferences.autoCorrectOnEnter,
             ) { value -> update { it.copy(autoCorrectOnEnter = value) } }
 
-            Explanation(
-                strings[Keys.CORRECTIONS_THE_USUAL_OBJECTION_TO_AUTOCORRECT_IS],
-            )
             SettingLabel(strings[Keys.CORRECTIONS_DISTANCE])
             FlowRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
