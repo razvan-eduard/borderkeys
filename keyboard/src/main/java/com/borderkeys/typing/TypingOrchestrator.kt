@@ -286,6 +286,12 @@ class TypingOrchestrator(
         learningFlow.setRefusedWords(words)
     }
 
+    /**
+     * Drops [word], in any case, from the learning not yet saved, with its pairs and triples.
+     * Returns whether the word itself was waiting to be saved.
+     */
+    fun forgetUnsaved(word: String): Boolean = learningFlow.forget(word)
+
     /** Learns nothing until the learning gate is next set, at a field start or a settings change. */
     fun stopLearning() {
         learningFlow.stop()

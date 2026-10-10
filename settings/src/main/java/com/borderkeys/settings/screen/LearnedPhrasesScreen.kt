@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.PersonalEntries
 import com.borderkeys.data.UserPhrase
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
@@ -46,7 +47,15 @@ fun LearnedPhrasesScreen(modifier: Modifier = Modifier) {
     var confirmingDeleteAll by remember { mutableStateOf(false) }
     // The phrases listed when Delete filtered phrases was pressed, until the dialog closes.
     var confirmingDelete by remember { mutableStateOf<List<UserPhrase>?>(null) }
-    val phrases by repository.phrases.collectAsStateWithLifecycle(initialValue = emptyList())
+    val saved by repository.phrases.collectAsStateWithLifecycle(initialValue = emptyList())
+    // Only the phrases that count as learned, as the keyboard counts them.
+    val themes = remember { DataGraph.themes }
+    val preferences by themes.preferences
+        .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
+    val now = remember { System.currentTimeMillis() }
+    val phrases = remember(saved, preferences.learnAfter, preferences.unlearnHalfLifeDays) {
+        PersonalEntries.phrases(saved, preferences, now)
+    }
     val listed = remember(phrases, query) {
         if (filtering) phrases.filter { textOf(it, strings).contains(query, ignoreCase = true) } else phrases
     }

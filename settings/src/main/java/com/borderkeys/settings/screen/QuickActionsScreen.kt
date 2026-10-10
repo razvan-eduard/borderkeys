@@ -44,6 +44,8 @@ import com.borderkeys.data.theme.QuickActionBar
 import com.borderkeys.data.theme.QuickActionBarItem
 import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
+import com.borderkeys.settings.ChoiceSlider
+import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
@@ -110,24 +112,16 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                 }
                 Explanation(strings[Keys.QUICK_MODE_NOTE])
                 SectionHeader(strings[Keys.QUICK_SIZE])
-                ChipRow {
-                    PickerChip(
-                        strings[Keys.QUICK_SIZE_DEFAULT],
-                        preferences.quickActionsSize == KeyboardPreferences.QUICK_ACTIONS_SIZE_DEFAULT,
-                    ) { update { it.copy(quickActionsSize = KeyboardPreferences.QUICK_ACTIONS_SIZE_DEFAULT) } }
-                    PickerChip(
-                        strings[Keys.QUICK_SIZE_SMALL],
-                        preferences.quickActionsSize == KeyboardPreferences.QUICK_ACTIONS_SIZE_SMALL,
-                    ) { update { it.copy(quickActionsSize = KeyboardPreferences.QUICK_ACTIONS_SIZE_SMALL) } }
-                    PickerChip(
-                        strings[Keys.QUICK_SIZE_MEDIUM],
-                        preferences.quickActionsSize == KeyboardPreferences.QUICK_ACTIONS_SIZE_MEDIUM,
-                    ) { update { it.copy(quickActionsSize = KeyboardPreferences.QUICK_ACTIONS_SIZE_MEDIUM) } }
-                    PickerChip(
-                        strings[Keys.QUICK_SIZE_HUGE],
-                        preferences.quickActionsSize == KeyboardPreferences.QUICK_ACTIONS_SIZE_HUGE,
-                    ) { update { it.copy(quickActionsSize = KeyboardPreferences.QUICK_ACTIONS_SIZE_HUGE) } }
-                }
+                ChoiceSlider(
+                    choices = listOf(
+                        KeyboardPreferences.QUICK_ACTIONS_SIZE_DEFAULT to strings[Keys.QUICK_SIZE_DEFAULT],
+                        KeyboardPreferences.QUICK_ACTIONS_SIZE_SMALL to strings[Keys.QUICK_SIZE_SMALL],
+                        KeyboardPreferences.QUICK_ACTIONS_SIZE_MEDIUM to strings[Keys.QUICK_SIZE_MEDIUM],
+                        KeyboardPreferences.QUICK_ACTIONS_SIZE_HUGE to strings[Keys.QUICK_SIZE_HUGE],
+                    ),
+                    value = preferences.quickActionsSize,
+                    default = DEFAULT_PREFERENCES.quickActionsSize,
+                ) { choice -> update { it.copy(quickActionsSize = choice) } }
                 Explanation(strings[Keys.QUICK_SIZE_NOTE])
                 SectionHeader(strings[Keys.QUICK_PLACEMENT])
                 ChipRow {

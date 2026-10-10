@@ -66,6 +66,9 @@ class SuggestionStripView(
 
         /** The screenshot chip was tapped. */
         fun onScreenshotPicked()
+
+        /** The screenshot chip held down rather than tapped. */
+        fun onScreenshotLongPressed()
     }
 
     /** True while the strip is showing action chips rather than word suggestions. */
@@ -287,17 +290,34 @@ class SuggestionStripView(
     private val decodingNotice = RoundedRectElement()
     private val tappedSlot = RoundedRectElement()
 
-    /** Fires once per press, at which point the press stops being a tap. */
+    /**
+     * Fires once per press, at which point the press stops being a tap: on a word, or on the
+     * screenshot chip.
+     */
     private val longPressRunnable = Runnable {
-        val index = pressedIndex - chipOffset
-        val word = if (index >= 0) words[index] else null
-        if (word != null && !actionMode) {
-            longPressFired = true
-            pressedIndex = -1
-            invalidate()
-            tapHaptic()
-            listener?.onSuggestionLongPressed(index, word)
+        val slot = pressedIndex
+        if (slot < 0 || actionMode) {
+            return@Runnable
         }
+        if (slot < chipOffset) {
+            if (chipIsScreenshot[slot]) {
+                holdFired()
+                listener?.onScreenshotLongPressed()
+            }
+            return@Runnable
+        }
+        val index = slot - chipOffset
+        val word = words[index] ?: return@Runnable
+        holdFired()
+        listener?.onSuggestionLongPressed(index, word)
+    }
+
+    /** A hold acted: the lift accepts nothing. */
+    private fun holdFired() {
+        longPressFired = true
+        pressedIndex = -1
+        invalidate()
+        tapHaptic()
     }
 
     /** Set when a hold has acted; the lift then accepts nothing. */
@@ -752,8 +772,7 @@ class SuggestionStripView(
                 pressedIndex = slotAt(event.x)
                 longPressFired = false
                 invalidate()
-                // The clipboard chip has no long press.
-                if (pressedIndex > chipOffset - 1 && pressedIndex >= 0) {
+                if (pressedIndex >= 0) {
                     postDelayed(longPressRunnable, KeyboardCanvasView.LONG_PRESS_MILLIS)
                 }
             }

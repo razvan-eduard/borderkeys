@@ -9,36 +9,41 @@ import com.borderkeys.data.entity.UserWord
 import kotlin.math.floor
 import kotlin.math.pow
 
-/** How the personal dictionary's counts fade with time unused, by a half-life. */
+/** How the personal dictionary's counts fade with time unused, by a half-life the user sets. */
 object PersonalWordDecay {
-    /** A word unused this long carries half the weight it did. */
-    const val HALF_LIFE_MILLIS: Long = 90L * 24 * 60 * 60 * 1000
+    private const val DAY_MILLIS: Long = 24L * 60 * 60 * 1000
 
-    /** How long a word written exactly once is kept before its row is dropped. */
-    const val UNCONFIRMED_LIFE_MILLIS: Long = 30L * 24 * 60 * 60 * 1000
+    /** The longest a word written exactly once is kept before its row is dropped. */
+    const val UNCONFIRMED_LIFE_MILLIS: Long = 30L * DAY_MILLIS
+
+    /** [days] as milliseconds. */
+    fun halfLifeMillis(days: Int): Long = days * DAY_MILLIS
+
+    /** How long a word written once is kept: [UNCONFIRMED_LIFE_MILLIS], or [halfLifeMillis] when shorter. */
+    fun unconfirmedLifeMillis(halfLifeMillis: Long): Long = minOf(UNCONFIRMED_LIFE_MILLIS, halfLifeMillis)
 
     /**
-     * [count], decayed for the time between [lastUsedAt] and [now]: never negative, never above
-     * [count], and [count] itself when [now] is not after [lastUsedAt].
+     * [count], decayed by [halfLifeMillis] for the time between [lastUsedAt] and [now]: never
+     * negative, never above [count], and [count] itself when [now] is not after [lastUsedAt].
      */
-    fun decayed(count: Int, lastUsedAt: Long, now: Long): Int {
-        if (count <= 0 || now <= lastUsedAt) {
+    fun decayed(count: Int, lastUsedAt: Long, now: Long, halfLifeMillis: Long): Int {
+        if (count <= 0 || now <= lastUsedAt || halfLifeMillis <= 0) {
             return count.coerceAtLeast(0)
         }
-        val halvings = (now - lastUsedAt).toDouble() / HALF_LIFE_MILLIS
+        val halvings = (now - lastUsedAt).toDouble() / halfLifeMillis
         val factor = 0.5.pow(halvings)
         return floor(count * factor + 0.5).toInt().coerceIn(0, count)
     }
 }
 
 /** [UserWord.count] decayed as of [now], for the native model; the stored row is untouched. */
-fun UserWord.decayed(now: Long): UserWord =
-    copy(count = PersonalWordDecay.decayed(count, lastUsedAt, now))
+fun UserWord.decayed(now: Long, halfLifeMillis: Long): UserWord =
+    copy(count = PersonalWordDecay.decayed(count, lastUsedAt, now, halfLifeMillis))
 
 /** The pair equivalent of [UserWord.decayed]. */
-fun UserBigram.decayed(now: Long): UserBigram =
-    copy(count = PersonalWordDecay.decayed(count, lastUsedAt, now))
+fun UserBigram.decayed(now: Long, halfLifeMillis: Long): UserBigram =
+    copy(count = PersonalWordDecay.decayed(count, lastUsedAt, now, halfLifeMillis))
 
 /** The triple equivalent of [UserWord.decayed]. */
-fun UserTrigram.decayed(now: Long): UserTrigram =
-    copy(count = PersonalWordDecay.decayed(count, lastUsedAt, now))
+fun UserTrigram.decayed(now: Long, halfLifeMillis: Long): UserTrigram =
+    copy(count = PersonalWordDecay.decayed(count, lastUsedAt, now, halfLifeMillis))

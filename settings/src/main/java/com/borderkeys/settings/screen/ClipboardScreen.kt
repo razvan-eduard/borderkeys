@@ -5,6 +5,8 @@ package com.borderkeys.settings.screen
 
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.settings.ChoiceSlider
+import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PrivateCopyActivity
 
@@ -120,24 +122,27 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
             // How recent a photo or screenshot must be for the strip, off meaning any age.
             Disableable(disabled = !offersImages) {
                 SectionHeader(strings[Keys.CLIPBOARD_IMAGE_OFFER_WINDOW])
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    for (minutes in KeyboardPreferences.IMAGE_OFFER_STEPS) {
-                        val label = when {
+                ChoiceSlider(
+                    choices = KeyboardPreferences.IMAGE_OFFER_STEPS.map { minutes ->
+                        minutes to when {
                             minutes == 0 -> strings[Keys.CLIPBOARD_SCREENSHOT_OFF]
                             minutes % 60 == 0 -> strings.counted(Keys.CLIPBOARD_HOURS, minutes / 60)
                             else -> strings.counted(Keys.CLIPBOARD_MINUTES, minutes)
                         }
-                        PickerChip(label, preferences.imageOfferMinutes == minutes) {
-                            update { it.copy(imageOfferMinutes = minutes) }
-                        }
-                    }
-                }
+                    },
+                    value = preferences.imageOfferMinutes,
+                    default = DEFAULT_PREFERENCES.imageOfferMinutes,
+                ) { minutes -> update { it.copy(imageOfferMinutes = minutes) } }
                 Explanation(strings[Keys.CLIPBOARD_IMAGE_OFFER_WINDOW_NOTE])
             }
+
+            // The screenshots within that window offered in turn, the oldest first.
+            SwitchRow(
+                title = strings[Keys.CLIPBOARD_SCREENSHOT_CASCADE],
+                subtitle = strings[Keys.CLIPBOARD_SCREENSHOT_CASCADE_NOTE],
+                checked = preferences.screenshotCascade,
+                enabled = Feature.SCREENSHOT_OFFER.on(preferences) && preferences.imageOfferLimited,
+            ) { value -> update { it.copy(screenshotCascade = value) } }
 
             // A small preview of the image on the photo and screenshot chips.
             SwitchRow(

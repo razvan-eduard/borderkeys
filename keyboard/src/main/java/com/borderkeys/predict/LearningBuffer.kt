@@ -206,6 +206,23 @@ class LearningBuffer(
         return drained
     }
 
+    /**
+     * Drops [word], in any case, with every pair and triple it is part of. Returns whether the
+     * word itself was waiting to be written.
+     */
+    fun forget(word: String): Boolean {
+        fun matches(other: String) = other.equals(word, ignoreCase = true)
+        val waiting = pending.keys.removeAll { matches(it.word) }
+        pendingPairs.keys.removeAll { matches(it.previousWord) || matches(it.word) }
+        pendingTriples.keys.removeAll {
+            matches(it.previousWord2) || matches(it.previousWord1) || matches(it.word)
+        }
+        if (pending.isEmpty()) {
+            oldestRecordedAt = 0L
+        }
+        return waiting
+    }
+
     /** Discards everything without writing it. */
     fun discard() {
         pending.clear()

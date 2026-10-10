@@ -933,12 +933,12 @@ jboolean nativeWarmSwipeModel(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
     return engine->warmSwipeModel() ? JNI_TRUE : JNI_FALSE;
 }
 
-void nativeSetLearningSpeed(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jfloat speed) {
+void nativeSetLearnAfterUses(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jint uses) {
     Engine* const engine = engineFrom(handle);
     if (engine == nullptr) {
         return;
     }
-    engine->setLearningSpeed(static_cast<float>(speed));
+    engine->setLearnAfterUses(static_cast<int>(uses));
 }
 
 void nativeSetKnownWordReach(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
@@ -1247,8 +1247,8 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeSetBlockedWords)},
     {"nativeLoadUserBigrams", "(J[Ljava/lang/String;[Ljava/lang/String;[I)V",
      reinterpret_cast<void*>(nativeLoadUserBigrams)},
-    {"nativeSetLearningSpeed", "(JF)V",
-     reinterpret_cast<void*>(nativeSetLearningSpeed)},
+    {"nativeSetLearnAfterUses", "(JI)V",
+     reinterpret_cast<void*>(nativeSetLearnAfterUses)},
     {"nativeSetCorrectionStrictness", "(JF)V",
      reinterpret_cast<void*>(nativeSetCorrectionStrictness)},
     {"nativeSetKnownWordReach", "(JF)V", reinterpret_cast<void*>(nativeSetKnownWordReach)},

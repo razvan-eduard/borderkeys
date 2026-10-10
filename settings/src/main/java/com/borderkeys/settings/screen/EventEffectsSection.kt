@@ -3,17 +3,17 @@
 
 package com.borderkeys.settings.screen
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import com.borderkeys.settings.PickerChip
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,12 +27,13 @@ import com.borderkeys.data.theme.EffectSetting
 import com.borderkeys.data.theme.EffectsSettings
 import com.borderkeys.effects.EffectStyle
 import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.ChoiceSlider
+import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.ColourRow
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
@@ -54,21 +55,15 @@ fun EventEffectsSection(
     SettingsSectionCard(strings[Keys.SCREEN_ANIMATIONS]) {
         // Off, Android's setting, or On: whether anything below moves at all.
         SettingLabel(strings[Keys.ANIMATIONS_ENABLE])
-        FlowRow(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            PickerChip(strings[Keys.ANIMATIONS_MODE_OFF], effects.animationMode == EffectsSettings.MODE_OFF) {
-                onChange { it.copy(mode = EffectsSettings.MODE_OFF) }
-            }
-            PickerChip(strings[Keys.ANIMATIONS_MODE_SYSTEM], effects.animationMode == EffectsSettings.MODE_SYSTEM) {
-                onChange { it.copy(mode = EffectsSettings.MODE_SYSTEM) }
-            }
-            PickerChip(strings[Keys.ANIMATIONS_MODE_ON], effects.animationMode == EffectsSettings.MODE_ON) {
-                onChange { it.copy(mode = EffectsSettings.MODE_ON) }
-            }
-        }
+        ChoiceSlider(
+            choices = listOf(
+                EffectsSettings.MODE_OFF to strings[Keys.ANIMATIONS_MODE_OFF],
+                EffectsSettings.MODE_SYSTEM to strings[Keys.ANIMATIONS_MODE_SYSTEM],
+                EffectsSettings.MODE_ON to strings[Keys.ANIMATIONS_MODE_ON],
+            ),
+            value = effects.animationMode,
+            default = DEFAULT_PREFERENCES.effects.animationMode,
+        ) { mode -> onChange { it.copy(mode = mode) } }
         Explanation(strings[Keys.ANIMATIONS_ENABLE_NOTE])
         SwitchRow(
             title = strings[Keys.ANIMATIONS_KEY_PRESS],
@@ -118,6 +113,7 @@ fun EventEffectsSection(
         EventEffectCard(
             title = strings[titleKeyFor(event)],
             setting = effects.forEvent(event),
+            default = DEFAULT_PREFERENCES.effects.forEvent(event),
             colourKey = effectColourKey(event),
             locked = !effects.anyOn,
             customColours = customColours,
@@ -133,6 +129,7 @@ fun EventEffectsSection(
 private fun EventEffectCard(
     title: String,
     setting: EffectSetting,
+    default: EffectSetting,
     colourKey: String,
     locked: Boolean,
     customColours: Map<String, List<Int>>,
@@ -178,18 +175,11 @@ private fun EventEffectCard(
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                             )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 20.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                for ((frequency, labelKey) in FREQUENCY_LABELS) {
-                                    PickerChip(strings[labelKey], setting.frequency == frequency) {
-                                        onSettingChange { it.withFrequency(frequency) }
-                                    }
-                                }
-                            }
+                            ChoiceSlider(
+                                choices = FREQUENCY_LABELS.map { (frequency, labelKey) -> frequency to strings[labelKey] },
+                                value = setting.frequency,
+                                default = default.frequency,
+                            ) { frequency -> onSettingChange { it.withFrequency(frequency) } }
                         }
                     }
                     if (!setting.enabled) {

@@ -31,9 +31,9 @@ interface UserWordDao {
     @Query("SELECT * FROM user_words WHERE word = :word LIMIT 1")
     suspend fun find(word: String): UserWord?
 
-    /** The entry for [word] whatever its ASCII case, by SQLite's NOCASE. */
-    @Query("SELECT * FROM user_words WHERE word = :word COLLATE NOCASE LIMIT 1")
-    suspend fun findIgnoreCase(word: String): UserWord?
+    /** Every learned spelling, in no order. */
+    @Query("SELECT word FROM user_words")
+    suspend fun allWords(): List<String>
 
     /**
      * Adds [delta] to a word's count, inserting it if it is new, in one statement. Two processes

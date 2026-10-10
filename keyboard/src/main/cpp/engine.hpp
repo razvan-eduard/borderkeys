@@ -127,6 +127,10 @@ private:
 class Engine final : public GestureScorer {
 public:
     static constexpr int kMaxPacks = 4;
+
+    /** setLearnAfterUses' default and its largest value. */
+    static constexpr uint32_t kDefaultLearnAfterUses = 3;
+    static constexpr uint32_t kMaxLearnAfterUses = 20;
     // The size of the candidate heap.
     static constexpr int kMaxCandidates = 16;
     static constexpr int kMaxComposing = 48;
@@ -298,8 +302,11 @@ public:
                           const char* const* next, const size_t* nextLengths,
                           const int32_t* counts, int count);
 
-    /** How readily what the user writes outranks the dictionary. See KeyboardPreferences. */
-    void setLearningSpeed(float speed);
+    /**
+     * How many uses a word, pair or triple needs before it is learned, from 1 to
+     * kMaxLearnAfterUses; below it, it carries no weight. See KeyboardPreferences.
+     */
+    void setLearnAfterUses(int uses);
 
     /**
      * How common a word a pack only knows must be to count as spelled: its unigram
@@ -488,8 +495,8 @@ private:
     void searchUserModel(const uint32_t* folded, int foldedLength, TopK<Candidate>& heap);
 
     /**
-     * Whether a personal entry was chosen on purpose at least once, or written
-     * kMinPersonalEvidence effective times.
+     * Whether a personal entry was chosen on purpose at least once, or written learnAfterUses_
+     * times.
      */
     bool personalWordEstablished(uint32_t entryIndex) const;
 
@@ -535,9 +542,11 @@ private:
     void collectWords(int packIndex, const LanguagePack& pack, const Endpoint& endpoint,
                       TopK<Candidate>& heap);
 
+    /** The boost of `text`'s personal entry: none until it is learned, then by its count. */
     float userBoostFor(const char* text, uint32_t length) const;
     /** Normalises the active packs' weights; used by tapping and swiping. */
     void refreshWeights();
+    /** The boost of a learned entry used `count` times. */
     float userBoostForCount(uint32_t count) const;
     // Offers a candidate, replacing an entry for the same word instead of adding a second one.
     void offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, const char* text,
@@ -805,8 +814,8 @@ private:
     bool decodedOffered_ = false;
     float decodedMargin_ = 0.0f;
 
-    /** Multiplier on how fast the personal model gains ground. 1.0 is the default. */
-    float learningSpeed_ = 1.0f;
+    /** The uses a word, pair or triple needs before it is learned. */
+    uint32_t learnAfterUses_ = kDefaultLearnAfterUses;
     /** Multiplier on kEditPenalty and kCorrectionSurcharge. 1.0 is the default. */
     float correctionStrictness_ = 1.0f;
 

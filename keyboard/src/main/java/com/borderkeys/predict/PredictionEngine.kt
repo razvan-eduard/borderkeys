@@ -299,11 +299,11 @@ class PredictionEngine(
         }
     }
 
-    /** Sets how readily the user's own words outrank the dictionaries. */
-    fun setLearningSpeed(speed: Float) {
+    /** Sets how many uses a word, pair or triple needs before it is learned. */
+    fun setLearnAfterUses(uses: Int) {
         worker.post {
             withHandle(Unit) { current ->
-                NativePredictor.nativeSetLearningSpeed(current, speed)
+                NativePredictor.nativeSetLearnAfterUses(current, uses)
             }
         }
     }

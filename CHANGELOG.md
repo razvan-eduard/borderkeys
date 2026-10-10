@@ -241,6 +241,27 @@ attestations and the full commit lists are on the
   last: Off, 1, 5 or 15 minutes, or 1 hour, for copied photos and screenshots alike; until now a
   screenshot had a fixed five minutes and a copied photo no limit. Offer it only once now also
   withdraws the screenshot chip after use or when the keyboard closes.
+- Cascade screenshots, on the Clipboard screen under Offer a photo or screenshot from the last:
+  the screenshots taken within that time are offered one after another, the oldest first, each
+  paste putting the next on the strip, so a series goes out in the order it was taken. With Offer
+  it only once on, closing the keyboard ends the series. Needs a time other than Off; off by
+  default. Holding the screenshot chip offers Dismiss, as holding a word offers Forget: it
+  withdraws that screenshot, or in a series brings up the next.
+- How soon a word or phrase is learned, on the Personal dictionary screen, is now a number of
+  uses: 1, 2, 3, 5 or 10, three by default, in place of Slow, Balanced and Immediate, which carry
+  over as 10, 3 and 1. Every word waits for it, a word the dictionary already has included: until
+  then it is only counted and moves nothing on the strip, and from then on it climbs one curve
+  the more it is used, whatever the number. Pairs and triples wait for the same number. A word's
+  case forms, This at a sentence start and this inside one, count together. The Words and Phrases
+  pages list only what is learned.
+- How fast unused words fade, beside it: a word or phrase unused for 7, 14, 30, 90, 180 or 365
+  days counts half as much, 90 by default, and is no longer learned once it falls below the
+  number of uses; a word used once goes within 30 days at most. Until now the 90 days were fixed.
+- A setting that picks a step on a scale is now a slider of nodes: the offer window, correction
+  distance, capitals, the language lock and the language switch, haptic strength, the ring's, the
+  bar's and the draft box's sizes, the animation mode, how often an effect plays, and the two
+  learning sliders. Tap or drag to a node; a dot under the track marks the default, and an ×
+  beside the value puts it back. Choices between named options keep their chips.
 - Six settings sat above the setting they depend on and now follow it: Layouts on this keyboard
   opens the Layout screen, ahead of the keys that draw on it; Long-press duration sits under
   Long-press hints instead of in the Advanced fold; Correction strictness and Shortest word to
@@ -280,6 +301,10 @@ attestations and the full commit lists are on the
   while another language was recognised is rechecked: not one made while the language was still
   undecided, and not again when the language goes undecided and comes back. Ask offered the
   same wrong words.
+- Fixed: Forget on a held word could leave it ranked above its place in the dictionary. It removed
+  only one of the cases the word was learned in, and the keyboard counts them as one word, so the
+  others kept its weight; it now removes every case, with what is still waiting to be saved. A
+  word typed in the last few seconds was blocked instead, and then saved as learned all the same.
 - Fixed: the panel a long press on Enter opens took the next typing taps on its tiles, so a
   finger still typing could make the keyboard one-handed or switch something off. Touches in
   the first half second after it opens are ignored. Its rows now fit the room: on a phone it

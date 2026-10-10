@@ -24,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.PersonalEntries
+import com.borderkeys.predict.WordFold
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.SettingRow
@@ -45,7 +47,17 @@ fun LearnedWordsScreen(modifier: Modifier = Modifier) {
     // The words listed when Delete filtered words was pressed, until the dialog closes.
     var confirmingDelete by remember { mutableStateOf<List<String>?>(null) }
     val listed = remember(query) { if (filtering) repository.search(query) else repository.words }
-    val words by listed.collectAsStateWithLifecycle(initialValue = emptyList())
+    val found by listed.collectAsStateWithLifecycle(initialValue = emptyList())
+    // Only the words that count as learned, as the keyboard counts them.
+    val saved by repository.words.collectAsStateWithLifecycle(initialValue = emptyList())
+    val themes = remember { DataGraph.themes }
+    val preferences by themes.preferences
+        .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
+    val now = remember { System.currentTimeMillis() }
+    val learned = remember(saved, preferences.learnAfter, preferences.unlearnHalfLifeDays) {
+        PersonalEntries.words(saved, preferences, now, WordFold::fold).mapTo(HashSet()) { it.word }
+    }
+    val words = remember(found, learned) { found.filter { it.word in learned } }
 
     LazyColumn(modifier = modifier.fillMaxSize()) {
         item {
@@ -91,7 +103,7 @@ fun LearnedWordsScreen(modifier: Modifier = Modifier) {
                         TextButton(onClick = { scope.launch { repository.block(word.word) } }) {
                             Text(strings[Keys.DICTIONARY_BLOCK])
                         }
-                        TextButton(onClick = { scope.launch { repository.forget(word.word) } }) {
+                        TextButton(onClick = { scope.launch { repository.forgetEveryCase(word.word) } }) {
                             Text(strings[Keys.DICTIONARY_DELETE])
                         }
                     }

@@ -57,6 +57,24 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.LayoutDirection
+import kotlin.math.roundToInt
 import com.borderkeys.data.DataGraph
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -591,36 +609,10 @@ fun DefaultableSlider(
     onChangeFinished: (() -> Unit)? = null,
     onChange: (Float) -> Unit,
 ) {
-    val strings = LocalStrings.current
-    val labelColor = if (enabled) {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-    }
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodySmall,
-                color = labelColor,
-                modifier = Modifier.weight(1f),
-            )
-            if (enabled && value != default) {
-                IconButton(
-                    onClick = {
-                        onChange(default)
-                        onChangeFinished?.invoke()
-                    },
-                    modifier = Modifier.size(28.dp),
-                ) {
-                    Icon(
-                        painter = painterResource(android.R.drawable.ic_menu_close_clear_cancel),
-                        contentDescription = strings[Keys.COMMON_RESET_TO_DEFAULT],
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+        SliderLabel(label, enabled, showReset = value != default) {
+            onChange(default)
+            onChangeFinished?.invoke()
         }
         Slider(
             value = value.coerceIn(range),
@@ -633,3 +625,193 @@ fun DefaultableSlider(
         )
     }
 }
+
+/** The line above a slider: [label], dimmed unless [enabled], and a reset "x" when [showReset]. */
+@Composable
+private fun SliderLabel(label: String, enabled: Boolean, showReset: Boolean, onReset: () -> Unit) {
+    val strings = LocalStrings.current
+    val labelColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            color = labelColor,
+            modifier = Modifier.weight(1f),
+        )
+        if (enabled && showReset) {
+            IconButton(onClick = onReset, modifier = Modifier.size(28.dp)) {
+                Icon(
+                    painter = painterResource(android.R.drawable.ic_menu_close_clear_cancel),
+                    contentDescription = strings[Keys.COMMON_RESET_TO_DEFAULT],
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A slider of a few fixed values, each a node at a fixed place on the track; a tap or a drag
+ * lands on the nearest node. [label] sits above it with [DefaultableSlider]'s reset control once
+ * [value] is not [default], and a dot under the track marks where [default] sits.
+ */
+@Composable
+fun NodeSlider(
+    label: String,
+    options: List<Int>,
+    value: Int,
+    default: Int,
+    /** False dims it and takes no touch, as for [DefaultableSlider]. */
+    enabled: Boolean = true,
+    onPick: (Int) -> Unit,
+) {
+    val selected = KeyboardPreferences.nearestStep(options, value)
+    val defaultIndex = KeyboardPreferences.nearestStep(options, default)
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val currentOptions by rememberUpdatedState(options)
+    val currentSelected by rememberUpdatedState(selected)
+    val currentPick by rememberUpdatedState(onPick)
+    val alpha = if (enabled) 1f else DISABLED_ALPHA
+    val active = MaterialTheme.colorScheme.primary.copy(alpha = alpha)
+    val track = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha)
+    val ring = MaterialTheme.colorScheme.outline.copy(alpha = alpha)
+    val mark = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
+    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+        SliderLabel(label, enabled, showReset = value != default) { onPick(default) }
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(NODE_SLIDER_HEIGHT)
+                .semantics {
+                    stateDescription = label
+                    progressBarRangeInfo = ProgressBarRangeInfo(
+                        selected.toFloat(),
+                        0f..(options.size - 1).coerceAtLeast(0).toFloat(),
+                        (options.size - 2).coerceAtLeast(0),
+                    )
+                    if (enabled) {
+                        setProgress { target ->
+                            val index = target.roundToInt().coerceIn(options.indices)
+                            if (index != selected) {
+                                onPick(options[index])
+                            }
+                            true
+                        }
+                    } else {
+                        disabled()
+                    }
+                }
+                .pointerInput(enabled, rtl) {
+                    if (!enabled) {
+                        return@pointerInput
+                    }
+                    detectTapGestures { offset ->
+                        val index = nodeAt(
+                            offset.x, currentOptions.size, size.width.toFloat(), NODE_THUMB_RADIUS.toPx(), rtl,
+                        )
+                        if (index != currentSelected) {
+                            currentPick(currentOptions[index])
+                        }
+                    }
+                }
+                .pointerInput(enabled, rtl) {
+                    if (!enabled) {
+                        return@pointerInput
+                    }
+                    var last = -1
+                    detectHorizontalDragGestures(onDragStart = { last = currentSelected }) { change, _ ->
+                        change.consume()
+                        val index = nodeAt(
+                            change.position.x, currentOptions.size, size.width.toFloat(), NODE_THUMB_RADIUS.toPx(), rtl,
+                        )
+                        if (index != last) {
+                            last = index
+                            currentPick(currentOptions[index])
+                        }
+                    }
+                },
+        ) {
+            val count = options.size
+            if (count == 0) {
+                return@Canvas
+            }
+            val thumb = NODE_THUMB_RADIUS.toPx()
+            val y = size.height / 2f
+            fun at(index: Int) = Offset(nodeX(index, count, size.width, thumb, rtl), y)
+            val stroke = NODE_TRACK_WIDTH.toPx()
+            drawLine(track, at(0), at(count - 1), strokeWidth = stroke, cap = StrokeCap.Round)
+            drawLine(active, at(0), at(selected), strokeWidth = stroke, cap = StrokeCap.Round)
+            val node = NODE_RADIUS.toPx()
+            for (index in 0 until count) {
+                if (index <= selected) {
+                    drawCircle(active, radius = node, center = at(index))
+                } else {
+                    drawCircle(track, radius = node, center = at(index))
+                    drawCircle(ring, radius = node, center = at(index), style = Stroke(NODE_RING_WIDTH.toPx()))
+                }
+            }
+            drawCircle(active, radius = thumb, center = at(selected))
+            val dot = NODE_DEFAULT_MARK_RADIUS.toPx()
+            drawCircle(mark, radius = dot, center = at(defaultIndex).copy(y = y + thumb + dot * 2))
+        }
+    }
+}
+
+/**
+ * One of [choices], each a value and its name, as a [NodeSlider] whose label is the chosen one's
+ * name. A [value] not among them reads as the first.
+ */
+@Composable
+fun <T> ChoiceSlider(
+    choices: List<Pair<T, String>>,
+    value: T,
+    default: T,
+    enabled: Boolean = true,
+    onPick: (T) -> Unit,
+) {
+    val selected = choices.indexOfFirst { it.first == value }.coerceAtLeast(0)
+    NodeSlider(
+        label = choices.getOrNull(selected)?.second.orEmpty(),
+        options = choices.indices.toList(),
+        value = selected,
+        default = choices.indexOfFirst { it.first == default }.coerceAtLeast(0),
+        enabled = enabled,
+    ) { index -> onPick(choices[index].first) }
+}
+
+/** Where node [index] of [count] sits across [width], [inset] in from each end, mirrored when [rtl]. */
+internal fun nodeX(index: Int, count: Int, width: Float, inset: Float, rtl: Boolean): Float {
+    val fraction = if (count <= 1) 0f else index.toFloat() / (count - 1)
+    val x = inset + (width - 2 * inset) * fraction
+    return if (rtl) width - x else x
+}
+
+/** The node of [count] nearest [x], as [nodeX] places them. */
+internal fun nodeAt(x: Float, count: Int, width: Float, inset: Float, rtl: Boolean): Int {
+    if (count <= 1) {
+        return 0
+    }
+    val fromStart = if (rtl) width - x else x
+    val span = (width - 2 * inset).coerceAtLeast(1f)
+    val fraction = ((fromStart - inset) / span).coerceIn(0f, 1f)
+    return (fraction * (count - 1)).roundToInt()
+}
+
+/** [NodeSlider]'s height, track, nodes, thumb, ring and default mark. */
+private val NODE_SLIDER_HEIGHT = 44.dp
+private val NODE_TRACK_WIDTH = 4.dp
+private val NODE_RADIUS = 6.dp
+private val NODE_THUMB_RADIUS = 11.dp
+private val NODE_RING_WIDTH = 1.5.dp
+private val NODE_DEFAULT_MARK_RADIUS = 2.dp
+
+/** Every setting's default, which a [ChoiceSlider] marks and resets to. */
+val DEFAULT_PREFERENCES = KeyboardPreferences()
+
+/** A disabled control's alpha, as Material dims it. */
+private const val DISABLED_ALPHA = 0.38f

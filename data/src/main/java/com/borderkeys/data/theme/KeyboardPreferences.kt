@@ -103,10 +103,23 @@ data class KeyboardPreferences(
     val blockOffensiveWords: Boolean = false,
 
     /**
-     * How quickly what you write starts to outrank what the dictionary says, one of the LEARNING_
-     * constants below. What is recorded is the same either way.
+     * Read only when [learnAfterUses] is absent, from a file written before it: one of the
+     * LEARNING_ constants below.
      */
     val learningSpeed: Int = LEARNING_BALANCED,
+
+    /**
+     * How many uses a word, pair or triple needs before it is learned, one of
+     * [LEARN_AFTER_USES_STEPS]; null in a file written before it existed. Read through
+     * [learnAfter]. Clamped on read.
+     */
+    val learnAfterUses: Int? = null,
+
+    /**
+     * After how many days unused a learned word or phrase counts half as much, one of
+     * [UNLEARN_HALF_LIFE_STEPS]. Clamped on read.
+     */
+    val unlearnHalfLifeDays: Int = DEFAULT_UNLEARN_HALF_LIFE_DAYS,
 
     /**
      * How many learned words are kept, a multiple of [LEARNED_WORD_LIMIT_STEP]; past it, the words
@@ -423,6 +436,13 @@ data class KeyboardPreferences(
      * one of [IMAGE_OFFER_STEPS]; 0 offers the newest whatever its age. Clamped on read.
      */
     val imageOfferMinutes: Int = DEFAULT_IMAGE_OFFER_MINUTES,
+
+    /**
+     * Whether the screenshots within [imageOfferMinutes] are offered one after another, the
+     * oldest first, each paste putting the next on the strip, in place of the newest alone. Does
+     * nothing while [imageOfferMinutes] is 0.
+     */
+    val screenshotCascade: Boolean = false,
 
     /**
      * Whether inserting the current clipboard item also deletes its row from the history panel,
@@ -826,6 +846,11 @@ data class KeyboardPreferences(
         } else {
             LEARNING_BALANCED
         },
+        learnAfterUses = learnAfterUses?.let {
+            LEARN_AFTER_USES_STEPS[nearestStep(LEARN_AFTER_USES_STEPS, it)]
+        },
+        unlearnHalfLifeDays =
+            UNLEARN_HALF_LIFE_STEPS[nearestStep(UNLEARN_HALF_LIFE_STEPS, unlearnHalfLifeDays)],
         heatmapWeight = if (heatmapWeight.isNaN()) {
             DEFAULT_HEATMAP_WEIGHT
         } else {
@@ -899,6 +924,20 @@ data class KeyboardPreferences(
 
     /** Whether copied photos are kept in the history and offered on the strip: Remember photos. */
     val photosRemembered: Boolean get() = clipboardImages
+
+    /**
+     * How many uses a word, pair or triple needs before it is learned: [learnAfterUses], or for a
+     * file written before it, what its [learningSpeed] asked for.
+     */
+    val learnAfter: Int
+        get() = learnAfterUses ?: when (learningSpeed) {
+            LEARNING_CAUTIOUS -> LEARN_AFTER_USES_STEPS.last()
+            LEARNING_IMMEDIATE -> LEARN_AFTER_USES_STEPS.first()
+            else -> DEFAULT_LEARN_AFTER_USES
+        }
+
+    /** Whether [imageOfferMinutes] limits how old an offered image may be: any choice but Off. */
+    val imageOfferLimited: Boolean get() = imageOfferMinutes != 0
 
     /** Whether screenshots are kept in the history and offered on the strip: Remember screenshots, with its folder. */
     val screenshotsRemembered: Boolean
@@ -991,14 +1030,18 @@ data class KeyboardPreferences(
         /** Lifted off the bottom edge and movable. */
         const val MODE_FLOATING = 3
 
-        /** Several repetitions before a word or phrase leads. */
+        /** [learningSpeed] values, from files written before [learnAfterUses]. */
         const val LEARNING_CAUTIOUS = 0
-
-        /** The default. A phrase written twice starts to lead. */
         const val LEARNING_BALANCED = 1
-
-        /** The first time counts. */
         const val LEARNING_IMMEDIATE = 2
+
+        /** [learnAfterUses]' stops and default. */
+        val LEARN_AFTER_USES_STEPS: List<Int> = listOf(1, 2, 3, 5, 10)
+        const val DEFAULT_LEARN_AFTER_USES = 3
+
+        /** [unlearnHalfLifeDays]' stops and default. */
+        val UNLEARN_HALF_LIFE_STEPS: List<Int> = listOf(7, 14, 30, 90, 180, 365)
+        const val DEFAULT_UNLEARN_HALF_LIFE_DAYS = 90
 
         /** [learnedWordLimit]'s range, step and default. */
         const val MIN_LEARNED_WORD_LIMIT = 1_000
@@ -1187,16 +1230,6 @@ data class KeyboardPreferences(
 
         /** Whether an undecided detector falls back to one dictionary instead of all of them. */
         fun languageLockStrict(lock: Int): Boolean = lock == LANGUAGE_LOCK_STRICT
-
-        /**
-         * The multiplier a [learningSpeed] applies to how fast the personal model gains ground,
-         * for words and phrases alike.
-         */
-        fun learningSpeedFactor(speed: Int): Float = when (speed) {
-            LEARNING_CAUTIOUS -> 0.35f
-            LEARNING_IMMEDIATE -> 3f
-            else -> 1f
-        }
 
         /**
          * The unigram log-probability a word the dictionaries only know needs at [step] of

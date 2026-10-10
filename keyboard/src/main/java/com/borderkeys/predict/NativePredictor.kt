@@ -179,8 +179,8 @@ internal object NativePredictor {
      */
     external fun nativeSetBlockedWords(handle: Long, words: Array<String>)
 
-    /** How readily the user's words outrank the dictionaries. A multiplier; 1 is the default. */
-    external fun nativeSetLearningSpeed(handle: Long, speed: Float)
+    /** How many uses a word, pair or triple needs before it is learned; 3 is the default. */
+    external fun nativeSetLearnAfterUses(handle: Long, uses: Int)
 
     /**
      * How common a word a pack knows but never offers must be to count as spelled: its unigram

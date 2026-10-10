@@ -1202,15 +1202,15 @@ void runEngineTests() {
         check(loaded.rankOf("borderkeysth", "borderkeysthrice") == 0,
               "a third use confirms it, and it is offered");
 
-        // The gate reads the effective count, so the setting decides rather than this constant.
-        loaded.engine.setLearningSpeed(3.0f);
+        // The number of uses is the setting's.
+        loaded.engine.setLearnAfterUses(1);
         check(loaded.rankOf("borderkeyso", "borderkeysonce") == 0,
-              "and \"the first time counts\" means exactly that");
+              "learned after one use, the first time counts");
 
-        loaded.engine.setLearningSpeed(0.35f);
+        loaded.engine.setLearnAfterUses(9);
         check(loaded.rankOf("borderkeysth", "borderkeysthrice") < 0,
-              "while the cautious setting wants more repetitions than three");
-        loaded.engine.setLearningSpeed(1.0f);
+              "while learned after nine, three are not enough");
+        loaded.engine.setLearnAfterUses(3);
 
         // Chosen on purpose once -- tapped on the strip, or put back after a correction -- and
         // the count no longer matters, at any setting.
@@ -1218,10 +1218,28 @@ void runEngineTests() {
         loaded.engine.loadUserWords(words, lengths, counts, 3, nullptr, asserted);
         check(loaded.rankOf("borderkeyso", "borderkeysonce") == 0,
               "a word chosen once is offered from then on");
-        loaded.engine.setLearningSpeed(0.35f);
+        loaded.engine.setLearnAfterUses(9);
         check(loaded.rankOf("borderkeyso", "borderkeysonce") == 0,
-              "however cautious the setting");
-        loaded.engine.setLearningSpeed(1.0f);
+              "however many uses the setting asks for");
+        loaded.engine.setLearnAfterUses(3);
+    }
+
+    section("a word's case forms count together");
+    {
+        // The personal dictionary keeps "Borderkeysform" from a sentence start apart from
+        // "borderkeysform"; loaded, they are one word whose uses add up.
+        LoadedEngine loaded;
+        loaded.open();
+        const char* words[2] = {"borderkeysform", "Borderkeysform"};
+        const size_t lengths[2] = {14, 14};
+        const int32_t counts[2] = {2, 1};
+        loaded.engine.loadUserWords(words, lengths, counts, 2);
+        check(loaded.rankOf("borderkeysf", "borderkeysform") == 0,
+              "two uses in one case and one in the other make three, and it is learned");
+
+        const int32_t once[2] = {1, 1};
+        loaded.engine.loadUserWords(words, lengths, once, 2);
+        check(loaded.rankOf("borderkeysf", "borderkeysform") < 0, "one and one make two, not yet");
     }
 
     section("a word typed past does not vouch for itself");
@@ -1242,13 +1260,17 @@ void runEngineTests() {
         check(loaded.engine.knownSpelling("borderkeysmine", 14, out, sizeof(out)) == 14,
               "chosen once, it is at once");
 
-        // A successor answers to the same rule.
+        // A pair answers to the same number of uses.
         loaded.engine.learn("keyboard", 8, nullptr, 0, nullptr, 0);
         loaded.engine.learn("borderkeysnext", 14, "keyboard", 8, nullptr, 0);
         check(loaded.rankOf("", "borderkeysnext", "keyboard") < 0,
               "a word written once after another is not predicted after it");
         loaded.engine.learn("borderkeysnext", 14, "keyboard", 8, nullptr, 0, false, true);
-        check(loaded.rankOf("", "borderkeysnext", "keyboard") >= 0, "until it is chosen");
+        check(loaded.rankOf("", "borderkeysnext", "keyboard") < 0,
+              "nor once chosen, the pair written twice");
+        loaded.engine.learn("borderkeysnext", 14, "keyboard", 8, nullptr, 0);
+        check(loaded.rankOf("", "borderkeysnext", "keyboard") >= 0,
+              "and is, the pair written a third time");
     }
 
     section("a private field does not consult the personal dictionary");
@@ -1323,8 +1345,8 @@ void runEngineTests() {
 
         check(loaded.rankOf("", "them", "the") == 0,
               "the phrase written three times leads");
-        check(loaded.rankOf("", "test", "the") > 0,
-              "and the one written once is still offered, behind it");
+        check(loaded.rankOf("", "test", "the") != 0,
+              "and the one written once is not learned, so does not lead");
 
         // The dictionary's own candidates are not thrown away; they sit behind the personal
         // ones rather than being replaced by them.
@@ -1332,31 +1354,32 @@ void runEngineTests() {
               "a word the pack predicts is still in the list");
     }
 
-    section("how quickly it learns is a setting");
+    section("a word the dictionary has gains nothing until it is learned");
     {
-        // The learning speed moves a personal word along the boost curve faster. It cannot make
-        // that word beat a correctly typed one: kMaxUserBoost is 3.0 against an anchor of -8.0,
-        // and "test" in the fixture scores -4.80.
-        const auto heldAfterThreePicks = [](float speed) {
+        // Typed fewer times than the setting asks, a dictionary word scores as if never typed;
+        // learned, it climbs one curve whatever the setting, from every use counted.
+        const auto scoreAfter = [](int uses, int learnAfter) {
             LoadedEngine loaded;
             loaded.open();
-            loaded.engine.setLearningSpeed(speed);
-            for (int i = 0; i < 3; ++i) {
-                loaded.engine.learn("testing", 7, nullptr, 0, nullptr, 0, false, true);
+            loaded.engine.setLearnAfterUses(learnAfter);
+            for (int i = 0; i < uses; ++i) {
+                loaded.engine.learn("testing", 7, nullptr, 0, nullptr, 0);
             }
             return loaded.scoreOf("test", "testing");
         };
+        const float untyped = scoreAfter(0, 3);
+        check(untyped != 0.0f, "the dictionary offers \"testing\" for \"test\" to begin with");
+        check(scoreAfter(2, 3) == untyped, "two uses of three weigh nothing");
+        check(scoreAfter(3, 3) > untyped, "the third learns it, and it gains");
+        check(scoreAfter(8, 9) == untyped, "eight of nine weigh nothing");
+        check(scoreAfter(9, 9) == scoreAfter(9, 1),
+              "learned, the climb is the same whatever the setting asked for");
+        check(scoreAfter(10, 1) > scoreAfter(3, 1), "and each further use adds");
 
-        check(heldAfterThreePicks(3.0f) > heldAfterThreePicks(1.0f),
-              "the impatient setting believes three picks sooner");
-        check(heldAfterThreePicks(1.0f) > heldAfterThreePicks(0.35f),
-              "and the cautious one later");
-
-        // And the ranking that should hold at every setting: the word actually typed leads, and
-        // the personal word is offered right behind it rather than instead of it.
+        // The word actually typed still leads at every setting; the learned one follows it.
         LoadedEngine loaded;
         loaded.open();
-        loaded.engine.setLearningSpeed(3.0f);
+        loaded.engine.setLearnAfterUses(1);
         for (int i = 0; i < 3; ++i) {
             loaded.engine.learn("testing", 7, nullptr, 0, nullptr, 0, false, true);
         }

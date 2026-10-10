@@ -76,7 +76,7 @@ data class FieldPolicy(
     val byField: TypingFeatures,
     /** What the settings allow: the Learning and Heatmap switches. */
     val bySettings: TypingFeatures = TypingFeatures.ALL,
-    /** What the user allows by hand, through the Suggestions quick action: everything or nothing. */
+    /** What the user allows by hand, through the Enabled/Disabled quick action: everything or nothing. */
     val byHand: TypingFeatures = TypingFeatures.ALL,
     /**
      * The user has unlocked since boot, so the personal dictionary, the clipboard history and

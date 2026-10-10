@@ -8,6 +8,7 @@ import com.borderkeys.data.BundledDictionaries
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.DictionaryRepository
 import com.borderkeys.data.LanguagePackRepository
+import com.borderkeys.data.PersonalWordDecay
 import com.borderkeys.data.decayed
 import com.borderkeys.data.entity.LanguagePackEntry
 import com.borderkeys.data.theme.KeyboardPreferences
@@ -163,6 +164,7 @@ internal class DictionaryLoader(
      */
     suspend fun loadPersonalModel(dictionary: DictionaryRepository) {
         val now = System.currentTimeMillis()
+        val halfLife = PersonalWordDecay.halfLifeMillis(preferences().unlearnHalfLifeDays)
         // With the offensive-word switch on, words, pairs and triples that contain an offensive
         // word are left out.
         val hidden = if (preferences().blockOffensiveWords) offensiveWords else emptySet()
@@ -170,17 +172,17 @@ internal class DictionaryLoader(
         engine.loadUserWords(
             dictionary.topWords(preferences().learnedWordLimit)
                 .filter { shown(it.word) }
-                .map { it.decayed(now) },
+                .map { it.decayed(now, halfLife) },
         )
         engine.loadUserBigrams(
             dictionary.topBigrams()
                 .filter { shown(it.previousWord) && shown(it.word) }
-                .map { it.decayed(now) },
+                .map { it.decayed(now, halfLife) },
         )
         engine.loadUserTrigrams(
             dictionary.topTrigrams()
                 .filter { shown(it.previousWord2) && shown(it.previousWord1) && shown(it.word) }
-                .map { it.decayed(now) },
+                .map { it.decayed(now, halfLife) },
         )
     }
 

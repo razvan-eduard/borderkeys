@@ -50,9 +50,10 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.LanguagePackRepository
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.ChoiceSlider
+import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.LocalStrings
-import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.PlacementPreview
 import com.borderkeys.settings.rememberPreferencesUpdater
 import com.borderkeys.settings.rememberThemeUpdater
@@ -210,19 +211,7 @@ private fun TypingPage(
         active = preferences.autoCapitalise,
         preview = { accent -> ArrowPreview(sample, sample.replaceFirstChar { it.titlecase() }, accent) },
     ) {
-        ChoiceRow {
-            PickerChip(strings[Keys.CORRECTIONS_CAPITALISE_OFF], !preferences.autoCapitalise) {
-                update { it.copy(autoCapitalise = false) }
-            }
-            PickerChip(
-                strings[Keys.CORRECTIONS_CAPITALISE_WHEN_ASKED],
-                preferences.autoCapitalise && !preferences.forceCapitaliseSentences,
-            ) { update { it.copy(autoCapitalise = true, forceCapitaliseSentences = false) } }
-            PickerChip(
-                strings[Keys.CORRECTIONS_CAPITALISE_ALWAYS],
-                preferences.autoCapitalise && preferences.forceCapitaliseSentences,
-            ) { update { it.copy(autoCapitalise = true, forceCapitaliseSentences = true) } }
-        }
+        CapitaliseSlider(preferences, update)
     }
     SwitchItem(
         title = strings[Keys.CORRECTIONS_SPACE_AFTER],
@@ -431,13 +420,11 @@ private fun LookPage(
         },
     ) {
         if (preferences.hapticFeedback) {
-            ChoiceRow {
-                for ((strength, labelKey) in HAPTIC_STRENGTHS) {
-                    PickerChip(strings[labelKey], preferences.hapticStrength == strength) {
-                        update { it.copy(hapticStrength = strength) }
-                    }
-                }
-            }
+            ChoiceSlider(
+                choices = HAPTIC_STRENGTHS.map { (strength, labelKey) -> strength to strings[labelKey] },
+                value = preferences.hapticStrength,
+                default = DEFAULT_PREFERENCES.hapticStrength,
+            ) { choice -> update { it.copy(hapticStrength = choice) } }
         }
     }
     // On here means as Android's setting says, the Animations screen's middle choice.
@@ -579,15 +566,6 @@ private fun ItemCard(active: Boolean, content: @Composable ColumnScope.() -> Uni
             .padding(horizontal = 14.dp, vertical = 10.dp),
         content = content,
     )
-}
-
-/** Choices side by side, scrolling sideways when they do not fit. */
-@Composable
-private fun ChoiceRow(content: @Composable () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) { content() }
 }
 
 /** A checkbox with its label, the whole row tappable. */
