@@ -843,19 +843,18 @@ void runEngineTests() {
         check(keyboardCount == 1,
               "the same word reached from two active packs still appears once");
 
-        // candidateForPack answers for the pack index it was given, not for the pack suggest()
-        // would pick.
-        char spelling[64];
-        int written = loaded.engine.candidateForPack(0, "keyboarf", 8, spelling, sizeof(spelling));
-        check(written == 8 && std::memcmp(spelling, "keyboard", 8) == 0,
-              "candidateForPack corrects a typo through pack 0 explicitly");
-        written = loaded.engine.candidateForPack(1, "keyboarf", 8, spelling, sizeof(spelling));
-        check(written == 8 && std::memcmp(spelling, "keyboard", 8) == 0,
-              "and through pack 1 explicitly, independent of which pack suggest() would pick");
-        check(loaded.engine.candidateForPack(2, "keyboarf", 8, spelling, sizeof(spelling)) == 0,
-              "a pack index with nothing loaded in it answers nothing");
-        check(loaded.engine.candidateForPack(0, "keyboarf", 8, spelling, 2) == 0,
-              "an output buffer too small to hold the answer is refused rather than truncated");
+        // answerAs makes the requests answer as the pack it names, until called with -1.
+        const int32_t verdict = loaded.engine.dominantPack();
+        check(loaded.engine.answerAs(1), "an open, active pack can be answered as");
+        check(loaded.rankOf("keyboarf", "keyboard") >= 0,
+              "answering as pack 1 still corrects a typo through it");
+        check(loaded.engine.dominantPack() == verdict,
+              "answering as a pack leaves the detected language as it was");
+        check(loaded.engine.answerAs(-1), "-1 returns the requests to the evidence");
+        check(!loaded.engine.answerAs(2), "a pack index with nothing loaded in it is refused");
+        check(!loaded.engine.answerAs(-2), "and so is one below -1");
+        check(loaded.rankOf("keyboarf", "keyboard") >= 0,
+              "a refused pack leaves the requests answering as before");
     }
 
     section("dominantPack starts undecided");

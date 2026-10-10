@@ -12,7 +12,7 @@ import org.junit.Test
 class LanguageSwitchCorrectorTest {
 
     private fun flag(typed: String, applied: String, start: Int, end: Int) =
-        LanguageSwitchCorrector.Flag(typed, applied, start, end)
+        LanguageSwitchCorrector.Flag(typed, applied, start, end, madeUnder = 0)
 
     @Test
     fun `no dominant pack yet is not a flip`() {
@@ -42,22 +42,71 @@ class LanguageSwitchCorrectorTest {
     }
 
     @Test
-    fun `snapshot returns everything tracked and clears it`() {
+    fun `undecided between two verdicts is no change, so the same one after it is none`() {
         val corrector = LanguageSwitchCorrector()
-        corrector.recordCorrection(flag("salut", "salute", 0, 6))
-        corrector.recordCorrection(flag("buna", "bună", 10, 14))
-        val snapshot = corrector.snapshot()
+        assertTrue(corrector.observeDominantPack(1))
+        assertFalse(corrector.observeDominantPack(-1))
+        assertFalse(corrector.observeDominantPack(1))
+        assertTrue("another one after it is", corrector.observeDominantPack(0))
+    }
+
+    @Test
+    fun `the verdict a field opens under is no change`() {
+        val corrector = LanguageSwitchCorrector()
+        corrector.startUnder(0)
+        assertFalse(corrector.observeDominantPack(0))
+        assertTrue(corrector.observeDominantPack(1))
+    }
+
+    @Test
+    fun `snapshot returns the corrections made under another decided pack, and clears everything`() {
+        val corrector = LanguageSwitchCorrector()
+        corrector.startUnder(0)
+        corrector.recordCorrection("salut", "salute", 0, 6)
+        corrector.recordCorrection("buna", "bună", 10, 14)
+        val snapshot = corrector.snapshot(1)
         assertEquals(2, snapshot.size)
-        assertTrue(corrector.snapshot().isEmpty())
+        assertTrue(snapshot.all { it.madeUnder == 0 })
+        assertTrue(corrector.snapshot(1).isEmpty())
+    }
+
+    @Test
+    fun `a correction made while undecided is not revisited`() {
+        val corrector = LanguageSwitchCorrector()
+        corrector.startUnder(0)
+        corrector.observeDominantPack(-1)
+        corrector.recordCorrection("makw", "make", 0, 4)
+        assertTrue(corrector.observeDominantPack(1))
+        assertTrue(corrector.snapshot(1).isEmpty())
+    }
+
+    @Test
+    fun `a correction made under the pack the verdict lands on is not revisited`() {
+        val corrector = LanguageSwitchCorrector()
+        corrector.startUnder(1)
+        corrector.recordCorrection("thia", "this", 0, 4)
+        corrector.observeDominantPack(0)
+        corrector.recordCorrection("pentr", "pentru", 5, 11)
+        assertTrue(corrector.observeDominantPack(1))
+        assertEquals(listOf("pentr"), corrector.snapshot(1).map { it.typedText })
+    }
+
+    @Test
+    fun `before any verdict is observed, a correction is not revisited`() {
+        val corrector = LanguageSwitchCorrector()
+        corrector.recordCorrection("in", "în", 0, 2)
+        assertTrue(corrector.observeDominantPack(1))
+        assertTrue(corrector.snapshot(1).isEmpty())
     }
 
     @Test
     fun `more than the tracking bound drops the oldest, not the newest`() {
         val corrector = LanguageSwitchCorrector()
+        corrector.startUnder(0)
         for (i in 0 until 25) {
-            corrector.recordCorrection(flag("w$i", "c$i", i, i + 1))
+            corrector.recordCorrection("w$i", "c$i", i, i + 1)
         }
-        val snapshot = corrector.snapshot()
+        val snapshot = corrector.snapshot(1)
         assertEquals(20, snapshot.size)
         assertEquals("w5", snapshot.first().typedText)
         assertEquals("w24", snapshot.last().typedText)

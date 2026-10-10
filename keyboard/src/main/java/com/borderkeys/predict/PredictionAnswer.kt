@@ -4,6 +4,7 @@
 package com.borderkeys.predict
 
 import com.borderkeys.ime.WordStems
+import com.borderkeys.typing.SearchAnswer
 
 /** One request's answer, as the engine gave it, before refused words are dropped. */
 internal class PredictionAnswer(
@@ -49,6 +50,16 @@ internal class PredictionAnswer(
     fun offers(refused: RefusedWords): List<CorrectionOffer> =
         if (refused.isEmpty) corrections else corrections.filterNot { refused.refuses(it.text) }
 
+    /** What the commit decision reads of this answer, with [refused] words dropped. */
+    fun searchAnswer(refused: RefusedWords): SearchAnswer = SearchAnswer(
+        query = query,
+        knownWord = knownWord,
+        knownWordExact = knownWordExact,
+        knownWordIsName = knownWordIsName,
+        corrections = offers(refused),
+        possessive = possessive,
+    )
+
     companion object {
         /** The answer for [query] when no engine is there to ask. */
         fun empty(query: String) = PredictionAnswer(
@@ -68,6 +79,16 @@ internal class AnswerScratch {
     val correctionSlips = BooleanArray(NativePredictor.CORRECTION_SLOTS)
     val correctionConfident = BooleanArray(NativePredictor.CORRECTION_SLOTS)
     val spellingFlags = BooleanArray(NativePredictor.SPELLING_FLAGS)
+
+    /** Empties the slots the engine fills only when it has something for them. */
+    fun clear() {
+        texts.fill(null)
+        corrections.fill(null)
+        correctionNames.fill(false)
+        correctionSlips.fill(false)
+        correctionConfident.fill(true)
+        spellingFlags.fill(false)
+    }
 }
 
 /**
@@ -85,17 +106,43 @@ internal fun answerRequest(
     tapXs: FloatArray? = null,
     tapYs: FloatArray? = null,
 ): PredictionAnswer {
-    scratch.texts.fill(null)
-    scratch.corrections.fill(null)
-    scratch.correctionNames.fill(false)
-    scratch.correctionSlips.fill(false)
-    scratch.correctionConfident.fill(true)
-    scratch.spellingFlags.fill(false)
+    scratch.clear()
     val count = NativePredictor.nativeAnswer(
         handle, composing, previous1, previous2, tapXs, tapYs, scratch.words, scratch.scores,
         scratch.properNoun, scratch.texts, scratch.corrections, scratch.correctionNames,
         scratch.correctionSlips, scratch.correctionConfident, scratch.spellingFlags,
     )
+    return readAnswer(handle, composing, languages, scratch, count)
+}
+
+/**
+ * [answerRequest] for [composing] alone, with no words before it and no taps, as if the pack at
+ * [packIndex] were the language being written; null when that pack is not open and active.
+ */
+internal fun answerRequestAs(
+    handle: Long,
+    packIndex: Int,
+    composing: String,
+    languages: List<String>,
+    scratch: AnswerScratch,
+): PredictionAnswer? {
+    scratch.clear()
+    val count = NativePredictor.nativeAnswerAs(
+        handle, packIndex, composing, scratch.words, scratch.scores, scratch.properNoun,
+        scratch.texts, scratch.corrections, scratch.correctionNames, scratch.correctionSlips,
+        scratch.correctionConfident, scratch.spellingFlags,
+    )
+    return if (count < 0) null else readAnswer(handle, composing, languages, scratch, count)
+}
+
+/** The answer [scratch] holds for [composing], [count] ranked words long. */
+private fun readAnswer(
+    handle: Long,
+    composing: String,
+    languages: List<String>,
+    scratch: AnswerScratch,
+    count: Int,
+): PredictionAnswer {
     val spelling = scratch.texts[NativePredictor.TEXT_KNOWN_SPELLING]
     val knownStems = if (composing.isNotEmpty()) knownStemsOf(handle, composing, languages) else emptySet()
     fun shielded(text: String) =

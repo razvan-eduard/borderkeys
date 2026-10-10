@@ -12,6 +12,7 @@ import com.borderkeys.predict.NewestWins
 import com.borderkeys.predict.PredictionEngine
 import com.borderkeys.predict.RefusedWords
 import com.borderkeys.predict.answerRequest
+import com.borderkeys.predict.answerRequestAs
 
 /**
  * The engine on the host bridge. Each call is queued as the prediction thread would take it, and
@@ -133,14 +134,14 @@ internal class QueuedEngine(
         tasks.addLast(Task(request = false) { onResult(NativePredictor.nativeDominantPack(handle)) })
     }
 
-    override fun candidatesForPack(dominantPack: Int, words: List<String>, onResult: (List<String?>) -> Unit) {
+    override fun answersAs(pack: Int, words: List<String>, onResult: (List<SearchAnswer?>) -> Unit) {
         if (words.isEmpty()) {
             onResult(emptyList())
             return
         }
         tasks.addLast(
             Task(request = false) {
-                onResult(words.map { NativePredictor.nativeCandidateForPack(handle, dominantPack, it) })
+                onResult(words.map { answerRequestAs(handle, pack, it, languages, scratch)?.searchAnswer(refused) })
             },
         )
     }

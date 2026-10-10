@@ -217,9 +217,9 @@ internal class Pipeline private constructor(
     /** The pack the conversation is taken to be in, or -1 while undecided; moved by [commit]. */
     fun dominantPack(): Int = NativePredictor.nativeDominantPack(handle)
 
-    /** What one pack alone would spell [word] as. */
-    fun candidateForPack(packIndex: Int, word: String): String? =
-        NativePredictor.nativeCandidateForPack(handle, packIndex, word)
+    /** The answer about [word] alone as if [packIndex] were the language, or null for no such pack. */
+    fun answerAs(packIndex: Int, word: String): PredictionAnswer? =
+        answerRequestAs(handle, packIndex, word, languages, scratch)
 
     /** Evidence thresholds, as the Languages screen sets them. */
     fun languageLock(minimumEvidence: Float, strict: Boolean = false) =

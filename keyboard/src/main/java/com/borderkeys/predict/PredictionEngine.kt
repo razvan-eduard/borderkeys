@@ -16,6 +16,7 @@ import com.borderkeys.data.entity.UserTrigram
 import com.borderkeys.data.entity.UserWord
 import com.borderkeys.ime.WordStems
 import com.borderkeys.typing.EnginePort
+import com.borderkeys.typing.SearchAnswer
 import com.borderkeys.typing.TouchPatterns
 
 /**
@@ -393,19 +394,16 @@ class PredictionEngine(
         }
     }
 
-    /**
-     * What [dominantPack] alone would spell each of [words] as, in the same order, null where it
-     * has nothing different. Delivered on the UI thread.
-     */
-    override fun candidatesForPack(dominantPack: Int, words: List<String>, onResult: (List<String?>) -> Unit) {
+    /** See [EnginePort.answersAs]; delivered on the UI thread. */
+    override fun answersAs(pack: Int, words: List<String>, onResult: (List<SearchAnswer?>) -> Unit) {
         if (words.isEmpty()) {
             onResult(emptyList())
             return
         }
         worker.post {
             val results = words.map { word ->
-                withHandle<String?>(null) { current ->
-                    NativePredictor.nativeCandidateForPack(current, dominantPack, word)
+                withHandle<SearchAnswer?>(null) { current ->
+                    answerRequestAs(current, pack, word, activeTags, scratch)?.searchAnswer(refused)
                 }
             }
             mainHandler.post { onResult(results) }

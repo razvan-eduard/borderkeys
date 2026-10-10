@@ -729,6 +729,9 @@ void Engine::setActiveLanguages(const char* const* tags, const float* weights, i
             if (dominantPack_ == i) {
                 dominantPack_ = -1;
             }
+            if (answeringPack_ == i) {
+                answeringPack_ = -1;
+            }
         }
     }
     for (int i = 0; tags != nullptr && i < count; ++i) {
@@ -2116,10 +2119,13 @@ int Engine::possessiveFor(const char* word, size_t length, char* out, int outByt
 // How much evidence has to have accumulated before one language answers alone.
 constexpr float kPreferredEvidenceMinimum = 3.0f;
 
-// The language being written, from languageEvidence_ whatever the language lock says: the only
-// active pack, or the one holding kLanguageDominanceShare of at least kPreferredEvidenceMinimum;
-// -1 otherwise.
+// The language being written: the pack answerAs names, else from languageEvidence_ whatever the
+// language lock says: the only active pack, or the one holding kLanguageDominanceShare of at
+// least kPreferredEvidenceMinimum; -1 otherwise.
 int Engine::preferredPack() const {
+    if (answeringPack_ >= 0) {
+        return answeringPack_;
+    }
     int active = -1;
     int activeCount = 0;
     float total = 0.0f;
@@ -2341,38 +2347,17 @@ bool Engine::vouchesForStem(const char* word, size_t length, const char* tag) co
     return entry >= 0 && personalWordEstablished(static_cast<uint32_t>(entry));
 }
 
-int Engine::candidateForPack(int packIndex, const char* word, size_t wordLength, char* out,
-                             int outBytes) {
-    if (!created_ || word == nullptr || wordLength == 0 || out == nullptr || outBytes <= 0) {
-        return 0;
+bool Engine::answerAs(int packIndex) {
+    if (packIndex == -1) {
+        answeringPack_ = -1;
+        return true;
     }
     if (packIndex < 0 || packIndex >= kMaxPacks || !packs_[packIndex].isOpen() ||
         !packs_[packIndex].active) {
-        return 0;
+        return false;
     }
-    arena_.reset();
-    phraseCount_ = 0;
-    uint32_t folded[kMaxComposing];
-    const int foldedLength = foldUtf8(word, wordLength, folded, kMaxComposing);
-    if (foldedLength <= 0) {
-        return 0;
-    }
-    TopK<Candidate> heap;
-    heap.reset(heapStorage_, kMaxCandidates);
-    // Leaves the context, dominantPack_ and languageEvidence_ untouched.
-    editCostCeiling_ = maxEditCostFor(foldedLength);
-    searchPacks(folded, foldedLength, packIndex, heap);
-    const int drained = heap.drainSorted(drainBuffer_, kMaxCandidates);
-    if (drained <= 0) {
-        return 0;
-    }
-    uint32_t textLength = 0;
-    const char* const text = candidateText(drainBuffer_[0], &textLength);
-    if (text == nullptr || textLength == 0 || textLength > static_cast<uint32_t>(outBytes)) {
-        return 0;
-    }
-    std::memcpy(out, text, textLength);
-    return static_cast<int>(textLength);
+    answeringPack_ = packIndex;
+    return true;
 }
 
 int Engine::suggest(const char* composing, size_t composingLength, const char* previous1,
@@ -2430,9 +2415,10 @@ int Engine::suggest(const char* composing, size_t composingLength, const char* p
     hasBestCorrection_ = false;
     hasBestRespelling_ = false;
 
-    // The search is restricted to the detected language, else the preferred one, else, when
-    // strict, the heaviest; otherwise every pack answers.
-    const int restrictTo = (dominantPack_ >= 0)  ? dominantPack_
+    // The search is restricted to the pack answerAs names, else the detected language, else the
+    // preferred one, else, when strict, the heaviest; otherwise every pack answers.
+    const int restrictTo = (answeringPack_ >= 0)  ? answeringPack_
+                           : (dominantPack_ >= 0)  ? dominantPack_
                            : (preferredPack_ >= 0) ? preferredPack_
                                                    : (strictLanguage_ ? heaviestPack() : -1);
     primaryReached_ = false;

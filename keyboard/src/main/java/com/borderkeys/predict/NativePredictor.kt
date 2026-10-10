@@ -89,6 +89,26 @@ internal object NativePredictor {
         outSpellingFlags: BooleanArray,
     ): Int
 
+    /**
+     * [nativeAnswer] for [composing] alone, with no words before it and no taps, as if the pack
+     * at [packIndex] were the language being written; the detected language is left as it is.
+     * Returns -1, filling nothing, when that pack is not open and active.
+     */
+    external fun nativeAnswerAs(
+        handle: Long,
+        packIndex: Int,
+        composing: String,
+        outWords: Array<String?>,
+        outScores: FloatArray,
+        outProperNoun: BooleanArray,
+        outTexts: Array<String?>,
+        outCorrections: Array<String?>,
+        outCorrectionNames: BooleanArray,
+        outCorrectionSlips: BooleanArray,
+        outCorrectionConfident: BooleanArray,
+        outSpellingFlags: BooleanArray,
+    ): Int
+
     /** [nativeAnswer]'s text slot: how the dictionaries spell the typed word. */
     const val TEXT_KNOWN_SPELLING = 0
 
@@ -287,11 +307,6 @@ internal object NativePredictor {
     /** The language tag of [nativeDominantPack]'s pack, or null while the engine is undecided. */
     external fun nativeDominantLanguageTag(handle: Long): String?
 
-    /**
-     * What [packIndex] alone would spell [word] as, or null when that pack has nothing better
-     * than [word].
-     */
-    external fun nativeCandidateForPack(handle: Long, packIndex: Int, word: String): String?
 
     /** The spelling the dictionaries hold for [word], in any case or marks, or null for none. */
     external fun nativeKnownSpelling(handle: Long, word: String): String?
