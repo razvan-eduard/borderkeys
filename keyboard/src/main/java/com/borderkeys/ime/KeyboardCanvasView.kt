@@ -204,6 +204,19 @@ class KeyboardCanvasView(
     /** The text size key [index]'s label is drawn at. */
     internal fun labelTextSizeAt(index: Int): Float = labelTextSize[index]
 
+    /** The bounds of the first key typing [code], or null when none does. */
+    internal fun keyBounds(code: Int): android.graphics.RectF? {
+        for (index in 0 until geometry.keyCount) {
+            if (geometry.keyCode[index] == code) {
+                return android.graphics.RectF(
+                    geometry.keyLeft[index], geometry.keyTop[index],
+                    geometry.keyRight[index], geometry.keyBottom[index],
+                )
+            }
+        }
+        return null
+    }
+
     // ---- touch state ---------------------------------------------------------------------
 
     /** Pointer id to key index. */
@@ -296,6 +309,22 @@ class KeyboardCanvasView(
     private fun isWordCandidate(index: Int): Boolean =
         swipeEnabled && index != NO_KEY && KeyFlags.has(geometry.keyFlags[index], KeyFlags.LETTER) &&
             gesture.count >= MIN_GESTURE_POINTS && lettersPassed() >= 2
+
+    /**
+     * Whether the followed press's path is as long as the distance from key [index]'s centre to
+     * the nearest other letter key's: the shortest path a word of two neighbouring letters takes.
+     */
+    private fun reachesNeighbour(index: Int): Boolean {
+        var nearest = Float.MAX_VALUE
+        for (other in 0 until geometry.keyCount) {
+            if (other != index && KeyFlags.has(geometry.keyFlags[other], KeyFlags.LETTER)) {
+                val dx = geometry.centerX[other] - geometry.centerX[index]
+                val dy = geometry.centerY[other] - geometry.centerY[index]
+                nearest = minOf(nearest, hypot(dx, dy))
+            }
+        }
+        return gesture.pathLength() >= nearest
+    }
 
     /** A press that came back near where it began: longer than a tap, its displacement under half its path. */
     private fun isReturnTrip(x: Float, y: Float, eventTime: Long): Boolean =
@@ -1394,7 +1423,7 @@ class KeyboardCanvasView(
                         } else {
                             captureGestureSamples(event, pointerIndex)
                         }
-                    } else {
+                    } else if (!splitAtLeap(event, pointerIndex, pointerId)) {
                         onPointerMove(pointerId, event.getX(pointerIndex),
                             event.getY(pointerIndex), event, pointerIndex)
                     }
@@ -1408,6 +1437,40 @@ class KeyboardCanvasView(
             MotionEvent.ACTION_CANCEL -> cancelAllPointers()
         }
         return true
+    }
+
+    /**
+     * Splits the followed press when, still within the tap distance, it leaps more than its key's
+     * width between two touch samples, which no finger does: the screen reported a second finger
+     * as this one. The press lifts as a tap where it was and a new one goes down where it leapt
+     * to. Returns whether it split; the event's later samples are left to the next one.
+     */
+    private fun splitAtLeap(event: MotionEvent, pointerIndex: Int, pointerId: Int): Boolean {
+        val key = gestureKey
+        if (pointerId != gesturePointer || gestureActive || gesturePastTap || key == NO_KEY ||
+            alternativesKey != NO_KEY || gesture.count == 0
+        ) {
+            return false
+        }
+        val limit = geometry.keyRight[key] - geometry.keyLeft[key]
+        var lastX = gesture.xs[gesture.count - 1]
+        var lastY = gesture.ys[gesture.count - 1]
+        var lastTime = gesture.times[gesture.count - 1]
+        for (sample in 0..event.historySize) {
+            val current = sample == event.historySize
+            val x = if (current) event.getX(pointerIndex) else event.getHistoricalX(pointerIndex, sample)
+            val y = if (current) event.getY(pointerIndex) else event.getHistoricalY(pointerIndex, sample)
+            val time = if (current) event.eventTime else event.getHistoricalEventTime(sample)
+            if (hypot(x - lastX, y - lastY) > limit) {
+                onPointerUp(pointerId, lastX, lastY, lastTime)
+                onPointerDown(pointerId, x, y, time)
+                return true
+            }
+            lastX = x
+            lastY = y
+            lastTime = time
+        }
+        return false
     }
 
     private fun onPointerDown(pointerId: Int, x: Float, y: Float, eventTime: Long) {
@@ -1625,7 +1688,9 @@ class KeyboardCanvasView(
                 word -> FlickClassifier.direction(x - gestureStartX, y - gestureStartY).takeIf { hasFlick(key, it) } ?: -1
                 else -> flickFor(key, x, y)
             }
-            if (flick < 0 && word && (verdict >= 0 || isReturnTrip(x, y, eventTime))) {
+            if (flick < 0 && word &&
+                (isReturnTrip(x, y, eventTime) || verdict >= 0 && reachesNeighbour(key))
+            ) {
                 // A short swipe over two letter keys with no flick of its own is a word.
                 beginGesture(key)
                 finishGesture(x, y, eventTime)
