@@ -30,6 +30,13 @@ class ThemePaints {
      */
     val appliedHighlight: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val label: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    /**
+     * The theme's label size, in pixels. Views borrow [label] and change its size while they
+     * draw; a size measured from is read here, never from [label].
+     */
+    var labelTextSizePx: Float = 0f
+        private set
     val labelSecondary: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val accent: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
@@ -185,6 +192,7 @@ class ThemePaints {
 
         label.color = theme.textColor
         label.textSize = theme.labelTextSizeSp * newScaledDensity
+        labelTextSizePx = label.textSize
         labelSecondary.color = theme.secondaryTextColor
         labelSecondary.textSize = theme.labelTextSizeSp * newScaledDensity * 0.62f
         hint.color = theme.secondaryTextColor

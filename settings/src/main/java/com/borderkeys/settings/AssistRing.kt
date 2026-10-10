@@ -41,7 +41,7 @@ const val RING_PERIOD_MILLIS = 5000
 @Composable
 fun rememberRingShift(): State<Float> {
     val effects by rememberEffects()
-    if (!effects.assistantColoursAnimated || !ValueAnimator.areAnimatorsEnabled()) {
+    if (!effects.assistantColours || !effects.plays(ValueAnimator.areAnimatorsEnabled())) {
         return remember { mutableFloatStateOf(RING_REST) }
     }
     // No `label` argument: NoHardcodedTextTest reads every `label = "..."` as user-facing text.
@@ -50,7 +50,7 @@ fun rememberRingShift(): State<Float> {
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(RING_PERIOD_MILLIS, easing = LinearEasing),
+            animation = tween((RING_PERIOD_MILLIS / effects.speed).toInt(), easing = LinearEasing),
         ),
     )
     return remember { derivedStateOf { floor(shift.value * RING_STEPS) / RING_STEPS } }
@@ -112,9 +112,16 @@ private const val RING_REST = 0.5f
 /** How many positions the gradient takes along one loop. */
 private const val RING_STEPS = 75f
 
-/** Whether the draft box moves: its switch and Android's animations both on. */
+/** Whether the draft box moves: its switch on, and the animations playing under their mode. */
 @Composable
 fun rememberDraftBoxMotion(): Boolean {
     val effects by rememberEffects()
-    return effects.draftBoxAnimated && ValueAnimator.areAnimatorsEnabled()
+    return effects.draftBoxMotion && effects.plays(ValueAnimator.areAnimatorsEnabled())
+}
+
+/** How fast the animations run, from the Animations screen's dial; 1 the default. */
+@Composable
+fun rememberAnimationSpeed(): Float {
+    val effects by rememberEffects()
+    return effects.speed
 }

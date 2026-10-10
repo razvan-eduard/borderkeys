@@ -136,6 +136,7 @@ import com.borderkeys.settings.openKeyboardPicker
 import com.borderkeys.settings.rememberBorderKeysDefaultState
 import com.borderkeys.settings.RingBackground
 import com.borderkeys.settings.rememberRingShift
+import com.borderkeys.settings.rememberAnimationSpeed
 import com.borderkeys.settings.rememberDraftBoxMotion
 import com.borderkeys.settings.ringBackground
 import com.borderkeys.settings.ringBorder
@@ -461,6 +462,7 @@ fun ProcessTextScreen(
     val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     val ringShift = rememberRingShift()
     val motion = rememberDraftBoxMotion()
+    val speed = rememberAnimationSpeed()
 
     if (!isDefaultKeyboard) {
         Column(modifier = modifier.fillMaxSize()) {
@@ -492,7 +494,7 @@ fun ProcessTextScreen(
     LaunchedEffect(isFocused) {
         if (!motion) return@LaunchedEffect
         focusSettle.snapTo(FOCUS_SETTLE_SCALE)
-        focusSettle.animateTo(1f, tween(FOCUS_SETTLE_MILLIS, easing = FastOutSlowInEasing))
+        focusSettle.animateTo(1f, tween(motionMillis(motion, speed, FOCUS_SETTLE_MILLIS), easing = FastOutSlowInEasing))
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -534,7 +536,7 @@ fun ProcessTextScreen(
                         hideKeyboardAndUnfocus()
                     } else {
                         // Released short of the threshold: eased back to rest.
-                        focusSettle.animateTo(1f, tween(motionMillis(motion, FOCUS_SETTLE_MILLIS), easing = FastOutSlowInEasing))
+                        focusSettle.animateTo(1f, tween(motionMillis(motion, speed, FOCUS_SETTLE_MILLIS), easing = FastOutSlowInEasing))
                     }
                 },
         ) {
@@ -564,6 +566,7 @@ fun ProcessTextScreen(
                         ringShift = ringShift,
                         focused = isFocused,
                         motion = motion,
+                        speed = speed,
                         modifier = Modifier.align(Alignment.Center),
                     )
                 }
@@ -604,7 +607,7 @@ fun ProcessTextScreen(
                         LaunchedEffect(rail.index) {
                             if (versionDirection == 0 || !motion) return@LaunchedEffect
                             versionSlide.snapTo(versionDirection.toFloat())
-                            versionSlide.animateTo(0f, tween(VERSION_TRANSITION_MILLIS, easing = FastOutSlowInEasing))
+                            versionSlide.animateTo(0f, tween(motionMillis(motion, speed, VERSION_TRANSITION_MILLIS), easing = FastOutSlowInEasing))
                         }
 
                         Column {
@@ -745,7 +748,7 @@ fun ProcessTextScreen(
                                                 goTo { composer.back() }
                                             } else {
                                                 // Released short of the threshold: eased back.
-                                                versionSlide.animateTo(0f, tween(motionMillis(motion, VERSION_TRANSITION_MILLIS), easing = FastOutSlowInEasing))
+                                                versionSlide.animateTo(0f, tween(motionMillis(motion, speed, VERSION_TRANSITION_MILLIS), easing = FastOutSlowInEasing))
                                             }
                                         },
                                 )
@@ -763,6 +766,7 @@ fun ProcessTextScreen(
                                 scrollState = scrollState,
                                 isFocused = isFocused,
                                 motion = motion,
+                                speed = speed,
                                 modifier = Modifier
                                     .align(Alignment.CenterEnd)
                                     .width(SCROLLBAR_WIDTH)
@@ -778,7 +782,7 @@ fun ProcessTextScreen(
                                     initialValue = 1f,
                                     targetValue = 0.35f,
                                     animationSpec = infiniteRepeatable(
-                                        animation = tween(WORKING_PULSE_MILLIS, easing = LinearEasing),
+                                        animation = tween((WORKING_PULSE_MILLIS / speed).toInt().coerceAtLeast(1), easing = LinearEasing),
                                         repeatMode = RepeatMode.Reverse,
                                     ),
                                 )
@@ -1334,6 +1338,7 @@ private fun VerticalScrollbar(
     scrollState: ScrollState,
     isFocused: Boolean,
     motion: Boolean,
+    speed: Float,
     modifier: Modifier = Modifier,
 ) {
     // Matching the field's border logic: primary when focused, outline otherwise.
@@ -1344,7 +1349,7 @@ private fun VerticalScrollbar(
         snapshotFlow { scrollState.value }.drop(1).collectLatest {
             visibility.snapTo(1f)
             delay(SCROLLBAR_FADE_DELAY_MILLIS)
-            visibility.animateTo(0f, tween(motionMillis(motion, SCROLLBAR_FADE_MILLIS)))
+            visibility.animateTo(0f, tween(motionMillis(motion, speed, SCROLLBAR_FADE_MILLIS)))
         }
     }
     Canvas(modifier = modifier) {
@@ -1377,7 +1382,13 @@ private fun VerticalScrollbar(
  * Without [motion] it stands still at its full alpha until focus arrives.
  */
 @Composable
-private fun SwipeUpHint(ringShift: State<Float>, focused: Boolean, motion: Boolean, modifier: Modifier = Modifier) {
+private fun SwipeUpHint(
+    ringShift: State<Float>,
+    focused: Boolean,
+    motion: Boolean,
+    speed: Float,
+    modifier: Modifier = Modifier,
+) {
     val strings = LocalStrings.current
     val progress = remember { Animatable(0f) }
     // Hides the text once focus arrives, multiplied with the rise's alpha.
@@ -1398,13 +1409,13 @@ private fun SwipeUpHint(ringShift: State<Float>, focused: Boolean, motion: Boole
                 return@LaunchedEffect
             }
             progress.snapTo(0f)
-            progress.animateTo(1f, tween(SWIPE_HINT_CYCLE_MILLIS, easing = FastOutSlowInEasing))
+            progress.animateTo(1f, tween(motionMillis(motion, speed, SWIPE_HINT_CYCLE_MILLIS), easing = FastOutSlowInEasing))
         }
     }
     // Fades out at once when focus arrives mid-cycle.
     LaunchedEffect(focused) {
         if (focused) {
-            focusFade.animateTo(0f, tween(motionMillis(motion, SWIPE_HINT_FOCUS_FADE_MILLIS)))
+            focusFade.animateTo(0f, tween(motionMillis(motion, speed, SWIPE_HINT_FOCUS_FADE_MILLIS)))
         }
     }
     val baseStyle = MaterialTheme.typography.labelLarge
@@ -1433,7 +1444,9 @@ private fun SwipeUpHint(ringShift: State<Float>, focused: Boolean, motion: Boole
 private const val SWIPE_HINT_STILL_PROGRESS = 0.5f
 
 /** [millis], or no time at all without motion. */
-private fun motionMillis(motion: Boolean, millis: Int): Int = if (motion) millis else 0
+/** [millis] at the animation [speed] while the draft box moves, else none. */
+private fun motionMillis(motion: Boolean, speed: Float, millis: Int): Int =
+    if (motion) (millis / speed).toInt().coerceAtLeast(1) else 0
 
 /** The field's side gap inside the card. */
 private val FIELD_SIDE_GAP = 12.dp

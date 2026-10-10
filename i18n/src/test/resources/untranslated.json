@@ -9,6 +9,6 @@
     "action_escape", "key_escape", "key_control", "key_emoji", "composer_action_show_original",
     "feature_sample_emoji_word", "feature_sample_learned", "particle_effects_builtin_neon",
     "theme_category_neon", "theme_neon", "theme_aurora", "theme_mono", "compose_pending", "key_compose",
-    "key_end", "key_enter", "key_home", "key_insert", "key_shift"
+    "key_end", "key_enter", "key_home", "key_insert", "key_shift", "animations_times"
   ]
 }

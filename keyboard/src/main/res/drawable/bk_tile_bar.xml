@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?android:attr/colorForeground">
+    <!-- A row of three dots above the keys: the quick actions bar. -->
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M3,13L21,13M3,18L21,18" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M5,7a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0zM10.4,7a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0zM15.8,7a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0z" />
+</vector>

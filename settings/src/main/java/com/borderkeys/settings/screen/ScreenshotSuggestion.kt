@@ -45,6 +45,7 @@ import com.borderkeys.settings.SettingRow
 fun ScreenshotSuggestionSetting(
     preferences: KeyboardPreferences,
     update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit,
+    enabled: Boolean = true,
 ) {
     val strings = LocalStrings.current
     val context = LocalContext.current
@@ -81,6 +82,7 @@ fun ScreenshotSuggestionSetting(
         title = strings[Keys.CLIPBOARD_SCREENSHOT_SUGGESTION],
         subtitle = strings[Keys.CLIPBOARD_SCREENSHOT_NOTE],
         checked = preferences.screenshotsRemembered,
+        enabled = enabled,
     ) { on ->
         if (on) {
             choose(KeyboardPreferences.SCREENSHOT_SUGGESTION_BESIDE)
@@ -89,7 +91,7 @@ fun ScreenshotSuggestionSetting(
             scope.launch { DataGraph.clipboard.deleteScreenshots() }
         }
     }
-    Disableable(disabled = !preferences.screenshotsRemembered) {
+    Disableable(disabled = !enabled || !preferences.screenshotsRemembered) {
         FlowRow(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

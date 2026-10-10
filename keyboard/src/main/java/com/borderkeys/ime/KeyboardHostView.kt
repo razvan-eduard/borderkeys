@@ -209,10 +209,13 @@ class KeyboardHostView(
         postInvalidateOnAnimation()
     }
 
+    /** How fast the photo lamp runs, 1 the default. */
+    var animationSpeed: Float = 1f
+
     /** Draws the rising photo over everything, until its time is up. */
     private fun drawPhotoLamp(canvas: android.graphics.Canvas) {
         val run = photoLamp ?: return
-        val progress = (android.os.SystemClock.uptimeMillis() - run.startedAt).toFloat() / PhotoLamp.DURATION_MILLIS
+        val progress = (android.os.SystemClock.uptimeMillis() - run.startedAt) * animationSpeed / PhotoLamp.DURATION_MILLIS
         if (progress >= 1f) {
             photoLamp = null
             onPhotoLampChanged?.invoke()
@@ -444,6 +447,12 @@ class KeyboardHostView(
         if (quickSettings.visibility != visibility) {
             quickSettings.visibility = visibility
             keyboard.visibility = if (show) GONE else VISIBLE
+            if (show) {
+                quickSettings.opened()
+            } else {
+                // The next opening starts in view mode, whatever this one was left in.
+                quickSettings.reset()
+            }
             requestLayout()
         }
     }
@@ -582,6 +591,18 @@ class KeyboardHostView(
         requestLayout()
     }
 
+    /**
+     * The room between a bar along the top or bottom and the keys it meets directly: half a key
+     * gap, so the nearest row sits a full gap from the bar as the rows sit from each other, the
+     * keys insetting only half a gap at their own edge. Zero when a strip or panel is between.
+     */
+    private var barGapPx = 0
+
+    /** Whether a row sits between a top bar and the keys: the strip, the inline row or the revert panel. */
+    private fun rowsAboveKeys(): Boolean =
+        suggestionStrip.visibility != GONE || inlineSuggestions.visibility != GONE ||
+            languageRevertPanel.visibility != GONE
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val contentWidth = (width * widthScale).toInt().coerceAtLeast(1)
@@ -659,6 +680,14 @@ class KeyboardHostView(
                 height += barThickness
             }
         }
+        barGapPx = if (quickActions.visibility != GONE && !sideBar && keyboard.visibility != GONE &&
+            (quickActionsPlacement == PLACEMENT_BELOW_KEYS || !rowsAboveKeys())
+        ) {
+            (paints.keyGapPx / 2f).toInt()
+        } else {
+            0
+        }
+        height += barGapPx
 
         val keyboardHeight = height + navigationBarInset + bottomOffsetPx
         // With reserveScreenAbove, the room above the keys is whatever the window has left.
@@ -712,7 +741,7 @@ class KeyboardHostView(
         var y = keyboardAreaTop
         if (quickActions.visibility != GONE && quickActionsPlacement == PLACEMENT_ABOVE_STRIP) {
             quickActions.layout(left, y, right, y + barThickness)
-            y += barThickness
+            y += barThickness + barGapPx
         }
         if (suggestionStrip.visibility != GONE) {
             suggestionStrip.layout(bodyLeft, y, bodyRight, y + suggestionStrip.measuredHeight)
@@ -763,7 +792,8 @@ class KeyboardHostView(
         }
         if (quickActions.visibility != GONE) {
             when (quickActionsPlacement) {
-                PLACEMENT_BELOW_KEYS -> quickActions.layout(left, y, right, y + barThickness)
+                PLACEMENT_BELOW_KEYS ->
+                    quickActions.layout(left, y + barGapPx, right, y + barGapPx + barThickness)
                 PLACEMENT_LEFT -> quickActions.layout(left, 0, left + barThickness, y)
                 PLACEMENT_RIGHT -> quickActions.layout(right - barThickness, 0, right, y)
                 else -> Unit

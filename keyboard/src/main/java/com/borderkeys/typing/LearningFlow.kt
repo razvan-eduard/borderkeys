@@ -73,6 +73,16 @@ class LearningFlow(
         }
     }
 
+    /** Switched off by hand mid-field: what was gathered in it is dropped, and the gate follows. */
+    override fun onPolicyChanged() {
+        if (session.policy.privateField) {
+            learning.discard()
+        }
+        if (host.viewAttached) {
+            applyGate()
+        }
+    }
+
     /** The gate opens for what the unlock allows; the bucket's stored totals are read now. */
     override fun onUserUnlocked() {
         if (host.viewAttached) {

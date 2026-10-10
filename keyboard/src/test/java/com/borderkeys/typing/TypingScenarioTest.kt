@@ -232,6 +232,55 @@ class TypingScenarioTest {
     }
 
     @Test
+    fun `an e-mail field gets the keys as typed, no swipe, and still a suggestion`() {
+        rig.startField(addressField = true, verbatimField = true)
+        rig.engine.queries.clear()
+        rig.type("teh.")
+        assertEquals("teh.", rig.editor.text)
+        assertTrue(rig.engine.queries.contains("teh"))
+        rig.swipe("the")
+        assertEquals("teh.", rig.editor.text)
+        assertTrue(rig.ring.opened.isEmpty())
+    }
+
+    @Test
+    fun `a number field gets the keys as typed and no swipe`() {
+        rig.startField(verbatimField = true)
+        rig.type("teh ")
+        assertEquals("teh ", rig.editor.text)
+        rig.swipe("the")
+        assertEquals("teh ", rig.editor.text)
+    }
+
+    @Test
+    fun `suggestions switched off by hand take the keys as typed and offer nothing, until switched back on`() {
+        rig.orchestrator.setFeaturesByHand(TypingFeatures.NONE)
+        rig.engine.queries.clear()
+        rig.type("teh ")
+        assertEquals("teh ", rig.editor.text)
+        assertEquals(emptyList<String>(), rig.engine.queries)
+        rig.swipe("the")
+        assertEquals("teh ", rig.editor.text)
+        assertTrue(rig.orchestrator.session.policy.privateField)
+        rig.startField()
+        rig.type("teh ")
+        assertEquals("the switch outlives the field", "teh ", rig.editor.text)
+        rig.orchestrator.setFeaturesByHand(TypingFeatures.ALL)
+        rig.type("teh ")
+        assertEquals("teh the ", rig.editor.text)
+        assertFalse(rig.orchestrator.session.policy.privateField)
+    }
+
+    @Test
+    fun `a web address field is corrected and swiped, with no space after a full stop`() {
+        rig.startField(addressField = true)
+        rig.type("teh.")
+        assertEquals("the.", rig.editor.text)
+        rig.swipe("the")
+        assertEquals("the.the", rig.editor.text)
+    }
+
+    @Test
     fun `a password field is not corrected after a caret move, and its text is never asked about`() {
         rig.startField(passwordField = true, privateField = true)
         rig.engine.queries.clear()
@@ -372,6 +421,33 @@ class TypingScenarioTest {
         assertEquals(ShiftState.ON, rig.host.shiftState)
         rig.type("world")
         assertEquals("Hello. World", rig.editor.text)
+    }
+
+    @Test
+    fun `switched off by hand, a field that asks for sentence capitals gets none, and gets them back when switched on`() {
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(autoCapitalise = true))
+        rig.orchestrator.setFeaturesByHand(TypingFeatures.NONE)
+        rig.startField(inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES)
+        assertEquals(ShiftState.OFF, rig.host.shiftState)
+        rig.type("hello. world")
+        assertEquals("hello. world", rig.editor.text)
+        rig.orchestrator.setFeaturesByHand(TypingFeatures.ALL)
+        rig.type(". again")
+        assertEquals("hello. world. Again", rig.editor.text)
+    }
+
+    @Test
+    fun `an e-mail field that asks for sentence capitals gets none either`() {
+        rig.orchestrator.applySettings(SMOKE_SETTINGS.copy(autoCapitalise = true))
+        rig.startField(
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS or
+                InputType.TYPE_TEXT_FLAG_CAP_SENTENCES,
+            addressField = true,
+            verbatimField = true,
+        )
+        assertEquals(ShiftState.OFF, rig.host.shiftState)
+        rig.type("hello")
+        assertEquals("hello", rig.editor.text)
     }
 
     @Test

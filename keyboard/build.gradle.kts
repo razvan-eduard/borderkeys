@@ -76,6 +76,8 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            // The drawables and the merged resources, for the Robolectric view tests.
+            isIncludeAndroidResources = true
             all {
                 // The host build of the native library and the compiled packs, for the JVM
                 // tests that drive the engine; without them the pipeline tests skip themselves.
@@ -140,6 +142,8 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.test.core)
+    // Views measured, drawn and touched on the JVM.
+    testImplementation(libs.robolectric)
     // org.json is a stub on the JVM; the real one lets the tests parse the layout assets.
     testImplementation(libs.org.json)
 }

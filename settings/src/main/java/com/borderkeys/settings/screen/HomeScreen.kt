@@ -125,7 +125,13 @@ fun HomeScreen(
                 strings[Keys.HOME_QUICK_ACTIONS],
                 strings[Keys.HOME_QUICK_ACTIONS_NOTE],
             ) { open(Screen.QuickActions) }
-            // In both builds; the screen says which of its buttons need a model.
+            if (hasAssistant) {
+                SettingRow(strings[Keys.HOME_TEXT_ASSISTANT], strings[Keys.HOME_SUMMARISE_CORRECT_AND_TRANSLATE_ON_THIS]) {
+                    open(Screen.Assistant)
+                }
+            }
+            // In both builds, after the assistant whose model its buttons need; the screen says
+            // which of them do.
             SettingRow(
                 strings[Keys.SCREEN_DRAFT_BOX],
                 strings[Keys.HOME_DRAFT_BOX],
@@ -134,11 +140,6 @@ fun HomeScreen(
                 strings[Keys.SCREEN_BACKUP],
                 strings[Keys.HOME_BACKUP],
             ) { open(Screen.Backup) }
-            if (hasAssistant) {
-                SettingRow(strings[Keys.HOME_TEXT_ASSISTANT], strings[Keys.HOME_SUMMARISE_CORRECT_AND_TRANSLATE_ON_THIS]) {
-                    open(Screen.Assistant)
-                }
-            }
         }
         SettingsSectionCard(strings[Keys.HOME_APPEARANCE]) {
             SettingRow(strings[Keys.HOME_THEME], strings[Keys.HOME_COLOURS_CORNERS_AND_SPACING_WITH_A]) {

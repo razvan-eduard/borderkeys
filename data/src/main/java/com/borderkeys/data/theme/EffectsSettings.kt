@@ -64,7 +64,10 @@ data class EffectSetting(
  */
 @Serializable
 data class EffectsSettings(
+    /** Read only when [mode] is absent, from a file written before it: off, or as Android says. */
     val enabled: Boolean = true,
+    /** [MODE_OFF], [MODE_SYSTEM] or [MODE_ON]; null in a file written before it existed. */
+    val mode: Int? = null,
     val swipeAccepted: EffectSetting = EffectSetting(style = EffectSetting.DEFAULT_STYLE),
     val learnedWord: EffectSetting = EffectSetting(),
     val autocorrectApplied: EffectSetting = EffectSetting(),
@@ -78,18 +81,25 @@ data class EffectsSettings(
     val assistantColours: Boolean = true,
     /** Whether the draft box moves: version slides, the working pulse, hints and scrollbar fades. */
     val draftBoxMotion: Boolean = true,
+    /** Whether a label too long for its button scrolls past, on the bar and the quick panel. */
+    val scrollingLabels: Boolean = true,
+    /** How fast every animation runs, [DEFAULT_SPEED] the default; clamped on read. */
+    val speed: Float = DEFAULT_SPEED,
 ) {
-    /** Whether a pressed key's highlight fades. */
-    val keyPressAnimated: Boolean get() = enabled && keyPress
+    /** Whether anything moves: never, as Android's own animation setting says, or always. */
+    val animationMode: Int
+        get() = mode ?: if (enabled) MODE_SYSTEM else MODE_OFF
 
-    /** Whether the assistant's colours move. */
-    val assistantColoursAnimated: Boolean get() = enabled && assistantColours
+    /** Whether the page's switches apply at all: the mode is not off. */
+    val anyOn: Boolean
+        get() = animationMode != MODE_OFF
 
-    /** Whether the draft box moves. */
-    val draftBoxAnimated: Boolean get() = enabled && draftBoxMotion
-
-    /** Whether a pasted photo rises out of its chip. */
-    val photoLampAnimated: Boolean get() = enabled && photoLamp
+    /** Whether animations play now, given whether Android's own are [systemAnimated]. */
+    fun plays(systemAnimated: Boolean): Boolean = when (animationMode) {
+        MODE_OFF -> false
+        MODE_ON -> true
+        else -> systemAnimated
+    }
 
     /** The setting for [event]. */
     fun forEvent(event: EffectEvent): EffectSetting = when (event) {
@@ -107,6 +117,20 @@ data class EffectsSettings(
         EffectEvent.AutocorrectApplied -> copy(autocorrectApplied = setting)
         EffectEvent.CorrectionReverted -> copy(correctionReverted = setting)
         EffectEvent.SuggestionPicked -> copy(suggestionPicked = setting)
+    }
+
+    companion object {
+        /** [mode] values: nothing moves; as Android's own animation setting says; always. */
+        const val MODE_OFF = 0
+        const val MODE_SYSTEM = 1
+        const val MODE_ON = 2
+
+        const val DEFAULT_SPEED = 1f
+        const val MIN_SPEED = 0.25f
+        const val MAX_SPEED = 4f
+
+        /** The speed dial's stops between its ends: a quarter apart. */
+        const val SPEED_STEPS = 14
     }
 }
 

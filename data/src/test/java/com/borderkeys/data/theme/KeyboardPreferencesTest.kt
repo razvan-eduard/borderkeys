@@ -12,6 +12,37 @@ import org.junit.Test
 class KeyboardPreferencesTest {
 
     @Test
+    fun animationsFollowTheirModeAndAFileFromBeforeKeepsWhatItHad() {
+        val fresh = EffectsSettings()
+        assertEquals(EffectsSettings.MODE_SYSTEM, fresh.animationMode)
+        assertTrue(fresh.plays(systemAnimated = true))
+        assertFalse(fresh.plays(systemAnimated = false))
+        assertEquals(EffectsSettings.MODE_OFF, EffectsSettings(enabled = false).animationMode)
+        assertFalse(EffectsSettings(enabled = false).plays(systemAnimated = true))
+        val always = EffectsSettings(enabled = false, mode = EffectsSettings.MODE_ON)
+        assertTrue(always.plays(systemAnimated = false))
+        assertTrue(always.anyOn)
+        assertEquals(
+            null,
+            KeyboardPreferences(effects = EffectsSettings(mode = 7)).sanitised().effects.mode,
+        )
+        assertEquals(
+            0.25f,
+            KeyboardPreferences(effects = EffectsSettings(speed = 0.01f)).sanitised().effects.speed,
+            0f,
+        )
+    }
+
+    @Test
+    fun theImageOfferWindowIsOneOfItsSteps() {
+        assertEquals(5, KeyboardPreferences().imageOfferMinutes)
+        assertEquals(0, KeyboardPreferences(imageOfferMinutes = 0).sanitised().imageOfferMinutes)
+        assertEquals(60, KeyboardPreferences(imageOfferMinutes = 60).sanitised().imageOfferMinutes)
+        assertEquals(5, KeyboardPreferences(imageOfferMinutes = 7).sanitised().imageOfferMinutes)
+        assertEquals(5, KeyboardPreferences(imageOfferMinutes = -1).sanitised().imageOfferMinutes)
+    }
+
+    @Test
     fun leavingTheDockNarrowsTheKeyboardOnce() {
         val docked = KeyboardPreferences()
         assertEquals(1f, docked.widthScale, 0f)

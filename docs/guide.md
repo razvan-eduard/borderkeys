@@ -299,7 +299,7 @@ everything, pasting, cutting, selecting a word or all of it, deleting a word, mo
 either end or one character left or right, a word left or right, selecting by the word or to
 either end of the line, deleting the word ahead, Escape and Tab, undo and redo, a new line, the
 date and time in a pattern you choose — plus two edits on the text itself: **Capital** flips the first letter of the
-word at the cursor, **Normalise** capitalises the start of every sentence in the field. Built in, and extendable: a **custom quick action** is
+word at the cursor, **Normalise** capitalises the start of every sentence in the field — and one switch, which reads **Enabled** or **Disabled**: one press turns suggestions, corrections, swipe, learning, the clipboard and the assistant off by hand, every key going in as typed and the strip hidden, and the next press turns them back on. Built in, and extendable: a **custom quick action** is
 a macro of steps you define yourself, pinned onto the bar exactly like a built-in one. The bar
 can sit above the suggestions, below the keys, or down either side; it comes in four sizes, with
 optional labels under the buttons and an outline around each whenever the theme outlines the
@@ -326,12 +326,15 @@ frames the whole keyboard.
 
 ## Effects and animations
 
-**Animations**, on the settings home between Size and position and Effects, is a page of its own: one switch stops every animation
-in the app, and each has its own switch beneath it, the key press highlight, the photo paste
+**Animations**, on the settings home between Size and position and Effects, is a page of its own: one choice at the top, Off,
+Android's setting or On, decides whether any animation plays at all, and each has its own switch beneath it, the key press highlight, the photo paste
 animation (a pasted photo rising out of its chip like a genie from a lamp, off by default), the
-moving colours around the draft box and on the plus build's title, the draft box's motion, and a
+moving colours around the draft box and on the plus build's title, the draft box's motion, the
+scrolling of a label too long for its button on the quick actions bar or the quick panel (it
+waits, slides past, waits and starts over), and a
 card for each moment the keyboard has something to say, a word learned, a correction applied or
 undone, a swipe accepted, a suggestion tapped, with its animation, colour and how often it plays.
+One dial, Animation speed, runs all of them from a quarter to four times the default.
 All of them stop as well when Android's own animations are off.
 
 The Effects screen holds the particles: five surfaces — the keys, the suggestion ring, the suggestion strip, the language-correction

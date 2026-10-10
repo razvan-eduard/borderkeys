@@ -72,6 +72,82 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
 
+        // First: which layouts are enabled, since the keys below draw their accents from the
+        // languages and the globe key shows only with two or more.
+        SettingsSectionCard(strings[Keys.LAYOUT_LAYOUTS_ON_THIS_KEYBOARD]) {
+            SettingRow(strings[Keys.LAYOUT_OWN_LAYOUTS], strings[Keys.LAYOUT_OWN_LAYOUTS_NOTE]) { open(Screen.CustomLayouts) }
+            if (subtypes.isEmpty()) {
+                SettingRow(
+                    title = strings[Keys.LAYOUT_NONE_ENABLED_YET],
+                    subtitle = strings[Keys.LAYOUT_ENABLE_BORDERKEYS_FIRST_THEN_ITS_LAYOUTS],
+                )
+            }
+            val orderedCustom = com.borderkeys.data.theme.CustomLayout
+                .ordered(preferences.customLayouts.map { it.id }, preferences.layoutOrder)
+                .mapNotNull { id -> preferences.customLayouts.firstOrNull { it.id == id } }
+            for (subtype in subtypes) {
+                val own = com.borderkeys.ime.LayoutChoice.layoutIdOf(subtype.extraValue)
+                val chosen = preferences.subtypeLayouts[own]
+                val chosenLandscape = preferences.subtypeLayoutsLandscape[own]
+                SettingRow(
+                    title = subtype.languageTag.ifEmpty { strings[Keys.LAYOUT_LAYOUT] },
+                    subtitle = own,
+                    content = {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(strings[Keys.CUSTOM_LAYOUTS_FOR_SUBTYPE], style = MaterialTheme.typography.bodySmall)
+                            PickerChip(strings[Keys.CUSTOM_LAYOUTS_DEFAULT], chosen == null) {
+                                update { it.copy(subtypeLayouts = it.subtypeLayouts - own) }
+                            }
+                            for (custom in orderedCustom) {
+                                PickerChip(custom.name, chosen == custom.id) {
+                                    update { it.copy(subtypeLayouts = it.subtypeLayouts + (own to custom.id)) }
+                                }
+                            }
+                        }
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(strings[Keys.CUSTOM_LAYOUTS_IN_LANDSCAPE], style = MaterialTheme.typography.bodySmall)
+                            PickerChip(strings[Keys.CUSTOM_LAYOUTS_AS_UPRIGHT], chosenLandscape == null) {
+                                update { it.copy(subtypeLayoutsLandscape = it.subtypeLayoutsLandscape - own) }
+                            }
+                            PickerChip(strings[Keys.CUSTOM_LAYOUTS_DEFAULT], chosenLandscape == own) {
+                                update { it.copy(subtypeLayoutsLandscape = it.subtypeLayoutsLandscape + (own to own)) }
+                            }
+                            for (custom in orderedCustom) {
+                                PickerChip(custom.name, chosenLandscape == custom.id) {
+                                    update {
+                                        it.copy(subtypeLayoutsLandscape = it.subtypeLayoutsLandscape + (own to custom.id))
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
+            }
+            Button(
+                onClick = {
+                    context.startActivity(
+                        Intent("android.settings.INPUT_METHOD_SUBTYPE_SETTINGS")
+                            // The input method's component id, built from the class, not a
+                            // catalogue string.
+                            .putExtra(
+                                android.provider.Settings.EXTRA_INPUT_METHOD_ID,
+                                "${context.packageName}/${com.borderkeys.ime.BorderKeysService::class.java.name}",
+                            )
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                },
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            ) { Text(strings[Keys.LAYOUT_CHOOSE_WHICH_LAYOUTS_ARE_ENABLED]) }
+            Explanation(strings[Keys.LAYOUT_A_LAYOUT_AND_A_LANGUAGE_ARE])
+            Explanation(strings[Keys.LAYOUT_THE_GLOBE_KEY_CYCLES_BETWEEN_THE])
+        }
+
         SettingsSectionCard(strings[Keys.LAYOUT_NUMBERS_AND_SYMBOLS]) {
             SwitchRow(
                 title = strings[Keys.SIZE_NUMBER_ROW],
@@ -149,6 +225,16 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 subtitle = strings[Keys.LAYOUT_LONG_PRESS_HINTS_NOTE],
                 checked = preferences.longPressHints,
             ) { value -> update { it.copy(longPressHints = value) } }
+            // How long a hold is, for the accents and the hints above.
+            SettingLabel(strings[Keys.LAYOUT_LONG_PRESS_DURATION])
+            DefaultableSlider(
+                label = strings.getString(Keys.LAYOUT_LONG_PRESS_MS, preferences.longPressMillis),
+                value = preferences.longPressMillis.toFloat(),
+                range = KeyboardPreferences.MIN_LONG_PRESS_MILLIS.toFloat()..
+                    KeyboardPreferences.MAX_LONG_PRESS_MILLIS.toFloat(),
+                default = KeyboardPreferences.DEFAULT_LONG_PRESS_MILLIS.toFloat(),
+                steps = 10,
+            ) { value -> update { it.copy(longPressMillis = value.toInt()) } }
             SwitchRow(
                 title = strings[Keys.LAYOUT_KEY_POPUP],
                 subtitle = strings[Keys.LAYOUT_KEY_POPUP_NOTE],
@@ -248,17 +334,8 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 ) { value -> update { it.copy(hapticRing = value) } }
             }
 
-            // How long a hold is, and what the enter key does in a field that has its own action.
+            // What the enter key does in a field that has its own action.
             AdvancedSection(strings[Keys.LAYOUT_ADVANCED_KEYS_NOTE]) {
-                SettingLabel(strings[Keys.LAYOUT_LONG_PRESS_DURATION])
-                DefaultableSlider(
-                    label = strings.getString(Keys.LAYOUT_LONG_PRESS_MS, preferences.longPressMillis),
-                    value = preferences.longPressMillis.toFloat(),
-                    range = KeyboardPreferences.MIN_LONG_PRESS_MILLIS.toFloat()..
-                        KeyboardPreferences.MAX_LONG_PRESS_MILLIS.toFloat(),
-                    default = KeyboardPreferences.DEFAULT_LONG_PRESS_MILLIS.toFloat(),
-                    steps = 10,
-                ) { value -> update { it.copy(longPressMillis = value.toInt()) } }
                 SettingLabel(strings[Keys.LAYOUT_ENTER_KEY])
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
@@ -279,80 +356,6 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 }
                 Explanation(strings[Keys.LAYOUT_ENTER_KEY_NOTE])
             }
-        }
-
-        SettingsSectionCard(strings[Keys.LAYOUT_LAYOUTS_ON_THIS_KEYBOARD]) {
-            SettingRow(strings[Keys.LAYOUT_OWN_LAYOUTS], strings[Keys.LAYOUT_OWN_LAYOUTS_NOTE]) { open(Screen.CustomLayouts) }
-            if (subtypes.isEmpty()) {
-                SettingRow(
-                    title = strings[Keys.LAYOUT_NONE_ENABLED_YET],
-                    subtitle = strings[Keys.LAYOUT_ENABLE_BORDERKEYS_FIRST_THEN_ITS_LAYOUTS],
-                )
-            }
-            val orderedCustom = com.borderkeys.data.theme.CustomLayout
-                .ordered(preferences.customLayouts.map { it.id }, preferences.layoutOrder)
-                .mapNotNull { id -> preferences.customLayouts.firstOrNull { it.id == id } }
-            for (subtype in subtypes) {
-                val own = com.borderkeys.ime.LayoutChoice.layoutIdOf(subtype.extraValue)
-                val chosen = preferences.subtypeLayouts[own]
-                val chosenLandscape = preferences.subtypeLayoutsLandscape[own]
-                SettingRow(
-                    title = subtype.languageTag.ifEmpty { strings[Keys.LAYOUT_LAYOUT] },
-                    subtitle = own,
-                    content = {
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(strings[Keys.CUSTOM_LAYOUTS_FOR_SUBTYPE], style = MaterialTheme.typography.bodySmall)
-                            PickerChip(strings[Keys.CUSTOM_LAYOUTS_DEFAULT], chosen == null) {
-                                update { it.copy(subtypeLayouts = it.subtypeLayouts - own) }
-                            }
-                            for (custom in orderedCustom) {
-                                PickerChip(custom.name, chosen == custom.id) {
-                                    update { it.copy(subtypeLayouts = it.subtypeLayouts + (own to custom.id)) }
-                                }
-                            }
-                        }
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(strings[Keys.CUSTOM_LAYOUTS_IN_LANDSCAPE], style = MaterialTheme.typography.bodySmall)
-                            PickerChip(strings[Keys.CUSTOM_LAYOUTS_AS_UPRIGHT], chosenLandscape == null) {
-                                update { it.copy(subtypeLayoutsLandscape = it.subtypeLayoutsLandscape - own) }
-                            }
-                            PickerChip(strings[Keys.CUSTOM_LAYOUTS_DEFAULT], chosenLandscape == own) {
-                                update { it.copy(subtypeLayoutsLandscape = it.subtypeLayoutsLandscape + (own to own)) }
-                            }
-                            for (custom in orderedCustom) {
-                                PickerChip(custom.name, chosenLandscape == custom.id) {
-                                    update {
-                                        it.copy(subtypeLayoutsLandscape = it.subtypeLayoutsLandscape + (own to custom.id))
-                                    }
-                                }
-                            }
-                        }
-                    },
-                )
-            }
-            Button(
-                onClick = {
-                    context.startActivity(
-                        Intent("android.settings.INPUT_METHOD_SUBTYPE_SETTINGS")
-                            // The input method's component id, built from the class, not a
-                            // catalogue string.
-                            .putExtra(
-                                android.provider.Settings.EXTRA_INPUT_METHOD_ID,
-                                "${context.packageName}/${com.borderkeys.ime.BorderKeysService::class.java.name}",
-                            )
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-            ) { Text(strings[Keys.LAYOUT_CHOOSE_WHICH_LAYOUTS_ARE_ENABLED]) }
-            Explanation(strings[Keys.LAYOUT_A_LAYOUT_AND_A_LANGUAGE_ARE])
-            Explanation(strings[Keys.LAYOUT_THE_GLOBE_KEY_CYCLES_BETWEEN_THE])
         }
     }
 }
