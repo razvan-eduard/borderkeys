@@ -30,6 +30,8 @@ class UnlockedPathsTest {
             // clipboard listener, registered by registerClipboardListener.
             "onClipPinToggled", "onClipDeleted", "refreshClipboardPanel", "onClipboardPicked",
             "onClipboardChanged",
+            // Behind the field policy's clipboard gate, which follows FieldPolicy.userUnlocked.
+            "offerClipboardHistory", "rememberScreenshot",
         ),
         "DictionaryLoader.kt" to setOf("load", "reloadPersonal"),
     )

@@ -16,6 +16,7 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.View
 import androidx.core.content.ContextCompat
 import com.borderkeys.data.theme.CustomIcon
@@ -52,8 +53,74 @@ class QuickActionsView(
             resolveIcons()
             resolveLabels()
             layoutButtons()
-            invalidate()
+            refreshAllowed()
         }
+
+    /**
+     * Whether each item may run in the field now; one that may not is drawn dimmed and takes no
+     * tap. Set from the field's policy; [refreshAllowed] re-reads it.
+     */
+    var allowed: (QuickActionBarItem) -> Boolean = { true }
+        set(value) {
+            field = value
+            refreshAllowed()
+        }
+
+    /** Whether each shown button is allowed, by index. */
+    private var allowedNow = BooleanArray(0)
+
+    /** Re-reads [allowed] for every item and redraws. */
+    fun refreshAllowed() {
+        allowedNow = BooleanArray(items.size) { allowed(items[it]) }
+        invalidate()
+    }
+
+    /** Whether the button at [index] may run now; the collapsed opener always may. */
+    private fun allowedAt(index: Int): Boolean =
+        (collapsible && !expanded) || allowedNow.getOrElse(index) { true }
+
+    /** Whether the Enabled/Disabled button reads Disabled; its icon and label follow at once. */
+    var featuresOff: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                resolveIcons()
+                resolveLabels()
+                layoutButtons()
+                invalidate()
+            }
+        }
+
+    /** Whether a label too long for its slot scrolls past rather than being cut. */
+    var labelsScroll: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                resolveLabels()
+                layoutButtons()
+                invalidate()
+            }
+        }
+
+    /** How fast the scrolling labels run, 1 the default. */
+    var animationSpeed: Float = 1f
+
+    /** Whether animations play at all: an [com.borderkeys.data.theme.EffectsSettings] mode. */
+    var animationMode: Int = com.borderkeys.data.theme.EffectsSettings.MODE_SYSTEM
+        set(value) {
+            if (field != value) {
+                field = value
+                resolveLabels()
+                layoutButtons()
+                invalidate()
+            }
+        }
+
+    /** How much of each label hangs past its slot, in pixels; 0 for one that fits or is cut. */
+    private val labelOverflow = FloatArray(MAX_BUTTONS)
+
+    /** When the labels' scroll cycle began, so they all move together. */
+    private var marqueeStartedAt = 0L
 
     /** Whether each button shows its name under its icon; a vertical bar ignores this. */
     var showLabels: Boolean = false
@@ -124,6 +191,33 @@ class QuickActionsView(
     /** One slot's width along the bar. */
     private var slotPx = 0f
 
+    /** How far the buttons are scrolled along the bar, when they do not all fit. */
+    private var scrollPx = 0f
+
+    /** The buttons' total length along the bar. */
+    private var contentPx = 0f
+
+    private val scroller = android.widget.OverScroller(context)
+    private var velocity: android.view.VelocityTracker? = null
+    private var downAlong = 0f
+    private var downScroll = 0f
+
+    /** Whether the finger is scrolling the bar rather than pressing a button. */
+    private var scrolling = false
+
+    /** The furthest the bar scrolls: the content past its length, or nothing. */
+    private fun maxScroll(): Float = max(0f, contentPx - (if (vertical) height else width))
+
+    /**
+     * A button's slot along a bar of [along] with [shown] buttons: an even share while they all
+     * fit, else a fixed width from the Size setting, through the icon, the bar scrolling past its
+     * end.
+     */
+    private fun slotFor(shown: Int, along: Float): Float {
+        val fixed = barIconPx() * FIXED_SLOT_ICONS
+        return if (shown * fixed <= along) along / shown else fixed
+    }
+
     /** Which edge of the bar meets the keyboard; each button's tab is flat against it. */
     var attachedEdge: Int = EDGE_BOTTOM
         set(value) {
@@ -142,6 +236,14 @@ class QuickActionsView(
     /** Button centres, in view coordinates, computed on layout. */
     private val centreX = FloatArray(MAX_BUTTONS)
     private val centreY = FloatArray(MAX_BUTTONS)
+
+    /** Button [index]'s centre on the view, the scroll applied. */
+    internal fun buttonCentre(index: Int): android.graphics.PointF =
+        if (vertical) {
+            android.graphics.PointF(centreX[index], centreY[index] - scrollPx)
+        } else {
+            android.graphics.PointF(centreX[index] - scrollPx, centreY[index])
+        }
     private var buttonSizePx = 0
 
     private var pressedIndex = -1
@@ -174,8 +276,12 @@ class QuickActionsView(
      * against [attachedEdge]. The radii run top-left, top-right, bottom-right, bottom-left, two
      * floats each.
      */
+    /** The keys' corner radius, no more than half of [rect]'s shorter side. */
+    private fun tabCornerRadius(rect: android.graphics.RectF): Float =
+        paints.keyCornerRadiusPx.coerceAtMost(minOf(rect.width(), rect.height()) / 2f)
+
     private fun tabPath(rect: android.graphics.RectF): android.graphics.Path {
-        val radius = paints.keyCornerRadiusPx.coerceAtMost(minOf(rect.width(), rect.height()) / 2f)
+        val radius = tabCornerRadius(rect)
         java.util.Arrays.fill(tabRadii, radius)
         val square = when (attachedEdge) {
             EDGE_TOP -> intArrayOf(0, 1, 2, 3)
@@ -264,7 +370,11 @@ class QuickActionsView(
     }
 
     private fun labelFor(item: QuickActionBarItem): String = when (item) {
-        is QuickActionBarItem.Builtin -> strings[labelKey(item.action)]
+        is QuickActionBarItem.Builtin -> when {
+            item.action != QuickAction.FEATURES_SWITCH -> strings[labelKey(item.action)]
+            featuresOff -> strings[Keys.ACTION_DISABLED]
+            else -> strings[Keys.ACTION_ENABLED]
+        }
         is QuickActionBarItem.Custom -> item.action.name
     }
 
@@ -304,6 +414,7 @@ class QuickActionsView(
         QuickAction.DELETE_WORD_FORWARD -> Keys.ACTION_DELETE_WORD_FORWARD
         QuickAction.ESCAPE -> Keys.ACTION_ESCAPE
         QuickAction.TAB -> Keys.ACTION_TAB
+        QuickAction.FEATURES_SWITCH -> Keys.ACTION_FEATURES_SWITCH
     }
 
     /** Whether labels are drawn: on, on a horizontal bar. */
@@ -344,6 +455,8 @@ class QuickActionsView(
         QuickAction.DELETE_WORD_FORWARD -> R.drawable.bk_action_delete_word_forward
         QuickAction.ESCAPE -> R.drawable.bk_action_escape
         QuickAction.TAB -> R.drawable.bk_action_tab
+        QuickAction.FEATURES_SWITCH ->
+            if (featuresOff) R.drawable.bk_action_features_off else R.drawable.bk_action_features_on
     }
 
     override fun getAccessibilityClassName(): CharSequence = QuickActionsView::class.java.name
@@ -383,33 +496,48 @@ class QuickActionsView(
     private fun barIconPx(): Float = barBasePx() * ICON_FRACTION
 
     /**
-     * The tallest label's height, with each label wrapped to its slot of [widthPx] in at most
-     * [LABEL_MAX_LINES] lines; builds [labelLayouts] and [labelLayoutWidth].
+     * The label line's height, each label on one line at its nominal size in its slot of a bar
+     * [widthPx] long; a label longer than the slot is cut with an ellipsis. Builds [labelLayouts]
+     * and [labelLayoutWidth].
      */
     private fun labelBandPx(widthPx: Int): Float {
         val shown = shownCount()
         // Bold, sized from the nominal thickness.
         labelPaint.textSize = barBasePx() * LABEL_TEXT_FRACTION
         labelPaint.typeface = Typeface.create(paints.labelSecondary.typeface, Typeface.BOLD)
-        val oneLine = labelPaint.fontMetrics.let { it.descent - it.ascent }
-        var tallest = oneLine
         if (shown > 0 && widthPx > 0) {
-            val step = widthPx.toFloat() / shown
+            val step = slotFor(shown, widthPx.toFloat())
             labelLayoutWidth = (step * LABEL_WIDTH_FRACTION).toInt().coerceAtLeast(1)
+            val scrolls = labelsScroll && AnimationGate.plays(animationMode)
+            var anyScrolls = false
             for (index in 0 until shown) {
+                labelOverflow[index] = 0f
                 labelLayouts[index] = labels[index]?.let { text ->
-                    StaticLayout.Builder.obtain(text, 0, text.length, labelPaint, labelLayoutWidth)
-                        .setAlignment(Layout.Alignment.ALIGN_CENTER)
-                        .setMaxLines(LABEL_MAX_LINES)
-                        .setEllipsize(TextUtils.TruncateAt.END)
-                        .setIncludePad(false)
-                        .setLineSpacing(0f, LABEL_LINE_SPACING_MULTIPLIER)
-                        .build()
+                    val textWidth = labelPaint.measureText(text)
+                    if (scrolls && textWidth > labelLayoutWidth) {
+                        // Laid out whole, to be scrolled past its slot.
+                        labelOverflow[index] = textWidth - labelLayoutWidth
+                        anyScrolls = true
+                        StaticLayout.Builder.obtain(text, 0, text.length, labelPaint, kotlin.math.ceil(textWidth).toInt())
+                            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                            .setMaxLines(1)
+                            .setIncludePad(false)
+                            .build()
+                    } else {
+                        StaticLayout.Builder.obtain(text, 0, text.length, labelPaint, labelLayoutWidth)
+                            .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                            .setMaxLines(1)
+                            .setEllipsize(TextUtils.TruncateAt.END)
+                            .setIncludePad(false)
+                            .build()
+                    }
                 }
-                tallest = max(tallest, labelLayouts[index]?.height?.toFloat() ?: oneLine)
+            }
+            if (anyScrolls) {
+                marqueeStartedAt = android.os.SystemClock.uptimeMillis()
             }
         }
-        return tallest
+        return labelPaint.fontMetrics.let { it.descent - it.ascent }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -423,8 +551,10 @@ class QuickActionsView(
             return
         }
         val along = if (vertical) height else width
-        val step = along.toFloat() / shown
+        val step = slotFor(shown, along.toFloat())
         slotPx = step
+        contentPx = step * shown
+        scrollPx = scrollPx.coerceIn(0f, maxScroll())
         // The icon sits a margin from the free edge; the labels are re-wrapped for the real width.
         val icon = barIconPx()
         buttonSizePx = icon.toInt().coerceAtLeast(1)
@@ -462,8 +592,12 @@ class QuickActionsView(
             if (drawsBackground) {
                 paints.backgroundPainter.draw(canvas, width.toFloat(), height.toFloat())
             }
+            // The buttons are laid out along the content and drawn shifted by the scroll.
+            canvas.save()
+            if (vertical) canvas.translate(0f, -scrollPx) else canvas.translate(-scrollPx, 0f)
             val shown = shownCount()
             val half = buttonSizePx / 2
+            var anyLabelScrolling = false
             for (index in 0 until shown) {
                 val cx = centreX[index].toInt()
                 val cy = centreY[index].toInt()
@@ -478,33 +612,62 @@ class QuickActionsView(
                 }
                 val collapsedOpener = collapsible && !expanded
                 val icon = if (collapsedOpener) moreIcon else icons[index]
+                val dim = if (allowedAt(index)) 255 else DISALLOWED_ALPHA
                 if (icon != null) {
                     icon.setBounds(cx - half, cy - half, cx + half, cy + half)
                     icon.setTint(paints.label.color)
+                    icon.alpha = dim
                     icon.draw(canvas)
                 }
-                // A dot marks a custom action, except on the collapsed opener.
+                // A dot marks a custom action, except on the collapsed opener: at the centre of
+                // the tab's rounded corner, the same distance from both edges on the diagonal.
                 if (!collapsedOpener && items.getOrNull(index) is QuickActionBarItem.Custom) {
-                    canvas.drawCircle(
-                        (cx + half).toFloat(), (cy - half).toFloat(),
-                        CUSTOM_DOT_RADIUS_FRACTION * buttonSizePx, paints.accent,
-                    )
+                    pressedBounds(index, pressedBoundsScratch)
+                    val corner = tabCornerRadius(pressedBoundsScratch)
+                    val dotX = if (attachedEdge == EDGE_RIGHT) pressedBoundsScratch.left + corner else pressedBoundsScratch.right - corner
+                    val dotY = if (attachedEdge == EDGE_TOP) pressedBoundsScratch.bottom - corner else pressedBoundsScratch.top + corner
+                    canvas.drawCircle(dotX, dotY, CUSTOM_DOT_RADIUS_FRACTION * buttonSizePx, paints.accent)
                 }
                 // No label under the collapsed opener.
                 if (labelsActive() && !collapsedOpener) {
                     val labelLayout = labelLayouts[index]
                     if (labelLayout != null) {
                         labelPaint.color = paints.labelSecondary.color
+                        labelPaint.alpha = android.graphics.Color.alpha(paints.labelSecondary.color) * dim / 255
+                        val left = centreX[index] - labelLayoutWidth / 2f
                         canvas.save()
-                        canvas.translate(centreX[index] - labelLayoutWidth / 2f, labelTopY)
+                        val overflow = labelOverflow[index]
+                        if (overflow > 0f) {
+                            // Scrolled past its slot: held, slid, held, and over again.
+                            val offset = LabelMarquee.offsetPx(
+                                android.os.SystemClock.uptimeMillis() - marqueeStartedAt, overflow,
+                                resources.displayMetrics.density * LabelMarquee.PACE_DP_PER_SECOND, animationSpeed,
+                            )
+                            canvas.clipRect(left, labelTopY, left + labelLayoutWidth, labelTopY + labelLayout.height)
+                            canvas.translate(left - offset, labelTopY)
+                            anyLabelScrolling = true
+                        } else {
+                            canvas.translate(left, labelTopY)
+                        }
                         labelLayout.draw(canvas)
                         canvas.restore()
                     }
                 }
             }
             particles.draw(canvas, paints.particlePaint)
+            canvas.restore()
+            if (anyLabelScrolling) {
+                postInvalidateOnAnimation()
+            }
         } finally {
             Trace.endSection()
+        }
+    }
+
+    override fun computeScroll() {
+        if (scroller.computeScrollOffset()) {
+            scrollPx = scroller.currX.toFloat().coerceIn(0f, maxScroll())
+            postInvalidateOnAnimation()
         }
     }
 
@@ -513,12 +676,11 @@ class QuickActionsView(
         if (shown <= 0) {
             return -1
         }
-        val along = if (vertical) y else x
-        val extent = if (vertical) height else width
-        if (extent <= 0) {
+        val along = (if (vertical) y else x) + scrollPx
+        if (slotPx <= 0f || along < 0f) {
             return -1
         }
-        val index = (along / (extent.toFloat() / shown)).toInt()
+        val index = (along / slotPx).toInt()
         return if (index in 0 until shown) index else -1
     }
 
@@ -528,17 +690,39 @@ class QuickActionsView(
         if (!isEnabled) {
             return false
         }
+        val along = if (vertical) event.y else event.x
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                pressedIndex = buttonAt(event.x, event.y)
+                // A finger stops a fling where it is.
+                scroller.forceFinished(true)
+                scrolling = false
+                downAlong = along
+                downScroll = scrollPx
+                velocity?.recycle()
+                velocity = android.view.VelocityTracker.obtain().also { it.addMovement(event) }
+                pressedIndex = buttonAt(event.x, event.y).takeIf { it < 0 || allowedAt(it) } ?: -1
                 if (pressedIndex >= 0) {
                     pressButton(pressedIndex)
                 }
                 invalidate()
-                return pressedIndex >= 0
+                return pressedIndex >= 0 || maxScroll() > 0f
             }
             MotionEvent.ACTION_MOVE -> {
-                val index = buttonAt(event.x, event.y)
+                velocity?.addMovement(event)
+                if (maxScroll() > 0f) {
+                    if (!scrolling && kotlin.math.abs(along - downAlong) > ViewConfiguration.get(context).scaledTouchSlop) {
+                        // Past the slop the finger is scrolling the bar, not pressing a button.
+                        scrolling = true
+                        pressedIndex = -1
+                        particles.release()
+                    }
+                    if (scrolling) {
+                        scrollPx = (downScroll - (along - downAlong)).coerceIn(0f, maxScroll())
+                        invalidate()
+                        return true
+                    }
+                }
+                val index = buttonAt(event.x, event.y).takeIf { it < 0 || allowedAt(it) } ?: -1
                 if (index != pressedIndex) {
                     pressedIndex = index
                     // The highlight follows the finger onto another button; so do the particles.
@@ -548,7 +732,23 @@ class QuickActionsView(
                 return true
             }
             MotionEvent.ACTION_UP -> {
-                val index = buttonAt(event.x, event.y)
+                if (scrolling) {
+                    // The bar coasts on with the finger's speed and stops at its ends.
+                    scrolling = false
+                    velocity?.let { tracker ->
+                        tracker.addMovement(event)
+                        tracker.computeCurrentVelocity(1000)
+                        val speed = if (vertical) tracker.yVelocity else tracker.xVelocity
+                        scroller.fling(scrollPx.toInt(), 0, (-speed).toInt(), 0, 0, maxScroll().toInt(), 0, 0)
+                        tracker.recycle()
+                    }
+                    velocity = null
+                    postInvalidateOnAnimation()
+                    return true
+                }
+                velocity?.recycle()
+                velocity = null
+                val index = buttonAt(event.x, event.y).takeIf { it < 0 || allowedAt(it) } ?: -1
                 pressedIndex = -1
                 particles.release()
                 if (index < 0) {
@@ -576,6 +776,9 @@ class QuickActionsView(
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
+                scrolling = false
+                velocity?.recycle()
+                velocity = null
                 pressedIndex = -1
                 particles.release()
                 invalidate()
@@ -635,11 +838,11 @@ class QuickActionsView(
         const val EDGE_LEFT = 2
         const val EDGE_RIGHT = 3
 
-        /** The most lines a label wraps to before it is ellipsised. */
-        const val LABEL_MAX_LINES = 2
+        /** A button's fixed slot, in icons, once the buttons no longer fit and the bar scrolls. */
+        const val FIXED_SLOT_ICONS = 2.2f
 
-        /** The label's line spacing multiplier. */
-        const val LABEL_LINE_SPACING_MULTIPLIER = 0.9f
+        /** The icon and label alpha of a button the field does not allow. */
+        const val DISALLOWED_ALPHA = 80
 
         /** The gap between the icon and its label, as a share of the icon's size. */
         const val ICON_LABEL_GAP_FRACTION = 0.12f

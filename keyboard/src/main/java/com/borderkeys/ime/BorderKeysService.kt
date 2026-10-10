@@ -36,6 +36,8 @@ import com.borderkeys.data.theme.EffectEvent
 import com.borderkeys.data.theme.EffectFrequency
 import com.borderkeys.effects.EffectStyle
 import com.borderkeys.data.theme.QuickAction
+import com.borderkeys.data.theme.QuickTile
+import com.borderkeys.data.theme.Feature
 import com.borderkeys.data.ClipboardExclusions
 import java.time.ZonedDateTime
 import com.borderkeys.data.theme.TimestampPattern
@@ -62,6 +64,7 @@ import com.borderkeys.typing.LearningBatch
 import com.borderkeys.typing.LearningStore
 import com.borderkeys.typing.RingUi
 import com.borderkeys.typing.TypingClock
+import com.borderkeys.typing.TypingFeatures
 import com.borderkeys.typing.TypingHost
 import com.borderkeys.typing.TypingOrchestrator
 import kotlinx.coroutines.CoroutineScope
@@ -222,6 +225,9 @@ class BorderKeysService :
     private val screenshotFolder by lazy { ScreenshotFolder(contentResolver) }
     private var newestScreenshot: ScreenshotFolder.Shot? = null
     private var pastedScreenshot: android.net.Uri? = null
+
+    /** The screenshot whose chip was showing when the keyboard closed with Offer it only once on. */
+    private var withheldScreenshot: android.net.Uri? = null
 
     /** Re-reads the screenshot folder when it changes while the keyboard shows. */
     private val screenshotObserver = object : android.database.ContentObserver(
@@ -844,7 +850,8 @@ class BorderKeysService :
             applyHaptics(view, newPreferences)
             view.keyboard.soundEnabled = newPreferences.keySound
             view.keyboard.keyPopupEnabled = newPreferences.keyPopup
-            view.keyboard.pressAnimated = newPreferences.effects.keyPressAnimated
+            view.keyboard.pressAnimated = newPreferences.effects.keyPress
+            applyAnimationPace(view, newPreferences)
             view.keyboard.spaceCursorEnabled = newPreferences.spaceCursorControl
             view.keyboard.holdHintsEnabled = newPreferences.longPressHints
             view.keyboard.longPressDelayMillis = newPreferences.longPressMillis.toLong()
@@ -867,10 +874,12 @@ class BorderKeysService :
                 closeDebugRing()
             }
             syncDebugRing()
-            view.keyboard.swipeEnabled =
-                newPreferences.swipeEnabled && orchestrator.session.policy.suggestionsAllowed
-            view.suggestionStripEnabled = newPreferences.showSuggestionStrip
+            view.keyboard.swipeEnabled = orchestrator.session.policy.on(Feature.SWIPE, newPreferences)
+            view.suggestionStripEnabled = orchestrator.session.policy.on(Feature.STRIP, newPreferences)
             showPage(page)
+            if (view.quickSettingsVisible) {
+                pushQuickSettingsState(view)
+            }
             view.fullWidthBackground = resolvedTheme.fullWidthBackground
             view.navigationBarBackground = resolvedTheme.navigationBarBackground
             view.opacity = resolvedTheme.opacity
@@ -950,7 +959,8 @@ class BorderKeysService :
         view.keyboard.swipeEnabled = preferences.swipeEnabled
         view.keyboard.soundEnabled = preferences.keySound
         view.keyboard.keyPopupEnabled = preferences.keyPopup
-        view.keyboard.pressAnimated = preferences.effects.keyPressAnimated
+        view.keyboard.pressAnimated = preferences.effects.keyPress
+        applyAnimationPace(view, preferences)
         view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
         view.keyboard.holdHintsEnabled = preferences.longPressHints
         view.keyboard.longPressDelayMillis = preferences.longPressMillis.toLong()
@@ -1005,6 +1015,7 @@ class BorderKeysService :
                 learningEnabled = preferences.learningEnabled,
                 heatmapEnabled = preferences.heatmapEnabled,
                 userUnlocked = unlocked,
+                verbatimField = info != null && AddressField.isVerbatim(info.inputType),
             ),
             addressField = info != null && AddressField.isAddress(info.inputType),
             terminalField = TerminalField.isTerminal(info, preferences.terminalPackages),
@@ -1030,20 +1041,24 @@ class BorderKeysService :
         engine.setPhraseSuggestions(preferences.phraseSuggestions)
 
         privateReveal = false
+        // The new field's policy as the orchestrator will hold it, the hand switch applied.
+        val policy = session.policy.byHand(orchestrator.featuresByHand)
         host?.let { view ->
-            view.suggestionStrip.privateMode = session.policy.privateField
+            view.suggestionStrip.privateMode = policy.fieldIsPrivate
             view.suggestionStrip.privateReveal = false
             view.suggestionStrip.privateText = null
             view.suggestionStrip.clear()
             applyHaptics(view, preferences)
-            view.keyboard.swipeEnabled = preferences.swipeEnabled && session.policy.suggestionsAllowed
-            view.suggestionStripEnabled = preferences.showSuggestionStrip
+            view.keyboard.swipeEnabled = policy.on(Feature.SWIPE, preferences)
+            view.suggestionStripEnabled = policy.on(Feature.STRIP, preferences)
             view.keyboard.soundEnabled = preferences.keySound
             view.keyboard.spaceCursorEnabled = preferences.spaceCursorControl
             applyParticleSettings(view, particleEffects)
         }
         showPage(pageFor(info))
         orchestrator.startField(session)
+        // The bar follows each field, so a field it was hidden or dimmed in never carries over.
+        host?.let(::applyQuickActions)
         // Posted, to run after the first layout.
         host?.post { syncDebugRing() }
 
@@ -1063,6 +1078,9 @@ class BorderKeysService :
             preferences.clipboardSuggestionOnce,
             currentInputEditorInfo?.packageName,
         )
+        if (preferences.clipboardSuggestionOnce && host?.suggestionStrip?.screenshotChip != null) {
+            withheldScreenshot = newestScreenshot?.uri
+        }
         unregisterClipboardListener()
         unwatchScreenshots()
         saveLanguageEvidence()
@@ -1931,18 +1949,88 @@ class BorderKeysService :
         view.showQuickSettings(opening)
     }
 
+    /** The animation mode, speed and the scrolling-labels switch, to every view that animates. */
+    private fun applyAnimationPace(view: KeyboardHostView, preferences: KeyboardPreferences) {
+        val effects = preferences.effects
+        view.animationSpeed = effects.speed
+        view.keyboard.animationSpeed = effects.speed
+        view.keyboard.animationMode = effects.animationMode
+        view.effects.speed = effects.speed
+        view.quickActions.animationSpeed = effects.speed
+        view.quickActions.animationMode = effects.animationMode
+        view.quickActions.labelsScroll = effects.scrollingLabels
+        view.quickSettings.animationSpeed = effects.speed
+        view.quickSettings.animationMode = effects.animationMode
+        view.quickSettings.labelsScroll = effects.scrollingLabels
+    }
+
+    /** The panel's tiles from the preferences, each with whether it is on or the current position. */
     private fun pushQuickSettingsState(view: KeyboardHostView) {
+        val tiles = QuickTile.fromIds(preferences.quickTiles)
         view.quickSettings.setState(
-            placement = when (preferences.positionMode) {
-                KeyboardPreferences.MODE_ONE_HANDED_LEFT -> QuickSettingsView.Placement.LEFT
-                KeyboardPreferences.MODE_ONE_HANDED_RIGHT -> QuickSettingsView.Placement.RIGHT
-                KeyboardPreferences.MODE_FLOATING -> QuickSettingsView.Placement.FLOATING
-                else -> QuickSettingsView.Placement.DOCKED
-            },
-            numberRow = preferences.numberRow,
+            tiles = tiles.map { QuickSettingsView.TileState(it, tileOn(it)) },
+            available = QuickTile.entries.filterNot { it in tiles },
             fullSettings = unlocked,
+            alignRight = preferences.positionMode != KeyboardPreferences.MODE_ONE_HANDED_LEFT,
         )
     }
+
+    /** Whether [tile] is drawn on: its switch set, or its position the current one. */
+    private fun tileOn(tile: QuickTile): Boolean = when (tile) {
+        QuickTile.RESIZE -> false
+        QuickTile.DOCK -> preferences.positionMode == KeyboardPreferences.MODE_DOCKED
+        QuickTile.LEFT -> preferences.positionMode == KeyboardPreferences.MODE_ONE_HANDED_LEFT
+        QuickTile.RIGHT -> preferences.positionMode == KeyboardPreferences.MODE_ONE_HANDED_RIGHT
+        QuickTile.FLOAT -> preferences.positionMode == KeyboardPreferences.MODE_FLOATING
+        QuickTile.NUMBER_ROW -> preferences.numberRow
+        QuickTile.SUGGESTION_STRIP -> preferences.showSuggestionStrip
+        QuickTile.SWIPE -> preferences.swipeEnabled
+        QuickTile.AUTOCORRECT -> preferences.autoCorrectOnSpace
+        QuickTile.LEARNING -> preferences.learningEnabled
+        QuickTile.CLIPBOARD_OFFER -> preferences.clipboardSuggestion
+        QuickTile.KEY_SOUND -> preferences.keySound
+        QuickTile.VIBRATION -> preferences.hapticFeedback
+        QuickTile.MODIFIER_ROW -> preferences.modifierRow
+        QuickTile.EMOJI_KEY -> preferences.emojiKey
+        QuickTile.GLOBE_KEY -> preferences.languageKey
+        QuickTile.KEY_POPUP -> preferences.keyPopup
+        QuickTile.RADIAL_MENU -> preferences.radialMenuEnabled
+        QuickTile.QUICK_ACTIONS -> preferences.quickActionsEnabled
+        QuickTile.NUMERIC_KEYPAD -> preferences.numericKeypad
+        QuickTile.FEATURES -> !orchestrator.session.policy.offByHand
+    }
+
+    override fun onTileTapped(tile: QuickTile) {
+        when (tile) {
+            QuickTile.RESIZE -> startResize()
+            QuickTile.DOCK -> changePlacement(KeyboardPreferences.MODE_DOCKED)
+            QuickTile.LEFT -> changePlacement(KeyboardPreferences.MODE_ONE_HANDED_LEFT)
+            QuickTile.RIGHT -> changePlacement(KeyboardPreferences.MODE_ONE_HANDED_RIGHT)
+            QuickTile.FLOAT -> changePlacement(KeyboardPreferences.MODE_FLOATING)
+            QuickTile.NUMBER_ROW -> updatePreferences { it.copy(numberRow = !it.numberRow) }
+            QuickTile.SUGGESTION_STRIP -> updatePreferences { it.copy(showSuggestionStrip = !it.showSuggestionStrip) }
+            QuickTile.SWIPE -> updatePreferences { it.copy(swipeEnabled = !it.swipeEnabled) }
+            QuickTile.AUTOCORRECT -> updatePreferences { it.copy(autoCorrectOnSpace = !it.autoCorrectOnSpace) }
+            QuickTile.LEARNING -> updatePreferences { it.copy(learningEnabled = !it.learningEnabled) }
+            QuickTile.CLIPBOARD_OFFER -> updatePreferences { it.copy(clipboardSuggestion = !it.clipboardSuggestion) }
+            QuickTile.KEY_SOUND -> updatePreferences { it.copy(keySound = !it.keySound) }
+            QuickTile.VIBRATION -> updatePreferences { it.copy(hapticFeedback = !it.hapticFeedback) }
+            QuickTile.MODIFIER_ROW -> updatePreferences { it.copy(modifierRow = !it.modifierRow) }
+            QuickTile.EMOJI_KEY -> updatePreferences { it.copy(emojiKey = !it.emojiKey) }
+            QuickTile.GLOBE_KEY -> updatePreferences { it.copy(languageKey = !it.languageKey) }
+            QuickTile.KEY_POPUP -> updatePreferences { it.copy(keyPopup = !it.keyPopup) }
+            QuickTile.RADIAL_MENU -> updatePreferences { it.copy(radialMenuEnabled = !it.radialMenuEnabled) }
+            QuickTile.QUICK_ACTIONS -> updatePreferences { it.copy(quickActionsEnabled = !it.quickActionsEnabled) }
+            QuickTile.NUMERIC_KEYPAD -> updatePreferences { it.copy(numericKeypad = !it.numericKeypad) }
+            QuickTile.FEATURES -> {
+                toggleFeatures()
+                host?.let(::pushQuickSettingsState)
+            }
+        }
+    }
+
+    override fun onTilesArranged(tiles: List<QuickTile>) =
+        updatePreferences { it.copy(quickTiles = tiles.map { tile -> tile.id }) }
 
     /**
      * Writes the preferences to the store the settings application uses; before the first
@@ -1960,7 +2048,8 @@ class BorderKeysService :
         }
     }
 
-    override fun onStartResize() {
+    /** Resize was tapped: the panel closes and the handles go on the keyboard. */
+    private fun startResize() {
         val view = host ?: return
         view.showQuickSettings(false)
         draggedHeight = activePlacement().heightScale
@@ -1976,20 +2065,12 @@ class BorderKeysService :
         commitResize()
     }
 
-    override fun onPlacementChanged(placement: QuickSettingsView.Placement) {
-        val mode = when (placement) {
-            QuickSettingsView.Placement.LEFT -> KeyboardPreferences.MODE_ONE_HANDED_LEFT
-            QuickSettingsView.Placement.RIGHT -> KeyboardPreferences.MODE_ONE_HANDED_RIGHT
-            QuickSettingsView.Placement.FLOATING -> KeyboardPreferences.MODE_FLOATING
-            QuickSettingsView.Placement.DOCKED -> KeyboardPreferences.MODE_DOCKED
-        }
+    /** A position tile was tapped: [mode] is one of the KeyboardPreferences position modes. */
+    private fun changePlacement(mode: Int) {
         // withPositionMode also narrows a keyboard leaving the dock for the first time.
         val landscape = isLandscape()
         updatePreferences { it.withPositionMode(mode, landscape) }
     }
-
-    override fun onNumberRowChanged(enabled: Boolean) =
-        updatePreferences { it.copy(numberRow = enabled) }
 
     override fun onOpenFullSettings() {
         host?.showQuickSettings(false)
@@ -2127,7 +2208,7 @@ class BorderKeysService :
     /** Plays [event]'s effect for [word], per its style, frequency and colour settings. */
     private fun playEffect(event: EffectEvent, word: String) {
         val settings = preferences.effects
-        if (!settings.enabled || word.isEmpty() || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
+        if (!AnimationGate.plays(settings.animationMode) || word.isEmpty()) {
             return
         }
         val setting = settings.forEvent(event)
@@ -2165,9 +2246,7 @@ class BorderKeysService :
     // ---- clipboard --------------------------------------------------------------------------------------
 
     private fun registerClipboardListener() {
-        if (clipboardListenerRegistered || !unlocked || orchestrator.session.policy.privateField ||
-            !preferences.clipboardEnabled
-        ) {
+        if (clipboardListenerRegistered || !orchestrator.session.policy.on(Feature.CLIPBOARD_HISTORY, preferences)) {
             return
         }
         // Delivered only while this input method has focus.
@@ -2226,10 +2305,11 @@ class BorderKeysService :
      */
     private fun applyQuickActions(view: KeyboardHostView) {
         val bar = view.quickActions
-        if (!preferences.quickActionsEnabled || orchestrator.session.policy.privateField) {
+        if (!preferences.quickActionsEnabled) {
             bar.visibility = View.GONE
             return
         }
+        bar.featuresOff = orchestrator.session.policy.offByHand
         val chosen = QuickActionBar.resolve(preferences.quickActions, preferences.customQuickActions)
             .filterNot { it is QuickActionBarItem.Builtin && it.action == QuickAction.COMPOSE && !preferences.composerEnabled }
         if (chosen.isEmpty()) {
@@ -2237,6 +2317,7 @@ class BorderKeysService :
             return
         }
         bar.visibility = View.VISIBLE
+        bar.allowed = { item -> orchestrator.session.policy.allows(item, preferences.customQuickActions) }
         bar.items = chosen
         bar.collapsible =
             preferences.quickActionsMode == KeyboardPreferences.QUICK_ACTIONS_COLLAPSED
@@ -2267,8 +2348,41 @@ class BorderKeysService :
         }
     }
 
+    /**
+     * The Enabled/Disabled quick action: everything off by hand, or everything back on. The
+     * strip hides or returns, and the chips, the swipe and the button follow at once.
+     */
+    private fun toggleFeatures() {
+        val off = !orchestrator.session.policy.offByHand
+        orchestrator.setFeaturesByHand(
+            if (off) TypingFeatures.NONE else TypingFeatures.ALL,
+        )
+        privateReveal = false
+        host?.let { view ->
+            view.suggestionStrip.privateReveal = false
+            view.suggestionStrip.privateText = null
+            view.suggestionStrip.clear()
+            view.suggestionStripEnabled = orchestrator.session.policy.on(Feature.STRIP, preferences)
+            view.keyboard.swipeEnabled = orchestrator.session.policy.on(Feature.SWIPE, preferences)
+            view.quickActions.featuresOff = off
+            view.quickActions.refreshAllowed()
+        }
+        if (off) {
+            unregisterClipboardListener()
+            unwatchScreenshots()
+        } else {
+            registerClipboardListener()
+            watchScreenshots()
+        }
+        refreshScreenshot()
+    }
+
     /** Runs one quick action against [connection]. */
     private fun runQuickAction(connection: InputConnection, action: QuickAction) {
+        // The one gate: what the action requires against what the field allows.
+        if (!orchestrator.session.policy.allows(action)) {
+            return
+        }
         when (action) {
             QuickAction.COPY_PREVIOUS_WORD -> copyToClipboard(wordBeforeCursor(connection))
             QuickAction.COPY_LINE -> copyToClipboard(lineAroundCursor(connection))
@@ -2276,7 +2390,13 @@ class BorderKeysService :
             QuickAction.COPY_ALL -> copyToClipboard(
                 connection.getExtractedText(ExtractedTextRequest(), 0)?.text?.toString().orEmpty(),
             )
-            QuickAction.PASTE -> onClipboardPicked()
+            // In a private field the system clipboard goes straight to the field: no chip, no history.
+            QuickAction.PASTE -> if (orchestrator.session.policy.fieldIsPrivate) {
+                orchestrator.resetComposing()
+                connection.performContextMenuAction(android.R.id.paste)
+            } else {
+                onClipboardPicked()
+            }
             QuickAction.PRIVATE_COPY -> privateCopy()
             QuickAction.WORD_LEFT, QuickAction.WORD_RIGHT, QuickAction.SELECT_WORD_LEFT,
             QuickAction.SELECT_WORD_RIGHT, QuickAction.SELECT_TO_LINE_START,
@@ -2310,8 +2430,9 @@ class BorderKeysService :
             }
             QuickAction.SWITCH_LAYOUT -> switchLanguage()
             QuickAction.SETTINGS -> openSettings()
+            QuickAction.FEATURES_SWITCH -> toggleFeatures()
             QuickAction.COMPOSE -> {
-                if (!unlocked || orchestrator.session.policy.privateField || !preferences.composerEnabled) return
+                if (!preferences.composerEnabled) return
                 // The draft box starts with the selection, or with the whole field.
                 val selection = currentInputConnection?.getSelectedText(0)?.toString().orEmpty()
                 val whole = selection.ifEmpty {
@@ -2455,7 +2576,7 @@ class BorderKeysService :
     }
 
     private fun copyToClipboard(text: String) {
-        if (text.isEmpty() || orchestrator.session.policy.privateField) {
+        if (text.isEmpty() || !orchestrator.session.policy.clipboardAllowed) {
             return
         }
         val clip = ClipData.newPlainText(null, text)
@@ -2467,7 +2588,7 @@ class BorderKeysService :
 
     /** Opens the clipboard history as a panel of cards, read and decoded off the main thread. */
     private fun offerClipboardHistory() {
-        if (!unlocked || orchestrator.session.policy.privateField || DirectBoot.isKeyguardLocked(this)) {
+        if (!orchestrator.session.policy.clipboardAllowed || DirectBoot.isKeyguardLocked(this)) {
             return
         }
         scope.launch {
@@ -2713,11 +2834,12 @@ class BorderKeysService :
 
     /**
      * Rebuilds the strip's chip for the clip on the clipboard, with its label; none in private
-     * mode, for a withheld or sensitive clip, or with the setting off.
+     * mode, for a withheld or sensitive clip, for a photo older than the offer window, or with
+     * the history or the offer switched off.
      */
     private fun refreshClipChip(clip: ClipData?) {
         val strip = host?.suggestionStrip ?: return
-        if (!unlocked || orchestrator.session.policy.privateField || !preferences.clipboardSuggestion) {
+        if (!orchestrator.session.policy.on(Feature.CLIPBOARD_OFFER, preferences)) {
             strip.clipboardChip = null
             clipOffers.shown(null, currentInputEditorInfo?.packageName)
             return
@@ -2733,7 +2855,9 @@ class BorderKeysService :
         val text = when {
             description.hasMimeType("image/*") ->
                 strings[Keys.CLIP_PHOTO].takeIf {
-                    preferences.photosRemembered && orchestrator.session.takesPhoto(description.getMimeType(0) ?: "image/*")
+                    orchestrator.session.policy.on(Feature.PHOTOS, preferences) &&
+                        orchestrator.session.takesPhoto(description.getMimeType(0) ?: "image/*") &&
+                        withinOfferWindow(description.timestamp)
                 }
             else -> {
                 val plain = clip.getItemAt(0).coerceToText(this)?.toString()?.trim().orEmpty()
@@ -2760,14 +2884,16 @@ class BorderKeysService :
 
     override fun onClipboardPicked() {
         val clip = clipboardManager?.primaryClip ?: return
-        if (!unlocked || clip.itemCount == 0 || orchestrator.session.policy.privateField) {
+        if (clip.itemCount == 0 || !orchestrator.session.policy.clipboardAllowed) {
             return
         }
         val item = clip.getItemAt(0)
         val uri = item.uri
         val description = clip.description
         if (uri != null && description != null && description.hasMimeType("image/*")) {
-            if (!preferences.photosRemembered || !orchestrator.session.takesPhoto(description.getMimeType(0) ?: "image/*")) {
+            if (!orchestrator.session.policy.on(Feature.PHOTOS, preferences) ||
+                !orchestrator.session.takesPhoto(description.getMimeType(0) ?: "image/*")
+            ) {
                 return
             }
             val chip = chipBoundsBeforePaste(screenshot = false)
@@ -2795,16 +2921,28 @@ class BorderKeysService :
 
     // ---- the screenshot chip --------------------------------------------------------------
 
-    /** Whether the strip offers screenshots in this field. */
-    private fun screenshotsOffered(): Boolean =
-        unlocked && !orchestrator.session.policy.privateField && preferences.screenshotsRemembered
+    /** Whether the screenshot folder is watched in this field: history on, Remember screenshots on. */
+    private fun screenshotsWatched(): Boolean = orchestrator.session.policy.on(Feature.SCREENSHOTS, preferences)
+
+    /** Whether the strip offers screenshots in this field: watched, and Offer what you copied on. */
+    private fun screenshotsOffered(): Boolean = orchestrator.session.policy.on(Feature.SCREENSHOT_OFFER, preferences)
 
     /**
-     * Reads the newest image of the screenshot folder off the main thread and places its chip; an
-     * image older than [SCREENSHOT_RECENT_MILLIS] or already pasted is not offered.
+     * Whether an image taken or copied at [millis] is young enough for the strip: within the
+     * offer window, or any age when the window is off. A missing time counts as young.
+     */
+    private fun withinOfferWindow(millis: Long): Boolean {
+        val window = preferences.imageOfferMinutes * 60_000L
+        return window == 0L || millis == 0L || System.currentTimeMillis() - millis <= window
+    }
+
+    /**
+     * Reads the newest image of the screenshot folder off the main thread, keeps a new one in the
+     * history and places its chip; one older than the offer window, already pasted or withheld
+     * on a close is not offered.
      */
     private fun refreshScreenshot() {
-        if (!screenshotsOffered()) {
+        if (!screenshotsWatched()) {
             newestScreenshot = null
             refreshClipboardChip()
             return
@@ -2812,9 +2950,12 @@ class BorderKeysService :
         val tree = android.net.Uri.parse(preferences.screenshotFolder)
         scope.launch {
             val shot = withContext(Dispatchers.IO) { screenshotFolder.newest(tree) }
-            val recent = shot?.takeIf { System.currentTimeMillis() - it.modifiedMillis <= SCREENSHOT_RECENT_MILLIS }
-            recent?.let(::rememberScreenshot)
-            newestScreenshot = recent?.takeIf { it.uri != pastedScreenshot }
+            shot?.takeIf { System.currentTimeMillis() - it.modifiedMillis <= SCREENSHOT_RECENT_MILLIS }
+                ?.let(::rememberScreenshot)
+            newestScreenshot = shot?.takeIf {
+                screenshotsOffered() && withinOfferWindow(it.modifiedMillis) &&
+                    it.uri != pastedScreenshot && it.uri != withheldScreenshot
+            }
             refreshClipboardChip()
         }
     }
@@ -2827,9 +2968,7 @@ class BorderKeysService :
      * Remember screenshots on; the same picture already there is kept once.
      */
     private fun rememberScreenshot(shot: ScreenshotFolder.Shot) {
-        if (!unlocked || !preferences.clipboardEnabled || !preferences.screenshotsRemembered ||
-            shot.uri == rememberedScreenshot
-        ) {
+        if (!orchestrator.session.policy.on(Feature.SCREENSHOTS, preferences) || shot.uri == rememberedScreenshot) {
             return
         }
         rememberedScreenshot = shot.uri
@@ -2867,15 +3006,17 @@ class BorderKeysService :
 
     override fun onScreenshotPicked() {
         val shot = newestScreenshot ?: return
-        if (!unlocked || !orchestrator.session.takesPhoto(shot.mimeType)) {
+        if (!orchestrator.session.takesPhoto(shot.mimeType)) {
             return
         }
         val chip = chipBoundsBeforePaste(screenshot = true)
         if (orchestrator.pasteImage(shot.uri.toString(), shot.mimeType)) {
             playPhotoLamp(shot.uri, chip)
-            pastedScreenshot = shot.uri
-            newestScreenshot = null
-            refreshClipboardChip()
+            if (preferences.clipboardSuggestionOnce) {
+                pastedScreenshot = shot.uri
+                newestScreenshot = null
+                refreshClipboardChip()
+            }
         }
     }
 
@@ -2886,13 +3027,13 @@ class BorderKeysService :
     }
 
     /**
-     * Lets the image at [uri] rise out of [chip] in a lamp's shape, with
-     * [com.borderkeys.data.theme.EffectsSettings.photoLampAnimated] and Android's animations on.
+     * Lets the image at [uri] rise out of [chip] in a lamp's shape, with its switch on and the
+     * animations playing under their mode.
      */
     private fun playPhotoLamp(uri: android.net.Uri, chip: android.graphics.RectF?) {
         val view = host ?: return
-        if (chip == null || !preferences.effects.photoLampAnimated ||
-            !android.animation.ValueAnimator.areAnimatorsEnabled()
+        if (chip == null || !preferences.effects.photoLamp ||
+            !AnimationGate.plays(preferences.effects.animationMode)
         ) {
             return
         }
@@ -2909,7 +3050,7 @@ class BorderKeysService :
     /** Watches the screenshot folder while the keyboard shows, so a new screenshot is offered. */
     private fun watchScreenshots() {
         unwatchScreenshots()
-        if (!screenshotsOffered()) {
+        if (!screenshotsWatched()) {
             return
         }
         val children = screenshotFolder.childrenUri(android.net.Uri.parse(preferences.screenshotFolder)) ?: return
@@ -2944,7 +3085,7 @@ class BorderKeysService :
     }.getOrNull()
 
     private fun onClipboardChanged() {
-        if (orchestrator.session.policy.privateField || !preferences.clipboardEnabled) {
+        if (!orchestrator.session.policy.on(Feature.CLIPBOARD_HISTORY, preferences)) {
             return
         }
         val clip = clipboardManager?.primaryClip ?: return

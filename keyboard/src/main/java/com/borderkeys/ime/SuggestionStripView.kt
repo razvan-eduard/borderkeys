@@ -346,7 +346,7 @@ class SuggestionStripView(
 
     /** Fixes each slot's text size so its word fits between the dividers, down to a floor. */
     private fun measureSlots() {
-        val label = paints.label.textSize
+        val label = paints.labelTextSizePx.takeIf { it > 0f } ?: paints.label.textSize
         val base = label * SLOT_TEXT_SCALE
         val shown = shownCount()
         if (shown <= 0 || width == 0) {

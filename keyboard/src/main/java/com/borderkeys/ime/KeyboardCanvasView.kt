@@ -117,6 +117,12 @@ class KeyboardCanvasView(
     /** Whether a pressed key's highlight fades in and out; off, it switches at once. */
     var pressAnimated: Boolean = true
 
+    /** How fast the press fade runs, 1 the default. */
+    var animationSpeed: Float = 1f
+
+    /** Whether animations play at all: an [com.borderkeys.data.theme.EffectsSettings] mode. */
+    var animationMode: Int = com.borderkeys.data.theme.EffectsSettings.MODE_SYSTEM
+
     /**
      * [com.borderkeys.data.theme.KeyboardPreferences.keyPopup]: the pressed key shown enlarged
      * above the finger, drawn by [KeyboardHostView].
@@ -191,6 +197,12 @@ class KeyboardCanvasView(
 
     /** Per-key text size, fixed when the layout is compiled. */
     private var labelTextSize = FloatArray(0)
+
+    /** How many keys the compiled layout has. */
+    internal val keyCount: Int get() = geometry.keyCount
+
+    /** The text size key [index]'s label is drawn at. */
+    internal fun labelTextSizeAt(index: Int): Float = labelTextSize[index]
 
     // ---- touch state ---------------------------------------------------------------------
 
@@ -937,7 +949,7 @@ class KeyboardCanvasView(
 
     /** Fixes each label's text size, shrinking a label wider than its key to fit. */
     private fun measureLabels() {
-        val themeSize = paints.label.textSize
+        val themeSize = paints.labelTextSizePx.takeIf { it > 0f } ?: paints.label.textSize
         val base = themeSize
         for (index in 0 until geometry.keyCount) {
             val length = geometry.labelLength[index]
@@ -1139,6 +1151,9 @@ class KeyboardCanvasView(
             geometry.centerX[index], geometry.centerY[index] + paints.labelBaselineOffsetPx,
             paints.label,
         )
+        if (paints.labelTextSizePx > 0f) {
+            paints.label.textSize = paints.labelTextSizePx
+        }
     }
 
     /**
@@ -1889,7 +1904,7 @@ class KeyboardCanvasView(
             ((frameTimeNanos - lastFrameNanos) / 1_000_000_000.0).toFloat()
         }
         lastFrameNanos = frameTimeNanos
-        val pressFades = pressAnimated && ValueAnimator.areAnimatorsEnabled()
+        val pressFades = pressAnimated && AnimationGate.plays(animationMode)
 
         var stillAnimating = false
         for (slot in 0 until PRESS_POOL) {
@@ -1903,9 +1918,9 @@ class KeyboardCanvasView(
             val next = if (!pressFades) {
                 target
             } else if (target > progress) {
-                min(target, progress + rate * deltaSeconds)
+                min(target, progress + rate * deltaSeconds * animationSpeed)
             } else {
-                max(target, progress - rate * deltaSeconds)
+                max(target, progress - rate * deltaSeconds * animationSpeed)
             }
             if (next != progress) {
                 pressProgress[slot] = next

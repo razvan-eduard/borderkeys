@@ -68,6 +68,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
         // What the strip offers: on or off, how many slots, the clipboard, two-word phrases, and
         // the words it never offers.
         SettingsSectionCard(strings[Keys.CORRECTIONS_SUGGESTIONS]) {
+            Explanation(strings[Keys.CORRECTIONS_SUGGESTIONS_NOTE])
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_SHOW_THE_SUGGESTION_STRIP],
                 subtitle = strings[Keys.CORRECTIONS_THE_ROW_ABOVE_THE_KEYS_IT],
@@ -102,6 +103,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
 
         // Spacing and capitals, then autocorrect under its own sub-heading.
         SettingsSectionCard(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE]) {
+            Explanation(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE_NOTE])
             SettingLabel(strings[Keys.CORRECTIONS_PUNCTUATION_AND_CAPITALS])
             // One choice of three, over the two stored switches autoCapitalise and
             // forceCapitaliseSentences.
@@ -165,6 +167,34 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 checked = preferences.autoCorrectOnEnter,
             ) { value -> update { it.copy(autoCorrectOnEnter = value) } }
 
+            // The two dials a correction has to clear, then the ceiling on top of them.
+            SettingLabel(strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS])
+            DefaultableSlider(
+                label = strings.getString(
+                    Keys.CORRECTIONS_TIMES_THE_DEFAULT,
+                    "%.1f".format(preferences.correctionStrictness),
+                ),
+                value = preferences.correctionStrictness,
+                range = KeyboardPreferences.MIN_CORRECTION_STRICTNESS..
+                    KeyboardPreferences.MAX_CORRECTION_STRICTNESS,
+                default = KeyboardPreferences.DEFAULT_CORRECTION_STRICTNESS,
+            ) { value -> update { it.copy(correctionStrictness = value) } }
+            Explanation(
+                strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS_NOTE],
+            )
+            SettingLabel(strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH])
+            DefaultableSlider(
+                label = strings.counted(Keys.CORRECTIONS_LETTERS_OR_MORE, preferences.minCorrectionLength),
+                value = preferences.minCorrectionLength.toFloat(),
+                range = KeyboardPreferences.MIN_CORRECTION_LENGTH.toFloat()..
+                    KeyboardPreferences.MAX_CORRECTION_LENGTH.toFloat(),
+                default = 3f,
+                steps = KeyboardPreferences.MAX_CORRECTION_LENGTH -
+                    KeyboardPreferences.MIN_CORRECTION_LENGTH - 1,
+            ) { value -> update { it.copy(minCorrectionLength = value.toInt()) } }
+            Explanation(
+                strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH_NOTE],
+            )
             SettingLabel(strings[Keys.CORRECTIONS_DISTANCE])
             FlowRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
@@ -221,33 +251,6 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     subtitle = strings[Keys.CORRECTIONS_SPACE_BEFORE_NOTE],
                     checked = preferences.removeSpaceBeforePunctuation,
                 ) { value -> update { it.copy(removeSpaceBeforePunctuation = value) } }
-                SettingLabel(strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS])
-                DefaultableSlider(
-                    label = strings.getString(
-                        Keys.CORRECTIONS_TIMES_THE_DEFAULT,
-                        "%.1f".format(preferences.correctionStrictness),
-                    ),
-                    value = preferences.correctionStrictness,
-                    range = KeyboardPreferences.MIN_CORRECTION_STRICTNESS..
-                        KeyboardPreferences.MAX_CORRECTION_STRICTNESS,
-                    default = KeyboardPreferences.DEFAULT_CORRECTION_STRICTNESS,
-                ) { value -> update { it.copy(correctionStrictness = value) } }
-                Explanation(
-                    strings[Keys.CORRECTIONS_CORRECTION_STRICTNESS_NOTE],
-                )
-                SettingLabel(strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH])
-                DefaultableSlider(
-                    label = strings.counted(Keys.CORRECTIONS_LETTERS_OR_MORE, preferences.minCorrectionLength),
-                    value = preferences.minCorrectionLength.toFloat(),
-                    range = KeyboardPreferences.MIN_CORRECTION_LENGTH.toFloat()..
-                        KeyboardPreferences.MAX_CORRECTION_LENGTH.toFloat(),
-                    default = 3f,
-                    steps = KeyboardPreferences.MAX_CORRECTION_LENGTH -
-                        KeyboardPreferences.MIN_CORRECTION_LENGTH - 1,
-                ) { value -> update { it.copy(minCorrectionLength = value.toInt()) } }
-                Explanation(
-                    strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH_NOTE],
-                )
                 SettingLabel(strings[Keys.CORRECTIONS_RARE_WORDS])
                 DefaultableSlider(
                     label = strings[RARE_WORDS_STEP_KEYS[preferences.rareWords]],
@@ -299,6 +302,7 @@ fun TypingScreen(modifier: Modifier = Modifier) {
 
         // Swipe typing, its decoding notes and the neural model, each under its own sub-heading.
         SettingsSectionCard(strings[Keys.SWIPE_SWIPE_TYPING]) {
+            Explanation(strings[Keys.SWIPE_SWIPE_TYPING_NOTE])
             SwitchRow(
                 title = strings[Keys.SWIPE_SWIPE_TYPING],
                 subtitle = strings[Keys.SWIPE_DRAG_ACROSS_THE_LETTERS_INSTEAD_OF],
@@ -388,59 +392,60 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 checked = preferences.radialMenuEnabled,
             ) { value -> update { it.copy(radialMenuEnabled = value) } }
             if (preferences.radialMenuEnabled) {
-                SettingLabel(strings[Keys.RADIAL_TIMEOUT_DEFAULT])
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    PickerChip(
-                        strings[Keys.RADIAL_TIMEOUT_APPLY_TOP],
-                        preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP,
-                    ) {
-                        update { it.copy(radialTimeoutDefault = KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP) }
-                    }
-                    PickerChip(
-                        strings[Keys.RADIAL_TIMEOUT_CANCEL],
-                        preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL,
-                    ) {
-                        update { it.copy(radialTimeoutDefault = KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) }
-                    }
-                }
-                DefaultableSlider(
-                    label = strings.getString(
-                        // The wording follows radialTimeoutDefault.
-                        if (preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) {
-                            Keys.RADIAL_PICK_TIMEOUT_CANCEL_S
-                        } else {
-                            Keys.RADIAL_PICK_TIMEOUT_S
-                        },
-                        "%.1f".format(preferences.radialPickTimeoutMillis / 1000f),
-                    ),
-                    value = preferences.radialPickTimeoutMillis / 1000f,
-                    range = (KeyboardPreferences.MIN_RADIAL_PICK_TIMEOUT_MILLIS / 1000f)..
-                        (KeyboardPreferences.MAX_RADIAL_PICK_TIMEOUT_MILLIS / 1000f),
-                    default = KeyboardPreferences.DEFAULT_RADIAL_PICK_TIMEOUT_MILLIS / 1000f,
-                    steps = (KeyboardPreferences.MAX_RADIAL_PICK_TIMEOUT_MILLIS -
-                        KeyboardPreferences.MIN_RADIAL_PICK_TIMEOUT_MILLIS) / 100 - 1,
-                    // Disabled while radialLiftKeepsOpen is on.
-                    enabled = !preferences.radialLiftKeepsOpen,
-                ) { value ->
-                    update { it.copy(radialPickTimeoutMillis = (value * 1000f).roundToInt()) }
-                }
-                // A note when the pause dwell is at least the pick timeout, unless
-                // radialLiftKeepsOpen is on.
-                if (!preferences.radialLiftKeepsOpen &&
-                    preferences.radialPauseDwellMillis >= preferences.radialPickTimeoutMillis
-                ) {
-                    CautionNote(strings[Keys.RADIAL_TIMEOUT_OVERLAP_WARNING])
-                }
                 SwitchRow(
                     title = strings[Keys.RADIAL_LIFT_KEEPS_OPEN],
                     subtitle = strings[Keys.RADIAL_LIFT_KEEPS_OPEN_NOTE],
                     checked = preferences.radialLiftKeepsOpen,
                 ) { value -> update { it.copy(radialLiftKeepsOpen = value) } }
-                // Under the switch above; together they decide whether a swipe without a pause
-                // shows a ring, and what is in it.
+                // What a lift does while the ring is not kept open; disabled while it is.
+                Disableable(disabled = preferences.radialLiftKeepsOpen) {
+                    SettingLabel(strings[Keys.RADIAL_TIMEOUT_DEFAULT])
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        PickerChip(
+                            strings[Keys.RADIAL_TIMEOUT_APPLY_TOP],
+                            preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP,
+                        ) {
+                            update { it.copy(radialTimeoutDefault = KeyboardPreferences.RADIAL_TIMEOUT_APPLY_TOP) }
+                        }
+                        PickerChip(
+                            strings[Keys.RADIAL_TIMEOUT_CANCEL],
+                            preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL,
+                        ) {
+                            update { it.copy(radialTimeoutDefault = KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) }
+                        }
+                    }
+                    DefaultableSlider(
+                        label = strings.getString(
+                            // The wording follows radialTimeoutDefault.
+                            if (preferences.radialTimeoutDefault == KeyboardPreferences.RADIAL_TIMEOUT_CANCEL) {
+                                Keys.RADIAL_PICK_TIMEOUT_CANCEL_S
+                            } else {
+                                Keys.RADIAL_PICK_TIMEOUT_S
+                            },
+                            "%.1f".format(preferences.radialPickTimeoutMillis / 1000f),
+                        ),
+                        value = preferences.radialPickTimeoutMillis / 1000f,
+                        range = (KeyboardPreferences.MIN_RADIAL_PICK_TIMEOUT_MILLIS / 1000f)..
+                            (KeyboardPreferences.MAX_RADIAL_PICK_TIMEOUT_MILLIS / 1000f),
+                        default = KeyboardPreferences.DEFAULT_RADIAL_PICK_TIMEOUT_MILLIS / 1000f,
+                        steps = (KeyboardPreferences.MAX_RADIAL_PICK_TIMEOUT_MILLIS -
+                            KeyboardPreferences.MIN_RADIAL_PICK_TIMEOUT_MILLIS) / 100 - 1,
+                        enabled = !preferences.radialLiftKeepsOpen,
+                    ) { value ->
+                        update { it.copy(radialPickTimeoutMillis = (value * 1000f).roundToInt()) }
+                    }
+                    // A note when the pause dwell is at least the pick timeout.
+                    if (!preferences.radialLiftKeepsOpen &&
+                        preferences.radialPauseDwellMillis >= preferences.radialPickTimeoutMillis
+                    ) {
+                        CautionNote(strings[Keys.RADIAL_TIMEOUT_OVERLAP_WARNING])
+                    }
+                }
+                // With the keep-open switch, decides whether a swipe without a pause shows a
+                // ring, and what is in it.
                 SettingLabel(strings[Keys.RADIAL_TRUSTED_WORD])
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),

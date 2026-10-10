@@ -37,6 +37,7 @@ import com.borderkeys.data.ClipSearch
 import com.borderkeys.data.ClipboardExclusions
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.entity.ClipEntry
+import com.borderkeys.data.theme.Feature
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
@@ -46,6 +47,7 @@ import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.PackageListEditor
 import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.PickerChip
+import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlinx.coroutines.launch
@@ -85,74 +87,113 @@ fun ClipboardScreen(modifier: Modifier = Modifier, editClipId: Long? = null) {
         editing = entry
     }
 
+    // The same table the keyboard reads: each row is greyed while a feature it sits under is off.
+    val history = Feature.CLIPBOARD_HISTORY.on(preferences)
+    val offers = Feature.CLIPBOARD_OFFER.on(preferences)
+    val offersImages = offers && (Feature.PHOTOS.on(preferences) || Feature.SCREENSHOT_OFFER.on(preferences))
+
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SwitchRow(
-            title = strings[Keys.CLIPBOARD_REMEMBER_WHAT_YOU_COPY],
-            subtitle = strings[Keys.CLIPBOARD_ONLY_WHILE_BORDERKEYS_IS_THE_KEYBOARD],
-            checked = preferences.clipboardEnabled,
-        ) { value -> update { it.copy(clipboardEnabled = value) } }
-
-        // The clipboard chip on the suggestion strip.
-        SwitchRow(
-            title = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD],
-            subtitle = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD_NOTE],
-            checked = preferences.clipboardSuggestion,
-        ) { value -> update { it.copy(clipboardSuggestion = value) } }
-
-        // Copied photos and screenshots, each kept in the history and offered on the strip.
-        SwitchRow(
-            title = strings[Keys.CLIPBOARD_REMEMBER_IMAGES],
-            subtitle = strings[Keys.CLIPBOARD_REMEMBER_IMAGES_NOTE],
-            checked = preferences.clipboardImages,
-        ) { value -> scope.launch { setRememberPhotos(value) } }
-        ScreenshotSuggestionSetting(preferences, update)
-
-        // A small preview of the image on the photo and screenshot chips.
-        SwitchRow(
-            title = strings[Keys.CLIPBOARD_CHIP_PREVIEW],
-            subtitle = strings[Keys.CLIPBOARD_CHIP_PREVIEW_NOTE],
-            checked = preferences.chipImagePreview,
-        ) { value -> update { it.copy(chipImagePreview = value) } }
-
-        // The hygiene policies, each independent: one withdraws the chip's offer, one empties
-        // the system clipboard, one removes the history row, one empties the history on close.
-        AdvancedSection(strings[Keys.CLIPBOARD_ADVANCED_NOTE]) {
+        SettingsSectionCard(strings[Keys.CLIPBOARD_REMEMBER_AND_OFFER_TITLE]) {
             SwitchRow(
-                title = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE],
-                subtitle = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE_NOTE],
-                checked = preferences.clipboardSuggestionOnce,
-            ) { value -> update { it.copy(clipboardSuggestionOnce = value) } }
+                title = strings[Keys.CLIPBOARD_REMEMBER_WHAT_YOU_COPY],
+                subtitle = strings[Keys.CLIPBOARD_ONLY_WHILE_BORDERKEYS_IS_THE_KEYBOARD],
+                checked = preferences.clipboardEnabled,
+            ) { value -> update { it.copy(clipboardEnabled = value) } }
+
+            // The chips on the suggestion strip: the clipboard's text or photo, and the screenshot.
             SwitchRow(
-                title = strings[Keys.CLIPBOARD_PRIVATE_MENU],
-                subtitle = strings[Keys.CLIPBOARD_PRIVATE_NOTE],
-                checked = preferences.privateCopyInTextMenu,
-            ) { value ->
-                PrivateCopyActivity.setOffered(context, value)
-                update { it.copy(privateCopyInTextMenu = value) }
+                title = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD],
+                subtitle = strings[Keys.CORRECTIONS_OFFER_THE_CLIPBOARD_NOTE],
+                checked = preferences.clipboardSuggestion,
+                enabled = history,
+            ) { value -> update { it.copy(clipboardSuggestion = value) } }
+
+            // Copied photos and screenshots, each kept in the history and offered on the strip.
+            SwitchRow(
+                title = strings[Keys.CLIPBOARD_REMEMBER_IMAGES],
+                subtitle = strings[Keys.CLIPBOARD_REMEMBER_IMAGES_NOTE],
+                checked = preferences.clipboardImages,
+                enabled = history,
+            ) { value -> scope.launch { setRememberPhotos(value) } }
+            ScreenshotSuggestionSetting(preferences, update, enabled = history)
+
+            // How recent a photo or screenshot must be for the strip, off meaning any age.
+            Disableable(disabled = !offersImages) {
+                SectionHeader(strings[Keys.CLIPBOARD_IMAGE_OFFER_WINDOW])
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for (minutes in KeyboardPreferences.IMAGE_OFFER_STEPS) {
+                        val label = when {
+                            minutes == 0 -> strings[Keys.CLIPBOARD_SCREENSHOT_OFF]
+                            minutes % 60 == 0 -> strings.counted(Keys.CLIPBOARD_HOURS, minutes / 60)
+                            else -> strings.counted(Keys.CLIPBOARD_MINUTES, minutes)
+                        }
+                        PickerChip(label, preferences.imageOfferMinutes == minutes) {
+                            update { it.copy(imageOfferMinutes = minutes) }
+                        }
+                    }
+                }
+                Explanation(strings[Keys.CLIPBOARD_IMAGE_OFFER_WINDOW_NOTE])
             }
-            SectionHeader(strings[Keys.CLIPBOARD_IMAGE_MAX_SIZE])
-            StepSlider(
-                label = strings.getString(Keys.CLIPBOARD_MEGABYTES, preferences.clipboardImageMaxMb),
-                steps = KeyboardPreferences.IMAGE_SIZE_STEPS,
-                current = preferences.clipboardImageMaxMb,
-                default = KeyboardPreferences.DEFAULT_CLIPBOARD_IMAGE_MAX_MB,
-            ) { value -> update { it.copy(clipboardImageMaxMb = value) } }
-            Explanation(strings[Keys.CLIPBOARD_IMAGE_MAX_SIZE_NOTE])
+
+            // A small preview of the image on the photo and screenshot chips.
             SwitchRow(
-                title = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE],
-                subtitle = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE_NOTE],
-                checked = preferences.clearClipboardOnClose,
-            ) { value -> update { it.copy(clearClipboardOnClose = value) } }
-            SwitchRow(
-                title = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT],
-                subtitle = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT_NOTE],
-                checked = preferences.clearClipboardAfterInsert,
-            ) { value -> update { it.copy(clearClipboardAfterInsert = value) } }
-            SwitchRow(
-                title = strings[Keys.CLIPBOARD_DELETE_AFTER_USE],
-                subtitle = strings[Keys.CLIPBOARD_DELETE_AFTER_USE_NOTE],
-                checked = preferences.clipboardDeleteAfterUse,
-            ) { value -> update { it.copy(clipboardDeleteAfterUse = value) } }
+                title = strings[Keys.CLIPBOARD_CHIP_PREVIEW],
+                subtitle = strings[Keys.CLIPBOARD_CHIP_PREVIEW_NOTE],
+                checked = preferences.chipImagePreview,
+                enabled = offersImages,
+            ) { value -> update { it.copy(chipImagePreview = value) } }
+
+            // The hygiene policies, each independent: one withdraws a chip's offer, one empties
+            // the system clipboard, one removes the history row, one empties the history on close.
+            AdvancedSection(strings[Keys.CLIPBOARD_ADVANCED_NOTE]) {
+                SwitchRow(
+                    title = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE],
+                    subtitle = strings[Keys.CORRECTIONS_CLIPBOARD_ONCE_NOTE],
+                    checked = preferences.clipboardSuggestionOnce,
+                    enabled = offers,
+                ) { value -> update { it.copy(clipboardSuggestionOnce = value) } }
+                SwitchRow(
+                    title = strings[Keys.CLIPBOARD_PRIVATE_MENU],
+                    subtitle = strings[Keys.CLIPBOARD_PRIVATE_NOTE],
+                    checked = preferences.privateCopyInTextMenu,
+                    enabled = history,
+                ) { value ->
+                    PrivateCopyActivity.setOffered(context, value)
+                    update { it.copy(privateCopyInTextMenu = value) }
+                }
+                Disableable(disabled = !history) {
+                    SectionHeader(strings[Keys.CLIPBOARD_IMAGE_MAX_SIZE])
+                    StepSlider(
+                        label = strings.getString(Keys.CLIPBOARD_MEGABYTES, preferences.clipboardImageMaxMb),
+                        steps = KeyboardPreferences.IMAGE_SIZE_STEPS,
+                        current = preferences.clipboardImageMaxMb,
+                        default = KeyboardPreferences.DEFAULT_CLIPBOARD_IMAGE_MAX_MB,
+                    ) { value -> update { it.copy(clipboardImageMaxMb = value) } }
+                    Explanation(strings[Keys.CLIPBOARD_IMAGE_MAX_SIZE_NOTE])
+                }
+                SwitchRow(
+                    title = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE],
+                    subtitle = strings[Keys.CLIPBOARD_CLEAR_ON_CLOSE_NOTE],
+                    checked = preferences.clearClipboardOnClose,
+                    enabled = history,
+                ) { value -> update { it.copy(clearClipboardOnClose = value) } }
+                SwitchRow(
+                    title = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT],
+                    subtitle = strings[Keys.CLIPBOARD_CLEAR_AFTER_INSERT_NOTE],
+                    checked = preferences.clearClipboardAfterInsert,
+                    enabled = offers,
+                ) { value -> update { it.copy(clearClipboardAfterInsert = value) } }
+                SwitchRow(
+                    title = strings[Keys.CLIPBOARD_DELETE_AFTER_USE],
+                    subtitle = strings[Keys.CLIPBOARD_DELETE_AFTER_USE_NOTE],
+                    checked = preferences.clipboardDeleteAfterUse,
+                    enabled = history,
+                ) { value -> update { it.copy(clipboardDeleteAfterUse = value) } }
+            }
         }
 
         SettingsSectionCard(strings[Keys.CLIPBOARD_EXCLUDED_TITLE]) {

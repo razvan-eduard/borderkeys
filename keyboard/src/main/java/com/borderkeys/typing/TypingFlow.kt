@@ -55,6 +55,15 @@ abstract class TypingFlow {
         onUserUnlocked()
     }
 
+    /** The user allows [features] by hand: the field's policy follows, in the open field too. */
+    fun applyByHand(features: TypingFeatures) {
+        session = session.copy(policy = session.policy.byHand(features))
+        onPolicyChanged()
+    }
+
+    /** The field's policy changed while it is open; a flow with a gate re-reads it here. */
+    protected open fun onPolicyChanged() {}
+
     /** The keyboard is going; the open field is finished first. */
     fun shutdown() {
         finishField()

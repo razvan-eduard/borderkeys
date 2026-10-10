@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-FileCopyrightText: 2026 BorderKeys contributors
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?android:attr/colorForeground">
+    <!-- A smiling face: the emoji key. -->
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M12,3A9,9 0 1 1 12,21A9,9 0 1 1 12,3ZM8,14C9,16.5 15,16.5 16,14" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M8,9.5a1.3,1.3 0 1,0 2.6,0a1.3,1.3 0 1,0 -2.6,0zM13.4,9.5a1.3,1.3 0 1,0 2.6,0a1.3,1.3 0 1,0 -2.6,0z" />
+</vector>

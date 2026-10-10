@@ -23,6 +23,9 @@ class EffectStage(context: Context) : View(context) {
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
+    /** How fast an effect runs, 1 the default; set by the host. */
+    var speed: Float = 1f
+
     private class Playing(
         val content: EffectContent,
         val style: EffectStyle,
@@ -93,7 +96,7 @@ class EffectStage(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         val playing = current ?: return
         val elapsed = AnimationUtils.currentAnimationTimeMillis() - startedAt
-        val progress = elapsed.toFloat() / playing.durationMillis
+        val progress = elapsed * speed / playing.durationMillis
         if (progress >= 1f) {
             current = null
             val next = pending.removeFirstOrNull()

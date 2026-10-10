@@ -440,11 +440,20 @@ private fun LookPage(
             }
         }
     }
+    // On here means as Android's setting says, the Animations screen's middle choice.
     SwitchItem(
         title = strings[Keys.ANIMATIONS_ENABLE],
         note = strings[Keys.EFFECTS_ANIMATIONS_NOTE],
-        checked = preferences.effects.enabled,
-    ) { value -> update { it.copy(effects = it.effects.copy(enabled = value)) } }
+        checked = preferences.effects.anyOn,
+    ) { value ->
+        update {
+            it.copy(
+                effects = it.effects.copy(
+                    mode = if (value) com.borderkeys.data.theme.EffectsSettings.MODE_SYSTEM else com.borderkeys.data.theme.EffectsSettings.MODE_OFF,
+                ),
+            )
+        }
+    }
     SwitchItem(
         title = strings[Keys.QUICK_SHOW],
         note = strings[Keys.QUICK_SHOW_NOTE],

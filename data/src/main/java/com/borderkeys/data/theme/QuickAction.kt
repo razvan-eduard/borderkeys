@@ -130,7 +130,24 @@ enum class QuickAction(val id: Int) {
 
     /** Sends the Tab key. */
     TAB(34),
+
+    /**
+     * Enabled or Disabled: one press switches suggestions, corrections, swipe, learning, the
+     * clipboard and the assistant off by hand, every key going in as typed and the strip
+     * hidden; the next press switches them back on. The button reads and shows the state. Not
+     * saved: a restart of the keyboard starts enabled.
+     */
+    FEATURES_SWITCH(35),
     ;
+
+    /** What this action needs the field to allow; the bar dims an action the field does not allow. */
+    val requires: FieldRequirement
+        get() = when (this) {
+            COPY_PREVIOUS_WORD, COPY_LINE, COPY_ALL, CUT, CLIPBOARD_HISTORY, PRIVATE_COPY -> FieldRequirement.CLIPBOARD
+            COMPOSE -> FieldRequirement.ASSISTANT
+            FEATURES_SWITCH -> FieldRequirement.PERSONAL_FIELD
+            else -> FieldRequirement.NONE
+        }
 
     /**
      * Whether this can be one step of a [CustomQuickAction] macro: an edit through the
@@ -138,7 +155,7 @@ enum class QuickAction(val id: Int) {
      */
     val macroEligible: Boolean
         get() = this !in setOf(
-            CLIPBOARD_HISTORY, SWITCH_LAYOUT, SETTINGS, COMPOSE, PICK_KEYBOARD, VOICE_INPUT,
+            CLIPBOARD_HISTORY, SWITCH_LAYOUT, SETTINGS, COMPOSE, PICK_KEYBOARD, VOICE_INPUT, FEATURES_SWITCH,
         )
 
     companion object {

@@ -225,6 +225,76 @@ attestations and the full commit lists are on the
   hedges and second example lists elsewhere are gone, the pointer under the Apply switches is
   removed, and the onboarding no longer says more languages are "available to download". In
   all 22 languages.
+- Fixed: the notes under Space after punctuation, Space after a picked suggestion, Capitalise
+  for me and Swipe typing each ended with the list of fields they skip. Each section now says
+  it once, at the top: Suggestions work in every field but a password field, and in private
+  mode offer nothing from what you have written; Correcting as you type and Swipe typing work
+  in free-form text fields and the browser's address bar; Learn from typing never in private
+  mode. In all 22 languages.
+- Fixed: an e-mail, number or phone field is now left as typed, with no swipe, as the swipe
+  note had said all along: autocorrect, the automatic spaces and the swipe acted there like in
+  any text field. Dictionary suggestions are still offered in them. The browser's address bar
+  keeps corrections and swipe, since browsers search from it.
+- The Clipboard screen's switches sit in one card, What is remembered and offered, and the two at
+  its top gate the rest: Remember what you copy off disables everything below it, Offer what you
+  copied off withdraws every chip, screenshot included. Offer a photo or screenshot from the
+  last: Off, 1, 5 or 15 minutes, or 1 hour, for copied photos and screenshots alike; until now a
+  screenshot had a fixed five minutes and a copied photo no limit. Offer it only once now also
+  withdraws the screenshot chip after use or when the keyboard closes.
+- Six settings sat above the setting they depend on and now follow it: Layouts on this keyboard
+  opens the Layout screen, ahead of the keys that draw on it; Long-press duration sits under
+  Long-press hints instead of in the Advanced fold; Correction strictness and Shortest word to
+  correct come before the correction distance that caps them; Keep the ring open until you
+  choose comes before If nothing is chosen, which it disables; Show a label under each button
+  sits after Where it sits and is disabled for a bar down a side; Text assistant is listed
+  before the Draft box whose buttons need it.
+- Enabled or disabled, a quick action that reads its own state: one press switches
+  suggestions, corrections, swipe, learning, the clipboard and the assistant off by hand, every
+  key going in as typed and the suggestion strip hidden, and the next press switches them back
+  on. It outlives the field and the app, not a restart of the keyboard, and changes no setting.
+  Under the hood, what a field allows is now one set of feature flags that the field's kind,
+  the settings and this switch each contribute to, and which switch each feature sits under is
+  one table, read by the keyboard and the settings screens alike.
+- The panel a long press on Enter opens is now a grid of tiles you arrange: hold one and the
+  grid enters arrange mode, where tiles drag into a new order and a badge removes them; the +
+  tile adds any of the rest: Strip, Swipe, Autocorrect, Learning, Clipboard, Sound, Vibration,
+  Modifier row, Emoji key, Globe key, Key popup, Ring, Quick actions, Number pad and
+  Enabled/Disabled, beside Resize, the four positions and Number row it starts with. Every tile
+  is the quick actions bar's size, an icon over a label; Close and All settings… sit on the
+  keyboard's side, left when it is one-handed left.
+- The quick actions bar shows in password fields and private windows too, where it used to be
+  hidden. Paste there puts the system clipboard straight into the field, with no chip and
+  nothing kept. A button the field does not allow, Copy, Cut, the clipboard history, the draft
+  box and Enabled/Disabled there, is drawn dimmed and takes no tap, and a custom action is
+  dimmed when any of its steps is; until now a refused button looked normal and did nothing.
+- Fixed: the quick actions bar could stay hidden in every field, its switch still on. Its
+  visibility was decided only when a setting changed, so a setting written while a private
+  field was focused hid it until the next one. It now follows each field as it opens.
+- Fixed: the key labels and the suggestion strip's words could shrink after the keyboard was
+  re-laid out, a little more each time. Each key set the shared label size to its own while
+  drawing, the last one was left behind, and the next layout measured from it.
+- Fixed: the panel a long press on Enter opens took the next typing taps on its tiles, so a
+  finger still typing could make the keyboard one-handed or switch something off. Touches in
+  the first half second after it opens are ignored. Its rows now fit the room: on a phone it
+  showed only one row, and Float, Number row and the + tile were cut off.
+- The Animations screen's master switch is a choice of three: Off, Android's setting, or On.
+  Until now every animation also deferred to Android's own animation setting; On no longer does,
+  and the photo lamp in particular plays whenever its switch is on. A file from before keeps
+  what it had: Off stays Off, on becomes Android's setting. Moving colours is now Animated
+  colours, and the notes on that screen no longer spell out what Off does.
+- Scrolling labels, on the Animations screen: a label too long for its button, on the quick
+  actions bar or the quick panel, waits two seconds, slides past at a readable pace, waits at
+  the end and starts over; off, it is cut with an ellipsis. Animation speed, below it: one dial
+  from a quarter to four times the default for every animation on that screen, the key press,
+  the photo lamp, the moving colours, the draft box and the word effects, with a reset to 1×.
+- Fixed: the quick actions bar's labels wrapped onto a second line on the phone where the
+  settings' preview had room for one. Buttons that fit still share the bar evenly; past that,
+  each takes a fixed width from the Size setting and the bar scrolls sideways, a side bar up
+  and down, with a fling. Labels stay one line at full size. The dot that marks a custom action
+  sits at the centre of the button's rounded corner.
+- Fixed: with the suggestion strip hidden, the quick actions bar sat half a key gap from the
+  top row where the rows sit a full gap from each other; a bar along the top or bottom that
+  meets the keys directly now keeps the rows' own gap.
 - The typing code is reorganised around one owner of each word, `TypingOrchestrator`, and the
   flows it drives; every case of the test corpora reads the same, to the digit, and 93 typing
   scenarios run the real flow on the JVM.

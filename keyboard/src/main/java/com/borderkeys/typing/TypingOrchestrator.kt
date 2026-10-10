@@ -7,6 +7,7 @@ import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import com.borderkeys.data.KeyboardStats
 import com.borderkeys.data.theme.EffectEvent
+import com.borderkeys.data.theme.Feature
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.KeyFlick
@@ -178,7 +179,9 @@ class TypingOrchestrator(
     fun startField(field: FieldSession) {
         session = field
         session = session.copy(
-            policy = session.policy.withSwitches(preferences.learningEnabled, preferences.heatmapEnabled),
+            policy = session.policy
+                .withSwitches(preferences.learningEnabled, preferences.heatmapEnabled)
+                .byHand(featuresByHand),
         )
         for (flow in flows) {
             flow.startField(session)
@@ -232,6 +235,30 @@ class TypingOrchestrator(
         for (flow in flows) {
             flow.applySettings(settings)
         }
+        if (host.viewAttached) {
+            applyAutoShift()
+        }
+    }
+
+    /**
+     * What the user allows by hand, through the Suggestions quick action: [TypingFeatures.ALL],
+     * or [TypingFeatures.NONE] while switched off. Not saved; a new keyboard starts with ALL.
+     */
+    var featuresByHand: TypingFeatures = TypingFeatures.ALL
+        private set
+
+    /** The user allows [features] by hand: the policy follows in this field and the flows, and the word in progress is dropped. */
+    fun setFeaturesByHand(features: TypingFeatures) {
+        if (features == featuresByHand) {
+            return
+        }
+        featuresByHand = features
+        session = session.copy(policy = session.policy.byHand(features))
+        for (flow in flows) {
+            flow.applyByHand(features)
+        }
+        engine.cancelPending()
+        resetComposing()
         if (host.viewAttached) {
             applyAutoShift()
         }
@@ -904,7 +931,7 @@ class TypingOrchestrator(
      * the word in progress finished, and the path is decoded.
      */
     fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
-        if (!preferences.swipeEnabled || !session.policy.suggestionsAllowed) {
+        if (!session.policy.on(Feature.SWIPE, preferences)) {
             return
         }
         swipeFlow.forgetTopWord()
@@ -925,7 +952,7 @@ class TypingOrchestrator(
 
     /** The finger paused mid-swipe: the path so far is decoded for the ring, if it is on. */
     fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
-        if (!preferences.radialMenuEnabled || !session.policy.suggestionsAllowed) {
+        if (!preferences.radialMenuEnabled || !session.policy.swipeAllowed) {
             ring.resumeGestureCapture()
             return
         }
@@ -1497,7 +1524,7 @@ class TypingOrchestrator(
      * when nothing is selected.
      */
     fun privateCopyText(): String? {
-        if (session.policy.privateField) {
+        if (!session.policy.clipboardAllowed) {
             return null
         }
         val selected = currentEditor()?.selectedText()?.toString()

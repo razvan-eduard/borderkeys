@@ -43,4 +43,21 @@ class AddressFieldTest {
         assertFalse(AddressField.isAddress(InputType.TYPE_CLASS_PHONE or emailBits))
         assertFalse(AddressField.isAddress(InputType.TYPE_CLASS_DATETIME or emailBits))
     }
+
+    @Test
+    fun `an e-mail, number or phone field takes the keys verbatim`() {
+        assertTrue(AddressField.isVerbatim(InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS))
+        assertTrue(AddressField.isVerbatim(InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS))
+        assertTrue(AddressField.isVerbatim(InputType.TYPE_CLASS_NUMBER))
+        assertTrue(AddressField.isVerbatim(InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL))
+        assertTrue(AddressField.isVerbatim(InputType.TYPE_CLASS_PHONE))
+    }
+
+    @Test
+    fun `a web address, ordinary text and a date are not verbatim`() {
+        assertFalse(AddressField.isVerbatim(InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI))
+        assertFalse(AddressField.isVerbatim(InputType.TYPE_CLASS_TEXT))
+        assertFalse(AddressField.isVerbatim(InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_SUBJECT))
+        assertFalse(AddressField.isVerbatim(InputType.TYPE_CLASS_DATETIME))
+    }
 }

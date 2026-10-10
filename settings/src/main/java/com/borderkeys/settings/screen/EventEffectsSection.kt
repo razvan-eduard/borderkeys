@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,7 +29,11 @@ import com.borderkeys.effects.EffectStyle
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.ColourRow
+import com.borderkeys.settings.DefaultableSlider
+import com.borderkeys.settings.Disableable
+import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PickerChip
+import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 
@@ -47,35 +52,66 @@ fun EventEffectsSection(
     val strings = LocalStrings.current
 
     SettingsSectionCard(strings[Keys.SCREEN_ANIMATIONS]) {
-        SwitchRow(
-            title = strings[Keys.ANIMATIONS_ENABLE],
-            subtitle = strings[Keys.ANIMATIONS_ENABLE_NOTE],
-            checked = effects.enabled,
-        ) { value -> onChange { it.copy(enabled = value) } }
+        // Off, Android's setting, or On: whether anything below moves at all.
+        SettingLabel(strings[Keys.ANIMATIONS_ENABLE])
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            PickerChip(strings[Keys.ANIMATIONS_MODE_OFF], effects.animationMode == EffectsSettings.MODE_OFF) {
+                onChange { it.copy(mode = EffectsSettings.MODE_OFF) }
+            }
+            PickerChip(strings[Keys.ANIMATIONS_MODE_SYSTEM], effects.animationMode == EffectsSettings.MODE_SYSTEM) {
+                onChange { it.copy(mode = EffectsSettings.MODE_SYSTEM) }
+            }
+            PickerChip(strings[Keys.ANIMATIONS_MODE_ON], effects.animationMode == EffectsSettings.MODE_ON) {
+                onChange { it.copy(mode = EffectsSettings.MODE_ON) }
+            }
+        }
+        Explanation(strings[Keys.ANIMATIONS_ENABLE_NOTE])
         SwitchRow(
             title = strings[Keys.ANIMATIONS_KEY_PRESS],
             subtitle = strings[Keys.ANIMATIONS_KEY_PRESS_NOTE],
             checked = effects.keyPress,
-            enabled = effects.enabled,
+            enabled = effects.anyOn,
         ) { value -> onChange { it.copy(keyPress = value) } }
         SwitchRow(
             title = strings[Keys.EFFECTS_PHOTO_LAMP],
             subtitle = strings[Keys.EFFECTS_PHOTO_LAMP_NOTE],
             checked = effects.photoLamp,
-            enabled = effects.enabled,
+            enabled = effects.anyOn,
         ) { value -> onChange { it.copy(photoLamp = value) } }
         SwitchRow(
             title = strings[Keys.ANIMATIONS_RING],
             subtitle = strings[Keys.ANIMATIONS_RING_NOTE],
             checked = effects.assistantColours,
-            enabled = effects.enabled,
+            enabled = effects.anyOn,
         ) { value -> onChange { it.copy(assistantColours = value) } }
         SwitchRow(
             title = strings[Keys.ANIMATIONS_DRAFT_BOX],
             subtitle = strings[Keys.ANIMATIONS_DRAFT_BOX_NOTE],
             checked = effects.draftBoxMotion,
-            enabled = effects.enabled,
+            enabled = effects.anyOn,
         ) { value -> onChange { it.copy(draftBoxMotion = value) } }
+        SwitchRow(
+            title = strings[Keys.ANIMATIONS_SCROLLING_LABELS],
+            subtitle = strings[Keys.ANIMATIONS_SCROLLING_LABELS_NOTE],
+            checked = effects.scrollingLabels,
+            enabled = effects.anyOn,
+        ) { value -> onChange { it.copy(scrollingLabels = value) } }
+        // One pace for everything on the page, 1x the default, with the reset the other dials have.
+        Disableable(disabled = !effects.anyOn) {
+            SettingLabel(strings[Keys.ANIMATIONS_SPEED])
+            DefaultableSlider(
+                label = strings.getString(Keys.ANIMATIONS_TIMES, "%.2f".format(effects.speed)),
+                value = effects.speed,
+                range = EffectsSettings.MIN_SPEED..EffectsSettings.MAX_SPEED,
+                default = EffectsSettings.DEFAULT_SPEED,
+                steps = EffectsSettings.SPEED_STEPS,
+            ) { value -> onChange { it.copy(speed = value) } }
+            Explanation(strings[Keys.ANIMATIONS_SPEED_NOTE])
+        }
     }
 
     for (event in EffectEvent.entries) {
@@ -83,7 +119,7 @@ fun EventEffectsSection(
             title = strings[titleKeyFor(event)],
             setting = effects.forEvent(event),
             colourKey = effectColourKey(event),
-            locked = !effects.enabled,
+            locked = !effects.anyOn,
             customColours = customColours,
             onCustomColoursChange = onCustomColoursChange,
             onSettingChange = { change ->

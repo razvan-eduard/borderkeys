@@ -413,10 +413,16 @@ data class KeyboardPreferences(
     val clearClipboardAfterInsert: Boolean = false,
 
     /**
-     * Whether the clipboard chip is withdrawn after it has been used, or once the keyboard has
-     * been closed. The history and the system clipboard are untouched.
+     * Whether a chip, text, copied photo or screenshot, is withdrawn after it has been used, or
+     * once the keyboard has been closed. The history and the system clipboard are untouched.
      */
     val clipboardSuggestionOnce: Boolean = true,
+
+    /**
+     * How recent a copied photo or a screenshot must be for the strip to offer it, in minutes,
+     * one of [IMAGE_OFFER_STEPS]; 0 offers the newest whatever its age. Clamped on read.
+     */
+    val imageOfferMinutes: Int = DEFAULT_IMAGE_OFFER_MINUTES,
 
     /**
      * Whether inserting the current clipboard item also deletes its row from the history panel,
@@ -461,6 +467,12 @@ data class KeyboardPreferences(
      * an id this build does not know is dropped when the list is read.
      */
     val quickActions: List<Int> = QuickAction.DEFAULT.map { it.id },
+
+    /**
+     * The tiles on the keyboard's quick panel, in order, as [QuickTile] ids; an id this build
+     * does not know is dropped when the list is read.
+     */
+    val quickTiles: List<Int> = QuickTile.DEFAULT.map { it.id },
 
     /**
      * Macros the user built for the quick-action bar -- each an ordered list of [QuickAction]
@@ -739,6 +751,7 @@ data class KeyboardPreferences(
         clipboardRetentionMinutes = clipboardRetentionMinutes.coerceIn(1, 60 * 24 * 30),
         clipboardMaxEntries = clipboardMaxEntries.coerceIn(1, 1000),
         clipboardImageMaxMb = clipboardImageMaxMb.coerceIn(MIN_CLIPBOARD_IMAGE_MAX_MB, MAX_CLIPBOARD_IMAGE_MAX_MB),
+        imageOfferMinutes = if (imageOfferMinutes in IMAGE_OFFER_STEPS) imageOfferMinutes else DEFAULT_IMAGE_OFFER_MINUTES,
         // The portrait placement comes from `portrait` above.
         heightScale = portrait.heightScale,
         widthScale = portrait.widthScale,
@@ -845,6 +858,12 @@ data class KeyboardPreferences(
         quickActions =
             QuickActionBar.sanitisedIds(quickActions, sanitisedCustomQuickActions).take(MAX_QUICK_ACTIONS),
         customQuickActions = sanitisedCustomQuickActions,
+        quickTiles = QuickTile.fromIds(quickTiles).map { it.id },
+        effects = effects.copy(
+            mode = effects.mode?.takeIf { it in EffectsSettings.MODE_OFF..EffectsSettings.MODE_ON },
+            speed = effects.speed.takeIf { it.isFinite() }?.coerceIn(EffectsSettings.MIN_SPEED, EffectsSettings.MAX_SPEED)
+                ?: EffectsSettings.DEFAULT_SPEED,
+        ),
         timestampPattern = TimestampPattern.sanitised(timestampPattern),
         composerBar = ComposerBar.sanitisedIds(composerBar, sanitisedCustomActions),
         composerTextSize =
@@ -1135,6 +1154,11 @@ data class KeyboardPreferences(
 
         /** The image size slider's stops, in megabytes. */
         val IMAGE_SIZE_STEPS: List<Int> = listOf(1, 2, 5, 10, 20, 50)
+
+        const val DEFAULT_IMAGE_OFFER_MINUTES = 5
+
+        /** The [imageOfferMinutes] choices: off, then minutes. */
+        val IMAGE_OFFER_STEPS: List<Int> = listOf(0, 1, 5, 15, 60)
 
         /** The step nearest [value], for putting a stored number back on a slider. */
         fun nearestStep(steps: List<Int>, value: Int): Int {

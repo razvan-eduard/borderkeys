@@ -83,6 +83,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SettingsSectionCard(strings[Keys.DICTIONARY_LEARN_FROM_TYPING]) {
+            Explanation(strings[Keys.DICTIONARY_LEARN_FROM_TYPING_NOTE])
             SwitchRow(
                 title = strings[Keys.DICTIONARY_LEARNING],
                 subtitle = strings[Keys.DICTIONARY_OFF_MEANS_NOTHING_NEW_IS_RECORDED],

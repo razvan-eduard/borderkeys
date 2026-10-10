@@ -111,11 +111,29 @@ class QuickActionBarTest {
         val ineligible = setOf(
             QuickAction.CLIPBOARD_HISTORY, QuickAction.SWITCH_LAYOUT,
             QuickAction.SETTINGS, QuickAction.COMPOSE,
-            QuickAction.PICK_KEYBOARD, QuickAction.VOICE_INPUT,
+            QuickAction.PICK_KEYBOARD, QuickAction.VOICE_INPUT, QuickAction.FEATURES_SWITCH,
         )
         for (action in QuickAction.entries) {
             assertEquals(action.name, action !in ineligible, action.macroEligible)
         }
+    }
+
+    @Test
+    fun `each action declares what the field has to allow`() {
+        val clipboard = setOf(
+            QuickAction.COPY_PREVIOUS_WORD, QuickAction.COPY_LINE, QuickAction.COPY_ALL, QuickAction.CUT,
+            QuickAction.CLIPBOARD_HISTORY, QuickAction.PRIVATE_COPY,
+        )
+        for (action in QuickAction.entries) {
+            val expected = when (action) {
+                in clipboard -> FieldRequirement.CLIPBOARD
+                QuickAction.COMPOSE -> FieldRequirement.ASSISTANT
+                QuickAction.FEATURES_SWITCH -> FieldRequirement.PERSONAL_FIELD
+                else -> FieldRequirement.NONE
+            }
+            assertEquals(action.name, expected, action.requires)
+        }
+        assertEquals("Paste reads the system clipboard and runs anywhere", FieldRequirement.NONE, QuickAction.PASTE.requires)
     }
 
     @Test

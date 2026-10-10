@@ -31,9 +31,9 @@ data class FieldSession(
 
     /**
      * Whether a photo of [mimeType], copied or a screenshot, may be offered and pasted here: the
-     * field is not private and takes that type.
+     * clipboard is allowed here and the field takes that type.
      */
-    fun takesPhoto(mimeType: String): Boolean = !policy.privateField && acceptsContent(mimeType)
+    fun takesPhoto(mimeType: String): Boolean = policy.clipboardAllowed && acceptsContent(mimeType)
 
     companion object {
         /** Before any field has started. */

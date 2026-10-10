@@ -92,11 +92,6 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     subtitle = strings[Keys.QUICK_SHOW_NOTE],
                     checked = preferences.quickActionsEnabled,
                 ) { value -> update { it.copy(quickActionsEnabled = value) } }
-                SwitchRow(
-                    title = strings[Keys.QUICK_LABELS_SHOW],
-                    subtitle = strings[Keys.QUICK_LABELS_NOTE],
-                    checked = preferences.quickActionsLabels,
-                ) { value -> update { it.copy(quickActionsLabels = value) } }
             }
 
             SettingsSectionCard(strings[Keys.QUICK_BAR_TITLE]) {
@@ -156,6 +151,14 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     ) { update { it.copy(quickActionsPlacement = KeyboardPreferences.QUICK_ACTIONS_RIGHT) } }
                 }
                 Explanation(strings[Keys.QUICK_PLACEMENT_NOTE])
+                // Labels need a bar along the bottom; a bar down a side has no room for them.
+                SwitchRow(
+                    title = strings[Keys.QUICK_LABELS_SHOW],
+                    subtitle = strings[Keys.QUICK_LABELS_NOTE],
+                    checked = preferences.quickActionsLabels,
+                    enabled = preferences.quickActionsPlacement == KeyboardPreferences.QUICK_ACTIONS_ABOVE_STRIP ||
+                        preferences.quickActionsPlacement == KeyboardPreferences.QUICK_ACTIONS_BELOW_KEYS,
+                ) { value -> update { it.copy(quickActionsLabels = value) } }
             }
 
             SettingsSectionCard(strings[Keys.QUICK_BUTTONS]) {
@@ -506,6 +509,7 @@ internal fun iconFor(action: QuickAction): Int = when (action) {
     QuickAction.DELETE_WORD_FORWARD -> R.drawable.bk_action_delete_word_forward
     QuickAction.ESCAPE -> R.drawable.bk_action_escape
     QuickAction.TAB -> R.drawable.bk_action_tab
+    QuickAction.FEATURES_SWITCH -> R.drawable.bk_action_features_on
 }
 
 internal fun labelFor(action: QuickAction): String = when (action) {
@@ -543,4 +547,5 @@ internal fun labelFor(action: QuickAction): String = when (action) {
     QuickAction.DELETE_WORD_FORWARD -> Keys.ACTION_DELETE_WORD_FORWARD
     QuickAction.ESCAPE -> Keys.ACTION_ESCAPE
     QuickAction.TAB -> Keys.ACTION_TAB
+    QuickAction.FEATURES_SWITCH -> Keys.ACTION_FEATURES_SWITCH
 }
