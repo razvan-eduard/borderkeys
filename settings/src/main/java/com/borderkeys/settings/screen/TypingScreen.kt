@@ -3,17 +3,20 @@
 
 package com.borderkeys.settings.screen
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import com.borderkeys.settings.PickerChip
 import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.ChoiceSlider
+import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.SettingLabel
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -40,7 +43,6 @@ import com.borderkeys.settings.SettingRow
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PackageListEditor
-import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SuggestionStripPreview
@@ -105,27 +107,8 @@ fun TypingScreen(modifier: Modifier = Modifier) {
         SettingsSectionCard(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE]) {
             Explanation(strings[Keys.CORRECTIONS_CORRECTING_AS_YOU_TYPE_NOTE])
             SettingLabel(strings[Keys.CORRECTIONS_PUNCTUATION_AND_CAPITALS])
-            // One choice of three, over the two stored switches autoCapitalise and
-            // forceCapitaliseSentences.
             SettingLabel(strings[Keys.CORRECTIONS_CAPITALISE])
-            FlowRow(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PickerChip(
-                    strings[Keys.CORRECTIONS_CAPITALISE_OFF],
-                    !preferences.autoCapitalise,
-                ) { update { it.copy(autoCapitalise = false) } }
-                PickerChip(
-                    strings[Keys.CORRECTIONS_CAPITALISE_WHEN_ASKED],
-                    preferences.autoCapitalise && !preferences.forceCapitaliseSentences,
-                ) { update { it.copy(autoCapitalise = true, forceCapitaliseSentences = false) } }
-                PickerChip(
-                    strings[Keys.CORRECTIONS_CAPITALISE_ALWAYS],
-                    preferences.autoCapitalise && preferences.forceCapitaliseSentences,
-                ) { update { it.copy(autoCapitalise = true, forceCapitaliseSentences = true) } }
-            }
+            CapitaliseSlider(preferences, update)
             Explanation(strings[Keys.CORRECTIONS_CAPITALISE_MODE_NOTE])
             // Name capitals, beside the sentence capitals.
             SwitchRow(
@@ -196,24 +179,15 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                 strings[Keys.CORRECTIONS_MIN_CORRECTION_LENGTH_NOTE],
             )
             SettingLabel(strings[Keys.CORRECTIONS_DISTANCE])
-            FlowRow(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PickerChip(
-                    strings[Keys.CORRECTIONS_DISTANCE_STRICT],
-                    preferences.correctionDistance == KeyboardPreferences.CORRECTION_DISTANCE_STRICT,
-                ) { update { it.copy(correctionDistance = KeyboardPreferences.CORRECTION_DISTANCE_STRICT) } }
-                PickerChip(
-                    strings[Keys.CORRECTIONS_DISTANCE_NORMAL],
-                    preferences.correctionDistance == KeyboardPreferences.CORRECTION_DISTANCE_NORMAL,
-                ) { update { it.copy(correctionDistance = KeyboardPreferences.CORRECTION_DISTANCE_NORMAL) } }
-                PickerChip(
-                    strings[Keys.CORRECTIONS_DISTANCE_LOOSE],
-                    preferences.correctionDistance == KeyboardPreferences.CORRECTION_DISTANCE_LOOSE,
-                ) { update { it.copy(correctionDistance = KeyboardPreferences.CORRECTION_DISTANCE_LOOSE) } }
-            }
+            ChoiceSlider(
+                choices = listOf(
+                    KeyboardPreferences.CORRECTION_DISTANCE_STRICT to strings[Keys.CORRECTIONS_DISTANCE_STRICT],
+                    KeyboardPreferences.CORRECTION_DISTANCE_NORMAL to strings[Keys.CORRECTIONS_DISTANCE_NORMAL],
+                    KeyboardPreferences.CORRECTION_DISTANCE_LOOSE to strings[Keys.CORRECTIONS_DISTANCE_LOOSE],
+                ),
+                value = preferences.correctionDistance,
+                default = DEFAULT_PREFERENCES.correctionDistance,
+            ) { choice -> update { it.copy(correctionDistance = choice) } }
             Explanation(strings[Keys.CORRECTIONS_DISTANCE_NOTE])
             SwitchRow(
                 title = strings[Keys.CORRECTIONS_BACKSPACE_PUTS_BACK_WHAT_YOU_TYPED],
@@ -275,28 +249,15 @@ fun TypingScreen(modifier: Modifier = Modifier) {
         // Revisiting text already committed, with its warning.
         SettingsSectionCard(strings[Keys.LANGUAGES_SWITCH_TITLE]) {
             CautionNote(strings[Keys.LANGUAGES_SWITCH_WARNING])
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PickerChip(
-                    strings[Keys.LANGUAGES_SWITCH_OFF],
-                    preferences.languageSwitchCorrectionMode == KeyboardPreferences.LANGUAGE_SWITCH_OFF,
-                ) { update { it.copy(languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_OFF) } }
-                PickerChip(
-                    strings[Keys.LANGUAGES_SWITCH_ASK],
-                    preferences.languageSwitchCorrectionMode == KeyboardPreferences.LANGUAGE_SWITCH_ASK,
-                ) { update { it.copy(languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_ASK) } }
-                PickerChip(
-                    strings[Keys.LANGUAGES_SWITCH_AUTO],
-                    preferences.languageSwitchCorrectionMode ==
-                        KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY,
-                ) {
-                    update {
-                        it.copy(languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY)
-                    }
-                }
-            }
+            ChoiceSlider(
+                choices = listOf(
+                    KeyboardPreferences.LANGUAGE_SWITCH_OFF to strings[Keys.LANGUAGES_SWITCH_OFF],
+                    KeyboardPreferences.LANGUAGE_SWITCH_ASK to strings[Keys.LANGUAGES_SWITCH_ASK],
+                    KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY to strings[Keys.LANGUAGES_SWITCH_AUTO],
+                ),
+                value = preferences.languageSwitchCorrectionMode,
+                default = DEFAULT_PREFERENCES.languageSwitchCorrectionMode,
+            ) { choice -> update { it.copy(languageSwitchCorrectionMode = choice) } }
             Explanation(strings[Keys.LANGUAGES_SWITCH_EXPLANATION])
         }
 
@@ -504,23 +465,15 @@ fun TypingScreen(modifier: Modifier = Modifier) {
                     }
                 }
                 SettingLabel(strings[Keys.RADIAL_SIZE])
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    PickerChip(
-                        strings[Keys.RADIAL_SIZE_SMALL],
-                        preferences.radialMenuSize == KeyboardPreferences.RADIAL_SIZE_SMALL,
-                    ) { update { it.copy(radialMenuSize = KeyboardPreferences.RADIAL_SIZE_SMALL) } }
-                    PickerChip(
-                        strings[Keys.RADIAL_SIZE_MEDIUM],
-                        preferences.radialMenuSize == KeyboardPreferences.RADIAL_SIZE_MEDIUM,
-                    ) { update { it.copy(radialMenuSize = KeyboardPreferences.RADIAL_SIZE_MEDIUM) } }
-                    PickerChip(
-                        strings[Keys.RADIAL_SIZE_LARGE],
-                        preferences.radialMenuSize == KeyboardPreferences.RADIAL_SIZE_LARGE,
-                    ) { update { it.copy(radialMenuSize = KeyboardPreferences.RADIAL_SIZE_LARGE) } }
-                }
+                ChoiceSlider(
+                    choices = listOf(
+                        KeyboardPreferences.RADIAL_SIZE_SMALL to strings[Keys.RADIAL_SIZE_SMALL],
+                        KeyboardPreferences.RADIAL_SIZE_MEDIUM to strings[Keys.RADIAL_SIZE_MEDIUM],
+                        KeyboardPreferences.RADIAL_SIZE_LARGE to strings[Keys.RADIAL_SIZE_LARGE],
+                    ),
+                    value = preferences.radialMenuSize,
+                    default = DEFAULT_PREFERENCES.radialMenuSize,
+                ) { choice -> update { it.copy(radialMenuSize = choice) } }
                 // How many words, how a pause is detected, and what closes the ring.
                 AdvancedSection(strings[Keys.RADIAL_ADVANCED_NOTE]) {
                     DefaultableSlider(
@@ -638,3 +591,43 @@ private fun resetCorrectionDefaults(preferences: KeyboardPreferences): KeyboardP
         rareWords = defaults.rareWords,
     )
 }
+
+/**
+ * Sentence capitals as one choice of three, Off, when the app asks, or always, over the two
+ * stored switches autoCapitalise and forceCapitaliseSentences.
+ */
+@Composable
+internal fun CapitaliseSlider(
+    preferences: KeyboardPreferences,
+    update: ((KeyboardPreferences) -> KeyboardPreferences) -> Unit,
+) {
+    val strings = LocalStrings.current
+    ChoiceSlider(
+        choices = listOf(
+            CAPITALISE_OFF to strings[Keys.CORRECTIONS_CAPITALISE_OFF],
+            CAPITALISE_WHEN_ASKED to strings[Keys.CORRECTIONS_CAPITALISE_WHEN_ASKED],
+            CAPITALISE_ALWAYS to strings[Keys.CORRECTIONS_CAPITALISE_ALWAYS],
+        ),
+        value = capitaliseChoice(preferences),
+        default = capitaliseChoice(DEFAULT_PREFERENCES),
+    ) { choice ->
+        update {
+            when (choice) {
+                CAPITALISE_OFF -> it.copy(autoCapitalise = false)
+                CAPITALISE_ALWAYS -> it.copy(autoCapitalise = true, forceCapitaliseSentences = true)
+                else -> it.copy(autoCapitalise = true, forceCapitaliseSentences = false)
+            }
+        }
+    }
+}
+
+/** Which of [CapitaliseSlider]'s choices [preferences] hold. */
+private fun capitaliseChoice(preferences: KeyboardPreferences): Int = when {
+    !preferences.autoCapitalise -> CAPITALISE_OFF
+    preferences.forceCapitaliseSentences -> CAPITALISE_ALWAYS
+    else -> CAPITALISE_WHEN_ASKED
+}
+
+private const val CAPITALISE_OFF = 0
+private const val CAPITALISE_WHEN_ASKED = 1
+private const val CAPITALISE_ALWAYS = 2

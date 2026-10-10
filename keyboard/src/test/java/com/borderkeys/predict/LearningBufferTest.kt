@@ -218,4 +218,21 @@ class LearningBufferTest {
         assertFalse(drained.getValue("plain").deliberateCapital)
         assertFalse(drained.getValue("plain").asserted)
     }
+
+    @Test
+    fun `forgetting a word drops it in every case, with its pairs and triples, and says whether it was waiting`() {
+        val buffer = LearningBuffer()
+        buffer.record("This", "en-US", 1_000)
+        buffer.record("this", "en-US", 2_000)
+        buffer.record("make", "en-US", 3_000)
+        buffer.recordPair("make", "this", 3_000)
+        buffer.recordPair("go", "home", 3_000)
+        buffer.recordTriple("I", "make", "this", 3_000)
+
+        assertTrue(buffer.forget("THIS"))
+        assertEquals(listOf("make"), buffer.drain().map { it.word })
+        assertEquals(listOf("go" to "home"), buffer.drainPairs().map { it.previousWord to it.word })
+        assertTrue(buffer.drainTriples().isEmpty())
+        assertFalse("nothing left of it to drop", buffer.forget("this"))
+    }
 }

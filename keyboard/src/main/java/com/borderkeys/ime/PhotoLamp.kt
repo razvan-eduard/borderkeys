@@ -18,7 +18,7 @@ object PhotoLamp {
     const val ROWS = 16
 
     /** How long the rise takes, in milliseconds. */
-    const val DURATION_MILLIS = 550L
+    const val DURATION_MILLIS = 786L
 
     /** How much of the rise the bottom row waits before it leaves the chip. */
     private const val ROW_LAG = 0.45f

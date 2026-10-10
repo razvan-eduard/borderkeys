@@ -172,7 +172,13 @@ ships.
   you type is recorded and nothing learned is offered, the dictionaries alone suggest, and
   switching it off asks you first and then forgets everything learned. Holding a suggestion
   offers the same from the keyboard, and a "Why?": the engine's own account of the word's score,
-  term by term, in plain words.
+  term by term, in plain words. Forget removes the word in every case it was learned in, This
+  and this alike, with what is still waiting to be saved. How soon a word or phrase is learned
+  is a number of uses, 1, 2, 3, 5 or 10, three by default, or one pick from the strip: until then
+  it is only counted and moves nothing, a dictionary word included, and from then on it climbs
+  the more you use it. How fast unused words fade sits beside it: a word or phrase unused for that
+  many days, a week to a year, counts half as much, and is no longer learned once it falls below
+  the number of uses. The two pages list only what is learned.
 
 <p align="center">
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/22_learned_words.jpg" alt="Learned words: a search box, Forget everything, and each word with how often it was used, a Block and a Delete" width="30%">
@@ -254,14 +260,18 @@ ships.
 - **Photos and screenshots.** Two switches on the Clipboard screen, side by side. Remember photos
   keeps the photos you copy, encrypted on the phone, in the clipboard history and offers the
   newest on the strip; the same picture copied twice is kept once, and Largest image kept sets the
-  limit. Remember screenshots does the same for each new screenshot, offered on the strip for five
-  minutes, beside the clipboard chip or in its place when newer, as chosen under it; turning it on
-  asks once for your screenshots folder in Android's own folder picker, and the keyboard reads that
-  folder alone, still with no permission. Turning either off deletes what it kept. Show a preview
-  in the chip puts a small picture of the image in front of the chip's icon, within the strip's
-  own height. All three are off by default. A photo or screenshot chip appears only in a field
-  that takes that kind of image, and never in a password or private field; in the clipboard panel
-  such a photo is shown faded.
+  limit. Remember screenshots does the same for each new screenshot, beside the clipboard chip or
+  in its place when newer, as chosen under it; turning it on asks once for your screenshots folder
+  in Android's own folder picker, and the keyboard reads that folder alone, still with no
+  permission. Turning either off deletes what it kept. Offer a photo or screenshot from the last
+  sets how recent either must be for the strip, from a minute to an hour, or any age. Cascade
+  screenshots offers the screenshots from that time one after another, the oldest first, each
+  paste putting the next on the strip; it needs a time other than Off. Holding the screenshot chip
+  offers Dismiss, which withdraws that screenshot, or in a series brings up the next. Show a
+  preview in the chip puts a small picture of the image in front of the chip's icon, within the
+  strip's own height. Each of these switches is off by default. A photo or screenshot chip
+  appears only in a field that takes that kind of image, and never in a password or private
+  field; in the clipboard panel such a photo is shown faded.
 
 <p align="center">
   <img src="../fastlane/com.borderkeys/metadata/android/en-US/images/phoneScreenshots/18_emoji_search.jpg" alt="The emoji panel opened over the word cake: the cakes come first" width="30%">

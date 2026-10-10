@@ -99,6 +99,12 @@ class LearningFlow(
         learning.setRefusedWords(words)
     }
 
+    /**
+     * Drops [word], in any case, from what is waiting to be written, with its pairs and triples.
+     * Returns whether the word itself was waiting.
+     */
+    fun forget(word: String): Boolean = learning.forget(word)
+
     /** Learns nothing until the gate is next set, at a field start or a settings change. */
     fun stop() {
         learning.enabled = false

@@ -46,6 +46,9 @@ enum class Feature(val needs: FieldRequirement) {
     /** The newest screenshot offered on the strip. */
     SCREENSHOT_OFFER(FieldRequirement.CLIPBOARD),
 
+    /** Cascade screenshots: those within the offer window offered in turn, the oldest first. */
+    SCREENSHOT_CASCADE(FieldRequirement.CLIPBOARD),
+
     /** Swipe typing. */
     SWIPE(FieldRequirement.SWIPE),
 
@@ -58,6 +61,7 @@ enum class Feature(val needs: FieldRequirement) {
         get() = when (this) {
             CLIPBOARD_OFFER, PHOTOS, SCREENSHOTS -> CLIPBOARD_HISTORY
             SCREENSHOT_OFFER -> SCREENSHOTS
+            SCREENSHOT_CASCADE -> SCREENSHOT_OFFER
             CLIPBOARD_HISTORY, SWIPE, STRIP -> null
         }
 
@@ -68,6 +72,7 @@ enum class Feature(val needs: FieldRequirement) {
         PHOTOS -> preferences.photosRemembered
         SCREENSHOTS -> preferences.screenshotsRemembered
         SCREENSHOT_OFFER -> preferences.clipboardSuggestion
+        SCREENSHOT_CASCADE -> preferences.screenshotCascade && preferences.imageOfferLimited
         SWIPE -> preferences.swipeEnabled
         STRIP -> preferences.showSuggestionStrip
     }

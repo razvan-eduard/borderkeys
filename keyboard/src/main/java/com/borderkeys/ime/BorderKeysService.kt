@@ -26,6 +26,7 @@ import androidx.autofill.inline.common.TextViewStyle
 import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.PersonalWordDecay
 import com.borderkeys.data.DirectBoot
 import com.borderkeys.data.entity.KeyTouch
 import com.borderkeys.data.DictionaryRepository
@@ -221,13 +222,17 @@ class BorderKeysService :
     /** Which clip the clipboard chip may show. */
     private val clipOffers = ClipChipOffers()
 
-    /** The screenshot folder's reader, the newest image it offers, and the last one pasted. */
+    /** The screenshot folder's reader, the screenshot the strip offers, and the last one pasted. */
     private val screenshotFolder by lazy { ScreenshotFolder(contentResolver) }
-    private var newestScreenshot: ScreenshotFolder.Shot? = null
+    private var offeredScreenshot: ScreenshotFolder.Shot? = null
     private var pastedScreenshot: android.net.Uri? = null
 
     /** The screenshot whose chip was showing when the keyboard closed with Offer it only once on. */
     private var withheldScreenshot: android.net.Uri? = null
+
+    /** The folder's images as last read, the oldest first, and where Cascade screenshots stands in them. */
+    private var folderScreenshots: List<ScreenshotFolder.Shot> = emptyList()
+    private val screenshotSeries = ScreenshotSeries()
 
     /** Re-reads the screenshot folder when it changes while the keyboard shows. */
     private val screenshotObserver = object : android.database.ContentObserver(
@@ -269,6 +274,9 @@ class BorderKeysService :
     /** The composing text the strip was about when [pendingForget] was held down. */
     private var pendingExplainQuery: String = ""
 
+    /** The screenshot whose chip was held, while the strip asks whether to dismiss it. */
+    private var pendingScreenshot: ScreenshotFolder.Shot? = null
+
     private var clipboardManager: ClipboardManager? = null
     private var clipboardListenerRegistered = false
 
@@ -301,6 +309,7 @@ class BorderKeysService :
             if (strip.actionMode) {
                 strip.clear()
                 pendingForget = null
+                pendingScreenshot = null
             }
         }
 
@@ -314,6 +323,7 @@ class BorderKeysService :
 
         override fun onWordReset() {
             pendingForget = null
+            pendingScreenshot = null
         }
 
         override fun onSwipeLifted(
@@ -807,6 +817,7 @@ class BorderKeysService :
             preferences.blockOffensiveWords != newPreferences.blockOffensiveWords
         val wordLimitChanged =
             preferences.learnedWordLimit != newPreferences.learnedWordLimit
+        val fadeChanged = preferences.unlearnHalfLifeDays != newPreferences.unlearnHalfLifeDays
         val swipeModelFlipped =
             preferences.experimentalSwipeModelEnabled !=
                 newPreferences.experimentalSwipeModelEnabled
@@ -822,7 +833,7 @@ class BorderKeysService :
             applySwipeModel(newPreferences.experimentalSwipeModelEnabled)
         }
         particleEffects = newParticleEffects
-        if (unlocked && (offensiveSwitchFlipped || wordLimitChanged)) {
+        if (unlocked && (offensiveSwitchFlipped || wordLimitChanged || fadeChanged)) {
             scope.launch(Dispatchers.IO) {
                 dictionaryLoader.reloadPersonal()
                 withContext(Dispatchers.Main) { orchestrator.requestSuggestions() }
@@ -921,6 +932,16 @@ class BorderKeysService :
     }
 
     override fun onActionPicked(index: Int) {
+        // The held screenshot's actions: dismiss, cancel.
+        pendingScreenshot?.let { shot ->
+            pendingScreenshot = null
+            host?.suggestionStrip?.clear()
+            if (index == 0) {
+                dismissScreenshot(shot)
+            }
+            orchestrator.requestSuggestions()
+            return
+        }
         // The held word's actions: forget, cancel, explain.
         val forgetting = pendingForget ?: return
         pendingForget = null
@@ -1025,9 +1046,7 @@ class BorderKeysService :
             described = info != null,
             contentMimeTypes = info?.contentMimeTypes?.toList().orEmpty(),
         )
-        engine.setLearningSpeed(
-            KeyboardPreferences.learningSpeedFactor(preferences.learningSpeed),
-        )
+        engine.setLearnAfterUses(preferences.learnAfter)
         engine.setCorrectionStrictness(preferences.correctionStrictness)
         engine.setKnownWordReach(KeyboardPreferences.rareWordsMinLogProb(preferences.rareWords))
         engine.setLanguageLock(
@@ -1079,7 +1098,11 @@ class BorderKeysService :
             currentInputEditorInfo?.packageName,
         )
         if (preferences.clipboardSuggestionOnce && host?.suggestionStrip?.screenshotChip != null) {
-            withheldScreenshot = newestScreenshot?.uri
+            if (screenshotsCascade()) {
+                screenshotSeries.end(folderScreenshots)
+            } else {
+                withheldScreenshot = offeredScreenshot?.uri
+            }
         }
         unregisterClipboardListener()
         unwatchScreenshots()
@@ -2110,6 +2133,7 @@ class BorderKeysService :
         if (orchestrator.session.policy.privateField || word.isEmpty()) {
             return
         }
+        pendingScreenshot = null
         pendingForget = word
         pendingExplainQuery = orchestrator.lastQuery
         val actions = listOf(
@@ -2168,20 +2192,19 @@ class BorderKeysService :
     }
 
     /**
-     * Forgets a personal word, with the pairs and triples it is part of. A word the personal
-     * dictionary does not hold is blocked in lower case instead, when [blockWhenNotPersonal].
+     * Forgets a personal word in every case, with the pairs and triples it is part of, saved or
+     * still waiting to be. A word never learned is blocked in lower case instead, when
+     * [blockWhenNotPersonal].
      */
     private fun forgetWord(word: String, blockWhenNotPersonal: Boolean = true) {
         if (!unlocked) {
             return
         }
+        val waiting = orchestrator.forgetUnsaved(word)
         scope.launch {
             val dictionary = DataGraph.dictionary
-            // Looked up ignoring case.
-            val personal = dictionary.findIgnoreCase(word)
-            if (personal != null) {
-                dictionary.forget(personal.word)
-            } else if (blockWhenNotPersonal) {
+            val forgotten = dictionary.forgetEveryCase(word)
+            if (!forgotten && !waiting && blockWhenNotPersonal) {
                 dictionary.block(word.lowercase())
                 dictionaryLoader.refreshBlockedWords(dictionary)
             }
@@ -2238,8 +2261,12 @@ class BorderKeysService :
         if (now - lastSweep < DECAY_SWEEP_INTERVAL_MILLIS) {
             return
         }
-        val limit = DataGraph.themes.preferences.first().learnedWordLimit
-        DataGraph.dictionary.decayStaleEntries(limit, now)
+        val settings = DataGraph.themes.preferences.first()
+        DataGraph.dictionary.decayStaleEntries(
+            settings.learnedWordLimit,
+            PersonalWordDecay.halfLifeMillis(settings.unlearnHalfLifeDays),
+            now,
+        )
         prefs.edit().putLong(DECAY_LAST_SWEEP_AT, now).apply()
     }
 
@@ -2801,7 +2828,7 @@ class BorderKeysService :
             strip.clipboardChip != null && it.itemCount > 0 && it.description?.hasMimeType("image/*") == true
         }?.getItemAt(0)?.uri
         loadChipPreview(clipUri, clipPreview) { strip.clipboardThumbnail = it }
-        val shotUri = newestScreenshot?.uri?.takeIf { strip.screenshotChip != null }
+        val shotUri = offeredScreenshot?.uri?.takeIf { strip.screenshotChip != null }
         loadChipPreview(shotUri, screenshotPreview) { strip.screenshotThumbnail = it }
     }
 
@@ -2927,6 +2954,8 @@ class BorderKeysService :
     /** Whether the strip offers screenshots in this field: watched, and Offer what you copied on. */
     private fun screenshotsOffered(): Boolean = orchestrator.session.policy.on(Feature.SCREENSHOT_OFFER, preferences)
 
+    private fun screenshotsCascade(): Boolean = orchestrator.session.policy.on(Feature.SCREENSHOT_CASCADE, preferences)
+
     /**
      * Whether an image taken or copied at [millis] is young enough for the strip: within the
      * offer window, or any age when the window is off. A missing time counts as young.
@@ -2937,27 +2966,43 @@ class BorderKeysService :
     }
 
     /**
-     * Reads the newest image of the screenshot folder off the main thread, keeps a new one in the
-     * history and places its chip; one older than the offer window, already pasted or withheld
-     * on a close is not offered.
+     * Reads the screenshot folder's images off the main thread, keeps a new one in the history,
+     * and offers one ([offerScreenshot]).
      */
     private fun refreshScreenshot() {
         if (!screenshotsWatched()) {
-            newestScreenshot = null
+            folderScreenshots = emptyList()
+            offeredScreenshot = null
             refreshClipboardChip()
             return
         }
         val tree = android.net.Uri.parse(preferences.screenshotFolder)
         scope.launch {
-            val shot = withContext(Dispatchers.IO) { screenshotFolder.newest(tree) }
-            shot?.takeIf { System.currentTimeMillis() - it.modifiedMillis <= SCREENSHOT_RECENT_MILLIS }
+            val shots = withContext(Dispatchers.IO) { screenshotFolder.images(tree) }
+            shots.lastOrNull()?.takeIf { System.currentTimeMillis() - it.modifiedMillis <= SCREENSHOT_RECENT_MILLIS }
                 ?.let(::rememberScreenshot)
-            newestScreenshot = shot?.takeIf {
-                screenshotsOffered() && withinOfferWindow(it.modifiedMillis) &&
-                    it.uri != pastedScreenshot && it.uri != withheldScreenshot
-            }
-            refreshClipboardChip()
+            folderScreenshots = shots
+            offerScreenshot()
         }
+    }
+
+    /**
+     * Picks the screenshot the strip offers from [folderScreenshots] within the offer window, and
+     * places the chips: with Cascade screenshots the next of the series, else the newest unless
+     * it was pasted or withheld on a close.
+     */
+    private fun offerScreenshot() {
+        val young = if (screenshotsOffered()) {
+            folderScreenshots.filter { withinOfferWindow(it.modifiedMillis) }
+        } else {
+            emptyList()
+        }
+        offeredScreenshot = if (screenshotsCascade()) {
+            screenshotSeries.next(young)
+        } else {
+            young.lastOrNull()?.takeIf { it.uri != pastedScreenshot && it.uri != withheldScreenshot }
+        }
+        refreshClipboardChip()
     }
 
     /** The screenshot last put in the clipboard history, so a refresh does not read it again. */
@@ -2984,7 +3029,7 @@ class BorderKeysService :
      */
     private fun placeScreenshotChip(clip: ClipData?) {
         val strip = host?.suggestionStrip ?: return
-        val shot = newestScreenshot?.takeIf { screenshotsOffered() && orchestrator.session.takesPhoto(it.mimeType) }
+        val shot = offeredScreenshot?.takeIf { screenshotsOffered() && orchestrator.session.takesPhoto(it.mimeType) }
         if (shot == null) {
             strip.screenshotChip = null
             return
@@ -3004,8 +3049,27 @@ class BorderKeysService :
         }
     }
 
+    override fun onScreenshotLongPressed() {
+        val shot = offeredScreenshot ?: return
+        pendingForget = null
+        pendingScreenshot = shot
+        host?.suggestionStrip?.setActions(
+            listOf(Candidate(strings[Keys.STRIP_DISMISS]), Candidate(strings[Keys.ASSISTANT_CANCEL])),
+        )
+    }
+
+    /** Withdraws [shot]'s chip; with Cascade screenshots the next of the series takes its place. */
+    private fun dismissScreenshot(shot: ScreenshotFolder.Shot) {
+        if (screenshotsCascade()) {
+            screenshotSeries.used(shot)
+        } else {
+            withheldScreenshot = shot.uri
+        }
+        offerScreenshot()
+    }
+
     override fun onScreenshotPicked() {
-        val shot = newestScreenshot ?: return
+        val shot = offeredScreenshot ?: return
         if (!orchestrator.session.takesPhoto(shot.mimeType)) {
             return
         }
@@ -3014,7 +3078,12 @@ class BorderKeysService :
             playPhotoLamp(shot.uri, chip)
             if (preferences.clipboardSuggestionOnce) {
                 pastedScreenshot = shot.uri
-                newestScreenshot = null
+            }
+            if (screenshotsCascade()) {
+                screenshotSeries.used(shot)
+                offerScreenshot()
+            } else if (preferences.clipboardSuggestionOnce) {
+                offeredScreenshot = null
                 refreshClipboardChip()
             }
         }

@@ -42,6 +42,9 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.TextShortcut
 import com.borderkeys.settings.DefaultableSlider
+import com.borderkeys.settings.NodeSlider
+import com.borderkeys.data.PersonalEntries
+import com.borderkeys.predict.WordFold
 import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.PickerChip
@@ -68,8 +71,8 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
 
     val wordCount by repository.wordCount.collectAsStateWithLifecycle(initialValue = 0)
     val blocked by repository.blocked.collectAsStateWithLifecycle(initialValue = emptyList())
-    val pairCount by repository.pairCount.collectAsStateWithLifecycle(initialValue = 0)
-    val tripleCount by repository.tripleCount.collectAsStateWithLifecycle(initialValue = 0)
+    val savedWords by repository.words.collectAsStateWithLifecycle(initialValue = emptyList())
+    val savedPhrases by repository.phrases.collectAsStateWithLifecycle(initialValue = emptyList())
     val touchTaps by repository.touchTaps.collectAsStateWithLifecycle(initialValue = 0)
     val touchRows by repository.touches.collectAsStateWithLifecycle(initialValue = emptyList())
     var chosenBucket by rememberSaveable { mutableStateOf<String?>(null) }
@@ -80,6 +83,14 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
     val appearance by themes.appearance
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentAppearance() })
+    // What counts as learned, as the keyboard counts it: only those are listed and counted.
+    val now = remember { System.currentTimeMillis() }
+    val learnedWords = remember(savedWords, preferences.learnAfter, preferences.unlearnHalfLifeDays) {
+        PersonalEntries.words(savedWords, preferences, now, WordFold::fold).size
+    }
+    val learnedPhrases = remember(savedPhrases, preferences.learnAfter, preferences.unlearnHalfLifeDays) {
+        PersonalEntries.phrases(savedPhrases, preferences, now).size
+    }
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SettingsSectionCard(strings[Keys.DICTIONARY_LEARN_FROM_TYPING]) {
@@ -96,36 +107,22 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                 }
             }
             AdvancedSection(strings[Keys.DICTIONARY_ADVANCED_NOTE]) {
-                Explanation(
-                    strings[Keys.DICTIONARY_THIS_DOES_NOT_CHANGE_WHAT_IS],
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    PickerChip(
-                        strings[Keys.DICTIONARY_CAUTIOUS],
-                        preferences.learningSpeed == KeyboardPreferences.LEARNING_CAUTIOUS,
-                    ) { update { it.copy(learningSpeed = KeyboardPreferences.LEARNING_CAUTIOUS) } }
-                    PickerChip(
-                        strings[Keys.DICTIONARY_BALANCED],
-                        preferences.learningSpeed == KeyboardPreferences.LEARNING_BALANCED,
-                    ) { update { it.copy(learningSpeed = KeyboardPreferences.LEARNING_BALANCED) } }
-                    PickerChip(
-                        strings[Keys.DICTIONARY_IMMEDIATE],
-                        preferences.learningSpeed == KeyboardPreferences.LEARNING_IMMEDIATE,
-                    ) { update { it.copy(learningSpeed = KeyboardPreferences.LEARNING_IMMEDIATE) } }
-                }
-                Explanation(
-                    when (preferences.learningSpeed) {
-                        KeyboardPreferences.LEARNING_CAUTIOUS ->
-                            strings[Keys.DICTIONARY_ABOUT_SIX_REPETITIONS_BEFORE_A_PHRASE]
-                        KeyboardPreferences.LEARNING_IMMEDIATE ->
-                            strings[Keys.DICTIONARY_THE_FIRST_TIME_COUNTS_BEST_IF]
-                        else ->
-                            strings[Keys.DICTIONARY_A_PHRASE_WRITTEN_TWICE_STARTS_TO]
-                    },
-                )
+                SettingLabel(strings[Keys.DICTIONARY_LEARN_AFTER_TITLE])
+                NodeSlider(
+                    label = strings.counted(Keys.DICTIONARY_LEARN_AFTER_USES, preferences.learnAfter),
+                    options = KeyboardPreferences.LEARN_AFTER_USES_STEPS,
+                    value = preferences.learnAfter,
+                    default = KeyboardPreferences.DEFAULT_LEARN_AFTER_USES,
+                ) { uses -> update { it.copy(learnAfterUses = uses) } }
+                Explanation(strings[Keys.DICTIONARY_THIS_DOES_NOT_CHANGE_WHAT_IS])
+                SettingLabel(strings[Keys.DICTIONARY_UNLEARN_TITLE])
+                NodeSlider(
+                    label = strings.counted(Keys.DICTIONARY_UNLEARN_DAYS, preferences.unlearnHalfLifeDays),
+                    options = KeyboardPreferences.UNLEARN_HALF_LIFE_STEPS,
+                    value = preferences.unlearnHalfLifeDays,
+                    default = KeyboardPreferences.DEFAULT_UNLEARN_HALF_LIFE_DAYS,
+                ) { days -> update { it.copy(unlearnHalfLifeDays = days) } }
+                Explanation(strings[Keys.DICTIONARY_UNLEARN_NOTE])
             }
         }
         // Where the taps land on each key; greyed, not hidden, while Learning is off.
@@ -295,11 +292,11 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
         // Each list is a page of its own.
         SettingsSectionCard(strings[Keys.DICTIONARY_LEARNED]) {
             SettingRow(
-                title = strings.getString(Keys.DICTIONARY_WORDS_COUNT, wordCount),
+                title = strings.getString(Keys.DICTIONARY_WORDS_COUNT, learnedWords),
                 trailing = { PageChevron() },
             ) { open(Screen.LearnedWords) }
             SettingRow(
-                title = strings.getString(Keys.DICTIONARY_PHRASES_COUNT, pairCount + tripleCount),
+                title = strings.getString(Keys.DICTIONARY_PHRASES_COUNT, learnedPhrases),
                 trailing = { PageChevron() },
             ) { open(Screen.LearnedPhrases) }
             val shownLimit = wordLimitDraft ?: preferences.learnedWordLimit

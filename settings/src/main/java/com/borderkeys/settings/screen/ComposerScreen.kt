@@ -4,7 +4,6 @@
 package com.borderkeys.settings.screen
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,10 +38,11 @@ import com.borderkeys.data.theme.CustomAction
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
+import com.borderkeys.settings.ChoiceSlider
+import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.SettingLabel
-import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.AdvancedSection
@@ -81,23 +81,15 @@ fun ComposerScreen(modifier: Modifier = Modifier) {
             if (preferences.composerEnabled) {
                 AdvancedSection(strings[Keys.COMPOSER_ADVANCED_NOTE]) {
                     SectionHeader(strings[Keys.COMPOSER_SETTINGS_TEXT_SIZE])
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        PickerChip(
-                            strings[Keys.COMPOSER_TEXT_SIZE_SMALL],
-                            preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL,
-                        ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL) } }
-                        PickerChip(
-                            strings[Keys.COMPOSER_TEXT_SIZE_MEDIUM],
-                            preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM,
-                        ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM) } }
-                        PickerChip(
-                            strings[Keys.COMPOSER_TEXT_SIZE_LARGE],
-                            preferences.composerTextSize == KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE,
-                        ) { update { it.copy(composerTextSize = KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE) } }
-                    }
+                    ChoiceSlider(
+                        choices = listOf(
+                            KeyboardPreferences.COMPOSER_TEXT_SIZE_SMALL to strings[Keys.COMPOSER_TEXT_SIZE_SMALL],
+                            KeyboardPreferences.COMPOSER_TEXT_SIZE_MEDIUM to strings[Keys.COMPOSER_TEXT_SIZE_MEDIUM],
+                            KeyboardPreferences.COMPOSER_TEXT_SIZE_LARGE to strings[Keys.COMPOSER_TEXT_SIZE_LARGE],
+                        ),
+                        value = preferences.composerTextSize,
+                        default = DEFAULT_PREFERENCES.composerTextSize,
+                    ) { choice -> update { it.copy(composerTextSize = choice) } }
                     SwitchRow(
                         title = strings[Keys.COMPOSER_SETTINGS_SNAP_SELECTION],
                         subtitle = strings[Keys.COMPOSER_SETTINGS_SNAP_SELECTION_NOTE],

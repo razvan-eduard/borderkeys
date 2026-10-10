@@ -3,7 +3,12 @@
 
 package com.borderkeys.settings.screen
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
+import com.borderkeys.settings.PickerChip
 import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.ChoiceSlider
+import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.Screen
@@ -11,9 +16,7 @@ import com.borderkeys.settings.Screen
 import android.content.Context
 import android.content.Intent
 import android.view.inputmethod.InputMethodManager
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,7 +37,6 @@ import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
-import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.SettingRow
@@ -294,28 +296,16 @@ fun LayoutScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
             // Nothing to choose while it is off.
             if (preferences.hapticFeedback) {
                 SettingLabel(strings[Keys.LAYOUT_HAPTIC_STRENGTH])
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    PickerChip(
-                        strings[Keys.LAYOUT_HAPTIC_SYSTEM],
-                        preferences.hapticStrength == KeyboardPreferences.HAPTIC_SYSTEM,
-                    ) { update { it.copy(hapticStrength = KeyboardPreferences.HAPTIC_SYSTEM) } }
-                    PickerChip(
-                        strings[Keys.LAYOUT_HAPTIC_LIGHT],
-                        preferences.hapticStrength == KeyboardPreferences.HAPTIC_LIGHT,
-                    ) { update { it.copy(hapticStrength = KeyboardPreferences.HAPTIC_LIGHT) } }
-                    PickerChip(
-                        strings[Keys.LAYOUT_HAPTIC_MEDIUM],
-                        preferences.hapticStrength == KeyboardPreferences.HAPTIC_MEDIUM,
-                    ) { update { it.copy(hapticStrength = KeyboardPreferences.HAPTIC_MEDIUM) } }
-                    PickerChip(
-                        strings[Keys.LAYOUT_HAPTIC_STRONG],
-                        preferences.hapticStrength == KeyboardPreferences.HAPTIC_STRONG,
-                    ) { update { it.copy(hapticStrength = KeyboardPreferences.HAPTIC_STRONG) } }
-                }
+                ChoiceSlider(
+                    choices = listOf(
+                        KeyboardPreferences.HAPTIC_SYSTEM to strings[Keys.LAYOUT_HAPTIC_SYSTEM],
+                        KeyboardPreferences.HAPTIC_LIGHT to strings[Keys.LAYOUT_HAPTIC_LIGHT],
+                        KeyboardPreferences.HAPTIC_MEDIUM to strings[Keys.LAYOUT_HAPTIC_MEDIUM],
+                        KeyboardPreferences.HAPTIC_STRONG to strings[Keys.LAYOUT_HAPTIC_STRONG],
+                    ),
+                    value = preferences.hapticStrength,
+                    default = DEFAULT_PREFERENCES.hapticStrength,
+                ) { choice -> update { it.copy(hapticStrength = choice) } }
                 Explanation(strings[Keys.LAYOUT_HAPTIC_STRENGTH_NOTE])
                 SwitchRow(
                     title = strings[Keys.LAYOUT_HAPTIC_KEYS],

@@ -21,6 +21,16 @@ constexpr int kMaxWordCodePoints = 64;
 
 UserModel::UserModel() { clear(); }
 
+namespace {
+
+/** [a] + [b], held at UINT32_MAX. */
+uint32_t saturatingAdd(uint32_t a, uint32_t b) {
+    const uint64_t sum = static_cast<uint64_t>(a) + b;
+    return (sum > UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(sum);
+}
+
+}  // namespace
+
 void UserModel::clear() {
     nodes_.clear();
     entries_.clear();
@@ -409,16 +419,20 @@ void UserModel::bulkLoad(const char* const* words, const size_t* lengths, const 
             continue;
         }
         Entry& entry = entries_[static_cast<size_t>(index)];
-        entry.text.assign(words[i], lengths[i]);
-        entry.count = static_cast<uint32_t>(stored);
-        entry.deliberateCapitals = (deliberateCapitals != nullptr && deliberateCapitals[i] > 0)
-            ? static_cast<uint32_t>(deliberateCapitals[i])
-            : 0u;
-        entry.asserted = (asserted != nullptr && asserted[i] > 0)
-            ? static_cast<uint32_t>(asserted[i])
-            : 0u;
-        const uint64_t total = static_cast<uint64_t>(totalCount_) + entry.count;
-        totalCount_ = (total > UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(total);
+        // Another case or mark form of a word already loaded adds to it; the first loaded keeps
+        // its spelling.
+        if (entry.count == 0u) {
+            entry.text.assign(words[i], lengths[i]);
+        }
+        entry.count = saturatingAdd(entry.count, static_cast<uint32_t>(stored));
+        if (deliberateCapitals != nullptr && deliberateCapitals[i] > 0) {
+            entry.deliberateCapitals =
+                saturatingAdd(entry.deliberateCapitals, static_cast<uint32_t>(deliberateCapitals[i]));
+        }
+        if (asserted != nullptr && asserted[i] > 0) {
+            entry.asserted = saturatingAdd(entry.asserted, static_cast<uint32_t>(asserted[i]));
+        }
+        totalCount_ = saturatingAdd(totalCount_, static_cast<uint32_t>(stored));
     }
 }
 

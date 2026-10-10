@@ -113,13 +113,13 @@ class DictionaryRepository internal constructor(
 
     /**
      * Halves the stored count of every word, pair and triple nobody has written in a
-     * [PersonalWordDecay.HALF_LIFE_MILLIS] or longer, then deletes the words written once before
-     * [PersonalWordDecay.UNCONFIRMED_LIFE_MILLIS] and those past the [keep] used most, with their
+     * [halfLifeMillis] or longer, then deletes the words written once before
+     * [PersonalWordDecay.unconfirmedLifeMillis] and those past the [keep] used most, with their
      * phrases.
      */
-    suspend fun decayStaleEntries(keep: Int, now: Long = System.currentTimeMillis()) {
-        val cutoff = now - PersonalWordDecay.HALF_LIFE_MILLIS
-        val unconfirmedCutoff = now - PersonalWordDecay.UNCONFIRMED_LIFE_MILLIS
+    suspend fun decayStaleEntries(keep: Int, halfLifeMillis: Long, now: Long = System.currentTimeMillis()) {
+        val cutoff = now - halfLifeMillis
+        val unconfirmedCutoff = now - PersonalWordDecay.unconfirmedLifeMillis(halfLifeMillis)
         database.withTransaction {
             userWords.decayStale(cutoff, now)
             userBigrams.decayStale(cutoff, now)
@@ -147,10 +147,18 @@ class DictionaryRepository internal constructor(
         }
     }
 
-    suspend fun findIgnoreCase(word: String): UserWord? = userWords.findIgnoreCase(word)
-
     /** Forgets a word and every phrase it was part of. */
     suspend fun forget(word: String) = forget(listOf(word))
+
+    /**
+     * Forgets [word] in every case it was learned in, each with its phrases. Returns whether the
+     * personal dictionary held any of them.
+     */
+    suspend fun forgetEveryCase(word: String): Boolean {
+        val cases = casesOf(word, userWords.allWords())
+        forget(cases)
+        return cases.isNotEmpty()
+    }
 
     /** Forgets [words] and every phrase any of them was part of, in one transaction. */
     suspend fun forget(words: Collection<String>) {
@@ -262,3 +270,7 @@ class DictionaryRepository internal constructor(
         const val MAX_TRIGRAMS_IN_MEMORY = 2_048
     }
 }
+
+/** The entries of [stored] that are [word] in some case: "This", "this" and "THIS" are one word. */
+internal fun casesOf(word: String, stored: Collection<String>): List<String> =
+    stored.filter { it.equals(word, ignoreCase = true) }

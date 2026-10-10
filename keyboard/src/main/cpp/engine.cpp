@@ -124,10 +124,6 @@ static_assert(
 // The log-probability of a word only the personal dictionary holds, before its boost.
 constexpr float kUserOnlyLogProb = -8.0f;
 
-// The effective count (raw count times learning speed) at which repetition alone establishes a
-// learned word; see Engine::personalWordEstablished.
-constexpr float kMinPersonalEvidence = 3.0f;
-
 /** Smoothing for a personal pair, in observations: its share is `count / (total + prior)`. */
 constexpr float kUserBigramPrior = 4.0f;
 
@@ -1291,9 +1287,8 @@ float Engine::userBoostForCount(uint32_t count) const {
     if (count == 0) {
         return 0.0f;
     }
-    // Logarithmic and capped; the learning speed scales the count, not the cap.
-    const float effective = static_cast<float>(count) * learningSpeed_;
-    const float boost = 0.9f * std::log(1.0f + effective);
+    // Logarithmic and capped.
+    const float boost = 0.9f * std::log(1.0f + static_cast<float>(count));
     return (boost > kMaxUserBoost) ? kMaxUserBoost : boost;
 }
 
@@ -1308,13 +1303,12 @@ void Engine::loadUserTrigrams(const char* const* previous2, const size_t* previo
                                 nextLengths, counts, count);
 }
 
-void Engine::setLearningSpeed(float speed) {
-    // A non-positive speed resets to 1; the rest is capped at 8.
-    if (!(speed > 0.0f)) {
-        learningSpeed_ = 1.0f;
+void Engine::setLearnAfterUses(int uses) {
+    if (uses < 1) {
+        learnAfterUses_ = kDefaultLearnAfterUses;
         return;
     }
-    learningSpeed_ = (speed > 8.0f) ? 8.0f : speed;
+    learnAfterUses_ = std::min(static_cast<uint32_t>(uses), kMaxLearnAfterUses);
 }
 
 void Engine::setCorrectionStrictness(float scale) {
@@ -1329,7 +1323,11 @@ float Engine::userBoostFor(const char* text, uint32_t length) const {
     if (!personalModelEnabled_ || userModel_.size() == 0 || text == nullptr || length == 0) {
         return 0.0f;
     }
-    return userBoostForCount(userModel_.countFor(text, length));
+    const int32_t entry = userModel_.entryIndexFor(text, length);
+    if (entry < 0 || !personalWordEstablished(static_cast<uint32_t>(entry))) {
+        return 0.0f;
+    }
+    return userBoostForCount(userModel_.entryCount(static_cast<uint32_t>(entry)));
 }
 
 void Engine::offerCandidate(TopK<Candidate>& heap, const Candidate& candidate, const char* text,
@@ -1846,7 +1844,7 @@ float Engine::userBigramBonusFor(uint32_t entryIndex) const {
         return 0.0f;
     }
     const uint32_t pair = userModel_.bigramCount(userContext1_, static_cast<int32_t>(entryIndex));
-    if (pair == 0u) {
+    if (pair < learnAfterUses_) {
         return 0.0f;
     }
     const uint32_t total = userModel_.successorTotal(userContext1_);
@@ -1854,8 +1852,7 @@ float Engine::userBigramBonusFor(uint32_t entryIndex) const {
         return 0.0f;
     }
     // The smoothed share, as a bounded bonus.
-    const float share = static_cast<float>(pair) /
-                        (static_cast<float>(total) + kUserBigramPrior / learningSpeed_);
+    const float share = static_cast<float>(pair) / (static_cast<float>(total) + kUserBigramPrior);
     const float bonus = kMaxUserBigramBoost * share;
     return bonus;
 }
@@ -1874,6 +1871,10 @@ void Engine::searchUserPhrases(TopK<Candidate>& heap) {
     const int firstCount = userModel_.successors(userContext1_, first, kMaxFirst);
 
     for (int i = 0; i < firstCount && phraseCount_ < kMaxPhrases; ++i) {
+        // Each link has to be learned.
+        if (first[i].count < learnAfterUses_) {
+            continue;
+        }
         const float firstShare = static_cast<float>(first[i].count) /
                                  (static_cast<float>(firstTotal) + kUserBigramPrior);
         if (firstShare < kPhraseMinShare) {
@@ -1886,7 +1887,7 @@ void Engine::searchUserPhrases(TopK<Candidate>& heap) {
             continue;
         }
         UserModel::Successor second[1];
-        if (userModel_.successors(middle, second, 1) != 1) {
+        if (userModel_.successors(middle, second, 1) != 1 || second[0].count < learnAfterUses_) {
             continue;
         }
         // The second link is smoothed against a larger prior.
@@ -1965,13 +1966,14 @@ void Engine::searchUserSuccessors(TopK<Candidate>& heap) {
         found = userModel_.successors(userContext1_, successors, kMaxSuccessors);
     }
     for (int i = 0; i < found; ++i) {
-        // A smoothed conditional probability plus the preference; the prior and the half-life
-        // both scale with the learning speed.
+        // A pair or triple is offered once learned.
+        if (successors[i].count < learnAfterUses_) {
+            continue;
+        }
+        // A smoothed conditional probability plus the preference.
         const float count = static_cast<float>(successors[i].count);
-        const float prior = kUserBigramPrior / learningSpeed_;
-        const float halfLife = kUserChainHalfLife / learningSpeed_;
-        const float share = count / (static_cast<float>(total) + prior);
-        const float confidence = count / (count + halfLife);
+        const float share = count / (static_cast<float>(total) + kUserBigramPrior);
+        const float confidence = count / (count + kUserChainHalfLife);
         const float score = std::log(share) + kUserChainPreference * confidence;
         uint32_t textLength = 0;
         const Candidate candidate{Candidate::kUserPack,
@@ -1992,8 +1994,7 @@ bool Engine::personalWordEstablished(uint32_t entryIndex) const {
     if (userModel_.asserted(entryIndex) > 0) {
         return true;
     }
-    return static_cast<float>(userModel_.entryCount(entryIndex)) * learningSpeed_ >=
-           kMinPersonalEvidence;
+    return userModel_.entryCount(entryIndex) >= learnAfterUses_;
 }
 
 int32_t Engine::establishedPersonalEntry(const char* word, size_t length) const {

@@ -23,6 +23,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -133,6 +134,73 @@ class KeyboardViewsTest {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
         tap(view, resize.x, resize.y)
         assertEquals(listOf(QuickTile.RESIZE), tapped)
+    }
+
+    // ---- the suggestion strip's chips -------------------------------------------------------
+
+    /** A strip with the screenshot chip in the first slot and the clipboard chip in the second. */
+    private fun chipStrip(): Pair<SuggestionStripView, MutableList<String>> {
+        val strip = SuggestionStripView(context, paints, strings)
+        val events = mutableListOf<String>()
+        strip.listener = object : SuggestionStripView.Listener {
+            override fun onSuggestionPicked(index: Int, word: String) {
+                events += "picked $word"
+            }
+            override fun onPrivateRevealToggled() = Unit
+            override fun onSuggestionLongPressed(index: Int, word: String) {
+                events += "held $word"
+            }
+            override fun onActionPicked(index: Int) {
+                events += "action $index"
+            }
+            override fun onClipboardPicked() {
+                events += "clipboard"
+            }
+            override fun onScreenshotPicked() {
+                events += "screenshot"
+            }
+            override fun onScreenshotLongPressed() {
+                events += "screenshot held"
+            }
+        }
+        strip.screenshotFirst = true
+        strip.screenshotChip = "Screenshot"
+        strip.clipboardChip = "copied"
+        // Attached, so the hold's delayed check runs.
+        val activity = Robolectric.buildActivity(android.app.Activity::class.java).setup().get()
+        activity.setContentView(strip, android.view.ViewGroup.LayoutParams(1080, 140))
+        shadowOf(Looper.getMainLooper()).idle()
+        place(strip, 1080, 140)
+        return strip to events
+    }
+
+    /** Presses at ([x], [y]) past the long-press time, then lifts. */
+    private fun hold(view: View, x: Float, y: Float) {
+        val now = SystemClock.uptimeMillis()
+        view.dispatchTouchEvent(MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0))
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(KeyboardCanvasView.LONG_PRESS_MILLIS + 50))
+        view.dispatchTouchEvent(MotionEvent.obtain(now, now + 500, MotionEvent.ACTION_UP, x, y, 0))
+    }
+
+    @Test
+    fun `holding the screenshot chip asks to dismiss it, and the lift pastes nothing`() {
+        val (strip, events) = chipStrip()
+        hold(strip, 270f, 70f)
+        assertEquals(listOf("screenshot held"), events)
+    }
+
+    @Test
+    fun `a tap on the screenshot chip still pastes it`() {
+        val (strip, events) = chipStrip()
+        tap(strip, 270f, 70f)
+        assertEquals(listOf("screenshot"), events)
+    }
+
+    @Test
+    fun `the clipboard chip has no hold, so holding it is a tap`() {
+        val (strip, events) = chipStrip()
+        hold(strip, 810f, 70f)
+        assertEquals(listOf("clipboard"), events)
     }
 
     // ---- the quick actions bar -------------------------------------------------------------

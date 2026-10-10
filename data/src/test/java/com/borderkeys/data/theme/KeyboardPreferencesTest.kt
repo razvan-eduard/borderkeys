@@ -190,22 +190,29 @@ class KeyboardPreferencesTest {
         )
     }
 
-    /** The three factors are ordered, and the default is 1. */
+    /** A file from before the uses setting keeps what its learning speed asked for. */
     @Test
-    fun theLearningSpeedsAreOrderedAroundTheDefault() {
-        val cautious = KeyboardPreferences.learningSpeedFactor(KeyboardPreferences.LEARNING_CAUTIOUS)
-        val balanced = KeyboardPreferences.learningSpeedFactor(KeyboardPreferences.LEARNING_BALANCED)
-        val immediate =
-            KeyboardPreferences.learningSpeedFactor(KeyboardPreferences.LEARNING_IMMEDIATE)
+    fun anOldLearningSpeedBecomesItsNumberOfUses() {
+        fun usesFor(speed: Int) = KeyboardPreferences(learningSpeed = speed).sanitised().learnAfter
+        assertEquals(10, usesFor(KeyboardPreferences.LEARNING_CAUTIOUS))
+        assertEquals(3, usesFor(KeyboardPreferences.LEARNING_BALANCED))
+        assertEquals(1, usesFor(KeyboardPreferences.LEARNING_IMMEDIATE))
+        assertEquals(
+            "a chosen number wins over the old speed",
+            5,
+            KeyboardPreferences(learningSpeed = KeyboardPreferences.LEARNING_CAUTIOUS, learnAfterUses = 5)
+                .sanitised().learnAfter,
+        )
+    }
 
-        assertTrue("cautious must be slower than the default", cautious < balanced)
-        assertTrue("immediate must be faster than the default", immediate > balanced)
-        assertEquals("the default must not scale anything", 1f, balanced, 0f)
-        assertTrue("a speed must never be zero or negative", cautious > 0f)
-
-        // An unknown value reads as the default.
-        assertEquals(1f, KeyboardPreferences.learningSpeedFactor(99), 0f)
-        assertEquals(1f, KeyboardPreferences.learningSpeedFactor(-1), 0f)
+    @Test
+    fun theUsesAndTheFadeLandOnTheirStops() {
+        assertEquals(5, KeyboardPreferences(learnAfterUses = 7).sanitised().learnAfterUses)
+        assertEquals(10, KeyboardPreferences(learnAfterUses = 99).sanitised().learnAfterUses)
+        assertEquals(1, KeyboardPreferences(learnAfterUses = -2).sanitised().learnAfterUses)
+        assertEquals(90, KeyboardPreferences(unlearnHalfLifeDays = 100).sanitised().unlearnHalfLifeDays)
+        assertEquals(7, KeyboardPreferences(unlearnHalfLifeDays = 0).sanitised().unlearnHalfLifeDays)
+        assertEquals(365, KeyboardPreferences(unlearnHalfLifeDays = 5000).sanitised().unlearnHalfLifeDays)
     }
 
     @Test
@@ -250,6 +257,8 @@ class KeyboardPreferencesTest {
         assertEquals(0f, defaults.bottomOffsetDp, 0f)
         assertEquals(0f, defaults.horizontalOffsetDp, 0f)
         assertEquals(KeyboardPreferences.LEARNING_BALANCED, defaults.learningSpeed)
+        assertEquals(3, defaults.learnAfter)
+        assertEquals(90, defaults.unlearnHalfLifeDays)
         assertEquals(KeyboardPreferences.DEFAULT_SUGGESTIONS, defaults.suggestionCount)
         assertFalse(defaults.phraseSuggestions)
         assertTrue(defaults.edgeArrows)
