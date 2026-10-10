@@ -301,6 +301,10 @@ attestations and the full commit lists are on the
   while another language was recognised is rechecked: not one made while the language was still
   undecided, and not again when the language goes undecided and comes back. Ask offered the
   same wrong words.
+- Fixed: typing fast, with two thumbs especially, could come out as a swiped word. A tap that slid
+  half a key into its neighbour counted as a short swipe; a short swipe now has to cover the
+  distance between two key centres. And when the screen reports a second thumb as the first one
+  leaping to another key, which no finger does, both keys are now typed.
 - Fixed: Forget on a held word could leave it ranked above its place in the dictionary. It removed
   only one of the cases the word was learned in, and the keyboard counts them as one word, so the
   others kept its weight; it now removes every case, with what is still waiting to be saved. A

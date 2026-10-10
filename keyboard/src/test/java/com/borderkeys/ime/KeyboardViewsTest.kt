@@ -94,6 +94,104 @@ class KeyboardViewsTest {
         assertEquals(before, (0 until keys.keyCount).map(keys::labelTextSizeAt))
     }
 
+    // ---- telling taps from swipes -----------------------------------------------------------
+
+    /** What a stroke on the keys came out as: each typed key, and "swipe" for a decoded word. */
+    private fun keysFor(stroke: (KeyboardCanvasView) -> Unit): List<String> {
+        val keys = KeyboardCanvasView(context, paints, strings)
+        keys.swipeEnabled = true
+        place(keys, 1080, 600)
+        val out = mutableListOf<String>()
+        keys.listener = object : KeyboardCanvasView.Listener {
+            override fun onKey(code: Int, keyIndex: Int, x: Float, y: Float) {
+                out += code.toChar().toString()
+            }
+            override fun onKeyRepeat(code: Int) = Unit
+            override fun onText(text: CharSequence) = Unit
+            override fun onKeyDown(code: Int) = Unit
+            override fun onGesture(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) {
+                out += "swipe"
+            }
+            override fun onGesturePaused(xs: FloatArray, ys: FloatArray, timestamps: LongArray, count: Int) = Unit
+            override fun onGestureSteered(x: Float, y: Float) = Unit
+            override fun onGestureRingResolved() = Unit
+            override fun onGestureRingCancelled() = Unit
+            override fun onKeyLongPress(code: Int, keyIndex: Int): Boolean = false
+            override fun onCursorNudge(steps: Int) = Unit
+            override fun onCursorNudgeLines(lines: Int) = Unit
+            override fun onFlick(keyIndex: Int, direction: Int) {
+                out += "flick"
+            }
+            override fun onBackspaceSelect(steps: Int) = Unit
+            override fun onBackspaceSelectLines(lines: Int) = Unit
+            override fun onBackspaceSelectionLift() = Unit
+        }
+        stroke(keys)
+        return out
+    }
+
+    /** Presses at the first point, moves through the rest 8 ms apart, and lifts at the last. */
+    private fun stroke(view: View, points: List<Pair<Float, Float>>) {
+        val down = SystemClock.uptimeMillis()
+        val (x0, y0) = points.first()
+        view.dispatchTouchEvent(MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, x0, y0, 0))
+        for ((i, point) in points.withIndex().drop(1)) {
+            view.dispatchTouchEvent(
+                MotionEvent.obtain(down, down + 8L * i, MotionEvent.ACTION_MOVE, point.first, point.second, 0),
+            )
+        }
+        val (x1, y1) = points.last()
+        view.dispatchTouchEvent(MotionEvent.obtain(down, down + 8L * points.size, MotionEvent.ACTION_UP, x1, y1, 0))
+    }
+
+    @Test
+    fun `a press that leaps a key's width between two samples types both keys and is no swipe`() {
+        val typed = keysFor { keys ->
+            val g = keys.keyBounds('g'.code)!!
+            val h = keys.keyBounds('h'.code)!!
+            // The thumb on g holds still; the screen then reports the other thumb, on h, as it.
+            val still = List(6) { g.centerX() + it % 2 to g.centerY() }
+            stroke(keys, still + List(3) { h.centerX() to h.centerY() })
+        }
+        assertEquals(listOf("g", "h"), typed)
+    }
+
+    @Test
+    fun `a tap that slips half a key into its neighbour types its own key`() {
+        val typed = keysFor { keys ->
+            val g = keys.keyBounds('g'.code)!!
+            val h = keys.keyBounds('h'.code)!!
+            val from = g.right - g.width() * 0.15f
+            val to = h.left + h.width() * 0.4f
+            stroke(keys, (0..12).map { from + (to - from) * it / 12f to g.centerY() })
+        }
+        assertEquals(listOf("g"), typed)
+    }
+
+    @Test
+    fun `a short swipe from a key's centre to its neighbour's is still a word`() {
+        val typed = keysFor { keys ->
+            val a = keys.keyBounds('a'.code)!!
+            val s = keys.keyBounds('s'.code)!!
+            val to = s.centerX() + s.width() * 0.05f
+            stroke(keys, (0..16).map { a.centerX() + (to - a.centerX()) * it / 16f to a.centerY() })
+        }
+        assertEquals(listOf("swipe"), typed)
+    }
+
+    @Test
+    fun `a fast swipe, its steps growing past a key's width once moving, is not split`() {
+        val typed = keysFor { keys ->
+            val g = keys.keyBounds('g'.code)!!
+            val l = keys.keyBounds('l'.code)!!
+            val w = g.width()
+            // From rest: small steps, then steps longer than a key once the finger is moving.
+            val xs = listOf(0f, 0.1f, 0.3f, 0.7f, 1.5f, 2.8f).map { g.centerX() + it * w }
+            stroke(keys, xs.map { it.coerceAtMost(l.centerX()) to g.centerY() })
+        }
+        assertEquals(listOf("swipe"), typed)
+    }
+
     // ---- the quick panel -------------------------------------------------------------------
 
     private fun panel(): Pair<QuickSettingsView, MutableList<QuickTile>> {
