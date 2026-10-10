@@ -273,6 +273,13 @@ attestations and the full commit lists are on the
 - Fixed: the key labels and the suggestion strip's words could shrink after the keyboard was
   re-laid out, a little more each time. Each key set the shared label size to its own while
   drawing, the last one was left behind, and the next layout measured from it.
+- Fixed: When the language changes could rewrite a correct word, already passed, into a rare
+  one starting with the same letters. It rechecked each correction by the new language's top
+  suggestion for the letters typed, completions included, so "makw", corrected to make, became
+  makwana; it now asks what autocorrect itself writes in that language. Only a correction made
+  while another language was recognised is rechecked: not one made while the language was still
+  undecided, and not again when the language goes undecided and comes back. Ask offered the
+  same wrong words.
 - Fixed: the panel a long press on Enter opens took the next typing taps on its tiles, so a
   finger still typing could make the keyboard one-handed or switch something off. Touches in
   the first half second after it opens are ignored. Its rows now fit the room: on a phone it

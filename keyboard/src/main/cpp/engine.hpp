@@ -175,7 +175,7 @@ public:
      */
     bool vouchesForStem(const char* word, size_t length, const char* tag = nullptr) const;
 
-    /** The language being written, by the evidence, or -1 when none leads. */
+    /** The language being written: [answerAs]'s pack, else by the evidence, or -1 when none leads. */
     int preferredPack() const;
 
     /**
@@ -191,11 +191,11 @@ public:
     int possessiveFor(const char* word, size_t length, char* out, int outBytes) const;
 
     /**
-     * What [packIndex] alone would spell [word] as, without context, written into [out]; 0 when
-     * the pack is not open and active or offers nothing.
+     * Has the requests that follow answer as if [packIndex] were the language being written,
+     * whatever the evidence says, until called with -1. False, with nothing changed, for a pack
+     * that is not open and active. [dominantPack] and the evidence are left as they are.
      */
-    int candidateForPack(int packIndex, const char* word, size_t wordLength, char* out,
-                         int outBytes);
+    bool answerAs(int packIndex);
 
     /** The pack the conversation is considered written in, or -1 when undecided. */
     int32_t dominantPack() const { return dominantPack_; }
@@ -678,6 +678,8 @@ private:
     bool strictLanguage_ = false;
     float languageEvidence_[kMaxPacks] = {};
     int dominantPack_ = -1;
+    /** The pack [answerAs] names, or -1 to answer as the evidence decides. */
+    int answeringPack_ = -1;
     uint32_t lastObservedWord_ = 0;
 
     /** The preferred language as a tag, and the slot it resolves to, or -1. */

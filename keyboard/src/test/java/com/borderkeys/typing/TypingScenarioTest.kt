@@ -408,6 +408,57 @@ class TypingScenarioTest {
         }
     }
 
+    @Test
+    fun `corrections made while the language is undecided stand when it settles`() {
+        val both = Pipeline.open("ro-RO", "en-US")
+        try {
+            both.languageLock(BALANCED_EVIDENCE)
+            val twoLanguages = both.typingRig(
+                SMOKE_SETTINGS.copy(
+                    languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY,
+                ),
+            )
+            twoLanguages.startField()
+            twoLanguages.type("$ROMANIAN_PHRASE ")
+            assertEquals("the field before was Romanian", 0, both.dominantPack())
+            twoLanguages.startField()
+            twoLanguages.type("I would also makw thia ")
+            assertEquals("autocorrect fixed both slips", "I would also make this ", twoLanguages.editor.text)
+            twoLanguages.type("for other places where context is queried like")
+            assertEquals("the verdict settled on English", 1, both.dominantPack())
+            assertEquals(
+                "I would also make this for other places where context is queried like",
+                twoLanguages.editor.text,
+            )
+        } finally {
+            both.close()
+        }
+    }
+
+    @Test
+    fun `a correction made under the other language becomes what autocorrect writes in the new one`() {
+        val both = Pipeline.open("ro-RO", "en-US")
+        try {
+            both.languageLock(BALANCED_EVIDENCE)
+            val twoLanguages = both.typingRig(
+                SMOKE_SETTINGS.copy(
+                    languageSwitchCorrectionMode = KeyboardPreferences.LANGUAGE_SWITCH_AUTO_APPLY,
+                ),
+            )
+            twoLanguages.startField()
+            twoLanguages.type("$ROMANIAN_PHRASE makw ")
+            val corrected = twoLanguages.editor.text
+            assertEquals("the Romanian verdict held", 0, both.dominantPack())
+            assertFalse("the slip was corrected in '$corrected'", corrected.endsWith(" makw "))
+            twoLanguages.type("$ENGLISH_PHRASE ")
+            assertEquals("the verdict turned English", 1, both.dominantPack())
+            val text = twoLanguages.editor.text
+            assertTrue("English autocorrect's word for makw in '$text'", text.startsWith("$ROMANIAN_PHRASE make "))
+        } finally {
+            both.close()
+        }
+    }
+
     // ---- what the smoke suite does not reach ----------------------------------------------------
 
     @Test

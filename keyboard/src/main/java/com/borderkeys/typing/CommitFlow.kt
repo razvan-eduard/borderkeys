@@ -35,9 +35,21 @@ class CommitFlow(
         val learnCorrected: Boolean,
     )
 
-    /** Each field starts with no corrections for a change of language to take back. */
+    /**
+     * Each field starts with no corrections for a change of language to take back, under the
+     * language the engine detects as it opens.
+     */
     override fun onFieldStarted(field: FieldSession) {
         languageSwitchCorrector.reset()
+        if (settings.languageSwitchCorrectionMode == KeyboardPreferences.LANGUAGE_SWITCH_OFF) {
+            return
+        }
+        val generation = field.generation
+        engine.dominantPack { pack ->
+            if (isCurrent(generation)) {
+                languageSwitchCorrector.startUnder(pack)
+            }
+        }
     }
 
     // ---- the decision --------------------------------------------------------------------------
@@ -164,14 +176,13 @@ class CommitFlow(
         if (start < 0) {
             return
         }
-        languageSwitchCorrector.recordCorrection(
-            LanguageSwitchCorrector.Flag(typed, correction, start, end),
-        )
+        languageSwitchCorrector.recordCorrection(typed, correction, start, end)
     }
 
     /**
      * Asks whether the conversation's language changed and which recent corrections that leaves
-     * wrong, and hands those to [onReplacements]. An answer about an older field is dropped.
+     * wrong: those made under another language that autocorrect, in the new one, writes
+     * differently. Hands them to [onReplacements]; an answer about an older field is dropped.
      * Nothing is asked with [KeyboardPreferences.languageSwitchCorrectionMode] off.
      */
     fun checkLanguageSwitch(onReplacements: (List<LanguageSwitchCorrector.Replacement>) -> Unit) {
@@ -186,21 +197,37 @@ class CommitFlow(
                 return@dominantPack
             }
             val editor = currentEditor() ?: return@dominantPack
-            val verified = languageSwitchCorrector.snapshot().filter { flag ->
+            val verified = languageSwitchCorrector.snapshot(dominantPack).filter { flag ->
                 textAt(editor, flag.startOffset, flag.endOffset) == flag.appliedText
             }
             if (verified.isEmpty()) {
                 return@dominantPack
             }
-            engine.candidatesForPack(dominantPack, verified.map { it.typedText }) { suggestions ->
+            engine.answersAs(dominantPack, verified.map { it.typedText }) { answers ->
                 if (!isCurrent(generation)) {
-                    return@candidatesForPack
+                    return@answersAs
                 }
-                val replacements = languageSwitchCorrector.resolve(verified, suggestions)
+                val written = verified.zip(answers) { flag, answer ->
+                    answer?.let { writtenFor(flag.typedText, it) }
+                }
+                val replacements = languageSwitchCorrector.resolve(verified, written)
                 if (replacements.isNotEmpty()) {
                     onReplacements(replacements)
                 }
             }
+        }
+    }
+
+    /**
+     * What autocorrect writes for [typed] from [answer]: its correction, the letters as typed
+     * when the dictionaries spell them, or null when it would leave an unknown word as typed.
+     */
+    private fun writtenFor(typed: String, answer: SearchAnswer): String? {
+        val outcome = decide(typed, ' '.code, fromGesture = false, runningText = true, answer = answer)
+        return when {
+            outcome.kind == WordCommit.Kind.CORRECTION -> outcome.text
+            outcome.kind == WordCommit.Kind.NONE && answer.knownWord.isNotEmpty() -> typed
+            else -> null
         }
     }
 

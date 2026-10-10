@@ -10,13 +10,17 @@ package com.borderkeys.ime
  */
 class LanguageSwitchCorrector {
 
-    /** A correction that turned [typedText] into [appliedText], at [startOffset] until
-     *  [endOffset] in the field. */
+    /**
+     * A correction that turned [typedText] into [appliedText], at [startOffset] until
+     * [endOffset] in the field, made while [madeUnder] was the detected pack: -1 undecided,
+     * [UNKNOWN] before any was observed.
+     */
     data class Flag(
         val typedText: String,
         val appliedText: String,
         val startOffset: Int,
         val endOffset: Int,
+        val madeUnder: Int,
     )
 
     /** An edit: replace `[startOffset, endOffset)`, which reads [previousText], with [text]. */
@@ -28,40 +32,69 @@ class LanguageSwitchCorrector {
     )
 
     private val flags = ArrayDeque<Flag>()
-    private var lastDominantPack = NO_DOMINANT_PACK
 
-    /** Tracks a correction just applied, dropping the oldest past [MAX_TRACKED]. */
-    fun recordCorrection(flag: Flag) {
+    /** The detected pack last observed: -1 undecided, [UNKNOWN] before any. */
+    var verdict = UNKNOWN
+        private set
+
+    /** The last pack observed that was decided, [UNKNOWN] before any. */
+    private var lastDecided = UNKNOWN
+
+    /**
+     * Tracks a correction just applied, made under [verdict], dropping the oldest past
+     * [MAX_TRACKED].
+     */
+    fun recordCorrection(typedText: String, appliedText: String, startOffset: Int, endOffset: Int) {
         if (flags.size >= MAX_TRACKED) {
             flags.removeFirst()
         }
-        flags.addLast(flag)
+        flags.addLast(Flag(typedText, appliedText, startOffset, endOffset, verdict))
     }
 
-    /** Forgets everything tracked. */
+    /** Forgets everything tracked and observed. */
     fun reset() {
         flags.clear()
-        lastDominantPack = NO_DOMINANT_PACK
+        verdict = UNKNOWN
+        lastDecided = UNKNOWN
     }
 
-    /** Whether [dominantPack] names a pack and differs from the one last observed. */
+    /** Takes [pack] as the verdict the field opens under, which is no change. */
+    fun startUnder(pack: Int) {
+        verdict = pack
+        if (pack >= 0) {
+            lastDecided = pack
+        }
+    }
+
+    /**
+     * Takes [dominantPack] as the verdict; whether it names a pack other than the last one
+     * decided. Undecided is no change, so a verdict that passes through it and back is none.
+     */
     fun observeDominantPack(dominantPack: Int): Boolean {
-        val previous = lastDominantPack
-        lastDominantPack = dominantPack
-        return dominantPack >= 0 && dominantPack != previous
+        verdict = dominantPack
+        if (dominantPack < 0) {
+            return false
+        }
+        val changed = dominantPack != lastDecided
+        lastDecided = dominantPack
+        return changed
     }
 
-    /** Everything tracked, cleared as it is returned. */
-    fun snapshot(): List<Flag> {
-        val tracked = flags.toList()
+    /**
+     * The corrections made under a decided pack other than [pack]; everything tracked is
+     * cleared.
+     */
+    fun snapshot(pack: Int): List<Flag> {
+        val tracked = flags.filter { it.madeUnder >= 0 && it.madeUnder != pack }
         flags.clear()
         return tracked
     }
 
     /**
      * The edits worth making, right to left by [Replacement.startOffset]. [verifiedFlags] are the
-     * flags whose live text still reads [Flag.appliedText]; [suggestions] is the new dominant
-     * pack's answer for each flag's [Flag.typedText], in the same order, null where it has none.
+     * flags whose live text still reads [Flag.appliedText]; [suggestions] is what autocorrect
+     * writes for each flag's [Flag.typedText] as the new pack, in the same order, null where it
+     * would leave the word as typed.
      */
     fun resolve(verifiedFlags: List<Flag>, suggestions: List<String?>): List<Replacement> =
         verifiedFlags.zip(suggestions).mapNotNull { (flag, suggestion) ->
@@ -92,11 +125,11 @@ class LanguageSwitchCorrector {
         return if (moved < 0) 0 else moved
     }
 
-    private companion object {
+    companion object {
         /** The most corrections tracked. */
-        const val MAX_TRACKED = 20
+        private const val MAX_TRACKED = 20
 
         /** Nothing observed yet; distinct from -1, no pack dominant. */
-        const val NO_DOMINANT_PACK = -2
+        const val UNKNOWN = -2
     }
 }

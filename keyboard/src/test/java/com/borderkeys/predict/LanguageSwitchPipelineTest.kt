@@ -7,8 +7,8 @@ import com.borderkeys.ime.LanguageSwitchCorrector
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -86,68 +86,40 @@ class LanguageSwitchPipelineTest {
         assertFalse("nor three times", corrector.observeDominantPack(settled))
     }
 
-    /** "in", corrected under a Romanian verdict, is asked about again once the verdict turns. */
+    /** What autocorrect reads in the letters as English, while the verdict stays Romanian. */
     @Test
-    fun `a word corrected under the wrong language is offered back`() {
+    fun `answering as a language reads the letters as that language's autocorrect does`() {
         pipeline.languageLock(BALANCED_EVIDENCE)
         pipeline.commitPhrase(ROMANIAN)
-        val romanianPack = pipeline.dominantPack()
         assertEquals("Romanian has to be the verdict for this to mean anything",
-                     ROMANIAN_PACK, romanianPack)
+                     ROMANIAN_PACK, pipeline.dominantPack())
 
-        // What the service records when it applies a correction.
-        val applied = pipeline.candidateForPack(romanianPack, "in")
-        assertNotNull(
-            "the Romanian pack must offer something for \"in\" -- this was an assumption, which " +
-                "meant the one test of the whole loop skipped itself rather than failed when " +
-                "the answer went away",
-            applied,
-        )
-        corrector.recordCorrection(
-            LanguageSwitchCorrector.Flag(typedText = "in", appliedText = applied!!,
-                                         startOffset = 0, endOffset = applied.length),
-        )
-        corrector.observeDominantPack(romanianPack)
-
-        pipeline.commitPhrase(ENGLISH)
-        val englishPack = pipeline.dominantPack()
-        assertEquals("the verdict has to move for any of this to fire", ENGLISH_PACK, englishPack)
-
-        assertTrue("a flip is what arms the revisit", corrector.observeDominantPack(englishPack))
-        val tracked = corrector.snapshot()
-        assertTrue("the correction should still be tracked", tracked.isNotEmpty())
-
-        val suggestions = tracked.map { pipeline.candidateForPack(englishPack, it.typedText) }
-        val replacements = corrector.resolve(tracked, suggestions)
-
-        assertEquals("one tracked correction, one answer", 1, replacements.size)
-        val replacement = replacements.single()
-        assertEquals("it replaces what was applied", applied, replacement.previousText)
-        assertNotEquals(
-            "and with something else -- a replacement identical to what is there is not one",
-            replacement.previousText, replacement.text,
-        )
+        val slip = pipeline.answerAs(ENGLISH_PACK, "makw")
+        assertNotNull("an active pack answers", slip)
+        assertEquals("English autocorrect's first choice for the slip",
+                     "make", slip!!.corrections.first().text)
+        assertTrue("English spells in exactly", pipeline.answerAs(ENGLISH_PACK, "in")!!.knownWordExact)
+        assertEquals("answering as English leaves the verdict Romanian",
+                     ROMANIAN_PACK, pipeline.dominantPack())
+        assertNull("a slot with no pack answers nothing", pipeline.answerAs(EMPTY_SLOT, "in"))
     }
 
     @Test
     fun `a pack that agrees proposes no replacement`() {
-        corrector.recordCorrection(
-            LanguageSwitchCorrector.Flag("care", "care", startOffset = 0, endOffset = 4),
+        val flags = listOf(
+            LanguageSwitchCorrector.Flag("care", "care", startOffset = 0, endOffset = 4, madeUnder = ROMANIAN_PACK),
         )
-        val tracked = corrector.snapshot()
-        assertTrue(corrector.resolve(tracked, listOf("care")).isEmpty())
+        assertTrue(corrector.resolve(flags, listOf("care")).isEmpty())
         // Nor one that differs only in case.
-        assertTrue(corrector.resolve(tracked, listOf("Care")).isEmpty())
+        assertTrue(corrector.resolve(flags, listOf("Care")).isEmpty())
     }
 
     @Test
     fun `a new field forgets what it was tracking`() {
-        corrector.recordCorrection(
-            LanguageSwitchCorrector.Flag("in", "în", startOffset = 0, endOffset = 2),
-        )
-        assertTrue(corrector.snapshot().isNotEmpty())
+        corrector.startUnder(ROMANIAN_PACK)
+        corrector.recordCorrection("in", "în", startOffset = 0, endOffset = 2)
         corrector.reset()
-        assertTrue("nothing is tracked across fields", corrector.snapshot().isEmpty())
+        assertTrue("nothing is tracked across fields", corrector.snapshot(ENGLISH_PACK).isEmpty())
         assertTrue("and the verdict is undecided again, so the next one counts as a change",
                    corrector.observeDominantPack(0))
     }
@@ -165,9 +137,10 @@ class LanguageSwitchPipelineTest {
         /** The Languages screen's default. */
         const val BALANCED_EVIDENCE = 1.8f
 
-        /** Slots, in Pipeline.open's argument order. */
+        /** Slots, in Pipeline.open's argument order, and one with no pack in it. */
         const val ROMANIAN_PACK = 0
         const val ENGLISH_PACK = 1
+        const val EMPTY_SLOT = 3
 
         // Words only one of the two shipped packs holds.
         const val ROMANIAN = "acesta trebuie foarte despre pentru"

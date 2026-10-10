@@ -468,13 +468,12 @@ int copyTaps(JNIEnv* env, jfloatArray tapXs, jfloatArray tapYs, float* xs, float
     return static_cast<int>(copied);
 }
 
-jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing, jstring prev1,
-                  jstring prev2, jfloatArray tapXs, jfloatArray tapYs, jobjectArray outWords,
-                  jfloatArray outScores, jbooleanArray outProperNoun, jobjectArray outTexts,
-                  jobjectArray outCorrections, jbooleanArray outCorrectionNames,
-                  jbooleanArray outCorrectionSlips, jbooleanArray outCorrectionConfident,
-                  jbooleanArray outSpellingFlags) {
-    Engine* const engine = engineFrom(handle);
+// nativeAnswer's work, for an engine already resolved.
+jint answer(JNIEnv* env, Engine* engine, jstring composing, jstring prev1, jstring prev2,
+            jfloatArray tapXs, jfloatArray tapYs, jobjectArray outWords, jfloatArray outScores,
+            jbooleanArray outProperNoun, jobjectArray outTexts, jobjectArray outCorrections,
+            jbooleanArray outCorrectionNames, jbooleanArray outCorrectionSlips,
+            jbooleanArray outCorrectionConfident, jbooleanArray outSpellingFlags) {
     if (engine == nullptr || outWords == nullptr || outScores == nullptr ||
         outProperNoun == nullptr) {
         return 0;
@@ -532,6 +531,37 @@ jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing
                    outSpellingFlags);
     }
     return writeRanking(env, *engine, candidates, found, outWords, outScores, outProperNoun);
+}
+
+jint nativeAnswer(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring composing, jstring prev1,
+                  jstring prev2, jfloatArray tapXs, jfloatArray tapYs, jobjectArray outWords,
+                  jfloatArray outScores, jbooleanArray outProperNoun, jobjectArray outTexts,
+                  jobjectArray outCorrections, jbooleanArray outCorrectionNames,
+                  jbooleanArray outCorrectionSlips, jbooleanArray outCorrectionConfident,
+                  jbooleanArray outSpellingFlags) {
+    return answer(env, engineFrom(handle), composing, prev1, prev2, tapXs, tapYs, outWords,
+                  outScores, outProperNoun, outTexts, outCorrections, outCorrectionNames,
+                  outCorrectionSlips, outCorrectionConfident, outSpellingFlags);
+}
+
+// nativeAnswer for `composing` alone, with no words before it and no taps, as if `packIndex`
+// were the language being written; -1 when that pack is not open and active.
+jint nativeAnswerAs(JNIEnv* env, jobject /*thiz*/, jlong handle, jint packIndex,
+                    jstring composing, jobjectArray outWords, jfloatArray outScores,
+                    jbooleanArray outProperNoun, jobjectArray outTexts,
+                    jobjectArray outCorrections, jbooleanArray outCorrectionNames,
+                    jbooleanArray outCorrectionSlips, jbooleanArray outCorrectionConfident,
+                    jbooleanArray outSpellingFlags) {
+    Engine* const engine = engineFrom(handle);
+    if (engine == nullptr || !engine->answerAs(static_cast<int>(packIndex))) {
+        return -1;
+    }
+    const jint found =
+        answer(env, engine, composing, nullptr, nullptr, nullptr, nullptr, outWords, outScores,
+               outProperNoun, outTexts, outCorrections, outCorrectionNames, outCorrectionSlips,
+               outCorrectionConfident, outSpellingFlags);
+    engine->answerAs(-1);
+    return found;
 }
 
 void nativeLearn(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring word, jstring prev1,
@@ -781,28 +811,6 @@ jint nativeKnownStems(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring tag,
     }
     env->SetBooleanArrayRegion(outKnown, 0, count, flags);
     return known;
-}
-
-jstring nativeCandidateForPack(JNIEnv* env, jobject /*thiz*/, jlong handle, jint packIndex,
-                               jstring word) {
-    Engine* const engine = engineFrom(handle);
-    if (engine == nullptr || word == nullptr) {
-        return nullptr;
-    }
-    char buffer[kStringBufferBytes];
-    const jsize length = copyString(env, word, buffer, sizeof(buffer));
-    if (length <= 0) {
-        return nullptr;
-    }
-    char spelling[kStringBufferBytes];
-    const int written = engine->candidateForPack(static_cast<int>(packIndex), buffer,
-                                                 static_cast<size_t>(length), spelling,
-                                                 sizeof(spelling) - 1);
-    if (written <= 0) {
-        return nullptr;
-    }
-    spelling[written] = '\0';
-    return env->NewStringUTF(spelling);
 }
 
 /** The spelling the dictionaries hold for `word`; see Engine::knownSpelling. */
@@ -1278,8 +1286,10 @@ const JNINativeMethod kMethods[] = {
      reinterpret_cast<void*>(nativeSetPersonalModelEnabled)},
     {"nativeDominantLanguageTag", "(J)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeDominantLanguageTag)},
-    {"nativeCandidateForPack", "(JILjava/lang/String;)Ljava/lang/String;",
-     reinterpret_cast<void*>(nativeCandidateForPack)},
+    {"nativeAnswerAs",
+     "(JILjava/lang/String;[Ljava/lang/String;[F[Z[Ljava/lang/String;[Ljava/lang/String;[Z[Z"
+     "[Z[Z)I",
+     reinterpret_cast<void*>(nativeAnswerAs)},
     {"nativeKnownSpelling", "(JLjava/lang/String;)Ljava/lang/String;",
      reinterpret_cast<void*>(nativeKnownSpelling)},
     {"nativeDominantPack", "(J)I", reinterpret_cast<void*>(nativeDominantPack)},

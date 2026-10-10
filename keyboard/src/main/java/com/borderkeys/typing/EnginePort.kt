@@ -42,7 +42,11 @@ interface EnginePort {
 
     fun dominantPack(onResult: (Int) -> Unit)
 
-    fun candidatesForPack(dominantPack: Int, words: List<String>, onResult: (List<String?>) -> Unit)
+    /**
+     * The answer about each of [words], with no words before it, as if [pack] were the language
+     * being written, in the same order; each null when [pack] is not open and active.
+     */
+    fun answersAs(pack: Int, words: List<String>, onResult: (List<SearchAnswer?>) -> Unit)
 
     /** Whether the dictionaries hold each of [words], in any case or marks. */
     fun knownWords(words: List<String>, onResult: (List<Boolean>) -> Unit)
