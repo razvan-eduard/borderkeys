@@ -1,6 +1,11 @@
 {
   "tag": "fr-FR",
   "name": "French",
+  "corpora": [
+    "fra_wikipedia_2021_1M",
+    "fra_newscrawl_2020_1M",
+    "fra_news_2020_1M"
+  ],
   "known_corpora": [
     "fra_wikipedia_2021_1M",
     "fra_news_2024_1M",

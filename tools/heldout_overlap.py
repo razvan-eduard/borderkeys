@@ -11,6 +11,8 @@ corpus and its word list's corpora, and no counted corpus is the held-out one or
 Sentences are compared with their text normalised to NFC and single spaces.
 
     python3 tools/heldout_overlap.py en_US ro_RO es_ES
+    python3 tools/heldout_overlap.py --check       # every verdict, nothing fetched
+    python3 tools/heldout_overlap.py --selftest
 """
 
 import argparse
@@ -98,11 +100,38 @@ def shared(manifest: language_manifest.Manifest,
     return out
 
 
+def selftest() -> int:
+    """Checks the verdict: admitted with a held-out corpus from no counted year, refused with no
+    held-out corpus, with no word-list corpora, and with a counted corpus from the held-out year,
+    the capitals corpus and the held-out one itself included."""
+    def manifest(corpora=("aaa_wikipedia_2021_1M",), capitals="aaa_news_2020_1M",
+                 heldout="aaa_news_2023_1M"):
+        return language_manifest.Manifest(
+            path=Path("xx_XX.json"), tag="xx-XX", corpora=list(corpora),
+            known_corpora=["aaa_news_2024_1M"], case_corpora=["aaa_newscrawl_2018_1M"],
+            capitals=capitals, heldout=heldout, persona=None, sha256={})
+
+    assert verdict(manifest()).admitted
+    for case, reason in ((manifest(heldout=None), "held-out"),
+                         (manifest(corpora=()), "corpora"),
+                         (manifest(capitals="aaa_news_2023_1M"), "year"),
+                         (manifest(heldout="aaa_news_2021_1M"), "year"),
+                         (manifest(heldout="aaa_news_2024_1M"), "year"),
+                         (manifest(heldout="aaa_newscrawl_2018_1M"), "year")):
+        found = verdict(case)
+        assert not found.admitted and reason in " ".join(found.refusals), (case, found.refusals)
+    print("heldout_overlap selftest: ok")
+    return 0
+
+
 def main() -> int:
+    if "--selftest" in sys.argv[1:]:
+        return selftest()
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("tags", nargs="*", default=language_manifest.with_key("heldout"))
     parser.add_argument("--cache", type=Path, default=language_manifest.CACHE)
+    parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
 
     refused = 0
@@ -114,6 +143,9 @@ def main() -> int:
             for refusal in found.refusals:
                 print(f"  refused: {refusal}")
             refused += 1
+            continue
+        if args.check:
+            print("  admitted")
             continue
         for name, prints in shared(manifest, args.cache).items():
             print(f"  {name}: {len(prints)} held-out sentences also written there")

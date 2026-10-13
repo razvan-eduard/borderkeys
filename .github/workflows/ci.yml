@@ -173,6 +173,15 @@ jobs:
       - name: Corpus pins are checked and recorded
         run: python3 tools/language_manifest.py --selftest
 
+      - name: Each manifest pins exactly the corpora it names
+        run: python3 tools/language_manifest.py --check
+
+      - name: The held-out verdict
+        run: python3 tools/heldout_overlap.py --selftest
+
+      - name: Each held-out corpus is from no year its language is counted from
+        run: python3 tools/heldout_overlap.py --check
+
       - name: The personal corpus split and typos are stable
         run: python3 tools/make_personal_corpus.py --selftest
 
