@@ -1504,7 +1504,7 @@ class TypingScenarioTest {
     }
 
     @Test
-    fun `a new field and a subtype change put pairs under the subtype's language until an answer names one`() {
+    fun `a new field and a subtype change put what is learned under the subtype's language until an answer names one`() {
         answeringInRomanian()
         val (first, second, third) = ROMANIAN_PHRASE.split(' ')
         rig.type("$first ")
@@ -1517,7 +1517,7 @@ class TypingScenarioTest {
         rig.host.subtype = OTHER_SUBTYPE_TAG
         rig.orchestrator.onSubtypeChanged()
         rig.type(" ")
-        assertEquals("a subtype change", LanguageTags.primary(OTHER_SUBTYPE_TAG), languageOfPairEndingIn(third))
+        assertEquals("a subtype change", LanguageTags.primary(OTHER_SUBTYPE_TAG), rig.engine.learnedIn.last())
     }
 
     @Test
