@@ -112,7 +112,7 @@ class PhraseBudgetPipelineTest {
 
         /** Words the English pack does not spell, and what in it makes each learnable or not. */
         const val BARE_FORM = "'cause"
-        const val POSSESSIVE = "pencil's"
+        const val POSSESSIVE = "illness's"
         const val COMPOUND = "pencil-green"
         const val BROKEN_COMPOUND = "pencil-grean"
     }
