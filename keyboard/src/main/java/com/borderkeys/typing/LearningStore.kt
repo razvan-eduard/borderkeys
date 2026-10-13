@@ -3,6 +3,8 @@
 
 package com.borderkeys.typing
 
+import com.borderkeys.data.DictionaryRepository
+import com.borderkeys.data.PhraseRecorder
 import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.data.dao.PairStep
 import com.borderkeys.data.dao.TripleStep
@@ -36,4 +38,11 @@ class LearningBatch(
     val touches: List<KeyTouch> = emptyList(),
     /** The half-life [touches] are merged into what is stored under. */
     val touchHalfLifeMillis: Long = 0L,
-)
+) {
+    /**
+     * Writes [updates], [pairs] and [triples] into [dictionary] ([DictionaryRepository.applyLearning]);
+     * returns the pairs and triples it gave up beyond the engine's.
+     */
+    suspend fun writeTo(dictionary: DictionaryRepository): PhraseRecorder.Dropped =
+        dictionary.applyLearning(updates, pairs, triples)
+}

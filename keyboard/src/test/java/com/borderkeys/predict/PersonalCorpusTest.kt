@@ -3,10 +3,13 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.data.SharedNativeTextRunner
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.language.LanguageTags
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -17,8 +20,11 @@ import java.util.concurrent.TimeUnit
  * line, and each row of `personal_rows_<language>.tsv` is `typed<TAB>meant<TAB>kind<TAB>previous2
  * previous1`, a `clean` row right when the word is left alone and a typo right when it becomes the
  * meant word. Each row is typed with an empty personal model, with the history's words alone, and
- * with the whole history, the model held as loaded while the rows are typed.
+ * with the whole history, the model held as loaded while the rows are typed. The history is written
+ * and read back through the personal dictionary on a database in memory, under Robolectric.
  */
+@RunWith(SharedNativeLibraryRunner::class)
+@Config(sdk = [SharedNativeTextRunner.SDK])
 class PersonalCorpusTest {
 
     private class Row(
@@ -68,7 +74,7 @@ class PersonalCorpusTest {
                 val full = pipeline.personalSnapshot()
                 val personal = mapOf(
                     Arm.EMPTY to PersonalSnapshot.EMPTY,
-                    Arm.WORDS to full.withoutPhrases(),
+                    Arm.WORDS to PersonalSnapshot.withoutPhrases(full),
                     Arm.FULL to full,
                 )
                 val rows = content(rowsFile).map { line ->
@@ -83,7 +89,9 @@ class PersonalCorpusTest {
                     }
                 }
                 for ((index, row) in rows.withIndex()) {
-                    val context = full.contextOf(LanguageTags.primary(tag), row.previous2, row.previous1, row.meant, learnAfter)
+                    val context = PersonalSnapshot.contextOf(
+                        full, LanguageTags.primary(tag), row.previous2, row.previous1, row.meant, learnAfter,
+                    )
                     val byArm = Arm.entries.associateWith { arm -> typedByArm.getValue(arm)[index] }
                     for ((arm, reading) in byArm) {
                         readings[arm]?.println("${context.name.lowercase()}\t${row.kind}\t${reading.line}")

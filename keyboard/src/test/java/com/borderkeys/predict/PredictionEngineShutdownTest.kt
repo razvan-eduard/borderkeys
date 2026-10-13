@@ -3,6 +3,7 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.data.SharedNativeTextRunner
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,7 +15,7 @@ import java.util.concurrent.TimeUnit
 
 /** [PredictionEngine.shutdown] answers the verdict requests still queued on the prediction thread. */
 @RunWith(SharedNativeLibraryRunner::class)
-@Config(sdk = [PredictionEngineShutdownTest.SDK])
+@Config(sdk = [SharedNativeTextRunner.SDK])
 class PredictionEngineShutdownTest {
 
     @Test
@@ -48,9 +49,6 @@ class PredictionEngineShutdownTest {
     }
 
     companion object {
-        /** The newest Android Robolectric runs. */
-        const val SDK = 35
-
         /** How long the test waits for the prediction thread at most. */
         const val WAIT_SECONDS = 10L
 

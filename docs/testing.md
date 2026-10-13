@@ -28,7 +28,9 @@ with a green build and a keyboard that suggests the wrong word.
 
 ### JVM — `./gradlew test`
 
-**813 test functions across 91 files.** No device, no emulator, no Robolectric.
+**1,285 test functions across 150 files.** No device and no emulator. Most run as plain JUnit;
+the views, the database and the pipeline tests that write the personal dictionary run under
+Robolectric.
 
 That is possible because the logic is deliberately kept out of the Android classes. The policy
 objects in `ime/` hold no `InputConnection` and make no native calls — they take strings and
@@ -994,13 +996,15 @@ The corpus in `native-tests/data` is not this generator's output: its history is
 a persona from the 2020 news, which the English and Romanian word lists count, as runs of words,
 and its rows are drawn from it by an estimated class.
 
-The history is learned through `LearningFlow.record`, the call a commit makes, under the
-language the engine answers in, and read back as the service reads it at start: through the
-same `PhraseRecorder` budget, then decayed (`PersonalSnapshot`). Each row is typed three ways,
-the model held as loaded: with no personal model, with the history's words alone, and with the
-whole history. A row's class is what that history taught after its context: **meant** (a learned
-pair or triple ends in the word), **others** (the context learned other words), **none**. A
-**none** row must read the same with and without the pairs and triples, in every language.
+The history is learned through `LearningFlow.record`, the call a commit makes, under the language
+the engine answers in. What it buffered is written as a flush writes it (`LearningBatch.writeTo`)
+into the personal dictionary on a database in memory, under Robolectric, and read back and loaded
+as the service loads it at start (`PersonalModelLoad.read`); the periodic clean-up a flush may run
+is not. Each row is typed three ways, the model held as loaded: with no personal model, with the
+history's words alone, and with the whole history. A row's class is what that history taught after
+its context: **meant** (a learned pair or triple ends in the word), **others** (the context learned
+other words), **none**. A **none** row must read the same with and without the pairs and triples,
+in every language.
 
 Floors, rows right with the whole history:
 

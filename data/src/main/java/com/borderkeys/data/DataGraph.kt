@@ -179,17 +179,7 @@ object DataGraph {
         ClipboardRepository(database.clipboardDao(), themes.preferences, ClipMediaStore(unlockedContext))
     }
 
-    val dictionary: DictionaryRepository by lazy {
-        DictionaryRepository(
-            database,
-            database.userWordDao(),
-            database.blockedWordDao(),
-            database.userBigramDao(),
-            database.userTrigramDao(),
-            database.keyTouchDao(),
-            database.userPhraseClockDao(),
-        )
-    }
+    val dictionary: DictionaryRepository by lazy { DictionaryRepository(database) }
 
     val languagePacks: LanguagePackRepository by lazy {
         LanguagePackRepository(

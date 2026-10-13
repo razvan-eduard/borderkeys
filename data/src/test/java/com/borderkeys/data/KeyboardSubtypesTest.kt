@@ -17,7 +17,7 @@ import org.robolectric.annotation.Config
 
 /** This keyboard found among the enabled input methods, and nothing read while it is not one of them. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [PhraseTablesSqlTest.SDK])
+@Config(sdk = [SharedNativeTextRunner.SDK])
 class KeyboardSubtypesTest {
 
     private val context = ApplicationProvider.getApplicationContext<Context>()

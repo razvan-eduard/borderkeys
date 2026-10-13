@@ -3,15 +3,16 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.data.SharedNativeTextRunner
 import org.junit.runners.model.FrameworkMethod
-import org.robolectric.RobolectricTestRunner
 import org.robolectric.internal.bytecode.InstrumentationConfiguration
 
 /**
  * A Robolectric runner that loads [NativePredictor], and with it the host library, through the
- * class loader every test in the JVM shares.
+ * class loader every test in the JVM shares, as [SharedNativeTextRunner] loads the personal
+ * dictionary's text rules.
  */
-class SharedNativeLibraryRunner(testClass: Class<*>) : RobolectricTestRunner(testClass) {
+class SharedNativeLibraryRunner(testClass: Class<*>) : SharedNativeTextRunner(testClass) {
 
     override fun createClassLoaderConfig(method: FrameworkMethod): InstrumentationConfiguration =
         InstrumentationConfiguration.Builder(super.createClassLoaderConfig(method))

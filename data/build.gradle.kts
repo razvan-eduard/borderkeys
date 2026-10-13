@@ -30,7 +30,8 @@ android {
         dataBinding = false
     }
 
-    // The in-memory phrase tables the data and keyboard tests share.
+    // The in-memory phrase tables the data tests use, and the in-memory database and the
+    // Robolectric runner the data and keyboard tests share.
     testFixtures {
         enable = true
     }
@@ -94,6 +95,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     testFixturesImplementation(libs.kotlinx.coroutines.android)
+    testFixturesImplementation(libs.androidx.room.runtime)
+    testFixturesImplementation(libs.robolectric)
+    testFixturesImplementation(libs.junit)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
