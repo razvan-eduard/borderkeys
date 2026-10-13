@@ -17,59 +17,19 @@ many words the counts are out of. Compiled by build_dict.py --known.
 """
 
 import argparse
-import collections
-import contextlib
 import pathlib
-import shutil
 import sys
-import tarfile
 
 import classify_wordlist
+import language_manifest
 import make_pack
-import new_language
 from build_dict import fold_word
 from make_unknown_corpus import packed_keys
 
 REPOSITORY = pathlib.Path(__file__).resolve().parent.parent
 
-# The Leipzig corpora each bundled list's extra words are counted from: the newest wikipedia,
-# news and newscrawl collection of a million sentences each.
-CORPORA = {
-    "en_US": ("eng_wikipedia_2016_1M", "eng_news_2025_1M", "eng_newscrawl_2018_1M"),
-    "ro_RO": ("ron_wikipedia_2021_1M", "ron_news_2024_1M", "ron_newscrawl_2015_1M"),
-    "de_DE": ("deu_wikipedia_2021_1M", "deu_news_2025_1M", "deu_newscrawl_2020_1M"),
-    "fr_FR": ("fra_wikipedia_2021_1M", "fra_news_2024_1M", "fra_newscrawl_2020_1M"),
-    "es_ES": ("spa_wikipedia_2021_1M", "spa_news_2024_1M", "spa_newscrawl_2021_1M"),
-    "it_IT": ("ita_wikipedia_2021_1M", "ita_news_2024_1M", "ita_newscrawl_2020_1M"),
-}
-
 MIN_LENGTH = 3
 MIN_COUNT = 2
-
-
-def sentences(name: str, cache: pathlib.Path) -> pathlib.Path:
-    """The sentence file of Leipzig corpus `name`, fetched into `cache` when absent."""
-    target = cache / f"{name}-sentences.txt"
-    if not target.is_file():
-        archive = cache / f"{name}.tar.gz"
-        with contextlib.redirect_stdout(sys.stderr):
-            new_language.download(new_language.LEIPZIG.format(name=name), archive)
-        with tarfile.open(archive) as tar:
-            member = next(m for m in tar.getmembers() if m.name.endswith("-sentences.txt"))
-            with tar.extractfile(member) as source, target.open("wb") as out:
-                shutil.copyfileobj(source, out, length=1 << 20)
-        archive.unlink()
-    return target
-
-
-def count_words(paths: list[pathlib.Path], alphabet) -> collections.Counter:
-    """How often each word is written in the sentences of `paths`, lower-cased."""
-    counts: collections.Counter = collections.Counter()
-    for path in paths:
-        with path.open(encoding="utf-8", errors="replace") as handle:
-            for line in handle:
-                counts.update(make_pack.tokenise(line.split("\t", 1)[-1], alphabet))
-    return counts
 
 
 def bare(key: tuple[int, ...]) -> tuple[int, ...]:
@@ -101,17 +61,17 @@ def left_out(tag: str) -> set[str]:
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("list", choices=sorted(CORPORA))
-    parser.add_argument("--leipzig", type=pathlib.Path,
-                        default=pathlib.Path.home() / ".cache" / "borderkeys" / "leipzig")
+    parser.add_argument("list", choices=language_manifest.with_key("known_corpora"))
+    parser.add_argument("--cache", type=pathlib.Path, default=language_manifest.CACHE)
     parser.add_argument("--evidence", type=pathlib.Path,
                         default=pathlib.Path.home() / ".cache" / "borderkeys" / "word-evidence")
     args = parser.parse_args()
 
-    args.leipzig.mkdir(parents=True, exist_ok=True)
-    corpora = CORPORA[args.list]
-    counts = count_words([sentences(name, args.leipzig) for name in corpora],
-                         make_pack.alphabet_for(args.list.replace("_", "-")))
+    manifest = language_manifest.load(args.list)
+    corpora = manifest.known_corpora
+    counts = make_pack.count_words([language_manifest.sentences(manifest, name, args.cache)
+                                    for name in corpora],
+                                   make_pack.alphabet_for(args.list.replace("_", "-")))
     tokens = sum(counts.values())
 
     listed = {bare(key)

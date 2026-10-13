@@ -117,6 +117,20 @@ def tokenise(line: str, alphabet: Alphabet | None = None) -> list[str]:
 SENTENCE_START = "\x02start"
 
 
+def count_words(paths: list[Path], alphabet: Alphabet | None = None,
+                wanted: set[str] | None = None) -> Counter:
+    """How often the plain text of [paths] writes each word, as [count_corpus] counts words; only
+    the words of [wanted] when it is given."""
+    words: Counter = Counter()
+    for path in paths:
+        with path.open(encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                for token in tokenise(line, alphabet):
+                    if wanted is None or token in wanted:
+                        words[token] += 1
+    return words
+
+
 def count_corpus(paths: list[Path], order: int,
                  alphabet: Alphabet | None = None) -> tuple[Counter, Counter, Counter]:
     """Counts words, pairs and triples from plain text, in one pass, without holding the text."""

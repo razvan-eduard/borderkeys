@@ -20,6 +20,8 @@ SEED = 20260921
 COUNT = 200
 FROM_TOP = 4000
 MIN_LENGTH = 6
+# No upper bound on a word's length.
+MAX_LENGTH = None
 
 
 def mangled(word, rng):

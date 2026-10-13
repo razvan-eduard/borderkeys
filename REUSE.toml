@@ -172,8 +172,8 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 BorderKeys contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
-# The per-language manifests tools/new_language.py builds the downloadable packs from. Plain
-# data, authored here.
+# The per-language manifests: the sources tools/new_language.py builds the downloadable packs
+# from, and the corpora the bundled lists are counted from. Plain data, authored here.
 [[annotations]]
 path = "tools/languages/**"
 precedence = "aggregate"

@@ -141,10 +141,11 @@ python3 tools/classify_wordlist.py --all --review /tmp/review    # report, and t
 python3 tools/classify_wordlist.py --all --apply                 # rewrite dictionaries/<tag>.tsv
 ```
 
-The first run downloads what it reads into `~/.cache/borderkeys/word-evidence`, about 1.7 GB and
-most of it the news corpora, from pinned commits and files it checks against their SHA-256. It
-needs the `hunspell` binary on PATH. Nothing it reads is shipped; the sources and their licences
-are in `docs/licensing.md` 2.1.2.
+The first run downloads what it reads into `~/.cache/borderkeys/word-evidence`, from pinned
+commits and files it checks against their SHA-256, and the Leipzig news corpus the language's
+manifest names under `capitals` into `~/.cache/borderkeys/leipzig`, checked against the pin there
+(below). It needs the `hunspell` binary on PATH. Nothing it reads is shipped; the sources and
+their licences are in `docs/licensing.md` 2.1.2.
 
 | evidence for a row | read from |
 |---|---|
@@ -495,8 +496,18 @@ lists beside the new one, the compiled pack with its size, and the reachability 
 whose budget is still `null` has its count recorded by that check, and every later run is gated
 against it; the number may only ever be lowered by hand. The manifests also feed
 `drop_unreachable.py` and `drop_foreign.py`, so a downloadable language is judged by the same
-rules as a bundled one. `.github/workflows/packs.yml`, started by hand,
-compiles every list in `dictionaries/extra/` and replaces the `packs` release with the result.
+rules as a bundled one. `.github/workflows/packs.yml`, started by hand, compiles every list in
+`dictionaries/extra/` and replaces the `packs` release with the result.
+
+The six bundled languages have manifests too, `tools/languages/<tag>.json`, holding only the
+Leipzig corpora their files are counted from, by role: `corpora` (the word list), `known_corpora`
+(the `.known` words), `case_corpora` (the `.case` evidence) and `heldout` (a news corpus none of
+those is, nor from any of their years, which the test corpora are drawn from), with each
+archive's SHA-256 under
+`sha256` and the personal corpus's `persona`. `tools/language_manifest.py` reads them and fetches
+a corpus into `~/.cache/borderkeys/leipzig`, checking its archive against the pin, or recording
+the pin on a first fetch; `--list-corpora <tag>` finds a word list's corpora by counting.
+`new_language.py` does not build the bundled six.
 
 Twenty-one languages are published this way, each with the same n-grams, names and grammar
 the bundled six carry: Dutch, Portuguese, Swedish, Danish, Norwegian Bokmål, Finnish, Polish,

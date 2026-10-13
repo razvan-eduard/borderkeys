@@ -1,0 +1,25 @@
+{
+  "tag": "de-DE",
+  "name": "German",
+  "known_corpora": [
+    "deu_wikipedia_2021_1M",
+    "deu_news_2025_1M",
+    "deu_newscrawl_2020_1M"
+  ],
+  "case_corpora": [
+    "deu_news_2025_1M",
+    "deu_newscrawl_2020_1M",
+    "deu_wikipedia_2021_1M"
+  ],
+  "capitals": "deu_news_2020_1M",
+  "heldout": "deu_news_2024_1M",
+  "sha256": {
+    "deu_news_2020_1M.tar.gz": "ba5f9f8fe0c1fb58817094c3b7475be83c4d2730395c119be58a2f04c34665e3",
+    "deu_news_2021_1M.tar.gz": "dbc5c7248eaf915d9b525ce49c7bea684e4b244a7e3ae489e90a9185f665485f",
+    "deu_news_2022_1M.tar.gz": "ad18c6267b9bcdad6f4622967f31e0137cab052fad334417af9292ff028e8f1d",
+    "deu_news_2023_1M.tar.gz": "392065f34be70e3612d6ef6b3edc6687b026524e57e00eef47f0528456deb1ba",
+    "deu_news_2025_1M.tar.gz": "2c55dbe53158bb06c323bfa30407972c219c70a643bbad50cc6b08221fa34e7a",
+    "deu_newscrawl_2020_1M.tar.gz": "8ceb2cb6f61a387b9c73345feee76d3bfd91136b394e9be7748c724f6b8456b6",
+    "deu_wikipedia_2021_1M.tar.gz": "d5eb95fe71010a88d69ba408a4016f67a3a219e1a63cade652593abf33010aba"
+  }
+}

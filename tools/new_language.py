@@ -33,8 +33,10 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import language_manifest  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -42,11 +44,9 @@ EXTRA = ROOT / "dictionaries" / "extra"
 ACCENTS = ROOT / "keyboard" / "src" / "main" / "assets" / "accents"
 BUNDLED = ("en_US", "ro_RO", "de_DE", "es_ES", "fr_FR", "it_IT")
 
-LEIPZIG = "https://downloads.wortschatz-leipzig.de/corpora/{name}.tar.gz"
 HUNSPELL = "https://raw.githubusercontent.com/LibreOffice/dictionaries/master/{path}.{ext}"
 ENGLISH_HUNSPELL = "en/en_US"
 TREEBANK = "https://raw.githubusercontent.com/UniversalDependencies/{repository}/{release}/{file}"
-USER_AGENT = "BorderKeys-tools (https://github.com/razvan-eduard/borderkeys)"
 
 STEPS = ("fetch", "overlay", "names", "grammar", "corpus", "ordinary", "pack", "clean", "compile", "check")
 
@@ -68,13 +68,7 @@ def download(url: str, target: Path) -> None:
     if target.is_file() and target.stat().st_size > 0:
         log(f"have {target.name}")
         return
-    target.parent.mkdir(parents=True, exist_ok=True)
-    log(f"fetching {url}")
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    partial = target.with_suffix(target.suffix + ".part")
-    with urllib.request.urlopen(request, timeout=120) as response, partial.open("wb") as out:
-        shutil.copyfileobj(response, out, length=1 << 20)
-    partial.rename(target)
+    language_manifest.download(url, target)
 
 
 class Language:
@@ -86,6 +80,8 @@ class Language:
         self.manifest = json.loads(manifest.read_text(encoding="utf-8"))
         self.tag = self.manifest["tag"]
         self.file_tag = self.tag.replace("-", "_")
+        if self.file_tag in BUNDLED:
+            raise SystemExit(f"{manifest.name}: {self.file_tag} is a bundled language, not built here")
         self.work = work_root / self.file_tag
         self.work.mkdir(parents=True, exist_ok=True)
         EXTRA.mkdir(parents=True, exist_ok=True)
@@ -94,7 +90,8 @@ class Language:
 
     @property
     def sentences(self) -> list:
-        return [self.work / "corpora" / f"{name}-sentences.txt" for name in self.manifest["corpora"]]
+        return [self.work / "corpora" / f"{name}{language_manifest.SENTENCES_SUFFIX}"
+                for name in self.manifest["corpora"]]
 
     @property
     def hunspell_sources(self) -> list:
@@ -174,9 +171,10 @@ class Language:
                 log(f"have {target.name}")
                 continue
             archive = self.work / "corpora" / f"{name}.tar.gz"
-            download(LEIPZIG.format(name=name), archive)
+            download(language_manifest.LEIPZIG.format(name=name), archive)
             with tarfile.open(archive) as tar:
-                member = next(m for m in tar.getmembers() if m.name.endswith("-sentences.txt"))
+                member = next(m for m in tar.getmembers()
+                              if m.name.endswith(language_manifest.SENTENCES_SUFFIX))
                 with tar.extractfile(member) as source, target.open("wb") as out:
                     shutil.copyfileobj(source, out, length=1 << 20)
             archive.unlink()

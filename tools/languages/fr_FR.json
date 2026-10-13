@@ -1,0 +1,23 @@
+{
+  "tag": "fr-FR",
+  "name": "French",
+  "known_corpora": [
+    "fra_wikipedia_2021_1M",
+    "fra_news_2024_1M",
+    "fra_newscrawl_2020_1M"
+  ],
+  "case_corpora": [
+    "fra_news_2024_1M",
+    "fra_newscrawl_2020_1M",
+    "fra_wikipedia_2021_1M"
+  ],
+  "capitals": "fra_news_2020_1M",
+  "heldout": "fra_news_2023_1M",
+  "sha256": {
+    "fra_news_2020_1M.tar.gz": "9a7a252453483e43a061213ac6b05b5558a70de18b09d0bb7e7de6b249f393b3",
+    "fra_news_2023_1M.tar.gz": "14b8812f80ebf91812bf9334feae2b53d101b9507d0e68bd11d30dd56861aa8f",
+    "fra_news_2024_1M.tar.gz": "907eed297ab7b5fbe0ea87105084899158f660890e87f121b2a24eb9853a6467",
+    "fra_newscrawl_2020_1M.tar.gz": "1f23938e4815ff34210d55f94e61d05c5cb26416a1e9b5af4802d6ab63952bec",
+    "fra_wikipedia_2021_1M.tar.gz": "73eadebaa2fe3600ebf4e41bac5241e821d7baa4c9906afc11969fb6c8aaec86"
+  }
+}

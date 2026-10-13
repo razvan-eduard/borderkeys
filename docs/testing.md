@@ -737,15 +737,16 @@ is the number a user gets.
 | `autocorrect_case_it` | 300 | — | 294 |
 | `autocorrect_case_ro` | 300 | — | 289 |
 
-The case corpora are read case-sensitively: a row is right only when the word comes out
-written exactly as expected. Each holds 300 words a pack list has flagged as a name, typed in
-lower case after the word before them in a held-out sentence: the 150 most frequent that the
-held-out Leipzig 2020 news writes capitalised inside a sentence, and the 150 it writes in lower
-case, each with 95% confidence (`tools/make_case_corpus.py`). Those sentences are not the ones
-`dictionaries/<tag>.case` was counted from. No corpus before them could see a capital: the
-known-words corpus leaves names out, and every other comparison ignores case. The real-typo
-reading a word at a time fell from 468 to 467 when the case evidence took 539 English name flags
-away: "shojlswe" ("shoulder") lost the decoder's margin to a word no longer flagged as a name.
+The case corpora are read case-sensitively: a row is right only when the word comes out written
+exactly as expected. Each holds 300 words a pack list has flagged as a name, typed in lower case
+after the word before them in a sentence of the Leipzig 2020 news: the 150 most frequent that it
+writes capitalised inside a sentence, and the 150 it writes in lower case, each with 95%
+confidence (`tools/make_case_corpus.py`). Those sentences are not the ones
+`dictionaries/<tag>.case` was counted from; the English, Romanian and French word lists count
+that same news. No corpus before them could see a capital: the known-words corpus leaves names
+out, and every other comparison ignores case. The real-typo reading a word at a time fell from
+468 to 467 when the case evidence took 539 English name flags away: "shojlswe" ("shoulder") lost
+the decoder's margin to a word no longer flagged as a name.
 
 `autocorrect_unlisted_en` holds real words the pack and both English spelling dictionaries lack,
 sampled from the stock keyboard's English lists by `tools/make_unlisted_corpus.py`, each to be
@@ -971,18 +972,26 @@ their word; the generated corpora hold none.
 
 ```
 python3 tools/heldout_overlap.py en_US ro_RO es_ES
-python3 tools/make_personal_corpus.py en_US native-tests/data   # and ro_RO, es_ES
+python3 tools/make_personal_corpus.py en_US   # and ro_RO, es_ES; into build/personal-corpus
 ```
 
 What a person has written changes what the keyboard offers after it, so this corpus types words
-after a history. `heldout_overlap.py` admits a language only when no corpus its pack is counted
-from is from the held-out file's year and every one is cached: English, Romanian and Spanish (the
-German, French and Italian packs count a 2020 newscrawl). `make_personal_corpus.py` takes a
-persona from the held-out 2020 news (every sentence mentioning the name the file writes most,
-less any sentence a counted corpus also writes, Romanian respelled as its list is), learns the
-first half, and draws rows from the second: words after their two words of context, each word
-and context once, typed with a slip, omitted, extra or mid-word typo in turn, and as written
-when the pack spells it exactly.
+after a history. Both tools take the held-out file and the corpora a language's lists are counted
+from out of its manifest, `tools/languages/<tag>.json`, every archive checked against its SHA-256
+(`language_manifest.py`). `heldout_overlap.py` admits a language only when its word list's corpora
+are recorded and none of those corpora is from the held-out file's year; each bundled language
+holds out the most recent news edition from no such year. `make_personal_corpus.py` takes a persona
+from the held-out news (every sentence mentioning the name those sentences write most, which must
+be the manifest's `persona`, less any sentence a counted corpus also writes, Romanian respelled as
+its list is) and splits it by a hash of each sentence. The history side is written as its
+sentences, to be typed; the rows side as candidate rows: each ordinary word of the list after its
+two words of context, as written, and with a slip, omitted, extra or mid-word typo where its length
+suits that corpus and the typo is not a word of the list, each typo drawn from its corpus's seed,
+its kind and the word.
+
+The corpus in `native-tests/data` predates that generator: its history is the first half of a
+persona from the 2020 news, which the English and Romanian lists count, as runs of words, and its
+rows were drawn from it by an estimated class.
 
 The history is learned through `LearningFlow.record`, the call a commit makes, under the
 language the engine answers in, and read back as the service reads it at start: through the
@@ -1003,9 +1012,9 @@ Floors, rows right with the whole history:
 | none, as written | 230 / 230 | 191 / 191 | 204 / 205 |
 | none, typo | 170 / 230 | 131 / 196 | 141 / 210 |
 
-**meant** is smaller than the 200 words a class is drawn to: the generator estimates a class from
-raw counts, and the budget gives up links in busy contexts, so the test files those rows under
-**others**.
+**meant** is smaller than the 200 words a class was drawn to: the earlier generator estimated a
+class from raw counts, and the budget gives up links in busy contexts, so the test files those
+rows under **others**.
 
 ### Accent restoration — the one that was missing
 
@@ -1119,7 +1128,9 @@ Named rather than left to be discovered:
 - **No screenshot or UI-regression tests.** The keyboard draws itself on a `Canvas`, so a visual
   regression is invisible to everything here, apart from the one smoke case that measures how far
   the strip's text reaches in a screenshot.
-- **The dictionary tools have no tests of their own**, apart from `build_dict.py --selftest`.
+- **Few dictionary tools have tests of their own**: the `--selftest` runs CI makes of
+  `build_dict.py`, `make_case_evidence.py`, `drop_unreachable.py`, `merge_apostrophes.py`,
+  `language_manifest.py` and `make_personal_corpus.py`.
   `make_pack.py`'s name guards, `merge_names.py`'s vetoes and `flag_names.py`'s rule are exercised
   by running them and reading the output, not by assertions.
 - **The assistant** (`:assist`) is covered only by the gates that keep it out of `core`. Its

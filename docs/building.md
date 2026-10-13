@@ -275,6 +275,9 @@ Every tool prints its usage with `--help`, and its header says what it does.
 | `make_real_corpus.py` | Real phone typos from the ITE Typing dataset. |
 | `make_accent_corpus.py`, `make_twin_corpus.py` | Accent restoration, and spellings that differ only by diacritics. |
 | `make_case_corpus.py` | Capitalisation inside sentences, from held-out text. |
+| `heldout_overlap.py` | Whether a language's held-out corpus may be measured on, and what it shares with the counted ones. |
+| `make_personal_corpus.py` | A persona's history and candidate rows for `PersonalCorpusTest`. |
+| `language_manifest.py` | Each language's corpora from its manifest, fetched and checked against their SHA-256; a word list's corpora found by counting. |
 | `make_context_corpus.py` | Held-out text for `suggest_eval --context`. |
 | `make_tap_corpus.py` | Synthetic taps for the touch model. |
 | `make_corrupt_packs.py` | The malformed packs under `native-tests/data/corpus`. |

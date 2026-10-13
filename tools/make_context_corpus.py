@@ -68,26 +68,35 @@ def is_word_character(ch):
     return ch.isalpha() or ch == "'" or ch == "-"
 
 
-def runs(text):
-    """The runs of words in `text` that each carry the context into the next."""
+def pieces(text):
+    """`text` in NFC with its apostrophes plain, as `(is_word, piece)`: each run of word
+    characters, and each other character on its own."""
     text = unicodedata.normalize("NFC", text)
     for typographic, plain in APOSTROPHES.items():
         text = text.replace(typographic, plain)
-    out = []
-    current = []
     at = 0
     while at < len(text):
         if is_word_character(text[at]):
             end = at
             while end < len(text) and is_word_character(text[end]):
                 end += 1
-            current.append(text[at:end])
+            yield True, text[at:end]
             at = end
             continue
-        if text[at] in SENTENCE_MARKS and current:
+        yield False, text[at]
+        at += 1
+
+
+def runs(text):
+    """The runs of words in `text` that each carry the context into the next."""
+    out = []
+    current = []
+    for is_word, piece in pieces(text):
+        if is_word:
+            current.append(piece)
+        elif piece in SENTENCE_MARKS and current:
             out.append(current)
             current = []
-        at += 1
     if current:
         out.append(current)
     return out

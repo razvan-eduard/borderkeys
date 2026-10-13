@@ -1,0 +1,26 @@
+{
+  "tag": "es-ES",
+  "name": "Spanish",
+  "known_corpora": [
+    "spa_wikipedia_2021_1M",
+    "spa_news_2024_1M",
+    "spa_newscrawl_2021_1M"
+  ],
+  "case_corpora": [
+    "spa_news_2024_1M",
+    "spa_newscrawl_2021_1M",
+    "spa_wikipedia_2021_1M"
+  ],
+  "capitals": "spa_news_2020_1M",
+  "heldout": "spa_news_2023_1M",
+  "persona": "José",
+  "sha256": {
+    "spa_news_2020_1M.tar.gz": "89fb1319f53b341466c065152467cb1bd3789a3ed9aa143807b1952503ef1d50",
+    "spa_news_2021_1M.tar.gz": "eb16987f15d1109279bac2e280065100c3d660e71f23d50623f6bb84eff0f1b4",
+    "spa_news_2022_1M.tar.gz": "039da88bf4ff48d97915f13b92a9254ba0df4fb07d6242266c3197359c00689c",
+    "spa_news_2023_1M.tar.gz": "6a720452204673e44e16e129c49a9815291b6664e1585763b25adcf5c1d8b25b",
+    "spa_news_2024_1M.tar.gz": "4666b54caad54cd46cdfea80e7cb727663b220c2ead871b4ccf6285df0599090",
+    "spa_newscrawl_2021_1M.tar.gz": "53ab5961ab18aee018d536f4425fa20b0f6d2b4ecf7d3925558103742874ba58",
+    "spa_wikipedia_2021_1M.tar.gz": "d4fc33f8cb079a3a2dc9edaec8cdd062b9fba5a36f7fa5af9488a945a8f629c8"
+  }
+}

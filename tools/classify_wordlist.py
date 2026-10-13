@@ -60,7 +60,8 @@ The decision, in order:
 
 A run that would drop a guard word or keep a GUARD_DROPS word writes nothing and fails. The
 evidence is fetched into --evidence on first use from the pinned sources below and checked
-against its SHA-256. A spelling dictionary that refuses its probe words, or accepts nonsense,
+against its SHA-256; the Leipzig corpus capitals are counted in through language_manifest.py,
+against the pin in the language's manifest. A spelling dictionary that refuses its probe words, or accepts nonsense,
 stops the run. Needs the `hunspell` binary on PATH.
 """
 
@@ -74,7 +75,6 @@ import math
 import re
 import subprocess
 import sys
-import tarfile
 import unicodedata
 import urllib.request
 from collections import Counter
@@ -84,6 +84,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_dict import fold_word  # noqa: E402
 from make_names import FLAT_FREQUENCY  # noqa: E402
+import language_manifest  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parent.parent
 
@@ -94,27 +95,24 @@ STOCK_KEYBOARD = ("https://raw.githubusercontent.com/LineageOS/"
                   "dictionaries/{code}_wordlist.combined.gz")
 SUBTITLES = ("https://raw.githubusercontent.com/hermitdave/FrequencyWords/"
              "525f9b560de45753a5ea01069454e72e9aa541c6/content/2018/{code}/{code}_full.txt")
-LEIPZIG = "https://downloads.wortschatz-leipzig.de/corpora/{name}.tar.gz"
 
 
 @dataclass(frozen=True)
 class Sources:
     """A language's spelling dictionaries (LibreOffice paths without the extension), its stock
-    keyboard lists, its subtitle list, and the Leipzig corpus its capitals are counted in."""
+    keyboard lists and its subtitle list."""
     spelling: tuple[str, ...]
     keyboard: tuple[str, ...]
     spoken: str
-    capitals: str
 
 
 SOURCES = {
-    "en_US": Sources(("en/en_US", "en/en_GB"), ("en", "en_US", "en_GB"), "en", "eng_news_2020_1M"),
-    "ro_RO": Sources(("ro/ro_RO",), ("ro",), "ro", "ron_news_2020_1M"),
-    "de_DE": Sources(("de/de_DE_frami", "de/de_AT_frami", "de/de_CH_frami"), ("de",), "de",
-                     "deu_news_2020_1M"),
-    "fr_FR": Sources(("fr_FR/dictionaries/fr",), ("fr",), "fr", "fra_news_2020_1M"),
-    "es_ES": Sources(("es/es_ES", "es/es_MX"), ("es",), "es", "spa_news_2020_1M"),
-    "it_IT": Sources(("it_IT/it_IT",), ("it",), "it", "ita_news_2020_1M"),
+    "en_US": Sources(("en/en_US", "en/en_GB"), ("en", "en_US", "en_GB"), "en"),
+    "ro_RO": Sources(("ro/ro_RO",), ("ro",), "ro"),
+    "de_DE": Sources(("de/de_DE_frami", "de/de_AT_frami", "de/de_CH_frami"), ("de",), "de"),
+    "fr_FR": Sources(("fr_FR/dictionaries/fr",), ("fr",), "fr"),
+    "es_ES": Sources(("es/es_ES", "es/es_MX"), ("es",), "es"),
+    "it_IT": Sources(("it_IT/it_IT",), ("it",), "it"),
 }
 
 SHA256 = {
@@ -154,12 +152,6 @@ SHA256 = {
     "fr_full.txt": "dda23c3025fc195b3a7996af26371dcf3abd1aa2cd7218dbbb7c92a49780ab0c",
     "es_full.txt": "b4794c425f3500c21a0ff9367175e36795a978c928a36670e9ad6ae206fb7728",
     "it_full.txt": "b23b0c6a3f59c1da1c7caa667b9df5699e95323fee20a05f343c7d7dae73c4be",
-    "eng_news_2020_1M.tar.gz": "be782eb82690415241d623fd2448dfd3fc68102ac1ce971107cb130420abbb41",
-    "ron_news_2020_1M.tar.gz": "6daa196d4c175ed447f227140618732edf7ca5889f56e53c290916ffaabd8d0d",
-    "deu_news_2020_1M.tar.gz": "ba5f9f8fe0c1fb58817094c3b7475be83c4d2730395c119be58a2f04c34665e3",
-    "fra_news_2020_1M.tar.gz": "9a7a252453483e43a061213ac6b05b5558a70de18b09d0bb7e7de6b249f393b3",
-    "spa_news_2020_1M.tar.gz": "89fb1319f53b341466c065152467cb1bd3789a3ed9aa143807b1952503ef1d50",
-    "ita_news_2020_1M.tar.gz": "b0728fc9d2ace61947b16b61162ca89be1c04531b4a56053f55a14bb68dae20c",
 }
 
 # How many of the commonest corpus rows are judged by what counts against them; the rest need
@@ -319,21 +311,16 @@ def spoken_counts(directory: Path, sources: Sources) -> dict[str, int]:
 TOKEN = re.compile(r"[^\W\d_]+(?:['’-][^\W\d_]+)*")
 
 
-def capital_counts(directory: Path, sources: Sources,
-                   words: set[str]) -> dict[str, tuple[int, int]]:
-    """For each of [words]: how often the corpus writes it in lower case, and how often
-    capitalised other than as a sentence's first word."""
+def capital_counts(tag: str, words: set[str]) -> dict[str, tuple[int, int]]:
+    """For each of [words]: how often [tag]'s capitals corpus writes it in lower case, and how
+    often capitalised other than as a sentence's first word."""
     if not words:
         return {}
-    name = sources.capitals
-    path = fetch(directory, f"{name}.tar.gz", LEIPZIG.format(name=name))
+    manifest = language_manifest.load(tag)
+    path = language_manifest.sentences(manifest, manifest.capitals)
     lower: Counter = Counter()
     capitalised: Counter = Counter()
-    with tarfile.open(path) as archive:
-        member = next((m for m in archive.getmembers() if m.name.endswith("-sentences.txt")), None)
-        if member is None:
-            raise SystemExit(f"{path} holds no sentences file")
-        handle = archive.extractfile(member)
+    with path.open("rb") as handle:
         for raw in handle:
             sentence = raw.decode("utf-8", "replace").rstrip("\n").split("\t", 1)[-1]
             for position, match in enumerate(TOKEN.finditer(sentence)):
@@ -564,7 +551,7 @@ def classify(tag: str, rows: list[tuple[str, int, bool]], evidence_dir: Path,
     based = {word for word in words
              if word not in any_evidence and (base_of(word) or "") in any_evidence}
     any_evidence |= based
-    capitals = capital_counts(evidence_dir, sources, {word.lower() for word in words})
+    capitals = capital_counts(tag, {word.lower() for word in words})
 
     def written_as_name(word: str) -> bool:
         lower, capitalised = capitals[word.lower()]

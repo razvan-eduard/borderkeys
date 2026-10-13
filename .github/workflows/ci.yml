@@ -170,6 +170,12 @@ jobs:
       - name: Case evidence counting
         run: python3 tools/make_case_evidence.py --selftest
 
+      - name: Corpus pins are checked and recorded
+        run: python3 tools/language_manifest.py --selftest
+
+      - name: The personal corpus split and typos are stable
+        run: python3 tools/make_personal_corpus.py --selftest
+
       # The letters with no unaccented twin ("ß", "æ", "œ") are still on their overlays.
       - name: Language alphabets are what the dictionaries were built against
         run: python3 tools/drop_unreachable.py --selftest
