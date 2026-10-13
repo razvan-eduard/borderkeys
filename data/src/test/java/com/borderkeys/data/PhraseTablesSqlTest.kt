@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,8 +23,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * The phrase tables' own SQL, on an in-memory database: the sweep's halving and forget's
- * subtraction. Rows are written already keyed, so nothing here reaches the native library.
+ * The phrase tables' own SQL, on an in-memory database: the sweep's halving, forget's subtraction
+ * and the purge taking its verdicts outside a transaction. Rows are written already keyed, so
+ * nothing here reaches the native library.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [PhraseTablesSqlTest.SDK])
@@ -103,7 +105,7 @@ class PhraseTablesSqlTest {
     }
 
     @Test
-    fun `the phrases used at most so many times are read in the order each was first recorded`() = runTest {
+    fun `the phrases used at most so many times are read`() = runTest {
         val most = PhraseBudget.PURGE_MOST_USES
         holdPair("the", "cat", most)
         holdPair("the", "dog", most + 1)
@@ -111,8 +113,25 @@ class PhraseTablesSqlTest {
         val triples = database.userTrigramDao()
         triples.upsert(UserTrigram(LANGUAGE, "on", "the", "cat", most, AT, most.toLong(), most.toLong()))
         triples.upsert(UserTrigram(LANGUAGE, "on", "the", "dog", most + 1, AT, most + 1L, most + 1L))
-        assertEquals(listOf("cat", "cow"), database.userBigramDao().usedAtMost(most).map { it.word })
-        assertEquals(listOf("cat"), triples.usedAtMost(most).map { it.word })
+        assertEquals(setOf("cat", "cow"), database.userBigramDao().usedAtMost(most).map { it.word }.toSet())
+        assertEquals(setOf("cat"), triples.usedAtMost(most).map { it.word }.toSet())
+    }
+
+    @Test
+    fun `the purge takes its verdicts with no transaction open`() = runTest {
+        holdPair("the", UNLEARNABLE, 1)
+        val repository = DictionaryRepository(
+            database, database.userWordDao(), database.blockedWordDao(), database.userBigramDao(),
+            database.userTrigramDao(), database.keyTouchDao(), database.userPhraseClockDao(),
+        )
+        val inTransaction = mutableListOf<Boolean>()
+        val purged = repository.purgeUnlearnable { words ->
+            inTransaction += database.inTransaction()
+            words.map { it != UNLEARNABLE }
+        }
+        assertEquals(listOf(false), inTransaction)
+        assertEquals(listOf(UNLEARNABLE), purged.pairs.map { it.word })
+        assertTrue(database.userBigramDao().all().isEmpty())
     }
 
     companion object {
@@ -120,6 +139,9 @@ class PhraseTablesSqlTest {
         const val SDK = 35
 
         const val LANGUAGE = "en"
+
+        /** A word the purge's test answers is not learnable. */
+        const val UNLEARNABLE = "zqx"
 
         /** When the links were written, and a later use. */
         const val AT = 1L

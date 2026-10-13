@@ -36,12 +36,12 @@ interface UserTrigramDao {
     suspend fun countIn(language: String): Int
 
     /** The triples [word] takes part in, wherever it sits, in every language. */
-    /** The triples used at most [uses] times, in the order each was first recorded. */
-    @Query("SELECT * FROM user_trigrams WHERE count <= :uses ORDER BY rowid")
-    suspend fun usedAtMost(uses: Int): List<UserTrigram>
-
     @Query("SELECT * FROM user_trigrams WHERE previousWord2 = :word OR previousWord1 = :word OR word = :word")
     suspend fun involving(word: String): List<UserTrigram>
+
+    /** The triples used at most [uses] times. */
+    @Query("SELECT * FROM user_trigrams WHERE count <= :uses")
+    suspend fun usedAtMost(uses: Int): List<UserTrigram>
 
     /** The triples that run through the pair [first] [second] in [language], on either side. */
     @Query(

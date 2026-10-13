@@ -166,6 +166,60 @@ class DictionaryRepositoryForgetTest {
         assertFalse("the sentence start is never asked about", UserBigram.SENTENCE_START in asked)
     }
 
+    @Test
+    fun `the purge keeps a pair and a triple whose uses rise past the threshold while the verdicts are taken`() = runTest {
+        val most = PhraseBudget.PURGE_MOST_USES
+        val recorder = PhraseRecorder(pairs, triples, clocks)
+        val pair = LearnedBigram("en", "the", UNLEARNABLE, most, AT)
+        val triple = LearnedTrigram("en", "on", "the", UNLEARNABLE, most, AT)
+        recorder.recordPairs(listOf(PairStep(pair)))
+        recorder.recordTriples(listOf(TripleStep(triple)))
+        val purged = repository.purgeUnlearnable { words ->
+            recorder.recordPairs(listOf(PairStep(pair.copy(delta = 1))))
+            recorder.recordTriples(listOf(TripleStep(triple.copy(delta = 1))))
+            words.map { it != UNLEARNABLE }
+        }
+        assertTrue(purged.pairs.isEmpty())
+        assertTrue(purged.triples.isEmpty())
+        assertEquals(listOf(most + 1), pairs.rows.values.map { it.count })
+        assertEquals(listOf(most + 1), triples.rows.values.map { it.count })
+    }
+
+    @Test
+    fun `the purge keeps a phrase first recorded while the verdicts are taken`() = runTest {
+        val recorder = PhraseRecorder(pairs, triples, clocks)
+        recorder.recordPairs(listOf(PairStep(LearnedBigram("en", "the", UNLEARNABLE, 1, AT))))
+        recorder.recordTriples(listOf(TripleStep(LearnedTrigram("en", "on", "the", UNLEARNABLE, 1, AT))))
+        val purged = repository.purgeUnlearnable { words ->
+            recorder.recordPairs(listOf(PairStep(LearnedBigram("en", "a", UNLEARNABLE, 1, AT))))
+            recorder.recordTriples(listOf(TripleStep(LearnedTrigram("en", "in", "a", UNLEARNABLE, 1, AT))))
+            words.map { it != UNLEARNABLE }
+        }
+        assertEquals(listOf("the" to UNLEARNABLE), purged.pairs.map { it.previousWord to it.word })
+        assertEquals(listOf("a" to UNLEARNABLE), pairs.rows.values.map { it.previousWord to it.word })
+        assertEquals(listOf("on"), purged.triples.map { it.previousWord2 })
+        assertEquals(listOf("in"), triples.rows.values.map { it.previousWord2 })
+    }
+
+    @Test
+    fun `a purge that finds no unlearnable word opens no transaction and deletes nothing`() = runTest {
+        PhraseRecorder(pairs, triples, clocks).recordPairs(listOf(PairStep(LearnedBigram("en", "the", "cat", 1, AT))))
+        val purged = repository.purgeUnlearnable { words -> words.map { true } }
+        assertTrue(purged.pairs.isEmpty())
+        assertTrue(purged.triples.isEmpty())
+        assertEquals(1, pairs.rows.size)
+        coVerify(exactly = 0) { database.withTransaction<Any?>(any()) }
+    }
+
+    @Test
+    fun `the purge keeps the phrases of a word the verdicts give no answer for`() = runTest {
+        PhraseRecorder(pairs, triples, clocks)
+            .recordPairs(listOf(PairStep(LearnedBigram("en", "the", UNLEARNABLE, 1, AT))))
+        val purged = repository.purgeUnlearnable { words -> words.dropLast(1).map { true } }
+        assertTrue(purged.pairs.isEmpty())
+        assertEquals(1, pairs.rows.size)
+    }
+
     private companion object {
         const val ROOM_DATABASE_KT = "androidx.room.RoomDatabaseKt"
 

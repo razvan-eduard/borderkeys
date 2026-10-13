@@ -175,28 +175,41 @@ class DictionaryRepository internal constructor(
 
     /**
      * Deletes the pairs and triples used at most [PhraseBudget.PURGE_MOST_USES] times that hold a
-     * word [learnable] answers false for, in one transaction; [learnable] answers for each word of
-     * a list, in order, and is never asked about the sentence start. Returns what it deleted.
+     * word [learnable] answers false for. The verdicts are taken with no transaction open; the
+     * delete then reads those phrases again, in one transaction, and a phrase the first read did not
+     * see is kept. [learnable] answers for each word of a list, in order, and is never asked about
+     * the sentence start; a word it gives no answer for is kept. Returns what it deleted.
      */
-    suspend fun purgeUnlearnable(learnable: suspend (List<String>) -> List<Boolean>): PhraseRecorder.Dropped =
-        database.withTransaction {
-            val pairs = userBigrams.usedAtMost(PhraseBudget.PURGE_MOST_USES)
-            val triples = userTrigrams.usedAtMost(PhraseBudget.PURGE_MOST_USES)
-            val words = (
-                pairs.flatMap { listOf(it.previousWord, it.word) } +
-                    triples.flatMap { listOf(it.previousWord2, it.previousWord1, it.word) }
-                ).filter { it != UserBigram.SENTENCE_START }.distinct()
-            if (words.isEmpty()) {
-                return@withTransaction PhraseRecorder.Dropped()
+    suspend fun purgeUnlearnable(learnable: suspend (List<String>) -> List<Boolean>): PhraseRecorder.Dropped {
+        val pairs = userBigrams.usedAtMost(PhraseBudget.PURGE_MOST_USES)
+        val triples = userTrigrams.usedAtMost(PhraseBudget.PURGE_MOST_USES)
+        val words = (
+            pairs.flatMap { listOf(it.previousWord, it.word) } +
+                triples.flatMap { listOf(it.previousWord2, it.previousWord1, it.word) }
+            ).filter { it != UserBigram.SENTENCE_START }.distinct()
+        if (words.isEmpty()) {
+            return PhraseRecorder.Dropped()
+        }
+        val unlearnable = words.zip(learnable(words)).filterNot { it.second }.mapTo(HashSet()) { it.first }
+        if (unlearnable.isEmpty()) {
+            return PhraseRecorder.Dropped()
+        }
+        val judged = (pairs.map { it.row() } + triples.map { it.row() }).mapTo(HashSet(), ::identity)
+        return database.withTransaction {
+            val gonePairs = userBigrams.usedAtMost(PhraseBudget.PURGE_MOST_USES).filter {
+                identity(it.row()) in judged && (it.previousWord in unlearnable || it.word in unlearnable)
             }
-            val unlearnable = words.zip(learnable(words)).filterNot { it.second }.mapTo(HashSet()) { it.first }
-            val gonePairs = pairs.filter { it.previousWord in unlearnable || it.word in unlearnable }
-            val goneTriples = triples.filter {
-                it.previousWord2 in unlearnable || it.previousWord1 in unlearnable || it.word in unlearnable
+            val goneTriples = userTrigrams.usedAtMost(PhraseBudget.PURGE_MOST_USES).filter {
+                identity(it.row()) in judged &&
+                    (it.previousWord2 in unlearnable || it.previousWord1 in unlearnable || it.word in unlearnable)
             }
             phraseRecorder.purge(gonePairs, goneTriples)
             PhraseRecorder.Dropped(gonePairs, goneTriples)
         }
+    }
+
+    /** The columns that name a pair or triple: its language, the words before its last, its last word. */
+    private fun identity(row: LinkRow) = Triple(row.language, row.context, row.word)
 
     /** Deletes the words past the [keep] used most, with the phrases of those no case of which is left. */
     suspend fun keepWords(keep: Int) {

@@ -80,6 +80,8 @@ class PredictionEngine(
 
     private val queue = PredictionRequestQueue()
 
+    private val verdictRequests = VerdictRequests()
+
     /** The tags handed to [setActiveLanguages], read on the worker. */
     private var activeTags: List<String> = emptyList()
 
@@ -173,6 +175,7 @@ class PredictionEngine(
             toDestroy = handle
             handle = 0L
         }
+        verdictRequests.close()
         queue.clear()
         if (::worker.isInitialized) {
             worker.removeCallbacksAndMessages(null)
@@ -434,17 +437,15 @@ class PredictionEngine(
     }
 
     /**
-     * Whether each of [words] may be part of a learned pair or triple, delivered on the prediction
-     * thread; every word is, once the engine is gone.
+     * Whether each of [words] may be part of a learned pair or triple. Each answer comes once: on
+     * the prediction thread; at once when the engine cannot take the request; at shutdown, on the
+     * thread that shuts it down. Every word is learnable when the engine is gone.
      */
     fun learnableWords(words: List<String>, onResult: (List<Boolean>) -> Unit) {
-        val posted = ::worker.isInitialized && worker.post {
-            val verdicts = BooleanArray(words.size) { true }
-            withHandle(Unit) { current -> NativePredictor.nativeLearnable(current, words.toTypedArray(), verdicts) }
-            onResult(verdicts.toList())
-        }
-        if (!posted) {
-            onResult(List(words.size) { true })
+        verdictRequests.submit(words, onResult, post = { ::worker.isInitialized && worker.post(it) }) { asked ->
+            val verdicts = BooleanArray(asked.size) { true }
+            withHandle(Unit) { current -> NativePredictor.nativeLearnable(current, asked.toTypedArray(), verdicts) }
+            verdicts.toList()
         }
     }
 
