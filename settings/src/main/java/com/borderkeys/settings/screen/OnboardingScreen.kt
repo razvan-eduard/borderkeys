@@ -54,7 +54,16 @@ import com.borderkeys.settings.ChoiceSlider
 import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.NodeSlider
 import com.borderkeys.settings.PlacementPreview
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_LARGE_PLUS
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_MEDIUM_PLUS
+import com.borderkeys.settings.SPACE_SMALL
+import com.borderkeys.settings.SPACE_XLARGE
+import com.borderkeys.settings.SPACE_XSMALL
+import com.borderkeys.settings.SPACE_XSMALL_PLUS
 import com.borderkeys.settings.rememberPreferencesUpdater
 import com.borderkeys.settings.rememberThemeUpdater
 import kotlinx.coroutines.Dispatchers
@@ -92,7 +101,7 @@ fun OnboardingScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = SPACE_XLARGE, end = SPACE_MEDIUM, top = SPACE_XSMALL),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -108,20 +117,20 @@ fun OnboardingScreen(
                 modifier = Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = SPACE_XLARGE),
             ) {
                 if (page == 0) {
                     Text(
                         strings[Keys.ONBOARDING_INTRO],
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                        modifier = Modifier.padding(top = SPACE_XSMALL, bottom = SPACE_MEDIUM),
                     )
                 }
                 Text(
                     strings[pages[page].titleKey],
                     style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
+                    modifier = Modifier.padding(top = SPACE_MEDIUM, bottom = SPACE_MEDIUM),
                 )
                 when (pages[page]) {
                     OnboardingPage.Typing -> TypingPage(appearance.preferences, update)
@@ -130,12 +139,12 @@ fun OnboardingScreen(
                     OnboardingPage.Look -> LookPage(appearance, update)
                     OnboardingPage.Discover -> FeatureTour(hasAssistant, open)
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(SPACE_XLARGE))
             }
         }
-        Surface(tonalElevation = 3.dp) {
+        Surface(tonalElevation = WELCOME_ELEVATION) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_LARGE, vertical = SPACE_MEDIUM),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (page > 0) {
@@ -308,7 +317,7 @@ private fun PrivacyPage(
         }
     }
     SwitchItem(
-        title = strings[Keys.CLIPBOARD_REMEMBER_WHAT_YOU_COPY],
+        title = strings[Keys.CLIPBOARD_HISTORY_SWITCH],
         note = strings[Keys.CLIPBOARD_ONLY_WHILE_BORDERKEYS_IS_THE_KEYBOARD],
         checked = preferences.clipboardEnabled,
     ) { value -> update { it.copy(clipboardEnabled = value) } }
@@ -317,11 +326,11 @@ private fun PrivacyPage(
         note = strings[Keys.CLIPBOARD_RETENTION_NOTE],
         active = preferences.clipboardEnabled,
     ) {
-        StepSlider(
+        NodeSlider(
             label = formatRetention(strings, preferences.clipboardRetentionMinutes),
-            steps = KeyboardPreferences.RETENTION_STEPS,
-            current = preferences.clipboardRetentionMinutes,
-            default = KeyboardPreferences().clipboardRetentionMinutes,
+            options = KeyboardPreferences.RETENTION_STEPS,
+            value = preferences.clipboardRetentionMinutes,
+            default = DEFAULT_PREFERENCES.clipboardRetentionMinutes,
         ) { value -> update { it.copy(clipboardRetentionMinutes = value) } }
     }
     SwitchItem(
@@ -369,12 +378,12 @@ private fun LookPage(
     val placement = preferences.placementFor(false)
 
     // The keyboard as these settings draw it.
-    PlacementPreview(appearance, Modifier.padding(vertical = 8.dp))
+    PlacementPreview(appearance, Modifier.padding(vertical = SPACE_MEDIUM))
 
     OnboardingItem(title = strings[Keys.HOME_THEME], note = strings[Keys.HOME_COLOURS_CORNERS_AND_SPACING_WITH_A]) {
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
         ) {
             for (preset in PRESETS) {
                 // showKeyBorders is carried over; a preset does not change it.
@@ -491,7 +500,7 @@ private fun LanguagesItem() {
                 it,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = SPACE_XSMALL),
             )
         }
     }
@@ -538,7 +547,7 @@ private fun OnboardingItem(
             trailing?.invoke()
         }
         if (preview != null) {
-            Box(modifier = Modifier.padding(top = 6.dp, bottom = 6.dp).alpha(if (active) 1f else INACTIVE_ALPHA)) {
+            Box(modifier = Modifier.padding(top = SPACE_SMALL, bottom = SPACE_SMALL).alpha(if (active) 1f else INACTIVE_ALPHA)) {
                 preview(accent)
             }
         }
@@ -548,7 +557,7 @@ private fun OnboardingItem(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (content != null) {
-            Column(modifier = Modifier.padding(top = 6.dp)) { content() }
+            Column(modifier = Modifier.padding(top = SPACE_SMALL)) { content() }
         }
     }
 }
@@ -560,10 +569,10 @@ private fun ItemCard(active: Boolean, content: @Composable ColumnScope.() -> Uni
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .padding(vertical = SPACE_XSMALL_PLUS)
+            .clip(RoundedCornerShape(SPACE_LARGE))
             .background(accent.copy(alpha = if (active) ACTIVE_TINT else INACTIVE_TINT))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = SPACE_LARGE_PLUS, vertical = SPACE_MEDIUM_PLUS),
         content = content,
     )
 }
@@ -596,3 +605,6 @@ private val HAPTIC_STRENGTHS = listOf(
     KeyboardPreferences.HAPTIC_MEDIUM to Keys.LAYOUT_HAPTIC_MEDIUM,
     KeyboardPreferences.HAPTIC_STRONG to Keys.LAYOUT_HAPTIC_STRONG,
 )
+
+/** The welcome card's elevation. */
+private val WELCOME_ELEVATION = 3.dp

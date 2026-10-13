@@ -3,6 +3,8 @@
 
 package com.borderkeys.ime
 
+import java.util.concurrent.TimeUnit
+
 /**
  * Where a label too long for its room is scrolled to, over time: still at its start for a
  * while, past at a readable pace, still at its end for as long, and over again from the start.
@@ -13,8 +15,13 @@ object LabelMarquee {
     /** How long the label stands at either end, at speed 1. */
     const val HOLD_MILLIS = 2000f
 
+    /** [HOLD_MILLIS] in whole seconds, as the settings state it. */
+    val HOLD_SECONDS: Int = TimeUnit.MILLISECONDS.toSeconds(HOLD_MILLIS.toLong()).toInt()
+
     /** How fast it moves, in dp per second, at speed 1. */
     const val PACE_DP_PER_SECOND = 40f
+
+    private val MILLIS_PER_SECOND = TimeUnit.SECONDS.toMillis(1).toFloat()
 
     /**
      * The offset to draw the label at, from 0 to [overflowPx], at [elapsedMillis] since the
@@ -25,7 +32,7 @@ object LabelMarquee {
             return 0f
         }
         val hold = HOLD_MILLIS / speed
-        val travel = overflowPx / (pacePxPerSecond * speed) * 1000f
+        val travel = overflowPx / (pacePxPerSecond * speed) * MILLIS_PER_SECOND
         val cycle = hold + travel + hold
         val t = (elapsedMillis % cycle.toLong()).toFloat()
         return when {

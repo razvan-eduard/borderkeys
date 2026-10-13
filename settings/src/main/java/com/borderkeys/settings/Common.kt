@@ -3,25 +3,27 @@
 
 package com.borderkeys.settings
 
-import com.borderkeys.i18n.Keys
-
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
@@ -35,60 +37,60 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.layout.onPlaced
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withLink
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.height
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.LayoutDirection
-import kotlin.math.roundToInt
-import com.borderkeys.data.DataGraph
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.distinctUntilChanged
-import com.borderkeys.data.theme.EffectsSettings
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.State
+import com.borderkeys.data.DataGraph
 import com.borderkeys.data.backup.BackupRepository
+import com.borderkeys.data.theme.EffectsSettings
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.KeyboardTheme
 import com.borderkeys.data.theme.ParticleEffectsSettings
+import com.borderkeys.geometry.bothSides
+import com.borderkeys.geometry.diameter
+import com.borderkeys.geometry.half
+import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** The shapes every settings screen is built from. */
 
@@ -98,7 +100,7 @@ fun SectionHeader(text: String) {
         text = text,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.searchTarget(text).padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp),
+        modifier = Modifier.searchTarget(text).padding(start = SPACE_GUTTER, end = SPACE_GUTTER, top = SPACE_XXLARGE, bottom = SPACE_MEDIUM),
     )
 }
 
@@ -150,7 +152,7 @@ fun SettingLabel(text: String, color: Color = Color.Unspecified) {
         text,
         style = MaterialTheme.typography.bodyLarge,
         color = color,
-        modifier = Modifier.searchTarget(text).padding(horizontal = 20.dp, vertical = 4.dp),
+        modifier = Modifier.searchTarget(text).padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
     )
 }
 
@@ -172,11 +174,11 @@ fun SettingRow(
             .searchTarget(title)
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = SPACE_GUTTER, vertical = SPACE_LARGE_PLUS),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+        Column(modifier = Modifier.weight(1f).padding(end = SPACE_XLARGE)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             if (content != null) {
                 content()
@@ -207,10 +209,10 @@ fun AdvancedSection(summary: String? = null, content: @Composable ColumnScope.()
         modifier = Modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded }
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM_PLUS),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+        Column(modifier = Modifier.weight(1f).padding(end = SPACE_XLARGE)) {
             Text(
                 strings[Keys.COMMON_ADVANCED_SETTINGS],
                 style = MaterialTheme.typography.bodyLarge,
@@ -235,7 +237,7 @@ fun AdvancedSection(summary: String? = null, content: @Composable ColumnScope.()
         )
     }
     AnimatedVisibility(visible = expanded) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { content() }
+        Column(verticalArrangement = Arrangement.spacedBy(SPACE_XSMALL)) { content() }
     }
 }
 
@@ -320,6 +322,21 @@ fun rememberParticleEffectsUpdater(): ((ParticleEffectsSettings) -> ParticleEffe
     return { transform -> scope.launch { themes.updateParticleEffects(transform) } }
 }
 
+/**
+ * Of [saved], the entries that count as learned, as the keyboard counts them: [select] under the
+ * stored preferences, at the time the screen opened.
+ */
+@Composable
+fun <T> rememberLearned(saved: List<T>, select: (List<T>, KeyboardPreferences, Long) -> List<T>): List<T> {
+    val themes = remember { DataGraph.themes }
+    val preferences by themes.preferences
+        .collectAsStateWithLifecycle(initialValue = remember { themes.currentPreferences() })
+    val now = remember { System.currentTimeMillis() }
+    return remember(saved, preferences.learnAfter, preferences.unlearnHalfLifeDays) {
+        select(saved, preferences, now)
+    }
+}
+
 /** Moves [from] to [to], clamped, and returns the new order. */
 fun <T> move(ids: List<T>, from: Int, to: Int): List<T> {
     if (from !in ids.indices) {
@@ -351,7 +368,7 @@ fun ReorderRow(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (onAdd != null) Modifier.clickable(onClick = onAdd) else Modifier)
-            .padding(horizontal = 20.dp, vertical = 6.dp),
+            .padding(horizontal = SPACE_GUTTER, vertical = SPACE_SMALL),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
@@ -359,37 +376,44 @@ fun ReorderRow(
                 painter = painterResource(icon),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(ICON_SIZE),
             )
         }
         Text(
             label,
             style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f).padding(start = if (icon != null) 16.dp else 0.dp),
+            modifier = Modifier.weight(1f).padding(start = if (icon != null) SPACE_XLARGE else 0.dp),
         )
         if (onAdd == null) {
-            IconButton(onClick = onMoveTop, enabled = index > 0, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    painter = painterResource(R.drawable.bk_reorder_top),
-                    contentDescription = strings[Keys.QUICK_MOVE_TOP],
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            IconButton(onClick = onMoveUp, enabled = index > 0, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    painter = painterResource(R.drawable.bk_reorder_up),
-                    contentDescription = strings[Keys.QUICK_MOVE_UP],
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
+            MoveButtons(index, onMoveTop, onMoveUp)
+            IconButton(onClick = onRemove, modifier = Modifier.size(ROW_ACTION_BUTTON_SIZE)) {
                 Icon(
                     painter = painterResource(R.drawable.bk_reorder_remove),
                     contentDescription = strings[Keys.QUICK_REMOVE],
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(COMPACT_ICON_SIZE),
                 )
             }
         }
+    }
+}
+
+/** The controls that move the entry at [index] of an ordered list to the top and one up; off for the first. */
+@Composable
+fun MoveButtons(index: Int, onMoveTop: () -> Unit, onMoveUp: () -> Unit) {
+    val strings = LocalStrings.current
+    IconButton(onClick = onMoveTop, enabled = index > 0, modifier = Modifier.size(ROW_ACTION_BUTTON_SIZE)) {
+        Icon(
+            painter = painterResource(R.drawable.bk_reorder_top),
+            contentDescription = strings[Keys.QUICK_MOVE_TOP],
+            modifier = Modifier.size(COMPACT_ICON_SIZE),
+        )
+    }
+    IconButton(onClick = onMoveUp, enabled = index > 0, modifier = Modifier.size(ROW_ACTION_BUTTON_SIZE)) {
+        Icon(
+            painter = painterResource(R.drawable.bk_reorder_up),
+            contentDescription = strings[Keys.QUICK_MOVE_UP],
+            modifier = Modifier.size(COMPACT_ICON_SIZE),
+        )
     }
 }
 
@@ -506,7 +530,7 @@ private fun BackupReviewRow(label: String, checked: Boolean, onCheckedChange: (B
 @Composable
 fun Divider() {
     HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 20.dp),
+        modifier = Modifier.padding(horizontal = SPACE_GUTTER),
         color = MaterialTheme.colorScheme.surfaceVariant,
     )
 }
@@ -555,7 +579,7 @@ fun Explanation(text: String) {
         text = text,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
     )
 }
 
@@ -568,17 +592,17 @@ fun CautionNote(text: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp)
-            .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(12.dp))
-            .padding(12.dp),
+            .padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM)
+            .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(SPACE_LARGE))
+            .padding(SPACE_LARGE),
         verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM_PLUS),
     ) {
         Icon(
             painter = painterResource(R.drawable.bk_icon_warning),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onErrorContainer,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(SMALL_ICON_SIZE),
         )
         Text(
             text = text,
@@ -609,7 +633,7 @@ fun DefaultableSlider(
     onChangeFinished: (() -> Unit)? = null,
     onChange: (Float) -> Unit,
 ) {
-    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+    Column(modifier = Modifier.padding(horizontal = SPACE_GUTTER)) {
         SliderLabel(label, enabled, showReset = value != default) {
             onChange(default)
             onChangeFinished?.invoke()
@@ -633,7 +657,7 @@ private fun SliderLabel(label: String, enabled: Boolean, showReset: Boolean, onR
     val labelColor = if (enabled) {
         MaterialTheme.colorScheme.onSurfaceVariant
     } else {
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = DISABLED_ALPHA)
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -643,11 +667,11 @@ private fun SliderLabel(label: String, enabled: Boolean, showReset: Boolean, onR
             modifier = Modifier.weight(1f),
         )
         if (enabled && showReset) {
-            IconButton(onClick = onReset, modifier = Modifier.size(28.dp)) {
+            IconButton(onClick = onReset, modifier = Modifier.size(RESET_BUTTON_SIZE)) {
                 Icon(
                     painter = painterResource(android.R.drawable.ic_menu_close_clear_cancel),
                     contentDescription = strings[Keys.COMMON_RESET_TO_DEFAULT],
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(RESET_ICON_SIZE),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -681,7 +705,7 @@ fun NodeSlider(
     val track = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha)
     val ring = MaterialTheme.colorScheme.outline.copy(alpha = alpha)
     val mark = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
-    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+    Column(modifier = Modifier.padding(horizontal = SPACE_GUTTER)) {
         SliderLabel(label, enabled, showReset = value != default) { onPick(default) }
         Canvas(
             modifier = Modifier
@@ -692,7 +716,7 @@ fun NodeSlider(
                     progressBarRangeInfo = ProgressBarRangeInfo(
                         selected.toFloat(),
                         0f..(options.size - 1).coerceAtLeast(0).toFloat(),
-                        (options.size - 2).coerceAtLeast(0),
+                        (options.size - NODE_SLIDER_ENDS).coerceAtLeast(0),
                     )
                     if (enabled) {
                         setProgress { target ->
@@ -741,7 +765,7 @@ fun NodeSlider(
                 return@Canvas
             }
             val thumb = NODE_THUMB_RADIUS.toPx()
-            val y = size.height / 2f
+            val y = half(size.height)
             fun at(index: Int) = Offset(nodeX(index, count, size.width, thumb, rtl), y)
             val stroke = NODE_TRACK_WIDTH.toPx()
             drawLine(track, at(0), at(count - 1), strokeWidth = stroke, cap = StrokeCap.Round)
@@ -757,7 +781,7 @@ fun NodeSlider(
             }
             drawCircle(active, radius = thumb, center = at(selected))
             val dot = NODE_DEFAULT_MARK_RADIUS.toPx()
-            drawCircle(mark, radius = dot, center = at(defaultIndex).copy(y = y + thumb + dot * 2))
+            drawCircle(mark, radius = dot, center = at(defaultIndex).copy(y = y + thumb + diameter(dot)))
         }
     }
 }
@@ -787,7 +811,7 @@ fun <T> ChoiceSlider(
 /** Where node [index] of [count] sits across [width], [inset] in from each end, mirrored when [rtl]. */
 internal fun nodeX(index: Int, count: Int, width: Float, inset: Float, rtl: Boolean): Float {
     val fraction = if (count <= 1) 0f else index.toFloat() / (count - 1)
-    val x = inset + (width - 2 * inset) * fraction
+    val x = inset + (width - bothSides(inset)) * fraction
     return if (rtl) width - x else x
 }
 
@@ -797,10 +821,45 @@ internal fun nodeAt(x: Float, count: Int, width: Float, inset: Float, rtl: Boole
         return 0
     }
     val fromStart = if (rtl) width - x else x
-    val span = (width - 2 * inset).coerceAtLeast(1f)
+    val span = (width - bothSides(inset)).coerceAtLeast(1f)
     val fraction = ((fromStart - inset) / span).coerceIn(0f, 1f)
     return (fraction * (count - 1)).roundToInt()
 }
+
+/** The settings screens' spacing: every padding, gap, corner and offset is one of these steps. */
+internal val SPACE_HAIRLINE = 1.dp
+internal val SPACE_TINY = 2.dp
+internal val SPACE_TINY_PLUS = 3.dp
+internal val SPACE_XSMALL = 4.dp
+internal val SPACE_XSMALL_PLUS = 5.dp
+internal val SPACE_SMALL = 6.dp
+internal val SPACE_MEDIUM = 8.dp
+internal val SPACE_MEDIUM_PLUS = 10.dp
+internal val SPACE_LARGE = 12.dp
+internal val SPACE_LARGE_PLUS = 14.dp
+internal val SPACE_XLARGE = 16.dp
+internal val SPACE_GUTTER = 20.dp
+internal val SPACE_XXLARGE = 24.dp
+
+/** Icons at Material's standard size, a size smaller, and the compact size row controls use. */
+internal val ICON_SIZE = 24.dp
+internal val SMALL_ICON_SIZE = 20.dp
+internal val COMPACT_ICON_SIZE = 18.dp
+
+/** The move and remove buttons beside a list row. */
+internal val ROW_ACTION_BUTTON_SIZE = 36.dp
+
+/** An outline's width, and a selected swatch's. */
+internal val BORDER_WIDTH = 1.dp
+internal val SELECTED_BORDER_WIDTH = 3.dp
+
+/** A raised card's elevation, and its outline's alpha over the primary colour. */
+internal val CARD_ELEVATION = 2.dp
+internal const val CARD_BORDER_ALPHA = 0.35f
+
+/** A slider's reset button and its icon. */
+private val RESET_BUTTON_SIZE = 28.dp
+private val RESET_ICON_SIZE = 14.dp
 
 /** [NodeSlider]'s height, track, nodes, thumb, ring and default mark. */
 private val NODE_SLIDER_HEIGHT = 44.dp
@@ -814,4 +873,7 @@ private val NODE_DEFAULT_MARK_RADIUS = 2.dp
 val DEFAULT_PREFERENCES = KeyboardPreferences()
 
 /** A disabled control's alpha, as Material dims it. */
-private const val DISABLED_ALPHA = 0.38f
+internal const val DISABLED_ALPHA = 0.38f
+
+/** The node slider's two end stops, which a range's steps between them leave out. */
+private const val NODE_SLIDER_ENDS = 2

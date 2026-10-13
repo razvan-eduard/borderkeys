@@ -100,6 +100,26 @@ class LanguageSwitchCorrectorTest {
     }
 
     @Test
+    fun `a correction recorded before the field's verdict arrives is rechecked when the verdict changes`() {
+        val corrector = LanguageSwitchCorrector()
+        corrector.recordCorrection("in", "în", 0, 2)
+        corrector.startUnder(0)
+        assertTrue(corrector.observeDominantPack(1))
+        val snapshot = corrector.snapshot(1)
+        assertEquals(listOf("in"), snapshot.map { it.typedText })
+        assertEquals(0, snapshot.single().madeUnder)
+    }
+
+    @Test
+    fun `a correction recorded before an undecided field verdict arrives is not revisited`() {
+        val corrector = LanguageSwitchCorrector()
+        corrector.recordCorrection("makw", "make", 0, 4)
+        corrector.startUnder(-1)
+        assertTrue(corrector.observeDominantPack(1))
+        assertTrue(corrector.snapshot(1).isEmpty())
+    }
+
+    @Test
     fun `more than the tracking bound drops the oldest, not the newest`() {
         val corrector = LanguageSwitchCorrector()
         corrector.startUnder(0)

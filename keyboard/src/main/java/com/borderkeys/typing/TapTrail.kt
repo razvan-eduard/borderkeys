@@ -21,7 +21,7 @@ class TapTrail {
     /** A code point chosen at [keyIndex], at ([x], [y]); NaN coordinates for no point. */
     fun add(keyIndex: Int, x: Float, y: Float) {
         if (size == keyIndexes.size) {
-            val capacity = size * 2
+            val capacity = size * GROWTH
             keyIndexes = keyIndexes.copyOf(capacity)
             xs = xs.copyOf(capacity)
             ys = ys.copyOf(capacity)
@@ -67,5 +67,8 @@ class TapTrail {
         const val NO_KEY = -1
 
         private const val INITIAL_CAPACITY = 48
+
+        /** How much the arrays grow by when full. */
+        private const val GROWTH = 2
     }
 }

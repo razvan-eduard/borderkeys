@@ -49,10 +49,10 @@ class FieldPolicyTest {
     }
 
     @Test
-    fun `an e-mail, number or phone field takes the keys verbatim and no swipe, and still offers dictionary words`() {
+    fun `an e-mail, number or phone field takes the keys verbatim, and keeps swipe and dictionary words`() {
         val policy = policy(verbatim = true)
         assertTrue(policy.verbatim)
-        assertFalse(policy.swipeAllowed)
+        assertTrue(policy.swipeAllowed)
         assertTrue(policy.suggestionsAllowed)
         assertFalse(policy.privateField)
         assertTrue(policy.personalAllowed)
@@ -96,11 +96,49 @@ class FieldPolicyTest {
     }
 
     @Test
+    fun `a feature can be switched where the field and its parents let it, whatever its own switch`() {
+        assertTrue(policy().canSwitch(Feature.CLIPBOARD_OFFER, prefsOn.copy(clipboardSuggestion = false)))
+        assertFalse("its parent's switch", policy().canSwitch(Feature.CLIPBOARD_OFFER, prefsOn.copy(clipboardEnabled = false)))
+        assertFalse("a password field", policy(password = true, private = true).canSwitch(Feature.CLIPBOARD_OFFER, prefsOn))
+        assertFalse("switched off by hand", policy().byHand(TypingFeatures.NONE).canSwitch(Feature.STRIP, prefsOn))
+        assertTrue(policy().canSwitch(Feature.STRIP, prefsOn.copy(showSuggestionStrip = false)))
+    }
+
+    @Test
+    fun `cascade screenshots can be switched only with the offer window on`() {
+        val screenshots = prefsOn.copy(
+            screenshotSuggestion = KeyboardPreferences.SCREENSHOT_SUGGESTION_BESIDE,
+            screenshotFolder = "content://folder",
+            screenshotCascade = false,
+        )
+        assertTrue(policy().canSwitch(Feature.SCREENSHOT_CASCADE, screenshots))
+        assertFalse(
+            "the offer window off",
+            policy().canSwitch(Feature.SCREENSHOT_CASCADE, screenshots.copy(imageOfferMinutes = 0)),
+        )
+    }
+
+    @Test
+    fun `a photo is offered with Remember photos and Offer what you copied`() {
+        assertTrue(policy().on(Feature.PHOTO_OFFER, prefsOn))
+        assertFalse("Offer what you copied off", policy().on(Feature.PHOTO_OFFER, prefsOn.copy(clipboardSuggestion = false)))
+        assertFalse("Remember photos off", policy().on(Feature.PHOTO_OFFER, prefsOn.copy(clipboardImages = false)))
+    }
+
+    @Test
+    fun `Paste takes the system clipboard wherever the keyboard may not read it`() {
+        assertFalse("a plain field", policy().pastesFromSystem)
+        assertTrue("switched off by hand", policy().byHand(TypingFeatures.NONE).pastesFromSystem)
+        assertTrue("a password field", policy(password = true, private = true).pastesFromSystem)
+        assertTrue("before the first unlock", FieldPolicy.NONE.pastesFromSystem)
+    }
+
+    @Test
     fun `swipe needs its switch and a field that reads swipes`() {
         assertTrue(policy().on(Feature.SWIPE, prefsOn))
         assertFalse(policy().on(Feature.SWIPE, prefsOn.copy(swipeEnabled = false)))
-        assertFalse(policy(verbatim = true).on(Feature.SWIPE, prefsOn))
-        assertFalse(policy(password = true, private = true).on(Feature.SWIPE, prefsOn))
+        assertTrue("an e-mail, number or phone field", policy(verbatim = true).on(Feature.SWIPE, prefsOn))
+        assertFalse("a password field", policy(password = true, private = true).on(Feature.SWIPE, prefsOn))
     }
 
     @Test
@@ -180,7 +218,7 @@ class FieldPolicyTest {
         val both = TypingFeatures.PRIVATE and TypingFeatures.AS_TYPED
         assertTrue(both.suggestions)
         assertFalse(both.corrections)
-        assertFalse(both.swipe)
+        assertTrue(both.swipe)
         assertFalse(both.learning)
         assertFalse(both.clipboard)
         assertTrue(both.isPrivate)
@@ -214,10 +252,19 @@ class FieldPolicyTest {
     }
 
     @Test
-    fun `a password field is private by its kind, so the quick actions bar stays away`() {
-        assertTrue(policy(password = true, private = true).fieldIsPrivate)
-        assertTrue(policy(private = true).fieldIsPrivate)
-        assertFalse(policy(verbatim = true).fieldIsPrivate)
+    fun `a password field is private by its kind, so the bar dims what changes the field and keeps Paste`() {
+        val password = policy(password = true, private = true)
+        val markedPrivate = policy(private = true)
+        val verbatim = policy(verbatim = true)
+        assertTrue(password.fieldIsPrivate)
+        assertTrue(markedPrivate.fieldIsPrivate)
+        assertFalse(verbatim.fieldIsPrivate)
+        assertFalse(password.allows(QuickAction.FEATURES_SWITCH))
+        assertFalse(markedPrivate.allows(QuickAction.FEATURES_SWITCH))
+        assertTrue(verbatim.allows(QuickAction.FEATURES_SWITCH))
+        for (field in listOf(password, markedPrivate, verbatim)) {
+            assertTrue(field.allows(QuickAction.PASTE))
+        }
     }
 
     @Test

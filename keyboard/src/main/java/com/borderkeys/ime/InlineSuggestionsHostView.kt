@@ -6,10 +6,10 @@ package com.borderkeys.ime
 import android.annotation.SuppressLint
 import android.content.Context
 import android.view.MotionEvent
-import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.inline.InlineContentView
+import com.borderkeys.geometry.halfDown
 import com.borderkeys.theme.ThemePaints
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -80,7 +80,7 @@ class InlineSuggestionsHostView(
         for (index in 0 until childCount) {
             val child = getChildAt(index)
             val childHeight = child.measuredHeight
-            val top = (height - childHeight) / 2
+            val top = halfDown(height - childHeight)
             child.layout(x, top, x + child.measuredWidth, top + childHeight)
             x += child.measuredWidth + GAP_PX
         }

@@ -35,10 +35,13 @@ uint64_t contextOf(uint64_t key) { return key | kSymbolMask; }
 // Counts by key, in one open-addressed table that doubles when half full.
 class KeyCounts {
 public:
+    /** What the table grows by when full, and the share of it, one in kGrowth, it fills before. */
+    static constexpr size_t kGrowth = 2;
+
     KeyCounts() : keys_(1u << 16, kEmpty), counts_(1u << 16, 0) {}
 
     void add(uint64_t key) {
-        if (used_ * 2 >= keys_.size()) {
+        if (used_ * kGrowth >= keys_.size()) {
             grow();
         }
         size_t slot = slotOf(key);
@@ -75,8 +78,8 @@ private:
     }
 
     void grow() {
-        std::vector<uint64_t> oldKeys(keys_.size() * 2, kEmpty);
-        std::vector<uint32_t> oldCounts(counts_.size() * 2, 0);
+        std::vector<uint64_t> oldKeys(keys_.size() * kGrowth, kEmpty);
+        std::vector<uint32_t> oldCounts(counts_.size() * kGrowth, 0);
         oldKeys.swap(keys_);
         oldCounts.swap(counts_);
         for (size_t i = 0; i < oldKeys.size(); ++i) {

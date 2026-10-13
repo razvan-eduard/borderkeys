@@ -18,7 +18,7 @@ internal object PhysicalKeys {
             lower in 'a'.code..'z'.code -> KeyEvent.KEYCODE_A + (lower - 'a'.code)
             lower in '0'.code..'9'.code -> KeyEvent.KEYCODE_0 + (lower - '0'.code)
             else -> when (lower) {
-                ' '.code -> KeyEvent.KEYCODE_SPACE
+                KeyCodes.SPACE -> KeyEvent.KEYCODE_SPACE
                 ','.code -> KeyEvent.KEYCODE_COMMA
                 '.'.code -> KeyEvent.KEYCODE_PERIOD
                 '-'.code -> KeyEvent.KEYCODE_MINUS

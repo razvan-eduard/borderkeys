@@ -629,7 +629,8 @@ int main(int argc, char** argv) {
         std::printf("  language model      %+9.3f\n", parts.languageModel);
         std::printf("  pack weight         %+9.3f\n", parts.packWeight);
         if (parts.personal != 0.0f) {
-            std::printf("  personal boost      %+9.3f\n", parts.personal);
+            std::printf("  personal score      %+9.3f\n", parts.personal);
+            std::printf("    of which context  %+9.3f\n", parts.context);
         }
         std::printf("  edit + completion   %+9.3f\n", parts.rest);
         std::printf("    edits %d, run-on %d, cost %.2f: penalty %+.3f, surcharge %+.3f, "

@@ -319,7 +319,7 @@ int TcnCtcDecoder::decode(const float* intention, const float* spectral, const P
         float score = normalised + kLengthBonus * letters + scorer.packWeightLog(packIndex) +
                       kFrequencyWeight *
                           scorer.contextLogProb(packIndex, static_cast<uint32_t>(wordIndex)) +
-                      scorer.userBoost(text, textLength);
+                      scorer.personalScore(text, textLength);
         heap.offer(Candidate{packIndex, wordIndex, score});
     }
 

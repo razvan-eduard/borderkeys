@@ -6,6 +6,7 @@ package com.borderkeys.data.dao
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Transaction
+import com.borderkeys.data.PersonalWordDecay
 import com.borderkeys.data.entity.UserWord
 import kotlinx.coroutines.flow.Flow
 
@@ -86,8 +87,8 @@ interface UserWordDao {
      */
     @Query(
         """
-        UPDATE user_words SET count = MAX(1, count / 2), lastUsedAt = :now
-        WHERE lastUsedAt < :cutoff AND count > 1
+        UPDATE user_words SET count = MAX(${PersonalWordDecay.STALE_FLOOR}, count / ${PersonalWordDecay.HALVING}), lastUsedAt = :now
+        WHERE lastUsedAt < :cutoff AND count > ${PersonalWordDecay.STALE_FLOOR}
         """,
     )
     suspend fun decayStale(cutoff: Long, now: Long)

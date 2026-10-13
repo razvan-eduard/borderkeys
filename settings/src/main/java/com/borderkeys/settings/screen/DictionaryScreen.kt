@@ -3,10 +3,6 @@
 
 package com.borderkeys.settings.screen
 
-import com.borderkeys.i18n.Keys
-import com.borderkeys.settings.LocalStrings
-import com.borderkeys.settings.SettingLabel
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,31 +24,37 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
-import com.borderkeys.settings.PlacementPreview
-import com.borderkeys.settings.HeatmapGlows
-import com.borderkeys.data.KeyTouches
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.KeyTouches
+import com.borderkeys.data.PersonalEntries
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.TextShortcut
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.DefaultableSlider
-import com.borderkeys.settings.NodeSlider
-import com.borderkeys.data.PersonalEntries
-import com.borderkeys.predict.WordFold
 import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.HeatmapGlows
+import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.NodeSlider
 import com.borderkeys.settings.PickerChip
+import com.borderkeys.settings.PlacementPreview
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.Screen
-import com.borderkeys.settings.SettingsSectionCard
-import com.borderkeys.settings.AdvancedSection
+import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
+import com.borderkeys.settings.rememberLearned
 import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -84,13 +86,8 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
     val appearance by themes.appearance
         .collectAsStateWithLifecycle(initialValue = remember { themes.currentAppearance() })
     // What counts as learned, as the keyboard counts it: only those are listed and counted.
-    val now = remember { System.currentTimeMillis() }
-    val learnedWords = remember(savedWords, preferences.learnAfter, preferences.unlearnHalfLifeDays) {
-        PersonalEntries.words(savedWords, preferences, now, WordFold::fold).size
-    }
-    val learnedPhrases = remember(savedPhrases, preferences.learnAfter, preferences.unlearnHalfLifeDays) {
-        PersonalEntries.phrases(savedPhrases, preferences, now).size
-    }
+    val learnedWords = rememberLearned(savedWords, PersonalEntries::words).size
+    val learnedPhrases = rememberLearned(savedPhrases, PersonalEntries::phrases).size
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SettingsSectionCard(strings[Keys.DICTIONARY_LEARN_FROM_TYPING]) {
@@ -123,6 +120,26 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                     default = KeyboardPreferences.DEFAULT_UNLEARN_HALF_LIFE_DAYS,
                 ) { days -> update { it.copy(unlearnHalfLifeDays = days) } }
                 Explanation(strings[Keys.DICTIONARY_UNLEARN_NOTE])
+                SettingLabel(strings[Keys.DICTIONARY_UNCONFIRMED_TITLE])
+                NodeSlider(
+                    label = if (preferences.unconfirmedLifeDays == KeyboardPreferences.UNCONFIRMED_LIFE_OFF) {
+                        strings[Keys.DICTIONARY_UNCONFIRMED_OFF]
+                    } else {
+                        strings.counted(Keys.DICTIONARY_UNCONFIRMED_DAYS, preferences.unconfirmedLifeDays)
+                    },
+                    options = KeyboardPreferences.UNCONFIRMED_LIFE_STEPS,
+                    value = preferences.unconfirmedLifeDays,
+                    default = KeyboardPreferences.DEFAULT_UNCONFIRMED_LIFE_DAYS,
+                ) { days -> update { it.copy(unconfirmedLifeDays = days) } }
+                Explanation(strings[Keys.DICTIONARY_UNCONFIRMED_NOTE])
+                SettingLabel(strings[Keys.DICTIONARY_CLEAN_UP_TITLE])
+                NodeSlider(
+                    label = strings[CLEAN_UP_LABELS.getValue(preferences.cleanUpIntervalDays)],
+                    options = KeyboardPreferences.CLEAN_UP_STEPS,
+                    value = preferences.cleanUpIntervalDays,
+                    default = KeyboardPreferences.DEFAULT_CLEAN_UP_INTERVAL_DAYS,
+                ) { days -> update { it.copy(cleanUpIntervalDays = days) } }
+                Explanation(strings[Keys.DICTIONARY_CLEAN_UP_NOTE])
             }
         }
         // Where the taps land on each key; greyed, not hidden, while Learning is off.
@@ -161,8 +178,8 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                     if (buckets.size > 1) {
                         val layouts = buckets.map { HeatmapGlows.Bucket.parse(it).baseLayoutId }.distinct()
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
+                            horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                         ) {
                             for (bucket in buckets) {
                                 val parsed = HeatmapGlows.Bucket.parse(bucket)
@@ -175,7 +192,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                     val parsed = shown?.let { HeatmapGlows.Bucket.parse(it) }
                     PlacementPreview(
                         appearance,
-                        Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
                         layoutId = parsed?.baseLayoutId?.takeIf { it.isNotEmpty() } ?: DEFAULT_PREVIEW_LAYOUT,
                         isLandscape = parsed?.landscape ?: false,
                         touchGlows = HeatmapGlows.of(
@@ -232,7 +249,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                     Button(
                         onClick = { update { resetHeatmapDefaults(it) } },
                         enabled = heatmapOn,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
                     ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULTS]) }
                     Explanation(strings[Keys.DICTIONARY_HEATMAP_RESET_NOTE])
                 }
@@ -262,13 +279,13 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                 onValueChange = { trigger = it },
                 label = { Text(strings[Keys.DICTIONARY_SHORTCUT_TRIGGER]) },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
             )
             OutlinedTextField(
                 value = expansion,
                 onValueChange = { expansion = it },
                 label = { Text(strings[Keys.DICTIONARY_SHORTCUT_EXPANSION]) },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
             )
             val addable = TextShortcut.isValidTrigger(trigger.trim()) && expansion.isNotBlank() &&
                 preferences.textShortcuts.size < TextShortcut.MAX_SHORTCUTS
@@ -286,7 +303,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {})
                     trigger = ""
                     expansion = ""
                 },
-                modifier = Modifier.padding(horizontal = 12.dp),
+                modifier = Modifier.padding(horizontal = SPACE_LARGE),
             ) { Text(strings[Keys.DICTIONARY_SHORTCUT_ADD]) }
         }
         // Each list is a page of its own.
@@ -438,3 +455,9 @@ private fun PageChevron() {
 
 /** The layout the heatmap preview shows before anything is learned. */
 private const val DEFAULT_PREVIEW_LAYOUT = "qwerty"
+
+private val CLEAN_UP_LABELS = mapOf(
+    KeyboardPreferences.CLEAN_UP_DAILY to Keys.DICTIONARY_CLEAN_UP_DAILY,
+    KeyboardPreferences.CLEAN_UP_WEEKLY to Keys.DICTIONARY_CLEAN_UP_WEEKLY,
+    KeyboardPreferences.CLEAN_UP_MONTHLY to Keys.DICTIONARY_CLEAN_UP_MONTHLY,
+)

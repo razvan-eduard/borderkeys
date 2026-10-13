@@ -12,10 +12,13 @@ import android.os.Trace
 import com.borderkeys.data.KeyboardStats
 import com.borderkeys.data.dao.LearnedWord
 import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserPairContext
+import com.borderkeys.data.entity.UserPhraseClock
 import com.borderkeys.data.entity.UserTrigram
+import com.borderkeys.data.entity.UserTripleContext
 import com.borderkeys.data.entity.UserWord
-import com.borderkeys.ime.WordStems
 import com.borderkeys.typing.EnginePort
+import com.borderkeys.typing.LearnOutcome
 import com.borderkeys.typing.SearchAnswer
 import com.borderkeys.typing.TouchPatterns
 
@@ -33,7 +36,8 @@ class PredictionEngine(
          * [query] is the composing text the answer is about, as it was asked. [knownWord] is
          * [query] when the dictionaries spell it, or empty; [knownWordExact] whether one spells it
          * exactly, case aside, and [knownWordIsName] whether that spelling is a name.
-         * [corrections] is autocorrect's list for [query], best first.
+         * [corrections] is autocorrect's list for [query], best first; [language] the primary
+         * language subtag whose learned pairs and triples the engine read.
          */
         fun onSuggestions(
             candidates: List<Candidate>,
@@ -43,10 +47,14 @@ class PredictionEngine(
             query: String,
             possessive: String?,
             corrections: List<CorrectionOffer>,
+            language: String?,
         )
 
-        /** A decoded swipe, best first. */
-        fun onGestureCandidates(candidates: List<Candidate>)
+        /**
+         * A decoded swipe, best first; [language] the primary language subtag whose learned pairs
+         * and triples the decode read.
+         */
+        fun onGestureCandidates(candidates: List<Candidate>, language: String?)
 
         /** A decode of a swipe still in progress, from [decodeGesturePreview]. */
         fun onGesturePreviewCandidates(candidates: List<Candidate>)
@@ -110,11 +118,13 @@ class PredictionEngine(
     private val gestureNativeProperNoun = BooleanArray(MAX_RESULTS)
 
     private var gestureNativeCount = 0
+    private var gestureNativeLanguage: String? = null
 
     // The decode's own scratch, filled without a lock and copied under [gestureResultLock].
     private val decodeWords = arrayOfNulls<String>(MAX_RESULTS)
     private val decodeScores = FloatArray(MAX_RESULTS)
     private val decodeProperNoun = BooleanArray(MAX_RESULTS)
+    private val decodeTexts = arrayOfNulls<String>(NativePredictor.TEXT_SLOTS)
 
     /** Numbers the swipe decodes; one cancelled or superseded is dropped. UI thread only. */
     private val gestureRequests = NewestWins()
@@ -285,22 +295,35 @@ class PredictionEngine(
     }
 
     /**
-     * Replaces the engine's personal word pairs, also with an empty list. Call after
-     * [loadUserWords].
+     * Replaces the engine's personal pairs and triples, each in its language's store, with their
+     * stamps, their contexts' totals and observations and each language's clocks, also with empty
+     * lists. Call after [loadUserWords].
      */
-    fun loadUserBigrams(pairs: List<UserBigram>) {
-        val previous = Array(pairs.size) { pairs[it].previousWord }
-        val next = Array(pairs.size) { pairs[it].word }
-        val counts = IntArray(pairs.size) { pairs[it].count }
+    fun loadUserLinks(
+        pairs: List<UserBigram>,
+        pairContexts: List<UserPairContext>,
+        triples: List<UserTrigram>,
+        tripleContexts: List<UserTripleContext>,
+        clocks: List<UserPhraseClock>,
+    ) {
         worker.post {
             withHandle(Unit) { current ->
-                NativePredictor.nativeLoadUserBigrams(current, previous, next, counts)
+                PersonalLinks.load(current, pairs, pairContexts, triples, tripleContexts, clocks)
             }
         }
     }
 
+    override fun dropLinks(pairs: List<UserBigram>, triples: List<UserTrigram>) {
+        if (pairs.isEmpty() && triples.isEmpty()) {
+            return
+        }
+        worker.post {
+            withHandle(Unit) { current -> PersonalLinks.drop(current, pairs, triples) }
+        }
+    }
+
     /** Sets how many uses a word, pair or triple needs before it is learned. */
-    fun setLearnAfterUses(uses: Int) {
+    override fun setLearnAfterUses(uses: Int) {
         worker.post {
             withHandle(Unit) { current ->
                 NativePredictor.nativeSetLearnAfterUses(current, uses)
@@ -321,7 +344,7 @@ class PredictionEngine(
     }
 
     /** Sets how much evidence an edit needs before it outranks a word spelled as typed. */
-    fun setCorrectionStrictness(scale: Float) {
+    override fun setCorrectionStrictness(scale: Float) {
         worker.post {
             withHandle(Unit) { current ->
                 NativePredictor.nativeSetCorrectionStrictness(current, scale)
@@ -410,6 +433,21 @@ class PredictionEngine(
         }
     }
 
+    /**
+     * Whether each of [words] may be part of a learned pair or triple, delivered on the prediction
+     * thread; every word is, once the engine is gone.
+     */
+    fun learnableWords(words: List<String>, onResult: (List<Boolean>) -> Unit) {
+        val posted = ::worker.isInitialized && worker.post {
+            val verdicts = BooleanArray(words.size) { true }
+            withHandle(Unit) { current -> NativePredictor.nativeLearnable(current, words.toTypedArray(), verdicts) }
+            onResult(verdicts.toList())
+        }
+        if (!posted) {
+            onResult(List(words.size) { true })
+        }
+    }
+
     /** Whether the dictionaries hold each of [words], delivered on the UI thread. */
     override fun knownWords(words: List<String>, onResult: (List<Boolean>) -> Unit) {
         worker.post {
@@ -422,21 +460,6 @@ class PredictionEngine(
         }
     }
 
-    /**
-     * Replaces the engine's personal three-word sequences, also with an empty list. Call after
-     * [loadUserBigrams].
-     */
-    fun loadUserTrigrams(triples: List<UserTrigram>) {
-        val previous2 = Array(triples.size) { triples[it].previousWord2 }
-        val previous1 = Array(triples.size) { triples[it].previousWord1 }
-        val next = Array(triples.size) { triples[it].word }
-        val counts = IntArray(triples.size) { triples[it].count }
-        worker.post {
-            withHandle(Unit) { current ->
-                NativePredictor.nativeLoadUserTrigrams(current, previous2, previous1, next, counts)
-            }
-        }
-    }
 
     fun setPhraseSuggestions(enabled: Boolean) {
         worker.post {
@@ -546,27 +569,29 @@ class PredictionEngine(
      */
     fun explain(typed: String, candidate: String, onResult: (ScoreExplanation?) -> Unit) {
         worker.post {
-            val slots = FloatArray(ScoreExplanation.SLOTS)
-            val offered = withHandle(false) { current ->
-                NativePredictor.nativeExplainScore(current, typed, candidate, slots)
+            val explanation = withHandle<ScoreExplanation?>(null) { current ->
+                ScoreExplanation.read(current, typed, candidate)
             }
-            val explanation = if (offered) ScoreExplanation.fromSlots(slots) else null
             mainHandler.post { onResult(explanation) }
         }
     }
 
-    override fun learn(updates: List<LearnedWord>, previous1: String?, previous2: String?) {
+    override fun learn(
+        updates: List<LearnedWord>,
+        previous1: String?,
+        previous2: String?,
+        language: String,
+        onLearned: (LearnOutcome) -> Unit,
+    ) {
         if (updates.isEmpty()) {
             return
         }
         worker.post {
-            withHandle(Unit) { current ->
-                for (update in updates) {
-                    NativePredictor.nativeLearn(
-                        current, update.word, previous1, previous2, update.deliberateCapital,
-                        update.asserted,
-                    )
-                }
+            val outcomes = withHandle(emptyList()) { current ->
+                updates.map { PersonalLinks.learn(current, it, previous1, previous2, language) }
+            }
+            if (outcomes.isNotEmpty()) {
+                mainHandler.post { outcomes.forEach(onLearned) }
             }
         }
     }
@@ -626,12 +651,13 @@ class PredictionEngine(
         worker.post {
             Trace.beginSection("PredictionEngine.decodeGesture")
             val started = System.nanoTime()
+            decodeTexts.fill(null)
             val found = try {
                 withHandle(0) { current ->
                     val samples = synchronized(gestureLock) { gestureCount }
                     val count = NativePredictor.nativeDecodeGesture(
                         current, gestureX, gestureY, gestureTime, samples,
-                        previous1, previous2, decodeWords, decodeScores, decodeProperNoun,
+                        previous1, previous2, decodeWords, decodeScores, decodeProperNoun, decodeTexts,
                     )
                     lastGestureUsedNeural = NativePredictor.nativeLastDecodeUsedNeural(current)
                     count
@@ -645,6 +671,7 @@ class PredictionEngine(
                 System.arraycopy(decodeScores, 0, gestureNativeScores, 0, found)
                 System.arraycopy(decodeProperNoun, 0, gestureNativeProperNoun, 0, found)
                 gestureNativeCount = found
+                gestureNativeLanguage = decodeTexts[NativePredictor.TEXT_LANGUAGE]
             }
             mainHandler.post {
                 if (gestureRequests.isNewest(generation)) {
@@ -654,9 +681,11 @@ class PredictionEngine(
         }
     }
 
-    /** Delivers the swipe's answer to the listener. */
+    /** Delivers the swipe's answer, and the language it read, to the listener. */
     private fun publishGestureResult() {
-        listener?.onGestureCandidates(copyAndFilterGesture())
+        val candidates = copyAndFilterGesture()
+        val language = synchronized(gestureResultLock) { gestureNativeLanguage }
+        listener?.onGestureCandidates(candidates, language)
     }
 
     /** The swipe's answer, copied out under its lock, with refused words dropped. */
@@ -699,11 +728,12 @@ class PredictionEngine(
         val generation = previewRequests.issue()
         worker.post {
             val started = System.nanoTime()
+            decodeTexts.fill(null)
             val found = withHandle(0) { current ->
                 val samples = synchronized(previewGestureLock) { previewGestureCount }
                 val count = NativePredictor.nativeDecodeGesture(
                     current, previewGestureX, previewGestureY, previewGestureTime, samples,
-                    previous1, previous2, decodeWords, decodeScores, decodeProperNoun,
+                    previous1, previous2, decodeWords, decodeScores, decodeProperNoun, decodeTexts,
                 )
                 lastGestureUsedNeural = NativePredictor.nativeLastDecodeUsedNeural(current)
                 count
@@ -778,6 +808,7 @@ class PredictionEngine(
         listener?.onSuggestions(
             answer.candidates(refused), answer.knownWord, answer.knownWordExact,
             answer.knownWordIsName, answer.query, answer.possessive, answer.offers(refused),
+            answer.language,
         )
     }
 

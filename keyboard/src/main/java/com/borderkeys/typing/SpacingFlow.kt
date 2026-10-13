@@ -4,6 +4,7 @@
 package com.borderkeys.typing
 
 import com.borderkeys.ime.HabitSpace
+import com.borderkeys.ime.KeyCodes
 import com.borderkeys.ime.PunctuationSpace
 
 /**
@@ -74,7 +75,7 @@ class SpacingFlow(private val clock: TypingClock) : TypingFlow() {
 
     /** The delimiter [code] is about to be written. */
     fun delimiterTyped(code: Int) {
-        if (code == ' '.code) {
+        if (code == KeyCodes.SPACE) {
             lastSpaceAt = clock.currentTimeMillis()
         }
         pendingSpacePeriod = false

@@ -4,7 +4,6 @@
 package com.borderkeys.data
 
 import com.borderkeys.data.entity.KeyTouch
-import kotlin.math.pow
 
 /** Arithmetic on [KeyTouch] totals, each tap weighing half as much every half-life. */
 object KeyTouches {
@@ -18,7 +17,7 @@ object KeyTouches {
         if (age <= 0L || halfLifeMillis <= 0L) {
             return touch
         }
-        val factor = 0.5.pow(age.toDouble() / halfLifeMillis)
+        val factor = PersonalWordDecay.remaining(age.toDouble() / halfLifeMillis)
         return touch.copy(
             taps = touch.taps * factor,
             sumX = touch.sumX * factor,

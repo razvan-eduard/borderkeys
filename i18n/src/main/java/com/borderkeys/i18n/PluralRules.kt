@@ -3,6 +3,8 @@
 
 package com.borderkeys.i18n
 
+import com.borderkeys.language.LanguageTags
+
 /**
  * The CLDR plural category a number takes in a language, for the catalogue languages and the ones
  * planned beside them. A counted key `name` is the "other" form; `name_one`, `name_few` and the
@@ -18,7 +20,7 @@ object PluralRules {
     const val OTHER = "other"
 
     /** The categories a language uses, [OTHER] last. */
-    fun categories(language: String): List<String> = when (base(language)) {
+    fun categories(language: String): List<String> = when (LanguageTags.primary(language)) {
         "ja", "ko", "zh", "vi", "id", "in" -> listOf(OTHER)
         "ro" -> listOf(ONE, FEW, OTHER)
         "cs", "sk", "pl", "ru", "uk" -> listOf(ONE, FEW, MANY, OTHER)
@@ -40,7 +42,7 @@ object PluralRules {
         val f = fraction
         val whole = f == 0L
         val isOne = i == 1L && whole
-        return when (base(language)) {
+        return when (LanguageTags.primary(language)) {
             "ja", "ko", "zh", "vi", "id", "in" -> OTHER
             "fr" -> if (i == 0L || i == 1L) ONE else OTHER
             "pt" -> if (i == 0L || i == 1L) ONE else OTHER
@@ -102,6 +104,4 @@ object PluralRules {
 
     /** Every suffix a counted key may carry, in any language. */
     val SUFFIXES: List<String> = listOf(ZERO, ONE, TWO, FEW, MANY).map { "_$it" }
-
-    private fun base(language: String): String = language.lowercase().substringBefore('-').substringBefore('_')
 }

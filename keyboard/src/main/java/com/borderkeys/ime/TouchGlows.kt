@@ -3,6 +3,9 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.geometry.bothSides
+import com.borderkeys.geometry.half
+import com.borderkeys.geometry.middle
 import kotlin.math.atan2
 import kotlin.math.max
 import kotlin.math.sqrt
@@ -33,14 +36,14 @@ class GlowEllipse(val major: Float, val minor: Float, val degrees: Float) {
          * covariance [covariance], its radii at least [floor].
          */
         fun of(varianceX: Float, varianceY: Float, covariance: Float, floor: Float): GlowEllipse {
-            val half = (varianceX + varianceY) / 2f
-            val spread = sqrt(max(half * half - (varianceX * varianceY - covariance * covariance), 0f))
+            val mean = middle(varianceX, varianceY)
+            val spread = sqrt(max(mean * mean - (varianceX * varianceY - covariance * covariance), 0f))
             val degrees = Math.toDegrees(
-                0.5 * atan2(2.0 * covariance, (varianceX - varianceY).toDouble()),
+                half(atan2(bothSides(covariance.toDouble()), (varianceX - varianceY).toDouble())),
             ).toFloat()
             return GlowEllipse(
-                major = max(sqrt(max(half + spread, 0f)), floor),
-                minor = max(sqrt(max(half - spread, 0f)), floor),
+                major = max(sqrt(max(mean + spread, 0f)), floor),
+                minor = max(sqrt(max(mean - spread, 0f)), floor),
                 degrees = degrees,
             )
         }

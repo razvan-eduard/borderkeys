@@ -12,6 +12,7 @@ import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.widget.OverScroller
+import com.borderkeys.geometry.half
 import com.borderkeys.theme.ThemePaints
 
 /**
@@ -188,12 +189,12 @@ class EmojiPanelView(
             for (index in first..last) {
                 val left = columnLeft(index % columns)
                 val row = index / columns
-                val cx = left + cellPx / 2f
-                val cy = top + row * cellPx - scrollY + cellPx / 2f
+                val cx = left + half(cellPx)
+                val cy = top + row * cellPx - scrollY + half(cellPx)
                 if (index == pressedCell) {
                     canvas.drawRect(
-                        left, cy - cellPx / 2f,
-                        left + cellPx, cy + cellPx / 2f,
+                        left, cy - half(cellPx),
+                        left + cellPx, cy + half(cellPx),
                         paints.keyPressedFill,
                     )
                 }
@@ -223,7 +224,7 @@ class EmojiPanelView(
         paints.label.textSize = tabHeightPx * TAB_GLYPH_FRACTION
         for (index in 0 until count) {
             val left = step * slotOf(index, count)
-            val cx = left + step / 2f
+            val cx = left + half(step)
             if (index == selectedTab || (index == 0 && selectedTab == SEARCH_TAB)) {
                 canvas.drawLine(
                     left + step * 0.2f, tabHeightPx - 2f,
@@ -235,7 +236,7 @@ class EmojiPanelView(
             val length = text.length.coerceAtMost(glyph.size)
             text.toCharArray(glyph, 0, 0, length)
             canvas.drawText(
-                glyph, 0, length, cx, tabHeightPx / 2f + paints.label.textSize * GLYPH_BASELINE,
+                glyph, 0, length, cx, half(tabHeightPx) + paints.label.textSize * GLYPH_BASELINE,
                 if (index == selectedTab) paints.label else paints.labelSecondary,
             )
         }

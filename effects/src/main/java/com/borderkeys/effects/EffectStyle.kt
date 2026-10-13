@@ -77,7 +77,8 @@ enum class EffectStyle {
         val DEFAULT = RiseFade
 
         /** Ease in and out, the curve the composer's own swipe hint uses. */
-        private fun smoothStep(progress: Float): Float = progress * progress * (3f - 2f * progress)
+        private fun smoothStep(progress: Float): Float =
+            progress * progress * (SMOOTHSTEP_SQUARE - SMOOTHSTEP_CUBE * progress)
 
         /** Opaque in the middle, fading across the first and last fifth. */
         private fun edgeFade(progress: Float): Float = when {
@@ -92,5 +93,9 @@ enum class EffectStyle {
         private const val EDGE = 0.2f
         private const val HALF = 0.5f
         private const val QUARTER = 0.25f
+
+        /** Smoothstep's coefficients: 3t² − 2t³. */
+        private const val SMOOTHSTEP_SQUARE = 3f
+        private const val SMOOTHSTEP_CUBE = 2f
     }
 }

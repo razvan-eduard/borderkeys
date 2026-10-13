@@ -174,15 +174,16 @@ internal class DictionaryLoader(
                 .filter { shown(it.word) }
                 .map { it.decayed(now, halfLife) },
         )
-        engine.loadUserBigrams(
-            dictionary.topBigrams()
+        engine.loadUserLinks(
+            pairs = dictionary.pairsToLoad()
                 .filter { shown(it.previousWord) && shown(it.word) }
                 .map { it.decayed(now, halfLife) },
-        )
-        engine.loadUserTrigrams(
-            dictionary.topTrigrams()
+            pairContexts = dictionary.pairContexts().map { it.decayed(now, halfLife) },
+            triples = dictionary.triplesToLoad()
                 .filter { shown(it.previousWord2) && shown(it.previousWord1) && shown(it.word) }
                 .map { it.decayed(now, halfLife) },
+            tripleContexts = dictionary.tripleContexts().map { it.decayed(now, halfLife) },
+            clocks = dictionary.phraseClocks(),
         )
     }
 

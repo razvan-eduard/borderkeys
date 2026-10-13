@@ -180,8 +180,8 @@ abstract class GenerateSettingsIndex : DefaultTask() {
          */
         val SKIPPED_SCREENS = setOf("Home", "Features", "Onboarding", "ProcessText", "Transfer", "LearnedWords", "LearnedPhrases")
 
-        const val TITLE = """\(\s*(?:title\s*=\s*)?strings(?:\[|\.getString\()Keys\.([A-Z0-9_]+)"""
-        const val KEY = """strings(?:\[|\.getString\()Keys\.([A-Z0-9_]+)"""
+        const val TITLE = """\(\s*(?:title\s*=\s*)?strings(?:\[|\.getString\(|\.counted\()Keys\.([A-Z0-9_]+)"""
+        const val KEY = """strings(?:\[|\.getString\(|\.counted\()Keys\.([A-Z0-9_]+)"""
         val CARD = Regex("SettingsSectionCard$TITLE")
         val ANY_CARD = Regex("""SettingsSectionCard\(""")
         val ADVANCED = Regex("""AdvancedSection\(\s*(?:summary\s*=\s*)?strings(?:\[|\.getString\()Keys\.([A-Z0-9_]+)""")
@@ -276,6 +276,8 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":geometry"))
+    implementation(project(":language"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

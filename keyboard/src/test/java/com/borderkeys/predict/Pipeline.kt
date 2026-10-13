@@ -3,8 +3,12 @@
 
 package com.borderkeys.predict
 
+import com.borderkeys.data.LanguagePackRepository
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.ime.Contractions
+import com.borderkeys.typing.FieldPolicy
+import com.borderkeys.typing.FieldSession
+import com.borderkeys.typing.LearningFlow
 import com.borderkeys.typing.QueuedEngine
 import com.borderkeys.typing.SwipePath
 import com.borderkeys.typing.TypingOrchestrator
@@ -26,8 +30,12 @@ internal class Pipeline private constructor(
     private val handle: Long,
     private val contractions: Map<String, String>,
     private val twins: Map<String, Contractions.Twin>,
-    private val languages: List<String>,
+    languages: List<String>,
 ) {
+
+    /** The active tags, in the order they were enabled. */
+    var languages: List<String> = languages
+        private set
 
     /** What a word became, and why. */
     internal data class Outcome(val typed: String, val committed: String?, val reason: String)
@@ -127,20 +135,37 @@ internal class Pipeline private constructor(
         rig.orchestrator.applySettings(settings())
         rig.startField(if (previous != null) "$previous " else "")
         val start = rig.editor.selectionEnd
-        val path = SwipePath.through(word, rig.clock)
-        val words = arrayOfNulls<String>(PredictionEngine.MAX_RESULTS)
-        val properNoun = BooleanArray(PredictionEngine.MAX_RESULTS)
-        val found = NativePredictor.nativeDecodeGesture(
-            handle, path.xs, path.ys, path.timestamps, path.count, previous, null,
-            words, FloatArray(PredictionEngine.MAX_RESULTS), properNoun,
-        )
-        val decoded = (0 until found).mapNotNull { index -> words[index]?.let { Candidate(it, properNoun[index]) } }
+        val decoded = decode(word, previous).first
         rig.swipe(word)
         rig.press(' '.code)
         rig.settle()
         val written = rig.editor.text.substring(start, rig.editor.selectionEnd).removeSuffix(" ")
         val offered = rig.orchestrator.caseSwipedWords(decoded).map { it.text }
         return Swiped(written, decoded.map { it.text }, offered)
+    }
+
+    /** The language whose learned pairs and triples a decode of a swipe through [word]'s keys read. */
+    fun swipeLanguage(word: String): String? = decode(word, null).second
+
+    /** The decoder's words for a swipe through [word]'s keys after [previous], and the language it read. */
+    private fun decode(word: String, previous: String?): Pair<List<Candidate>, String?> {
+        val path = SwipePath.through(word, rig.clock)
+        val words = arrayOfNulls<String>(PredictionEngine.MAX_RESULTS)
+        val properNoun = BooleanArray(PredictionEngine.MAX_RESULTS)
+        val texts = arrayOfNulls<String>(NativePredictor.TEXT_SLOTS)
+        val found = NativePredictor.nativeDecodeGesture(
+            handle, path.xs, path.ys, path.timestamps, path.count, previous, null,
+            words, FloatArray(PredictionEngine.MAX_RESULTS), properNoun, texts,
+        )
+        val decoded = (0 until found).mapNotNull { index -> words[index]?.let { Candidate(it, properNoun[index]) } }
+        return decoded to texts[NativePredictor.TEXT_LANGUAGE]
+    }
+
+    /** Whether each of [words] may be part of a learned pair or triple, as the engine judges it. */
+    fun learnable(words: List<String>): List<Boolean> {
+        val verdicts = BooleanArray(words.size)
+        NativePredictor.nativeLearnable(handle, words.toTypedArray(), verdicts)
+        return verdicts.toList()
     }
 
     /** Whether an active pack spells [word] exactly, case aside. */
@@ -187,17 +212,113 @@ internal class Pipeline private constructor(
     fun strip(typed: String, previous: String? = null): List<String> =
         answerRequest(handle, typed, previous, null, languages, scratch).words.filterNotNull()
 
+    /** The language whose learned pairs and triples the answer about [typed] read. */
+    fun answerLanguage(typed: String): String? =
+        answerRequest(handle, typed, null, null, languages, scratch).language
+
     /**
      * [outcome] as one tab-separated line: typed, committed or `-`, reason, then the engine's
      * ranking for the typed word, each entry `word:score`, a name marked `word*:score`.
      */
-    fun readingLine(outcome: Outcome): String {
-        val answer = answerRequest(handle, outcome.typed, null, null, languages, scratch)
-        val ranking = answer.words.indices.joinToString(" ") { index ->
+    fun readingLine(outcome: Outcome): String = readingLine(outcome, ranking(outcome.typed, null, null))
+
+    private fun readingLine(outcome: Outcome, ranking: String): String =
+        "${outcome.typed}\t${outcome.committed ?: "-"}\t${outcome.reason}\t$ranking"
+
+    /** The engine's ranking for [typed] after [previous1] and [previous2], as [readingLine] writes it. */
+    private fun ranking(typed: String, previous1: String?, previous2: String?): String {
+        val answer = answerRequest(handle, typed, previous1, previous2, languages, scratch)
+        return answer.words.indices.joinToString(" ") { index ->
             val name = if (answer.properNoun[index]) "*" else ""
             "${answer.words[index]}$name:" + String.format(Locale.ROOT, "%.4f", answer.scores[index])
         }
-        return "${outcome.typed}\t${outcome.committed ?: "-"}\t${outcome.reason}\t$ranking"
+    }
+
+    /** What a word typed after a context became, and its reading line there. */
+    internal data class Reading(val outcome: Outcome, val line: String)
+
+    /**
+     * Learns [runs] as the orchestrator learns committed words: each word with the two before
+     * it in its run, through a [LearningFlow] on this pipeline's engine and store, the engine
+     * answering before the next word and the clock moving as if each word and a space were typed.
+     * What it buffered is written at the end.
+     */
+    fun learnHistory(runs: List<List<String>>) {
+        val learning = settings().copy(learningEnabled = true)
+        val flow = LearningFlow(rig.engine, rig.host, rig.store, rig.clock)
+        flow.applySettings(learning)
+        flow.startField(
+            FieldSession(
+                generation = rig.orchestrator.session.generation + 1,
+                policy = FieldPolicy.of(
+                    passwordField = false,
+                    privateField = false,
+                    learningEnabled = learning.learningEnabled,
+                    heatmapEnabled = learning.heatmapEnabled,
+                ),
+                addressField = false,
+                terminalField = false,
+            ),
+        )
+        // The language the engine answers in, as a typed word's answer would name it.
+        answerRequest(handle, "", null, null, languages, scratch).language?.let(flow::answeredIn)
+        for (run in runs) {
+            for ((at, word) in run.withIndex()) {
+                // A capital after a run's first word is typed with shift.
+                flow.record(
+                    word, run.getOrNull(at - 1), run.getOrNull(at - 2),
+                    deliberateCapital = at > 0 && word.first().isUpperCase(),
+                )
+                rig.settle()
+                rig.clock.advance((word.length + 1) * TypingRig.KEY_INTERVAL_MILLIS)
+            }
+        }
+        flow.finishField()
+        rig.settle()
+    }
+
+    /** What the store holds after [learnHistory], read as the service reads it at start. */
+    fun personalSnapshot(): PersonalSnapshot =
+        PersonalSnapshot.of(rig.store.batches, settings(), rig.clock.now)
+
+    /** The words the engine holds after [previous] in [language]'s pairs, as the store keys them. */
+    fun heldAfter(language: String, previous: String): Set<String> {
+        val counted = LongArray(NativePredictor.CONTEXT_SLOTS)
+        val held = NativePredictor.nativeContextLinks(
+            handle, language, null, previous, emptyArray(), IntArray(0), LongArray(0), counted,
+        )
+        val words = arrayOfNulls<String>(held)
+        NativePredictor.nativeContextLinks(handle, language, null, previous, words, IntArray(held), LongArray(held), counted)
+        return words.filterNotNull().toSet()
+    }
+
+    /**
+     * Runs [block] with the engine's personal model replaced by [personal] and held there: the
+     * words typed meanwhile are learned into the store but not into the engine, and their pairs
+     * and triples into neither.
+     */
+    fun <T> withPersonal(personal: PersonalSnapshot, block: () -> T): T {
+        rig.settle()
+        personal.loadInto(handle)
+        rig.engine.learns = false
+        try {
+            return block()
+        } finally {
+            rig.engine.learns = true
+        }
+    }
+
+    /**
+     * Types [typed] and a space into a field holding [previous2], [previous1] and a space, and
+     * reads back what the field kept, with the engine's ranking for [typed] there before it was
+     * typed.
+     */
+    fun commitAfter(typed: String, previous2: String, previous1: String): Reading {
+        rig.orchestrator.applySettings(settings())
+        rig.startField("$previous2 $previous1 ")
+        val ranking = ranking(typed, previous1, previous2)
+        val outcome = typeWord(typed)
+        return Reading(outcome, readingLine(outcome, ranking))
     }
 
     /** Autocorrect's list for [typed], best first, as the bridge hands it over. */
@@ -216,6 +337,26 @@ internal class Pipeline private constructor(
 
     /** The pack the conversation is taken to be in, or -1 while undecided; moved by [commit]. */
     fun dominantPack(): Int = NativePredictor.nativeDominantPack(handle)
+
+    /** The slot the engine holds [tag]'s pack in, or [NativePredictor.NO_PACK]. */
+    fun packOf(tag: String): Int =
+        (0 until LanguagePackRepository.MAX_ENABLED).firstOrNull { NativePredictor.nativePackTag(handle, it) == tag }
+            ?: NativePredictor.NO_PACK
+
+    /**
+     * Closes [old]'s pack and opens [new]'s, enabled after the others, as the loader does when the
+     * enabled languages change.
+     */
+    fun swapLanguage(old: String, new: String) {
+        val kept = languages - old
+        NativePredictor.nativeSetActiveLanguages(handle, kept.toTypedArray(), FloatArray(kept.size) { 1.0f })
+        loadPack(handle, new)
+        languages = kept + new
+        NativePredictor.nativeSetActiveLanguages(handle, languages.toTypedArray(), FloatArray(languages.size) { 1.0f })
+    }
+
+    /** The engine's account of [word]'s score for [typed], or null when it is not offered. */
+    fun explain(typed: String, word: String): ScoreExplanation? = ScoreExplanation.read(handle, typed, word)
 
     /** The answer about [word] alone as if [packIndex] were the language, or null for no such pack. */
     fun answerAs(packIndex: Int, word: String): PredictionAnswer? =
@@ -252,8 +393,14 @@ internal class Pipeline private constructor(
      */
     fun learn(word: String, asserted: Boolean = false, times: Int = 1) {
         repeat(times) {
-            NativePredictor.nativeLearn(handle, word, null, null, false, asserted)
+            NativePredictor.nativeLearn(handle, word, null, null, false, asserted, null, true)
         }
+    }
+
+    /** Replaces the personal words with [words], each used [uses] times, as the loader hands them over. */
+    fun loadWords(words: List<String>, uses: Int) {
+        val none = IntArray(words.size)
+        NativePredictor.nativeLoadUserWords(handle, words.toTypedArray(), IntArray(words.size) { uses }, none, none)
     }
 
     /** Replaces the blocked words, the way the service pushes them. */
@@ -262,6 +409,9 @@ internal class Pipeline private constructor(
     fun close() = NativePredictor.nativeDestroy(handle)
 
     companion object {
+        /** The corpora the native tests share, relative to the module the tests run in. */
+        const val CORPUS_DIRECTORY = "../native-tests/data"
+
         /** The shipped apostrophe maps, relative to the module the tests run in. */
         private const val CONTRACTIONS_DIRECTORY = "src/main/assets/contractions"
 
@@ -315,18 +465,10 @@ internal class Pipeline private constructor(
 
         /** [open], with [preferred] weighted above the other languages; null leaves them equal. */
         fun open(preferred: String?, vararg tags: String): Pipeline {
-            val packs = requireNotNull(packDirectory()) { "borderkeys.packs is not set" }
             val handle = NativePredictor.nativeCreate()
             check(handle != 0L) { "the engine would not start" }
             for (tag in tags) {
-                val file = File(packs, tag.replace('-', '_') + ".bkd")
-                check(file.isFile) { "no pack at $file" }
-                FileInputStream(file).use { stream ->
-                    val status = NativePredictor.nativeLoadLanguage(
-                        handle, tag, rawDescriptor(stream.fd), 0L, file.length(), 1.0f,
-                    )
-                    check(status == 0) { "loadLanguage($tag) refused the pack: $status" }
-                }
+                loadPack(handle, tag)
             }
             NativePredictor.nativeSetActiveLanguages(
                 handle,
@@ -352,6 +494,19 @@ internal class Pipeline private constructor(
                 },
             )
             return Pipeline(handle, contractions, twins, tags.toList())
+        }
+
+        /** Loads the shipped pack for [tag] into the engine at [handle]. */
+        private fun loadPack(handle: Long, tag: String) {
+            val packs = requireNotNull(packDirectory()) { "borderkeys.packs is not set" }
+            val file = File(packs, tag.replace('-', '_') + ".bkd")
+            check(file.isFile) { "no pack at $file" }
+            FileInputStream(file).use { stream ->
+                val status = NativePredictor.nativeLoadLanguage(
+                    handle, tag, rawDescriptor(stream.fd), 0L, file.length(), 1.0f,
+                )
+                check(status == 0) { "loadLanguage($tag) refused the pack: $status" }
+            }
         }
 
         /**

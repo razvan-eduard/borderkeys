@@ -10,6 +10,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
 import com.borderkeys.data.theme.KeyboardTheme
+import com.borderkeys.geometry.half
 
 /**
  * The surface the keys sit on: a colour or a gradient, a picture, and patterns drawn as repeating
@@ -109,10 +110,10 @@ class KeyboardBackground {
         val visibleWidth = (boxWidth / scale).coerceAtMost(bitmap.width.toFloat())
         val visibleHeight = (boxHeight / scale).coerceAtMost(bitmap.height.toFloat())
         imageSource.set(
-            ((bitmap.width - visibleWidth) / 2f).toInt(),
-            ((bitmap.height - visibleHeight) / 2f).toInt(),
-            ((bitmap.width + visibleWidth) / 2f).toInt(),
-            ((bitmap.height + visibleHeight) / 2f).toInt(),
+            half(bitmap.width - visibleWidth).toInt(),
+            half(bitmap.height - visibleHeight).toInt(),
+            half(bitmap.width + visibleWidth).toInt(),
+            half(bitmap.height + visibleHeight).toInt(),
         )
         imageTarget.set(left, top, right, bottom)
         canvas.drawBitmap(bitmap, imageSource, imageTarget, imagePaint)
@@ -146,7 +147,7 @@ class KeyboardBackground {
         when (pattern) {
             // Opposite tile edges match: dots centred, lines edge to edge, the diagonal thrice.
             KeyboardTheme.PATTERN_DOTS ->
-                canvas.drawCircle(edge / 2f, edge / 2f, edge * DOT_RADIUS_FRACTION, ink)
+                canvas.drawCircle(half(edge), half(edge), edge * DOT_RADIUS_FRACTION, ink)
 
             KeyboardTheme.PATTERN_GRID -> {
                 ink.style = Paint.Style.FILL
@@ -163,13 +164,13 @@ class KeyboardBackground {
             }
 
             KeyboardTheme.PATTERN_CHECKS -> {
-                val half = edge / 2f
+                val half = half(edge)
                 canvas.drawRect(0f, 0f, half, half, ink)
                 canvas.drawRect(half, half, edge, edge, ink)
             }
 
             KeyboardTheme.PATTERN_STRIPES ->
-                canvas.drawRect(0f, 0f, edge / 2f, edge, ink)
+                canvas.drawRect(0f, 0f, half(edge), edge, ink)
         }
         return Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)

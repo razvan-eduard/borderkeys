@@ -159,16 +159,25 @@ What is never recorded:
 - where taps land, while Learning or the Heatmap switch is off;
 - any word the user has blocked (`LearningBuffer.setRefusedWords`);
 - the offensive-word list, while that switch is on (`OffensiveWords`);
-- word order beyond three (`kMaxTrigrams`), and only the 2,048 most-used of those.
+- word order beyond three words; of the pairs and triples, only what `PhraseBudget` keeps: at
+  most 10,000 of each per language, 24 pairs after any one word and 13 triples after any two;
+- a pair or triple holding a word that no dictionary knows and that is not yet learned
+  (`Engine::learnable`); the clean-up deletes the pairs and triples used at most twice that hold
+  one.
 
 A blocked word is matched by its exact spelling, case aside, so `Maine` at a sentence start is
 the same refusal as `maine`, and `mâine` is not refused with it. The offensive list is folded
 through `WordFold` before comparison, so `Shit` is the same refusal as `shit`.
 
-`PersonalWordDecay` (`:data`) is how the dictionary forgets without being told to, and the pair
-and triple tables evict least-used entries when full — so a phrase typed once years ago does not
-hold a slot against one typed daily. The words themselves stop at the *Words kept* setting,
-20,000 by default: past it, the words used least are deleted with their phrases.
+`PersonalWordDecay` (`:data`) is how the dictionary forgets without being told to. The pairs and
+triples are kept per language, and each language and each context keeps only so many: when one
+is full, what has gone unused longest, weighed by how often it was used, is deleted, so a phrase
+typed once years ago does not hold a place against one typed daily. The words themselves stop at
+the *Words kept* setting, 20,000 by default: past it, the words used least are deleted, and their
+phrases with the last of their cases. A word typed only once is deleted after the days unused
+that *How long a word used once is kept* sets, 30 by default, 10 or 90, or never with it Off, and
+its phrases with the last of its cases. The clean-up that fades and deletes runs daily, weekly or
+monthly, weekly by default.
 
 Everything learned is visible and deletable on the Personal dictionary and heatmap screen. The
 Learned words and Learned phrases pages list every word and phrase, each with a Delete, and a

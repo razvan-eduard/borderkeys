@@ -56,8 +56,8 @@ data class TypingFeatures(
         /** A field the keyboard must forget: nothing personal; dictionary words still offered. */
         val PRIVATE = TypingFeatures(learning = false, heatmap = false, clipboard = false, assistant = false)
 
-        /** A field that takes the keys as typed: no rewrite and no swipe; dictionary words still offered. */
-        val AS_TYPED = TypingFeatures(corrections = false, swipe = false)
+        /** A field that takes the keys as typed: no rewrite; dictionary words and swipe still on. */
+        val AS_TYPED = TypingFeatures(corrections = false)
 
         /** A password field: private, as typed, and no dictionary words. */
         val PASSWORD = NONE
@@ -145,7 +145,14 @@ data class FieldPolicy(
      * Whether [feature] runs in this field: switched on in [preferences] with every feature it
      * sits under, and allowed here, its parents' needs included.
      */
-    fun on(feature: Feature, preferences: KeyboardPreferences): Boolean {
+    fun on(feature: Feature, preferences: KeyboardPreferences): Boolean =
+        feature.switchedOn(preferences) && canSwitch(feature, preferences)
+
+    /**
+     * Whether [feature] would run in this field were its own setting on: allowed here with every
+     * feature it sits under, and switchable in [preferences] ([Feature.canSwitch]).
+     */
+    fun canSwitch(feature: Feature, preferences: KeyboardPreferences): Boolean {
         var current: Feature? = feature
         while (current != null) {
             if (!allows(current.needs)) {
@@ -153,8 +160,15 @@ data class FieldPolicy(
             }
             current = current.parent
         }
-        return feature.on(preferences)
+        return feature.canSwitch(preferences)
     }
+
+    /**
+     * Whether Paste hands the system clipboard straight to the field, no chip and no history: the
+     * keyboard may not read the clipboard here.
+     */
+    val pastesFromSystem: Boolean
+        get() = !clipboardAllowed
 
     /** Whether [action] may run in this field. */
     fun allows(action: QuickAction): Boolean = allows(action.requires)
@@ -187,7 +201,7 @@ data class FieldPolicy(
         /**
          * The policy of a field: [passwordField] allows no dictionary words and takes the keys
          * verbatim, [verbatimField] (an e-mail, number or phone field) takes the keys verbatim
-         * and no swipe but still offers dictionary words, [privateField] allows nothing personal,
+         * and still offers dictionary words and swipe, [privateField] allows nothing personal,
          * the personal dictionary needs [learningEnabled] and [userUnlocked] as well, and the
          * heatmap needs [heatmapEnabled] on top.
          */
@@ -198,16 +212,21 @@ data class FieldPolicy(
             heatmapEnabled: Boolean,
             userUnlocked: Boolean = true,
             verbatimField: Boolean = false,
+        ): FieldPolicy = ofField(passwordField, privateField, userUnlocked, verbatimField)
+            .withSwitches(learningEnabled, heatmapEnabled)
+
+        /** [of] by the field's kind alone, before the switches are applied. */
+        fun ofField(
+            passwordField: Boolean,
+            privateField: Boolean,
+            userUnlocked: Boolean = true,
+            verbatimField: Boolean = false,
         ): FieldPolicy {
             var kind = TypingFeatures.ALL
             if (passwordField) kind = kind and TypingFeatures.PASSWORD
             if (privateField) kind = kind and TypingFeatures.PRIVATE
             if (verbatimField) kind = kind and TypingFeatures.AS_TYPED
-            return FieldPolicy(
-                byField = kind,
-                bySettings = TypingFeatures.switches(learningEnabled, heatmapEnabled),
-                userUnlocked = userUnlocked,
-            )
+            return FieldPolicy(byField = kind, userUnlocked = userUnlocked)
         }
     }
 }

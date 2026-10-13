@@ -23,7 +23,8 @@ public:
     virtual float packWeightLog(int packIndex) const = 0;
     /** Stupid-backoff log-probability of a word in the current context. */
     virtual float contextLogProb(int packIndex, uint32_t wordIndex) const = 0;
-    virtual float userBoost(const char* text, uint32_t length) const = 0;
+    /** What the personal dictionary adds to the word spelled [text] under the current context. */
+    virtual float personalScore(const char* text, uint32_t length) const = 0;
     /**
      * The first spelling of the folded-key run starting at [firstIndex] that is not blocked, or
      * -1 when every one is.

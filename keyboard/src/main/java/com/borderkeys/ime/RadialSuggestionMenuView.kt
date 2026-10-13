@@ -13,6 +13,8 @@ import android.os.Trace
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import com.borderkeys.geometry.half
+import com.borderkeys.geometry.middle
 import com.borderkeys.ime.fx.AnnularWedgeElement
 import com.borderkeys.ime.fx.ParticleElement
 import com.borderkeys.ime.fx.ParticleGeometry
@@ -365,7 +367,7 @@ class RadialSuggestionMenuView(
         val inner = ringInnerRadius()
         wedgeOuterBounds.set(anchorX - outer, anchorY - outer, anchorX + outer, anchorY + outer)
         wedgeInnerBounds.set(anchorX - inner, anchorY - inner, anchorX + inner, anchorY + inner)
-        val midRadius = (inner + outer) / 2f
+        val midRadius = middle(inner, outer)
         val previousAlign = paints.label.textAlign
         paints.label.textAlign = Paint.Align.CENTER
         for (index in words.indices) {
@@ -514,8 +516,8 @@ class RadialSuggestionMenuView(
                 val nextCentre = bySortedAngle[(i + 1) % wedgeCount].second
                 val prevGap = if (wedgeCount == 1) 360f else normalizeDegrees(centre - prevCentre)
                 val nextGap = if (wedgeCount == 1) 360f else normalizeDegrees(nextCentre - centre)
-                start[rank] = centre - prevGap / 2f
-                sweep[rank] = prevGap / 2f + nextGap / 2f
+                start[rank] = centre - half(prevGap)
+                sweep[rank] = half(prevGap) + half(nextGap)
             }
             return start to sweep
         }

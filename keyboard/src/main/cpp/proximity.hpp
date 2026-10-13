@@ -15,7 +15,10 @@ namespace borderkeys {
 // overlong sequence, a surrogate, or anything above U+10FFFF.
 const char* utf8Decode(const char* p, const char* end, uint32_t* codePoint);
 
-// Writes up to four bytes. Returns the count, or 0 if the code point is not encodable.
+/** The most bytes UTF-8 spends on one code point. */
+constexpr int kMaxUtf8Bytes = 4;
+
+// Writes up to kMaxUtf8Bytes bytes. Returns the count, or 0 if the code point is not encodable.
 int utf8Encode(uint32_t codePoint, char* out);
 
 // Lowercases and strips the diacritic, for ASCII, Latin-1 Supplement, Latin Extended-A, the
@@ -25,10 +28,29 @@ int utf8Encode(uint32_t codePoint, char* out);
 constexpr uint32_t kDroppedCodePoint = 0u;
 uint32_t foldCodePoint(uint32_t codePoint);
 
+/** The capital I with a dot above, whose lowercase is the plain i. */
+constexpr uint32_t kDottedCapitalI = 0x130u;
+
+/** The capital sigma, and the form its lowercase takes at the end of a word. */
+constexpr uint32_t kCapitalSigma = 0x3A3u;
+constexpr uint32_t kFinalSigma = 0x3C2u;
+
 /** Lowercases without touching diacritics -- foldCodePoint's case half on its own. */
 uint32_t lowerCodePoint(uint32_t codePoint);
 
-/** Whether two UTF-8 spellings differ only by case. */
+/**
+ * lowerCodePoint for a code point of a text: a capital sigma that ends the text after another code
+ * point is the final sigma. [first] and [last] say whether it opens and whether it ends the text.
+ */
+uint32_t lowerCodePointIn(uint32_t codePoint, bool first, bool last);
+
+/**
+ * [text] with every code point lowered by lowerCodePointIn, into [out]; its byte count, or -1 when
+ * [text] is not valid UTF-8 or does not fit in [outBytes].
+ */
+int lowerUtf8(const char* text, size_t length, char* out, int outBytes);
+
+/** Whether two UTF-8 spellings differ only by case, each lowered as lowerUtf8 lowers it. */
 bool sameSpellingIgnoringCase(const char* a, size_t aLength, const char* b, size_t bLength);
 
 // Folds a UTF-8 string into code points. Returns the number written, or -1 if the input is

@@ -26,11 +26,13 @@ internal class PredictionAnswer(
     val knownWordIsName: Boolean,
     /** The possessive of a name missing its apostrophe, or null. */
     val possessive: String?,
+    /** The primary language subtag whose learned pairs and triples the engine read, or null. */
+    val language: String? = null,
 ) {
     /** This answer with its ranking dropped, as a cancelled request leaves it. */
     fun withoutRanking(): PredictionAnswer = PredictionAnswer(
         query, emptyList(), emptyList(), emptyList(), corrections, knownWord, knownWordExact,
-        knownWordIsName, possessive,
+        knownWordIsName, possessive, language,
     )
 
     /** The candidates the listener receives: the ranking, with [refused] words dropped. */
@@ -174,6 +176,7 @@ private fun readAnswer(
         knownWordExact = scratch.spellingFlags[NativePredictor.SPELLING_EXACT],
         knownWordIsName = scratch.spellingFlags[NativePredictor.SPELLING_NAME],
         possessive = scratch.texts[NativePredictor.TEXT_POSSESSIVE],
+        language = scratch.texts[NativePredictor.TEXT_LANGUAGE],
     )
 }
 

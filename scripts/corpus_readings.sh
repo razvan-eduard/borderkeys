@@ -79,6 +79,7 @@ fi
 "$ROOT/gradlew" -p "$ROOT" -q :keyboard:testCoreDebugUnitTest \
     --tests 'com.borderkeys.predict.PipelineCorpusTest' \
     --tests 'com.borderkeys.predict.PipelineTest' \
+    --tests 'com.borderkeys.predict.PersonalCorpusTest' \
     --rerun -Pborderkeys.readings="$OUT/kotlin"
 
 if [ -f "$OUT/kotlin/SUMMARY.txt" ]; then

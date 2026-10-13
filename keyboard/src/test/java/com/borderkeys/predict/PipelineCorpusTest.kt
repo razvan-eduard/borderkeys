@@ -76,7 +76,7 @@ class PipelineCorpusTest {
         val report = StringBuilder()
         val failures = mutableListOf<String>()
         for (corpus in corpora) {
-            val file = File(CORPUS_DIRECTORY, corpus.file)
+            val file = File(Pipeline.CORPUS_DIRECTORY, corpus.file)
             if (!file.isFile) {
                 failures += "  ${corpus.file} is missing"
                 continue
@@ -137,7 +137,6 @@ class PipelineCorpusTest {
     }
 
     private companion object {
-        const val CORPUS_DIRECTORY = "../native-tests/data"
         const val MISSES_LISTED = 24
 
         /** Rows answered as the corpus expects, out of 200 -- 268 for the marks corpus, 248 for

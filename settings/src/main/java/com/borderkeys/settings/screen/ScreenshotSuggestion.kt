@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -23,16 +23,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
 import com.borderkeys.settings.Disableable
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PickerChip
-import com.borderkeys.settings.SwitchRow
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.SwitchRow
+import kotlinx.coroutines.launch
 
 /**
  * Remember screenshots: a switch that keeps each new screenshot in the clipboard history and
@@ -93,9 +95,9 @@ fun ScreenshotSuggestionSetting(
     }
     Disableable(disabled = !enabled || !preferences.screenshotsRemembered) {
         FlowRow(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
+            horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
+            verticalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
         ) {
             PickerChip(
                 strings[Keys.CLIPBOARD_SCREENSHOT_BESIDE],

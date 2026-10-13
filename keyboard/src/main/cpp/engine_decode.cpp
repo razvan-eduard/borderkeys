@@ -359,10 +359,17 @@ float Engine::listedTotal(const Candidate& word, const DecoderTaps& taps) {
             }
         }
     });
+    const uint32_t wordIndex = static_cast<uint32_t>(word.wordIndex);
     return reach == kDecodeNegativeInfinity
                ? reach
-               : reach + packWeightLog(word.packIndex) +
-                     contextLogProb(word.packIndex, static_cast<uint32_t>(word.wordIndex));
+               : reach + packWeightLog(word.packIndex) + contextLogProb(word.packIndex, wordIndex) +
+                     personalScoreOf(packs_[word.packIndex].trie(), wordIndex);
+}
+
+float Engine::personalScoreOf(const PackedTrie& trie, uint32_t wordIndex) const {
+    uint32_t length = 0;
+    const char* const text = trie.wordText(wordIndex, &length);
+    return text != nullptr ? personal_.scoreFor(text, length) : 0.0f;
 }
 
 bool Engine::respells(const Candidate& word, const DecoderTaps& taps) const {
@@ -426,7 +433,8 @@ void Engine::offerDecodedWords(int packIndex, const DecoderTaps& taps,
             const uint32_t wordIndex = static_cast<uint32_t>(firstIndex) + offset;
             if (decodable(packIndex, wordIndex, taps)) {
                 words->offer(Candidate{packIndex, static_cast<int32_t>(wordIndex), 0.0f},
-                             finals[k].score + weightLog + contextLogProb(packIndex, wordIndex));
+                             finals[k].score + weightLog + contextLogProb(packIndex, wordIndex) +
+                                 personalScoreOf(trie, wordIndex));
             }
         }
     }

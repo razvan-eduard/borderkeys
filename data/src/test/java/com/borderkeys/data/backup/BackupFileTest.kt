@@ -105,7 +105,7 @@ class BackupFileTest {
     @Test
     fun `a file from a later format is refused rather than half read`() {
         val text = BackupFile.write(settingsOnly, passphrase = "")
-            .replace("\"format\":2", "\"format\":99")
+            .replace("\"format\":${BackupFile.FORMAT}", "\"format\":${BackupFile.FORMAT + 1}")
         assertEquals(BackupFile.Failure.NOT_A_BACKUP, BackupFile.read(text, "").failure)
     }
 
@@ -131,7 +131,7 @@ class BackupFileTest {
     @Test
     fun `a new file declares the current format and round count`() {
         val text = BackupFile.write(sensitive, passphrase = "correct horse")
-        assertTrue(text.contains("\"format\":2"))
+        assertTrue(text.contains("\"format\":${BackupFile.FORMAT}"))
         assertTrue(text.contains("\"iterations\":600000"))
     }
 
@@ -176,7 +176,7 @@ class BackupFileTest {
     @Test
     fun `a changed header is refused the way a wrong passphrase is`() {
         val text = BackupFile.write(sensitive, passphrase = "correct horse")
-        val downgraded = text.replace("\"format\":2", "\"format\":1")
+        val downgraded = text.replace("\"format\":${BackupFile.FORMAT}", "\"format\":${BackupFile.FORMAT - 1}")
         val result = BackupFile.read(downgraded, "correct horse")
         assertNull(result.payload)
         assertEquals(BackupFile.Failure.WRONG_PASSPHRASE, result.failure)
@@ -212,6 +212,37 @@ class BackupFileTest {
         val read = BackupFile.read(BackupFile.write(payload, passphrase = ""), "").payload!!.preferences!!
         assertEquals(listOf(own), read.customLayouts)
         assertEquals(mapOf("qwerty" to "custom-4"), read.subtypeLayouts)
+    }
+
+    @Test
+    fun `a phrase's stamps, its context's uses and its language's clocks survive a round trip`() {
+        val phrases = BackupPayload(
+            bigrams = listOf(BackupBigram("o", "cana", 4, "ro", lastUsedAt = 7L, contextSeen = 9L, languageSeen = 11L)),
+            trigrams = listOf(BackupTrigram("vreau", "o", "cana", 2, "ro", 7L, 5L, 3L)),
+            pairContexts = listOf(BackupPairContext("ro", "o", total = 6L, seen = 9L, lastUsedAt = 7L)),
+            tripleContexts = listOf(BackupTripleContext("ro", "vreau", "o", total = 2L, seen = 5L, lastUsedAt = 7L)),
+            phraseClocks = listOf(BackupPhraseClock("ro", pairs = 11L, triples = 3L)),
+        )
+        val read = BackupFile.read(BackupFile.write(phrases, passphrase = "correct horse"), "correct horse").payload
+        assertEquals(phrases, read)
+    }
+
+    @Test
+    fun `a file from before the stamps reads with none, and no contexts or clocks`() {
+        val older = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString(
+            BackupPayload.serializer(),
+            """{"bigrams":[{"previous":"o","word":"cana","count":4,"language":"ro"}]}""",
+        )
+        assertEquals(listOf(BackupBigram("o", "cana", 4, "ro")), older.bigrams)
+        assertEquals(0L, older.bigrams.single().lastUsedAt)
+        assertTrue(older.pairContexts.isEmpty() && older.tripleContexts.isEmpty() && older.phraseClocks.isEmpty())
+    }
+
+    @Test
+    fun `a phrase's contexts or its clocks alone make a backup private`() {
+        assertTrue(BackupPayload(pairContexts = listOf(BackupPairContext("ro", "o", 1L, 1L, 1L))).isSensitive)
+        assertTrue(BackupPayload(tripleContexts = listOf(BackupTripleContext("ro", "a", "b", 1L, 1L, 1L))).isSensitive)
+        assertTrue(BackupPayload(phraseClocks = listOf(BackupPhraseClock("ro", 1L, 1L))).isSensitive)
     }
 
     @Test

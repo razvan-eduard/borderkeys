@@ -29,6 +29,7 @@ import com.borderkeys.data.theme.ParticleEffectsSettings
 import com.borderkeys.data.theme.ParticleFillLayer
 import com.borderkeys.data.theme.ParticleOutlineLayer
 import com.borderkeys.data.theme.ParticleRegionSettings
+import com.borderkeys.geometry.bothSides
 import com.borderkeys.ime.fx.ParticleGeometry
 import com.borderkeys.ime.fx.ParticlePreviewView
 import com.borderkeys.ime.fx.applyParticleLayer
@@ -51,15 +52,15 @@ fun ParticleChipPreview(
      * How far past the chip's bounds the preview may draw, on every side; the chip's geometry sits
      * at this offset inside the view.
      */
-    bleed: Dp = 28.dp,
+    bleed: Dp = CHIP_BLEED,
 ) {
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val bleedPx = with(density) { bleed.roundToPx() }
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
     val outlineGeometry = remember(shape, density, layoutDirection, sizePx, bleedPx) {
-        val chipWidth = sizePx.width - 2 * bleedPx
-        val chipHeight = sizePx.height - 2 * bleedPx
+        val chipWidth = sizePx.width - bothSides(bleedPx)
+        val chipHeight = sizePx.height - bothSides(bleedPx)
         if (chipWidth <= 0 || chipHeight <= 0) {
             null
         } else {
@@ -84,7 +85,7 @@ fun ParticleChipPreview(
         modifier = modifier
             .layout { measurable, constraints ->
                 val placeable = measurable.measure(
-                    Constraints.fixed(constraints.maxWidth + 2 * bleedPx, constraints.maxHeight + 2 * bleedPx),
+                    Constraints.fixed(constraints.maxWidth + bothSides(bleedPx), constraints.maxHeight + bothSides(bleedPx)),
                 )
                 layout(constraints.maxWidth, constraints.maxHeight) {
                     placeable.place(-bleedPx, -bleedPx)
@@ -113,3 +114,6 @@ private fun Outline.toParticleGeometry(offsetX: Float, offsetY: Float): Particle
 
 private fun Rect.toRoundedRect(cornerRadiusPx: Float, offsetX: Float, offsetY: Float): ParticleGeometry.RoundedRect =
     ParticleGeometry.RoundedRect(left + offsetX, top + offsetY, right + offsetX, bottom + offsetY, cornerRadiusPx)
+
+/** How far a chip's particles may spread past its edges. */
+private val CHIP_BLEED = 28.dp

@@ -226,6 +226,14 @@ precedence = "override"
 SPDX-FileCopyrightText = "Wortschatz Leipzig, Universität Leipzig"
 SPDX-License-Identifier = "CC-BY-4.0"
 
+# A persona's sentences and words typed after them, from tools/make_personal_corpus.py on the
+# Wortschatz Leipzig 2020 news sentences; docs/licensing.md, the test data table.
+[[annotations]]
+path = ["native-tests/data/personal_history_*.txt", "native-tests/data/personal_rows_*.tsv"]
+precedence = "override"
+SPDX-FileCopyrightText = "Wortschatz Leipzig, Universität Leipzig"
+SPDX-License-Identifier = "CC-BY-4.0"
+
 # Words sampled by tools/make_unlisted_corpus.py from Android's stock keyboard word lists
 # (LineageOS's copy of LatinIME); docs/licensing.md, the test data table.
 [[annotations]]

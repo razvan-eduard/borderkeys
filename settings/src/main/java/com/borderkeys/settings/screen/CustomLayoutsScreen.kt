@@ -5,28 +5,23 @@ package com.borderkeys.settings.screen
 
 import android.content.Context
 import android.net.Uri
-import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,25 +31,31 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.KeyboardSubtypes
 import com.borderkeys.data.theme.CustomLayout
 import com.borderkeys.data.theme.KeyFlick
 import com.borderkeys.data.theme.KeyboardPreferences
-import com.borderkeys.ime.LayoutChoice
-import com.borderkeys.keyboard.R
-import com.borderkeys.settings.move
 import com.borderkeys.i18n.Keys
+import com.borderkeys.ime.LayoutChoice
 import com.borderkeys.ime.LayoutValidator
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.MoveButtons
 import com.borderkeys.settings.PlacementPreview
-import com.borderkeys.settings.SettingRow
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_SMALL
+import com.borderkeys.settings.SPACE_TINY
+import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.move
 import com.borderkeys.settings.rememberPreferencesUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -123,11 +124,11 @@ fun CustomLayoutsScreen(modifier: Modifier = Modifier) {
             if (preferences.customLayouts.size < CustomLayout.MAX_CUSTOM_LAYOUTS) {
                 TextButton(
                     onClick = { picking = !picking },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = SPACE_LARGE, vertical = SPACE_XSMALL),
                 ) { Text(strings[Keys.CUSTOM_LAYOUTS_ADD]) }
                 if (picking) {
                     Explanation(strings[Keys.CUSTOM_LAYOUTS_COPY_FROM])
-                    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = SPACE_GUTTER)) {
                         for (id in builtIns) {
                             FilterChip(
                                 selected = false,
@@ -136,7 +137,7 @@ fun CustomLayoutsScreen(modifier: Modifier = Modifier) {
                                     editing = copyOf(context, id, preferences.customLayouts)
                                 },
                                 label = { Text(id) },
-                                modifier = Modifier.padding(vertical = 2.dp),
+                                modifier = Modifier.padding(vertical = SPACE_TINY),
                             )
                         }
                     }
@@ -233,7 +234,7 @@ private fun LayoutEditor(
         onDismissRequest = onDismiss,
         title = { Text(name.ifBlank { strings[Keys.CUSTOM_LAYOUTS_ADD] }) },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(CustomLayout.MAX_NAME_CHARS) },
@@ -274,7 +275,7 @@ private fun LayoutEditor(
                 if (parsed != null) {
                     PlacementPreview(appearance, layout = parsed)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
                     TextButton(onClick = { importFile.launch(arrayOf("application/json", "text/*", "*/*")) }) {
                         Text(strings[Keys.CUSTOM_LAYOUTS_IMPORT])
                     }
@@ -337,9 +338,7 @@ private fun copyOf(context: Context, id: String, existing: List<CustomLayout>): 
 private class LayoutUsage(val portrait: Map<String, List<String>>, val landscape: Map<String, List<String>>)
 
 private fun layoutUsage(context: Context, preferences: KeyboardPreferences): LayoutUsage {
-    val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-    val ours = manager?.enabledInputMethodList?.firstOrNull { it.packageName == context.packageName }
-    val subtypes = ours?.let { manager.getEnabledInputMethodSubtypeList(it, true) }.orEmpty()
+    val subtypes = KeyboardSubtypes.enabled(context)
     val portrait = HashMap<String, MutableList<String>>()
     val landscape = HashMap<String, MutableList<String>>()
     val sideways = LayoutChoice.forOrientation(preferences.subtypeLayouts, preferences.subtypeLayoutsLandscape, landscape = true)
@@ -369,23 +368,10 @@ private fun LayoutListRow(
     onDelete: (() -> Unit)?,
 ) {
     val strings = LocalStrings.current
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_SMALL)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            IconButton(onClick = onMoveTop, enabled = index > 0, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    painter = painterResource(R.drawable.bk_reorder_top),
-                    contentDescription = strings[Keys.QUICK_MOVE_TOP],
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            IconButton(onClick = onMoveUp, enabled = index > 0, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    painter = painterResource(R.drawable.bk_reorder_up),
-                    contentDescription = strings[Keys.QUICK_MOVE_UP],
-                    modifier = Modifier.size(18.dp),
-                )
-            }
+            MoveButtons(index, onMoveTop, onMoveUp)
             TextButton(onClick = onEdit) { Text(strings[Keys.CUSTOM_LAYOUTS_EDIT]) }
             if (onDelete != null) {
                 TextButton(onClick = onDelete) { Text(strings[Keys.CUSTOM_LAYOUTS_DELETE]) }
@@ -394,16 +380,16 @@ private fun LayoutListRow(
         if (detail != null) {
             Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 2.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(SPACE_SMALL), modifier = Modifier.padding(top = SPACE_TINY)) {
             for (badge in badges) {
                 Text(
                     badge,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier
-                        .padding(vertical = 2.dp)
-                        .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                        .padding(vertical = SPACE_TINY)
+                        .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(SPACE_XSMALL))
+                        .padding(horizontal = SPACE_SMALL, vertical = SPACE_TINY),
                 )
             }
         }

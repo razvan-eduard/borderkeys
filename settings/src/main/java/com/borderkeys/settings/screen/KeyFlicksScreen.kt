@@ -25,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyFlick
@@ -38,6 +37,11 @@ import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PlacementPreview
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_TINY
+import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SectionHeader
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.rememberPreferencesUpdater
@@ -66,7 +70,7 @@ fun KeyFlicksScreen(modifier: Modifier = Modifier) {
             Explanation(strings[Keys.LAYOUT_FLICK_EDITOR])
             PlacementPreview(
                 appearance,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
                 onKeyPicked = { code -> selectedKey = code },
             )
             if (selectedKey != KeyCodes.NONE) {
@@ -83,7 +87,7 @@ fun KeyFlicksScreen(modifier: Modifier = Modifier) {
             if (preferences.keyFlicks.isNotEmpty()) {
                 TextButton(
                     onClick = { update { it.copy(keyFlicks = emptyList()) } },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = SPACE_LARGE, vertical = SPACE_XSMALL),
                 ) { Text(strings[Keys.FLICK_CLEAR_ALL]) }
             }
         }
@@ -146,9 +150,9 @@ private fun DirectionGrid(
         listOf(KeyFlick.WEST, -1, KeyFlick.EAST),
         listOf(KeyFlick.SOUTH_WEST, KeyFlick.SOUTH, KeyFlick.SOUTH_EAST),
     )
-    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM), verticalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
         for (row in rows) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
                 for (direction in row) {
                     if (direction < 0) {
                         OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.weight(1f)) {
@@ -203,8 +207,8 @@ private fun FlickDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
                     FilterChip(selected = kind == KeyFlick.TEXT, onClick = { kind = KeyFlick.TEXT }, label = { Text(strings[Keys.FLICK_KIND_TEXT]) })
                     FilterChip(selected = kind == KeyFlick.COMMAND, onClick = { kind = KeyFlick.COMMAND }, label = { Text(strings[Keys.FLICK_KIND_COMMAND]) })
                     FilterChip(selected = kind == KeyFlick.KEY, onClick = { kind = KeyFlick.KEY }, label = { Text(strings[Keys.FLICK_KIND_KEY]) })
@@ -218,26 +222,26 @@ private fun FlickDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     KeyFlick.COMMAND -> Column(
-                        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 4.dp),
+                        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = SPACE_XSMALL),
                     ) {
                         for (action in QuickAction.entries) {
                             FilterChip(
                                 selected = command == action.id.toString(),
                                 onClick = { command = action.id.toString() },
                                 label = { Text(strings[labelFor(action)]) },
-                                modifier = Modifier.padding(vertical = 2.dp),
+                                modifier = Modifier.padding(vertical = SPACE_TINY),
                             )
                         }
                     }
                     else -> Column(
-                        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 4.dp),
+                        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = SPACE_XSMALL),
                     ) {
                         for (name in FLICKABLE_KEYS) {
                             FilterChip(
                                 selected = keyName == name,
                                 onClick = { keyName = name },
                                 label = { Text(keyName(KeyCodes.named(name), strings)) },
-                                modifier = Modifier.padding(vertical = 2.dp),
+                                modifier = Modifier.padding(vertical = SPACE_TINY),
                             )
                         }
                     }

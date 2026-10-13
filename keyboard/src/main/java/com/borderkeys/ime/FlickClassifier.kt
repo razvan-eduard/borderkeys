@@ -3,6 +3,7 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.geometry.half
 import kotlin.math.atan2
 import kotlin.math.hypot
 
@@ -23,6 +24,10 @@ object FlickClassifier {
 
     /** The sectors a direction is read in for a flick's fallback: 16 of 22.5 degrees. */
     private const val FINE_SECTORS = 16
+
+    /** The directions a flick is read in: 8 of 45 degrees, each two fine sectors. */
+    private const val DIRECTIONS = 8
+    private const val FINE_PER_DIRECTION = FINE_SECTORS / DIRECTIONS
 
     /** Whether a finger [distance] from where it went down is past [maxFraction] of the key's diagonal. */
     fun leftKey(distance: Float, keyWidth: Float, keyHeight: Float, maxFraction: Float): Boolean =
@@ -56,7 +61,7 @@ object FlickClassifier {
         minFraction: Float,
         leftKey: Boolean,
     ): Int {
-        if (leftKey && (pathLength >= keyWidth / 2 || elapsedMillis > SWIPE_MILLIS)) {
+        if (leftKey && (pathLength >= half(keyWidth) || elapsedMillis > SWIPE_MILLIS)) {
             return SWIPE
         }
         if (hypot(x - startX, y - startY) < minFraction * hypot(keyWidth, keyHeight)) {
@@ -66,7 +71,7 @@ object FlickClassifier {
     }
 
     /** The 45-degree sector of ([dx], [dy]) in view coordinates, 0 north and clockwise. */
-    fun direction(dx: Float, dy: Float): Int = (fineSector(dx, dy) + 1) / 2 % 8
+    fun direction(dx: Float, dy: Float): Int = (fineSector(dx, dy) + 1) / FINE_PER_DIRECTION % DIRECTIONS
 
     /**
      * The direction a flick of ([dx], [dy]) takes on a key whose flick directions [has]: its
@@ -74,12 +79,12 @@ object FlickClassifier {
      */
     fun flickDirection(dx: Float, dy: Float, has: (Int) -> Boolean): Int {
         val fine = fineSector(dx, dy)
-        val exact = (fine + 1) / 2 % 8
+        val exact = (fine + 1) / FINE_PER_DIRECTION % DIRECTIONS
         if (has(exact)) {
             return exact
         }
         for (neighbour in intArrayOf(fine - 1, fine + 1)) {
-            val direction = ((neighbour + FINE_SECTORS) % FINE_SECTORS + 1) / 2 % 8
+            val direction = ((neighbour + FINE_SECTORS) % FINE_SECTORS + 1) / FINE_PER_DIRECTION % DIRECTIONS
             if (direction != exact && has(direction)) {
                 return direction
             }

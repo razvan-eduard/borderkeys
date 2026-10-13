@@ -10,6 +10,7 @@ import android.graphics.Paint
 import android.os.Trace
 import android.view.MotionEvent
 import android.view.View
+import com.borderkeys.geometry.half
 import com.borderkeys.ime.fx.ParticleSurface
 import com.borderkeys.ime.fx.RoundedRectElement
 import com.borderkeys.theme.ThemePaints
@@ -110,7 +111,7 @@ class LanguageRevertPanelView(
         if (index > 0) {
             canvas.drawLine(0f, top, width.toFloat(), top, paints.keyStroke)
         }
-        val midY = top + rowHeightPx / 2f + paints.labelBaselineOffsetPx
+        val midY = top + half(rowHeightPx) + paints.labelBaselineOffsetPx
         val previous = paints.label.textAlign
         paints.label.textAlign = Paint.Align.LEFT
         val text = rowTexts[index]
@@ -126,8 +127,8 @@ class LanguageRevertPanelView(
                 canvas.drawRect(width - dismissWidth, 0f, width.toFloat(), rowHeightPx, dismissFill)
             }
             canvas.drawText(
-                DISMISS_GLYPH, width - dismissWidth / 2f,
-                rowHeightPx / 2f + paints.labelBaselineOffsetPx, paints.labelSecondary,
+                DISMISS_GLYPH, width - half(dismissWidth),
+                half(rowHeightPx) + paints.labelBaselineOffsetPx, paints.labelSecondary,
             )
         }
     }

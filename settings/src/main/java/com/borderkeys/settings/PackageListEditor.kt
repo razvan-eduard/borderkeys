@@ -14,7 +14,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.borderkeys.data.PackageNames
 import com.borderkeys.i18n.Keys
 
@@ -48,7 +47,7 @@ fun PackageListEditor(
         onValueChange = { newPackage = it },
         label = { Text(fieldLabel) },
         singleLine = true,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
     )
     val candidate = newPackage.trim()
     TextButton(
@@ -58,6 +57,6 @@ fun PackageListEditor(
             update { it + candidate }
             newPackage = ""
         },
-        modifier = Modifier.padding(horizontal = 12.dp),
+        modifier = Modifier.padding(horizontal = SPACE_LARGE),
     ) { Text(strings[Keys.COMMON_ADD_THIS_APP]) }
 }

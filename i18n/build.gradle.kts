@@ -52,6 +52,7 @@ kotlin {
 dependencies {
     // The catalogue parser, the same on the phone and in host unit tests.
     implementation(libs.kotlinx.serialization.json)
+    implementation(project(":language"))
 
     testImplementation(libs.junit)
 }

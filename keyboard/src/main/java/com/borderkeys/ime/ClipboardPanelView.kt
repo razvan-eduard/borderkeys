@@ -13,14 +13,19 @@ import android.graphics.RectF
 import android.net.Uri
 import android.os.Trace
 import android.text.TextDirectionHeuristics
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
-import android.view.HapticFeedbackConstants
 import android.view.ViewConfiguration
 import android.widget.OverScroller
+import com.borderkeys.data.ClipMedia
 import com.borderkeys.data.ClipSearch
 import com.borderkeys.data.entity.ClipEntry
+import com.borderkeys.geometry.bothSides
+import com.borderkeys.geometry.centreOfSlot
+import com.borderkeys.geometry.half
+import com.borderkeys.geometry.middle
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.theme.ThemePaints
@@ -124,16 +129,26 @@ class ClipboardPanelView(
 
     private val cardRect = RectF()
     private val thumbRect = Rect()
-    private val emptyChars = CharArray(96)
-    private var emptyLength = 0
+    private val emptyMessage = strings[Keys.CLIPBOARD_EMPTY].toCharArray()
+    private val offMessage = strings[Keys.CLIPBOARD_HISTORY_OFF].toCharArray()
+
+    /** Whether the clipboard history is on; off, the panel shows that it is off in place of cards. */
+    var historyOn: Boolean = true
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    /** The line drawn in the panel's centre while it shows no card, or null. */
+    internal val centredMessage: String?
+        get() = if (entries.isEmpty()) String(shownMessage()) else null
 
     init {
         setWillNotDraw(false)
         isHapticFeedbackEnabled = true
-        val empty = strings[Keys.CLIPBOARD_EMPTY]
-        emptyLength = empty.length.coerceAtMost(emptyChars.size)
-        empty.toCharArray(emptyChars, 0, 0, emptyLength)
     }
+
+    private fun shownMessage(): CharArray = if (historyOn) emptyMessage else offMessage
 
     /**
      * Decodes a thumbnail for every image in [list], keyed by entry id, for [setEntries]. Reads
@@ -191,8 +206,8 @@ class ClipboardPanelView(
                     buffered, 0, buffered.size, options,
                 )
                 var sample = 1
-                while (options.outHeight / sample > target * 2) {
-                    sample *= 2
+                while (options.outHeight / sample > target * ClipMedia.SAMPLE_STEP) {
+                    sample *= ClipMedia.SAMPLE_STEP
                 }
                 android.graphics.BitmapFactory.decodeByteArray(
                     buffered, 0, buffered.size,
@@ -224,9 +239,10 @@ class ClipboardPanelView(
             canvas.drawRect(0f, viewTop, width.toFloat(), viewTop + height, paints.background)
 
             if (entries.isEmpty()) {
+                val message = shownMessage()
                 canvas.drawText(
-                    emptyChars, 0, emptyLength,
-                    width / 2f, viewTop + (headerHeightPx + height) / 2f + paints.secondaryBaselineOffsetPx,
+                    message, 0, message.size,
+                    half(width.toFloat()), viewTop + middle(headerHeightPx, height.toFloat()) + paints.secondaryBaselineOffsetPx,
                     paints.labelSecondary,
                 )
             } else {
@@ -255,16 +271,16 @@ class ClipboardPanelView(
         canvas.drawLine(
             0f, viewTop + headerHeightPx, width.toFloat(), viewTop + headerHeightPx, paints.keyStroke,
         )
-        val midY = viewTop + headerHeightPx / 2f + paints.labelBaselineOffsetPx
+        val midY = viewTop + half(headerHeightPx) + paints.labelBaselineOffsetPx
         // Placed from the start edge: the left one, or the right when rightToLeft.
         val align = if (rightToLeft) Paint.Align.RIGHT else Paint.Align.LEFT
         val previous = paints.label.textAlign
         paints.label.textAlign = align
-        canvas.drawText(if (rightToLeft) BACK_GLYPH_RTL else BACK_GLYPH, fromStart(paddingPx * 2f), midY, paints.label)
-        val titleOffset = paddingPx * 2f + headerHeightPx * 0.7f
+        canvas.drawText(if (rightToLeft) BACK_GLYPH_RTL else BACK_GLYPH, fromStart(bothSides(paddingPx)), midY, paints.label)
+        val titleOffset = bothSides(paddingPx) + headerHeightPx * BACK_GLYPH_HEADER_SHARE
         canvas.drawText(title, fromStart(titleOffset), midY, paints.label)
         if (matchNote.isNotEmpty()) {
-            val noteOffset = titleOffset + paints.label.measureText(title) + paddingPx * 2f
+            val noteOffset = titleOffset + paints.label.measureText(title) + bothSides(paddingPx)
             val previousSecondary = paints.labelSecondary.textAlign
             paints.labelSecondary.textAlign = align
             canvas.save()
@@ -275,7 +291,7 @@ class ClipboardPanelView(
             }
             canvas.drawText(
                 matchNote, fromStart(noteOffset),
-                viewTop + headerHeightPx / 2f + paints.secondaryBaselineOffsetPx,
+                viewTop + half(headerHeightPx) + paints.secondaryBaselineOffsetPx,
                 paints.labelSecondary,
             )
             canvas.restore()
@@ -292,7 +308,7 @@ class ClipboardPanelView(
         if (contentHeight <= height || viewport <= 0f) {
             return
         }
-        val track = viewport - paddingPx * 2f
+        val track = viewport - bothSides(paddingPx)
         val thumbLength = (track * viewport / contentHeight).coerceAtLeast(paddingPx * 3f)
         val travel = track - thumbLength
         val progress = (scrollY.toFloat() / maxScroll()).coerceIn(0f, 1f)
@@ -301,7 +317,7 @@ class ClipboardPanelView(
         val left = if (rightToLeft) paddingPx else width - paddingPx - barWidth
         canvas.drawRoundRect(
             left, viewTop + topInView, left + barWidth, viewTop + topInView + thumbLength,
-            barWidth / 2f, barWidth / 2f, paints.labelSecondary,
+            half(barWidth), half(barWidth), paints.labelSecondary,
         )
     }
 
@@ -344,7 +360,7 @@ class ClipboardPanelView(
         val thumbnail = thumbnails[entry.id]
         if (thumbnail != null) {
             // At the card's start edge: the left one, or the right when rightToLeft.
-            val side = (cardHeightPx - inset * 2f).toInt()
+            val side = (cardHeightPx - bothSides(inset)).toInt()
             val thumbLeft = if (rightToLeft) textRight.toInt() - side else textLeft.toInt()
             thumbRect.set(thumbLeft, (top + inset).toInt(), thumbLeft + side, (top + inset).toInt() + side)
             canvas.drawBitmap(thumbnail, null, thumbRect, null)
@@ -367,7 +383,7 @@ class ClipboardPanelView(
         canvas.drawText(
             label, 0, length,
             if (textRightToLeft) textRight else textLeft,
-            top + cardHeightPx / 2f + paints.labelBaselineOffsetPx, paints.label,
+            top + half(cardHeightPx) + paints.labelBaselineOffsetPx, paints.label,
         )
         canvas.restore()
         paints.label.textAlign = previous
@@ -403,10 +419,10 @@ class ClipboardPanelView(
         val zoneWidth = cardRect.width() / zones
         val previous = paints.label.textAlign
         paints.label.textAlign = android.graphics.Paint.Align.CENTER
-        val baseline = top + cardHeightPx / 2f + paints.labelBaselineOffsetPx
+        val baseline = top + half(cardHeightPx) + paints.labelBaselineOffsetPx
         for (zone in 0 until zones) {
             val label = actionLabel(entry, zone)
-            canvas.drawText(label, cardRect.left + zoneWidth * (slotOf(zone, zones) + 0.5f), baseline, paints.label)
+            canvas.drawText(label, cardRect.left + centreOfSlot(slotOf(zone, zones), zoneWidth), baseline, paints.label)
         }
         paints.label.textAlign = previous
     }
@@ -443,7 +459,7 @@ class ClipboardPanelView(
         }
         val entry = entries[index]
         val zones = actionCount(entry)
-        val slot = ((x - paddingPx) / ((width - paddingPx * 2f) / zones)).toInt().coerceIn(0, zones - 1)
+        val slot = ((x - paddingPx) / ((width - bothSides(paddingPx)) / zones)).toInt().coerceIn(0, zones - 1)
         val zone = slotOf(slot, zones)
         when {
             zone == 0 -> listener?.onClipPinToggled(entry)
@@ -585,6 +601,9 @@ class ClipboardPanelView(
     }
 
     private companion object {
+        /** The back glyph's room in the header, as a share of the header's height. */
+        private const val BACK_GLYPH_HEADER_SHARE = 0.7f
+
         /** A refused photo card's opacity, out of 255: Material's disabled-content alpha. */
         const val REFUSED_ALPHA = 97
 

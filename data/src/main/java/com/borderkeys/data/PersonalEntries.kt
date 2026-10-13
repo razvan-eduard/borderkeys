@@ -11,22 +11,17 @@ object PersonalEntries {
 
     /**
      * The words of [words] that have entered under [settings] as of [now]: chosen on purpose, or
-     * used [KeyboardPreferences.learnAfter] times, each decayed count added to those of the forms
-     * [fold] makes the same word.
+     * used [KeyboardPreferences.learnAfter] times, each decayed count added to those of its other
+     * cases ([PhraseKey.word]).
      */
-    fun words(
-        words: List<UserWord>,
-        settings: KeyboardPreferences,
-        now: Long,
-        fold: (String) -> String,
-    ): List<UserWord> {
+    fun words(words: List<UserWord>, settings: KeyboardPreferences, now: Long): List<UserWord> {
         val halfLife = PersonalWordDecay.halfLifeMillis(settings.unlearnHalfLifeDays)
-        val entered = words.groupBy { fold(it.word) }.filterValues { forms ->
+        val entered = words.groupBy { PhraseKey.word(it.word) }.filterValues { forms ->
             forms.any { it.asserted > 0 } ||
                 forms.sumOf { PersonalWordDecay.decayed(it.count, it.lastUsedAt, now, halfLife) } >=
                 settings.learnAfter
         }.keys
-        return words.filter { fold(it.word) in entered }
+        return words.filter { PhraseKey.word(it.word) in entered }
     }
 
     /** The phrases of [phrases] used [KeyboardPreferences.learnAfter] times, decayed as of [now]. */

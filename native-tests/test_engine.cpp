@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 BorderKeys contributors
 
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <cstdint>
@@ -9,9 +10,12 @@
 #include <fcntl.h>
 #include <initializer_list>
 #include <limits>
+#include <set>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <utility>
+#include <vector>
 
 #include "engine.hpp"
 #include "reading.hpp"
@@ -101,26 +105,20 @@ struct LoadedEngine {
         const int found = engine.suggest(composing, length, nullptr, 0, nullptr, 0, xs, ys,
                                          xs != nullptr ? static_cast<int>(length) : 0, out,
                                          Engine::kMaxCandidates);
-        for (int i = 0; i < found; ++i) {
-            uint32_t length = 0;
-            const char* const text = engine.candidateText(out[i], &length);
-            if (text != nullptr && length == std::strlen(expected) &&
-                std::memcmp(text, expected, length) == 0) {
-                return out[i].score;
-            }
-        }
-        return 0.0f;
+        return scoreIn(out, found, expected);
     }
 
     /**
      * The suggestions for the ASCII word `composing`, each letter tapped at `xs` and `ys`, or
-     * untapped when they are null: best first, each `word:score` to three places, then a bar and
-     * autocorrect's word.
+     * untapped when they are null, after `previous1` and `previous2`, null for none: best first,
+     * each `word:score` to three places, then a bar and autocorrect's word.
      */
-    std::string answer(const char* composing, const float* xs, const float* ys) {
+    std::string answer(const char* composing, const float* xs, const float* ys,
+                       const char* previous1 = nullptr, const char* previous2 = nullptr) {
         Candidate out[Engine::kMaxCandidates];
         const size_t length = std::strlen(composing);
-        const int found = engine.suggest(composing, length, nullptr, 0, nullptr, 0, xs, ys,
+        const int found = engine.suggest(composing, length, previous1, lengthOf(previous1),
+                                         previous2, lengthOf(previous2), xs, ys,
                                          xs != nullptr ? static_cast<int>(length) : 0, out,
                                          Engine::kMaxCandidates);
         std::string text;
@@ -184,14 +182,16 @@ struct LoadedEngine {
 
     /**
      * The tap decoder's word for the ASCII `composing`, letter i tapped at `xs[i]`, `ys[i]`, or
-     * untapped when they are null; empty when it found none. `accepted` receives whether the
-     * engine accepted it, `margin` its margin over the typed letters.
+     * untapped when they are null, after `previous1`, null for none; empty when it found none.
+     * `accepted` receives whether the engine accepted it, `margin` its margin over the typed
+     * letters.
      */
     std::string decoded(const char* composing, const float* xs, const float* ys,
-                        bool* accepted = nullptr, float* margin = nullptr) {
+                        bool* accepted = nullptr, float* margin = nullptr,
+                        const char* previous1 = nullptr) {
         Candidate out[Engine::kMaxCandidates];
         const size_t length = std::strlen(composing);
-        engine.suggest(composing, length, nullptr, 0, nullptr, 0, xs, ys,
+        engine.suggest(composing, length, previous1, lengthOf(previous1), nullptr, 0, xs, ys,
                        xs != nullptr ? static_cast<int>(length) : 0, out, Engine::kMaxCandidates);
         if (accepted != nullptr) {
             *accepted = engine.decodedCorrection() != nullptr;
@@ -236,6 +236,85 @@ struct LoadedEngine {
         }
         return -1;
     }
+
+    /** Writes `previous` and then `word` after it, `times` times, as the keyboard learns them. */
+    void learnAfter(const char* previous, const char* word, uint32_t times) {
+        for (uint32_t i = 0; i < times; ++i) {
+            engine.learn(previous, std::strlen(previous), nullptr, 0, nullptr, 0);
+            engine.learn(word, std::strlen(word), previous, std::strlen(previous), nullptr, 0);
+        }
+    }
+
+    /**
+     * The score `expected` carries among the suggestions for `composing` after `previous1`, and
+     * `previous2` before it, either null for none; 0 if absent.
+     */
+    float scoreAfter(const char* composing, const char* expected, const char* previous1,
+                     const char* previous2 = nullptr) {
+        Candidate out[Engine::kMaxCandidates];
+        const int found = engine.suggest(composing, std::strlen(composing), previous1,
+                                         lengthOf(previous1), previous2, lengthOf(previous2), out,
+                                         Engine::kMaxCandidates);
+        return scoreIn(out, found, expected);
+    }
+
+    /** The score `expected` carries in autocorrect's list for `composing` after `previous1`. */
+    float correctionScoreAfter(const char* composing, const char* expected,
+                               const char* previous1) {
+        Candidate out[Engine::kMaxCandidates];
+        engine.suggest(composing, std::strlen(composing), previous1, lengthOf(previous1), nullptr,
+                       0, out, Engine::kMaxCandidates);
+        const Candidate* list = nullptr;
+        const int count = engine.corrections(&list);
+        return scoreIn(list, count, expected);
+    }
+
+    /** Autocorrect's word for `composing` after `previous1`, its score in `score`; empty for none. */
+    std::string bestAfter(const char* composing, const char* previous1, float* score) {
+        Candidate out[Engine::kMaxCandidates];
+        engine.suggest(composing, std::strlen(composing), previous1, lengthOf(previous1), nullptr,
+                       0, out, Engine::kMaxCandidates);
+        const Candidate* const best = engine.bestCorrection();
+        if (best == nullptr) {
+            return std::string();
+        }
+        *score = best->score;
+        uint32_t length = 0;
+        const char* const text = engine.candidateText(*best, &length);
+        return text != nullptr ? std::string(text, length) : std::string();
+    }
+
+    /** Whether `word` stands in autocorrect's list from the last request; false when absent. */
+    bool stands(const char* word) const {
+        const Candidate* list = nullptr;
+        const int count = engine.corrections(&list);
+        for (int i = 0; i < count; ++i) {
+            if (spells(list[i], word)) {
+                return engine.correctionConfident(i);
+            }
+        }
+        return false;
+    }
+
+    /** The score of `expected` among the `count` candidates at `list`; 0 if absent. */
+    float scoreIn(const Candidate* list, int count, const char* expected) const {
+        for (int i = 0; i < count; ++i) {
+            if (spells(list[i], expected)) {
+                return list[i].score;
+            }
+        }
+        return 0.0f;
+    }
+
+    /** Whether `candidate` is spelled `word`. */
+    bool spells(const Candidate& candidate, const char* word) const {
+        uint32_t length = 0;
+        const char* const text = engine.candidateText(candidate, &length);
+        return text != nullptr && length == std::strlen(word) && std::memcmp(text, word, length) == 0;
+    }
+
+    /** The length of `text`, 0 for null. */
+    static size_t lengthOf(const char* text) { return text != nullptr ? std::strlen(text) : 0; }
 };
 
 }  // namespace
@@ -675,6 +754,25 @@ void runEngineTests() {
         check(!pastName.empty() && pastName != nameMeant,
               "a name is never decoded to; the decoder reads past it to another word");
 
+        // A learned word's boost joins the decoder's evidence for it.
+        float base = 0.f;
+        loaded.leanTaps(typed, meant, 0.f, xs, ys);
+        loaded.decoded(typed, xs, ys, nullptr, &base);
+        const char* const learnedWord[1] = {meant};
+        const size_t learnedLength[1] = {sizeof(meant) - 1};
+        const int32_t uses[1] = {9};
+        loaded.engine.loadUserWords(learnedWord, learnedLength, uses, 1);
+        float boosted = 0.f;
+        loaded.decoded(typed, xs, ys, nullptr, &boosted);
+        checkRise(boosted, base, PersonalScore::wordBoostForCount(static_cast<uint32_t>(uses[0])),
+                  "a learned word's margin rises by its word boost");
+        loaded.engine.setPersonalModelEnabled(false);
+        float off = 0.f;
+        loaded.decoded(typed, xs, ys, nullptr, &off);
+        check(off == base, "and with the personal model off it reads as before");
+        loaded.engine.setPersonalModelEnabled(true);
+        loaded.engine.loadUserWords(nullptr, nullptr, nullptr, 0);
+
         const char* const personal[1] = {typed};
         const size_t personalLength[1] = {sizeof(typed) - 1};
         const int32_t once[1] = {1};
@@ -843,16 +941,16 @@ void runEngineTests() {
         check(keyboardCount == 1,
               "the same word reached from two active packs still appears once");
 
-        // answerAs makes the requests answer as the pack it names, until called with -1.
+        // answerAs makes the requests answer as the pack it names, until called with kNoPack.
         const int32_t verdict = loaded.engine.dominantPack();
         check(loaded.engine.answerAs(1), "an open, active pack can be answered as");
         check(loaded.rankOf("keyboarf", "keyboard") >= 0,
               "answering as pack 1 still corrects a typo through it");
         check(loaded.engine.dominantPack() == verdict,
               "answering as a pack leaves the detected language as it was");
-        check(loaded.engine.answerAs(-1), "-1 returns the requests to the evidence");
+        check(loaded.engine.answerAs(Engine::kNoPack), "kNoPack returns the requests to the evidence");
         check(!loaded.engine.answerAs(2), "a pack index with nothing loaded in it is refused");
-        check(!loaded.engine.answerAs(-2), "and so is one below -1");
+        check(!loaded.engine.answerAs(Engine::kNoPack - 1), "and so is one below kNoPack");
         check(loaded.rankOf("keyboarf", "keyboard") >= 0,
               "a refused pack leaves the requests answering as before");
     }
@@ -989,7 +1087,11 @@ void runEngineTests() {
         const char* next[1] = {"hello"};
         const size_t nextLengths[1] = {5};
         const int32_t pairCounts[1] = {5};
-        loaded.engine.loadUserBigrams(previous, previousLengths, next, nextLengths, pairCounts, 1);
+        // In the store of the test pack's language.
+        const char* languages[1] = {"ro"};
+        const size_t languageLengths[1] = {2};
+        loaded.engine.loadUserBigrams(languages, languageLengths, previous, previousLengths, next,
+                                      nextLengths, pairCounts, 1);
         auto slotsOf = [&](int* helloAt, int* markerAt) {
             Candidate out[Engine::kMaxCandidates];
             const int found = loaded.engine.suggest("", 0, nullptr, 0, nullptr, 0, out,
@@ -1057,6 +1159,658 @@ void runEngineTests() {
         check(model.countFor("borders", 7) == 2, "learning increments a count");
         check(model.countFor("Borders", 7) == 2, "and the lookup is case folded");
         check(model.countFor("absent", 6) == 0, "an unlearned word has no count");
+    }
+
+    section("pairs and triples are kept by their words");
+    {
+        UserModel model;
+        const char* words[] = {"The", "the", "Friday", "night", "on"};
+        const size_t wordLengths[] = {3, 3, 6, 5, 2};
+        const int32_t wordCounts[] = {4, 6, 9, 2, 7};
+        model.bulkLoad(words, wordLengths, wordCounts, 5);
+        const int32_t the = model.entryIndexFor("the", 3);
+        const int32_t friday = model.entryIndexFor("Friday", 6);
+        const int32_t night = model.entryIndexFor("night", 5);
+        const int32_t on = model.entryIndexFor("on", 2);
+
+        const char* previous[] = {"The", "the", "the"};
+        const size_t previousLengths[] = {3, 3, 3};
+        const char* next[] = {"Friday", "Friday", "night"};
+        const size_t nextLengths[] = {6, 6, 5};
+        const int32_t pairCounts[] = {2, 3, 4};
+        const char* languages[] = {"en", "en", "en"};
+        const size_t languageLengths[] = {2, 2, 2};
+        model.bulkLoadBigrams(languages, languageLengths, previous, previousLengths, next,
+                              nextLengths, pairCounts, 3);
+        const int32_t en = model.findStore("en", 2);
+        check(en >= 0 && model.findStore("ro", 2) < 0, "a store per language named");
+        check(model.pairsHeld(en) == 2, "the case forms of a pair load as one pair");
+        check(model.bigramCount(en, the, friday) == 5, "with their counts added");
+        check(model.successorTotal(en, the) == 9, "and their context's total counting both");
+        model.learnBigram(en, the, friday);
+        check(model.bigramCount(en, the, friday) == 6 && model.successorTotal(en, the) == 10,
+              "learning adds to the loaded pair and its total");
+
+        UserModel::Successor best[2];
+        check(model.successors(en, the, best, 2) == 2 &&
+                  best[0].entryIndex == static_cast<uint32_t>(friday) &&
+                  best[1].entryIndex == static_cast<uint32_t>(night),
+              "a context's words come most frequent first");
+        check(model.successors(en, the, best, 1) == 1 &&
+                  best[0].entryIndex == static_cast<uint32_t>(friday),
+              "and the first is the most frequent when only one is asked for");
+
+        const int32_t ro = model.storeFor("ro", 2);
+        model.learnBigram(ro, the, night);
+        check(model.bigramCount(ro, the, night) == 1 && model.bigramCount(en, the, night) == 4,
+              "another language's pairs are kept apart");
+
+        const uint32_t lower[] = {3};
+        model.loadPairTotals(languages, languageLengths, previous, previousLengths, lower, 1);
+        check(model.successorTotal(en, the) == 10,
+              "a loaded total below its pairs' counts leaves the total at them");
+        const uint32_t totals[] = {20};
+        model.loadPairTotals(languages, languageLengths, previous, previousLengths, totals, 1);
+        check(model.successorTotal(en, the) == 20, "a loaded total counts uses no longer held");
+        model.dropBigram(en, the, night);
+        check(model.bigramCount(en, the, night) == 0 && model.successorTotal(en, the) == 20,
+              "a dropped pair leaves its uses in the total");
+
+        const char* before2[] = {"on", "On"};
+        const size_t before2Lengths[] = {2, 2};
+        const char* before1[] = {"Friday", "friday"};
+        const size_t before1Lengths[] = {6, 6};
+        const char* after[] = {"night", "night"};
+        const size_t afterLengths[] = {5, 5};
+        const int32_t tripleCounts[] = {3, 2};
+        model.bulkLoadTrigrams(languages, languageLengths, before2, before2Lengths, before1,
+                               before1Lengths, after, afterLengths, tripleCounts, 2);
+        check(model.triplesHeld(en) == 1, "the case forms of a triple load as one triple");
+        check(model.trigramCount(en, on, friday, night) == 5 &&
+                  model.trigramTotal(en, on, friday) == 5,
+              "with their counts and their context's total added");
+        const uint32_t lowerTriple[] = {1};
+        model.loadTripleTotals(languages, languageLengths, before2, before2Lengths, before1,
+                               before1Lengths, lowerTriple, 1);
+        check(model.trigramTotal(en, on, friday) == 5, "and a triple context's total the same");
+        UserModel::Successor tripleBest[1];
+        check(model.trigramSuccessors(en, on, friday, tripleBest, 1) == 1 &&
+                  tripleBest[0].entryIndex == static_cast<uint32_t>(night) &&
+                  tripleBest[0].count == 5,
+              "and the context lists its word");
+    }
+
+    section("a word following itself is not learned, nor loaded");
+    {
+        UserModel model;
+        const int32_t store = model.storeFor("en", 2);
+        const int32_t so = model.learn("so", 2);
+        const int32_t very = model.learn("very", 4);
+        model.learnBigram(store, very, very);
+        model.learnTrigram(store, so, very, very);
+        check(model.pairsHeld(store) == 0 && model.triplesHeld(store) == 0,
+              "a word after itself is not learned");
+
+        const char* languages[] = {"en"};
+        const size_t languageLengths[] = {2};
+        const char* before[] = {"so"};
+        const size_t beforeLengths[] = {2};
+        const char* repeated[] = {"very"};
+        const size_t repeatedLengths[] = {4};
+        const int32_t counts[] = {3};
+        model.bulkLoadBigrams(languages, languageLengths, repeated, repeatedLengths, repeated,
+                              repeatedLengths, counts, 1);
+        model.bulkLoadTrigrams(languages, languageLengths, before, beforeLengths, repeated,
+                               repeatedLengths, repeated, repeatedLengths, counts, 1);
+        check(model.pairsHeld(store) == 0 && model.triplesHeld(store) == 0, "nor loaded");
+    }
+
+    section("a link's context words are held without being counted");
+    {
+        LoadedEngine taught;
+        check(taught.open(), "the engine loads");
+        LoadedEngine wordOnly;
+        check(wordOnly.open(), "a second engine loads");
+        LoadedEngine pairOnly;
+        check(pairOnly.open(), "a third engine loads");
+        // Words before that the pack only knows, never offers, and the user model holds no count for.
+        for (Engine* engine : {&taught.engine, &wordOnly.engine, &pairOnly.engine}) {
+            engine->setKnownWordReach(-std::numeric_limits<float>::infinity());
+        }
+        const char* const first = "keyboardist";
+        const char* const second = "timepiece";
+        for (uint32_t i = 0; i < Engine::kDefaultLearnAfterUses; ++i) {
+            taught.engine.learn("time", std::strlen("time"), first, std::strlen(first), nullptr, 0);
+            // The same word, with nothing before it.
+            wordOnly.engine.learn("time", std::strlen("time"), nullptr, 0, nullptr, 0);
+            // The pair's context has another word after it in both; the triple's only this one.
+            for (Engine* engine : {&taught.engine, &pairOnly.engine}) {
+                engine->learn("noapte", std::strlen("noapte"), second, std::strlen(second), nullptr,
+                              0);
+            }
+            taught.engine.learn("key", std::strlen("key"), second, std::strlen(second), first,
+                                std::strlen(first));
+            pairOnly.engine.learn("key", std::strlen("key"), second, std::strlen(second), nullptr,
+                                  0);
+        }
+        check(taught.scoreAfter("tim", "time", first) > wordOnly.scoreAfter("tim", "time", first),
+              "a pair after a word with no count lifts its word");
+        check(taught.rankOf("keyboardi", first) < 0,
+              "and the word before is never offered as a completion");
+        check(taught.scoreAfter("ke", "key", second, first) >
+                  pairOnly.scoreAfter("ke", "key", second, first),
+              "a triple whose words before have no count lifts its word past its pair");
+
+        UserModel model;
+        const char* words[] = {"time"};
+        const size_t wordLengths[] = {std::strlen("time")};
+        const int32_t wordCounts[] = {static_cast<int32_t>(Engine::kDefaultLearnAfterUses)};
+        model.bulkLoad(words, wordLengths, wordCounts, static_cast<int>(sizeof(words) / sizeof(words[0])));
+        const char* languages[] = {"en", "en"};
+        const size_t languageLengths[] = {std::strlen("en"), std::strlen("en")};
+        const char* before[] = {first, first};
+        const size_t beforeLengths[] = {std::strlen(first), std::strlen(first)};
+        const char* after[] = {"time", "absent"};
+        const size_t afterLengths[] = {std::strlen("time"), std::strlen("absent")};
+        const int32_t counts[] = {static_cast<int32_t>(Engine::kDefaultLearnAfterUses),
+                                  static_cast<int32_t>(Engine::kDefaultLearnAfterUses)};
+        model.bulkLoadBigrams(languages, languageLengths, before, beforeLengths, after,
+                              afterLengths, counts, static_cast<int>(sizeof(after) / sizeof(after[0])));
+        const int32_t en = model.findStore("en", std::strlen("en"));
+        const int32_t before1 = model.entryIndexFor(first, std::strlen(first));
+        const int32_t absent = model.entryIndexFor("absent", std::strlen("absent"));
+        check(model.pairsHeld(en) == 2 &&
+                  model.bigramCount(en, before1, model.entryIndexFor("time", std::strlen("time"))) ==
+                      Engine::kDefaultLearnAfterUses &&
+                  model.bigramCount(en, before1, absent) == Engine::kDefaultLearnAfterUses &&
+                  model.entryCount(static_cast<uint32_t>(absent)) == 0u,
+              "a loaded pair is held whatever its words' counts, a last word with none held uncounted");
+    }
+
+    section("dropped rows take out only the links they name");
+    {
+        UserModel model;
+        const char* words[] = {"on", "the", "friday", "night"};
+        const size_t wordLengths[] = {2, 3, 6, 5};
+        const int32_t wordCounts[] = {1, 1, 1, 1};
+        model.bulkLoad(words, wordLengths, wordCounts, 4);
+        const int32_t on = model.entryIndexFor("on", 2);
+        const int32_t the = model.entryIndexFor("the", 3);
+        const int32_t friday = model.entryIndexFor("friday", 6);
+        const int32_t night = model.entryIndexFor("night", 5);
+
+        const char* languages[] = {"en", "en"};
+        const size_t languageLengths[] = {2, 2};
+        const char* before2[] = {"on", "on"};
+        const size_t before2Lengths[] = {2, 2};
+        const char* before1[] = {"the", "the"};
+        const size_t before1Lengths[] = {3, 3};
+        const char* after[] = {"friday", "night"};
+        const size_t afterLengths[] = {6, 5};
+        const int32_t counts[] = {2, 3};
+        model.bulkLoadBigrams(languages, languageLengths, before1, before1Lengths, after,
+                              afterLengths, counts, 2);
+        model.bulkLoadTrigrams(languages, languageLengths, before2, before2Lengths, before1,
+                               before1Lengths, after, afterLengths, counts, 2);
+        const int32_t en = model.findStore("en", 2);
+
+        // A held link; one in a language no store holds; one naming a word not held.
+        const char* dropLanguages[] = {"en", "fr", "en"};
+        const size_t dropLanguageLengths[] = {2, 2, 2};
+        const char* dropBefore2[] = {"on", "on", "on"};
+        const size_t dropBefore2Lengths[] = {2, 2, 2};
+        const char* dropBefore1[] = {"the", "the", "the"};
+        const size_t dropBefore1Lengths[] = {3, 3, 3};
+        const char* dropAfter[] = {"night", "friday", "absent"};
+        const size_t dropAfterLengths[] = {5, 6, 6};
+        model.dropBigrams(dropLanguages, dropLanguageLengths, dropBefore1, dropBefore1Lengths,
+                          dropAfter, dropAfterLengths, 3);
+        check(model.pairsHeld(en) == 1 && model.bigramCount(en, the, night) == 0 &&
+                  model.bigramCount(en, the, friday) == 2 && model.successorTotal(en, the) == 5,
+              "a dropped row takes out its pair alone, the context keeping its uses");
+        model.dropTrigrams(dropLanguages, dropLanguageLengths, dropBefore2, dropBefore2Lengths,
+                           dropBefore1, dropBefore1Lengths, dropAfter, dropAfterLengths, 3);
+        check(model.triplesHeld(en) == 1 && model.trigramCount(en, on, the, night) == 0 &&
+                  model.trigramCount(en, on, the, friday) == 2 &&
+                  model.trigramTotal(en, on, the) == 5,
+              "and a triple the same");
+    }
+
+    section("a known word looked up again, and learned again with its pair and triple, allocates nothing");
+    {
+        // Longer than a string holds without the heap.
+        const char word[] = "pneumonoultramicroscopicsilicovolcanoconiosis";
+        const size_t length = std::strlen(word);
+        UserModel model;
+        model.learn(word, length);
+        long lookups = 0;
+        int32_t found = -1;
+        {
+            AllocationCount allocations;
+            found = model.entryIndexFor(word, length);
+            lookups = allocations.count();
+        }
+        check(found >= 0 && lookups == 0, "a known word is found without the heap");
+
+        LoadedEngine loaded;
+        loaded.open();
+        const char before2[] = "a";
+        const char before1[] = "rare";
+        const auto learnAll = [&]() {
+            loaded.engine.learn(before2, std::strlen(before2), nullptr, 0, nullptr, 0);
+            loaded.engine.learn(before1, std::strlen(before1), before2, std::strlen(before2), nullptr, 0);
+            loaded.engine.learn(word, length, before1, std::strlen(before1), before2, std::strlen(before2));
+        };
+        for (uint32_t i = 0; i < Engine::kDefaultLearnAfterUses; ++i) {
+            learnAll();
+        }
+        long learning = 0;
+        {
+            AllocationCount allocations;
+            learnAll();
+            learning = allocations.count();
+        }
+        check(learning == 0, "and learned again, with its pair and triple, without the heap");
+    }
+
+    section("among equal counts, the link recorded first after its context comes first");
+    {
+        UserModel model;
+        const int32_t store = model.storeFor("en", 2);
+        const int32_t context = model.learn("on", 2);
+        const int32_t later = model.learn("on", 2);
+        const int32_t x = model.learn("xx", 2);
+        const int32_t y = model.learn("yy", 2);
+        const int32_t z = model.learn("zz", 2);
+        check(context == later && x < y && y < z, "the words enter the model in the order x, y, z");
+        model.learnBigram(store, context, z);
+        model.learnBigram(store, context, y);
+        model.learnBigram(store, context, x);
+        UserModel::Successor listed[3];
+        check(model.successors(store, context, listed, 3) == 3 &&
+                  listed[0].entryIndex == static_cast<uint32_t>(z) &&
+                  listed[1].entryIndex == static_cast<uint32_t>(y) &&
+                  listed[2].entryIndex == static_cast<uint32_t>(x),
+              "pairs used as often come in the order they were recorded");
+        check(model.successors(store, context, listed, 1) == 1 &&
+                  listed[0].entryIndex == static_cast<uint32_t>(z),
+              "and the first recorded is the one kept when one is asked for");
+        model.dropBigram(store, context, z);
+        check(model.successors(store, context, listed, 3) == 2 &&
+                  listed[0].entryIndex == static_cast<uint32_t>(y) &&
+                  listed[1].entryIndex == static_cast<uint32_t>(x),
+              "a dropped pair leaves the others in their order");
+
+        model.learnTrigram(store, context, context, z);
+        model.learnTrigram(store, context, context, y);
+        check(model.trigramSuccessors(store, context, context, listed, 3) == 2 &&
+                  listed[0].entryIndex == static_cast<uint32_t>(z) &&
+                  listed[1].entryIndex == static_cast<uint32_t>(y),
+              "triples used as often come in the order they were recorded");
+
+        UserModel loaded;
+        loaded.learn("on", 2);
+        loaded.learn("xx", 2);
+        loaded.learn("yy", 2);
+        const char* languages[] = {"en", "en"};
+        const size_t languageLengths[] = {2, 2};
+        const char* previous[] = {"on", "on"};
+        const size_t previousLengths[] = {2, 2};
+        const char* next[] = {"yy", "xx"};
+        const size_t nextLengths[] = {2, 2};
+        const int32_t counts[] = {1, 1};
+        const int pairs = static_cast<int>(sizeof(counts) / sizeof(counts[0]));
+        loaded.bulkLoadBigrams(languages, languageLengths, previous, previousLengths, next,
+                               nextLengths, counts, pairs);
+        const int32_t en = loaded.findStore("en", 2);
+        check(loaded.successors(en, loaded.entryIndexFor("on", 2), listed, 3) == pairs &&
+                  listed[0].entryIndex == static_cast<uint32_t>(loaded.entryIndexFor("yy", 2)),
+              "a load keeps the order the rows come in");
+    }
+
+    section("every language keeps a store");
+    {
+        UserModel model;
+        const int32_t previous = model.learn("on", 2);
+        const int32_t next = model.learn("it", 2);
+        bool everyStore = true;
+        int stores = 0;
+        for (char letter = 'a'; letter <= 'z'; ++letter) {
+            const char language[] = {letter, letter};
+            const int32_t store = model.storeFor(language, sizeof(language));
+            model.learnBigram(store, previous, next);
+            everyStore = everyStore && store == stores &&
+                         model.bigramCount(store, previous, next) == 1;
+            ++stores;
+        }
+        check(everyStore, "each of the alphabet's two-letter languages learns into a store of its own");
+    }
+
+    section("a spelling keeps its marks, and only case is folded");
+    {
+        UserModel model;
+        model.learn("masă", std::strlen("masă"));
+        model.learn("masă", std::strlen("masă"));
+        model.learn("masa", 4);
+        model.learn("Masă", std::strlen("Masă"));
+        check(model.countFor("masă", std::strlen("masă")) == 3, "a capital is the same spelling");
+        check(model.countFor("masa", 4) == 1, "a missing mark is another spelling");
+        check(model.entryIndexFor("masa", 4) != model.entryIndexFor("masă", std::strlen("masă")),
+              "each spelling is its own entry");
+
+        uint32_t folded[8];
+        const int length = foldUtf8("mas", 3, folded, 8);
+        UserModel::Completion found[4];
+        check(model.completions(folded, length, found, 4) == 2,
+              "typed without marks, both spellings are reached");
+
+        const int32_t store = model.storeFor("ro", 2);
+        const int32_t pe = model.learn("pe", 2);
+        model.learnBigram(store, pe, model.entryIndexFor("masă", std::strlen("masă")));
+        check(model.bigramCount(store, pe, model.entryIndexFor("masa", 4)) == 0,
+              "a pair names one spelling");
+
+        const char* words[] = {"Ștefan", "ștefan", "stefan"};
+        const size_t lengths[] = {std::strlen("Ștefan"), std::strlen("ștefan"), 6};
+        const int32_t counts[] = {2, 3, 4};
+        model.bulkLoad(words, lengths, counts, 3);
+        check(model.countFor("ștefan", std::strlen("ștefan")) == 5 &&
+                  model.countFor("stefan", 6) == 4,
+              "a load adds case forms together and keeps mark forms apart");
+    }
+
+    section("a full store keeps every link until the budget runs, and every total");
+    {
+        constexpr int kSide = 100;
+        static_assert(kSide * kSide == UserModel::kMaxBigrams, "one pair per (first, second)");
+        static_assert(kSide * kSide == UserModel::kMaxTrigrams, "one triple per (first, second)");
+        UserModel model;
+        const int32_t store = model.storeFor("en", 2);
+        int32_t first[kSide];
+        int32_t second[kSide];
+        char word[4] = {'q', 'a', 'a', '\0'};
+        for (int i = 0; i < 2 * kSide; ++i) {
+            word[1] = static_cast<char>('a' + i / 26);
+            word[2] = static_cast<char>('a' + i % 26);
+            const int32_t entry = model.learn(word, 3);
+            (i < kSide ? first[i] : second[i - kSide]) = entry;
+        }
+        const int32_t last = model.learn("zzz", 3);
+
+        for (int i = 0; i < kSide; ++i) {
+            for (int j = 0; j < kSide; ++j) {
+                model.learnBigram(store, first[i], second[j]);
+                model.learnBigram(store, first[i], second[j]);
+                model.learnTrigram(store, first[i], second[j], last);
+                model.learnTrigram(store, first[i], second[j], last);
+            }
+        }
+        // One link of each kind used once more than the rest.
+        model.learnBigram(store, first[0], second[0]);
+        model.learnTrigram(store, first[0], second[0], last);
+
+        model.learnBigram(store, last, first[0]);
+        model.learnTrigram(store, last, first[0], second[0]);
+        check(model.pairsHeld(store) == UserModel::kMaxBigrams + 1,
+              "a full store of pairs takes one more");
+        check(model.triplesHeld(store) == UserModel::kMaxTrigrams + 1, "and so does one of triples");
+        check(model.bigramCount(store, last, first[0]) == 1 &&
+                  model.trigramCount(store, last, first[0], second[0]) == 1,
+              "the new link is held");
+
+        int dropped = 0;
+        bool totalsAgree = true;
+        UserModel::Successor listed[kSide];
+        for (int i = 0; i < kSide; ++i) {
+            const int found = model.successors(store, first[i], listed, kSide);
+            uint32_t sum = 0;
+            for (int k = 0; k < found; ++k) {
+                sum += listed[k].count;
+            }
+            dropped += kSide - found;
+            totalsAgree = totalsAgree && sum == model.successorTotal(store, first[i]);
+        }
+        check(dropped == 0, "no pair made room");
+        check(model.bigramCount(store, first[0], second[0]) == 3, "the most used one kept its count");
+        check(totalsAgree, "every context's total counts its pairs");
+
+        int triplesDropped = 0;
+        bool tripleTotalsAgree = true;
+        for (int i = 0; i < kSide; ++i) {
+            for (int j = 0; j < kSide; ++j) {
+                const uint32_t count = model.trigramCount(store, first[i], second[j], last);
+                triplesDropped += count == 0 ? 1 : 0;
+                tripleTotalsAgree =
+                    tripleTotalsAgree && model.trigramTotal(store, first[i], second[j]) == count;
+            }
+        }
+        check(triplesDropped == 0, "no triple made room");
+        check(tripleTotalsAgree, "every two-word context's total counts its triples");
+
+        std::set<std::pair<int32_t, int32_t>> listedPairs;
+        bool listedAgree = true;
+        for (int i = 0; i < model.pairsHeld(store); ++i) {
+            int32_t previous = -1;
+            int32_t next = -1;
+            uint32_t count = 0;
+            model.pairAt(store, i, &previous, &next, &count);
+            listedAgree = listedAgree && count > 0 && count == model.bigramCount(store, previous, next);
+            listedPairs.emplace(previous, next);
+        }
+        size_t heldPairs = model.bigramCount(store, last, first[0]) > 0 ? 1 : 0;
+        for (int i = 0; i < kSide; ++i) {
+            for (int j = 0; j < kSide; ++j) {
+                heldPairs += model.bigramCount(store, first[i], second[j]) > 0 ? 1 : 0;
+            }
+        }
+        check(listedAgree, "each pair listed carries its words and its count");
+        check(listedPairs.size() == static_cast<size_t>(model.pairsHeld(store)), "no pair is listed twice");
+        check(listedPairs.size() == heldPairs, "and every pair held is listed");
+    }
+
+    section("a learned link is stamped with its context's observations and its store's clock");
+    {
+        UserModel model;
+        const int32_t store = model.storeFor("en", 2);
+        const int32_t the = model.learn("the", 3);
+        const int32_t cat = model.learn("cat", 3);
+        const int32_t dog = model.learn("dog", 3);
+        const int32_t on = model.learn("on", 2);
+        model.learnBigram(store, the, cat);
+        model.learnBigram(store, the, dog);
+        model.learnBigram(store, the, cat);
+        UserModel::ContextLink links[2] = {};
+        UserModel::ContextCount context{};
+        check(model.pairsAfter(store, the, links, 2, &context) == 2, "the context lists its two pairs");
+        check(context.total == 3u && context.seen == 3u, "its total and observations count every use");
+        check(links[0].nextIndex == cat && links[0].count == 2u && links[0].contextSeen == 3u &&
+                  links[1].nextIndex == dog && links[1].count == 1u && links[1].contextSeen == 2u,
+              "in the order recorded, each stamped with the observations at its last use");
+        uint64_t catSeen = 0;
+        uint64_t dogSeen = 0;
+        model.pairAt(store, 0, nullptr, nullptr, nullptr, &catSeen);
+        model.pairAt(store, 1, nullptr, nullptr, nullptr, &dogSeen);
+        check(catSeen == 3u && dogSeen == 2u, "and with the store's pair clock at its last use");
+
+        model.learnTrigram(store, on, the, cat);
+        uint64_t tripleSeen = 0;
+        uint32_t tripleTotal = 0;
+        model.tripleAt(store, 0, nullptr, nullptr, nullptr, nullptr, &tripleSeen, &tripleTotal);
+        check(tripleSeen == 1u && tripleTotal == 1u, "the triples keep a clock of their own");
+        check(model.triplesAfter(store, on, the, links, 2, &context) == 1 && context.seen == 1u &&
+                  links[0].contextSeen == 1u,
+              "and their contexts their own observations");
+        check(model.pairsAfter(store, dog, links, 2, &context) == 0 && context.total == 0u &&
+                  context.seen == 0u,
+              "a context not held lists nothing and counts nothing");
+    }
+
+    section("a load keeps the links' stamps, the contexts' observations and the stores' clocks");
+    {
+        UserModel model;
+        const char* words[] = {"the", "cat", "dog", "on"};
+        const size_t wordLengths[] = {3, 3, 3, 2};
+        const int32_t wordCounts[] = {1, 1, 1, 1};
+        model.bulkLoad(words, wordLengths, wordCounts, 4);
+        const int32_t the = model.entryIndexFor("the", 3);
+        const int32_t dog = model.entryIndexFor("dog", 3);
+        const int32_t on = model.entryIndexFor("on", 2);
+
+        const char* languages[] = {"en"};
+        const size_t languageLengths[] = {2};
+        const char* previous[] = {"the"};
+        const size_t previousLengths[] = {3};
+        const char* next[] = {"cat"};
+        const size_t nextLengths[] = {3};
+        const int32_t counts[] = {4};
+        const uint64_t contextSeen[] = {7};
+        const uint64_t languageSeen[] = {40};
+        model.bulkLoadBigrams(languages, languageLengths, previous, previousLengths, next,
+                              nextLengths, counts, 1, contextSeen, languageSeen);
+        const uint32_t totals[] = {9};
+        const uint64_t seen[] = {12};
+        model.loadPairTotals(languages, languageLengths, previous, previousLengths, totals, 1, seen);
+        const uint64_t pairClocks[] = {40};
+        const uint64_t tripleClocks[] = {5};
+        model.loadClocks(languages, languageLengths, pairClocks, tripleClocks, 1);
+        const int32_t store = model.findStore("en", 2);
+
+        UserModel::ContextLink links[2] = {};
+        UserModel::ContextCount context{};
+        check(model.pairsAfter(store, the, links, 2, &context) == 1 && links[0].contextSeen == 7u &&
+                  context.total == 9u && context.seen == 12u,
+              "a loaded pair keeps its stamp and its context its total and observations");
+        uint64_t loadedSeen = 0;
+        model.pairAt(store, 0, nullptr, nullptr, nullptr, &loadedSeen);
+        check(loadedSeen == 40u, "and its language's stamp");
+
+        model.learnBigram(store, the, dog);
+        model.learnTrigram(store, on, the, dog);
+        uint64_t dogSeen = 0;
+        uint64_t tripleSeen = 0;
+        model.pairAt(store, 1, nullptr, nullptr, nullptr, &dogSeen);
+        model.tripleAt(store, 0, nullptr, nullptr, nullptr, nullptr, &tripleSeen);
+        check(model.pairsAfter(store, the, links, 2, &context) == 2 && links[1].contextSeen == 13u &&
+                  dogSeen == 41u && tripleSeen == 6u,
+              "learning goes on from the loaded observations and clocks");
+
+        model.loadClocks(languages, languageLengths, nullptr, nullptr, 0);
+        model.learnBigram(store, dog, the);
+        uint64_t afterReset = 0;
+        model.pairAt(store, 2, nullptr, nullptr, nullptr, &afterReset);
+        check(afterReset == 1u, "a store no clock row names starts again at zero");
+    }
+
+    section("a phrase is learned only from learnable words");
+    {
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads");
+        const uint32_t uses = Engine::kDefaultLearnAfterUses;
+        check(loaded.engine.learnable("time", 4), "a word the pack knows is learnable");
+        check(!loaded.engine.learnable("zqxv", 4), "one it does not, never written, is not");
+        check(loaded.engine.learnable(Engine::kUserSentenceStart, Engine::kUserSentenceStartLength),
+              "the sentence start always is");
+        for (uint32_t i = 0; i + 1 < uses; ++i) {
+            loaded.engine.learn("zqxv", 4, nullptr, 0, nullptr, 0);
+        }
+        check(!loaded.engine.learnable("zqxv", 4), "nor one written once short of learn-after");
+        loaded.engine.learn("zqxv", 4, nullptr, 0, nullptr, 0);
+        check(loaded.engine.learnable("zqxv", 4), "written learn-after times, it is");
+        loaded.engine.learn("zqxw", 4, nullptr, 0, nullptr, 0, false, true);
+        check(loaded.engine.learnable("zqxw", 4), "and so is a word chosen on purpose once");
+
+        check(!loaded.engine.learn("time", 4, "zqxy", 4, nullptr, 0).pair,
+              "a pair after a word that is not learnable is not recorded");
+        for (uint32_t i = 0; i < uses; ++i) {
+            loaded.engine.learn("zqxy", 4, nullptr, 0, nullptr, 0);
+        }
+        check(loaded.engine.learn("time", 4, "zqxy", 4, nullptr, 0).pair,
+              "and is once that word is learned");
+
+        for (uint32_t i = 0; i + 1 < uses; ++i) {
+            loaded.engine.learn("zqxt", 4, nullptr, 0, nullptr, 0);
+        }
+        loaded.engine.learn("zqxt", 4, "time", 4, nullptr, 0, false, false, nullptr, 0, false);
+        check(!loaded.engine.learnable("zqxt", 4), "a word learned without its tally is not counted");
+        loaded.engine.learn("zqxt", 4, nullptr, 0, nullptr, 0);
+        check(loaded.engine.learnable("zqxt", 4), "and counts with it");
+
+        Engine bare;
+        check(bare.create(), "an engine with no pack is created");
+        check(bare.learnable("zqxv", 4), "with no pack active, every word is learnable");
+        bare.destroy();
+
+        UserModel model;
+        const char* languages[] = {"en"};
+        const size_t languageLengths[] = {2};
+        const char* before[] = {"is"};
+        const size_t beforeLengths[] = {2};
+        const char* after[] = {"a"};
+        const size_t afterLengths[] = {1};
+        const int32_t counts[] = {static_cast<int32_t>(uses)};
+        model.bulkLoadBigrams(languages, languageLengths, before, beforeLengths, after, afterLengths,
+                              counts, 1);
+        check(model.pairsHeld(model.findStore("en", 2)) == 1,
+              "a loaded pair whose last word is one letter is held");
+    }
+
+    section("a learn reports which links it recorded");
+    {
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads");
+        const Engine::Learned both = loaded.engine.learn("time", 4, "the", 3, "acum", 4, false,
+                                                        false, "en", 2);
+        check(both.pair && both.triple, "a pair and a triple, both recorded");
+        const Engine::Learned repeated = loaded.engine.learn("time", 4, "time", 4, "the", 3, false,
+                                                            false, "en", 2);
+        check(!repeated.pair && !repeated.triple, "a word after itself records neither");
+        const char* const tatweels = "\u0640\u0640";
+        const Engine::Learned folded = loaded.engine.learn("time", 4, tatweels,
+                                                          std::strlen(tatweels), "acum", 4, false,
+                                                          false, "en", 2);
+        check(!folded.pair && !folded.triple, "nor a word after one that folds to nothing");
+        const Engine::Learned alone = loaded.engine.learn("time", 4, nullptr, 0, nullptr, 0, false,
+                                                         false, "en", 2);
+        check(!alone.pair && !alone.triple, "nor a word with none before it");
+    }
+
+    section("the engine reads a context's links and a store's links by their words");
+    {
+        Engine unopened;
+        UserModel::ContextLink links[2] = {};
+        UserModel::ContextCount context{1u, 1u};
+        check(unopened.userContextLinks("en", 2, nullptr, 0, "the", 3, links, 2, &context) == 0 &&
+                  context.total == 0u && context.seen == 0u &&
+                  unopened.userLinksHeld("en", 2, false) == 0,
+              "an engine not created reads nothing");
+
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads");
+        loaded.engine.learn("time", 4, "The", 3, "acum", 4, false, false, "en", 2);
+        check(loaded.engine.userContextLinks("en", 2, nullptr, 0, "the", 3, links, 2, &context) ==
+                      1 &&
+                  context.total == 1u && context.seen == 1u && links[0].count == 1u,
+              "a held context, found case aside, lists its pair and counts its use");
+        uint32_t keyLength = 0;
+        const char* key = loaded.engine.userEntryKey(static_cast<uint32_t>(links[0].nextIndex),
+                                                     &keyLength);
+        check(key != nullptr && std::string(key, keyLength) == "time", "named by its key");
+        check(loaded.engine.userContextLinks("en", 2, "acum", 4, "the", 3, links, 2, &context) == 1 &&
+                  context.seen == 1u,
+              "and a triple's context its triple");
+        check(loaded.engine.userContextLinks("en", 2, nullptr, 0, "time", 4, links, 2, &context) ==
+                      0 &&
+                  context.total == 0u && context.seen == 0u,
+              "an empty context lists nothing and counts nothing");
+        check(loaded.engine.userLinksHeld("en", 2, false) == 1 &&
+                  loaded.engine.userLinksHeld("en", 2, true) == 1 &&
+                  loaded.engine.userLinksHeld("ro", 2, false) == 0,
+              "each store counts its own pairs and triples");
+        Engine::StoredLink stored{};
+        check(loaded.engine.userLinkAt("en", 2, true, 0, &stored) && stored.count == 1u &&
+                  stored.languageSeen == 1u && stored.contextTotal == 1u &&
+                  stored.previous2Index >= 0 && !loaded.engine.userLinkAt("en", 2, true, 1, &stored),
+              "a store's links are read one by one, with their stamps and totals");
     }
 
     section("a name missing its apostrophe");
@@ -1147,6 +1901,19 @@ void runEngineTests() {
         const Candidate* none = nullptr;
         check(loaded.engine.corrections(&none) == 0, "and an empty list");
 
+        // A word too long to search answers with nothing left by the request before it.
+        const char* const typo = "thexx";
+        loaded.engine.suggest(typo, std::strlen(typo), nullptr, 0, nullptr, 0, out,
+                              Engine::kMaxCandidates);
+        check(loaded.engine.corrections(&none) > 0, "a typo has corrections");
+        const std::string overlong(Engine::kMaxComposing + 1, 'a');
+        loaded.engine.suggest(overlong.c_str(), overlong.size(), nullptr, 0, nullptr, 0, out,
+                              Engine::kMaxCandidates);
+        check(loaded.engine.corrections(&none) == 0,
+              "a word past kMaxComposing letters has no corrections");
+        check(loaded.engine.bestCorrection() == nullptr, "nor a best correction");
+        check(loaded.engine.decodedCorrection() == nullptr, "nor a decoded one");
+
         // The list: sorted, at most the respelling plus the heap, every entry resolving.
         loaded.engine.suggest("thexx", 5, nullptr, 0, nullptr, 0, out, Engine::kMaxCandidates);
         const Candidate* list = nullptr;
@@ -1224,6 +1991,19 @@ void runEngineTests() {
         loaded.engine.setLearnAfterUses(3);
     }
 
+    section("a learn-after setting past the largest asks for the largest");
+    {
+        LoadedEngine loaded;
+        loaded.open();
+        const char* words[1] = {"borderkeysmost"};
+        const size_t lengths[1] = {std::strlen(words[0])};
+        const int32_t counts[1] = {static_cast<int32_t>(Engine::kMaxLearnAfterUses)};
+        loaded.engine.loadUserWords(words, lengths, counts, 1);
+        loaded.engine.setLearnAfterUses(static_cast<int>(Engine::kMaxLearnAfterUses) + 1);
+        check(loaded.rankOf("borderkeysmos", "borderkeysmost") == 0,
+              "a word used the largest number of times is learned");
+    }
+
     section("a word's case forms count together");
     {
         // The personal dictionary keeps "Borderkeysform" from a sentence start apart from
@@ -1260,8 +2040,11 @@ void runEngineTests() {
         check(loaded.engine.knownSpelling("borderkeysmine", 14, out, sizeof(out)) == 14,
               "chosen once, it is at once");
 
-        // A pair answers to the same number of uses.
+        // A pair answers to the same number of uses, its word learned first.
         loaded.engine.learn("keyboard", 8, nullptr, 0, nullptr, 0);
+        for (uint32_t i = 0; i < Engine::kDefaultLearnAfterUses; ++i) {
+            loaded.engine.learn("borderkeysnext", 14, nullptr, 0, nullptr, 0);
+        }
         loaded.engine.learn("borderkeysnext", 14, "keyboard", 8, nullptr, 0);
         check(loaded.rankOf("", "borderkeysnext", "keyboard") < 0,
               "a word written once after another is not predicted after it");
@@ -1300,8 +2083,13 @@ void runEngineTests() {
         loaded.open();
 
         // Writing "vreau sa ma duc la" a few times, the way the service does it: each word is
-        // learned with the one before it as context.
+        // learned with the one before it as context, once each word is learned.
         const char* phrase[] = {"vreau", "sa", "ma", "duc", "la"};
+        for (const char* word : phrase) {
+            for (uint32_t i = 0; i < Engine::kDefaultLearnAfterUses; ++i) {
+                loaded.engine.learn(word, std::strlen(word), nullptr, 0, nullptr, 0);
+            }
+        }
         for (int round = 0; round < 4; ++round) {
             const char* previous = nullptr;
             for (const char* word : phrase) {
@@ -1326,27 +2114,149 @@ void runEngineTests() {
               "an unrelated word does not become a prediction");
     }
 
+    section("pairs are read in the language being written");
+    {
+        LoadedEngine loaded;
+        loaded.open();
+        const char* phrase[] = {"vreau", "sa", "ma"};
+        for (const char* word : phrase) {
+            for (uint32_t i = 0; i < Engine::kDefaultLearnAfterUses; ++i) {
+                loaded.engine.learn(word, std::strlen(word), nullptr, 0, nullptr, 0);
+            }
+        }
+        for (int round = 0; round < 4; ++round) {
+            const char* previous = nullptr;
+            for (const char* word : phrase) {
+                loaded.engine.learn(word, std::strlen(word), previous,
+                                    previous != nullptr ? std::strlen(previous) : 0, nullptr, 0,
+                                    false, false, "en", 2);
+                previous = word;
+            }
+        }
+        check(loaded.rankOf("", "sa", "vreau") != 0,
+              "pairs learned under another language are not read while the pack's is");
+        check(std::strcmp(loaded.engine.personalLanguage(), "ro") == 0,
+              "the answer names the language of the pack it read");
+
+        for (int round = 0; round < 4; ++round) {
+            const char* previous = nullptr;
+            for (const char* word : phrase) {
+                loaded.engine.learn(word, std::strlen(word), previous,
+                                    previous != nullptr ? std::strlen(previous) : 0, nullptr, 0);
+                previous = word;
+            }
+        }
+        check(loaded.rankOf("", "sa", "vreau") == 0,
+              "with no language named, the pair goes to the language being written");
+    }
+
+    section("the personal language follows the pack the engine answers in");
+    {
+        LoadedEngine loaded;
+        check(loaded.open(), "the engine loads");
+        check(loaded.openSecondPack("en-US"), "a second pack loads under another tag");
+        const char* tags[] = {"ro-RO", "en-US"};
+        const float lighter = 1.0f;
+        const float weights[] = {lighter, lighter + lighter};
+        const int packs = static_cast<int>(sizeof(tags) / sizeof(tags[0]));
+        loaded.engine.setActiveLanguages(tags, weights, packs);
+        const int englishSlot = 1;
+        const auto answeredIn = [&loaded](const char* language) {
+            check(loaded.rankOf("keyboar", "keyboard") >= 0, "the request is answered");
+            return std::strcmp(loaded.engine.personalLanguage(), language) == 0;
+        };
+
+        check(answeredIn("en"), "with nothing decided, the heavier pack's language is read");
+        loaded.engine.setPreferredLanguage("ro-RO");
+        check(answeredIn("ro"), "a preferred language is read before the heavier pack's");
+        check(loaded.engine.answerAs(englishSlot), "the lighter pack's slot can be answered as");
+        check(answeredIn("en"), "the pack answerAs names is read before the preferred one");
+        check(loaded.engine.answerAs(Engine::kNoPack), "kNoPack returns the requests to the preference");
+
+        {
+            const Engine::AnsweringScope answering(loaded.engine, englishSlot);
+            check(answering.held(), "a scope takes an open, active pack");
+            check(answeredIn("en"), "inside it, the requests read that pack's language");
+        }
+        check(answeredIn("ro"), "after it, the preference's again");
+        {
+            const Engine::AnsweringScope refused(loaded.engine, packs);
+            check(!refused.held(), "a scope over the slot past the loaded packs holds nothing");
+            check(answeredIn("ro"), "and the requests read as before");
+        }
+
+        // A word too long to search names the language its own request reads.
+        {
+            const Engine::AnsweringScope answering(loaded.engine, englishSlot);
+            check(answeredIn("en"), "a request answered as the lighter pack names its language");
+        }
+        {
+            const std::string overlong(Engine::kMaxComposing + 1, 'a');
+            Candidate out[Engine::kMaxCandidates];
+            loaded.engine.suggest(overlong.c_str(), overlong.size(), nullptr, 0, nullptr, 0, out,
+                                  Engine::kMaxCandidates);
+            check(std::strcmp(loaded.engine.personalLanguage(), "ro") == 0,
+                  "a word past kMaxComposing letters names the language its request reads");
+        }
+
+        // Learned with no language while the preference names ro, after a request read en.
+        loaded.engine.setPreferredLanguage(nullptr);
+        check(answeredIn("en"), "cleared, the heavier pack's language is read again");
+        loaded.engine.setPreferredLanguage("ro-RO");
+        const char* phrase[] = {"vreau", "sa", "ma"};
+        for (const char* word : phrase) {
+            for (uint32_t i = 0; i < Engine::kDefaultLearnAfterUses; ++i) {
+                loaded.engine.learn(word, std::strlen(word), nullptr, 0, nullptr, 0);
+            }
+        }
+        for (uint32_t round = 0; round < Engine::kDefaultLearnAfterUses; ++round) {
+            const char* previous = nullptr;
+            for (const char* word : phrase) {
+                loaded.engine.learn(word, std::strlen(word), previous,
+                                    previous != nullptr ? std::strlen(previous) : 0, nullptr, 0);
+                previous = word;
+            }
+        }
+        check(loaded.rankOf("", "sa", "vreau") == 0,
+              "with no language named, the pair goes to the language being written at the call");
+        check(std::strcmp(loaded.engine.personalLanguage(), "ro") == 0, "which the answer names");
+        loaded.engine.setPreferredLanguage(nullptr);
+        check(loaded.rankOf("", "sa", "vreau") != 0,
+              "with the heavier pack read, the same request no longer leads with the pair");
+
+        loaded.engine.setActiveLanguages(nullptr, nullptr, 0);
+        Candidate out[Engine::kMaxCandidates];
+        loaded.engine.suggest("keyboar", std::strlen("keyboar"), nullptr, 0, nullptr, 0, out,
+                              Engine::kMaxCandidates);
+        check(std::strcmp(loaded.engine.personalLanguage(), kUnknownLanguage) == 0,
+              "with no pack active, the answer names the unknown language");
+    }
+
     section("a learned chain leads the strip");
     {
         LoadedEngine loaded;
         loaded.open();
+        LoadedEngine unwritten;
+        unwritten.open();
 
-        // Two phrases starting from the same word, one written three times and one once: the
-        // repeated one leads. Both words of each phrase are learned, as the service does.
-        const auto write = [&loaded](const char* first, const char* second) {
-            loaded.engine.learn(first, std::strlen(first), nullptr, 0, nullptr, 0);
-            loaded.engine.learn(second, std::strlen(second), first, std::strlen(first),
-                                nullptr, 0);
+        // Two phrases from the same word: one written as many times as learning asks, in both
+        // engines, and one written once, in the first only. Both words of a phrase are learned.
+        const auto write = [](LoadedEngine& into, const char* first, const char* second) {
+            into.engine.learn(first, std::strlen(first), nullptr, 0, nullptr, 0);
+            into.engine.learn(second, std::strlen(second), first, std::strlen(first),
+                              nullptr, 0);
         };
-        for (int round = 0; round < 3; ++round) {
-            write("the", "them");
+        for (uint32_t round = 0; round < Engine::kDefaultLearnAfterUses; ++round) {
+            write(loaded, "the", "them");
+            write(unwritten, "the", "them");
         }
-        write("the", "test");
+        write(loaded, "the", "test");
 
         check(loaded.rankOf("", "them", "the") == 0,
-              "the phrase written three times leads");
-        check(loaded.rankOf("", "test", "the") != 0,
-              "and the one written once is not learned, so does not lead");
+              "the phrase written as many times as learning asks leads");
+        check(unwritten.rankOf("", "them", "the") == 0, "as it does where the other is unwritten");
+        check(loaded.rankOf("", "test", "the") == unwritten.rankOf("", "test", "the"),
+              "and the one written once is not learned: it ranks where it does unwritten");
 
         // The dictionary's own candidates are not thrown away; they sit behind the personal
         // ones rather than being replaced by them.
@@ -1385,6 +2295,319 @@ void runEngineTests() {
         }
         check(loaded.rankOf("test", "test") == 0, "the word typed exactly is first");
         check(loaded.rankOf("test", "testing") == 1, "the learned word follows it, not replaces it");
+    }
+
+    section("a learned context adds its share, the triple before the pair");
+    {
+        UserModel model;
+        const int32_t store = model.storeFor("ro", 2);
+        const auto entry = [&model](const char* word) {
+            return model.reserve(word, std::strlen(word));
+        };
+        const int32_t the = entry("the");
+        const int32_t border = entry("border");
+        const int32_t key = entry("key");
+        const int32_t theme = entry("theme");
+        const int32_t there = entry("there");
+        const uint32_t uses = Engine::kDefaultLearnAfterUses;
+        const uint32_t more = uses + 1;
+        for (uint32_t i = 0; i < uses; ++i) {
+            model.learnBigram(store, key, theme);
+            model.learnTrigram(store, the, key, theme);
+        }
+        for (uint32_t i = 0; i < more; ++i) {
+            model.learnBigram(store, key, there);
+            model.learnTrigram(store, border, key, there);
+        }
+        const uint32_t keyTotal = uses + more;
+        const auto bonusOf = [](const PersonalScore& personal, int32_t word) {
+            return personal.contextBonus(static_cast<uint32_t>(word));
+        };
+
+        PersonalScore personal(model, uses);
+        personal.resolve(store, key, the);
+        check(bonusOf(personal, theme) == personalShareOf(uses, uses),
+              "after two words, a word takes its triple's share of them");
+        check(bonusOf(personal, there) == personalShareOf(more, keyTotal),
+              "a word with no triple there takes its pair's share of the last word");
+        check(bonusOf(personal, border) == 0.0f, "a word never written there takes nothing");
+        check(personal.ceiling() == PersonalScore::kMaxUserBoost +
+                                        std::max(personalShareOf(uses, uses), personalShareOf(more, keyTotal)),
+              "the ceiling is the word boost's cap and the largest share there");
+        check(personal.ceiling() <= PersonalScore::kMaxPersonalScore,
+              "within the most the personal score adds");
+
+        personal.resolve(store, key, -1);
+        check(bonusOf(personal, theme) == personalShareOf(uses, keyTotal),
+              "after one word, a word takes its pair's share");
+
+        personal.setLearnAfterUses(more);
+        personal.resolve(store, key, the);
+        check(bonusOf(personal, theme) == 0.0f,
+              "a triple below learn-after gives way to the pair, and a pair below it to nothing");
+        check(bonusOf(personal, there) == personalShareOf(more, keyTotal),
+              "while a pair that reached it still counts");
+        check(personal.ceiling() == PersonalScore::kMaxUserBoost + personalShareOf(more, keyTotal),
+              "and the ceiling follows what counts");
+
+        personal.setLearnAfterUses(more + 1);
+        personal.resolve(store, key, the);
+        check(personal.ceiling() == PersonalScore::kMaxUserBoost,
+              "a context with nothing learned leaves the ceiling at the word boost's cap");
+
+        personal.setLearnAfterUses(uses);
+        personal.resolve(store, -1, -1);
+        check(bonusOf(personal, theme) == 0.0f && personal.ceiling() == PersonalScore::kMaxUserBoost,
+              "with no context, nothing");
+    }
+
+    section("a context holding a full store of pairs keeps its ceiling");
+    {
+        UserModel model;
+        const int32_t store = model.storeFor("ro", 2);
+        const int32_t context = model.reserve("context", 7);
+        const uint32_t uses = Engine::kDefaultLearnAfterUses;
+        const uint32_t most = uses + 1;
+        uint32_t total = 0;
+        std::vector<int32_t> words;
+        for (int i = 0; i < UserModel::kMaxBigrams; ++i) {
+            const std::string word = "w" + std::to_string(i);
+            const int32_t next = model.reserve(word.data(), word.size());
+            const uint32_t count = 1 + static_cast<uint32_t>(i) % most;
+            for (uint32_t use = 0; use < count; ++use) {
+                model.learnBigram(store, context, next);
+            }
+            total += count;
+            words.push_back(next);
+        }
+        check(model.pairsHeld(store) == UserModel::kMaxBigrams, "one context holds the store's every pair");
+
+        PersonalScore personal(model, uses);
+        personal.resolve(store, context, -1);
+        const float largest = personalShareOf(most, total);
+        check(personal.ceiling() == PersonalScore::kMaxUserBoost + largest,
+              "its ceiling is the cap and its most used pair's share");
+        bool bounded = true;
+        for (const int32_t next : words) {
+            if (personal.contextBonus(static_cast<uint32_t>(next)) > largest) {
+                bounded = false;
+            }
+        }
+        check(bounded, "and no word's share passes it");
+    }
+
+    section("an empty personal model answers as one switched off");
+    {
+        LoadedEngine empty;
+        empty.open();
+        LoadedEngine off;
+        off.open();
+        off.engine.setPersonalModelEnabled(false);
+        const char* const requests[][3] = {
+            {"th", nullptr, nullptr}, {"th", "key", nullptr}, {"thene", "key", "the"},
+            {"keyboarf", nullptr, nullptr}, {"", "the", nullptr}, {"", nullptr, nullptr},
+        };
+        bool same = true;
+        for (const auto& request : requests) {
+            if (empty.answer(request[0], nullptr, nullptr, request[1], request[2]) !=
+                off.answer(request[0], nullptr, nullptr, request[1], request[2])) {
+                same = false;
+            }
+        }
+        check(same, "for prefixes, slips and an empty prefix, with and without words before");
+    }
+
+    section("a learned pair lifts its word by its share, and only that word");
+    {
+        // One word learned after one context in one engine, and after another in the other.
+        LoadedEngine learned;
+        learned.open();
+        LoadedEngine elsewhere;
+        elsewhere.open();
+        const uint32_t uses = Engine::kDefaultLearnAfterUses;
+        learned.learnAfter("key", "time", uses);
+        elsewhere.learnAfter("border", "time", uses);
+        const float share = personalShareOf(uses, uses);
+
+        checkRise(learned.scoreAfter("tim", "time", "key"), elsewhere.scoreAfter("tim", "time", "key"),
+                  share, "on the strip, a word rises by its share after the word before it");
+        checkRise(elsewhere.scoreAfter("tim", "time", "border"),
+                  learned.scoreAfter("tim", "time", "border"), share, "and only after that word");
+        const float other = learned.scoreAfter("tim", "timp", "key");
+        check(other != 0.0f, "another word is offered for the same letters");
+        check(other == elsewhere.scoreAfter("tim", "timp", "key"), "no other word moves");
+        check(learned.rankOf("t", "time", "key") == 0 && elsewhere.rankOf("t", "the", "key") == 0,
+              "enough to lead the strip where a commoner word led");
+
+        const float corrected = learned.correctionScoreAfter("tine", "time", "key");
+        check(corrected != 0.0f, "autocorrect's list holds the word for a slip");
+        checkRise(corrected, elsewhere.correctionScoreAfter("tine", "time", "key"), share,
+                  "where it rises by the same share");
+        float learnedBest = 0.0f;
+        float elsewhereBest = 0.0f;
+        check(learned.bestAfter("tine", "key", &learnedBest) == "time" &&
+                  elsewhere.bestAfter("tine", "key", &elsewhereBest) == "time",
+              "autocorrect takes it");
+        checkRise(learnedBest, elsewhereBest, share, "at a score raised by the share");
+    }
+
+    section("a dropped pair and triple no longer lift their word");
+    {
+        // One word learned after one context in one engine, and after another in the other.
+        LoadedEngine learned;
+        learned.open();
+        LoadedEngine elsewhere;
+        elsewhere.open();
+        const uint32_t uses = Engine::kDefaultLearnAfterUses;
+        const auto learnTriple = [](LoadedEngine& loaded, const char* previous2,
+                                    const char* previous1, const char* word) {
+            for (uint32_t i = 0; i < uses; ++i) {
+                loaded.engine.learn(previous2, std::strlen(previous2), nullptr, 0, nullptr, 0);
+                loaded.engine.learn(previous1, std::strlen(previous1), previous2,
+                                    std::strlen(previous2), nullptr, 0);
+                loaded.engine.learn(word, std::strlen(word), previous1, std::strlen(previous1),
+                                    previous2, std::strlen(previous2));
+            }
+        };
+        learnTriple(learned, "the", "key", "time");
+        learnTriple(elsewhere, "the", "border", "time");
+        check(learned.scoreAfter("tim", "time", "key", "the") >
+                  elsewhere.scoreAfter("tim", "time", "key", "the"),
+              "a learned pair and triple lift their word");
+
+        const std::string language = learned.engine.currentPersonalLanguage();
+        const char* languages[] = {language.c_str()};
+        const size_t languageLengths[] = {language.size()};
+        const char* before2[] = {"the"};
+        const size_t before2Lengths[] = {3};
+        const char* before1[] = {"key"};
+        const size_t before1Lengths[] = {3};
+        const char* after[] = {"time"};
+        const size_t afterLengths[] = {4};
+        learned.engine.dropUserTriples(languages, languageLengths, before2, before2Lengths, before1,
+                                       before1Lengths, after, afterLengths, 1);
+        check(learned.scoreAfter("tim", "time", "key", "the") >
+                  elsewhere.scoreAfter("tim", "time", "key", "the"),
+              "with its triple dropped, its pair still lifts it");
+        learned.engine.dropUserPairs(languages, languageLengths, before1, before1Lengths, after,
+                                     afterLengths, 1);
+        check(learned.scoreAfter("tim", "time", "key", "the") ==
+                  elsewhere.scoreAfter("tim", "time", "key", "the"),
+              "with its pair dropped too, nothing does");
+    }
+
+    section("a pair below learn-after lifts nothing until the setting reaches it");
+    {
+        LoadedEngine learned;
+        learned.open();
+        LoadedEngine elsewhere;
+        elsewhere.open();
+        const uint32_t uses = Engine::kDefaultLearnAfterUses - 1;
+        learned.learnAfter("key", "time", uses);
+        elsewhere.learnAfter("border", "time", uses);
+        const auto lift = [&learned, &elsewhere]() {
+            return learned.scoreAfter("tim", "time", "key") -
+                   elsewhere.scoreAfter("tim", "time", "key");
+        };
+        const auto learnAfterUses = [&learned, &elsewhere](uint32_t setting) {
+            learned.engine.setLearnAfterUses(setting);
+            elsewhere.engine.setLearnAfterUses(setting);
+        };
+        check(lift() == 0.0f, "one use short of the setting, a pair weighs nothing");
+        learnAfterUses(uses);
+        checkRise(learned.scoreAfter("tim", "time", "key"), elsewhere.scoreAfter("tim", "time", "key"),
+                  personalShareOf(uses, uses), "with the setting lowered to its uses, it lifts its word");
+        learnAfterUses(Engine::kDefaultLearnAfterUses);
+        check(lift() == 0.0f, "and raised again, it weighs nothing again");
+    }
+
+    section("learned sentence openers lift a prefix");
+    {
+        LoadedEngine opener;
+        opener.open();
+        LoadedEngine inside;
+        inside.open();
+        const uint32_t uses = Engine::kDefaultLearnAfterUses;
+        for (uint32_t i = 0; i < uses; ++i) {
+            opener.engine.learn("key", 3, Engine::kUserSentenceStart, Engine::kUserSentenceStartLength, nullptr, 0);
+        }
+        inside.learnAfter("border", "key", uses);
+        checkRise(opener.scoreAfter("ke", "key", nullptr), inside.scoreAfter("ke", "key", nullptr),
+                  personalShareOf(uses, uses),
+                  "a word this person opens sentences with rises by its share at a sentence start");
+        const float insideSentence = opener.scoreAfter("ke", "key", "the");
+        check(insideSentence != 0.0f, "the word is offered inside a sentence too");
+        check(insideSentence == inside.scoreAfter("ke", "key", "the"), "and not inside a sentence");
+
+        Engine::ScoreParts parts;
+        Engine::ScoreParts unlearned;
+        LoadedEngine plain;
+        plain.open();
+        check(opener.engine.explainScore("ke", 2, "key", 3, &parts) &&
+                  plain.engine.explainScore("ke", 2, "key", 3, &unlearned),
+              "the score of an opener is explained");
+        check(parts.context == personalShareOf(uses, uses),
+              "its context part is its share at a sentence start");
+        check(parts.personal == PersonalScore::wordBoostForCount(uses) + parts.context,
+              "its personal part adds its word boost");
+        check(parts.rest == unlearned.rest, "and the rest is as if nothing were learned");
+    }
+
+    section("the tap decoder reads a learned context");
+    {
+        LoadedEngine learned;
+        learned.open();
+        LoadedEngine elsewhere;
+        elsewhere.open();
+        LoadedEngine plain;
+        plain.open();
+        const uint32_t uses = Engine::kDefaultLearnAfterUses;
+        learned.learnAfter("the", "keyboard", uses);
+        elsewhere.learnAfter("border", "keyboard", uses);
+        const char typed[] = "jeubpard";
+        const char meant[] = "keyboard";
+        float xs[8];
+        float ys[8];
+        learned.leanTaps(typed, meant, 0.f, xs, ys);
+
+        float learnedMargin = 0.f;
+        float elsewhereMargin = 0.f;
+        check(learned.decoded(typed, xs, ys, nullptr, &learnedMargin, "the") == meant &&
+                  learned.stands(meant),
+              "after the word it was learned after, the decoder takes the word and it stands");
+        elsewhere.decoded(typed, xs, ys, nullptr, &elsewhereMargin, "the");
+        checkRise(learnedMargin, elsewhereMargin, personalShareOf(uses, uses), "its margin rising by its share");
+
+        learned.engine.setPersonalModelEnabled(false);
+        float offMargin = 0.f;
+        float plainMargin = 0.f;
+        learned.decoded(typed, xs, ys, nullptr, &offMargin, "the");
+        const bool offStands = learned.stands(meant);
+        plain.decoded(typed, xs, ys, nullptr, &plainMargin, "the");
+        check(offMargin == plainMargin && offStands == plain.stands(meant),
+              "with the personal model off, it reads as if nothing were learned");
+    }
+
+    section("a case form's links are its word's, an accent form's are its own");
+    {
+        LoadedEngine learned;
+        learned.open();
+        LoadedEngine elsewhere;
+        elsewhere.open();
+        const uint32_t uses = Engine::kDefaultLearnAfterUses;
+        learned.learnAfter("key", "Masă", uses);
+        elsewhere.learnAfter("border", "Masă", uses);
+        // The spelling without the mark, learned as a word alone in both, so both offer it.
+        const char unmarked[] = "masa";
+        for (uint32_t i = 0; i < uses; ++i) {
+            learned.engine.learn(unmarked, std::strlen(unmarked), nullptr, 0, nullptr, 0);
+            elsewhere.engine.learn(unmarked, std::strlen(unmarked), nullptr, 0, nullptr, 0);
+        }
+        checkRise(learned.scoreAfter("mas", "masă", "key"), elsewhere.scoreAfter("mas", "masă", "key"),
+                  personalShareOf(uses, uses), "a pair learned capitalised lifts the word");
+        const float withoutMark = learned.scoreAfter("mas", unmarked, "key");
+        check(withoutMark != 0.0f, "its spelling without the mark is offered too");
+        check(withoutMark == elsewhere.scoreAfter("mas", unmarked, "key"), "and not its spelling without the mark");
     }
 
     section("a personal-dictionary word can still be a proper noun");

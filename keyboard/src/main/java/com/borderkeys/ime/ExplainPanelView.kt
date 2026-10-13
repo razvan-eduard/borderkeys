@@ -11,6 +11,8 @@ import android.os.Trace
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import com.borderkeys.geometry.bothSides
+import com.borderkeys.geometry.half
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.theme.ThemePaints
@@ -82,7 +84,7 @@ class ExplainPanelView(
     private fun drawLine(canvas: Canvas, text: String, top: Float, right: Float, paint: Paint, left: Float) {
         val previous = paint.textAlign
         paint.textAlign = Paint.Align.LEFT
-        val midY = top + rowHeightPx / 2f + paints.labelBaselineOffsetPx
+        val midY = top + half(rowHeightPx) + paints.labelBaselineOffsetPx
         val room = (right - left).coerceAtLeast(0f)
         val fits = paint.breakText(text, true, room, null)
         if (fits >= text.length) {
@@ -104,15 +106,15 @@ class ExplainPanelView(
         paints.accentLabel.textAlign = Paint.Align.CENTER
         canvas.drawText(
             strings[Keys.PANEL_CLOSE],
-            left + closeWidth / 2f,
-            rowHeightPx / 2f + paints.labelBaselineOffsetPx,
+            left + half(closeWidth),
+            half(rowHeightPx) + paints.labelBaselineOffsetPx,
             paints.accentLabel,
         )
         paints.accentLabel.textAlign = previous
     }
 
     private fun closeWidthPx(): Float =
-        paints.accentLabel.measureText(strings[Keys.PANEL_CLOSE]) + rowHeightPx * MARGIN_ROWS * 2f
+        paints.accentLabel.measureText(strings[Keys.PANEL_CLOSE]) + bothSides(rowHeightPx * MARGIN_ROWS)
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {

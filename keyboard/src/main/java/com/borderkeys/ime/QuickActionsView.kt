@@ -9,24 +9,29 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
-import kotlin.math.max
 import android.os.Trace
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import android.view.MotionEvent
-import android.view.ViewConfiguration
 import android.view.View
+import android.view.ViewConfiguration
 import androidx.core.content.ContextCompat
 import com.borderkeys.data.theme.CustomIcon
+import com.borderkeys.data.theme.EffectsSettings
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.QuickActionBarItem
+import com.borderkeys.geometry.bothSides
+import com.borderkeys.geometry.half
+import com.borderkeys.geometry.halfDown
 import com.borderkeys.i18n.Keys
 import com.borderkeys.ime.fx.ParticleSurface
 import com.borderkeys.ime.fx.RoundedRectElement
 import com.borderkeys.keyboard.R
 import com.borderkeys.theme.ThemePaints
+import java.util.concurrent.TimeUnit
+import kotlin.math.max
 
 /**
  * A row of buttons for the things that are otherwise several gestures, with icons loaded once and
@@ -103,7 +108,7 @@ class QuickActionsView(
         }
 
     /** How fast the scrolling labels run, 1 the default. */
-    var animationSpeed: Float = 1f
+    var animationSpeed: Float = EffectsSettings.DEFAULT_SPEED
 
     /** Whether animations play at all: an [com.borderkeys.data.theme.EffectsSettings] mode. */
     var animationMode: Int = com.borderkeys.data.theme.EffectsSettings.MODE_SYSTEM
@@ -260,7 +265,7 @@ class QuickActionsView(
      */
     private fun pressedBounds(index: Int, out: android.graphics.RectF) {
         val gap = buttonSizePx * TAB_FREE_GAP_FRACTION
-        val alongHalf = slotPx * TAB_ALONG_FRACTION / 2f
+        val alongHalf = half(slotPx * TAB_ALONG_FRACTION)
         val cx = centreX[index]
         val cy = centreY[index]
         when (attachedEdge) {
@@ -271,15 +276,15 @@ class QuickActionsView(
         }
     }
 
+    /** The keys' corner radius, no more than half of [rect]'s shorter side. */
+    private fun tabCornerRadius(rect: android.graphics.RectF): Float =
+        paints.keyCornerRadiusPx.coerceAtMost(half(minOf(rect.width(), rect.height())))
+
     /**
      * [rect] as a path with the keys' corner radius on the free corners and none on the two
      * against [attachedEdge]. The radii run top-left, top-right, bottom-right, bottom-left, two
      * floats each.
      */
-    /** The keys' corner radius, no more than half of [rect]'s shorter side. */
-    private fun tabCornerRadius(rect: android.graphics.RectF): Float =
-        paints.keyCornerRadiusPx.coerceAtMost(minOf(rect.width(), rect.height()) / 2f)
-
     private fun tabPath(rect: android.graphics.RectF): android.graphics.Path {
         val radius = tabCornerRadius(rect)
         java.util.Arrays.fill(tabRadii, radius)
@@ -481,7 +486,7 @@ class QuickActionsView(
         val h = if (labelsActive()) {
             margin + icon + icon * ICON_LABEL_GAP_FRACTION + labelBandPx(measuredWidthHint) + margin
         } else {
-            icon + 2f * margin
+            icon + bothSides(margin)
         }
         return h.toInt().coerceAtLeast(1)
     }
@@ -560,15 +565,15 @@ class QuickActionsView(
         buttonSizePx = icon.toInt().coerceAtLeast(1)
         val margin = icon * EDGE_MARGIN_FRACTION
         val gap = icon * ICON_LABEL_GAP_FRACTION
-        val iconCentre = margin + icon / 2f
+        val iconCentre = margin + half(icon)
         if (labelsActive()) {
             labelBandPx(width)
         }
         labelBandBottomY = 0f
         for (index in 0 until shown) {
-            val centre = step * index + step / 2f
+            val centre = step * index + half(step)
             if (vertical) {
-                centreX[index] = width / 2f
+                centreX[index] = half(width.toFloat())
                 centreY[index] = centre
             } else {
                 centreX[index] = centre
@@ -576,7 +581,7 @@ class QuickActionsView(
             }
         }
         if (labelsActive()) {
-            labelTopY = iconCentre + buttonSizePx / 2f + gap
+            labelTopY = iconCentre + half(buttonSizePx.toFloat()) + gap
             for (index in 0 until shown) {
                 val layoutBottom = labelTopY + (labelLayouts[index]?.height ?: 0)
                 if (layoutBottom > labelBandBottomY) {
@@ -596,7 +601,7 @@ class QuickActionsView(
             canvas.save()
             if (vertical) canvas.translate(0f, -scrollPx) else canvas.translate(-scrollPx, 0f)
             val shown = shownCount()
-            val half = buttonSizePx / 2
+            val half = halfDown(buttonSizePx)
             var anyLabelScrolling = false
             for (index in 0 until shown) {
                 val cx = centreX[index].toInt()
@@ -612,7 +617,7 @@ class QuickActionsView(
                 }
                 val collapsedOpener = collapsible && !expanded
                 val icon = if (collapsedOpener) moreIcon else icons[index]
-                val dim = if (allowedAt(index)) 255 else DISALLOWED_ALPHA
+                val dim = if (allowedAt(index)) OPAQUE_ALPHA else DISALLOWED_ALPHA
                 if (icon != null) {
                     icon.setBounds(cx - half, cy - half, cx + half, cy + half)
                     icon.setTint(paints.label.color)
@@ -633,8 +638,8 @@ class QuickActionsView(
                     val labelLayout = labelLayouts[index]
                     if (labelLayout != null) {
                         labelPaint.color = paints.labelSecondary.color
-                        labelPaint.alpha = android.graphics.Color.alpha(paints.labelSecondary.color) * dim / 255
-                        val left = centreX[index] - labelLayoutWidth / 2f
+                        labelPaint.alpha = android.graphics.Color.alpha(paints.labelSecondary.color) * dim / OPAQUE_ALPHA
+                        val left = centreX[index] - half(labelLayoutWidth.toFloat())
                         canvas.save()
                         val overflow = labelOverflow[index]
                         if (overflow > 0f) {
@@ -737,7 +742,7 @@ class QuickActionsView(
                     scrolling = false
                     velocity?.let { tracker ->
                         tracker.addMovement(event)
-                        tracker.computeCurrentVelocity(1000)
+                        tracker.computeCurrentVelocity(VELOCITY_UNIT_MILLIS)
                         val speed = if (vertical) tracker.yVelocity else tracker.xVelocity
                         scroller.fling(scrollPx.toInt(), 0, (-speed).toInt(), 0, 0, maxScroll().toInt(), 0, 0)
                         tracker.recycle()
@@ -843,6 +848,12 @@ class QuickActionsView(
 
         /** The icon and label alpha of a button the field does not allow. */
         const val DISALLOWED_ALPHA = 80
+
+        /** The alpha of a button the field allows: fully opaque. */
+        const val OPAQUE_ALPHA = 255
+
+        /** The span a fling's velocity is read over: pixels per second. */
+        private val VELOCITY_UNIT_MILLIS = TimeUnit.SECONDS.toMillis(1).toInt()
 
         /** The gap between the icon and its label, as a share of the icon's size. */
         const val ICON_LABEL_GAP_FRACTION = 0.12f

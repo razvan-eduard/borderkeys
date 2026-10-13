@@ -19,21 +19,17 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import java.util.Locale
-import java.time.ZonedDateTime
-import com.borderkeys.data.theme.TimestampPattern
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.CustomIcon
@@ -42,6 +38,7 @@ import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.data.theme.QuickAction
 import com.borderkeys.data.theme.QuickActionBar
 import com.borderkeys.data.theme.QuickActionBarItem
+import com.borderkeys.data.theme.TimestampPattern
 import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
 import com.borderkeys.settings.ChoiceSlider
@@ -49,16 +46,23 @@ import com.borderkeys.settings.DEFAULT_PREFERENCES
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
-import com.borderkeys.settings.SettingLabel
-import com.borderkeys.settings.VoiceKeyboards
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.PlacementPreview
+import com.borderkeys.settings.ReorderRow
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_SMALL
+import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.SectionHeader
+import com.borderkeys.settings.SettingLabel
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
+import com.borderkeys.settings.VoiceKeyboards
 import com.borderkeys.settings.move
-import com.borderkeys.settings.ReorderRow
 import com.borderkeys.settings.rememberPreferencesUpdater
+import java.time.ZonedDateTime
+import java.util.Locale
 
 /**
  * The quick-action bar: whether it is shown, what shape it takes, where it sits, and which
@@ -85,7 +89,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
 
     // The preview is outside the scrolling column, so it stays on screen.
     Column(modifier = modifier.fillMaxSize()) {
-        PlacementPreview(appearance, Modifier.padding(vertical = 12.dp))
+        PlacementPreview(appearance, Modifier.padding(vertical = SPACE_LARGE))
         Divider()
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             SettingsSectionCard(strings[Keys.QUICK_TITLE]) {
@@ -145,7 +149,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     ) { update { it.copy(quickActionsPlacement = KeyboardPreferences.QUICK_ACTIONS_RIGHT) } }
                 }
                 Explanation(strings[Keys.QUICK_PLACEMENT_NOTE])
-                // Labels need a bar along the bottom; a bar down a side has no room for them.
+                // Labels show only on a bar along the bottom.
                 SwitchRow(
                     title = strings[Keys.QUICK_LABELS_SHOW],
                     subtitle = strings[Keys.QUICK_LABELS_NOTE],
@@ -180,7 +184,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                                 current.copy(quickActions = QuickAction.DEFAULT.map { it.id })
                             }
                         },
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = SPACE_LARGE, vertical = SPACE_MEDIUM),
                     ) { Text(strings[Keys.COMMON_RESET_TO_DEFAULT]) }
                 }
                 Explanation(strings[Keys.QUICK_BUTTONS_NOTE])
@@ -198,7 +202,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .clickable { picking = !picking }
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = SPACE_MEDIUM),
                     ) {
                         SettingLabel(strings[Keys.QUICK_ADD], color = MaterialTheme.colorScheme.primary)
                     }
@@ -249,7 +253,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     label = { Text(strings[Keys.QUICK_TIMESTAMP_PATTERN]) },
                     singleLine = true,
                     isError = !valid,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
                 )
                 Explanation(
                     if (valid) {
@@ -283,7 +287,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                 }
                 for (action in preferences.customQuickActions) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_SMALL),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         var pickingIcon by remember(action.id) { mutableStateOf(false) }
@@ -313,7 +317,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                             }
                         }
                         Column(
-                            modifier = Modifier.weight(1f).padding(start = 4.dp)
+                            modifier = Modifier.weight(1f).padding(start = SPACE_XSMALL)
                                 .clickable { editingCustomAction = action },
                         ) {
                             Text(action.name, style = MaterialTheme.typography.bodyLarge)
@@ -337,7 +341,7 @@ fun QuickActionsScreen(modifier: Modifier = Modifier) {
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .clickable { creatingCustomAction = true }
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = SPACE_MEDIUM),
                     ) {
                         SettingLabel(strings[Keys.QUICK_CUSTOM_ADD], color = MaterialTheme.colorScheme.primary)
                     }
@@ -461,9 +465,9 @@ private fun ButtonRow(
 private fun ChipRow(content: @Composable () -> Unit) {
     // Wraps, like every other chip group in the settings.
     FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
+        horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
+        verticalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
     ) { content() }
 }
 

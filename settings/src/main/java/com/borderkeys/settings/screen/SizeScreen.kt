@@ -3,9 +3,6 @@
 
 package com.borderkeys.settings.screen
 
-import com.borderkeys.i18n.Keys
-import com.borderkeys.settings.LocalStrings
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,19 +21,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.theme.KeyboardPlacement
 import com.borderkeys.data.theme.KeyboardPreferences
+import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.AdvancedSection
 import com.borderkeys.settings.DefaultableSlider
 import com.borderkeys.settings.Divider
 import com.borderkeys.settings.Explanation
+import com.borderkeys.settings.LocalStrings
 import com.borderkeys.settings.PickerChip
 import com.borderkeys.settings.PlacementPreview
-import com.borderkeys.settings.SettingsSectionCard
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_MEDIUM
 import com.borderkeys.settings.SectionHeader
-import com.borderkeys.settings.AdvancedSection
+import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.SwitchRow
 import com.borderkeys.settings.rememberPreferencesUpdater
 import com.borderkeys.settings.rememberThemeUpdater
@@ -66,7 +67,7 @@ fun SizeScreen(modifier: Modifier = Modifier) {
 
     // The preview is outside the scrolling column, so it stays on screen.
     Column(modifier = modifier.fillMaxSize()) {
-        PlacementPreview(appearance, Modifier.padding(vertical = 12.dp), isLandscape = landscapeTab)
+        PlacementPreview(appearance, Modifier.padding(vertical = SPACE_LARGE), isLandscape = landscapeTab)
         Divider()
         TabRow(selectedTabIndex = if (landscapeTab) 1 else 0) {
             Tab(
@@ -93,8 +94,8 @@ fun SizeScreen(modifier: Modifier = Modifier) {
 
                 Explanation(strings[Keys.SIZE_ONE_HANDED_MODE_NARROWS_THE_KEYBOARD])
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = SPACE_GUTTER),
+                    horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM),
                 ) {
                     PickerChip(
                         strings[Keys.SIZE_DOCKED],
@@ -149,7 +150,7 @@ fun SizeScreen(modifier: Modifier = Modifier) {
                 }
                 TextButton(
                     onClick = { updatePlacement { defaultPlacement(landscapeTab) } },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = SPACE_LARGE, vertical = SPACE_MEDIUM),
                 ) { Text(strings[Keys.SIZE_RESET_SIZE_AND_POSITION]) }
                 // The empty strip a narrowed keyboard leaves beside it: whether the background
                 // fills it, whether the app behind is blurred when it does not, and the

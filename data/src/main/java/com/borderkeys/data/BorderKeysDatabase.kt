@@ -15,6 +15,7 @@ import com.borderkeys.data.dao.ClipboardDao
 import com.borderkeys.data.dao.KeyTouchDao
 import com.borderkeys.data.dao.LanguagePackDao
 import com.borderkeys.data.dao.UserBigramDao
+import com.borderkeys.data.dao.UserPhraseClockDao
 import com.borderkeys.data.dao.UserTrigramDao
 import com.borderkeys.data.dao.UserWordDao
 import com.borderkeys.data.entity.AssistModelEntry
@@ -23,7 +24,10 @@ import com.borderkeys.data.entity.ClipEntry
 import com.borderkeys.data.entity.KeyTouch
 import com.borderkeys.data.entity.LanguagePackEntry
 import com.borderkeys.data.entity.UserBigram
+import com.borderkeys.data.entity.UserPairContext
+import com.borderkeys.data.entity.UserPhraseClock
 import com.borderkeys.data.entity.UserTrigram
+import com.borderkeys.data.entity.UserTripleContext
 import com.borderkeys.data.entity.UserWord
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.util.Arrays
@@ -39,8 +43,11 @@ import java.util.Arrays
         UserBigram::class,
         UserTrigram::class,
         KeyTouch::class,
+        UserPairContext::class,
+        UserTripleContext::class,
+        UserPhraseClock::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 abstract class BorderKeysDatabase : RoomDatabase() {
@@ -53,6 +60,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
     abstract fun userBigramDao(): UserBigramDao
     abstract fun userTrigramDao(): UserTrigramDao
     abstract fun keyTouchDao(): KeyTouchDao
+    abstract fun userPhraseClockDao(): UserPhraseClockDao
 
     companion object {
         private const val DATABASE_NAME = "borderkeys.db"
@@ -215,6 +223,15 @@ abstract class BorderKeysDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 10 to 11: pairs and triples kept per language, in lower case, with their
+         * contexts' totals and their languages' clocks; see [PhraseMigration]. A link no word's
+         * locale names a language for takes [fallbackLanguage], read when the migration runs.
+         */
+        fun migration10To11(fallbackLanguage: () -> String): Migration = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) = PhraseMigration.migrate(db, fallbackLanguage())
+        }
+
         fun open(context: Context): BorderKeysDatabase {
             // sqlcipher-android 4.x does not load its own library.
             System.loadLibrary("sqlcipher")
@@ -233,6 +250,7 @@ abstract class BorderKeysDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
                     MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
+                    migration10To11 { KeyboardSubtypes.language(context) },
                 )
                 // The ":assist" process opens this database too.
                 .enableMultiInstanceInvalidation()

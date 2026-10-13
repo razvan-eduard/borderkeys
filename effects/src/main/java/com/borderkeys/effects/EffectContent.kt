@@ -6,6 +6,7 @@ package com.borderkeys.effects
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.drawable.Drawable
+import com.borderkeys.geometry.half
 
 /** What an effect is showing, once [EffectStyle] has decided where it is. */
 sealed interface EffectContent {
@@ -37,7 +38,7 @@ sealed interface EffectContent {
         override fun isEmpty(): Boolean = side <= 0f
 
         override fun draw(canvas: Canvas, x: Float, y: Float, scale: Float, paint: Paint) {
-            val half = side * scale / 2f
+            val half = half(side * scale)
             drawable.setBounds(
                 (x - half).toInt(), (y - half).toInt(), (x + half).toInt(), (y + half).toInt(),
             )

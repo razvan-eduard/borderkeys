@@ -3,6 +3,12 @@
 
 package com.borderkeys.ime.fx
 
+import com.borderkeys.geometry.FULL_TURN
+import com.borderkeys.geometry.QUARTER_TURN
+import com.borderkeys.geometry.bothSides
+import com.borderkeys.geometry.diameter
+import com.borderkeys.geometry.half
+import com.borderkeys.geometry.perimeter
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -16,10 +22,10 @@ object EmitterShape {
 
     /** A point on a circle's perimeter; [angleFraction01] 0..1 is the whole turn. */
     fun ringX(centerX: Float, radius: Float, angleFraction01: Float): Float =
-        centerX + radius * cos(angleFraction01 * TWO_PI)
+        centerX + radius * cos(angleFraction01 * FULL_TURN)
 
     fun ringY(centerY: Float, radius: Float, angleFraction01: Float): Float =
-        centerY + radius * sin(angleFraction01 * TWO_PI)
+        centerY + radius * sin(angleFraction01 * FULL_TURN)
 
     fun lineX(x1: Float, x2: Float, fraction01: Float): Float = x1 + (x2 - x1) * fraction01
 
@@ -32,7 +38,7 @@ object EmitterShape {
     fun rectanglePerimeterX(left: Float, top: Float, right: Float, bottom: Float, phase01: Float): Float {
         val width = right - left
         val height = bottom - top
-        val perimeter = 2f * (width + height)
+        val perimeter = perimeter(width, height)
         if (perimeter <= 0f) {
             return left
         }
@@ -40,7 +46,7 @@ object EmitterShape {
         return when {
             distance <= width -> left + distance
             distance <= width + height -> right
-            distance <= 2f * width + height -> right - (distance - width - height)
+            distance <= bothSides(width) + height -> right - (distance - width - height)
             else -> left
         }
     }
@@ -48,7 +54,7 @@ object EmitterShape {
     fun rectanglePerimeterY(left: Float, top: Float, right: Float, bottom: Float, phase01: Float): Float {
         val width = right - left
         val height = bottom - top
-        val perimeter = 2f * (width + height)
+        val perimeter = perimeter(width, height)
         if (perimeter <= 0f) {
             return top
         }
@@ -56,8 +62,8 @@ object EmitterShape {
         return when {
             distance <= width -> top
             distance <= width + height -> top + (distance - width)
-            distance <= 2f * width + height -> bottom
-            else -> bottom - (distance - 2f * width - height)
+            distance <= bothSides(width) + height -> bottom
+            else -> bottom - (distance - bothSides(width) - height)
         }
     }
 
@@ -136,11 +142,11 @@ object EmitterShape {
     ): PlanePoint {
         val width = right - left
         val height = bottom - top
-        val r = cornerRadius.coerceIn(0f, (kotlin.math.min(width, height) / 2f).coerceAtLeast(0f))
-        val straightW = width - 2f * r
-        val straightH = height - 2f * r
-        val arcLen = (PI / 2.0).toFloat() * r
-        val perimeter = 2f * (straightW + straightH) + 4f * arcLen
+        val r = cornerRadius.coerceIn(0f, half(kotlin.math.min(width, height)).coerceAtLeast(0f))
+        val straightW = width - diameter(r)
+        val straightH = height - diameter(r)
+        val arcLen = QUARTER_TURN * r
+        val perimeter = perimeter(straightW, straightH) + CORNERS * arcLen
         if (perimeter <= 0f) {
             return PlanePoint(left, top, 0f, -1f)
         }
@@ -188,15 +194,15 @@ object EmitterShape {
     fun roundedRectPerimeterLength(left: Float, top: Float, right: Float, bottom: Float, cornerRadius: Float): Float {
         val width = (right - left).coerceAtLeast(0f)
         val height = (bottom - top).coerceAtLeast(0f)
-        val r = cornerRadius.coerceIn(0f, kotlin.math.min(width, height) / 2f)
-        return 2f * (width - 2f * r + height - 2f * r) + 2f * PI.toFloat() * r
+        val r = cornerRadius.coerceIn(0f, half(kotlin.math.min(width, height)))
+        return perimeter(width - diameter(r), height - diameter(r)) + FULL_TURN * r
     }
 
     /** The area [roundedRectInteriorX] fills. */
     fun roundedRectArea(left: Float, top: Float, right: Float, bottom: Float, cornerRadius: Float): Float {
         val width = (right - left).coerceAtLeast(0f)
         val height = (bottom - top).coerceAtLeast(0f)
-        val r = cornerRadius.coerceIn(0f, kotlin.math.min(width, height) / 2f)
+        val r = cornerRadius.coerceIn(0f, half(kotlin.math.min(width, height)))
         // The full box minus the four corners the rounding cuts away.
         return width * height - (4f - PI.toFloat()) * r * r
     }
@@ -236,7 +242,7 @@ object EmitterShape {
     ): PlanePoint {
         val width = (right - left).coerceAtLeast(0f)
         val height = (bottom - top).coerceAtLeast(0f)
-        val r = cornerRadius.coerceIn(0f, kotlin.math.min(width, height) / 2f)
+        val r = cornerRadius.coerceIn(0f, half(kotlin.math.min(width, height)))
         val x = left + width * u01.coerceIn(0f, 1f)
         val y = top + height * v01.coerceIn(0f, 1f)
         if (r <= 0f) {
@@ -266,14 +272,14 @@ object EmitterShape {
     /** The perimeter length [annularWedgePerimeterX] walks. */
     fun annularWedgePerimeterLength(innerRadius: Float, outerRadius: Float, sweepDeg: Float): Float {
         val sweepRad = kotlin.math.abs(sweepDeg) * DEG_TO_RAD
-        val edges = if (kotlin.math.abs(sweepDeg) >= 360f) 0f else 2f * (outerRadius - innerRadius).coerceAtLeast(0f)
+        val edges = if (kotlin.math.abs(sweepDeg) >= 360f) 0f else bothSides((outerRadius - innerRadius).coerceAtLeast(0f))
         return outerRadius * sweepRad + innerRadius * sweepRad + edges
     }
 
     /** The area [annularWedgeInteriorX] fills. */
     fun annularWedgeArea(innerRadius: Float, outerRadius: Float, sweepDeg: Float): Float {
         val sweepRad = kotlin.math.abs(sweepDeg) * DEG_TO_RAD
-        return 0.5f * sweepRad * (outerRadius * outerRadius - innerRadius * innerRadius).coerceAtLeast(0f)
+        return half(sweepRad * (outerRadius * outerRadius - innerRadius * innerRadius).coerceAtLeast(0f))
     }
 
     /**
@@ -399,6 +405,8 @@ object EmitterShape {
         }
     }
 
-    private val TWO_PI = (2.0 * PI).toFloat()
+    /** A rounded rectangle's corners. */
+    private const val CORNERS = 4
+
     private val DEG_TO_RAD = (PI / 180.0).toFloat()
 }

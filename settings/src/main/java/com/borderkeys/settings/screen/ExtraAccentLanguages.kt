@@ -4,8 +4,6 @@
 package com.borderkeys.settings.screen
 
 import android.content.Context
-import android.provider.Settings
-import android.view.inputmethod.InputMethodManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -15,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borderkeys.data.DataGraph
+import com.borderkeys.data.KeyboardSubtypes
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.i18n.Keys
 import com.borderkeys.ime.AccentOverlays
@@ -72,17 +71,9 @@ internal fun ExtraAccentLanguages(
  * this keyboard is the one in use, else every enabled subtype's, upright and in landscape.
  */
 private fun lendingLanguages(context: Context, preferences: KeyboardPreferences): List<Pair<String, String>> {
-    val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        ?: return emptyList()
-    val ours = manager.enabledInputMethodList.firstOrNull { it.packageName == context.packageName }
-        ?: return emptyList()
-    val inUse = Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
-        ?.substringBefore('/') == context.packageName
-    val current = manager.currentInputMethodSubtype
-    val subtypes = if (inUse && current != null) {
-        listOf(current)
-    } else {
-        manager.getEnabledInputMethodSubtypeList(ours, true)
+    val subtypes = KeyboardSubtypes.inUse(context)
+    if (subtypes.isEmpty()) {
+        return emptyList()
     }
     val letters = HashSet<Char>()
     val layouts = subtypes.flatMap { subtype ->

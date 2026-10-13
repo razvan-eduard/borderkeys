@@ -34,14 +34,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.backup.BackupFile
 import com.borderkeys.data.backup.TransferProtocol
 import com.borderkeys.i18n.Keys
+import com.borderkeys.settings.COMPACT_ICON_SIZE
 import com.borderkeys.settings.Explanation
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.Screen
 import com.borderkeys.settings.SettingsSectionCard
 import com.borderkeys.settings.isBorderKeysDefault
@@ -120,7 +123,7 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     )
                 },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
             ) {
                 Text(
                     if (enabled) {
@@ -146,7 +149,7 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
             )
             Button(
                 onClick = { openKeyboardPicker(context) },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
             ) { Text(strings[Keys.SETUP_CHOOSE_KEYBOARD]) }
         }
 
@@ -166,12 +169,12 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                                 .putExtra(TransferProtocol.EXTRA_REQUEST, true),
                         )
                     },
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
                 ) { Text(strings[Keys.SETUP_TAKE_SETTINGS]) }
                 // From a backup file, for when the other build is no longer installed.
                 Button(
                     onClick = { open(Screen.Backup) },
-                    modifier = Modifier.padding(horizontal = 20.dp),
+                    modifier = Modifier.padding(horizontal = SPACE_GUTTER),
                 ) { Text(strings[Keys.SETUP_OPEN_IMPORT]) }
                 if (notice.isNotEmpty()) {
                     Explanation(notice)
@@ -193,7 +196,7 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                         )
                     },
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_MEDIUM),
                 ) { Text(strings[Keys.SETUP_REMOVE]) }
             }
         }
@@ -208,13 +211,13 @@ fun SetupScreen(modifier: Modifier = Modifier, open: (Screen) -> Unit = {}) {
                 value = probe,
                 onValueChange = { probe = it },
                 label = { Text(strings[Keys.SETUP_TYPE_HERE]) },
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                modifier = Modifier.fillMaxWidth().padding(SPACE_GUTTER),
             )
             Text(
                 strings[Keys.SETUP_THIS_FIELD_IS_NOT_SAVED_ANYWHERE],
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
             )
         }
     }
@@ -235,20 +238,20 @@ private fun Step(
     SettingsSectionCard(title) {
         if (done) {
             Row(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = SPACE_GUTTER, vertical = SPACE_XSMALL),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     painter = painterResource(android.R.drawable.checkbox_on_background),
                     contentDescription = null,
                     tint = doneColour(),
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(COMPACT_ICON_SIZE),
                 )
                 Text(
                     strings[Keys.SETUP_DONE],
                     style = MaterialTheme.typography.labelLarge,
                     color = doneColour(),
-                    modifier = Modifier.padding(start = 8.dp),
+                    modifier = Modifier.padding(start = SPACE_MEDIUM),
                 )
             }
         }

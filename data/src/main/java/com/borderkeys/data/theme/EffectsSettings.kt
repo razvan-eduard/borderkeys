@@ -4,6 +4,7 @@
 package com.borderkeys.data.theme
 
 import kotlinx.serialization.Serializable
+import kotlin.math.abs
 
 /**
  * How often an effect plays for the same word, stored by [id]; an id this build does not know
@@ -64,9 +65,9 @@ data class EffectSetting(
  */
 @Serializable
 data class EffectsSettings(
-    /** Read only when [mode] is absent, from a file written before it: off, or as Android says. */
+    /** Read only when [mode] is absent: off, or as Android says. */
     val enabled: Boolean = true,
-    /** [MODE_OFF], [MODE_SYSTEM] or [MODE_ON]; null in a file written before it existed. */
+    /** [MODE_OFF], [MODE_SYSTEM] or [MODE_ON]; null when absent, and [enabled] read instead. */
     val mode: Int? = null,
     val swipeAccepted: EffectSetting = EffectSetting(style = EffectSetting.DEFAULT_STYLE),
     val learnedWord: EffectSetting = EffectSetting(),
@@ -95,11 +96,7 @@ data class EffectsSettings(
         get() = animationMode != MODE_OFF
 
     /** Whether animations play now, given whether Android's own are [systemAnimated]. */
-    fun plays(systemAnimated: Boolean): Boolean = when (animationMode) {
-        MODE_OFF -> false
-        MODE_ON -> true
-        else -> systemAnimated
-    }
+    fun plays(systemAnimated: Boolean): Boolean = plays(animationMode, systemAnimated)
 
     /** The setting for [event]. */
     fun forEvent(event: EffectEvent): EffectSetting = when (event) {
@@ -125,12 +122,25 @@ data class EffectsSettings(
         const val MODE_SYSTEM = 1
         const val MODE_ON = 2
 
-        const val DEFAULT_SPEED = 1f
-        const val MIN_SPEED = 0.25f
-        const val MAX_SPEED = 4f
+        /** Whether animations play under [mode], given whether Android's own are [systemAnimated]. */
+        fun plays(mode: Int, systemAnimated: Boolean): Boolean = when (mode) {
+            MODE_OFF -> false
+            MODE_ON -> true
+            else -> systemAnimated
+        }
 
-        /** The speed dial's stops between its ends: a quarter apart. */
-        const val SPEED_STEPS = 14
+        const val DEFAULT_SPEED = 1f
+
+        /** The speeds the Animations screen's slider stops at, slowest first. */
+        val SPEED_STOPS: List<Float> = listOf(0.1f, 0.25f, 0.5f, 0.75f, DEFAULT_SPEED, 1.5f, 2f, 3f, 4f)
+        val MIN_SPEED: Float = SPEED_STOPS.first()
+        val MAX_SPEED: Float = SPEED_STOPS.last()
+
+        /** The stop nearest [speed]. */
+        fun nearestSpeed(speed: Float): Float {
+            val within = speed.coerceIn(MIN_SPEED, MAX_SPEED)
+            return SPEED_STOPS.minBy { abs(it - within) }
+        }
     }
 }
 

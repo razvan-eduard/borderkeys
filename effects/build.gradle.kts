@@ -44,5 +44,6 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":geometry"))
     testImplementation(libs.junit)
 }

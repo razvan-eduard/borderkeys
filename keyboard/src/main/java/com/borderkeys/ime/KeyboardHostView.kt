@@ -8,11 +8,17 @@ import android.content.Context
 import android.view.View.MeasureSpec
 import android.view.ViewGroup
 import android.view.WindowInsets
+import com.borderkeys.data.theme.EffectsSettings
 import com.borderkeys.data.theme.KeyboardPreferences
 import com.borderkeys.effects.EffectStage
-import com.borderkeys.theme.ThemePaints
-import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.geometry.bothSides
+import com.borderkeys.geometry.half
+import com.borderkeys.geometry.halfDown
+import com.borderkeys.geometry.middle
+import com.borderkeys.geometry.middleDown
 import com.borderkeys.i18n.Keys
+import com.borderkeys.i18n.LanguageManager
+import com.borderkeys.theme.ThemePaints
 
 /**
  * The root of the input view: its children stacked vertically and laid out in code. Only one of
@@ -210,7 +216,7 @@ class KeyboardHostView(
     }
 
     /** How fast the photo lamp runs, 1 the default. */
-    var animationSpeed: Float = 1f
+    var animationSpeed: Float = EffectsSettings.DEFAULT_SPEED
 
     /** Draws the rising photo over everything, until its time is up. */
     private fun drawPhotoLamp(canvas: android.graphics.Canvas) {
@@ -386,9 +392,9 @@ class KeyboardHostView(
     private fun contentLeft(totalWidth: Int, contentWidth: Int): Int = when (positionMode) {
         MODE_ONE_HANDED_LEFT -> 0
         MODE_ONE_HANDED_RIGHT -> totalWidth - contentWidth
-        MODE_FLOATING -> ((totalWidth - contentWidth) / 2 + horizontalOffsetPx)
+        MODE_FLOATING -> (halfDown(totalWidth - contentWidth) + horizontalOffsetPx)
             .coerceIn(0, totalWidth - contentWidth)
-        else -> (totalWidth - contentWidth) / 2
+        else -> halfDown(totalWidth - contentWidth)
     }
 
     init {
@@ -593,8 +599,7 @@ class KeyboardHostView(
 
     /**
      * The room between a bar along the top or bottom and the keys it meets directly: half a key
-     * gap, so the nearest row sits a full gap from the bar as the rows sit from each other, the
-     * keys insetting only half a gap at their own edge. Zero when a strip or panel is between.
+     * gap. Zero when a strip or panel is between.
      */
     private var barGapPx = 0
 
@@ -683,7 +688,7 @@ class KeyboardHostView(
         barGapPx = if (quickActions.visibility != GONE && !sideBar && keyboard.visibility != GONE &&
             (quickActionsPlacement == PLACEMENT_BELOW_KEYS || !rowsAboveKeys())
         ) {
-            (paints.keyGapPx / 2f).toInt()
+            half(paints.keyGapPx).toInt()
         } else {
             0
         }
@@ -816,9 +821,9 @@ class KeyboardHostView(
         if (gutter < minimum || bottom <= top) {
             return
         }
-        val centreY = (top + bottom) / 2
-        val half = minOf(gutter, (resources.displayMetrics.density * MAX_ARROW_SIZE_DP).toInt()) / 2
-        val centreX = if (rightGutter >= leftGutter) width - rightGutter / 2 else leftGutter / 2
+        val centreY = middleDown(top, bottom)
+        val half = halfDown(minOf(gutter, (resources.displayMetrics.density * MAX_ARROW_SIZE_DP).toInt()))
+        val centreX = if (rightGutter >= leftGutter) width - halfDown(rightGutter) else halfDown(leftGutter)
         arrowBounds.set(centreX - half, centreY - half, centreX + half, centreY + half)
     }
 
@@ -828,7 +833,7 @@ class KeyboardHostView(
             return
         }
         // Points into the gutter it sits in, the way the keyboard would move.
-        val pointsRight = arrowBounds.centerX() > width / 2
+        val pointsRight = arrowBounds.centerX() > halfDown(width)
         val paint = if (arrowPressed) paints.label else paints.labelSecondary
         val inset = arrowBounds.width() * 0.22f
         val tipX = if (pointsRight) arrowBounds.right - inset else arrowBounds.left + inset
@@ -871,7 +876,7 @@ class KeyboardHostView(
         if (!paints.showKeyBorders) {
             return
         }
-        val half = paints.keyStroke.strokeWidth / 2f
+        val half = half(paints.keyStroke.strokeWidth)
         canvas.drawLine(left, half, right, half, paints.keyStroke)
         if (bottomOffsetPx > 0) {
             canvas.drawLine(left, bottom - half, right, bottom - half, paints.keyStroke)
@@ -957,9 +962,9 @@ class KeyboardHostView(
 
         val radius = handleRadiusPx()
         // Top for height, sides for width.
-        drawHandle(canvas, (left + right) / 2f, top, radius, draggingHandle == HANDLE_TOP)
-        drawHandle(canvas, left, (top + bottom) / 2f, radius, draggingHandle == HANDLE_LEFT)
-        drawHandle(canvas, right, (top + bottom) / 2f, radius, draggingHandle == HANDLE_RIGHT)
+        drawHandle(canvas, middle(left, right), top, radius, draggingHandle == HANDLE_TOP)
+        drawHandle(canvas, left, middle(top, bottom), radius, draggingHandle == HANDLE_LEFT)
+        drawHandle(canvas, right, middle(top, bottom), radius, draggingHandle == HANDLE_RIGHT)
 
         // Reset and Done, on pills inside the frame.
         resizeLabel.textSize = density() * LABEL_TEXT_DP
@@ -971,7 +976,7 @@ class KeyboardHostView(
 
         // The hint, along the bottom edge.
         val hint = strings[Keys.RESIZE_HINT]
-        drawPill(canvas, hint, (left + right - pillWidth(hint)) / 2f,
+        drawPill(canvas, hint, half(left + right - pillWidth(hint)),
             bottom - radius * 1.4f - pillHeight(), null)
     }
 
@@ -1024,7 +1029,7 @@ class KeyboardHostView(
             alternativeLabel[0] = keyboard.alternativeCharAt(position)
             canvas.drawText(
                 alternativeLabel, 0, 1,
-                cellLeft + cellWidth / 2f, top + rowHeight / 2f + paints.labelBaselineOffsetPx,
+                cellLeft + half(cellWidth), top + half(rowHeight) + paints.labelBaselineOffsetPx,
                 paints.label,
             )
         }
@@ -1059,16 +1064,16 @@ class KeyboardHostView(
         paints.label.textSize = keyboard.keyPreviewTextSizePx
         // Centred on the box from the enlarged font's metrics.
         val metrics = paints.label.fontMetrics
-        val baseline = (top + bottom) / 2f - (metrics.ascent + metrics.descent) / 2f
-        canvas.drawText(previewLabel, 0, length, (left + right) / 2f, baseline, paints.label)
+        val baseline = middle(top, bottom) - middle(metrics.ascent, metrics.descent)
+        canvas.drawText(previewLabel, 0, length, middle(left, right), baseline, paints.label)
         paints.label.textSize = base
     }
 
     private fun pillWidth(text: String): Float =
-        resizeLabel.measureText(text) + density() * PILL_PADDING_DP * 2f
+        resizeLabel.measureText(text) + bothSides(density() * PILL_PADDING_DP)
 
     private fun pillHeight(): Float =
-        labelMetrics.descent - labelMetrics.ascent + density() * PILL_PADDING_DP * 2f
+        labelMetrics.descent - labelMetrics.ascent + bothSides(density() * PILL_PADDING_DP)
 
     /** A label on a filled, outlined pill, with its own touch rectangle where it has one. */
     private fun drawPill(
@@ -1080,7 +1085,7 @@ class KeyboardHostView(
     ) {
         val width = pillWidth(text)
         val height = pillHeight()
-        val radius = height / 2f
+        val radius = half(height)
         canvas.drawRoundRect(left, top, left + width, top + height, radius, radius, pillFill)
         canvas.drawRoundRect(left, top, left + width, top + height, radius, radius, resizeFrame)
         canvas.drawText(text, left + density() * PILL_PADDING_DP,
@@ -1111,15 +1116,15 @@ class KeyboardHostView(
         val left = contentLeft(width, (width * widthScale).toInt().coerceAtLeast(1)).toFloat()
         val right = left + (width * widthScale)
         val top = keyboardTopForResize().toFloat()
-        val middle = (top + keyboard.bottom) / 2f
+        val sideHandleY = middle(top, keyboard.bottom.toFloat())
         val reach = density() * HANDLE_TOUCH_DP
-        if (kotlin.math.hypot(x - (left + right) / 2f, y - top) <= reach) {
+        if (kotlin.math.hypot(x - middle(left, right), y - top) <= reach) {
             return HANDLE_TOP
         }
-        if (kotlin.math.hypot(x - left, y - middle) <= reach) {
+        if (kotlin.math.hypot(x - left, y - sideHandleY) <= reach) {
             return HANDLE_LEFT
         }
-        if (kotlin.math.hypot(x - right, y - middle) <= reach) {
+        if (kotlin.math.hypot(x - right, y - sideHandleY) <= reach) {
             return HANDLE_RIGHT
         }
         return HANDLE_NONE

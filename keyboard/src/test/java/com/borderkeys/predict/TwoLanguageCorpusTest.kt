@@ -44,7 +44,7 @@ class TwoLanguageCorpusTest {
         try {
             pipeline.languageLock(BALANCED_EVIDENCE)
             for (run in runs) {
-                val file = File(CORPUS_DIRECTORY, run.file)
+                val file = File(Pipeline.CORPUS_DIRECTORY, run.file)
                 if (!file.isFile) {
                     failures += "  ${run.file} is missing"
                     continue
@@ -100,7 +100,6 @@ class TwoLanguageCorpusTest {
     }
 
     private companion object {
-        const val CORPUS_DIRECTORY = "../native-tests/data"
         const val MISSES_LISTED = 12
 
         /** The Languages screen's default. */

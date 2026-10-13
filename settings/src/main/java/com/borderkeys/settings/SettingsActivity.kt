@@ -4,101 +4,100 @@
 package com.borderkeys.settings
 
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.takeOrElse
 import com.borderkeys.data.DataGraph
 import com.borderkeys.data.assist.AssistProtocol
 import com.borderkeys.data.assist.AssistTask
+import com.borderkeys.data.backup.TransferProtocol
 import com.borderkeys.data.draft.DraftProtocol
 import com.borderkeys.i18n.Keys
 import com.borderkeys.i18n.LanguageManager
 import com.borderkeys.i18n.LanguageResolution
 import com.borderkeys.settings.screen.AboutScreen
+import com.borderkeys.settings.screen.AnimationsScreen
 import com.borderkeys.settings.screen.AssistantScreen
-import com.borderkeys.data.backup.TransferProtocol
 import com.borderkeys.settings.screen.BackupScreen
 import com.borderkeys.settings.screen.ClipboardScreen
 import com.borderkeys.settings.screen.ComposerScreen
+import com.borderkeys.settings.screen.CustomLayoutsScreen
 import com.borderkeys.settings.screen.DictionaryScreen
 import com.borderkeys.settings.screen.EffectsScreen
+import com.borderkeys.settings.screen.ExtraKeysScreen
 import com.borderkeys.settings.screen.FeaturesScreen
 import com.borderkeys.settings.screen.HomeScreen
-import com.borderkeys.settings.screen.LanguagesScreen
-import com.borderkeys.settings.screen.CustomLayoutsScreen
 import com.borderkeys.settings.screen.KeyFlicksScreen
-import com.borderkeys.settings.screen.OnboardingScreen
-import com.borderkeys.settings.screen.AnimationsScreen
-import com.borderkeys.settings.screen.ExtraKeysScreen
+import com.borderkeys.settings.screen.LanguagesScreen
 import com.borderkeys.settings.screen.LayoutScreen
 import com.borderkeys.settings.screen.LearnedPhrasesScreen
 import com.borderkeys.settings.screen.LearnedWordsScreen
+import com.borderkeys.settings.screen.OnboardingScreen
 import com.borderkeys.settings.screen.PrivacyScreen
 import com.borderkeys.settings.screen.ProcessTextScreen
 import com.borderkeys.settings.screen.QuickActionsScreen
 import com.borderkeys.settings.screen.SetupScreen
-import com.borderkeys.settings.screen.TransferScreen
 import com.borderkeys.settings.screen.SizeScreen
-import com.borderkeys.settings.screen.TypingScreen
 import com.borderkeys.settings.screen.ThemeScreen
+import com.borderkeys.settings.screen.TransferScreen
+import com.borderkeys.settings.screen.TypingScreen
 
 /**
  * The only launchable component in the application, drawn entirely in Compose. The UI reads from
@@ -290,13 +289,13 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .padding(horizontal = SPACE_XLARGE, vertical = SPACE_XSMALL)
                     .navigationBarsPadding()
                     .imePadding(),
                 shape = MaterialTheme.shapes.medium,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                border = BorderStroke(BORDER_WIDTH, MaterialTheme.colorScheme.primary.copy(alpha = CARD_BORDER_ALPHA)),
                 colors = CardDefaults.elevatedCardColors(),
-                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = CARD_ELEVATION),
             ) {
                 DebugStatsLine(statsExpanded) { statsExpanded = !statsExpanded }
                 // One field, three modes. Resting inside the empty field the label names the
@@ -339,7 +338,7 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .padding(horizontal = SPACE_LARGE, vertical = SPACE_SMALL)
                         .then(if (probeMode == ProbeMode.LINES) Modifier else Modifier.height(PROBE_FIELD_HEIGHT))
                         .onFocusChanged { probeFocused = it.isFocused }
                         .semantics { contentDescription = probeMode.description + probe },
@@ -359,7 +358,7 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                             Text(title)
                         }
                         if (current == Screen.Home) {
-                            Spacer(Modifier.width(16.dp))
+                            Spacer(Modifier.width(SPACE_XLARGE))
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
@@ -368,7 +367,7 @@ private fun SettingsApp(openTo: Screen? = null, editClipId: Long? = null) {
                                 },
                                 singleLine = true,
                                 textStyle = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                                modifier = Modifier.weight(1f).padding(end = SPACE_LARGE),
                             )
                         }
                     }

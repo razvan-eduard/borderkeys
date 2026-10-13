@@ -31,10 +31,11 @@ class FeatureTest {
     }
 
     @Test
-    fun `Remember what you copy off switches off everything under it, whatever their own switches say`() {
+    fun `Clipboard history off switches off everything under it, whatever their own switches say`() {
         val off = allOn.copy(clipboardEnabled = false)
         for (feature in listOf(
             Feature.CLIPBOARD_HISTORY, Feature.CLIPBOARD_OFFER, Feature.PHOTOS,
+            Feature.PHOTO_OFFER,
             Feature.SCREENSHOTS, Feature.SCREENSHOT_OFFER, Feature.SCREENSHOT_CASCADE,
         )) {
             assertFalse(feature.name, feature.on(off))
@@ -64,6 +65,7 @@ class FeatureTest {
         assertEquals(null, Feature.CLIPBOARD_HISTORY.parent)
         assertEquals(Feature.CLIPBOARD_HISTORY, Feature.CLIPBOARD_OFFER.parent)
         assertEquals(Feature.CLIPBOARD_HISTORY, Feature.PHOTOS.parent)
+        assertEquals(Feature.PHOTOS, Feature.PHOTO_OFFER.parent)
         assertEquals(Feature.CLIPBOARD_HISTORY, Feature.SCREENSHOTS.parent)
         assertEquals(Feature.SCREENSHOTS, Feature.SCREENSHOT_OFFER.parent)
         assertEquals(Feature.SCREENSHOT_OFFER, Feature.SCREENSHOT_CASCADE.parent)
@@ -77,6 +79,7 @@ class FeatureTest {
         assertEquals(FieldRequirement.ON_BY_HAND, Feature.STRIP.needs)
         for (feature in listOf(
             Feature.CLIPBOARD_HISTORY, Feature.CLIPBOARD_OFFER, Feature.PHOTOS,
+            Feature.PHOTO_OFFER,
             Feature.SCREENSHOTS, Feature.SCREENSHOT_OFFER, Feature.SCREENSHOT_CASCADE,
         )) {
             assertEquals(feature.name, FieldRequirement.CLIPBOARD, feature.needs)

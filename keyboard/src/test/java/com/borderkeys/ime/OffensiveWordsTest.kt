@@ -3,6 +3,7 @@
 
 package com.borderkeys.ime
 
+import com.borderkeys.data.RepositoryRoot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -30,9 +31,7 @@ class OffensiveWordsTest {
      */
     @Test
     fun `every bundled language ships a well-formed list`() {
-        val root = generateSequence(File("").absoluteFile) { it.parentFile }
-            .first { File(it, "settings.gradle.kts").isFile }
-        val directory = File(root, "keyboard/src/main/assets/offensive")
+        val directory = RepositoryRoot.file("keyboard/src/main/assets/offensive")
         for (tag in listOf("en-US", "ro-RO", "de-DE", "fr-FR", "es-ES", "it-IT")) {
             val file = File(directory, "$tag.txt")
             assertTrue("$tag has a list", file.isFile)

@@ -30,6 +30,8 @@ class UnlockedPathsTest {
             // clipboard listener, registered by registerClipboardListener.
             "onClipPinToggled", "onClipDeleted", "refreshClipboardPanel", "onClipboardPicked",
             "onClipboardChanged",
+            // Called by offerClipboardHistory and refreshClipboardPanel.
+            "fillClipboardPanel",
             // Behind the field policy's clipboard gate, which follows FieldPolicy.userUnlocked.
             "offerClipboardHistory", "rememberScreenshot",
         ),

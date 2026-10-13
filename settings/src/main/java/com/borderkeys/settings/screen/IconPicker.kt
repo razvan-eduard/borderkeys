@@ -39,6 +39,13 @@ import com.borderkeys.data.theme.QuickActionBar
 import com.borderkeys.i18n.Keys
 import com.borderkeys.keyboard.R
 import com.borderkeys.settings.LocalStrings
+import com.borderkeys.settings.SMALL_ICON_SIZE
+import com.borderkeys.settings.SPACE_GUTTER
+import com.borderkeys.settings.SPACE_LARGE
+import com.borderkeys.settings.SPACE_MEDIUM
+import com.borderkeys.settings.SPACE_TINY
+import com.borderkeys.settings.SPACE_XLARGE
+import com.borderkeys.settings.SPACE_XSMALL
 import com.borderkeys.settings.move
 
 /** The drawable for a [CustomIcon]. */
@@ -64,9 +71,9 @@ internal fun iconFor(icon: CustomIcon): Int = when (icon) {
 /** Every [CustomIcon], in a fixed grid. */
 @Composable
 internal fun IconPicker(selected: CustomIcon, onPick: (CustomIcon) -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
         for (row in CustomIcon.entries.chunked(4)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(SPACE_MEDIUM)) {
                 for (icon in row) {
                     val isSelected = icon == selected
                     Surface(
@@ -76,7 +83,7 @@ internal fun IconPicker(selected: CustomIcon, onPick: (CustomIcon) -> Unit, modi
                         } else {
                             MaterialTheme.colorScheme.surfaceVariant
                         },
-                        modifier = Modifier.size(48.dp).clickable { onPick(icon) },
+                        modifier = Modifier.size(ICON_CHOICE_SIZE).clickable { onPick(icon) },
                     ) {
                         Icon(
                             painter = painterResource(iconFor(icon)),
@@ -86,7 +93,7 @@ internal fun IconPicker(selected: CustomIcon, onPick: (CustomIcon) -> Unit, modi
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(SPACE_LARGE),
                         )
                     }
                 }
@@ -101,11 +108,11 @@ internal fun IconPickerDialog(selected: CustomIcon, onPick: (CustomIcon) -> Unit
     val strings = LocalStrings.current
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(modifier = Modifier.padding(SPACE_GUTTER)) {
                 Text(
                     strings[Keys.COMPOSER_ICON_PICKER_TITLE],
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 16.dp),
+                    modifier = Modifier.padding(bottom = SPACE_XLARGE),
                 )
                 IconPicker(selected = selected, onPick = onPick)
             }
@@ -134,11 +141,11 @@ internal fun CreateCustomActionDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(modifier = Modifier.padding(SPACE_GUTTER)) {
                 Text(
                     strings[if (editing != null) Keys.CUSTOM_ACTION_EDIT_TITLE else Keys.COMPOSER_CUSTOM_ACTION_TITLE],
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 16.dp),
+                    modifier = Modifier.padding(bottom = SPACE_XLARGE),
                 )
                 Box {
                     IconButton(onClick = { pickingIcon = true }) {
@@ -161,24 +168,24 @@ internal fun CreateCustomActionDialog(
                     onValueChange = { name = it.take(CustomAction.MAX_NAME_CHARS) },
                     placeholder = { Text(strings[Keys.COMPOSER_CUSTOM_ACTION_NAME_HINT]) },
                     singleLine = true,
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(top = SPACE_MEDIUM),
                 )
                 OutlinedTextField(
                     value = instruction,
                     onValueChange = { instruction = it.take(CustomAction.MAX_INSTRUCTION_CHARS) },
                     placeholder = { Text(strings[Keys.COMPOSER_CUSTOM_ACTION_INSTRUCTION_HINT]) },
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(top = SPACE_MEDIUM),
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { pinToBar = !pinToBar }.padding(top = 8.dp),
+                    modifier = Modifier.clickable { pinToBar = !pinToBar }.padding(top = SPACE_MEDIUM),
                 ) {
                     Checkbox(checked = pinToBar, onCheckedChange = { pinToBar = it })
                     Text(strings[Keys.COMPOSER_CUSTOM_ACTION_PIN_TO_BAR], style = MaterialTheme.typography.bodySmall)
                 }
                 Row(
                     horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = SPACE_LARGE),
                 ) {
                     TextButton(onClick = onDismiss) { Text(strings[Keys.COMPOSER_CUSTOM_ACTION_CANCEL]) }
                     TextButton(
@@ -238,13 +245,13 @@ internal fun CreateCustomQuickActionDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(modifier = Modifier.padding(SPACE_GUTTER)) {
                 Text(
                     strings[
                         if (editing != null) Keys.CUSTOM_ACTION_EDIT_TITLE else Keys.COMPOSER_CUSTOM_ACTION_TITLE,
                     ],
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 16.dp),
+                    modifier = Modifier.padding(bottom = SPACE_XLARGE),
                 )
                 Box {
                     IconButton(onClick = { pickingIcon = true }) {
@@ -267,12 +274,12 @@ internal fun CreateCustomQuickActionDialog(
                     onValueChange = { name = it.take(CustomQuickAction.MAX_NAME_CHARS) },
                     placeholder = { Text(strings[Keys.COMPOSER_CUSTOM_ACTION_NAME_HINT]) },
                     singleLine = true,
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(top = SPACE_MEDIUM),
                 )
                 Text(
                     strings[Keys.QUICK_CUSTOM_STEPS],
                     style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(top = SPACE_XLARGE, bottom = SPACE_XSMALL),
                 )
                 if (steps.isEmpty()) {
                     Text(
@@ -283,36 +290,36 @@ internal fun CreateCustomQuickActionDialog(
                 }
                 steps.forEachIndexed { index, stepId ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = SPACE_TINY),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
                             painter = painterResource(iconForStep(stepId)),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(SMALL_ICON_SIZE),
                         )
                         Text(
                             labelForStep(stepId),
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f).padding(start = 12.dp),
+                            modifier = Modifier.weight(1f).padding(start = SPACE_LARGE),
                         )
                         IconButton(
                             onClick = { steps = move(steps, index, index - 1) },
                             enabled = index > 0,
-                            modifier = Modifier.size(32.dp),
+                            modifier = Modifier.size(STEP_BUTTON_SIZE),
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.bk_reorder_up),
                                 contentDescription = strings[Keys.QUICK_MOVE_UP],
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(MINI_ICON_SIZE),
                             )
                         }
-                        IconButton(onClick = { removingStepAt = index }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = { removingStepAt = index }, modifier = Modifier.size(STEP_BUTTON_SIZE)) {
                             Icon(
                                 painter = painterResource(R.drawable.bk_reorder_remove),
                                 contentDescription = strings[Keys.QUICK_REMOVE],
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(MINI_ICON_SIZE),
                             )
                         }
                     }
@@ -321,25 +328,25 @@ internal fun CreateCustomQuickActionDialog(
                     Text(
                         strings[Keys.QUICK_CUSTOM_ADD_STEP],
                         style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                        modifier = Modifier.padding(top = SPACE_LARGE, bottom = SPACE_XSMALL),
                     )
                     for (builtin in addableBuiltins) {
                         Row(
                             modifier = Modifier.fillMaxWidth()
                                 .clickable { steps = steps + builtin.id }
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = SPACE_XSMALL),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
                                 painter = painterResource(iconFor(builtin)),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(SMALL_ICON_SIZE),
                             )
                             Text(
                                 strings[labelFor(builtin)],
                                 style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(start = 12.dp),
+                                modifier = Modifier.padding(start = SPACE_LARGE),
                             )
                         }
                     }
@@ -347,33 +354,33 @@ internal fun CreateCustomQuickActionDialog(
                         Row(
                             modifier = Modifier.fillMaxWidth()
                                 .clickable { steps = steps + custom.id }
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = SPACE_XSMALL),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
                                 painter = painterResource(iconFor(CustomIcon.fromId(custom.icon))),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(SMALL_ICON_SIZE),
                             )
                             Text(
                                 custom.name,
                                 style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(start = 12.dp),
+                                modifier = Modifier.padding(start = SPACE_LARGE),
                             )
                         }
                     }
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { pinToBar = !pinToBar }.padding(top = 12.dp),
+                    modifier = Modifier.clickable { pinToBar = !pinToBar }.padding(top = SPACE_LARGE),
                 ) {
                     Checkbox(checked = pinToBar, onCheckedChange = { pinToBar = it })
                     Text(strings[Keys.COMPOSER_CUSTOM_ACTION_PIN_TO_BAR], style = MaterialTheme.typography.bodySmall)
                 }
                 Row(
                     horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = SPACE_LARGE),
                 ) {
                     TextButton(onClick = onDismiss) { Text(strings[Keys.COMPOSER_CUSTOM_ACTION_CANCEL]) }
                     TextButton(
@@ -403,3 +410,8 @@ internal fun CreateCustomQuickActionDialog(
         )
     }
 }
+
+/** An icon to choose, a step's button, and the small icon inside it. */
+private val ICON_CHOICE_SIZE = 48.dp
+private val STEP_BUTTON_SIZE = 32.dp
+private val MINI_ICON_SIZE = 16.dp

@@ -108,6 +108,13 @@ android {
                     .withPropertyName("drawables").withPathSensitivity(PathSensitivity.RELATIVE)
                 it.inputs.dir(rootProject.layout.projectDirectory.dir("native-tests/data"))
                     .withPropertyName("corpora").withPathSensitivity(PathSensitivity.RELATIVE)
+                // The engine headers NativeSlotsTest reads.
+                it.inputs.file(
+                    rootProject.layout.projectDirectory.file("keyboard/src/main/cpp/jni_slots.hpp"),
+                ).withPropertyName("bridgeSlotsHeader").withPathSensitivity(PathSensitivity.NONE)
+                it.inputs.file(
+                    rootProject.layout.projectDirectory.file("keyboard/src/main/cpp/engine.hpp"),
+                ).withPropertyName("engineHeader").withPathSensitivity(PathSensitivity.NONE)
                 // The directory the pipeline tests write one line per case into; unset writes none.
                 providers.gradleProperty("borderkeys.readings").orNull?.let { directory ->
                     it.systemProperty("borderkeys.readings", directory)
@@ -130,6 +137,8 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":geometry"))
+    implementation(project(":language"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     // Styles the password manager's inline suggestions.
@@ -138,6 +147,7 @@ dependencies {
     implementation(project(":i18n"))
     implementation(project(":effects"))
 
+    testImplementation(testFixtures(project(":data")))
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)

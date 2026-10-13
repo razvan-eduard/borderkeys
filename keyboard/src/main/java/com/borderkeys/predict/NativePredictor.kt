@@ -118,8 +118,14 @@ internal object NativePredictor {
     /** [nativeAnswer]'s text slot: the tap decoder's word, when the engine accepted it. */
     const val TEXT_DECODED = 2
 
+    /**
+     * [nativeAnswer]'s and [nativeDecodeGesture]'s text slot, filled for every request: the primary
+     * language subtag whose learned pairs and triples it read.
+     */
+    const val TEXT_LANGUAGE = 3
+
     /** How many text slots [nativeAnswer] fills. */
-    const val TEXT_SLOTS = 3
+    const val TEXT_SLOTS = 4
 
     /** How many entries of autocorrect's list [nativeAnswer] writes at most. */
     const val CORRECTION_SLOTS = 5
@@ -133,10 +139,15 @@ internal object NativePredictor {
     /** How many spelling flags [nativeAnswer] fills. */
     const val SPELLING_FLAGS = 2
 
+    /** No pack: [nativeDominantPack]'s answer while undecided. */
+    const val NO_PACK = -1
+
     /**
-     * Records that the user committed [word] after [prev1] and [prev2]. [asserted] is whether it
-     * was picked on the strip or put back after a correction; [deliberateCapital] is whether its
-     * capital was typed with shift.
+     * Records that the user committed [word] after [prev1] and [prev2], the pair and triple in
+     * the store of [language], a primary language subtag, or with none of the language the
+     * engine reads. [asserted] is whether it was picked on the strip or put back after a
+     * correction; [deliberateCapital] is whether its capital was typed with shift. Not [tally],
+     * the word is not counted.
      */
     external fun nativeLearn(
         handle: Long,
@@ -145,11 +156,17 @@ internal object NativePredictor {
         prev2: String?,
         deliberateCapital: Boolean,
         asserted: Boolean,
-    )
+        language: String?,
+        tally: Boolean,
+    ): Int
+
+    const val LEARNED_PAIR = 1
+
+    const val LEARNED_TRIPLE = 2
 
     /**
      * Decodes a swipe from its raw touch samples, in view pixels, into the output buffers, best
-     * first, and returns how many were written.
+     * first, and returns how many were written. [outTexts] receives [TEXT_LANGUAGE] alone.
      */
     external fun nativeDecodeGesture(
         handle: Long,
@@ -162,6 +179,7 @@ internal object NativePredictor {
         outWords: Array<String?>,
         outScores: FloatArray,
         outProperNoun: BooleanArray,
+        outTexts: Array<String?>,
     ): Int
 
     /** Replaces the personal dictionary's words, with their per-word counts. */
@@ -179,7 +197,7 @@ internal object NativePredictor {
      */
     external fun nativeSetBlockedWords(handle: Long, words: Array<String>)
 
-    /** How many uses a word, pair or triple needs before it is learned; 3 is the default. */
+    /** How many uses a word, pair or triple needs before it is learned. */
     external fun nativeSetLearnAfterUses(handle: Long, uses: Int)
 
     /**
@@ -263,21 +281,132 @@ internal object NativePredictor {
         out: FloatArray,
     ): Boolean
 
-    /** Replaces the personal three-word sequences. */
+    /**
+     * Replaces the personal three-word sequences, each in the store of its language, with how
+     * many times its context had been seen, and its language's triple clock, when each was last
+     * recorded.
+     */
     external fun nativeLoadUserTrigrams(
         handle: Long,
+        languages: Array<String>,
         previous2: Array<String>,
         previous1: Array<String>,
         next: Array<String>,
         counts: IntArray,
+        contextSeen: LongArray,
+        languageSeen: LongArray,
     )
 
-    /** Replaces the personal word pairs. */
+    /** Replaces the personal word pairs, each in the store of its language, stamped as the triples. */
     external fun nativeLoadUserBigrams(
         handle: Long,
+        languages: Array<String>,
         previous: Array<String>,
         next: Array<String>,
         counts: IntArray,
+        contextSeen: LongArray,
+        languageSeen: LongArray,
+    )
+
+    /**
+     * How often each previous word of a pair has been followed, and how many times it has been
+     * seen, per language; after the pairs.
+     */
+    external fun nativeLoadUserPairTotals(
+        handle: Long,
+        languages: Array<String>,
+        previous: Array<String>,
+        totals: LongArray,
+        seen: LongArray,
+    )
+
+    /** [nativeLoadUserPairTotals], for each start of a triple; after the triples. */
+    external fun nativeLoadUserTripleTotals(
+        handle: Long,
+        languages: Array<String>,
+        previous2: Array<String>,
+        previous1: Array<String>,
+        totals: LongArray,
+        seen: LongArray,
+    )
+
+    /** Each language's pair clock and triple clock; after the links. */
+    external fun nativeLoadUserClocks(
+        handle: Long,
+        languages: Array<String>,
+        pairClocks: LongArray,
+        tripleClocks: LongArray,
+    )
+
+    /**
+     * The links after [previous2] and [previous1] in [language]'s store, pairs when [previous2] is
+     * null, in the order recorded: each next word's key into [outWords], its count into
+     * [outCounts] and how many times its context had been seen when it last was into
+     * [outContextSeen], up to their size; [outContext] gets [CONTEXT_TOTAL] and [CONTEXT_SEEN],
+     * zeros for a context not held. Returns how many links follow it.
+     */
+    external fun nativeContextLinks(
+        handle: Long,
+        language: String,
+        previous2: String?,
+        previous1: String,
+        outWords: Array<String?>,
+        outCounts: IntArray,
+        outContextSeen: LongArray,
+        outContext: LongArray,
+    ): Int
+
+    /** [nativeContextLinks]' context slot: how often the context has been followed. */
+    const val CONTEXT_TOTAL = 0
+
+    /** [nativeContextLinks]' context slot: how many times the context has been seen. */
+    const val CONTEXT_SEEN = 1
+
+    /** How many context slots [nativeContextLinks] fills. */
+    const val CONTEXT_SLOTS = 2
+
+    /**
+     * Whether each of [words] may be part of a learned pair or triple, into [out] up to its size;
+     * a word the bridge cannot take is left as [out] holds it.
+     */
+    external fun nativeLearnable(handle: Long, words: Array<String>, out: BooleanArray)
+
+    /** How many triples, or pairs, [language]'s store holds. */
+    external fun nativeLinksHeld(handle: Long, language: String, triples: Boolean): Int
+
+    /**
+     * Every triple, or pair, of [language]'s store, up to the arrays' size: the keys of the words
+     * before its last into [outPrevious2] (left as is for a pair) and [outPrevious1], its last
+     * into [outWords], its count, when its language last saw it, and its context's total. Returns
+     * how many were written.
+     */
+    external fun nativeLanguageLinks(
+        handle: Long,
+        language: String,
+        triples: Boolean,
+        outPrevious2: Array<String?>,
+        outPrevious1: Array<String?>,
+        outWords: Array<String?>,
+        outCounts: IntArray,
+        outLanguageSeen: LongArray,
+        outContextTotals: LongArray,
+    ): Int
+
+    /** Drops the pairs the budget gave up, each from its language's store. */
+    external fun nativeDropUserPairs(
+        handle: Long,
+        languages: Array<String>,
+        previous: Array<String>,
+        next: Array<String>,
+    )
+
+    /** Drops the triples the budget gave up, each from its language's store. */
+    external fun nativeDropUserTriples(
+        handle: Long,
+        languages: Array<String>,
+        previous2: Array<String>,
+        previous1: Array<String>,
+        next: Array<String>,
     )
 
     /** Whether the personal dictionary is consulted; it stays loaded either way. */
@@ -307,10 +436,13 @@ internal object NativePredictor {
     /** The language tag of [nativeDominantPack]'s pack, or null while the engine is undecided. */
     external fun nativeDominantLanguageTag(handle: Long): String?
 
+    /** The tag of the pack in [slot], or null when the slot holds no open pack. */
+    external fun nativePackTag(handle: Long, slot: Int): String?
+
 
     /** The spelling the dictionaries hold for [word], in any case or marks, or null for none. */
     external fun nativeKnownSpelling(handle: Long, word: String): String?
 
-    /** The pack the conversation is currently considered written in, or -1 when undecided. */
+    /** The pack the conversation is currently considered written in, or [NO_PACK] when undecided. */
     external fun nativeDominantPack(handle: Long): Int
 }

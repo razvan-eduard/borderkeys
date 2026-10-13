@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.borderkeys.data.KeyboardSubtypes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -29,11 +30,7 @@ import kotlinx.coroutines.isActive
  * Whether this build is enabled in the system's list of input methods; [isBorderKeysDefault] says
  * whether it is the one in use.
  */
-fun isBorderKeysEnabled(context: Context): Boolean {
-    val manager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        ?: return false
-    return manager.enabledInputMethodList.any { it.packageName == context.packageName }
-}
+fun isBorderKeysEnabled(context: Context): Boolean = KeyboardSubtypes.enabledMethod(context) != null
 
 /** Whether this build is the keyboard in use, compared by exact package name, never by prefix. */
 fun isBorderKeysDefault(context: Context): Boolean {

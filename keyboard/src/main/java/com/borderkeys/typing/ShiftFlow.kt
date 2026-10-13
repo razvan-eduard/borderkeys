@@ -202,8 +202,8 @@ class ShiftFlow(
      * the cursor.
      */
     private fun autoState(composingEmpty: Boolean, justCommitted: String): Int {
-        // A field that takes the keys as typed gets no capital it did not press.
-        if (!session.described || session.policy.verbatim) {
+        // Switched off by hand, the keys get no capital they did not press.
+        if (!session.described || session.policy.offByHand) {
             return ShiftState.OFF
         }
         return AutoShift.stateFor(

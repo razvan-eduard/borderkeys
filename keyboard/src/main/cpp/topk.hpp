@@ -14,6 +14,9 @@ namespace borderkeys {
 template <typename T>
 class TopK {
 public:
+    /** The heap's branching: each entry has two children. */
+    static constexpr int kArity = 2;
+
     void reset(T* storage, int capacity) {
         items_ = storage;
         capacity_ = capacity;
@@ -86,7 +89,7 @@ public:
 private:
     void siftUp(int index) {
         while (index > 0) {
-            const int parent = (index - 1) / 2;
+            const int parent = (index - 1) / kArity;
             if (!items_[index].ranksBelow(items_[parent])) {
                 return;
             }
@@ -99,7 +102,7 @@ private:
 
     void siftDown(int index) {
         for (;;) {
-            const int left = 2 * index + 1;
+            const int left = kArity * index + 1;
             if (left >= size_) {
                 return;
             }

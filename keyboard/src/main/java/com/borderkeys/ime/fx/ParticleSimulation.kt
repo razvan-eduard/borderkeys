@@ -3,6 +3,7 @@
 
 package com.borderkeys.ime.fx
 
+import com.borderkeys.data.theme.EffectsSettings
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.random.Random
@@ -32,7 +33,7 @@ class ParticleSimulation(val capacity: Int) {
     private val sampleScratch = FloatArray(4)
 
     var preset: ParticleEffectPreset = ParticleEffectPresets.GLOW
-    var speedMultiplier: Float = 1f
+    var speedMultiplier: Float = EffectsSettings.DEFAULT_SPEED
 
     /** Scales how many particles an ambient keeps alive and how many a burst spawns. */
     var densityMultiplier: Float = 1f

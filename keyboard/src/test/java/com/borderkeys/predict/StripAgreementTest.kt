@@ -25,7 +25,7 @@ class StripAgreementTest {
         var checked = 0
 
         for ((tag, name) in corpora) {
-            val file = File(CORPUS_DIRECTORY, name)
+            val file = File(Pipeline.CORPUS_DIRECTORY, name)
             if (!file.isFile) {
                 failures += "  $name is missing"
                 continue
@@ -67,6 +67,5 @@ class StripAgreementTest {
     private companion object {
         /** The default number of suggestion slots, KeyboardPreferences.DEFAULT_SUGGESTIONS. */
         const val SLOTS = 3
-        const val CORPUS_DIRECTORY = "../native-tests/data"
     }
 }
