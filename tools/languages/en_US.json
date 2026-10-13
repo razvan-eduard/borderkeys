@@ -1,0 +1,26 @@
+{
+  "tag": "en-US",
+  "name": "English",
+  "known_corpora": [
+    "eng_wikipedia_2016_1M",
+    "eng_news_2025_1M",
+    "eng_newscrawl_2018_1M"
+  ],
+  "case_corpora": [
+    "eng_news_2024_1M",
+    "eng_news_2025_1M",
+    "eng_newscrawl_2018_1M",
+    "eng_wikipedia_2016_1M"
+  ],
+  "capitals": "eng_news_2020_1M",
+  "heldout": "eng_news_2023_1M",
+  "persona": "Friday",
+  "sha256": {
+    "eng_news_2020_1M.tar.gz": "be782eb82690415241d623fd2448dfd3fc68102ac1ce971107cb130420abbb41",
+    "eng_news_2023_1M.tar.gz": "c8a5a5e72897aa5e367b0319c1884831c02aaf29bf81342de31ca1b1cc8f3e4c",
+    "eng_news_2024_1M.tar.gz": "8f1d4d07b9771f8a7fc219ad587d5382eabf5009ef563f1bc4c12a467a8e3a97",
+    "eng_news_2025_1M.tar.gz": "7cad9136013d27b6230841558d19c5ab39b18c502dce8ccd3a821fdf74b4081b",
+    "eng_newscrawl_2018_1M.tar.gz": "e849ff6776829c52e8c2a0af7aca5dcd612fe323391550c49f78d131cbbe8da8",
+    "eng_wikipedia_2016_1M.tar.gz": "42cc4e689b93a320151fa4378572db9d6c5a5eee6e13c966fdefe77954d6596d"
+  }
+}

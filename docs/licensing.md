@@ -248,14 +248,16 @@ among them to decide which unlisted corpus words a pack knows. None of them is c
 repository or the application: what the tools change in a list is which of the list's own rows
 stay, and which words the pack knows, a yes/no per word, recorded under this project's
 GPL-3.0-or-later like the `names-ordinary` lists in 2.1.1.
-Every file is pinned and checked against a SHA-256 the tool carries.
+Every file is pinned and checked against a SHA-256: the tool carries the pins of the
+dictionaries, word lists and subtitle lists, and the language's manifest in `tools/languages/`
+the pin of the Leipzig corpus it names under `capitals`.
 
 | Source | Pinned at | Licence |
 |---|---|---|
 | Hunspell dictionaries from LibreOffice: `en_US`, `en_GB`, `ro_RO`, `de_DE_frami`, `de_AT_frami`, `de_CH_frami`, `fr`, `es_ES`, `es_MX`, `it_IT` | `LibreOffice/dictionaries` commit `32b006a2` | `en_US` SCOWL (MIT/BSD terms); `en_GB` LGPL-3.0; the three frami dictionaries GPL-2.0 or GPL-3.0; `fr` MPL-2.0; `es_ES` and `es_MX` GPL-3.0/LGPL-3.0/MPL-1.1; `it_IT` GPL-3.0; `ro_RO` GPL-2.0/LGPL-2.1/MPL-1.1 |
 | The word lists of Android's stock keyboard, `<code>_wordlist.combined.gz` for `en`, `en_US`, `en_GB`, `ro`, `de`, `fr`, `es`, `it` | `LineageOS/android_packages_inputmethods_LatinIME` commit `ee832c11` | Apache-2.0 |
 | OpenSubtitles 2018 frequency lists, `<code>_full.txt` | `hermitdave/FrequencyWords` commit `525f9b56` | CC BY-SA 4.0 (the lists), MIT (the code) |
-| Wortschatz Leipzig news corpora, 2020, 1M sentences: `eng`, `ron`, `deu`, `fra`, `spa`, `ita` | the file names | CC BY 4.0 |
+| Wortschatz Leipzig news corpora, 2020, 1M sentences: `eng`, `ron`, `deu`, `fra`, `spa`, `ita` | the file names, and their SHA-256 in `tools/languages/<tag>.json` | CC BY 4.0 |
 
 ### 2.1.3 The held-out text the context model is measured on
 
@@ -379,7 +381,7 @@ licence below.
 |---|---|---|
 | `native-tests/data/autocorrect_real_en.tsv` | 1,000 typos sampled by `tools/make_real_corpus.py` from the **ITE Typing dataset** (Katri Leino, Markku Laine, Mikko Kurimo and Antti Oulasvirta, Aalto University, 2024, doi:10.5281/zenodo.12528162): words participants typed on their own phones, the word the sentence held, and what their phone's autocorrect wrote. The dataset itself is not in this repository | **CC BY 4.0**, the dataset's licence on Zenodo; the attribution is the file's header, this row and the entry in `REUSE.toml` |
 | `native-tests/data/autocorrect_case_*.tsv` | 300 words a language's list flags as a name, and the word before each, sampled by `tools/make_case_corpus.py` from the **Wortschatz Leipzig** 2020 news sentences, which are not in this repository | **CC BY 4.0**, the corpora's licence; the attribution is this row and the entry in `REUSE.toml` |
-| `native-tests/data/personal_history_*.txt`, `personal_rows_*.tsv` | For English, Romanian and Spanish, a persona's sentences from the **Wortschatz Leipzig** 2020 news corpus, those mentioning one name, the first half verbatim, split into runs of words, and 1,200 words from the second half with the two words before each, as typed and with a typo, written by `tools/make_personal_corpus.py` | **CC BY 4.0**, the corpus's licence; the attribution is this row and the entry in `REUSE.toml` |
+| `native-tests/data/personal_history_*.txt`, `personal_rows_*.tsv` | For English, Romanian and Spanish, a persona's sentences from the **Wortschatz Leipzig** 2020 news corpus, those mentioning one name, the first half verbatim, split into runs of words, and 600 words from the second half with the two words before each, as typed and with a typo, written by `tools/make_personal_corpus.py` | **CC BY 4.0**, the corpus's licence; the attribution is this row and the entry in `REUSE.toml` |
 | `native-tests/data/autocorrect_unlisted_en.tsv` | 200 words sampled by `tools/make_unlisted_corpus.py` from the English word lists of **Android's stock keyboard** (LineageOS's copy of LatinIME, pinned in 2.1.2) that neither the bundled pack nor the `en_US` and `en_GB` spelling dictionaries list | **Apache-2.0**, the lists' licence; the attribution is the file's header, this row and the entry in `REUSE.toml` |
 | `native-tests/data/corpus/*.bkd`, 18 blobs | Deliberately damaged copies of the pack `tools/build_dict.py --selftest` produces: truncated headers, wrong magic, sizes that lie, section offsets past the end of the file, a capacity that is not a power of two, an unterminated language tag | GPL-3.0-or-later |
 | `native-tests/data/gestures.csv` | Synthesised by `tools/gesture_replay.py --synthesise`; no recorded human gesture is in this repository | GPL-3.0-or-later |
