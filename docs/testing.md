@@ -978,20 +978,21 @@ python3 tools/make_personal_corpus.py en_US   # and ro_RO, es_ES; into build/per
 What a person has written changes what the keyboard offers after it, so this corpus types words
 after a history. Both tools take the held-out file and the corpora a language's lists are counted
 from out of its manifest, `tools/languages/<tag>.json`, every archive checked against its SHA-256
-(`language_manifest.py`). `heldout_overlap.py` admits a language only when its word list's corpora
-are recorded and none of those corpora is from the held-out file's year; each bundled language
-holds out the most recent news edition from no such year. `make_personal_corpus.py` takes a persona
-from the held-out news (every sentence mentioning the name those sentences write most, which must
-be the manifest's `persona`, less any sentence a counted corpus also writes, Romanian respelled as
-its list is) and splits it by a hash of each sentence. The history side is written as its
-sentences, to be typed; the rows side as candidate rows: each ordinary word of the list after its
-two words of context, as written, and with a slip, omitted, extra or mid-word typo where its length
-suits that corpus and the typo is not a word of the list, each typo drawn from its corpus's seed,
-its kind and the word.
+(`language_manifest.py`). `heldout_overlap.py` admits a language only when its manifest names a
+held-out corpus and its word list's corpora, and no corpus its lists are counted from (`corpora`,
+`known_corpora`, `case_corpora`, `capitals`) is from the held-out file's year; each bundled
+language holds out the most recent news edition from no such year. `make_personal_corpus.py` takes
+a persona from the held-out news (every sentence mentioning the name those sentences write most,
+which must be the manifest's `persona`, less any sentence a counted corpus also writes, Romanian
+respelled as its list is) and splits it by a hash of each sentence. The history side is written as
+its sentences, to be typed; the rows side as candidate rows: each ordinary word of the list after
+its two words of context, as written, and with a slip, omitted, extra or mid-word typo where its
+length suits that corpus and the typo is not a word of the list, each typo drawn from its corpus's
+seed, its kind and the word.
 
-The corpus in `native-tests/data` predates that generator: its history is the first half of a
-persona from the 2020 news, which the English and Romanian lists count, as runs of words, and its
-rows were drawn from it by an estimated class.
+The corpus in `native-tests/data` is not this generator's output: its history is the first half of
+a persona from the 2020 news, which the English and Romanian word lists count, as runs of words,
+and its rows are drawn from it by an estimated class.
 
 The history is learned through `LearningFlow.record`, the call a commit makes, under the
 language the engine answers in, and read back as the service reads it at start: through the
@@ -1012,8 +1013,8 @@ Floors, rows right with the whole history:
 | none, as written | 230 / 230 | 191 / 191 | 204 / 205 |
 | none, typo | 170 / 230 | 131 / 196 | 141 / 210 |
 
-**meant** is smaller than the 200 words a class was drawn to: the earlier generator estimated a
-class from raw counts, and the budget gives up links in busy contexts, so the test files those
+**meant** is smaller than the 200 words a class is drawn to in that corpus: its classes are
+estimated from raw counts, and the budget gives up links in busy contexts, so the test files those
 rows under **others**.
 
 ### Accent restoration — the one that was missing

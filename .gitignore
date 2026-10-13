@@ -36,3 +36,6 @@ __pycache__/
 /tools/swipe_model/data/
 /tools/swipe_model/*.pt
 /tools/swipe_model/*.bkw
+
+# The lock tools/language_manifest.py rewrites the manifests under.
+/tools/languages/.lock

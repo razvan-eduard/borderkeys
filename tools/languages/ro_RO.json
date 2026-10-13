@@ -1,6 +1,11 @@
 {
   "tag": "ro-RO",
   "name": "Romanian",
+  "corpora": [
+    "ron_wikipedia_2021_1M",
+    "ron_news_2020_1M",
+    "ron_newscrawl_2011_1M"
+  ],
   "known_corpora": [
     "ron_wikipedia_2021_1M",
     "ron_news_2024_1M",
@@ -14,12 +19,13 @@
   ],
   "capitals": "ron_news_2020_1M",
   "heldout": "ron_news_2019_1M",
-  "persona": "Constanța",
+  "persona": "Mihai",
   "sha256": {
     "ron_news_2019_1M.tar.gz": "16bb62ef9e508ab8f078b7d1775af1dce3a1e00a11e8432661f25199da37862a",
     "ron_news_2020_1M.tar.gz": "6daa196d4c175ed447f227140618732edf7ca5889f56e53c290916ffaabd8d0d",
     "ron_news_2022_1M.tar.gz": "17f9fda1b39152bdd637a76485a0065844b5c2f30c22b6358d046e70e2265fe6",
     "ron_news_2024_1M.tar.gz": "1d1b5ddeecc00d60f573750655ed9befb52ef44fcda58095d02f4dd1ead452d2",
+    "ron_newscrawl_2011_1M.tar.gz": "a5fa5bae4a8d0f302fe2ee748cc552f704b47ae07aeba71d139828c811c3b8d5",
     "ron_newscrawl_2015_1M.tar.gz": "b30ed4d6ac9489f0105cb01bba6e10997acdc32f05825167f20e21e5c0103869",
     "ron_wikipedia_2021_1M.tar.gz": "b8a882387128848a3c1273cd1dd3ba644780298686abcab5d8f425a6b82755ea"
   }

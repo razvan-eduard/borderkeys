@@ -1,6 +1,11 @@
 {
   "tag": "en-US",
   "name": "English",
+  "corpora": [
+    "eng_wikipedia_2016_1M",
+    "eng_newscrawl_2018_1M",
+    "eng_news_2020_1M"
+  ],
   "known_corpora": [
     "eng_wikipedia_2016_1M",
     "eng_news_2025_1M",

@@ -1,6 +1,11 @@
 {
   "tag": "it-IT",
   "name": "Italian",
+  "corpora": [
+    "ita_wikipedia_2021_1M",
+    "ita_newscrawl_2020_1M",
+    "ita_news_2021_1M"
+  ],
   "known_corpora": [
     "ita_wikipedia_2021_1M",
     "ita_news_2024_1M",
@@ -16,10 +21,8 @@
   "sha256": {
     "ita_news_2020_1M.tar.gz": "b0728fc9d2ace61947b16b61162ca89be1c04531b4a56053f55a14bb68dae20c",
     "ita_news_2021_1M.tar.gz": "2683e41cb40fab2366b8a1f9114c8612340bfc98bba2353e38e059e81bc6bd26",
-    "ita_news_2022_1M.tar.gz": "fd879ae8afa8b3831ff1f856e0801950665ef3435aa07f8837253f22581dfbef",
     "ita_news_2023_1M.tar.gz": "208ef099ee0ddbbaec7e69649b1ad76ebc2f0bd073c487952783e690f973cc3e",
     "ita_news_2024_1M.tar.gz": "90ed9f839c50de9a58a7f1772516891d6721c92f4b863560bd26a480d7717e30",
-    "ita_newscrawl_2019_1M.tar.gz": "c4f1a62800583999e9717f75d31bf57dc172cac50cc88114d04f76cd4fddb193",
     "ita_newscrawl_2020_1M.tar.gz": "3f7291dc709eb2cccbc9650feaaebe05445eda9b633c339399afbe94c81fbd7c",
     "ita_wikipedia_2021_1M.tar.gz": "e934b9ad62a4d79a9d48e3d903b5c32d8d279ac8f67938acc17aadb0782c2104"
   }

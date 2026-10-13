@@ -500,14 +500,33 @@ rules as a bundled one. `.github/workflows/packs.yml`, started by hand, compiles
 `dictionaries/extra/` and replaces the `packs` release with the result.
 
 The six bundled languages have manifests too, `tools/languages/<tag>.json`, holding only the
-Leipzig corpora their files are counted from, by role: `corpora` (the word list), `known_corpora`
-(the `.known` words), `case_corpora` (the `.case` evidence) and `heldout` (a news corpus none of
-those is, nor from any of their years, which the test corpora are drawn from), with each
-archive's SHA-256 under
-`sha256` and the personal corpus's `persona`. `tools/language_manifest.py` reads them and fetches
-a corpus into `~/.cache/borderkeys/leipzig`, checking its archive against the pin, or recording
-the pin on a first fetch; `--list-corpora <tag>` finds a word list's corpora by counting.
-`new_language.py` does not build the bundled six.
+Leipzig corpora their files are counted from and tested on, by role: `corpora` (the word list),
+`known_corpora` (the `.known` words), `case_corpora` (the `.case` evidence), `capitals` (the news
+`classify_wordlist.py` counts capitals in) and `heldout` (the most recent news edition none of
+those is, nor from any of their years, which the test corpora are drawn from), with the SHA-256 of
+each archive they name under `sha256` and the personal corpus's `persona`.
+`tools/language_manifest.py` reads them and fetches a corpus into `~/.cache/borderkeys/leipzig`,
+checking its archive against the pin, or recording the pin on a first fetch. `new_language.py` does
+not build the bundled six.
+
+A word list's `corpora` are found by count: `--list-corpora <tag>` counts every word of each corpus
+the manifest names, and of any given with `--also`, as `make_pack.py` counts them, tries every set,
+and takes the only one that gives each of the list's 200 commonest compared rows its count within
+0.25%. Names, words holding an apostrophe and the words an apostrophe joins in the list, and words
+the Romanian respelling or the diacritic fold changes are not compared. The sets are sought among
+the corpora each manifest names and the news editions Leipzig publishes next to each list's own. No
+set gives every row its exact count. `--check` confirms that each manifest pins exactly the corpora
+it names, and `heldout_overlap.py --check` that no held-out corpus is from a year its language is
+counted from; CI runs both.
+
+| Language | The word list's corpora | Rows exact, of 200 | Furthest row | Next-nearest set | Held out |
+|---|---|---|---|---|---|
+| English | wikipedia 2016, newscrawl 2018, news 2020 | 193 | 0.003% | 25.6% | news 2023 |
+| Romanian | wikipedia 2021, news 2020, newscrawl 2011 | 199 | under 0.001% | 18.4% | news 2019 |
+| Spanish | wikipedia 2021, newscrawl 2021, news 2021 | 192 | 0.003% | 13.2% | news 2023 |
+| French | wikipedia 2021, newscrawl 2020, news 2020 | 195 | 0.004% | 18.1% | news 2023 |
+| German | wikipedia 2021, newscrawl 2020, news 2021 | 178 | 0.013% | 7.2% | news 2024 |
+| Italian | wikipedia 2021, newscrawl 2020, news 2021 | 194 | 0.004% | 9.4% | news 2023 |
 
 Twenty-one languages are published this way, each with the same n-grams, names and grammar
 the bundled six carry: Dutch, Portuguese, Swedish, Danish, Norwegian Bokmål, Finnish, Polish,

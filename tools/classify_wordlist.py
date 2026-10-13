@@ -60,9 +60,9 @@ The decision, in order:
 
 A run that would drop a guard word or keep a GUARD_DROPS word writes nothing and fails. The
 evidence is fetched into --evidence on first use from the pinned sources below and checked
-against its SHA-256; the Leipzig corpus capitals are counted in through language_manifest.py,
-against the pin in the language's manifest. A spelling dictionary that refuses its probe words, or accepts nonsense,
-stops the run. Needs the `hunspell` binary on PATH.
+against its SHA-256; the Leipzig corpus the language's manifest names under `capitals` is fetched
+through language_manifest.py and checked against its pin there. A spelling dictionary that
+refuses its probe words, or accepts nonsense, stops the run. Needs the `hunspell` binary on PATH.
 """
 
 from __future__ import annotations
@@ -317,6 +317,8 @@ def capital_counts(tag: str, words: set[str]) -> dict[str, tuple[int, int]]:
     if not words:
         return {}
     manifest = language_manifest.load(tag)
+    if manifest.capitals is None:
+        raise SystemExit(f"{manifest.path.name}: names no capitals corpus")
     path = language_manifest.sentences(manifest, manifest.capitals)
     lower: Counter = Counter()
     capitalised: Counter = Counter()
